@@ -16,6 +16,10 @@ linters:
   settings:
     misspell:
       locale: US
+      # "signins" is our domain term for sign-in logs (package + identifiers);
+      # misspell otherwise "corrects" it to "signings".
+      ignore-rules:
+        - signins
   exclusions:
     generated: lax
     presets:
