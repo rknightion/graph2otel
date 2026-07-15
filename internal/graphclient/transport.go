@@ -97,10 +97,25 @@ func buildMiddlewares(opts Options) []nethttplibrary.Middleware {
 // instrumented base transport, wrapped by Kiota's default middleware pipeline
 // (retry/redirect/compression/...). This is the unit the 429-retry regression
 // test exercises directly.
+//
+// When opts.Limiter is set, the per-workload rate limiter (#5) is spliced in
+// as the innermost RoundTripper, so the chain (outermost to innermost) is:
+// Kiota default middlewares -> instrumentedTransport -> rateLimitTransport ->
+// opts.baseTransport (or http.DefaultTransport). opts.Limiter == nil skips
+// the splice entirely, leaving this function's behavior identical to before #5.
 func newGraphHTTPClient(opts Options) *http.Client {
 	base := opts.baseTransport
 	if base == nil {
 		base = http.DefaultTransport
+	}
+	if opts.Limiter != nil {
+		base = &rateLimitTransport{
+			next:     base,
+			limiter:  opts.Limiter,
+			backoff:  NewBackoff(),
+			tenantID: opts.TenantID,
+			emitter:  opts.Emitter,
+		}
 	}
 	instrumented := &instrumentedTransport{next: base, emitter: opts.Emitter}
 	transport := nethttplibrary.NewCustomTransportWithParentTransport(instrumented, buildMiddlewares(opts)...)

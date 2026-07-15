@@ -53,6 +53,18 @@ type Options struct {
 	// MaxRetries overrides the retry handler's attempt cap (0 = Kiota default of 3).
 	MaxRetries int
 
+	// Limiter, when non-nil, wires the per-workload client-side rate limiter
+	// (#5) into the transport as the innermost RoundTripper — proactively
+	// gating outbound requests and observing 429 throttle responses for the
+	// workloads (reporting, Identity Protection) that Graph never sends a
+	// Retry-After for. Nil disables rate limiting entirely (the transport
+	// behaves exactly as it did before #5).
+	Limiter *WorkloadLimiter
+	// TenantID identifies the tenant this client authenticates against, for
+	// the limiter's per-tenant bucket key and the throttle self-obs attrs.
+	// Required whenever Limiter is set.
+	TenantID string
+
 	// baseTransport overrides the base RoundTripper under the middleware pipeline
 	// (test seam; nil = http.DefaultTransport).
 	baseTransport http.RoundTripper
@@ -82,6 +94,12 @@ func NewClient(_ context.Context, ta *auth.TenantAuth, opts Options) (*Client, e
 	hosts := opts.ValidHosts
 	if len(hosts) == 0 {
 		hosts = defaultValidHosts
+	}
+	if opts.TenantID == "" {
+		// The limiter/self-obs wiring keys off opts.TenantID; default it from
+		// the TenantAuth so callers that only set Limiter don't also have to
+		// duplicate the tenant ID.
+		opts.TenantID = ta.TenantID
 	}
 
 	authProvider, err := azureauth.NewAzureIdentityAuthenticationProviderWithScopesAndValidHosts(
