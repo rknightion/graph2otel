@@ -21,5 +21,6 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/risk"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/roles"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/securescore"
+	_ "github.com/rknightion/graph2otel/internal/collectors/entra/signinactivity"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/users"
 )
