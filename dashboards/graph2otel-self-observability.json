@@ -462,6 +462,84 @@
           "legendFormat": "limit"
         }
       ]
+    },
+    {
+      "id": 21,
+      "type": "row",
+      "title": "Throttle & rate limiting",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 55 }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Throttle (429) count by workload",
+      "description": "graph2otel_throttle_count_total{workload,tenant_id} — 429 responses from Graph, broken down by which client-side rate-limiter workload was throttled (reporting, identity-protection, intune-export, directory).",
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 56 },
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "$datasource" },
+          "expr": "sum by (workload) (rate(graph2otel_throttle_count_total{tenant_id=~\"$tenant\"}[5m]))",
+          "legendFormat": "{{workload}}"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "type": "timeseries",
+      "title": "Throttle limit usage by workload",
+      "description": "graph2otel_throttle_limit_percentage{workload,tenant_id} — how close each workload's client-side rate limiter is running to its ceiling (%). Sustained values near 100% mean the limiter is actively shaping traffic, not just headroom.",
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 56 },
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "min": 0, "max": 100 },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "$datasource" },
+          "expr": "graph2otel_throttle_limit_percentage{tenant_id=~\"$tenant\"}",
+          "legendFormat": "{{workload}} ({{tenant_id}})"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "Outbound Graph request latency (p95)",
+      "description": "graph2otel_http_client_request_duration{tenant_id} histogram — p95 latency of outbound requests to Graph, via histogram_quantile. Rising latency alongside throttle count points at Graph-side throttling rather than a client bug.",
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 56 },
+      "datasource": { "type": "prometheus", "uid": "$datasource" },
+      "fieldConfig": {
+        "defaults": { "unit": "s" },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "$datasource" },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(graph2otel_http_client_request_duration_bucket{tenant_id=~\"$tenant\"}[5m])))",
+          "legendFormat": "p95"
+        }
+      ]
     }
   ]
 }
