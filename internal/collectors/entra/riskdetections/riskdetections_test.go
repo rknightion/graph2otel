@@ -2,6 +2,7 @@ package riskdetections
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -152,6 +153,25 @@ func TestRequiredPermissions(t *testing.T) {
 func TestClassifyWorkloadRoutesThroughIPC(t *testing.T) {
 	if got := graphclient.ClassifyWorkload(riskDetectionsPath); got != graphclient.WorkloadIPC {
 		t.Errorf("ClassifyWorkload(%q) = %q, want %q", riskDetectionsPath, got, graphclient.WorkloadIPC)
+	}
+}
+
+// TestPageSizeIsCappedAt500 guards the live-verified constraint that the
+// Identity Protection endpoint rejects $top=1000 with HTTP 400 ("Must be
+// between 1 and 500 inclusive"); this collector must request $top=500, not the
+// engine's 1000 default.
+func TestPageSizeIsCappedAt500(t *testing.T) {
+	f := &recordingFetcher{records: []map[string]any{{"id": "a", "detectedDateTime": "2026-07-01T10:00:00Z"}}}
+	c := newCollector(collectors.WindowDeps{TenantID: "t1", Fetcher: f, Store: checkpoint.NewStore(t.TempDir())})
+	from := time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC)
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), telemetrytest.New().Emitter()); err != nil {
+		t.Fatalf("CollectWindow: %v", err)
+	}
+	if len(f.seenURLs) == 0 {
+		t.Fatal("no page fetched")
+	}
+	if !strings.Contains(f.seenURLs[0], "%24top=500") && !strings.Contains(f.seenURLs[0], "$top=500") {
+		t.Errorf("first-page URL = %q, want $top=500 (Identity Protection caps page size at 500)", f.seenURLs[0])
 	}
 }
 

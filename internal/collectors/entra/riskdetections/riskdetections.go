@@ -87,7 +87,12 @@ func newCollector(d collectors.WindowDeps) *collectorImpl {
 		TimeField:       "detectedDateTime",
 		Flavor:          logpipeline.FlavorGeLe,
 		OrderByReliable: false, // $orderby is weak/unverified here; sort client-side
-		Map:             mapRiskDetection,
+		// The Identity Protection endpoint caps $top at 500 (HTTP 400
+		// "Invalid page size specified: '1000'. Must be between 1 and 500
+		// inclusive." — verified live). The engine's 1000 default is rejected,
+		// so pin the max this endpoint accepts.
+		PageSize: 500,
+		Map:      mapRiskDetection,
 	}
 	lc := logpipeline.NewLogCollector(collectorName, interval, lag, d.TenantID, cfg, d.Fetcher, d.Store)
 	return &collectorImpl{LogCollector: lc}
