@@ -42,19 +42,23 @@ builds:
       # image tags produced below.
       - -s -w -X main.version={{ .Version }}
     mod_timestamp: "{{ .CommitTimestamp }}"
-    goos: [linux, darwin, windows]
+    # Runtime is Docker/Linux (the GHCR image is built from the repo-root
+    # Dockerfile, not here); darwin is only for Apple-Silicon local dev. So this
+    # is a deliberately trimmed 3-target matrix — linux/amd64, linux/arm64,
+    # darwin/arm64 — NOT the 5-target sibling default. Cross-compiling the
+    # msgraph-heavy tree is memory-hungry; fewer targets keep it fast and under
+    # the runner's memory ceiling. Intel-Mac devs build locally (go build); there
+    # is no windows target (this is a server-side agent).
+    goos: [linux, darwin]
     goarch: [amd64, arm64]
     ignore:
-      - goos: windows
-        goarch: arm64
+      - goos: darwin
+        goarch: amd64
 
 archives:
   - id: graph2otel
     formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    format_overrides:
-      - goos: windows
-        formats: [zip]
 
 checksum:
   name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"

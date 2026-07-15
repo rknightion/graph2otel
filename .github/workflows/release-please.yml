@@ -106,7 +106,12 @@ jobs:
     with:
       release-tag: ${{ needs.release-please.outputs.tag_name }}
       install-cosign: true
-      # -p 1: serialize per-target builds; the parallel 5-target matrix OOM-kills
-      # the runner now the msgraph dependency tree has grown (see ci.yml).
-      goreleaser-args: "release --clean --skip=docker -p 1"
+      # -p 2: build two targets at a time. The matrix is trimmed to 3 targets in
+      # .goreleaser.yaml (linux amd64/arm64 + darwin arm64); -p 2 is well below the
+      # 5-way parallelism that OOM-killed the runner (msgraph-heavy tree, see
+      # ci.yml) while halving the serial cost. NOTE: the shared binaries.yml
+      # reusable sets setup-go cache:false, so release builds don't get the
+      # cross-run build cache the ci snapshot job does — matrix-trim + -p 2 are the
+      # levers here. Dial back to -p 1 if OOM recurs.
+      goreleaser-args: "release --clean --skip=docker -p 2"
       pre-cmd: "go install github.com/anchore/syft/cmd/syft@v1.18.1 && go install github.com/google/go-licenses@v1.6.0"

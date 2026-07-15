@@ -86,7 +86,12 @@ jobs:
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
-          cache: false
+          # Cache the module + build cache (keyed on go.sum). The msgraph-heavy
+          # dependency tree is compiled once and restored on every subsequent
+          # push, so a snapshot build only recompiles the packages that changed
+          # instead of the whole tree cold. Build-cache objects are keyed per
+          # GOOS/GOARCH, so all three cross-compile targets cache independently.
+          cache: true
 
       # Cross-compile every target + build archives/checksums. .goreleaser.yaml has
       # no docker pipeline (the real image build is the repo-root Dockerfile via
@@ -97,12 +102,13 @@ jobs:
         with:
           distribution: goreleaser
           version: "v2.16.0"
-          # -p 1 serializes the per-target builds. Cross-compiling the 5-target
-          # matrix in parallel OOM-kills the 7 GB ubuntu-latest runner now the
-          # msgraph-heavy dependency tree has grown (each Go compile+link is
-          # memory-hungry); serial builds trade ~2 min of wall-clock for a
-          # bounded memory footprint. Release builds use the same cap.
-          args: release --snapshot --clean --skip=publish,sign,sbom -p 1
+          # -p 2 builds two targets concurrently. The full 5-target matrix at
+          # unbounded parallelism OOM-killed the runner (each Go compile+link of
+          # the msgraph-heavy tree is memory-hungry), which is why the matrix is
+          # now trimmed to 3 targets in .goreleaser.yaml; -p 2 is well below the
+          # 5-way peak that OOM'd, so it stays bounded while halving the serial
+          # cost. Release builds use the same cap. Dial back to -p 1 if OOM recurs.
+          args: release --snapshot --clean --skip=publish,sign,sbom -p 2
 
   docker-build:
     name: docker image builds
