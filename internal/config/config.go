@@ -222,6 +222,15 @@ func Default() *Config {
 			Enabled: false,
 			Addr:    ":9090",
 		},
+		Profiling: ProfilingConfig{
+			// Contention profiling on by default. It is applied only when the
+			// Pyroscope push is enabled (see profiling.Start), so it costs nothing
+			// when profiling is off. Fraction 5 samples 1/5 of mutex-contention
+			// events; block rate 100µs records blocking events averaging at least
+			// that long. Set either to 0 to drop that profile.
+			MutexProfileFraction: 5,
+			BlockProfileRate:     100_000,
+		},
 		CheckpointDir: "./checkpoints",
 	}
 }

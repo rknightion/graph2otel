@@ -8,16 +8,28 @@ import (
 	"fmt"
 	"log/slog"
 	"runtime"
+	"runtime/pprof"
 
 	"github.com/grafana/pyroscope-go"
 
 	"github.com/rknightion/graph2otel/internal/config"
 )
 
+// goroutineLeakAvailable reports whether the runtime exposes the goroutineleak
+// profile. It is registered only when the binary is built with
+// GOEXPERIMENT=goroutineleakprofile (Go 1.26+); a binary built without it simply
+// omits the type instead of pushing an empty/erroring profile. Release builds and
+// the container image set the experiment; a plain `go build` does not.
+func goroutineLeakAvailable() bool {
+	return pprof.Lookup("goroutineleak") != nil
+}
+
 // profileTypes returns the profile types pushed to Pyroscope: the standard CPU
-// + alloc/inuse memory set plus goroutines, adding the mutex and block profiles
-// only when their runtime sampling is enabled (pushing them otherwise would
-// just upload empty profiles).
+// + alloc/inuse memory set plus goroutines, the mutex and block contention
+// profiles when their runtime sampling is enabled (on by default — see
+// config.Default; pushing them with sampling off would just upload empty
+// profiles), and goroutine-leak when the runtime exposes it (built with the
+// experiment).
 func profileTypes(p config.ProfilingConfig) []pyroscope.ProfileType {
 	types := []pyroscope.ProfileType{
 		pyroscope.ProfileCPU,
@@ -32,6 +44,9 @@ func profileTypes(p config.ProfilingConfig) []pyroscope.ProfileType {
 	}
 	if p.BlockProfileRate > 0 {
 		types = append(types, pyroscope.ProfileBlockCount, pyroscope.ProfileBlockDuration)
+	}
+	if goroutineLeakAvailable() {
+		types = append(types, pyroscope.ProfileGoroutineLeak)
 	}
 	return types
 }
@@ -63,18 +78,21 @@ func buildConfig(cfg config.ProfilingConfig, serviceName, version string) pyrosc
 	return pc
 }
 
-// Start applies the runtime mutex/block sampling rates and, when the Pyroscope
-// push is enabled, starts the continuous profiler. It returns the profiler (nil
-// when push is disabled) so the caller can Stop it on shutdown.
+// Start starts the continuous profiler when the Pyroscope push is enabled,
+// applying the process-global mutex/block sampling rates first. It returns the
+// profiler (nil when push is disabled) so the caller can Stop it on shutdown.
+// The sampling rates are on by default (config.Default) but Pyroscope is the only
+// consumer, so they are applied only when it is enabled — a process with
+// profiling off pays no sampling overhead for profiles nobody collects.
 func Start(cfg config.ProfilingConfig, serviceName, version string, logger *slog.Logger) (*pyroscope.Profiler, error) {
+	if !cfg.Pyroscope.Enabled {
+		return nil, nil
+	}
 	if cfg.MutexProfileFraction > 0 {
 		runtime.SetMutexProfileFraction(cfg.MutexProfileFraction)
 	}
 	if cfg.BlockProfileRate > 0 {
 		runtime.SetBlockProfileRate(cfg.BlockProfileRate)
-	}
-	if !cfg.Pyroscope.Enabled {
-		return nil, nil
 	}
 	if logger == nil {
 		logger = slog.Default()

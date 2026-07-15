@@ -74,10 +74,11 @@ profiling:
     tenant_id: "" # optional; leave empty for Grafana Cloud
     upload_rate: 15s # optional; 0/omit uses the pyroscope default
     tags: {} # extra static tags; service_version is always set and cannot be overridden
-  # runtime mutex/block sampling (0 = disabled); enable only when investigating
-  # contention — sampling them is not free.
-  mutex_profile_fraction: 0
-  block_profile_rate: 0
+  # runtime mutex/block sampling; on by default. Applied only when the pyroscope
+  # push is enabled, so it costs nothing when profiling is off. Set either to 0 to
+  # drop that contention profile.
+  mutex_profile_fraction: 5      # runtime.SetMutexProfileFraction; 0 = disabled
+  block_profile_rate: 100000     # runtime.SetBlockProfileRate (ns, 100µs); 0 = disabled
 
 # checkpoint_dir is where window-log collectors persist their per-(tenant,
 # endpoint) watermarks so a restart resumes rather than re-fetching or dropping.

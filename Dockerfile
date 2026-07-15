@@ -8,8 +8,11 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 ARG VERSION=dev
+# GOEXPERIMENT=goroutineleakprofile registers the goroutineleak pprof profile, which
+# is pushed to Pyroscope by default (the profiling code guards on availability). Keep
+# in sync with the Makefile and .goreleaser.yaml.
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -trimpath \
+    CGO_ENABLED=0 GOEXPERIMENT=goroutineleakprofile go build -trimpath \
     -ldflags "-s -w -X main.version=${VERSION}" \
     -o /out/graph2otel ./cmd/graph2otel
 

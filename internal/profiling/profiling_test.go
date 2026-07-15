@@ -35,9 +35,21 @@ func TestBuildConfigBaseProfileTypesAndVersionTag(t *testing.T) {
 		t.Errorf("user tag env = %q, want lab", pc.Tags["env"])
 	}
 	// Base set (no mutex/block) = 6 types.
-	if len(pc.ProfileTypes) != 6 {
-		t.Errorf("ProfileTypes = %d, want 6 (base set)", len(pc.ProfileTypes))
+	// Base set (no mutex/block) = 6 types, plus goroutine-leak when the binary
+	// was built with GOEXPERIMENT=goroutineleakprofile.
+	if want := 6 + leakCount(); len(pc.ProfileTypes) != want {
+		t.Errorf("ProfileTypes = %d, want %d (base set[+leak])", len(pc.ProfileTypes), want)
 	}
+}
+
+// leakCount is 1 when the goroutineleak profile is available (built with the
+// experiment), else 0 — so the type-count assertions hold in both CI (plain
+// build) and release builds.
+func leakCount() int {
+	if goroutineLeakAvailable() {
+		return 1
+	}
+	return 0
 }
 
 func TestBuildConfigAddsMutexBlockWhenSampled(t *testing.T) {
@@ -47,8 +59,8 @@ func TestBuildConfigAddsMutexBlockWhenSampled(t *testing.T) {
 		Pyroscope:            config.ProfilingPyroscope{Enabled: true, UploadRate: 30 * time.Second},
 	}
 	pc := buildConfig(cfg, "graph2otel", "dev")
-	if len(pc.ProfileTypes) != 10 { // 6 base + 2 mutex + 2 block
-		t.Errorf("ProfileTypes = %d, want 10 (base+mutex+block)", len(pc.ProfileTypes))
+	if want := 10 + leakCount(); len(pc.ProfileTypes) != want { // 6 base + 2 mutex + 2 block [+leak]
+		t.Errorf("ProfileTypes = %d, want %d (base+mutex+block[+leak])", len(pc.ProfileTypes), want)
 	}
 	if pc.UploadRate != 30*time.Second {
 		t.Errorf("UploadRate = %v, want 30s", pc.UploadRate)
