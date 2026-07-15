@@ -1,12 +1,13 @@
-# Publish the multi-arch image to GHCR via the shared rknightion
+# Publish the multi-arch image + Helm chart to GHCR via the shared rknightion
 # container-publish reusable (native amd64+arm64 matrix, cosign signing, provenance,
-# syft SPDX+CycloneDX SBOM, Trivy). Called by release-please.yml when a release is
-# created (release_tag set). Also workflow_dispatch-able: leave release_tag empty
-# for an edge (:main) test build, or set it to re-publish a tag.
+# syft SPDX+CycloneDX SBOM, Trivy, OCI Helm chart publish). Called by
+# release-please.yml when a release is created (release_tag set). Also
+# workflow_dispatch-able: leave release_tag empty for an edge (:main) test
+# build, or set it to re-publish a tag.
 #
-# No helm-chart-path input: graph2otel does not ship a Helm chart yet (tracked as
-# a future M6 issue). container-publish.yml treats an empty/omitted input as
-# "skip the chart publish step".
+# helm-chart-path points at charts/graph2otel (#26); no charts-repo/sign/sbom
+# overrides are set, matching tailscale2otel's proven usage of this same
+# reusable — its defaults apply.
 name: publish
 
 on:
@@ -40,6 +41,7 @@ jobs:
     with:
       release-tag: ${{ inputs.release_tag }}
       dockerfile: Dockerfile
+      helm-chart-path: charts/graph2otel
 
   # go-licenses third-party notices (Go-specific; migrates to the shared binaries
   # reusable later). Releases only. Generates THIRD_PARTY_NOTICES.md inline since

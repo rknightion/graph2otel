@@ -1,0 +1,35 @@
+graph2otel has been deployed as {{ include "graph2otel.fullname" . }}.
+
+It is a single-instance poller shipping Entra ID + Intune observability data
+to your OTLP endpoint ({{ .Values.config.otlp.endpoint }}) for
+{{ len .Values.config.tenants }} tenant(s).
+
+1. Confirm it started:
+   kubectl logs -l app.kubernetes.io/instance={{ .Release.Name }} -f
+
+2. Credentials:
+{{- if .Values.existingSecret }}
+   Using existing Secret "{{ .Values.existingSecret }}" — ensure it exposes
+   AZURE_TENANT_ID / AZURE_CLIENT_ID / AZURE_CLIENT_SECRET (or
+   AZURE_CLIENT_CERTIFICATE_PATH via extraEnv + extraVolumes) for the app
+   registration graph2otel authenticates as.
+{{- else }}
+   Rendered into Secret "{{ include "graph2otel.fullname" . }}". Set values via
+   --set secret.AZURE_CLIENT_ID=... --set secret.AZURE_CLIENT_SECRET=... etc.,
+   or point existingSecret at your own.
+{{- end }}
+{{- if not .Values.config.admin.enabled }}
+
+   NOTE: config.admin.enabled is false — no liveness/readiness probes are
+   configured on this pod.
+{{- end }}
+{{- if not .Values.persistence.enabled }}
+
+   NOTE: persistence.enabled is false — checkpoint watermarks live in an
+   emptyDir and are LOST on pod rescheduling. Every window-log collector will
+   cold-start (re-run its lookback window) after that. Set persistence.enabled=true
+   for any deployment where that reprocessing cost matters.
+{{- end }}
+
+3. In Grafana Cloud Explore, look for metrics like entra_devices_total,
+   intune_compliance_devices, and graph2otel_scrape_success.

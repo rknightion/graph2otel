@@ -140,6 +140,33 @@ jobs:
           build-args: |
             VERSION=ci-${{ github.sha }}
 
+  helm:
+    name: helm lint + template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+
+      - name: helm lint
+        run: helm lint charts/graph2otel
+
+      - name: helm template
+        run: helm template t charts/graph2otel > /dev/null
+
+      # Exercise the non-default branches (existing secret, PVC persistence,
+      # admin disabled) so a broken conditional doesn't slip past the default-
+      # values render above.
+      - name: helm template (persistence + existingSecret + admin disabled)
+        run: |
+          helm template t charts/graph2otel \
+            --set persistence.enabled=true \
+            --set existingSecret=my-secret \
+            --set config.admin.enabled=false \
+            > /dev/null
+
   # Single required status check for this workflow. Branch protection on `main`
   # requires this, so CI legs can be added or renamed without re-touching
   # protection. Fails if any leg failed or was cancelled.
@@ -147,7 +174,7 @@ jobs:
     name: ci-success
     runs-on: ubuntu-latest
     if: always()
-    needs: [build-test, lint, govulncheck, goreleaser-snapshot, docker-build]
+    needs: [build-test, lint, govulncheck, goreleaser-snapshot, docker-build, helm]
     steps:
       - name: Fail if any required job did not pass
         if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}

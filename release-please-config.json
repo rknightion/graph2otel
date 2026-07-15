@@ -5,7 +5,11 @@
   "packages": {
     ".": {
       "changelog-path": "CHANGELOG.md",
-      "package-name": "graph2otel"
+      "package-name": "graph2otel",
+      "extra-files": [
+        { "type": "yaml", "path": "charts/graph2otel/Chart.yaml", "jsonpath": "$.version" },
+        { "type": "yaml", "path": "charts/graph2otel/Chart.yaml", "jsonpath": "$.appVersion" }
+      ]
     }
   },
   "changelog-sections": [

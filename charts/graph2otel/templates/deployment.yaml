@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "graph2otel.fullname" . }}
+  labels:
+    {{- include "graph2otel.labels" . | nindent 4 }}
+spec:
+  # Single-instance poller — do not scale horizontally (would double-poll every
+  # tenant and double-emit every metric/log; see CLAUDE.md Architecture).
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "graph2otel.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        # Roll the pod when the config or secret changes.
+        checksum/config: {{ include "graph2otel.config" . | sha256sum }}
+        {{- if not .Values.existingSecret }}
+        checksum/secret: {{ toYaml .Values.secret | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "graph2otel.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "graph2otel.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: graph2otel
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["-config", "/etc/graph2otel/config.yaml"]
+          envFrom:
+            - secretRef:
+                name: {{ include "graph2otel.secretName" . }}
+          {{- with .Values.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- if .Values.config.admin.enabled }}
+          # Probes hit the admin server's /healthz (its only health route — see
+          # internal/admin/admin.go; there is no separate /readyz) for both
+          # liveness and readiness. Only rendered when config.admin.enabled —
+          # the binary itself defaults this off.
+          ports:
+            - name: admin
+              containerPort: {{ .Values.config.admin.addr | splitList ":" | last | int }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: admin
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: admin
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/graph2otel
+              readOnly: true
+            - name: checkpoints
+              mountPath: {{ .Values.config.checkpoint_dir }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "graph2otel.fullname" . }}
+        - name: checkpoints
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (include "graph2otel.fullname" .) }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

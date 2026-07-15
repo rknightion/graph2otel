@@ -1,0 +1,216 @@
+# Default values for graph2otel.
+
+image:
+  # -- Container image repository.
+  repository: ghcr.io/rknightion/graph2otel
+  # -- Image tag. Defaults to .Chart.appVersion when empty.
+  tag: ""
+  # -- Image pull policy.
+  pullPolicy: IfNotPresent
+# -- Image pull secrets for private registries.
+imagePullSecrets: []
+
+# -- Replica count. Keep at 1 — graph2otel is a single-instance poller with no
+# leader election or HA in v1 (see CLAUDE.md Architecture: none of the polled
+# Graph endpoints support consumer-group/delta semantics that would make
+# multi-replica coordination pay for itself). Scaling this up double-polls
+# every tenant and double-emits every metric and log.
+replicaCount: 1
+
+# -- Override the chart name portion of resource names.
+nameOverride: ""
+# -- Fully override the generated resource names.
+fullnameOverride: ""
+
+serviceAccount:
+  # -- Create a ServiceAccount.
+  create: true
+  # -- ServiceAccount name. Generated when empty.
+  name: ""
+  # -- Annotations to add to the ServiceAccount.
+  annotations: {}
+  # -- Automount the ServiceAccount API token into the pod. graph2otel makes
+  # no Kubernetes API calls, so this defaults to false to drop an unused,
+  # attacker-useful credential from the network-facing pod.
+  automountServiceAccountToken: false
+
+# -- Extra annotations for the pod.
+podAnnotations: {}
+# -- Extra labels for the pod.
+podLabels: {}
+
+# -- Pod-level security context. Runs as non-root with the RuntimeDefault
+# seccomp profile; the app needs no special privileges. fsGroup makes the
+# opt-in PVC persistence path (persistence.enabled=true) reliably writable by
+# the uid-65532 container regardless of the CSI driver's default ownership
+# behavior — a freshly provisioned block PVC is typically root:root on many
+# drivers. The default emptyDir checkpoint volume already works without this
+# (kubelet chmods emptyDir roots 0777).
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+  fsGroup: 65532
+  fsGroupChangePolicy: OnRootMismatch
+# -- Container-level security context. Drops all capabilities and runs with a
+# read-only root filesystem (the app writes only to the checkpoint volume).
+# Runs as the distroless `nonroot` uid/gid 65532 (a high, non-system id
+# > 10000) to satisfy hardened-cluster policy.
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  capabilities:
+    drop: ["ALL"]
+
+# -- Resource requests and limits. graph2otel caches per-tenant inventory
+# (users/devices/groups/etc.) between polls, so the working set scales with
+# tenant size and enabled-collector count more than tailscale2otel's — raise
+# limits for a large multi-tenant deployment or many opt-in Intune/beta
+# collectors.
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# -- Node selector for pod scheduling.
+nodeSelector: {}
+# -- Tolerations for pod scheduling.
+tolerations: []
+# -- Affinity rules for pod scheduling.
+affinity: {}
+
+# -- Extra env vars appended to the container, as-is (e.g. AZURE_CLIENT_CERTIFICATE_PATH
+# pointing at a path mounted via extraVolumes below, for certificate auth instead
+# of a client secret).
+extraEnv: []
+# -- Extra volumes appended to the pod spec as-is (e.g. a Secret volume holding
+# an AZURE_CLIENT_CERTIFICATE_PATH cert/key, since readOnlyRootFilesystem
+# leaves no other place to put arbitrary files). Paired with extraVolumeMounts
+# below by volume name.
+extraVolumes: []
+# -- Extra volume mounts appended to the main container's volumeMounts, as-is.
+# Paired with extraVolumes above by name.
+extraVolumeMounts: []
+
+# --- Auth ---
+# Tenant credentials are NEVER read from the rendered config.yaml (see
+# config.example.yaml) — they come from azidentity.DefaultAzureCredential via
+# well-known AZURE_* environment variables, injected here through a Secret.
+# graph2otel's multi-tenant model pins each tenants[].tenant_id into the
+# credential per call, so ONE app registration's AZURE_CLIENT_ID/
+# AZURE_CLIENT_SECRET (or certificate) can authenticate against every tenant
+# listed in config.tenants — there is no per-tenant secret to template.
+#
+# Provide credentials either inline here (rendered into a Secret) OR reference
+# an existing Secret via existingSecret. Inline values win only when
+# existingSecret is "".
+# -- Name of a pre-created Secret exposing the AZURE_* env keys below. When set, no Secret is rendered.
+existingSecret: ""
+# -- Inline secret values rendered into a Secret and injected via envFrom.
+# Keys left empty ("") are NOT rendered into the Secret, so azidentity's
+# credential-chain fallbacks (workload identity, managed identity) still work
+# when you deliberately omit a client-secret/certificate pair.
+secret:
+  # -- Ambient fallback tenant ID for DefaultAzureCredential. Usually NOT
+  # needed: NewTenantAuth pins each tenants[].tenant_id explicitly per
+  # credential, regardless of this value.
+  AZURE_TENANT_ID: ""
+  # -- App registration (application) client ID. Required unless every
+  # tenants[] entry sets client_id in config.tenants and you rely on workload/
+  # managed identity instead.
+  AZURE_CLIENT_ID: ""
+  # -- Client secret paired with AZURE_CLIENT_ID. Leave empty when using
+  # AZURE_CLIENT_CERTIFICATE_PATH (extraEnv/extraVolumes) or workload/managed
+  # identity instead.
+  AZURE_CLIENT_SECRET: ""
+
+# --- App config ---
+# The FULL application config, rendered verbatim into a ConfigMap as
+# config.yaml. This mirrors config.example.yaml's top-level keys 1:1 — the
+# single source of truth, kept in sync with it — and carries NO secrets (see
+# the Auth section above). Helm deep-merges maps, so single-key overrides
+# keep working, e.g.:
+#   --set config.log_level=debug
+#   --set config.collectors.sign_ins.enabled=false
+config:
+  # -- Log verbosity: debug | info | warn | error.
+  log_level: info
+
+  # -- Tenants graph2otel polls. At least one entry is required unless
+  # otlp.protocol is "stdout". A flat env var cannot express a list of
+  # structs, so this list is file/values-only (no G2O_TENANTS__<index>__*
+  # env equivalent) — use --set/-f to override it.
+  tenants:
+    - # -- Entra tenant GUID or verified domain.
+      tenant_id: "00000000-0000-0000-0000-000000000000"
+      # -- App registration (application) ID. Optional if AZURE_CLIENT_ID (secret, above) is set.
+      client_id: ""
+      # Optional per-tenant collector overrides, layered on top of `collectors`
+      # below (field-by-field), e.g.:
+      # collectors:
+      #   sign_ins:
+      #     enabled: false
+
+  otlp:
+    # -- Export protocol: http | grpc | stdout (stdout = local debug).
+    protocol: http
+    # -- OTLP endpoint base URL. For Grafana Cloud use the otlp-gateway URL for YOUR region.
+    endpoint: "https://otlp-gateway-prod-us-central-0.grafana.net/otlp"
+    grafana_cloud:
+      # -- Grafana Cloud OTLP instance ID. NOT a secret by itself, but set
+      # alongside the token below; kept out of values.yaml defaults on
+      # purpose so an empty chart install doesn't silently point at nothing.
+      instance_id: ""
+      # -- Grafana Cloud OTLP token. DO NOT set here — this key is
+      # informational only; provide it via G2O_OTLP__GRAFANA_CLOUD__TOKEN
+      # in extraEnv sourced from a Secret, since it never belongs in a
+      # ConfigMap-rendered config.yaml.
+      token: ""
+
+  # -- Per-collector overrides, applied globally across all tenants, keyed by
+  # collector name. A collector omitted here runs enabled at its built-in
+  # default interval. Experimental/beta collectors need explicit enabling —
+  # see docs/collectors.md. Example:
+  # collectors:
+  #   sign_ins:
+  #     enabled: true
+  #     interval: "5m"
+  collectors: {}
+
+  # -- Admin health/status HTTP endpoint (liveness at /healthz, status page at
+  # / and /api/status.json). The graph2otel binary itself defaults this to
+  # disabled, but the chart default is true so the Deployment can always wire
+  # working liveness/readiness probes; set to false to run without probes.
+  admin:
+    enabled: true
+    addr: ":9090"
+
+  # -- Where window-log collectors persist their per-(tenant, endpoint)
+  # watermarks, so a restart resumes rather than re-fetching or dropping
+  # data. Matches the checkpoint volume's mountPath below, so overriding this
+  # also moves where the volume is mounted — keep it an absolute path.
+  checkpoint_dir: "/var/lib/graph2otel/checkpoints"
+
+# --- Checkpoint persistence ---
+persistence:
+  # -- Persist checkpoints (window-collector watermarks) across restarts. When
+  # false, an emptyDir is used (survives container restarts within a pod, but
+  # is LOST on pod rescheduling/deletion — every WindowCollector cold-starts
+  # from a zero watermark, which re-runs its initial lookback window rather
+  # than silently dropping data, but is wasteful and duplicative on frequent
+  # reschedules). When true, a PVC is created. Defaults to false to match a
+  # zero-config `helm install`; enable this for any real deployment.
+  enabled: false
+  # -- StorageClass for the PVC (empty = cluster default). Only used when enabled.
+  storageClass: ""
+  # -- PVC access mode.
+  accessMode: ReadWriteOnce
+  # -- PVC size (checkpoint files are tiny — one small JSON file per tenant/endpoint).
+  size: 64Mi
+  # -- Use an existing PVC instead of creating one (empty = create one). Only used when enabled.
+  existingClaim: ""
