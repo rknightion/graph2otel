@@ -7,6 +7,7 @@ package main
 import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/authmethodspolicy"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/conditionalaccess"
+	_ "github.com/rknightion/graph2otel/internal/collectors/entra/consent"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/credentialexpiry"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/directorycounts"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/domains"
