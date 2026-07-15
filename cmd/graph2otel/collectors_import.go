@@ -28,4 +28,12 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/signinactivity"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/signins"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/users"
+	_ "github.com/rknightion/graph2otel/internal/collectors/intune/appletokens"
+	_ "github.com/rknightion/graph2otel/internal/collectors/intune/compliance"
+	_ "github.com/rknightion/graph2otel/internal/collectors/intune/connectors"
+	_ "github.com/rknightion/graph2otel/internal/collectors/intune/detectedapps"
+	_ "github.com/rknightion/graph2otel/internal/collectors/intune/enrollment"
+	_ "github.com/rknightion/graph2otel/internal/collectors/intune/malware"
+	_ "github.com/rknightion/graph2otel/internal/collectors/intune/manageddevices"
+	_ "github.com/rknightion/graph2otel/internal/collectors/intune/mobileapps"
 )
