@@ -200,6 +200,43 @@ collectors:
 }
 
 // mustLoad writes y to a temp file, loads it, and fails on error.
+// TestCollectorExplicitlyEnabled: the default-true state is NOT "explicitly
+// enabled" (so a beta collector stays off), but an explicit enabled=true at the
+// global or per-tenant layer IS, and an explicit false is not.
+func TestCollectorExplicitlyEnabled(t *testing.T) {
+	const y = `
+otlp:
+  protocol: stdout
+collectors:
+  entra.recommendations:
+    enabled: true
+  entra.signin_activity:
+    enabled: false
+tenants:
+  - tenant_id: t2
+    collectors:
+      entra.signin_activity:
+        enabled: true
+`
+	cfg := mustLoad(t, y)
+	// Unconfigured collector: default-enabled, but NOT explicitly enabled.
+	if cfg.CollectorExplicitlyEnabled("t1", "entra.recommendations_unset") {
+		t.Error("unconfigured collector must not count as explicitly enabled")
+	}
+	// Globally explicit true.
+	if !cfg.CollectorExplicitlyEnabled("t1", "entra.recommendations") {
+		t.Error("global enabled=true should be explicitly enabled")
+	}
+	// Globally explicit false.
+	if cfg.CollectorExplicitlyEnabled("t1", "entra.signin_activity") {
+		t.Error("global enabled=false is not explicitly enabled")
+	}
+	// Per-tenant override flips it explicitly true for t2.
+	if !cfg.CollectorExplicitlyEnabled("t2", "entra.signin_activity") {
+		t.Error("per-tenant enabled=true should be explicitly enabled for that tenant")
+	}
+}
+
 func mustLoad(t *testing.T, y string) *config.Config {
 	t.Helper()
 	p := writeTemp(t, y)

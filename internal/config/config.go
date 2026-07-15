@@ -138,6 +138,30 @@ func (c *Config) CollectorSettings(tenantID, collectorName string) (enabled bool
 	return enabled, interval
 }
 
+// CollectorExplicitlyEnabled reports whether some config layer (global or the
+// matching per-tenant override) set enabled=true EXPLICITLY for the collector,
+// as distinct from the default-true CollectorSettings returns when nothing is
+// set. It exists to gate experimental (beta) collectors, which are opt-in: they
+// must never register on the default, only on an explicit opt-in. A per-tenant
+// explicit value wins over a global one; an explicit false at either layer
+// means "not explicitly enabled".
+func (c *Config) CollectorExplicitlyEnabled(tenantID, collectorName string) bool {
+	explicit := false
+	if gc, ok := c.Collectors[collectorName]; ok && gc.Enabled != nil {
+		explicit = *gc.Enabled
+	}
+	for i := range c.Tenants {
+		if c.Tenants[i].TenantID != tenantID {
+			continue
+		}
+		if tc, ok := c.Tenants[i].Collectors[collectorName]; ok && tc.Enabled != nil {
+			explicit = *tc.Enabled
+		}
+		break
+	}
+	return explicit
+}
+
 // OTLPConfig configures the OTLP exporter.
 type OTLPConfig struct {
 	// Protocol selects the OTLP transport: "grpc", "http", or "stdout" (the

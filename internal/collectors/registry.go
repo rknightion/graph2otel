@@ -56,6 +56,16 @@ type Deps struct {
 // land; M2's collectors are all SnapshotCollectors.
 type Factory func(Deps) collector.SnapshotCollector
 
+// Experimental is optionally implemented by a collector that polls a beta /
+// preview Graph endpoint (schema-unstable). Such a collector is OPT-IN: the
+// composition root registers it only when config explicitly enables it
+// (config.CollectorExplicitlyEnabled), never on the default-enabled state, so a
+// beta surface change can never break a default deployment.
+type Experimental interface {
+	// Experimental reports true to mark the collector as beta/opt-in.
+	Experimental() bool
+}
+
 // registered accumulates every collector factory. Populated only from
 // subpackage init() functions (single-threaded package initialization), so it
 // needs no synchronization.

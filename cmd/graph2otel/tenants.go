@@ -106,6 +106,15 @@ func setupTenant(
 			skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] = "disabled by config"
 			continue
 		}
+		// Experimental (beta) collectors are opt-in: they register only on an
+		// explicit config enable, never on the default-enabled state, so a beta
+		// Graph surface change can't break a default deployment.
+		if exp, ok := c.(collectors.Experimental); ok && exp.Experimental() &&
+			!cfg.CollectorExplicitlyEnabled(ta.TenantID, c.Name()) {
+			tlog.Info("skipping experimental collector (opt-in)", "collector", c.Name())
+			skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] = "beta; enable explicitly to opt in"
+			continue
+		}
 		registry.Register(c, interval)
 	}
 
