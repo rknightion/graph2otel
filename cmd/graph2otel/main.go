@@ -13,7 +13,10 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/rknightion/graph2otel/internal/admin"
+	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/config"
+	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
 // version is overridden at build time via -ldflags "-X main.version=...".
@@ -68,6 +71,48 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 	logger.Info("graph2otel starting",
 		"version", version, "otlp_protocol", cfg.OTLP.Protocol, "tenants", len(cfg.Tenants))
+
+	// Telemetry provider: the single OTLP metrics+logs pipeline everything emits
+	// through. Built here so the process fails fast on a bad exporter config.
+	provider, err := telemetry.NewProvider(ctx, telemetry.Options{
+		ServiceName:    "graph2otel",
+		ServiceVersion: version,
+		Protocol:       cfg.OTLP.Protocol,
+		Endpoint:       cfg.OTLP.Endpoint,
+		InstanceID:     cfg.OTLP.GrafanaCloud.InstanceID,
+		Token:          cfg.OTLP.GrafanaCloud.Token.Reveal(),
+		SelfObsEnabled: true,
+		StdoutWriter:   stdout,
+	})
+	if err != nil {
+		fmt.Fprintf(stderr, "failed to build telemetry provider: %v\n", err)
+		return 1
+	}
+	// Flush and release the pipeline on the way out (background ctx: the run
+	// ctx is already canceled by the time we shut down).
+	defer func() {
+		if err := provider.Shutdown(context.Background()); err != nil {
+			logger.Warn("telemetry provider shutdown", "error", err)
+		}
+	}()
+	collector.EmitBuildInfo(provider.Emitter())
+
+	// Admin/health endpoint. Collectors (and therefore per-collector status
+	// sources) land in M2, so it starts with an empty status set for now — it
+	// still serves /healthz and a (bare) status page. Start blocks until ctx is
+	// canceled, then shuts the server down itself, so run it in the background.
+	adminSrv := admin.New(cfg.Admin, nil, nil)
+	go func() {
+		if err := adminSrv.Start(ctx); err != nil {
+			logger.Error("admin server", "error", err)
+		}
+	}()
+
+	// NOTE (M1): auth, Graph clients, license detection, and the per-tenant
+	// scheduler are consumed by the collectors that arrive in M2-M5 — wiring
+	// them here now would be unused. The composition root grows the tenant loop
+	// (auth.BuildAll -> graphclient.NewClient -> collector.Registry ->
+	// collector.Scheduler) as the first collectors land.
 
 	<-ctx.Done()
 

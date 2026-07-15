@@ -20,6 +20,16 @@ otlp:
   protocol: not-a-real-protocol
 `
 
+// adminEnabledStdoutYAML boots the telemetry provider (stdout) and the admin
+// server on an ephemeral port, exercising the M1 composition-root wiring.
+const adminEnabledStdoutYAML = `
+otlp:
+  protocol: stdout
+admin:
+  enabled: true
+  addr: "127.0.0.1:0"
+`
+
 func writeTempConfig(t *testing.T, content string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -88,6 +98,30 @@ func TestRun_StartsAndShutsDownCleanly(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "starting") {
 		t.Errorf("stderr = %q, want a startup log line", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "stopped") {
+		t.Errorf("stderr = %q, want a shutdown log line", stderr.String())
+	}
+}
+
+// TestRun_AdminEnabledBootsAndShutsDown exercises the M1 composition root with
+// the admin server enabled: the telemetry provider and admin HTTP server start,
+// and canceling ctx returns cleanly (the admin server self-shuts-down).
+func TestRun_AdminEnabledBootsAndShutsDown(t *testing.T) {
+	path := writeTempConfig(t, adminEnabledStdoutYAML)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	var stdout, stderr bytes.Buffer
+	// Cancel shortly after boot so the server has bound before shutdown.
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+
+	code := run(ctx, []string{"-config", path}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr=%s", code, stderr.String())
 	}
 	if !strings.Contains(stderr.String(), "stopped") {
 		t.Errorf("stderr = %q, want a shutdown log line", stderr.String())
