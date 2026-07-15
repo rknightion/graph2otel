@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>graph2otel admin</title>
+<style>
+  body { font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; color: #1a1a1a; }
+  h1 { font-size: 1.25rem; }
+  h2 { font-size: 1.05rem; margin-top: 2rem; }
+  table { border-collapse: collapse; width: 100%; margin-top: 0.5rem; }
+  th, td { text-align: left; padding: 0.3rem 0.6rem; border-bottom: 1px solid #ddd; }
+  th { font-weight: 600; color: #555; }
+  .badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 0.3rem; font-size: 0.85em; }
+  .ok { background: #d4f4dd; color: #146c2e; }
+  .err { background: #fbdada; color: #8a1c1c; }
+  .pending { background: #fff3cd; color: #7a5b00; }
+  .skipped { color: #888; font-style: italic; }
+</style>
+</head>
+<body>
+  <h1>graph2otel <span class="badge {{healthClass .Health}}">{{.Health}}</span></h1>
+  <p>version {{.Service.Version}} &middot; go {{.Service.GoVersion}} &middot; up {{.Service.Uptime}} &middot; started {{.Service.StartedAt}}</p>
+
+  {{if .HealthReasons}}
+  <ul>
+    {{range .HealthReasons}}<li>{{.}}</li>{{end}}
+  </ul>
+  {{end}}
+
+  {{range .Tenants}}
+  <h2>Tenant {{.TenantID}}</h2>
+  <table>
+    <tr>
+      <th>Collector</th>
+      <th>State</th>
+      <th>Last success</th>
+      <th>Staleness</th>
+      <th>Last error</th>
+      <th>Runs</th>
+      <th>Failures</th>
+    </tr>
+    {{range .Collectors}}
+    <tr>
+      <td>{{.Name}}</td>
+      {{if .Enabled}}
+      <td><span class="badge {{if .LastSuccess}}ok{{else}}{{if .HasRun}}err{{else}}pending{{end}}{{end}}">{{if not .HasRun}}starting{{else if .LastSuccess}}ok{{else}}failing{{end}}</span></td>
+      <td>{{if .LastSuccess}}{{.LastFinishedAt}}{{end}}</td>
+      <td>{{.Staleness}}</td>
+      <td>{{.LastError}}</td>
+      <td>{{.Runs}}</td>
+      <td>{{.Failures}}</td>
+      {{else}}
+      <td class="skipped" colspan="6">skipped &mdash; {{.SkipReason}}</td>
+      {{end}}
+    </tr>
+    {{end}}
+  </table>
+  {{end}}
+
+  <p><small>generated {{.GeneratedAt}}</small></p>
+</body>
+</html>
