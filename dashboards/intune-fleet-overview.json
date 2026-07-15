@@ -1,0 +1,2392 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "id": 2,
+      "title": "About this dashboard",
+      "type": "text",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "### Intune fleet overview \u2014 graph2otel\n\ngraph2otel exports **OTLP** metrics. Grafana Cloud (Mimir/Prometheus) normalizes OTLP\nmetric names on ingest: dots become underscores, and unit/type suffixes may be appended\n(`_total`, `_seconds`, `_ratio`, ...) depending on the OTLP-to-Prometheus pipeline\nconfiguration. Every PromQL query below uses the underscored convention, e.g.\n`intune.devices.count` &rarr; `intune_devices_count`. **Exact names depend on your\ningest pipeline config** \u2014 some setups preserve original names or omit `_total`. If a\npanel reads empty, check your metric names first with `{__name__=~\"intune_.*\"}`.\n\nPanels marked **(beta)** read from Intune collectors that are opt-in/experimental\n(`settingsCatalog`, Autopilot profiles, update rings, driver updates, certificates).\nThey show no data until the corresponding beta collector is enabled \u2014 see\n`docs/collectors.md` \u2014 and are not evidence of a broken dashboard.\n\nAll panels are scoped by the `$tenant` template variable and filter on `tenant_id`.\nEvery series here is a bounded aggregate (count by state/OS/policy/category) \u2014 never a\nper-device or per-user series, per the cardinality boundary in `SECURITY.md`."
+      }
+    },
+    {
+      "id": 3,
+      "title": "Managed devices",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "panels": []
+    },
+    {
+      "id": 4,
+      "title": "Devices by compliance state",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (compliance_state) (intune_devices_count{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{compliance_state}}"
+        }
+      ],
+      "description": "intune.devices.count{compliance_state,operating_system}",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Devices by operating system",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (operating_system) (intune_devices_count{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{operating_system}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Device inventory overview",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 17
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (os) (intune_devices_overview_total{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{os}}"
+        }
+      ],
+      "description": "intune.devices.overview.total{os}",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Encrypted devices by OS",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 17
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (operating_system) (intune_devices_encrypted_count{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{operating_system}}"
+        }
+      ],
+      "description": "intune.devices.encrypted.count{operating_system}",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Enrollment type overview",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 25
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(intune_devices_overview_enrolled_device_count{tenant_id=~\"$tenant\"})",
+          "legendFormat": "enrolled"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(intune_devices_overview_mdm_enrolled_device_count{tenant_id=~\"$tenant\"})",
+          "legendFormat": "mdm enrolled"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(intune_devices_overview_dual_enrolled_device_count{tenant_id=~\"$tenant\"})",
+          "legendFormat": "dual enrolled"
+        }
+      ],
+      "description": "intune.devices.overview.{enrolled,mdm_enrolled,dual_enrolled}_device_count",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "Device sync staleness",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 25
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (staleness_bucket) (intune_devices_sync_staleness_seconds{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{staleness_bucket}}"
+        }
+      ],
+      "description": "intune.devices.sync_staleness_seconds{staleness_bucket}",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "Compliance",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 33
+      },
+      "panels": []
+    },
+    {
+      "id": 11,
+      "title": "Devices by compliance policy state",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 34
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (state) (intune_compliance_devices{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{state}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "Compliance by policy",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 34
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (policy_name, state) (intune_compliance_policy_devices{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{policy_name}} / {{state}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 13,
+      "title": "Compliance policy user rollup",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 42
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (policy_name, state) (intune_compliance_policy_users{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{policy_name}} / {{state}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "title": "Compliance policy version",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 42
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "intune_compliance_policy_version{tenant_id=~\"$tenant\"}",
+          "legendFormat": "{{policy_name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      }
+    },
+    {
+      "id": 15,
+      "title": "Compliance setting rollup by platform",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 50
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (setting_name, platform, state) (intune_compliance_setting_devices{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{setting_name}} / {{platform}} / {{state}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 16,
+      "title": "Configuration profiles",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 59
+      },
+      "panels": []
+    },
+    {
+      "id": 17,
+      "title": "Config profile count by type",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 60
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (odata_type) (intune_config_profile_count{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{odata_type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 18,
+      "title": "Config profile status",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 60
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (profile_name, state) (intune_config_profile_status{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{profile_name}} / {{state}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 19,
+      "title": "Config profile version",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 68
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "intune_config_profile_version{tenant_id=~\"$tenant\"}",
+          "legendFormat": "{{profile_name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      }
+    },
+    {
+      "id": 20,
+      "title": "Apps / MAM",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 75
+      },
+      "panels": []
+    },
+    {
+      "id": 21,
+      "title": "Mobile apps by type / publishing state",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 76
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (app_type, publishing_state) (intune_mobile_apps_count{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{app_type}} / {{publishing_state}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 22,
+      "title": "Mobile app config status",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 76
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (policy_name, status) (intune_mobile_app_config_status{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{policy_name}} / {{status}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 23,
+      "title": "App protection policy count",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 84
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (platform, assigned) (intune_app_protection_policy_count{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{platform}} / assigned={{assigned}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 24,
+      "title": "Flagged app registrations",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 84
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (flagged_reason, platform) (intune_app_protection_flagged_registrations{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{flagged_reason}} / {{platform}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 25,
+      "title": "Windows Information Protection (WIP) policy count",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 92
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (assigned) (intune_wip_policy_count{tenant_id=~\"$tenant\"})",
+          "legendFormat": "assigned={{assigned}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 26,
+      "title": "Autopilot (beta)",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 99
+      },
+      "panels": []
+    },
+    {
+      "id": 27,
+      "title": "Autopilot devices by enrollment state",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 100
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (enrollment_state, group_tag) (intune_autopilot_devices{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{enrollment_state}} / {{group_tag}}"
+        }
+      ],
+      "description": "beta collector \u2014 reads empty unless the Autopilot beta collector is enabled (see docs/collectors.md).",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 28,
+      "title": "Stale Autopilot contact by group tag",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 100
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (group_tag) (intune_autopilot_stale_contact_count{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{group_tag}}"
+        }
+      ],
+      "description": "beta collector \u2014 reads empty unless the Autopilot beta collector is enabled (see docs/collectors.md).",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 29,
+      "title": "Autopilot deployment profile count",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 108
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (device_type, preprovisioning_allowed) (intune_autopilot_profile_count{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{device_type}} / preprovisioning={{preprovisioning_allowed}}"
+        }
+      ],
+      "description": "beta collector \u2014 reads empty unless the Autopilot beta collector is enabled (see docs/collectors.md).",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 30,
+      "title": "Updates (beta)",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 115
+      },
+      "panels": []
+    },
+    {
+      "id": 31,
+      "title": "Update ring status by ring",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 116
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (ring_name, state) (intune_update_ring_status{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{ring_name}} / {{state}}"
+        }
+      ],
+      "description": "beta collector \u2014 update ring / driver update metrics read empty unless the Windows Update beta collector is enabled (see docs/collectors.md).",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 32,
+      "title": "Update ring pause state",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 116
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (ring_name, update_type) (intune_update_ring_pause_state{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{ring_name}} / {{update_type}}"
+        }
+      ],
+      "description": "beta collector \u2014 update ring / driver update metrics read empty unless the Windows Update beta collector is enabled (see docs/collectors.md).",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 33,
+      "title": "Update ring pause expiry",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 124
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "intune_update_ring_pause_expiry_seconds{tenant_id=~\"$tenant\"}",
+          "legendFormat": "{{ring_name}} / {{update_type}}"
+        }
+      ],
+      "description": "beta collector \u2014 update ring / driver update metrics read empty unless the Windows Update beta collector is enabled (see docs/collectors.md).",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 34,
+      "title": "Update ring rollback active",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 124
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (ring_name, update_type) (intune_update_ring_rollback_active{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{ring_name}} / {{update_type}}"
+        }
+      ],
+      "description": "beta collector \u2014 update ring / driver update metrics read empty unless the Windows Update beta collector is enabled (see docs/collectors.md).",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 35,
+      "title": "Driver updates pending approval",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 132
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (profile_name) (intune_driver_update_pending_approval{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{profile_name}}"
+        }
+      ],
+      "description": "beta collector \u2014 update ring / driver update metrics read empty unless the Windows Update beta collector is enabled (see docs/collectors.md).",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 36,
+      "title": "Endpoint analytics",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 139
+      },
+      "panels": []
+    },
+    {
+      "id": 37,
+      "title": "UXA score by category / health state",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 140
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "avg by (category, health_state) (intune_uxa_score{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{category}} / {{health_state}}"
+        }
+      ],
+      "description": "intune.uxa.score{category,health_state} \u2014 average, not per-device.",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 38,
+      "title": "App crash count by app",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 140
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (app_name) (intune_uxa_app_crash_count{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{app_name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 39,
+      "title": "Boot time distribution by restart category",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 148
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, restart_category) (rate(intune_uxa_boot_time_ms_bucket{tenant_id=~\"$tenant\"}[5m])))",
+          "legendFormat": "p95 {{restart_category}}"
+        }
+      ],
+      "description": "intune.uxa.boot_time_ms histogram, p95 by restart_category.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 40,
+      "title": "Login time distribution by restart category",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 148
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, restart_category) (rate(intune_uxa_login_time_ms_bucket{tenant_id=~\"$tenant\"}[5m])))",
+          "legendFormat": "p95 {{restart_category}}"
+        }
+      ],
+      "description": "intune.uxa.login_time_ms histogram, p95 by restart_category.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 41,
+      "title": "Malware / Defender",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 156
+      },
+      "panels": []
+    },
+    {
+      "id": 42,
+      "title": "Malware detected devices",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 157
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(intune_malware_overview_detected_devices{tenant_id=~\"$tenant\"})",
+          "legendFormat": "detected devices"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(intune_malware_overview_total{tenant_id=~\"$tenant\"})",
+          "legendFormat": "total"
+        }
+      ],
+      "description": "Aggregate snapshot, not the audit-log event stream (see M5 WindowCollectors).",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 43,
+      "title": "Malware by severity / category",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 157
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (severity) (intune_malware_overview_by_severity{tenant_id=~\"$tenant\"})",
+          "legendFormat": "severity={{severity}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (category) (intune_malware_overview_by_category{tenant_id=~\"$tenant\"})",
+          "legendFormat": "category={{category}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 44,
+      "title": "Defender protection state by signal",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 165
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (signal) (intune_defender_protection_state{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{signal}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 45,
+      "title": "Defender product status",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 165
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (status) (intune_defender_product_status{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 46,
+      "title": "Apple tokens",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 173
+      },
+      "panels": []
+    },
+    {
+      "id": 47,
+      "title": "Apple token days until expiry",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 174
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "intune_apple_token_days_until_expiry{tenant_id=~\"$tenant\"}",
+          "legendFormat": "{{token_name}} ({{type}}, {{state}})"
+        }
+      ],
+      "description": "intune.apple_token.days_until_expiry{type,state,token_name} \u2014 countdown; coordinate with the alert rule in alerts/ (#30), same metric name.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 14
+              },
+              {
+                "color": "green",
+                "value": 30
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 48,
+      "title": "Apple token synced device count",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 174
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (token_name) (intune_apple_token_synced_device_count{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{token_name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 49,
+      "title": "Connectors",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 182
+      },
+      "panels": []
+    },
+    {
+      "id": 50,
+      "title": "Connector state",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 183
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (connector_type, state) (intune_connector_state{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{connector_type}} / {{state}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 51,
+      "title": "Connector heartbeat age",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 183
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "intune_connector_heartbeat_age_seconds{tenant_id=~\"$tenant\"}",
+          "legendFormat": "{{connector_type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 52,
+      "title": "MTD partner platform coverage",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 191
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (platform, enabled) (intune_connector_mtd_platform_total{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{platform}} / enabled={{enabled}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 53,
+      "title": "Certificates (beta)",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 198
+      },
+      "panels": []
+    },
+    {
+      "id": 54,
+      "title": "Certificate days until expiry",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 199
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "intune_certificate_days_until_expiry{tenant_id=~\"$tenant\"}",
+          "legendFormat": "{{cert_profile_name}} ({{expiry_bucket}}, {{state}})"
+        }
+      ],
+      "description": "beta collector \u2014 certificate state is flagged beta-api; reads empty unless the certificate collector is enabled (see docs/collectors.md). Metric name kept consistent with the alert rule in alerts/ (#30).",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 14
+              },
+              {
+                "color": "green",
+                "value": 30
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      }
+    },
+    {
+      "id": 55,
+      "title": "Certificate state count",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 199
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (state) (intune_certificate_state_count{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{state}}"
+        }
+      ],
+      "description": "beta collector \u2014 certificate state is flagged beta-api; reads empty unless the certificate collector is enabled (see docs/collectors.md). Metric name kept consistent with the alert rule in alerts/ (#30).",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 56,
+      "title": "Enrollment configuration",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 207
+      },
+      "panels": []
+    },
+    {
+      "id": 57,
+      "title": "Enrollment config count by type",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 208
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (config_type) (intune_enrollment_config_count{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{config_type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 20
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 58,
+      "title": "Enrollment config priority",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 208
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "intune_enrollment_config_priority{tenant_id=~\"$tenant\"}",
+          "legendFormat": "{{config_type}} / {{config_name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      }
+    },
+    {
+      "id": 59,
+      "title": "Enrollment config version",
+      "type": "table",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 216
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "intune_enrollment_config_version{tenant_id=~\"$tenant\"}",
+          "legendFormat": "{{config_name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      }
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "tags": [
+    "graph2otel",
+    "intune"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "text": "prometheus",
+          "value": "prometheus"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Data source",
+        "multi": false,
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "type": "datasource"
+      },
+      {
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(intune_devices_count, tenant_id)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Tenant",
+        "multi": true,
+        "name": "tenant",
+        "options": [],
+        "query": {
+          "query": "label_values(intune_devices_count, tenant_id)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Intune Fleet Overview",
+  "uid": "intune-fleet-overview",
+  "version": 1,
+  "weekStart": ""
+}

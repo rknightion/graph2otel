@@ -1,0 +1,1296 @@
+{
+  "title": "graph2otel: Entra ID compliance overview",
+  "uid": "graph2otel-entra-compliance",
+  "description": "Entra ID directory hygiene, licensing, credential expiry, CA/PIM posture, secure score, MFA, and risk \u2014 built from graph2otel's entra.* metrics (M2). See top panel for the OTLP-to-Prometheus naming caveat.",
+  "tags": [
+    "graph2otel",
+    "entra"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "refresh": "5m",
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0,
+        "label": "Data source",
+        "refresh": 1
+      },
+      {
+        "name": "tenant",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(tenant_id)",
+          "refId": "tenant"
+        },
+        "definition": "label_values(tenant_id)",
+        "current": {},
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "label": "Tenant",
+        "refresh": 2,
+        "sort": 1
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "",
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Entra ID compliance overview** \u2014 built against graph2otel's `entra.*` OTLP metric namespace (see CLAUDE.md \"Metric namespaces\"). Panel queries below use the OTLP&rarr;Prometheus underscored convention (dots become underscores; counters may carry a `_total` suffix) \u2014 e.g. `entra.devices.total` &rarr; `entra_devices_total`. Exact normalization depends on your OTLP&rarr;Prometheus pipeline (Grafana Alloy / Collector config); adjust metric names to match your setup if they differ. Panels marked **P1**/**P2** read as empty on a tenant without that Entra ID license tier, and panels for a disabled/beta collector read empty until it's enabled \u2014 see graph2otel's `collectors.*.enabled` config."
+      }
+    },
+    {
+      "id": 2,
+      "type": "row",
+      "title": "Directory objects",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Directory objects by type",
+      "description": "Total directory objects (users, groups, devices, service principals, ...) grouped by object type.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (type) (entra_directory_objects_total{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{type}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Users by account state / type",
+      "description": "User count broken down by account_enabled and user_type (bounded enum labels, not per-UPN).",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (account_enabled, user_type) (entra_users_total{tenant_id=~\"$tenant\"})",
+          "legendFormat": "enabled={{account_enabled}} type={{user_type}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Groups by type",
+      "description": "Group count by group_type/membership_type/security_enabled/mail_enabled.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 13
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (group_type, membership_type, security_enabled, mail_enabled) (entra_groups_total{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{group_type}}/{{membership_type}} sec={{security_enabled}} mail={{mail_enabled}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Devices by trust type",
+      "description": "Device count by Entra ID trust type (Azure AD joined, hybrid joined, registered).",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 13
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (trust_type) (entra_devices_total{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{trust_type}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "row",
+      "title": "Stale accounts",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Stale users by threshold",
+      "description": "Users with no sign-in activity beyond each configured staleness threshold, bucketed by threshold_days (not per-UPN).",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (threshold_days) (entra_users_stale_total{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{threshold_days}}d",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Stale devices by threshold",
+      "description": "Devices with no activity beyond each configured staleness threshold, bucketed by threshold_days (not per-device).",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (threshold_days) (entra_devices_stale_total{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{threshold_days}}d",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Licensing",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Licenses consumed by SKU",
+      "description": "Consumed license units per SKU.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 31
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (sku) (entra_license_consumed{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{sku}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Licenses enabled by SKU",
+      "description": "Enabled/purchased license units per SKU.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 31
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (sku) (entra_license_enabled{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{sku}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "row",
+      "title": "Credential expiry",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 39
+      }
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Expiring credentials by bucket",
+      "description": "App/service-principal credentials expiring, bucketed by days-to-expiry (expiry_bucket) \u2014 never one series per credential, per the M2 cardinality strategy.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (expiry_bucket) (entra_credentials_expiring_total{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{expiry_bucket}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Expiring credentials by owner/credential type",
+      "description": "Same expiring-credential data grouped by owner_type (application/servicePrincipal) and credential_type (password/certificate).",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 40
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (owner_type, credential_type) (entra_credentials_expiring_total{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{owner_type}}/{{credential_type}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "type": "row",
+      "title": "Conditional Access & named locations",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 48
+      }
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "CA policies by state",
+      "description": "Conditional Access policy count by state (enabled/disabled/reportOnly).",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 49
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (state) (entra_ca_policies_total{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{state}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "Named locations by type/trust",
+      "description": "Named location count by type (IP range / country) and trusted flag.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 49
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (type, is_trusted) (entra_named_locations_total{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{type}} trusted={{is_trusted}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "type": "row",
+      "title": "Directory roles & PIM",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 57
+      }
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Standing role members by role",
+      "description": "Active directory role assignment count by role_name (bounded by number of built-in/custom roles).",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 58
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (role_name) (entra_roles_members_total{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{role_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "PIM assignments by role (requires Entra ID P2)",
+      "description": "**Requires Entra ID P2.** PIM eligible + active assignment counts by role_name and assignment_type. Reads empty (no data) on a tenant without P2.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 58
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (role_name, assignment_type) (entra_pim_assignments_total{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{role_name}}/{{assignment_type}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "PIM permanent assignments by role (requires Entra ID P2)",
+      "description": "**Requires Entra ID P2.** Standing (non-time-bound) PIM role assignments by role_name \u2014 a posture signal, since permanent assignments defeat PIM's just-in-time model. Reads empty without P2.",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 66
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (role_name) (entra_pim_permanent_assignments_total{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{role_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "type": "row",
+      "title": "Secure score",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 74
+      }
+    },
+    {
+      "id": 24,
+      "type": "stat",
+      "title": "Secure score",
+      "description": "Current secure score as a percentage of the tenant's achievable maximum.",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 75
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "graphMode": "area"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "avg(entra_secure_score_percentage{tenant_id=~\"$tenant\"})",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "type": "timeseries",
+      "title": "Secure score current vs max",
+      "description": "Raw current and maximum achievable secure score points, trended over time.",
+      "gridPos": {
+        "h": 8,
+        "w": 18,
+        "x": 6,
+        "y": 75
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "avg(entra_secure_score_current{tenant_id=~\"$tenant\"}) or avg(entra_secure_score_max{tenant_id=~\"$tenant\"})",
+          "legendFormat": "current/max",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "type": "timeseries",
+      "title": "Control profiles by category",
+      "description": "Secure score control profile count by category (Identity, Device, Apps, ...).",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 83
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (category) (entra_secure_score_control_profiles_by_category{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{category}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "type": "timeseries",
+      "title": "Control profiles by status",
+      "description": "Secure score control profile count by remediation status (completed/toReview/ignored/...).",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 83
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (status) (entra_secure_score_control_profiles_by_status{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 28,
+      "type": "row",
+      "title": "MFA & authentication methods",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 91
+      }
+    },
+    {
+      "id": 29,
+      "type": "timeseries",
+      "title": "MFA registration by status",
+      "description": "User count by MFA registration status (registered/enabled/capable/...).",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 92
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (status) (entra_mfa_registration_users_total{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "type": "timeseries",
+      "title": "Auth methods registered",
+      "description": "Registered authentication method count by method type (bounded enum, e.g. authenticatorApp, fido2, sms).",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 92
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (method) (entra_mfa_registration_methods_total{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{method}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "Admin MFA-capable",
+      "description": "Count of privileged-role admins who are/aren't MFA-capable.",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 92
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (is_admin) (entra_mfa_admin_mfa_capable_total{tenant_id=~\"$tenant\"})",
+          "legendFormat": "admin={{is_admin}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "type": "row",
+      "title": "Risk (requires Entra ID P2)",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 100
+      }
+    },
+    {
+      "id": 33,
+      "type": "timeseries",
+      "title": "Risky users by level/state (requires Entra ID P2)",
+      "description": "**Requires Entra ID P2 (Identity Protection).** Current risky-user gauge \u2014 a state snapshot, not an event count \u2014 grouped by risk_level and risk_state. Reads empty (no data) without P2.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 101
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (risk_level, risk_state) (entra_risky_users_total{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{risk_level}}/{{risk_state}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "type": "timeseries",
+      "title": "Risky service principals by level/state (requires Entra ID P2)",
+      "description": "**Requires Entra ID P2 (Identity Protection).** Current risky-service-principal gauge, grouped by risk_level and risk_state. Reads empty (no data) without P2.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 101
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (risk_level, risk_state) (entra_risky_service_principals_total{tenant_id=~\"$tenant\"})",
+          "legendFormat": "{{risk_level}}/{{risk_state}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}
