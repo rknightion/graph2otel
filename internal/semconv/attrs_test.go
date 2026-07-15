@@ -13,3 +13,15 @@ func TestSelfObsConstants(t *testing.T) {
 		t.Errorf("UnitDimensionless = %q, want %q", UnitDimensionless, "1")
 	}
 }
+
+func TestCollectorConstants(t *testing.T) {
+	if AttrCollector != "collector" {
+		t.Errorf("AttrCollector = %q, want %q", AttrCollector, "collector")
+	}
+	if AttrTenantID != "tenant_id" {
+		t.Errorf("AttrTenantID = %q, want %q", AttrTenantID, "tenant_id")
+	}
+	if UnitSeconds != "s" {
+		t.Errorf("UnitSeconds = %q, want %q", UnitSeconds, "s")
+	}
+}
