@@ -1,0 +1,160 @@
+# graph2otel
+
+Polls the Microsoft Graph API (Entra ID + Intune) and exports **OpenTelemetry-native
+metrics + logs** over OTLP, optimized for Grafana Cloud. Single static Go binary, OTLP
+push only — there is no Prometheus pull endpoint. Multi-tenant from day one: one process
+can poll several tenants concurrently. Focus: Entra ID directory/sign-in/audit activity
+and Intune device compliance monitoring. See `README.md` for the user-facing pitch.
+
+> **Status:** pre-1.0, active development. Version starts at `0.1.0`
+> (`.release-please-manifest.json`). The Architecture section below tracks the actual
+> code — update it as the composition root and collectors land; don't let it drift into
+> aspirational fiction.
+
+## Commands
+
+```sh
+go build ./cmd/graph2otel   # build the binary (or: go build ./...)
+go test -race ./...         # unit + integration tests (race detector on)
+go vet ./...
+golangci-lint run           # lint (v2 config, .golangci.yml)
+golangci-lint fmt           # apply gofmt + goimports
+make check                  # vet + test + lint + govulncheck + build — the green bar
+```
+
+`make check` is the full gate; run it before every commit. CI runs the same steps.
+
+## Development methodology
+
+- **Work directly on `main` and push unprompted.** This is an `rknightion` repo with
+  GitHub Issues as the source of truth — commit straight to `main` and push immediately
+  once a completing commit lands (the push is what fires the issue-closing keyword). No
+  feature branches, no PR flow for first-party work. Bypass-on-push output ("Bypassed
+  rule violations...") is expected admin behavior, not an error.
+- **GitHub issues are the record of intent and progress**, not this file. Before starting
+  substantial work, file an issue with the plan + acceptance criteria; keep it live as you
+  work (tick checkboxes, comment at checkpoints); close it via a `Closes #NN` trailer on
+  the completing commit. A future session with no memory of this one should be able to
+  reconstruct what happened from GitHub alone.
+- **Specs & plans are local scratch, never committed:** brainstorming/design docs and
+  implementation plans live under `docs/superpowers/` (gitignored). Adversarially
+  self-review a plan before acting on it — attack it for placeholders, contradictions,
+  hidden assumptions, and scope creep.
+- **Strict TDD:** failing test → watch it fail for the right reason → minimal code →
+  green → refactor. Standard-library `testing` only — no testify or other third-party
+  assertion library.
+- Keep `go build ./... && go vet ./... && go test -race ./...` and `golangci-lint run`
+  green after every change; commit a **green** state between units of work — evidence,
+  not assertion.
+- **Conventional Commits:** `type(scope): subject` (`feat`/`fix`/`perf`/`refactor`/`docs`/
+  `chore`/`ci`/`build`/`test`). release-please's changelog sections show `feat`/`fix`/
+  `perf`/`refactor`; `docs`/`test`/`chore`/`ci`/`build` are hidden.
+
+## Architecture (the seams)
+
+Intended shape, closest architectural analogs: `sf2loki`'s Source/Sink/CheckpointStore
+composition-root pattern (poll a tenant-scoped SaaS API, single global instance, avoid
+over-building HA prematurely) and `tailscale2otel`'s poll → `telemetry.Emitter` facade.
+
+- **Multi-tenant config** (`internal/config`) — a `tenants` list, each entry a tenant ID +
+  client ID + per-domain collector overrides. Auth material (client secret/certificate)
+  comes from environment variables consumed by `azidentity.DefaultAzureCredential`, never
+  from YAML.
+- **Graph client factory** — wraps `msgraph-sdk-go` v1.0, re-attaches Kiota's default
+  middlewares (retry, redirect, compression, telemetry) explicitly under our own
+  OTEL-instrumented transport, and applies per-workload client-side rate limiters
+  (directory RU budget / reporting 5-per-10s / Identity-Protection 1-per-s / Intune
+  general + elevated Devices tier / Intune reports-export 48-per-min) — none of these
+  workloads reliably send `Retry-After`, so backoff is our own responsibility.
+- **Collector framework** (ported from tailscale2otel) — typed `SnapshotCollector`
+  (inventory → OTEL metric gauges/counters) and `WindowCollector` (event streams → OTEL
+  logs, checkpointed watermark + overlap + seen-id dedupe, since none of the log
+  endpoints support delta queries or reliable server-side ordering). A `Registry` +
+  goroutine-per-collector `Scheduler` with stagger.
+- **Telemetry emitter facade** (`internal/telemetry`, arrives with the framework) — the
+  only thing touching OTLP metrics + logs, so exporter details never leak into
+  collectors. Grafana Cloud auth header + the `/v1/metrics` / `/v1/logs` URL-path
+  distinction live here, once.
+- **CheckpointStore** — file-based, namespaced per tenant + endpoint, storing
+  `{watermark, overlap_window, seen_ids}` so a restart resumes from `watermark - overlap`
+  rather than re-fetching or dropping data across out-of-order arrivals.
+- Single-instance, no HA/leader-election in v1 — none of the polled Graph endpoints
+  support consumer-group/delta semantics that would make multi-replica coordination
+  pay for itself. Revisit only if a real multi-replica requirement shows up.
+
+**v1 skeleton package layout:** only `internal/config` and `internal/version` exist in
+the scaffold. Framework packages (`internal/telemetry`, `internal/graphclient`,
+`internal/collector`, `internal/checkpoint`, …) land via the M1 backlog issues, not the
+scaffold — keeps the initial CI fast and the diff reviewable.
+
+## Config & secrets
+
+- **Env var prefix:** `G2O_`, double-underscore for nesting (koanf layered:
+  defaults < YAML < env) — e.g. `otlp.endpoint` → `G2O_OTLP__ENDPOINT`.
+- **Top-level config keys:** `tenants` (list: `tenant_id`, `auth`, per-domain collector
+  overrides), `otlp`, `collectors`, `log_level`, `admin`. See `config.example.yaml`.
+- **Auth:** Microsoft Entra ID app registration (tenant ID + client ID + client secret or
+  certificate), consumed via `azidentity.DefaultAzureCredential` from
+  `AZURE_TENANT_ID` / `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` or
+  `AZURE_CLIENT_CERTIFICATE_PATH`. Never in YAML. Grant the minimum read-only Graph API
+  application permission scopes each enabled collector needs.
+- `config.local.yaml` and `.env` are gitignored — never commit credentials.
+
+## Metric namespaces
+
+Exported domain metrics use OTLP dot notation: `entra.*` for Entra ID signals, `intune.*`
+for Intune signals. Self-observability (collector success/duration/staleness, build
+info) uses `graph2otel.*`. Keep these namespaces consistent across collectors — a new
+collector emitting outside its domain's namespace is a bug.
+
+## OpenTelemetry dependency lockstep
+
+`go.opentelemetry.io/otel` (core, v1.44.0) and `go.opentelemetry.io/otel/sdk/log`
+(v0.20.0) are a **lockstep pair** — the log SDK's minor version tracks the core SDK's
+release train and they must be bumped together, never independently. Renovate groups them
+(see `renovate.json`); if you bump one by hand, bump the other to its matching release
+and re-run `make check`.
+
+## Cardinality & PII guidance
+
+Entra ID and Intune data are **not** low-cardinality infrastructure metadata — sign-in
+logs, device compliance records, and directory objects carry real PII (UPNs/emails,
+device names, sign-in IP addresses, group memberships). The boundary rule (see
+`SECURITY.md` for the full rationale):
+
+- **High-cardinality, per-entity data never becomes an OTEL metric label.** Per-user,
+  per-device, per-sign-in identifiers (UPN, device ID, IP address, correlation ID) belong
+  in the **logs** pipeline as structured attributes, not as metric label dimensions.
+- **Metrics carry bounded, tenant-shaped aggregates** — counts by compliance state, by
+  operating system, by policy, by risk level, by license SKU. A metric series whose
+  cardinality grows with tenant size (rather than with the number of policies/states/
+  categories) is a bug.
+- Default to **read-only, least-privilege** Graph API scopes; never request more than the
+  declared signal needs.
+
+## Project-wide gotchas
+
+- **No delta query exists** for any of the log-shaped endpoints (`signIns`,
+  `directoryAudits`, `provisioning`, `riskDetections`, `riskyUsers`, Intune
+  `auditEvents`). Every `WindowCollector` owns its own watermark — there is no
+  server-side cursor to lean on.
+- **Two independent Graph throttle ceilings with no `Retry-After`:** the reporting
+  workload (5 req/10s per app per tenant) and the Identity Protection workload (1 req/s
+  per tenant, across all apps). Intune has its own tighter ceiling again, and the Intune
+  reports-export API is tighter still (48/min per app). Client-side rate limiters are not
+  optional.
+- **Four separate sign-in pollers are required**, not one: interactive, non-interactive,
+  service principal, and managed identity sign-in event types cannot be combined in a
+  single `signInEventTypes` filter query.
+- **Some sign-in sub-types are beta-only** (`signInEventTypes` filter on
+  `/auditLogs/signIns`) — Microsoft's own docs call this "not recommended for
+  production." Treat as beta until proven otherwise on v1.0; verify at implementation
+  time rather than trusting older docs.
+- **Reports export API needs a write-level scope just to create the export job**, even
+  though a read-only exporter only ever reads the result back — document this, don't
+  silently request more scope than that one exception requires.
+- **Graph cannot see everything.** `MicrosoftGraphActivityLogs`,
+  `EnrichedOffice365AuditLogs`, and most of Intune `OperationalLogs` have no Graph
+  endpoint at all — they exist only via diagnostic settings → Event Hub/Log Analytics.
+  graph2otel is not a full replacement for that pipeline; see the README's honest-scope
+  section.

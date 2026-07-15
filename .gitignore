@@ -1,0 +1,31 @@
+# Scratch plans/specs/research — never committed (see operating model)
+docs/superpowers/
+
+# Go
+/graph2otel
+/bin/
+/dist/
+*.test
+*.out
+coverage.*
+/.tools/
+
+# Third-party notices are a release artifact (regenerated per dependency bump,
+# baked into the image / attached to the GitHub Release) — never committed.
+/THIRD_PARTY_NOTICES.md
+
+# Local config / secrets — NEVER commit
+config.local.yaml
+config.smoke.yaml
+.env
+.env.local
+.secrets/
+
+# Local checkpoint / state files from running the binary locally
+/checkpoints/
+*.checkpoint.json
+
+.DS_Store
+
+# Zensical docs-site build output (once the docs site exists)
+site/

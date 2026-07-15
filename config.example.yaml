@@ -1,0 +1,37 @@
+# graph2otel example configuration.
+#
+# This file is optional: with no -config flag graph2otel runs from its
+# built-in defaults plus environment variables alone (the container-friendly
+# path). Any key you omit here keeps its default; any key you set here is
+# overridden by the matching G2O_ environment variable if one is set (env
+# always wins). See the "__" nesting rule below.
+#
+# IMPORTANT — no secrets or auth material belong in this file, ever:
+#   * Tenant credentials (client secret, certificate, or workload/managed
+#     identity) are NEVER read from tenants[] or from any key in this file.
+#     They come from azidentity.DefaultAzureCredential, which reads its own
+#     well-known environment variables at run time:
+#       AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET,
+#       AZURE_CLIENT_CERTIFICATE_PATH, or ambient workload/managed identity.
+#     tenants[].tenant_id / client_id below are non-secret identifiers only —
+#     they select which tenant/app registration a collector run targets.
+#   * otlp.grafana_cloud.token IS a credential and belongs in the
+#     G2O_OTLP__GRAFANA_CLOUD__TOKEN environment variable instead of this
+#     file. It is shown here only to document the key name.
+
+log_level: info # debug | info | warn | error
+
+# tenants lists every Entra tenant graph2otel polls. At least one entry is
+# required unless otlp.protocol is "stdout". Set via env with
+# G2O_TENANTS__<index>__<field> is NOT supported (a flat env var cannot
+# express a list of structs) — use this file for tenants.
+tenants:
+  - tenant_id: "00000000-0000-0000-0000-000000000000" # Entra tenant GUID or verified domain
+    client_id: "" # app registration (application) ID; optional if AZURE_CLIENT_ID is set
+
+otlp:
+  protocol: http # grpc | http | stdout
+  endpoint: "https://otlp-gateway-prod-us-central-0.grafana.net/otlp"
+  grafana_cloud:
+    instance_id: "" # Grafana Cloud OTLP instance ID
+    token: "" # DO NOT set here — use G2O_OTLP__GRAFANA_CLOUD__TOKEN instead

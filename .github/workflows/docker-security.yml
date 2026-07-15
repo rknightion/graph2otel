@@ -1,0 +1,14 @@
+name: Docker Security
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '33 5 * * 2'
+  workflow_dispatch:
+permissions: {}
+jobs:
+  docker-security:
+    permissions:
+      contents: read
+      security-events: write
+    uses: rknightion/.github/.github/workflows/docker-security.yml@65aedb61754e9bf31e947c17409256ba0c58c637 # v1.4.3

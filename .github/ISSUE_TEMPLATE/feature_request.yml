@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest an enhancement or a new collector
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What are you trying to achieve? What Entra ID / Intune signal is missing today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: |
+        What you'd like to see. Note any new collector must fit the existing SnapshotCollector /
+        WindowCollector model and document its Graph API permissions and cardinality impact.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false

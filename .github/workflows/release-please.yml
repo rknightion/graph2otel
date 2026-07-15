@@ -1,0 +1,110 @@
+name: Release
+
+# Releases are driven by release-please from Conventional Commits (the repo's
+# commit convention). On every push to main, the `release-please` job maintains
+# a "release PR" that accumulates the changelog + the next version. Merging that
+# PR makes release-please create the GitHub Release + a `vX.Y.Z` tag and sets
+# `release_created=true`, which unlocks the GoReleaser + publish jobs below.
+#
+# The release-please step authenticates with a PAT (RELEASE_PLEASE_TOKEN), not
+# GITHUB_TOKEN: a bot-authored release PR opened under the default token never
+# auto-runs CI that pulls in another repo's reusable workflow (parked at
+# action_required). A PAT identity is treated as a trusted author, so CI runs
+# unattended — see rknightion release-please-pat convention.
+#
+# Images are published by the `publish`/`edge` jobs via the shared rknightion
+# container-publish reusable (native matrix, cosign, provenance, SBOM, Trivy).
+# GoReleaser (`--skip=docker`) ONLY builds the cross-compiled binaries +
+# checksums + archive SBOMs and uploads them to the release release-please
+# created; it does NOT overwrite the release body, so release-please stays the
+# single owner of the changelog/notes. Snapshot ("edge") :main images come from
+# the `edge` job on every non-release push to main.
+on:
+  push:
+    branches: [main]
+
+# Least-privilege default; each job widens this as needed.
+permissions:
+  contents: read
+
+concurrency:
+  # Serialize releases; never cancel one mid-flight.
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: release-please (maintain release PR / cut release)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub Release + tag
+      pull-requests: write # open/maintain the release PR
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+      major: ${{ steps.release.outputs.major }}
+      minor: ${{ steps.release.outputs.minor }}
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
+        with:
+          # PAT (not GITHUB_TOKEN): bot-authored release PRs need a non-default-token author for CI to run without manual approval
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+
+  # Build + push the image for the freshly-created tag via the shared rknightion
+  # container-publish reusable. Same run as the merge that created the release.
+  publish:
+    name: publish (image)
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    uses: ./.github/workflows/publish.yml
+    permissions:
+      contents: write        # attach SBOMs + third-party notices to the GitHub Release
+      packages: write
+      id-token: write        # cosign keyless signing + provenance attestation
+      attestations: write
+      security-events: write # Trivy SARIF upload
+    with:
+      release_tag: ${{ needs.release-please.outputs.tag_name }}
+
+  # Edge build on every non-release push to main: publishes the :main multi-arch
+  # image via the shared reusable. release_created gates this vs publish, so they
+  # never both run on one push.
+  edge:
+    name: edge (:main image)
+    needs: release-please
+    if: needs.release-please.outputs.release_created != 'true'
+    uses: ./.github/workflows/publish.yml
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    with:
+      release_tag: ""
+
+  # Binaries via the shared GoReleaser reusable: cross-compiled binaries + checksums +
+  # archive SBOMs + cosign signatures, uploaded to the release-please release. Images +
+  # THIRD_PARTY_NOTICES are published by the `publish` job (container-publish reusable),
+  # so this skips docker. pre-cmd installs the pinned syft (archive SBOMs) + go-licenses;
+  # there is no scripts/notices.sh yet (see the `notices` job in publish.yml, and the
+  # tracked follow-up issue to add a THIRD_PARTY_NOTICES generation script).
+  binaries:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    permissions:
+      contents: write # upload release assets
+      id-token: write # keyless cosign signing
+      packages: write
+      attestations: write # SLSA build provenance (.intoto.jsonl) attached to the release
+    # Pinned past v1.4.3 for the checksums-locate fix (the attest step was nondeterministically
+    # handed the cosign .sigstore.json bundle instead of SHA256SUMS). Renovate will repin this to
+    # the tag once the shared repo cuts its next release.
+    uses: rknightion/.github/.github/workflows/binaries.yml@d1c590b295b9d7f2535fadc7bc5e74f2eddbd512 # main
+    with:
+      release-tag: ${{ needs.release-please.outputs.tag_name }}
+      install-cosign: true
+      goreleaser-args: "release --clean --skip=docker"
+      pre-cmd: "go install github.com/anchore/syft/cmd/syft@v1.18.1 && go install github.com/google/go-licenses@v1.6.0"

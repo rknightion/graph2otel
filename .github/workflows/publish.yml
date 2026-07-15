@@ -1,0 +1,77 @@
+# Publish the multi-arch image to GHCR via the shared rknightion
+# container-publish reusable (native amd64+arm64 matrix, cosign signing, provenance,
+# syft SPDX+CycloneDX SBOM, Trivy). Called by release-please.yml when a release is
+# created (release_tag set). Also workflow_dispatch-able: leave release_tag empty
+# for an edge (:main) test build, or set it to re-publish a tag.
+#
+# No helm-chart-path input: graph2otel does not ship a Helm chart yet (tracked as
+# a future M6 issue). container-publish.yml treats an empty/omitted input as
+# "skip the chart publish step".
+name: publish
+
+on:
+  workflow_call:
+    inputs:
+      release_tag:
+        description: "Release tag to publish, e.g. v1.2.3"
+        required: false
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag (vX.Y.Z) to publish; empty = edge (:main) test build"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    permissions:
+      contents: write        # SBOMs attached to the release (when release_tag set)
+      packages: write
+      id-token: write
+      attestations: write
+      security-events: write
+    uses: rknightion/.github/.github/workflows/container-publish.yml@65aedb61754e9bf31e947c17409256ba0c58c637 # v1.4.3
+    with:
+      release-tag: ${{ inputs.release_tag }}
+      dockerfile: Dockerfile
+
+  # go-licenses third-party notices (Go-specific; migrates to the shared binaries
+  # reusable later). Releases only. Generates THIRD_PARTY_NOTICES.md inline since
+  # there is no scripts/notices.sh yet (tracked as a future follow-up issue).
+  notices:
+    if: inputs.release_tag != ''
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Harden the runner (audit egress)
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.release_tag }}
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Install go-licenses
+        run: go install github.com/google/go-licenses@v1.6.0
+      - name: Generate third-party notices
+        run: |
+          go-licenses report ./... --template .github/notices.tpl > THIRD_PARTY_NOTICES.md || \
+          go-licenses csv ./... > THIRD_PARTY_NOTICES.md
+      - name: Attach third-party notices to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: gh release upload "${RELEASE_TAG}" THIRD_PARTY_NOTICES.md --clobber

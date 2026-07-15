@@ -1,0 +1,49 @@
+name: Bug report
+description: Report a defect in graph2otel
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. Please do **not** include secrets, tokens, tenant identifiers, or
+        any Entra ID / Intune record content in this report.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, including what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps, config (with secrets/tenant IDs redacted), and the collector(s) involved.
+      placeholder: |
+        1. Config used (redact ${ENV} values and tenant/client IDs) ...
+        2. Run ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `graph2otel --version` (or the image tag).
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: How it runs (binary / container / k8s), Go version if built from source, OS/arch.
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs / self-obs metrics
+      description: Redacted logs or `graph2otel.*` self-observability metrics. No tenant data or credentials.
+      render: shell
+    validations:
+      required: false

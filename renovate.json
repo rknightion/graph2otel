@@ -1,0 +1,13 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "postUpdateOptions": ["gomodTidy"],
+  "packageRules": [
+    {
+      "description": "OpenTelemetry: update core (v1.x) and the 0.x log modules together in ONE PR and never automerge - a core bump without the log modules (or vice-versa) breaks the build.",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["go.opentelemetry.io/otel{,/**}"],
+      "groupName": "OpenTelemetry",
+      "automerge": false
+    }
+  ]
+}

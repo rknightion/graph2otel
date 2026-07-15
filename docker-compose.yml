@@ -1,0 +1,46 @@
+# Minimal docker-compose for graph2otel.
+#
+# Usage:
+#   1. Copy config.example.yaml to config.yaml and fill in your tenant(s) (auth
+#      material still comes from env/DefaultAzureCredential — never put secrets
+#      in the YAML).
+#   2. Put your secrets in a .env file next to this compose file (gitignored), e.g.:
+#        AZURE_TENANT_ID=...
+#        AZURE_CLIENT_ID=...
+#        AZURE_CLIENT_SECRET=...
+#        G2O_OTLP__GRAFANA_CLOUD__INSTANCE_ID=...
+#        G2O_OTLP__GRAFANA_CLOUD__TOKEN=...
+#   3. docker compose up --build
+#
+# graph2otel is OTLP push-only — there is no scrape port to expose, so this
+# compose file has no `ports:` block.
+services:
+  graph2otel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-compose}
+    image: ghcr.io/rknightion/graph2otel:latest
+    restart: unless-stopped
+    # Image is distroless+nonroot already; these enforce it at the daemon level.
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      # DefaultAzureCredential reads these directly (client-secret flow shown;
+      # swap AZURE_CLIENT_SECRET for AZURE_CLIENT_CERTIFICATE_PATH to use a cert).
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
+      G2O_OTLP__ENDPOINT: ${G2O_OTLP__ENDPOINT:-}
+      G2O_OTLP__GRAFANA_CLOUD__INSTANCE_ID: ${G2O_OTLP__GRAFANA_CLOUD__INSTANCE_ID:-}
+      G2O_OTLP__GRAFANA_CLOUD__TOKEN: ${G2O_OTLP__GRAFANA_CLOUD__TOKEN:-}
+      G2O_LOG_LEVEL: ${G2O_LOG_LEVEL:-info}
+    # Mount a real config for tenant list + per-domain collector overrides
+    # (auth material still comes from the env vars above, never from the file).
+    volumes:
+      - ./config.yaml:/etc/graph2otel/config.yaml:ro
+    command: ["--config", "/etc/graph2otel/config.yaml"]

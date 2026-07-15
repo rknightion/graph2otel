@@ -1,0 +1,48 @@
+# golangci-lint v2 configuration.
+#
+#   golangci-lint run     # report issues
+#   golangci-lint fmt     # apply formatters (gofmt, goimports)
+version: "2"
+
+linters:
+  # "standard" = errcheck, govet, ineffassign, staticcheck, unused.
+  default: standard
+  enable:
+    - bodyclose # HTTP response bodies must be closed (Graph API calls are all HTTP)
+    - errorlint # correct errors.Is/As/%w wrapping
+    - gosec # common security mistakes
+    - misspell # typos in comments and strings
+    - unconvert # redundant type conversions
+  settings:
+    misspell:
+      locale: US
+  exclusions:
+    generated: lax
+    presets:
+      - common-false-positives
+      - std-error-handling
+    rules:
+      # Tests favour brevity over exhaustive error/security checks.
+      - path: _test\.go
+        linters:
+          - bodyclose
+          - errcheck
+          - gosec
+      # SA5011 false-positives on the idiomatic `if x == nil { t.Fatal(...) }`
+      # guard: t.Fatal terminates the test so the later deref is unreachable, but
+      # staticcheck's package loading in CI does not always recognise t.Fatal as
+      # no-return. The code is correct; suppress the false positive in tests only.
+      - path: _test\.go
+        linters:
+          - staticcheck
+        text: "SA5011"
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+issues:
+  # Surface every finding in CI rather than hiding duplicates (defaults cap at 3).
+  max-issues-per-linter: 0
+  max-same-issues: 0
