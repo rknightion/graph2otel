@@ -13,4 +13,5 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/licensing"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/organization"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/risk"
+	_ "github.com/rknightion/graph2otel/internal/collectors/entra/securescore"
 )
