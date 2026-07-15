@@ -225,3 +225,27 @@ device names, sign-in IP addresses, group memberships). The boundary rule (see
   **empty response body** → `json.Unmarshal` fails with `"unexpected end of JSON input"`.
   Treat an empty body as an empty list (zero rows), and treat such deprecated-endpoint
   fetches as best-effort — never fail the collector on them.
+- **Some Intune event endpoints reject a server-side `$filter`** (M5, verified live).
+  `troubleshootingEvents` and `autopilotEvents` don't support a `$filter` on their time
+  field; the logpipeline engine's `EndpointConfig.NoServerFilter` omits the server filter
+  and bounds the window CLIENT-SIDE instead (heavier — no lower bound on the wire — but
+  correct). `auditEvents` DOES support a time `$filter`, so it uses the normal path.
+- **The reports export API needs one WRITE scope just to create a job** (M5). `POST
+  /deviceManagement/reports/exportJobs` requires one of `DeviceManagement*.ReadWrite.All`
+  even though the exporter only reads the result back — the single break in graph2otel's
+  read-only property. Export report collectors are opt-in (`Experimental`) and declare
+  that one scope; document it, don't request more than one.
+- **Not every "available report" supports export, and reportName/select are exact-match**
+  (M5, verified live). `POST exportJobs` 400s with NO fuzzy match on a wrong `reportName`
+  or `select` column — always smoke-test names/columns against a live tenant. Beyond wrong
+  names: (a) some reports listed in Microsoft's available-reports catalog are **not
+  export-supported** — `DeviceEnrollmentFailures` → 400 `"PostExportJobAsync not supported
+  for reportType"`; (b) some require a **mandatory filter** and have no fleet-wide form —
+  `DeviceInstallStatusByApp` → 400 `"restriction filter needed"` (needs a per-app
+  `ApplicationId`), so use the aggregate variant (`AppInstallStatusAggregate`) where one
+  exists; per-policy reports (feature updates) likewise need a `PolicyId` fan-out.
+- **Intune export CSVs are not RFC-4180-strict** (M5, verified live). They carry a leading
+  **UTF-8 BOM** (corrupts the first header name if not stripped) and **bare double-quotes
+  in unquoted fields** (Go's `encoding/csv` rejects with `"bare \""`). The `exportjob`
+  parser strips the BOM and sets `LazyQuotes = true` + `FieldsPerRecord = -1`. Always send
+  an explicit `select` — Microsoft warns default columns can change without notice.
