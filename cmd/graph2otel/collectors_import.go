@@ -9,4 +9,5 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/domains"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/groups"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/licensing"
+	_ "github.com/rknightion/graph2otel/internal/collectors/entra/organization"
 )
