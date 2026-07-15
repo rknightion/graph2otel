@@ -13,6 +13,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/config"
+	"github.com/rknightion/graph2otel/internal/exportjob"
 	"github.com/rknightion/graph2otel/internal/graphclient"
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
@@ -95,8 +96,13 @@ func setupTenant(
 
 	registry := collector.NewRegistry()
 
-	// Snapshot collectors (metric-shaped inventory polls).
-	deps := collectors.Deps{Graph: gc, TenantID: ta.TenantID, Logger: tlog, Caps: caps}
+	// Snapshot collectors (metric-shaped inventory polls). exporter runs the
+	// Intune reports export-job pipeline (POST → poll → download → parse) for the
+	// M5 export-based report collectors; it shares gc's instrumented, rate-limited
+	// (48/min export bucket) transport for create/poll and a plain client for the
+	// unauthenticated SAS download.
+	exporter := exportjob.New(gc, exportjob.DefaultDownloader(), exportjob.Options{})
+	deps := collectors.Deps{Graph: gc, TenantID: ta.TenantID, Logger: tlog, Caps: caps, Export: exporter}
 	for _, factory := range collectors.All() {
 		c := factory(deps)
 		if interval, ok := gateCollector(c, ta, cfg, caps, tlog, skips); ok {

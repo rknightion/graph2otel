@@ -96,6 +96,16 @@ type EndpointConfig struct {
 	// whole window before sorting client-side by the record's parsed
 	// TimeField value rather than trusting server order.
 	OrderByReliable bool
+	// NoServerFilter, when true, omits the server-side time-window $filter
+	// entirely — for Intune event endpoints (troubleshootingEvents,
+	// autopilotEvents) that reject a $filter on their time field (HTTP 400).
+	// The endpoint's whole (retention-bounded) collection is drained and Poll
+	// bounds the window CLIENT-SIDE, dropping records outside [from, to]
+	// before dedupe/emit, which preserves the "newest <= to" watermark
+	// invariant. Heavier than a server-filtered fetch (no lower bound on the
+	// wire), so reserve it for endpoints that genuinely reject $filter; verify
+	// live before setting it. FilterExtra is ignored when this is set.
+	NoServerFilter bool
 	// SafetyLag trails the window's upper bound; defaults to
 	// DefaultSafetyLag when zero.
 	SafetyLag time.Duration
@@ -185,6 +195,13 @@ func Poll(ctx context.Context, cfg EndpointConfig, cp *checkpoint.Checkpoint, fr
 			if ev.Timestamp.IsZero() {
 				ev.Timestamp = t
 			}
+			// With no server-side $filter, the endpoint returns its whole
+			// collection, so bound the window client-side: drop records outside
+			// [from, to]. This keeps newest <= to (watermark invariant) and
+			// stops events inside the SafetyLag tail from emitting early.
+			if cfg.NoServerFilter && (t.Before(from) || t.After(to)) {
+				continue
+			}
 			all = append(all, drainedRecord{id: id, ev: ev, t: t})
 		}
 		pageURL = next
@@ -243,7 +260,9 @@ func Poll(ctx context.Context, cfg EndpointConfig, cp *checkpoint.Checkpoint, fr
 // @odata.nextLink verbatim — Poll never builds $skip itself.
 func buildFirstURL(cfg EndpointConfig, from, to time.Time) string {
 	q := url.Values{}
-	q.Set("$filter", buildFilter(cfg, from, to))
+	if !cfg.NoServerFilter {
+		q.Set("$filter", buildFilter(cfg, from, to))
+	}
 	if cfg.OrderByReliable {
 		q.Set("$orderby", cfg.TimeField+" asc")
 	}

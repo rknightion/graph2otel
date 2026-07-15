@@ -15,6 +15,7 @@ import (
 	"log/slog"
 
 	"github.com/rknightion/graph2otel/internal/collector"
+	"github.com/rknightion/graph2otel/internal/exportjob"
 	"github.com/rknightion/graph2otel/internal/license"
 )
 
@@ -49,6 +50,11 @@ type Deps struct {
 	// present (e.g. entra.users population counts always, stale-accounts only
 	// under P1).
 	Caps license.Capabilities
+	// Export runs Intune reports export jobs (POST → poll → download → parse)
+	// for the export-based report collectors (M5 #37/#38/#40/#41/#42). Only
+	// those collectors use it; every other collector ignores it. The
+	// composition root builds one per tenant.
+	Export exportjob.Runner
 }
 
 // Factory constructs one snapshot collector instance for a tenant. Window

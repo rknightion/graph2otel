@@ -1,8 +1,10 @@
 package graphclient
 
 import (
+	"compress/gzip"
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -82,6 +84,88 @@ func TestRawGetUsesInstrumentedTransportAndBearer(t *testing.T) {
 	}
 	if gotAuth != "Bearer secret-token" {
 		t.Errorf("Authorization = %q, want bearer token", gotAuth)
+	}
+}
+
+// TestRawPostSendsBodyBearerAndContentType: the POST hatch (used by the Intune
+// reports export-job subsystem to create jobs) attaches the bearer token, sets
+// Content-Type: application/json, sends the body, reads through the retrying
+// transport (a 429 is retried), and returns the response body on 2xx.
+func TestRawPostSendsBodyBearerAndContentType(t *testing.T) {
+	var gotAuth, gotCT, gotBody, gotMethod string
+	first := true
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		gotCT = r.Header.Get("Content-Type")
+		gotMethod = r.Method
+		// The instrumented transport's compression middleware gzips the request
+		// body (Kiota default; Graph accepts it), so decompress before asserting.
+		var reader io.Reader = r.Body
+		if r.Header.Get("Content-Encoding") == "gzip" {
+			gz, gzErr := gzip.NewReader(r.Body)
+			if gzErr != nil {
+				t.Errorf("gzip.NewReader: %v", gzErr)
+			} else {
+				defer gz.Close()
+				reader = gz
+			}
+		}
+		b, _ := io.ReadAll(reader)
+		gotBody = string(b)
+		if first {
+			first = false
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":"job-1","status":"notStarted"}`))
+	}))
+	defer srv.Close()
+
+	ta := &auth.TenantAuth{TenantID: "t", Cred: fakeCredential{token: "secret-token"}}
+	c, err := NewClient(context.Background(), ta, Options{RetryDelaySeconds: 1})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	body, err := c.RawPost(context.Background(), srv.URL, []byte(`{"reportName":"x"}`), nil)
+	if err != nil {
+		t.Fatalf("RawPost: %v", err)
+	}
+	if string(body) != `{"id":"job-1","status":"notStarted"}` {
+		t.Errorf("body = %q, want the JSON payload", body)
+	}
+	if gotMethod != http.MethodPost {
+		t.Errorf("method = %q, want POST", gotMethod)
+	}
+	if gotAuth != "Bearer secret-token" {
+		t.Errorf("Authorization = %q, want bearer token", gotAuth)
+	}
+	if gotCT != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", gotCT)
+	}
+	if gotBody != `{"reportName":"x"}` {
+		t.Errorf("request body = %q, want the posted JSON", gotBody)
+	}
+}
+
+// TestRawPostReturnsErrorWithStatusAndBodyOnNon2xx: a non-2xx POST response is
+// surfaced as an error including the status and body (the export API 400s on a
+// bad reportName/select column, which the subsystem must classify).
+func TestRawPostReturnsErrorWithStatusAndBodyOnNon2xx(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"code":"BadRequest"}}`))
+	}))
+	defer srv.Close()
+
+	ta := &auth.TenantAuth{TenantID: "t", Cred: fakeCredential{token: "secret-token"}}
+	c, err := NewClient(context.Background(), ta, Options{RetryDelaySeconds: 1})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	if _, err := c.RawPost(context.Background(), srv.URL, []byte(`{}`), nil); err == nil {
+		t.Fatal("expected RawPost to return an error on HTTP 400")
 	}
 }
 

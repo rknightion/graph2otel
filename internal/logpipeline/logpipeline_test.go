@@ -311,6 +311,91 @@ func TestBuildFirstURLBaseURLOverride(t *testing.T) {
 	}
 }
 
+// TestBuildFirstURLOmitsFilterWhenNoServerFilter verifies that an endpoint
+// flagged NoServerFilter (e.g. Intune troubleshootingEvents / autopilotEvents,
+// which reject a server-side $filter on their time field) gets NO $filter query
+// param — the window is bounded client-side in Poll instead. $top still applies,
+// and $orderby only when the order is trusted.
+func TestBuildFirstURLOmitsFilterWhenNoServerFilter(t *testing.T) {
+	cfg := EndpointConfig{
+		Path:           "/deviceManagement/autopilotEvents",
+		TimeField:      "eventDateTime",
+		Flavor:         FlavorGeLe,
+		NoServerFilter: true,
+		PageSize:       100,
+	}
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+
+	raw := buildFirstURL(cfg, from, to)
+	u, err := url.Parse(raw)
+	if err != nil {
+		t.Fatalf("url.Parse(%q): %v", raw, err)
+	}
+	if got := u.Query().Get("$filter"); got != "" {
+		t.Errorf("$filter = %q, want empty (NoServerFilter omits the server-side time filter)", got)
+	}
+	if got := u.Query().Get("$top"); got != "100" {
+		t.Errorf("$top = %q, want 100 (page size still applies)", got)
+	}
+}
+
+// TestPollClientSideWindowFiltersWhenNoServerFilter verifies that when the
+// server-side $filter is omitted (NoServerFilter), Poll drops records outside
+// [from, to] client-side — so an event newer than `to` (inside the SafetyLag
+// tail) is not emitted early and does not push the watermark past to-SafetyLag,
+// and an event older than `from` is not re-emitted.
+func TestPollClientSideWindowFiltersWhenNoServerFilter(t *testing.T) {
+	rec := telemetrytest.New()
+	store := checkpoint.NewStore(t.TempDir())
+
+	cfg := EndpointConfig{
+		Path:           "/deviceManagement/troubleshootingEvents",
+		TimeField:      "eventDateTime",
+		Flavor:         FlavorGeLe,
+		NoServerFilter: true,
+		SafetyLag:      15 * time.Minute,
+		Overlap:        2 * time.Hour,
+		Map:            mapByID,
+	}
+	from := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+	inWindow := from.Add(30 * time.Minute)
+	beforeWindow := from.Add(-time.Hour)
+	afterWindow := to.Add(30 * time.Minute)
+
+	fetcher := pageFetcherFunc(func(_ context.Context, _ string) ([]map[string]any, string, error) {
+		return []map[string]any{
+			{"id": "before", "eventDateTime": beforeWindow.Format(time.RFC3339)},
+			{"id": "in", "eventDateTime": inWindow.Format(time.RFC3339)},
+			{"id": "after", "eventDateTime": afterWindow.Format(time.RFC3339)},
+		}, "", nil
+	})
+
+	cp, err := store.Load("tenant1", cfg.Path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	hw, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter())
+	if err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+
+	logs := rec.LogRecords()
+	var ids []string
+	for _, l := range logs {
+		ids = append(ids, l.Attrs["id"])
+	}
+	if len(ids) != 1 || ids[0] != "in" {
+		t.Fatalf("emitted ids = %v, want exactly [in] (before/after are outside the window)", ids)
+	}
+	// Watermark must reflect the in-window event, never the after-window one.
+	wantHW := inWindow.Add(-cfg.SafetyLag)
+	if !hw.Equal(wantHW) {
+		t.Errorf("high water = %v, want in-window(%v) - safetyLag = %v", hw, inWindow, wantHW)
+	}
+}
+
 // TestPollSortsClientSideWhenOrderByUnreliable verifies that for an endpoint
 // flagged OrderByReliable=false, Poll sorts the drained window by event time
 // before emitting rather than trusting server order, and that the returned

@@ -1,6 +1,7 @@
 package graphclient
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -65,6 +66,48 @@ func (c *Client) RawGetWithHeaders(ctx context.Context, url string, headers map[
 		return nil, fmt.Errorf("graphclient: GET %s: status %d: %s", url, resp.StatusCode, string(body))
 	}
 	return body, nil
+}
+
+// RawPost performs a POST against an absolute Graph URL through the SAME
+// instrumented, retrying, rate-limited transport as the typed client, attaching
+// a bearer token for GraphDefaultScope and Content-Type: application/json. It is
+// the create side of the Intune reports export-job subsystem (#17): POST
+// /deviceManagement/reports/exportJobs to create a job. body is sent verbatim as
+// the request payload; caller-supplied headers layer on top of the defaults
+// (caller headers win on collision, but cannot strip Authorization). A non-2xx
+// response is returned as an error including the status and body, so the caller
+// can classify the export API's report-specific 400s (bad reportName/select).
+func (c *Client) RawPost(ctx context.Context, url string, body []byte, headers map[string]string) ([]byte, error) {
+	tok, err := c.cred.GetToken(ctx, policy.TokenRequestOptions{Scopes: []string{auth.GraphDefaultScope}})
+	if err != nil {
+		return nil, fmt.Errorf("graphclient: tenant %q: acquire token: %w", c.TenantID, err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("graphclient: build request %s: %w", url, err)
+	}
+	req.Header.Set("Authorization", "Bearer "+tok.Token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("graphclient: POST %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxRawBodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("graphclient: read %s body: %w", url, err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("graphclient: POST %s: status %d: %s", url, resp.StatusCode, string(respBody))
+	}
+	return respBody, nil
 }
 
 // maxRawBodyBytes caps a raw-REST response read so a pathological/hostile
