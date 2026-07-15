@@ -11,6 +11,11 @@ package deps
 import (
 	_ "github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	_ "github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	_ "github.com/microsoft/kiota-abstractions-go"
+	_ "github.com/microsoft/kiota-authentication-azure-go"
+	_ "github.com/microsoft/kiota-http-go"
+	_ "github.com/microsoftgraph/msgraph-sdk-go"
+	_ "github.com/microsoftgraph/msgraph-sdk-go-core"
 	_ "go.opentelemetry.io/otel"
 	_ "go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	_ "go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
