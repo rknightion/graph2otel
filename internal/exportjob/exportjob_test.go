@@ -346,3 +346,29 @@ func TestExportEmitsSelfObsMetrics(t *testing.T) {
 		t.Fatalf("graph2otel.export.bytes = %+v, want one point with value %d", bytesPoints, len(zipBytes))
 	}
 }
+
+// TestParseCSVRowsToleratesBOMAndBareQuotes is the live-caught regression: the
+// Intune export CSVs carry a leading UTF-8 BOM and occasional bare double-quotes
+// in unquoted fields, which the default encoding/csv reader rejects. parseCSVRows
+// strips the BOM (so the first header isn't corrupted) and uses LazyQuotes.
+func TestParseCSVRowsToleratesBOMAndBareQuotes(t *testing.T) {
+	// BOM + header + a data row whose 3rd field carries a bare double-quote.
+	data := append([]byte{0xEF, 0xBB, 0xBF}, []byte("DeviceName,State,Note\nPC1,ok,a\"b\nPC2,fail,plain\n")...)
+	rows, err := parseCSVRows(data)
+	if err != nil {
+		t.Fatalf("parseCSVRows: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("got %d rows, want 2", len(rows))
+	}
+	// BOM must not corrupt the first header key.
+	if _, ok := rows[0]["DeviceName"]; !ok {
+		t.Errorf("first header corrupted by BOM; keys=%v", rows[0])
+	}
+	if rows[0]["Note"] != `a"b` {
+		t.Errorf("bare-quote field = %q, want a\"b", rows[0]["Note"])
+	}
+	if rows[1]["State"] != "fail" {
+		t.Errorf("row 2 State = %q, want fail", rows[1]["State"])
+	}
+}

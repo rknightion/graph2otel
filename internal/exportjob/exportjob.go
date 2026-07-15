@@ -361,8 +361,17 @@ func parseZIPPayload(zipBytes []byte, format Format) ([]Row, error) {
 
 // parseCSVRows parses data as CSV: the first row is the header, and every
 // subsequent row becomes a Row keyed by that header.
+//
+// The Intune export CSVs are not RFC-4180-strict (verified live): they carry a
+// leading UTF-8 BOM (which would otherwise corrupt the first header name) and
+// occasional bare double-quotes inside unquoted fields (which the default
+// encoding/csv reader rejects as "bare \""). So the BOM is stripped and the
+// reader runs with LazyQuotes and a variable field count.
 func parseCSVRows(data []byte) ([]Row, error) {
+	data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
 	r := csv.NewReader(bytes.NewReader(data))
+	r.LazyQuotes = true    // tolerate bare quotes inside unquoted fields
+	r.FieldsPerRecord = -1 // Intune rows can vary in field count; don't reject
 	records, err := r.ReadAll()
 	if err != nil {
 		return nil, fmt.Errorf("parse csv: %w", err)
