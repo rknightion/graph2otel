@@ -28,6 +28,12 @@ log_level: info # debug | info | warn | error
 tenants:
   - tenant_id: "00000000-0000-0000-0000-000000000000" # Entra tenant GUID or verified domain
     client_id: "" # app registration (application) ID; optional if AZURE_CLIENT_ID is set
+    # Optional per-tenant collector overrides. These layer on top of the global
+    # `collectors` block below, winning field-by-field, so one tenant can
+    # disable a collector (or retune its interval) that the rest keep enabled.
+    # collectors:
+    #   sign_ins:
+    #     enabled: false
 
 otlp:
   protocol: http # grpc | http | stdout
@@ -35,3 +41,25 @@ otlp:
   grafana_cloud:
     instance_id: "" # Grafana Cloud OTLP instance ID
     token: "" # DO NOT set here — use G2O_OTLP__GRAFANA_CLOUD__TOKEN instead
+
+# collectors overrides per-collector behavior globally (across all tenants),
+# keyed by collector name. A collector omitted here runs enabled at its
+# built-in default interval. `enabled` unset means "default true" (distinct from
+# an explicit false); `interval` unset (or 0) means "use the collector default".
+# A collector name containing an underscore stays addressable via env using the
+# "__" nesting / single "_" preserved rule, e.g. collectors.sign_ins.enabled ->
+# G2O_COLLECTORS__SIGN_INS__ENABLED=false.
+collectors: {}
+#   sign_ins:
+#     enabled: true
+#     interval: "5m"  # duration string: "30s", "5m", "168h" (minimum 1s)
+
+# admin exposes an operator health/status HTTP endpoint (liveness + per-collector
+# status). Disabled by default; bind address defaults to :9090.
+admin:
+  enabled: false
+  addr: ":9090"
+
+# checkpoint_dir is where window-log collectors persist their per-(tenant,
+# endpoint) watermarks so a restart resumes rather than re-fetching or dropping.
+checkpoint_dir: "./checkpoints"

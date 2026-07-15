@@ -26,6 +26,7 @@ package config
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/knadh/koanf/parsers/yaml"
@@ -51,6 +52,36 @@ type Config struct {
 	LogLevel string         `yaml:"log_level"`
 	Tenants  []TenantConfig `yaml:"tenants"`
 	OTLP     OTLPConfig     `yaml:"otlp"`
+	// Collectors holds global per-collector overrides keyed by collector name.
+	// A collector absent from this map runs with its built-in defaults
+	// (enabled, default interval). Per-tenant overrides on TenantConfig layer
+	// on top of these (see CollectorSettings).
+	Collectors map[string]CollectorConfig `yaml:"collectors"`
+	// Admin configures the operator health/status endpoint (#12).
+	Admin AdminConfig `yaml:"admin"`
+	// CheckpointDir is the root directory for the file-based CheckpointStore
+	// (#7); each (tenant, endpoint) window poller persists its watermark there.
+	CheckpointDir string `yaml:"checkpoint_dir"`
+}
+
+// CollectorConfig overrides a single collector's runtime behavior. It is used
+// both globally (Config.Collectors) and per-tenant (TenantConfig.Collectors),
+// with the tenant layer winning field-by-field over the global one.
+type CollectorConfig struct {
+	// Enabled toggles the collector. A nil pointer means "unset" — inherit the
+	// lower layer, ultimately defaulting to true — which is deliberately
+	// distinct from an explicit false (disable).
+	Enabled *bool `yaml:"enabled"`
+	// Interval overrides the collector's poll cadence. Zero means "unset" —
+	// inherit the lower layer, ultimately the collector's DefaultInterval
+	// (resolved by the scheduler, not here).
+	Interval time.Duration `yaml:"interval"`
+}
+
+// AdminConfig configures the admin/health HTTP endpoint (#12).
+type AdminConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Addr    string `yaml:"addr"`
 }
 
 // TenantConfig identifies one Entra tenant to poll. It intentionally carries
@@ -64,6 +95,47 @@ type TenantConfig struct {
 	// against this tenant. Optional: a single shared app registration across
 	// tenants can leave this unset and rely on AZURE_CLIENT_ID.
 	ClientID string `yaml:"client_id"`
+	// Collectors holds per-tenant collector overrides that layer on top of the
+	// global Config.Collectors — a tenant may disable a globally-enabled
+	// collector or tune its interval. See CollectorSettings.
+	Collectors map[string]CollectorConfig `yaml:"collectors"`
+}
+
+// CollectorSettings resolves the effective enabled state and interval for a
+// collector on a given tenant, applying the precedence:
+//
+//	per-tenant override > global collectors config > built-in default
+//
+// A returned interval of 0 means "no override — use the collector's
+// DefaultInterval" (the scheduler applies that fallback at registration). The
+// returned enabled flag defaults to true when neither layer sets it.
+func (c *Config) CollectorSettings(tenantID, collectorName string) (enabled bool, interval time.Duration) {
+	enabled = true // default when unset at every layer
+
+	if gc, ok := c.Collectors[collectorName]; ok {
+		if gc.Enabled != nil {
+			enabled = *gc.Enabled
+		}
+		if gc.Interval > 0 {
+			interval = gc.Interval
+		}
+	}
+
+	for i := range c.Tenants {
+		if c.Tenants[i].TenantID != tenantID {
+			continue
+		}
+		if tc, ok := c.Tenants[i].Collectors[collectorName]; ok {
+			if tc.Enabled != nil {
+				enabled = *tc.Enabled
+			}
+			if tc.Interval > 0 {
+				interval = tc.Interval
+			}
+		}
+		break
+	}
+	return enabled, interval
 }
 
 // OTLPConfig configures the OTLP exporter.
@@ -93,6 +165,11 @@ func Default() *Config {
 			Protocol: "http",
 			Endpoint: "https://otlp-gateway-prod-us-central-0.grafana.net/otlp",
 		},
+		Admin: AdminConfig{
+			Enabled: false,
+			Addr:    ":9090",
+		},
+		CheckpointDir: "./checkpoints",
 	}
 }
 
@@ -132,6 +209,10 @@ func Load(path string) (*Config, error) {
 		DecoderConfig: &mapstructure.DecoderConfig{
 			Result:           &cfg,
 			WeaklyTypedInput: true, // env values are strings ("true", "10", ...)
+			// Decode duration strings ("5m", "30s") from the file/env layers
+			// into time.Duration fields (collector intervals). Values already
+			// typed as time.Duration (the structs defaults layer) pass through.
+			DecodeHook: mapstructure.StringToTimeDurationHookFunc(),
 		},
 	}); err != nil {
 		return nil, fmt.Errorf("decode config: %w", err)
@@ -178,7 +259,32 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("tenants[%d].tenant_id %q: duplicate tenant", i, t.TenantID)
 		}
 		seen[t.TenantID] = true
+
+		for name, cc := range t.Collectors {
+			if err := validateInterval(cc.Interval); err != nil {
+				return fmt.Errorf("tenants[%d].collectors[%q].interval: %w", i, name, err)
+			}
+		}
 	}
 
+	for name, cc := range c.Collectors {
+		if err := validateInterval(cc.Interval); err != nil {
+			return fmt.Errorf("collectors[%q].interval: %w", name, err)
+		}
+	}
+
+	return nil
+}
+
+// minInterval is the smallest permitted collector poll interval. A positive
+// interval below this is almost certainly a mistake (a unit typo, e.g. "10ms"
+// instead of "10m") that would hammer Graph into throttling; reject it. A zero
+// interval is allowed — it means "use the collector's built-in default".
+const minInterval = time.Second
+
+func validateInterval(d time.Duration) error {
+	if d != 0 && d < minInterval {
+		return fmt.Errorf("%v is below the %v minimum (0 means use the collector default)", d, minInterval)
+	}
 	return nil
 }
