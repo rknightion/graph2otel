@@ -15,6 +15,7 @@ import (
 	"log/slog"
 
 	"github.com/rknightion/graph2otel/internal/collector"
+	"github.com/rknightion/graph2otel/internal/license"
 )
 
 // GraphClient is the narrow Graph-fetch seam every collector depends on. It is
@@ -40,6 +41,14 @@ type Deps struct {
 	TenantID string
 	// Logger is the process logger, for collector-side diagnostics.
 	Logger *slog.Logger
+	// Caps are the tenant's detected license capabilities. A collector that is
+	// fully premium-gated should instead implement license.CapabilityRequirer
+	// (the composition root then skips it entirely on an insufficient tier).
+	// Caps is for collectors that PARTIALLY degrade — emit a base signal on
+	// every tier and an extra premium-gated series only when the capability is
+	// present (e.g. entra.users population counts always, stale-accounts only
+	// under P1).
+	Caps license.Capabilities
 }
 
 // Factory constructs one snapshot collector instance for a tenant. Window

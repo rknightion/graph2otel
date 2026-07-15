@@ -91,7 +91,7 @@ func setupTenant(
 	license.EmitLicenseTier(emitter, ta.TenantID, caps)
 
 	registry := collector.NewRegistry()
-	deps := collectors.Deps{Graph: gc, TenantID: ta.TenantID, Logger: tlog}
+	deps := collectors.Deps{Graph: gc, TenantID: ta.TenantID, Logger: tlog, Caps: caps}
 	for _, factory := range collectors.All() {
 		c := factory(deps)
 		if ok, requiredCap, _ := license.ShouldRun(c, caps); !ok {
