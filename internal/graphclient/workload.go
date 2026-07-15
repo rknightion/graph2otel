@@ -73,6 +73,11 @@ var classifyRules = []workloadMatch{
 	{"/auditLogs/directoryAudits", WorkloadReporting},
 	{"/auditLogs/provisioning", WorkloadReporting},
 	{"/reports/", WorkloadReporting},
+	// Security alerts (alerts_v2): the security workload has moderate limits —
+	// not the 1 req/s IPC ceiling risk detections use — and no reliable
+	// Retry-After, so route it through the reporting-class limiter as a
+	// defensive backstop rather than leaving it unlimited (#25).
+	{"/security/alerts", WorkloadReporting},
 
 	// Directory object reads.
 	{"/users", WorkloadDirectory},

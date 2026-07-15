@@ -79,7 +79,7 @@ func (c *LogCollector) Lag() time.Duration { return c.LagValue }
 func (c *LogCollector) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter) (time.Time, error) {
 	cfg := c.Config.withDefaults()
 
-	cp, err := c.Store.Load(c.TenantID, cfg.Path)
+	cp, err := c.Store.Load(c.TenantID, cfg.checkpointKey())
 	if err != nil {
 		return from, fmt.Errorf("logpipeline: %s: load checkpoint: %w", c.NameField, err)
 	}

@@ -261,6 +261,56 @@ func TestBuildFilterGtLt(t *testing.T) {
 	}
 }
 
+// TestBuildFilterAppendsFilterExtra verifies that a non-empty FilterExtra is
+// ANDed onto the time-window clause (parenthesized), so an endpoint like the
+// beta signInEventTypes-filtered sign-in streams can narrow the window query
+// without re-implementing the time bounds.
+func TestBuildFilterAppendsFilterExtra(t *testing.T) {
+	cfg := EndpointConfig{
+		TimeField:   "createdDateTime",
+		Flavor:      FlavorGeLe,
+		FilterExtra: "signInEventTypes/any(t: t eq 'nonInteractiveUser')",
+	}
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 1, 1, 1, 0, 0, 0, time.UTC)
+
+	got := buildFilter(cfg, from, to)
+	want := "createdDateTime ge 2026-01-01T00:00:00Z and createdDateTime le 2026-01-01T01:00:00Z and (signInEventTypes/any(t: t eq 'nonInteractiveUser'))"
+	if got != want {
+		t.Fatalf("buildFilter(+FilterExtra) = %q, want %q", got, want)
+	}
+}
+
+// TestBuildFirstURLBaseURLOverride verifies that BaseURLOverride replaces the
+// default v1.0 service root for the first page (the beta signInEventTypes
+// streams need /beta), while the path still carries cfg.Path so workload
+// classification is unaffected.
+func TestBuildFirstURLBaseURLOverride(t *testing.T) {
+	cfg := EndpointConfig{
+		Path:            "/auditLogs/signIns",
+		TimeField:       "createdDateTime",
+		Flavor:          FlavorGeLe,
+		OrderByReliable: true,
+		BaseURLOverride: "https://graph.microsoft.com/beta",
+		PageSize:        100,
+	}
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+
+	raw := buildFirstURL(cfg, from, to)
+	if !strings.HasPrefix(raw, "https://graph.microsoft.com/beta/auditLogs/signIns?") {
+		t.Fatalf("built URL = %q, want it to start with the beta base + path", raw)
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		t.Fatalf("url.Parse(%q): %v", raw, err)
+	}
+	// Beta prefix must not defeat workload classification (Contains-based).
+	if workload := graphclient.ClassifyWorkload(u.Path); workload != graphclient.WorkloadReporting {
+		t.Fatalf("ClassifyWorkload(%q) = %q, want %q even on the beta path", u.Path, workload, graphclient.WorkloadReporting)
+	}
+}
+
 // TestPollSortsClientSideWhenOrderByUnreliable verifies that for an endpoint
 // flagged OrderByReliable=false, Poll sorts the drained window by event time
 // before emitting rather than trusting server order, and that the returned

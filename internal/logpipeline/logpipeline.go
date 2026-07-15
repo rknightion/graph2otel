@@ -60,6 +60,30 @@ type EndpointConfig struct {
 	// v1.0 service root; the real PageFetcher adapter (see
 	// graphclient_adapter.go) resolves it against that root.
 	Path string
+	// BaseURLOverride, when non-empty, replaces the default v1.0 service root
+	// for this endpoint's FIRST page — e.g.
+	// "https://graph.microsoft.com/beta" for the signInEventTypes-filtered
+	// sign-in streams (nonInteractiveUser/servicePrincipal/managedIdentity),
+	// which return HTTP 400 on v1.0 ("Could not find a property named
+	// 'signInEventTypes'") and exist only on beta. Subsequent pages follow the
+	// response's already-absolute @odata.nextLink verbatim, so only the first
+	// page URL consults this. The path still carries Path, so the transport's
+	// Contains-based workload classification is unaffected by the /beta prefix.
+	BaseURLOverride string
+	// FilterExtra, when non-empty, is an additional OData $filter predicate
+	// ANDed (parenthesized) onto the time-window clause — e.g.
+	// "signInEventTypes/any(t: t eq 'nonInteractiveUser')" for the filtered
+	// sign-in streams. Left empty for endpoints that filter on time alone.
+	FilterExtra string
+	// CheckpointKey, when non-empty, overrides Path as the checkpoint
+	// namespace (the endpoint component of the (tenant, endpoint) checkpoint
+	// key). Several collectors legitimately poll the SAME Path with different
+	// FilterExtra — the four sign-in event-type streams all hit
+	// "/auditLogs/signIns" — and would otherwise collide on one checkpoint,
+	// deduping each other's events away. Each sets a distinct CheckpointKey
+	// (e.g. "/auditLogs/signIns#nonInteractiveUser") so their watermarks and
+	// SeenIDs stay independent. Defaults to Path when empty.
+	CheckpointKey string
 	// TimeField is the record's time-window field used in $filter and (when
 	// OrderByReliable) $orderby, e.g. "createdDateTime" or
 	// "activityDateTime".
@@ -106,6 +130,16 @@ func (cfg EndpointConfig) withDefaults() EndpointConfig {
 		cfg.PageSize = DefaultPageSize
 	}
 	return cfg
+}
+
+// checkpointKey returns the checkpoint namespace for this endpoint:
+// CheckpointKey when set, otherwise Path. See CheckpointKey's field doc for
+// why the two are decoupled.
+func (cfg EndpointConfig) checkpointKey() string {
+	if cfg.CheckpointKey != "" {
+		return cfg.CheckpointKey
+	}
+	return cfg.Path
 }
 
 // PageFetcher fetches one page of a Graph collection response, abstracting
@@ -214,7 +248,11 @@ func buildFirstURL(cfg EndpointConfig, from, to time.Time) string {
 		q.Set("$orderby", cfg.TimeField+" asc")
 	}
 	q.Set("$top", strconv.Itoa(cfg.PageSize))
-	return graphV1BaseURL + cfg.Path + "?" + q.Encode()
+	base := graphV1BaseURL
+	if cfg.BaseURLOverride != "" {
+		base = cfg.BaseURLOverride
+	}
+	return base + cfg.Path + "?" + q.Encode()
 }
 
 // buildFilter renders the $filter expression for cfg's time window, in
@@ -226,7 +264,11 @@ func buildFilter(cfg EndpointConfig, from, to time.Time) string {
 	if cfg.Flavor == FlavorGtLt {
 		op1, op2 = "gt", "lt"
 	}
-	return fmt.Sprintf("%s %s %s and %s %s %s", cfg.TimeField, op1, fromStr, cfg.TimeField, op2, toStr)
+	window := fmt.Sprintf("%s %s %s and %s %s %s", cfg.TimeField, op1, fromStr, cfg.TimeField, op2, toStr)
+	if cfg.FilterExtra != "" {
+		return window + " and (" + cfg.FilterExtra + ")"
+	}
+	return window
 }
 
 // recordTime extracts and parses record[timeField] (an RFC3339 string, as

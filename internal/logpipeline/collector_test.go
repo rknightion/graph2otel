@@ -83,3 +83,51 @@ func TestLogCollectorPersistsAndResumesAcrossRestart(t *testing.T) {
 		t.Fatalf("expected 'a' emitted exactly once across the restart, got %d: %+v", len(logs), logs)
 	}
 }
+
+// TestLogCollectorCheckpointKeyIsolatesSharedPath verifies that two
+// collectors polling the SAME Graph path ("/auditLogs/signIns" — as the four
+// sign-in event-type streams do) but declaring distinct CheckpointKeys keep
+// independent checkpoint namespaces: a record seen by one must NOT be deduped
+// away for the other. Without CheckpointKey they would collide on Path and
+// silently drop each other's events.
+func TestLogCollectorCheckpointKeyIsolatesSharedPath(t *testing.T) {
+	dir := t.TempDir()
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	fetcher := pageFetcherFunc(func(_ context.Context, _ string) ([]map[string]any, string, error) {
+		return []map[string]any{
+			{"id": "shared-id", "createdDateTime": base.Add(10 * time.Minute).Format(time.RFC3339)},
+		}, "", nil
+	})
+
+	newCfg := func(key string) EndpointConfig {
+		return EndpointConfig{
+			Path:            "/auditLogs/signIns",
+			CheckpointKey:   key,
+			TimeField:       "createdDateTime",
+			Flavor:          FlavorGeLe,
+			OrderByReliable: true,
+			SafetyLag:       5 * time.Minute,
+			Overlap:         30 * time.Minute,
+			Map:             mapByID,
+		}
+	}
+
+	store := checkpoint.NewStore(dir)
+	rec := telemetrytest.New()
+	interactive := NewLogCollector("interactive", time.Minute, 5*time.Minute, "tenant1", newCfg("/auditLogs/signIns#interactive"), fetcher, store)
+	noninteractive := NewLogCollector("noninteractive", time.Minute, 5*time.Minute, "tenant1", newCfg("/auditLogs/signIns#nonInteractiveUser"), fetcher, store)
+
+	if _, err := interactive.CollectWindow(context.Background(), base, base.Add(30*time.Minute), rec.Emitter()); err != nil {
+		t.Fatalf("interactive CollectWindow: %v", err)
+	}
+	if _, err := noninteractive.CollectWindow(context.Background(), base, base.Add(30*time.Minute), rec.Emitter()); err != nil {
+		t.Fatalf("noninteractive CollectWindow: %v", err)
+	}
+
+	// The same "shared-id" is a DISTINCT event in each stream: both must emit.
+	logs := rec.LogRecords()
+	if len(logs) != 2 {
+		t.Fatalf("expected each stream to emit its own record (2 total), got %d — the two collectors collided on one checkpoint namespace: %+v", len(logs), logs)
+	}
+}

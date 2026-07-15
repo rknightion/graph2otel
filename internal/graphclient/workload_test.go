@@ -12,6 +12,8 @@ func TestClassifyWorkload(t *testing.T) {
 		{"/auditLogs/provisioning", WorkloadReporting},
 		{"/reports/applicationSignInSummary", WorkloadReporting},
 		{"/reports/credentialUserRegistrationDetails", WorkloadReporting},
+		{"/security/alerts_v2", WorkloadReporting},
+		{"/v1.0/security/alerts_v2", WorkloadReporting},
 		{"/identityProtection/riskyUsers", WorkloadIPC},
 		{"/identityProtection/riskDetections", WorkloadIPC},
 		{"/identityProtection/riskyServicePrincipals", WorkloadIPC},
