@@ -153,6 +153,24 @@ device names, sign-in IP addresses, group memberships). The boundary rule (see
 - **Reports export API needs a write-level scope just to create the export job**, even
   though a read-only exporter only ever reads the result back — document this, don't
   silently request more scope than that one exception requires.
+- **`$count` segment serves `text/plain`, not JSON** (M2, verified live). A
+  `GET /users/$count` (and any `/{type}/$count`) returns a bare integer as
+  `text/plain`; requesting it with `Accept: application/json` returns **HTTP
+  415**. `collectors.Count` sets `Accept: text/plain` + `ConsistencyLevel:
+  eventual` for this — always count through it, never a hand-rolled `$count` GET.
+- **`/users/$count` rejects a `signInActivity` filter with HTTP 502** (M2,
+  verified live). The `$count` path segment can't filter on `signInActivity`;
+  use the collection form `GET /users?$filter=…&$count=true&$top=1` reading
+  `@odata.count` (`collectors.CountViaCollection`) for signInActivity-based
+  counts. Simple-property filters (accountEnabled, userType) are fine on the
+  `$count` segment.
+- **URL-encode every `$filter` value** (M2, verified live). A raw
+  `$filter=appId eq '<guid>'` with literal spaces/quotes makes a malformed URL
+  and Graph returns **HTTP 400**; always `url.QueryEscape` the filter expression.
+- **`$select=keyCredentials` on a collection GET is throttled ~150 req/min per
+  tenant** (M2) — tighter than the general directory ceiling. Paging
+  `/applications` + `/servicePrincipals` for credential data in a large tenant
+  can approach it; keep `$select` minimal.
 - **Graph cannot see everything.** `MicrosoftGraphActivityLogs`,
   `EnrichedOffice365AuditLogs`, and most of Intune `OperationalLogs` have no Graph
   endpoint at all — they exist only via diagnostic settings → Event Hub/Log Analytics.
