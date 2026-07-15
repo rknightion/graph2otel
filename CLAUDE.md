@@ -146,10 +146,21 @@ device names, sign-in IP addresses, group memberships). The boundary rule (see
 - **Four separate sign-in pollers are required**, not one: interactive, non-interactive,
   service principal, and managed identity sign-in event types cannot be combined in a
   single `signInEventTypes` filter query.
-- **Some sign-in sub-types are beta-only** (`signInEventTypes` filter on
-  `/auditLogs/signIns`) — Microsoft's own docs call this "not recommended for
-  production." Treat as beta until proven otherwise on v1.0; verify at implementation
-  time rather than trusting older docs.
+- **The `signInEventTypes` filter is beta-only** (M3, verified live 2026-07-15). A
+  `GET /v1.0/auditLogs/signIns?$filter=…signInEventTypes/any(t: t eq 'nonInteractiveUser')`
+  returns **HTTP 400** — `"Could not find a property named 'signInEventTypes' on type
+  'microsoft.graph.signIn'"` — for `nonInteractiveUser`, `servicePrincipal`, AND
+  `managedIdentity`. The same query on `/beta/auditLogs/signIns` returns 200. Microsoft's
+  docs (updated 2025-06-30) document these filters only on `/beta` and call beta "not
+  recommended for production." So the three filtered sign-in streams (`entra.signins.
+  non_interactive` / `.service_principal` / `.managed_identity`) target the beta endpoint via
+  `logpipeline.EndpointConfig.BaseURLOverride` and are `Experimental` (opt-in); only the
+  interactive stream (`entra.signins.interactive`, the v1.0 default slice, no filter) is v1.0
+  and default-on. Confirmed under app-only cert auth with `AuditLog.Read.All`.
+- **Streams sharing a Graph path need distinct `CheckpointKey`s** (M3). The four sign-in
+  collectors all poll `/auditLogs/signIns`; without a per-stream
+  `logpipeline.EndpointConfig.CheckpointKey` they collide on one checkpoint namespace and
+  dedupe each other's events away. Each sets `"/auditLogs/signIns#<eventType>"`.
 - **Reports export API needs a write-level scope just to create the export job**, even
   though a read-only exporter only ever reads the result back — document this, don't
   silently request more scope than that one exception requires.
