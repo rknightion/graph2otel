@@ -1,0 +1,8 @@
+.git
+.github
+*.md
+docs/
+deploy/grafana/
+/graph2otel
+*_test.go
+.claude/
