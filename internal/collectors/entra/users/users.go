@@ -167,7 +167,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for _, days := range staleThresholdsDays {
 		cutoff := c.now().UTC().AddDate(0, 0, -days).Truncate(time.Second).Format("2006-01-02T15:04:05Z")
 		filter := fmt.Sprintf("signInActivity/lastSignInDateTime le %s", cutoff)
-		n, err := c.count(ctx, filter)
+		n, err := c.countStale(ctx, filter)
 		if err != nil {
 			c.logger.Warn("stale user count failed",
 				"collector", collectorName, "threshold_days", days, "error", err)
@@ -187,10 +187,21 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 }
 
 // count issues a sliced $count request for the given (unescaped) $filter
-// expression against /users.
+// expression against the /users/$count segment. Correct for simple-property
+// filters (accountEnabled, userType, onPremisesSyncEnabled).
 func (c *Collector) count(ctx context.Context, filter string) (int64, error) {
 	u := c.baseURL + "/users/$count?$filter=" + url.QueryEscape(filter)
 	return collectors.Count(ctx, c.g, u)
+}
+
+// countStale counts users matching a signInActivity filter. The /users/$count
+// segment returns HTTP 502 for a signInActivity filter (verified live against
+// Graph), so this uses the $count=true collection form reading @odata.count —
+// the documented way to count by signInActivity. $top=1&$select=id keeps the
+// response body tiny (we only read the count, not the page).
+func (c *Collector) countStale(ctx context.Context, filter string) (int64, error) {
+	u := c.baseURL + "/users?$filter=" + url.QueryEscape(filter) + "&$count=true&$top=1&$select=id"
+	return collectors.CountViaCollection(ctx, c.g, u)
 }
 
 func init() {

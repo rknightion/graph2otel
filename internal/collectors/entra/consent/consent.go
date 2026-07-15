@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	neturl "net/url"
 	"strings"
 	"time"
 
@@ -294,7 +295,11 @@ func (c *Collector) collectResourceAppRoleAssignments(ctx context.Context, ra re
 // resource isn't provisioned (e.g. no Exchange Online) returns (nil, nil),
 // not an error.
 func (c *Collector) resolveResourceServicePrincipal(ctx context.Context, appID string) (*servicePrincipalLookup, error) {
-	url := c.baseURL + "/servicePrincipals?$filter=appId eq '" + appID + "'&$select=id,appRoles"
+	// The $filter value ("appId eq '<guid>'") contains spaces and quotes, which
+	// must be percent-encoded or Graph rejects the request as malformed (HTTP
+	// 400) — verified live. Encode the query value, don't inline it raw.
+	filter := fmt.Sprintf("appId eq '%s'", appID)
+	url := c.baseURL + "/servicePrincipals?$filter=" + neturl.QueryEscape(filter) + "&$select=id,appRoles"
 	values, err := collectors.GetAllValues(ctx, c.g, url, nil)
 	if err != nil {
 		return nil, err
@@ -312,7 +317,7 @@ func (c *Collector) resolveResourceServicePrincipal(ctx context.Context, appID s
 // grantHasHighPrivilegeScope reports whether any space-delimited token in a
 // delegated grant's `scope` field is in the high-privilege allowlist.
 func grantHasHighPrivilegeScope(scope string) bool {
-	for _, s := range strings.Fields(scope) {
+	for s := range strings.FieldsSeq(scope) {
 		if highPrivilegeDelegatedScopes[s] {
 			return true
 		}

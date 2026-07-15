@@ -3,6 +3,7 @@ package consent
 import (
 	"context"
 	"errors"
+	neturl "net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -40,7 +41,10 @@ const base = "https://graph.microsoft.com/v1.0"
 const grantsURL = base + "/oauth2PermissionGrants"
 
 func spFilterURL(appID string) string {
-	return base + "/servicePrincipals?$filter=appId eq '" + appID + "'&$select=id,appRoles"
+	// Mirrors the collector's URL-encoded $filter (spaces/quotes percent-encoded,
+	// required or Graph returns HTTP 400).
+	filter := "appId eq '" + appID + "'"
+	return base + "/servicePrincipals?$filter=" + neturl.QueryEscape(filter) + "&$select=id,appRoles"
 }
 
 func assignedToURL(spID string) string {

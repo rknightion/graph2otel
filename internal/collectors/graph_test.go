@@ -71,6 +71,22 @@ func TestCountPropagatesGraphError(t *testing.T) {
 	}
 }
 
+func TestCountViaCollectionReadsODataCountWithEventualHeader(t *testing.T) {
+	const url = "https://graph.microsoft.com/v1.0/users?$filter=x&$count=true&$top=1"
+	g := &fakeGraph{bodies: map[string]string{url: `{"@odata.count":57,"value":[{"id":"a"}]}`}}
+
+	n, err := CountViaCollection(context.Background(), g, url)
+	if err != nil {
+		t.Fatalf("CountViaCollection: %v", err)
+	}
+	if n != 57 {
+		t.Errorf("count = %d, want 57", n)
+	}
+	if g.seenHeaders[0]["ConsistencyLevel"] != "eventual" {
+		t.Errorf("ConsistencyLevel header not set: %v", g.seenHeaders)
+	}
+}
+
 func TestGetAllValuesFollowsNextLink(t *testing.T) {
 	const page1 = "https://graph.microsoft.com/v1.0/subscribedSkus"
 	const page2 = "https://graph.microsoft.com/v1.0/subscribedSkus?$skiptoken=abc"

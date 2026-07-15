@@ -79,9 +79,17 @@ func allPopulationCounts() map[string]string {
 	return bodies
 }
 
+// staleURL builds the collection $count=true form the stale gauge uses (the
+// /users/$count segment 502s on a signInActivity filter).
 func staleURL(now time.Time, days int) string {
 	cutoff := now.UTC().AddDate(0, 0, -days).Truncate(time.Second).Format("2006-01-02T15:04:05Z")
-	return countURL("signInActivity/lastSignInDateTime le " + cutoff)
+	filter := "signInActivity/lastSignInDateTime le " + cutoff
+	return base + "/users?$filter=" + url.QueryEscape(filter) + "&$count=true&$top=1&$select=id"
+}
+
+// staleBody is the @odata.count envelope the collection-count form returns.
+func staleBody(n int) string {
+	return `{"@odata.count":` + strconv.Itoa(n) + `,"value":[]}`
 }
 
 func fixedNow() time.Time {
@@ -171,8 +179,8 @@ func TestCollectWithoutP1SkipsStaleAndStillEmitsPopulation(t *testing.T) {
 func TestCollectEmitsStaleGaugeUnderEntraP1(t *testing.T) {
 	now := fixedNow()
 	bodies := allPopulationCounts()
-	bodies[staleURL(now, 30)] = "5"
-	bodies[staleURL(now, 90)] = "12"
+	bodies[staleURL(now, 30)] = staleBody(5)
+	bodies[staleURL(now, 90)] = staleBody(12)
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
@@ -205,8 +213,8 @@ func TestCollectEmitsStaleGaugeUnderEntraP2Only(t *testing.T) {
 	// a tenant holding only P2 (no P1) must still get the stale gauge.
 	now := fixedNow()
 	bodies := allPopulationCounts()
-	bodies[staleURL(now, 30)] = "1"
-	bodies[staleURL(now, 90)] = "2"
+	bodies[staleURL(now, 30)] = staleBody(1)
+	bodies[staleURL(now, 90)] = staleBody(2)
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
@@ -258,8 +266,8 @@ func TestCollectNeverEmitsPerUserSeries(t *testing.T) {
 	for k := range bodies {
 		bodies[k] = "123456789"
 	}
-	bodies[staleURL(now, 30)] = "654321"
-	bodies[staleURL(now, 90)] = "987654"
+	bodies[staleURL(now, 30)] = staleBody(654321)
+	bodies[staleURL(now, 90)] = staleBody(987654)
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
@@ -283,8 +291,10 @@ func TestCollectNeverEmitsPerUserSeries(t *testing.T) {
 	// scalar segment) — never a paged /users listing, which would risk a
 	// per-user series if ever unmarshaled into attributes.
 	for u := range g.seenHeaders {
-		if !strings.Contains(u, "/users/$count") {
-			t.Errorf("unexpected non-$count request: %s", u)
+		isSegmentCount := strings.Contains(u, "/users/$count")
+		isCollectionCount := strings.Contains(u, "/users?") && strings.Contains(u, "$count=true")
+		if !isSegmentCount && !isCollectionCount {
+			t.Errorf("unexpected non-count request (would risk a per-user series): %s", u)
 		}
 	}
 }

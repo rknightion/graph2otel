@@ -42,6 +42,28 @@ func Count(ctx context.Context, g GraphClient, url string) (int64, error) {
 	return n, nil
 }
 
+// CountViaCollection issues an advanced count using the `$count=true` query
+// parameter on a collection endpoint (rather than the `$count` path segment),
+// reading `@odata.count` from the response envelope. Some filters — notably
+// `signInActivity/lastSignInDateTime` — are rejected by the `/$count` segment
+// (HTTP 5xx) but work via `$count=true` on the collection, verified live; this
+// is the fallback for those. The caller builds the full URL including
+// `$count=true` (and typically `$top=1&$select=id` to keep the payload tiny);
+// ConsistencyLevel: eventual is sent automatically.
+func CountViaCollection(ctx context.Context, g GraphClient, url string) (int64, error) {
+	body, err := g.RawGetWithHeaders(ctx, url, EventualHeaders())
+	if err != nil {
+		return 0, err
+	}
+	var env struct {
+		Count int64 `json:"@odata.count"`
+	}
+	if err := json.Unmarshal(body, &env); err != nil {
+		return 0, fmt.Errorf("collectors: decode @odata.count from %q: %w", url, err)
+	}
+	return env.Count, nil
+}
+
 // maxPages caps GetAllValues' nextLink following. GetAllValues is for the
 // small, bounded collections (subscribedSkus, domains, CA policies, directory
 // roles, ...) — never for paging a full users/devices collection, which the
