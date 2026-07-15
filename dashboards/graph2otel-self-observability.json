@@ -31,7 +31,7 @@
           "uid": "$datasource"
         },
         "query": {
-          "query": "label_values(graph2otel_scrape_success, tenant_id)",
+          "query": "label_values(graph2otel_scrape_success_ratio, tenant_id)",
           "refId": "tenant"
         },
         "refresh": 2,
@@ -53,7 +53,7 @@
           "uid": "$datasource"
         },
         "query": {
-          "query": "label_values(graph2otel_scrape_success{tenant_id=~\"$tenant\"}, collector)",
+          "query": "label_values(graph2otel_scrape_success_ratio{tenant_id=~\"$tenant\"}, collector)",
           "refId": "collector"
         },
         "refresh": 2,
@@ -76,7 +76,7 @@
       "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
       "options": {
         "mode": "markdown",
-        "content": "graph2otel emits **OTLP** metrics; Grafana Cloud ingests them into Mimir/Prometheus, which normalizes names: dots become underscores, and OTEL unit/type suffix rules may append `_total` (counters), `_seconds`, etc. — e.g. `graph2otel.scrape.staleness` → `graph2otel_scrape_staleness`, `graph2otel.scrape.errors` → `graph2otel_scrape_errors_total`. This dashboard is built against that underscored convention, but exact normalization depends on your OTLP→Prometheus pipeline config (some preserve original names or omit `_total`) — adjust queries if your metric names differ."
+        "content": "graph2otel emits **OTLP** metrics; Grafana Cloud ingests them into Mimir/Prometheus, which normalizes names: dots become underscores, and OTEL unit/type suffix rules may append `_total` (counters), `_seconds`, etc. — e.g. `graph2otel.scrape.staleness` → `graph2otel_scrape_staleness_seconds`, `graph2otel.scrape.errors` → `graph2otel_scrape_errors_total`. This dashboard is built against that underscored convention, but exact normalization depends on your OTLP→Prometheus pipeline config (some preserve original names or omit `_total`) — adjust queries if your metric names differ."
       }
     },
     {
@@ -89,7 +89,7 @@
       "id": 3,
       "type": "timeseries",
       "title": "Scrape success by collector",
-      "description": "graph2otel_scrape_success{collector,tenant_id} — 1 = last scrape succeeded, 0 = failed.",
+      "description": "graph2otel_scrape_success_ratio{collector,tenant_id} — 1 = last scrape succeeded, 0 = failed.",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
       "datasource": { "type": "prometheus", "uid": "$datasource" },
       "fieldConfig": {
@@ -108,7 +108,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "$datasource" },
-          "expr": "graph2otel_scrape_success{tenant_id=~\"$tenant\", collector=~\"$collector\"}",
+          "expr": "graph2otel_scrape_success_ratio{tenant_id=~\"$tenant\", collector=~\"$collector\"}",
           "legendFormat": "{{collector}} ({{tenant_id}})"
         }
       ]
@@ -117,7 +117,7 @@
       "id": 4,
       "type": "heatmap",
       "title": "Scrape duration",
-      "description": "graph2otel_scrape_duration{collector,tenant_id} seconds.",
+      "description": "graph2otel_scrape_duration_seconds{collector,tenant_id} seconds.",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
       "datasource": { "type": "prometheus", "uid": "$datasource" },
       "fieldConfig": {
@@ -132,7 +132,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "$datasource" },
-          "expr": "graph2otel_scrape_duration{tenant_id=~\"$tenant\", collector=~\"$collector\"}",
+          "expr": "graph2otel_scrape_duration_seconds{tenant_id=~\"$tenant\", collector=~\"$collector\"}",
           "legendFormat": "{{collector}} ({{tenant_id}})",
           "format": "heatmap"
         }
@@ -142,7 +142,7 @@
       "id": 5,
       "type": "table",
       "title": "Scrape staleness (all collectors, sorted worst-first)",
-      "description": "graph2otel_scrape_staleness{collector,tenant_id} seconds since last successful scrape. Sorted descending — top rows are the most stale.",
+      "description": "graph2otel_scrape_staleness_seconds{collector,tenant_id} seconds since last successful scrape. Sorted descending — top rows are the most stale.",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
       "datasource": { "type": "prometheus", "uid": "$datasource" },
       "fieldConfig": {
@@ -156,7 +156,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "$datasource" },
-          "expr": "graph2otel_scrape_staleness{tenant_id=~\"$tenant\", collector=~\"$collector\"}",
+          "expr": "graph2otel_scrape_staleness_seconds{tenant_id=~\"$tenant\", collector=~\"$collector\"}",
           "format": "table",
           "instant": true
         }
@@ -196,7 +196,7 @@
       "id": 8,
       "type": "stat",
       "title": "Build info (what's deployed)",
-      "description": "graph2otel_build_info{version,go_version} — constant 1-valued gauge, labels carry the deployed version.",
+      "description": "graph2otel_build_info_ratio{version,go_version} — constant 1-valued gauge, labels carry the deployed version.",
       "gridPos": { "h": 4, "w": 24, "x": 0, "y": 22 },
       "datasource": { "type": "prometheus", "uid": "$datasource" },
       "fieldConfig": {
@@ -213,7 +213,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "$datasource" },
-          "expr": "graph2otel_build_info{tenant_id=~\"$tenant\"}",
+          "expr": "graph2otel_build_info_ratio{tenant_id=~\"$tenant\"}",
           "legendFormat": "{{version}} (go {{go_version}}) — {{tenant_id}}",
           "format": "table",
           "instant": true
@@ -230,7 +230,7 @@
       "id": 10,
       "type": "table",
       "title": "Detected license tier by tenant",
-      "description": "graph2otel_tenant_license_tier{tenant_id,tier} — which Entra/Intune license tier was auto-detected per tenant, so operators can see at a glance which collectors run in degraded/skipped mode (e.g. P2-gated risk/PIM collectors, license-gated Intune features).",
+      "description": "graph2otel_tenant_license_tier_ratio{tenant_id,tier} — which Entra/Intune license tier was auto-detected per tenant, so operators can see at a glance which collectors run in degraded/skipped mode (e.g. P2-gated risk/PIM collectors, license-gated Intune features).",
       "gridPos": { "h": 6, "w": 24, "x": 0, "y": 27 },
       "datasource": { "type": "prometheus", "uid": "$datasource" },
       "fieldConfig": {
@@ -241,7 +241,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "$datasource" },
-          "expr": "graph2otel_tenant_license_tier{tenant_id=~\"$tenant\"}",
+          "expr": "graph2otel_tenant_license_tier_ratio{tenant_id=~\"$tenant\"}",
           "format": "table",
           "instant": true
         }
@@ -281,7 +281,7 @@
       "id": 13,
       "type": "table",
       "title": "Window-collector staleness (watermark lag)",
-      "description": "Same graph2otel_scrape_staleness metric, pre-filtered to the log-shaped WindowCollectors (sign-ins, directory audit, provisioning, risk detections/risky users, Intune audit events) so watermark lag is visible separately from snapshot collectors. Adjust the regex if collector names differ from this heuristic.",
+      "description": "Same graph2otel_scrape_staleness_seconds metric, pre-filtered to the log-shaped WindowCollectors (sign-ins, directory audit, provisioning, risk detections/risky users, Intune audit events) so watermark lag is visible separately from snapshot collectors. Adjust the regex if collector names differ from this heuristic.",
       "gridPos": { "h": 7, "w": 12, "x": 12, "y": 34 },
       "datasource": { "type": "prometheus", "uid": "$datasource" },
       "fieldConfig": {
@@ -295,7 +295,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "$datasource" },
-          "expr": "graph2otel_scrape_staleness{tenant_id=~\"$tenant\", collector=~\"$collector\", collector=~\".*(signin|audit|provisioning|risk).*\"}",
+          "expr": "graph2otel_scrape_staleness_seconds{tenant_id=~\"$tenant\", collector=~\"$collector\", collector=~\".*(signin|audit|provisioning|risk).*\"}",
           "format": "table",
           "instant": true
         }
@@ -326,7 +326,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "$datasource" },
-          "expr": "sum by (report_name, result) (rate(graph2otel_export_jobs{tenant_id=~\"$tenant\"}[15m]))",
+          "expr": "sum by (report_name, result) (rate(graph2otel_export_jobs_total{tenant_id=~\"$tenant\"}[15m]))",
           "legendFormat": "{{report_name}} / {{result}}"
         }
       ]
@@ -536,7 +536,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "$datasource" },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(graph2otel_http_client_request_duration_bucket{tenant_id=~\"$tenant\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(graph2otel_http_client_request_duration_seconds_bucket{tenant_id=~\"$tenant\"}[5m])))",
           "legendFormat": "p95"
         }
       ]

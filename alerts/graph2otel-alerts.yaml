@@ -471,7 +471,7 @@ groups:
                 type: "prometheus"
                 uid: "grafanacloud-prom"
               editorMode: "code"
-              expr: "max by (tenant_id, collector) (graph2otel_scrape_staleness)"
+              expr: "max by (tenant_id, collector) (graph2otel_scrape_staleness_seconds)"
               instant: false
               range: true
               intervalMs: 1000
@@ -525,7 +525,7 @@ groups:
           source: "graph2otel"
         annotations:
           summary: "Collector {{ $labels.collector }} hasn't scraped successfully in over an hour (tenant {{ $labels.tenant_id }})"
-          description: "graph2otel_scrape_staleness for collector={{ $labels.collector }}, tenant {{ $labels.tenant_id }} has exceeded 3600s (the placeholder default: 3x a 20-minute poll interval) for 5m. Replace 3600 with 3x YOUR configured collector interval in seconds. noDataState is Alerting (not OK) because self-obs metrics are emitted by every running collector — a fully missing series means the process died or that collector was removed, same semantics as tailscale2otel's ExporterDown."
+          description: "graph2otel_scrape_staleness_seconds for collector={{ $labels.collector }}, tenant {{ $labels.tenant_id }} has exceeded 3600s (the placeholder default: 3x a 20-minute poll interval) for 5m. Replace 3600 with 3x YOUR configured collector interval in seconds. noDataState is Alerting (not OK) because self-obs metrics are emitted by every running collector — a fully missing series means the process died or that collector was removed, same semantics as tailscale2otel's ExporterDown."
         isPaused: false
 
       - uid: "g2o-checkpoint-persist-errors"

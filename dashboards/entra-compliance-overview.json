@@ -893,7 +893,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "avg(entra_secure_score_percentage{tenant_id=~\"$tenant\"})",
+          "expr": "avg(entra_secure_score_percentage_percent{tenant_id=~\"$tenant\"})",
           "refId": "A"
         }
       ]
@@ -1181,7 +1181,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (is_admin) (entra_mfa_admin_mfa_capable_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (is_admin) (entra_mfa_registration_admin_mfa_capable_total{tenant_id=~\"$tenant\"})",
           "legendFormat": "admin={{is_admin}}",
           "refId": "A"
         }

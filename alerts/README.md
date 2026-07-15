@@ -26,10 +26,11 @@ ingest: dots become underscores, and unit/type suffixes get appended
 (`_total` on counters, `_seconds`, `_ratio`, …). Every `expr` below queries
 the **normalized** form — e.g. `entra.credentials.expiring.total` becomes
 `entra_credentials_expiring_total`, `graph2otel.scrape.staleness` becomes
-`graph2otel_scrape_staleness`. Exact normalization depends on your
-OTLP→Prometheus pipeline config; some setups preserve original names or omit
-`_total`. Adjust the query if yours differs — this is a documented starting
-point, not a byte-exact contract we can validate without a live Mimir.
+`graph2otel_scrape_staleness_seconds` (a time-unit gauge gains `_seconds`; a
+unit-`1` gauge gains `_ratio`; a percent gauge gains `_percent`). The exprs
+below were verified against a live Grafana Cloud Mimir. Exact normalization
+still depends on your OTLP→Prometheus pipeline config; some setups preserve
+original names or omit suffixes — adjust the query if yours differs.
 
 ## Multi-tenant
 
@@ -129,7 +130,7 @@ that tenant, or the collector is disabled.
 **Rules:** `g2o-collector-staleness` (primary), `g2o-checkpoint-persist-errors`
 (companion).
 
-**What/why:** `graph2otel_scrape_staleness` (from `#9`) is seconds since a
+**What/why:** `graph2otel_scrape_staleness_seconds` (from `#9`) is seconds since a
 collector's last *successful* scrape — the same signal covers both a
 SnapshotCollector going quiet (Graph calls failing) and a WindowCollector's
 watermark stalling (log-shaped endpoints have no delta query, so a stuck
