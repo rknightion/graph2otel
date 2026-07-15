@@ -114,9 +114,9 @@ func TestRun_NilSource(t *testing.T) {
 
 func TestRun_ExportExceptionNoted(t *testing.T) {
 	cfg := &config.Config{Tenants: []config.TenantConfig{{TenantID: "tenant-a"}}}
-	src := fakeSource{granted: map[string][]string{"tenant-a": {"DeviceManagementConfiguration.ReadWrite.All"}}}
+	src := fakeSource{granted: map[string][]string{"tenant-a": {"DeviceManagementManagedDevices.ReadWrite.All"}}}
 	reqs := func(string) []CollectorReq {
-		return []CollectorReq{{Name: "intune_reports_export", Permissions: []string{"DeviceManagementConfiguration.ReadWrite.All"}}}
+		return []CollectorReq{{Name: "intune_reports_export", Permissions: []string{"DeviceManagementManagedDevices.ReadWrite.All"}}}
 	}
 
 	var out bytes.Buffer

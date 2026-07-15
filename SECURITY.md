@@ -57,11 +57,25 @@ backend.
 configured against. Depending on which collectors are enabled, that data includes, among
 other things:
 
-- user principal names (UPNs) / email addresses,
-- device names, serial numbers, and other hardware identifiers,
-- sign-in IP addresses, locations, and client application identifiers,
-- directory/group/role membership and app credential metadata,
-- device compliance and configuration policy state.
+- user principal names (UPNs) / email addresses, and user object IDs;
+- device names, serial numbers, IMEIs, and other hardware identifiers;
+- sign-in IP addresses, geographic locations, and client application identifiers;
+- directory/group/role membership and app credential metadata;
+- device compliance and configuration policy state;
+- opaque correlation / request / incident / job / cycle / change identifiers (GUIDs);
+- certificate identifiers — thumbprints, serial numbers, subject and issuer names;
+- security alert titles, categories, and provider/incident identifiers, plus risk-detection
+  event types and details;
+- sign-in and provisioning source/target identity IDs and display names (users, service
+  principals, applications, and target resources).
+
+This list was confirmed against the **actual** collector emission by the pre-1.0 PII &
+cardinality audit (see `docs/pii-cardinality-audit.md`), not just the design intent. That
+audit also confirmed the boundary rule below holds in code: **all** of the above per-entity
+data is confined to the **logs** pipeline as structured attributes; **no** metric label
+anywhere is keyed by a user, device, or per-event identity. One deliberate protection worth
+calling out: the Intune audit-event stream emits the **names** of changed properties but
+**never** their old/new values (which can carry credentials, certificates, or PII).
 
 All of this is exported over **OTLP to the configured backend** (for example Grafana
 Cloud). **Treat the OTLP backend as a trusted data sink** — anyone with read access to it

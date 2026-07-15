@@ -67,16 +67,16 @@ func TestCheck(t *testing.T) {
 		},
 		{
 			name:    "export ReadWrite scope surfaced as expected exception, granted",
-			granted: []string{"DeviceManagementConfiguration.ReadWrite.All"},
+			granted: []string{"DeviceManagementManagedDevices.ReadWrite.All"},
 			reqs: []CollectorReq{
-				{Name: "intune_reports_export", Permissions: []string{"DeviceManagementConfiguration.ReadWrite.All"}},
+				{Name: "intune_reports_export", Permissions: []string{"DeviceManagementManagedDevices.ReadWrite.All"}},
 			},
 			want: Report{
 				Collectors: []CollectorResult{
-					{Name: "intune_reports_export", Required: []string{"DeviceManagementConfiguration.ReadWrite.All"}, Missing: nil, OK: true},
+					{Name: "intune_reports_export", Required: []string{"DeviceManagementManagedDevices.ReadWrite.All"}, Missing: nil, OK: true},
 				},
 				MissingAggregate:   nil,
-				ExpectedExceptions: []string{"DeviceManagementConfiguration.ReadWrite.All"},
+				ExpectedExceptions: []string{"DeviceManagementManagedDevices.ReadWrite.All"},
 				OK:                 true,
 			},
 		},
@@ -84,14 +84,14 @@ func TestCheck(t *testing.T) {
 			name:    "export ReadWrite scope surfaced as expected exception even when missing",
 			granted: []string{},
 			reqs: []CollectorReq{
-				{Name: "intune_reports_export", Permissions: []string{"DeviceManagementConfiguration.ReadWrite.All"}},
+				{Name: "intune_reports_export", Permissions: []string{"DeviceManagementManagedDevices.ReadWrite.All"}},
 			},
 			want: Report{
 				Collectors: []CollectorResult{
-					{Name: "intune_reports_export", Required: []string{"DeviceManagementConfiguration.ReadWrite.All"}, Missing: []string{"DeviceManagementConfiguration.ReadWrite.All"}, OK: false},
+					{Name: "intune_reports_export", Required: []string{"DeviceManagementManagedDevices.ReadWrite.All"}, Missing: []string{"DeviceManagementManagedDevices.ReadWrite.All"}, OK: false},
 				},
-				MissingAggregate:   []string{"DeviceManagementConfiguration.ReadWrite.All"},
-				ExpectedExceptions: []string{"DeviceManagementConfiguration.ReadWrite.All"},
+				MissingAggregate:   []string{"DeviceManagementManagedDevices.ReadWrite.All"},
+				ExpectedExceptions: []string{"DeviceManagementManagedDevices.ReadWrite.All"},
 				OK:                 false,
 			},
 		},

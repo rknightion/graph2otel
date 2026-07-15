@@ -13,9 +13,11 @@ var ExpectedExceptionScopes = map[string]string{
 	// result back. This is documented Microsoft Graph behavior, not a
 	// graph2otel design choice — see the "Reports export API needs a
 	// write-level scope" gotcha in the project README/CLAUDE.md.
-	"DeviceManagementConfiguration.ReadWrite.All": "required only to CREATE an Intune reports-export job " +
-		"(POST /deviceManagement/reports/export*); graph2otel only reads the exported result back, " +
-		"never writes any Intune configuration.",
+	"DeviceManagementManagedDevices.ReadWrite.All": "required only to CREATE an Intune reports-export job " +
+		"(POST /deviceManagement/reports/exportJobs — used by the app-install, certificate-inventory, and " +
+		"Defender-agent report collectors); graph2otel only reads the exported result back, never writes any " +
+		"Intune configuration or device state. Any one of the three DeviceManagement*.ReadWrite.All scopes " +
+		"authorizes the create call; this is the one graph2otel's export collectors declare.",
 }
 
 // NeverRequestScopes documents permission scopes graph2otel deliberately
@@ -61,6 +63,6 @@ var DocumentedRequiredScopes = map[string][]string{
 		"DeviceManagementServiceConfig.Read.All",
 	},
 	"intune (reports export — see the ReadWrite exception note)": {
-		"DeviceManagementConfiguration.ReadWrite.All",
+		"DeviceManagementManagedDevices.ReadWrite.All",
 	},
 }
