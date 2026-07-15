@@ -106,5 +106,7 @@ jobs:
     with:
       release-tag: ${{ needs.release-please.outputs.tag_name }}
       install-cosign: true
-      goreleaser-args: "release --clean --skip=docker"
+      # -p 1: serialize per-target builds; the parallel 5-target matrix OOM-kills
+      # the runner now the msgraph dependency tree has grown (see ci.yml).
+      goreleaser-args: "release --clean --skip=docker -p 1"
       pre-cmd: "go install github.com/anchore/syft/cmd/syft@v1.18.1 && go install github.com/google/go-licenses@v1.6.0"

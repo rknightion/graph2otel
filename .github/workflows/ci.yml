@@ -97,7 +97,12 @@ jobs:
         with:
           distribution: goreleaser
           version: "v2.16.0"
-          args: release --snapshot --clean --skip=publish,sign,sbom
+          # -p 1 serializes the per-target builds. Cross-compiling the 5-target
+          # matrix in parallel OOM-kills the 7 GB ubuntu-latest runner now the
+          # msgraph-heavy dependency tree has grown (each Go compile+link is
+          # memory-hungry); serial builds trade ~2 min of wall-clock for a
+          # bounded memory footprint. Release builds use the same cap.
+          args: release --snapshot --clean --skip=publish,sign,sbom -p 1
 
   docker-build:
     name: docker image builds
