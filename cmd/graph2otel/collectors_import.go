@@ -5,6 +5,7 @@ package main
 // gates, and schedules. Adding a collector = adding one line here; the wiring
 // in tenants.go never changes.
 import (
+	_ "github.com/rknightion/graph2otel/internal/collectors/entra/agreements"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/authmethodspolicy"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/conditionalaccess"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/consent"
