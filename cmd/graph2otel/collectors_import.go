@@ -6,5 +6,6 @@ package main
 // in tenants.go never changes.
 import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/directorycounts"
+	_ "github.com/rknightion/graph2otel/internal/collectors/entra/groups"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/licensing"
 )
