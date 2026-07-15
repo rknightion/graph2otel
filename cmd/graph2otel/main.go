@@ -22,7 +22,18 @@ var version = "dev"
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	os.Exit(run(ctx, os.Args[1:], os.Stdout, os.Stderr))
+	os.Exit(dispatch(ctx, os.Args[1:], os.Stdout, os.Stderr))
+}
+
+// dispatch routes to the "check" subcommand (see check.go) when it's the
+// first argument, otherwise falls through to the default run mode. It exists
+// so run's own flag parsing (and its existing tests) stay untouched: run is
+// never given a chance to see "check" as a bogus flag value.
+func dispatch(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "check" {
+		return runCheck(ctx, args[1:], stdout, stderr)
+	}
+	return run(ctx, args, stdout, stderr)
 }
 
 // run parses flags, loads and validates the config, and (barring -version or
