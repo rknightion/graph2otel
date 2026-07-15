@@ -193,3 +193,35 @@ device names, sign-in IP addresses, group memberships). The boundary rule (see
   endpoint at all — they exist only via diagnostic settings → Event Hub/Log Analytics.
   graph2otel is not a full replacement for that pipeline; see the README's honest-scope
   section.
+- **Intune `managedDevices` has no `$count` segment** (M4, verified live). A
+  `GET /deviceManagement/managedDevices/$count` returns **HTTP 400** — `"No OData
+  route exists that match template ~/singleton/navigation/$count"` (its backend is
+  `DeviceFE/StatelessDeviceFEService`, not the directory OData stack). AND
+  `operatingSystem` is **not** a server-`$filter`able property on that collection. So
+  there is no bounded `$count`/`$filter` slice for the fleet — page the full collection
+  with a trimmed `$select` and bucket/count **client-side** (as `intune/manageddevices`
+  and `intune/malware` do). This is the deliberate exception to "never page the full
+  collection."
+- **Intune signals "feature not provisioned" via HTTP 400 `ResourceNotFound` /
+  "not found for segment", not 403/404** (M4, verified live). A tenant that hasn't
+  onboarded a feature returns a **400** whose body carries `"code":"ResourceNotFound"`
+  or message `"Resource not found for (the) segment '<x>'"` — seen on
+  `userExperienceAnalyticsOverview` (analytics not enabled), per-template
+  `templates/{id}/deviceStateSummary` (template type has no summary), and others.
+  (`exchangeConnectors` is a variant: **HTTP 501 `NotSupported`** when no Exchange
+  connector is provisioned.) Collectors must recognize this **specific signature** and
+  skip that sub-fetch gracefully (log Info, drop only that metric, don't fail the
+  collector) — but must **NOT** blanket-swallow all 400s: a genuine malformed-query 400
+  (the `$count`, `$top=1000`, unescaped-`$filter` bugs above) must still surface as a
+  real error.
+- **Per-device Intune sub-resources 404 routinely** (M4, verified live). A
+  `GET /managedDevices/{id}/windowsProtectionState` returns **404 `ResourceNotFound`**
+  for a Windows device that simply hasn't reported that sub-resource yet — a normal
+  no-data condition, not a failure. A per-device sweep must skip-and-count these, never
+  fail the whole collector, and should emit an empty snapshot (not all-zeros) when
+  **zero** devices returned readable data, so "no data" is never misread as "0 enabled."
+- **Deprecated Intune endpoints can return an empty body** (M4, verified live). The
+  product-deprecated `windowsInformationProtectionPolicies` (WIP) endpoints return an
+  **empty response body** → `json.Unmarshal` fails with `"unexpected end of JSON input"`.
+  Treat an empty body as an empty list (zero rows), and treat such deprecated-endpoint
+  fetches as best-effort — never fail the collector on them.
