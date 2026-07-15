@@ -1,0 +1,41 @@
+# Grafana-managed notification wiring (file provisioning) — a documented
+# no-op stub. graph2otel ships alert *rules* (graph2otel-alerts.yaml); it does
+# not ship an opinion on where your pages go. This file exists only so the
+# rule group has a receiver to attach to out of the box; replace the
+# `graph2otel-noop` contact point with your own (Slack/PagerDuty/OnCall/email/
+# webhook) before relying on these alerts to notify anyone.
+#
+# The noop receiver is a webhook pointed at localhost — it will fail to
+# deliver (that's fine; nothing listens there on purpose) rather than silently
+# looking "configured" while going nowhere useful.
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: "graph2otel-noop"
+    receivers:
+      - uid: "g2o-noop-receiver"
+        type: "webhook"
+        settings:
+          url: "http://localhost:9999/graph2otel/noop"
+          httpMethod: "POST"
+        disableResolveMessage: false
+
+policies:
+  - orgId: 1
+    receiver: "graph2otel-noop"
+    group_by: ["alertname", "tenant_id"]
+    # No matchers on the root route — every graph2otel-* rule lands here until
+    # you add real routing. A typical next step is to split by the `severity`
+    # and `category` labels every rule in graph2otel-alerts.yaml carries, e.g.:
+    #
+    # routes:
+    #   - receiver: "your-pager"
+    #     matchers:
+    #       - severity = critical
+    #   - receiver: "your-team-chat"
+    #     matchers:
+    #       - severity = warning
+    group_wait: "30s"
+    group_interval: "5m"
+    repeat_interval: "4h"
