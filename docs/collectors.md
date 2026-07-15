@@ -95,7 +95,7 @@ Note: the `beta` gate above is about the `signInEventTypes` filter, which 400s o
 | --- | --- | --- | --- | --- | --- |
 | `intune.audit_events` | Intune audit events (redacts old/new property values; emits changed-property names only) | `/deviceManagement/auditEvents` | `DeviceManagementApps.Read.All` | — | 15m |
 | `intune.enrollment_events` | Enrollment troubleshooting events | `/deviceManagement/troubleshootingEvents` | `DeviceManagementManagedDevices.Read.All` | `needs-license/intune` | 20m |
-| `intune.autopilot_events` | Autopilot deployment/enrollment events | Autopilot event resource (beta, no v1.0 equivalent) | `DeviceManagementManagedDevices.Read.All` | `beta` | 20m |
+| `intune.autopilot_events` | Autopilot deployment/enrollment events | `/deviceManagement/autopilotEvents` (beta, no v1.0 equivalent) | `DeviceManagementManagedDevices.Read.All` | `beta` | 20m |
 
 ## Intune — export-report collectors (opt-in, write-level scope)
 
