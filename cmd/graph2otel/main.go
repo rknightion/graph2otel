@@ -16,6 +16,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/admin"
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/config"
+	"github.com/rknightion/graph2otel/internal/profiling"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -96,6 +97,17 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		}
 	}()
 	collector.EmitBuildInfo(provider.Emitter())
+
+	// Continuous profiling is opt-in (default off). Start also applies the
+	// runtime mutex/block sampling rates. A failure to reach Pyroscope is
+	// non-fatal — the exporter's core job is unaffected.
+	if prof, perr := profiling.Start(cfg.Profiling, "graph2otel", version, logger); perr != nil {
+		logger.Error("pyroscope profiler failed to start", "error", perr)
+	} else if prof != nil {
+		defer func() { _ = prof.Stop() }()
+		logger.Info("pyroscope continuous profiling started",
+			"server", cfg.Profiling.Pyroscope.ServerAddress)
+	}
 
 	// Per-tenant Graph clients + collector schedulers. Each configured tenant
 	// gets its own client, license-gated collector set, and Scheduler goroutine

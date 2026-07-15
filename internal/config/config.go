@@ -59,6 +59,8 @@ type Config struct {
 	Collectors map[string]CollectorConfig `yaml:"collectors"`
 	// Admin configures the operator health/status endpoint (#12).
 	Admin AdminConfig `yaml:"admin"`
+	// Profiling configures optional Pyroscope continuous profiling (#85).
+	Profiling ProfilingConfig `yaml:"profiling"`
 	// CheckpointDir is the root directory for the file-based CheckpointStore
 	// (#7); each (tenant, endpoint) window poller persists its watermark there.
 	CheckpointDir string `yaml:"checkpoint_dir"`
@@ -82,6 +84,33 @@ type CollectorConfig struct {
 type AdminConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	Addr    string `yaml:"addr"`
+}
+
+// ProfilingConfig configures optional continuous profiling. Everything here is
+// off by default; enabling the Pyroscope push has no effect on the exporter's
+// core job and a failure to reach Pyroscope is non-fatal.
+type ProfilingConfig struct {
+	Pyroscope ProfilingPyroscope `yaml:"pyroscope"`
+	// MutexProfileFraction sets runtime.SetMutexProfileFraction (0 = disabled)
+	// and BlockProfileRate sets runtime.SetBlockProfileRate (0 = disabled). Both
+	// feed the Pyroscope mutex + block profiles; leave 0 unless investigating
+	// contention, since sampling them is not free.
+	MutexProfileFraction int `yaml:"mutex_profile_fraction"`
+	BlockProfileRate     int `yaml:"block_profile_rate"`
+}
+
+// ProfilingPyroscope configures the Pyroscope continuous-profiling push. Auth
+// material (BasicAuthPassword) is a Secret so it redacts in any config dump;
+// supply it via env (G2O_PROFILING__PYROSCOPE__BASIC_AUTH_PASSWORD) like every
+// other credential, never in committed YAML.
+type ProfilingPyroscope struct {
+	Enabled           bool              `yaml:"enabled"`
+	ServerAddress     string            `yaml:"server_address"`
+	BasicAuthUser     string            `yaml:"basic_auth_user"`
+	BasicAuthPassword Secret            `yaml:"basic_auth_password"`
+	TenantID          string            `yaml:"tenant_id"`
+	UploadRate        time.Duration     `yaml:"upload_rate"`
+	Tags              map[string]string `yaml:"tags"`
 }
 
 // TenantConfig identifies one Entra tenant to poll. It intentionally carries
@@ -295,6 +324,10 @@ func (c *Config) Validate() error {
 		if err := validateInterval(cc.Interval); err != nil {
 			return fmt.Errorf("collectors[%q].interval: %w", name, err)
 		}
+	}
+
+	if c.Profiling.Pyroscope.Enabled && c.Profiling.Pyroscope.ServerAddress == "" {
+		return fmt.Errorf("profiling.pyroscope.server_address is required when profiling.pyroscope.enabled is true")
 	}
 
 	return nil

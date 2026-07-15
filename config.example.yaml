@@ -60,6 +60,25 @@ admin:
   enabled: false
   addr: ":9090"
 
+# profiling enables optional Grafana Pyroscope continuous profiling (default
+# off). It has no effect on the exporter's core job and a failure to reach
+# Pyroscope is non-fatal. basic_auth_password is a credential — set it via
+# G2O_PROFILING__PYROSCOPE__BASIC_AUTH_PASSWORD, never in committed YAML.
+profiling:
+  pyroscope:
+    enabled: false
+    # Grafana Cloud Profiles ingest endpoint (e.g. https://profiles-prod-NNN.grafana.net).
+    server_address: ""
+    basic_auth_user: "" # Grafana Cloud Profiles user/instance ID
+    basic_auth_password: "" # DO NOT set here — use the env var above
+    tenant_id: "" # optional; leave empty for Grafana Cloud
+    upload_rate: 15s # optional; 0/omit uses the pyroscope default
+    tags: {} # extra static tags; service_version is always set and cannot be overridden
+  # runtime mutex/block sampling (0 = disabled); enable only when investigating
+  # contention — sampling them is not free.
+  mutex_profile_fraction: 0
+  block_profile_rate: 0
+
 # checkpoint_dir is where window-log collectors persist their per-(tenant,
 # endpoint) watermarks so a restart resumes rather than re-fetching or dropping.
 checkpoint_dir: "./checkpoints"
