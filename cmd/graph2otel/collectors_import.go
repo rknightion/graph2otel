@@ -9,6 +9,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/conditionalaccess"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/consent"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/credentialexpiry"
+	_ "github.com/rknightion/graph2otel/internal/collectors/entra/devices"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/directorycounts"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/domains"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/groups"
