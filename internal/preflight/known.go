@@ -40,6 +40,7 @@ var NeverRequestScopes = map[string]string{
 var DocumentedRequiredScopes = map[string][]string{
 	"entra (directory, sign-ins, audits, provisioning, reports)": {
 		"AuditLog.Read.All",
+		"Reports.Read.All",
 		"Directory.Read.All",
 		"User.Read.All",
 		"Group.Read.All",

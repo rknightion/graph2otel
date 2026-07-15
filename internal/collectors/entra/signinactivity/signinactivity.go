@@ -96,7 +96,12 @@ func (c *Collector) Experimental() bool { return true }
 func (c *Collector) RequiredCapability() license.Capability { return license.CapEntraP1 }
 
 // RequiredPermissions declares the least-privilege Graph scope.
-func (c *Collector) RequiredPermissions() []string { return []string{"AuditLog.Read.All"} }
+// AuditLog.Read.All covers the two /reports/*SignInActivities fetches;
+// Reports.Read.All is additionally required by the appSummary sub-fetch
+// (getAzureADApplicationSignInSummary), which 403s without it (verified live).
+func (c *Collector) RequiredPermissions() []string {
+	return []string{"AuditLog.Read.All", "Reports.Read.All"}
+}
 
 // Collect fetches the three beta reports and emits the bounded aggregates. Each
 // half is independent: a failure in one is logged and joined into the returned

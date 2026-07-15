@@ -135,7 +135,8 @@ func TestExperimentalAndCapabilityAndPerms(t *testing.T) {
 	if c.RequiredCapability() != license.CapEntraP1 {
 		t.Errorf("RequiredCapability = %v, want CapEntraP1", c.RequiredCapability())
 	}
-	if got := c.RequiredPermissions(); len(got) != 1 || got[0] != "AuditLog.Read.All" {
+	if got := c.RequiredPermissions(); len(got) != 2 ||
+		got[0] != "AuditLog.Read.All" || got[1] != "Reports.Read.All" {
 		t.Errorf("RequiredPermissions = %v", got)
 	}
 	if c.Name() != "entra.signin_activity" {
