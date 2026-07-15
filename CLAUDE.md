@@ -157,6 +157,12 @@ device names, sign-in IP addresses, group memberships). The boundary rule (see
   `logpipeline.EndpointConfig.BaseURLOverride` and are `Experimental` (opt-in); only the
   interactive stream (`entra.signins.interactive`, the v1.0 default slice, no filter) is v1.0
   and default-on. Confirmed under app-only cert auth with `AuditLog.Read.All`.
+- **Identity Protection caps `$top` at 500, not 1000** (M3, verified live). A
+  `GET /identityProtection/riskDetections?$top=1000` returns **HTTP 400** — `"Invalid page
+  size specified: '1000'. Must be between 1 and 500 inclusive."` The `logpipeline` engine
+  defaults `PageSize` to 1000, so IPC-workload window collectors must set
+  `EndpointConfig.PageSize=500` explicitly. Watch for similar per-endpoint page-size ceilings
+  on other paged endpoints (check when a paged collector 400s on page size).
 - **Streams sharing a Graph path need distinct `CheckpointKey`s** (M3). The four sign-in
   collectors all poll `/auditLogs/signIns`; without a per-stream
   `logpipeline.EndpointConfig.CheckpointKey` they collide on one checkpoint namespace and
