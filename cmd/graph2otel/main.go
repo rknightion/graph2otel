@@ -97,24 +97,24 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}()
 	collector.EmitBuildInfo(provider.Emitter())
 
-	// Admin/health endpoint. Collectors (and therefore per-collector status
-	// sources) land in M2, so it starts with an empty status set for now — it
-	// still serves /healthz and a (bare) status page. Start blocks until ctx is
-	// canceled, then shuts the server down itself, so run it in the background.
-	adminSrv := admin.New(cfg.Admin, nil, nil)
+	// Per-tenant Graph clients + collector schedulers. Each configured tenant
+	// gets its own client, license-gated collector set, and Scheduler goroutine
+	// bound to ctx; startTenants returns the admin status sources and skip
+	// reasons. With zero tenants (stdout mode) this is a no-op.
+	sources, skips, waitTenants := startTenants(ctx, cfg, provider, logger)
+
+	// Admin/health endpoint, fed the live per-tenant status sources and skip
+	// reasons. Start blocks until ctx is canceled, then shuts the server down
+	// itself, so run it in the background.
+	adminSrv := admin.New(cfg.Admin, sources, skips)
 	go func() {
 		if err := adminSrv.Start(ctx); err != nil {
 			logger.Error("admin server", "error", err)
 		}
 	}()
 
-	// NOTE (M1): auth, Graph clients, license detection, and the per-tenant
-	// scheduler are consumed by the collectors that arrive in M2-M5 — wiring
-	// them here now would be unused. The composition root grows the tenant loop
-	// (auth.BuildAll -> graphclient.NewClient -> collector.Registry ->
-	// collector.Scheduler) as the first collectors land.
-
 	<-ctx.Done()
+	waitTenants() // drain the per-tenant schedulers before releasing telemetry
 
 	logger.Info("graph2otel stopped")
 	return 0

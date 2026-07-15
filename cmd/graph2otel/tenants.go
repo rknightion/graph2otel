@@ -1,0 +1,124 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"sync"
+
+	"github.com/rknightion/graph2otel/internal/admin"
+	"github.com/rknightion/graph2otel/internal/auth"
+	"github.com/rknightion/graph2otel/internal/collector"
+	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/config"
+	"github.com/rknightion/graph2otel/internal/graphclient"
+	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/telemetry"
+)
+
+// startTenants builds one Graph client + collector set per configured tenant,
+// gates each collector by license tier and config, and launches a per-tenant
+// Scheduler goroutine bound to ctx. It returns the admin status sources (one
+// per tenant) and the skip-reason map so the admin page can show both the
+// running collectors and the ones deliberately not registered.
+//
+// It never fails the process for a single tenant: an auth/client or license
+// error for one tenant is logged and that tenant is skipped, so a
+// misconfigured tenant can't take down the others. The returned wait func
+// blocks until every launched Scheduler has drained (after ctx is canceled).
+func startTenants(
+	ctx context.Context,
+	cfg *config.Config,
+	provider *telemetry.Provider,
+	logger *slog.Logger,
+) (sources []admin.CollectorSource, skips map[admin.SkipKey]string, wait func()) {
+	skips = map[admin.SkipKey]string{}
+	var wg sync.WaitGroup
+
+	// One limiter shared across tenants: its buckets are keyed per tenant
+	// internally, so this correctly isolates each tenant's per-app throttle
+	// budget while keeping a single instance.
+	limiter := graphclient.NewWorkloadLimiter()
+
+	auths, err := auth.BuildAll(cfg.Tenants)
+	if err != nil {
+		logger.Error("building tenant credentials", "error", err)
+		return nil, skips, wg.Wait
+	}
+
+	for _, ta := range auths {
+		src, launched := setupTenant(ctx, ta, cfg, provider, logger, limiter, skips, &wg)
+		if launched {
+			sources = append(sources, src)
+		}
+	}
+	return sources, skips, wg.Wait
+}
+
+// setupTenant wires one tenant end to end. launched is false when the tenant
+// could not be brought up (client build failed) — its collectors are skipped
+// rather than aborting the whole process.
+func setupTenant(
+	ctx context.Context,
+	ta *auth.TenantAuth,
+	cfg *config.Config,
+	provider *telemetry.Provider,
+	logger *slog.Logger,
+	limiter *graphclient.WorkloadLimiter,
+	skips map[admin.SkipKey]string,
+	wg *sync.WaitGroup,
+) (admin.CollectorSource, bool) {
+	tlog := logger.With("tenant", ta.TenantID)
+	emitter := provider.Emitter()
+
+	gc, err := graphclient.NewClient(ctx, ta, graphclient.Options{
+		Emitter:  emitter,
+		Limiter:  limiter,
+		TenantID: ta.TenantID,
+	})
+	if err != nil {
+		tlog.Error("building Graph client", "error", err)
+		return admin.CollectorSource{}, false
+	}
+
+	// License detection is best-effort: on failure, proceed with no premium
+	// capabilities (gated collectors skip, ungated collectors still run) rather
+	// than taking the tenant down.
+	caps, err := license.Detect(ctx, license.NewGraphSkuLister(gc))
+	if err != nil {
+		tlog.Warn("license detection failed; proceeding with base tier", "error", err)
+	}
+	license.EmitLicenseTier(emitter, ta.TenantID, caps)
+
+	registry := collector.NewRegistry()
+	deps := collectors.Deps{Graph: gc, TenantID: ta.TenantID, Logger: tlog}
+	for _, factory := range collectors.All() {
+		c := factory(deps)
+		if ok, requiredCap, _ := license.ShouldRun(c, caps); !ok {
+			reason := license.SkipReason(c.Name(), ta.TenantID, requiredCap)
+			tlog.Info("skipping collector", "collector", c.Name(), "reason", reason)
+			skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] = fmt.Sprintf("requires %s", requiredCap)
+			continue
+		}
+		enabled, interval := cfg.CollectorSettings(ta.TenantID, c.Name())
+		if !enabled {
+			tlog.Info("collector disabled by config", "collector", c.Name())
+			skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] = "disabled by config"
+			continue
+		}
+		registry.Register(c, interval)
+	}
+
+	status := collector.NewStatusTracker()
+	sched := collector.NewScheduler(emitter, collector.NewMemoryStore(),
+		collector.WithTenant(ta.TenantID),
+		collector.WithStatusTracker(status),
+		collector.WithLogger(tlog),
+	)
+	wg.Go(func() {
+		_ = sched.Run(ctx, registry)
+	})
+
+	tlog.Info("tenant started", "collectors", len(registry.Entries()))
+	return admin.CollectorSource{TenantID: ta.TenantID, Registry: registry, Status: status}, true
+}

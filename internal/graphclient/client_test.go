@@ -85,6 +85,41 @@ func TestRawGetUsesInstrumentedTransportAndBearer(t *testing.T) {
 	}
 }
 
+// TestRawGetWithHeadersSetsHeaders: the header-capable raw GET attaches the
+// caller's headers (e.g. ConsistencyLevel: eventual, required by every Entra
+// directory $count/advanced-$filter query) on top of the bearer token, and
+// still reads through the retrying transport.
+func TestRawGetWithHeadersSetsHeaders(t *testing.T) {
+	var gotConsistency, gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotConsistency = r.Header.Get("ConsistencyLevel")
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`42`))
+	}))
+	defer srv.Close()
+
+	ta := &auth.TenantAuth{TenantID: "t", Cred: fakeCredential{token: "secret-token"}}
+	c, err := NewClient(context.Background(), ta, Options{})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	body, err := c.RawGetWithHeaders(context.Background(), srv.URL, map[string]string{"ConsistencyLevel": "eventual"})
+	if err != nil {
+		t.Fatalf("RawGetWithHeaders: %v", err)
+	}
+	if string(body) != `42` {
+		t.Errorf("body = %q, want 42", body)
+	}
+	if gotConsistency != "eventual" {
+		t.Errorf("ConsistencyLevel = %q, want eventual", gotConsistency)
+	}
+	if gotAuth != "Bearer secret-token" {
+		t.Errorf("Authorization = %q, want bearer token", gotAuth)
+	}
+}
+
 func TestRawGetTokenError(t *testing.T) {
 	ta := &auth.TenantAuth{TenantID: "t", Cred: fakeCredential{err: errors.New("cred boom")}}
 	c, err := NewClient(context.Background(), ta, Options{})

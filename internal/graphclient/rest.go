@@ -25,6 +25,17 @@ type tokenCredential interface {
 // pulling msgraph-beta-sdk-go for: the caller hand-decodes the returned body.
 // A non-2xx response is returned as an error including the status and body.
 func (c *Client) RawGet(ctx context.Context, url string) ([]byte, error) {
+	return c.RawGetWithHeaders(ctx, url, nil)
+}
+
+// RawGetWithHeaders is RawGet with caller-supplied request headers layered on
+// top of the bearer token and Accept. It exists for the Entra directory
+// aggregate queries — every `$count` segment and every advanced `$filter`
+// operator (`ne`, `endsWith`, `$search`) requires the request header
+// `ConsistencyLevel: eventual`, which omitting returns an error for. The
+// caller's headers win over the defaults for any colliding key, so a caller
+// cannot accidentally strip Authorization by passing an unrelated header set.
+func (c *Client) RawGetWithHeaders(ctx context.Context, url string, headers map[string]string) ([]byte, error) {
 	tok, err := c.cred.GetToken(ctx, policy.TokenRequestOptions{Scopes: []string{auth.GraphDefaultScope}})
 	if err != nil {
 		return nil, fmt.Errorf("graphclient: tenant %q: acquire token: %w", c.TenantID, err)
@@ -36,6 +47,9 @@ func (c *Client) RawGet(ctx context.Context, url string) ([]byte, error) {
 	}
 	req.Header.Set("Authorization", "Bearer "+tok.Token)
 	req.Header.Set("Accept", "application/json")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
