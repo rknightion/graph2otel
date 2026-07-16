@@ -346,12 +346,25 @@ and queryability, never by confidentiality:
   | `resourceId` casing | `/TENANTS/…` | `/tenants/…` | **`/tenants/…`** |
 
   It follows MGAL on timestamps + `level`, and SignInLogs on `durationMs` + casing.
-- **`AuditLogs` is NOT yet safely mappable, and the reason is the sample, not the schema** (#135).
-  The container holds **9 records and all 9 are the same Entra Cloud Sync heartbeat**
-  (`category=ProvisioningManagement`, `loggedByService=Account Provisioning`, `operationType=Read`).
-  Zero `targetResources[].modifiedProperties` in it — which does **not** mean the category lacks
-  them; a real audit event carries them, and the names-not-values exclusion applies. Nine
-  heartbeats is closer to documentation than to a live sample.
+- **`AuditLogs` IS mappable today — it is blocked ONLY on #131, not on data** (#135, verified live
+  2026-07-16). A first pass at this claimed the opposite ("the sample is 9 identical Cloud Sync
+  heartbeats, so it is unmappable"). **That verdict was wrong and the reasoning is the lesson:**
+  it judged the sample by its *variety* when `mapDirectoryAudit` is **field-driven, not
+  event-type-driven**. Checked against 28 live records, **all 9 fields the mapper reads are present
+  in 28/28**: `id`, `category`, `activityDisplayName`, `result`, `resultReason`, `loggedByService`,
+  `correlationId`, `initiatedBy` (incl. `.app.displayName`/`.appId`, `.user`), `targetResources`
+  (incl. `[].displayName`). So the blob `properties` object IS the Graph `directoryAudit` resource,
+  the same way it is the `signIn` resource — **reuse `mapDirectoryAudit`, do not write a second
+  mapper**. Sample variety is irrelevant when no new mapper is being written. (`mapDirectoryAudit`
+  reads **no** `modifiedProperties` — only `targetResources[].displayName` — so the names-not-values
+  exclusion does not even arise on this path.)
+- **Why #131 genuinely blocks blob `AuditLogs` (unlike the sign-ins)** (#135 group D).
+  `entra.directory_audits` carries **no `Experimental` marker**, so it is **default-on and v1.0**,
+  emitting `entra.directory_audit` from Graph. A blob collector emits the *same event name* with the
+  *same ids*. Both default-on ⇒ **every directory audit ships twice into one pipeline** — precisely
+  the duplication #131 exists to prevent. The sign-in streams escaped this only because their polled
+  beta twins are `Experimental` (off by default), so blob-on + polled-off = each event once. **There
+  is no equivalent default here**, which is why `dual` has to be settled as a mode first.
 - **The blob `properties` object IS the Graph `signIn` resource** (#135, verified field-for-field
   across live samples of all four sign-in categories). Every field the polled `mapSignIn` reads is
   present in every blob category, so `entra/signins` reuses ONE mapper for both the polled and blob
