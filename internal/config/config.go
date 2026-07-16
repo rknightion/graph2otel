@@ -145,6 +145,31 @@ type TenantConfig struct {
 	// global Config.Collectors — a tenant may disable a globally-enabled
 	// collector or tune its interval. See CollectorSettings.
 	Collectors map[string]CollectorConfig `yaml:"collectors"`
+	// BlobIngest configures the read-only Azure Storage blob consumer (#89),
+	// the one place graph2otel reads from outside Graph. Off unless an account
+	// URL is set.
+	BlobIngest BlobIngestConfig `yaml:"blob_ingest"`
+}
+
+// BlobIngestConfig points a tenant's blob-sourced collectors at the Azure
+// Storage account its Entra/Intune diagnostic settings write to (#89).
+//
+// This exists because a handful of signals have no Graph endpoint at all —
+// MicrosoftGraphActivityLogs, MicrosoftServicePrincipalSignInLogs, Intune
+// OperationalLogs — and reach us only as Azure Monitor diagnostic-settings
+// output landing in blob storage.
+//
+// It carries no credential: the tenant's existing DefaultAzureCredential is
+// reused, and the SDK requests the storage audience itself. The identity needs
+// the DATA-plane role Storage Blob Data Reader on this account — read-only, by
+// design (graph2otel never deletes; the account's lifecycle rule owns
+// retention).
+type BlobIngestConfig struct {
+	// AccountURL is the blob service endpoint, e.g.
+	// "https://myaccount.blob.core.windows.net". Empty (the default) disables
+	// blob ingest entirely for this tenant: no blob collectors are registered,
+	// so a deployment with no storage account is unaffected.
+	AccountURL string `yaml:"account_url"`
 }
 
 // CollectorSettings resolves the effective enabled state and interval for a
@@ -351,6 +376,10 @@ func (c *Config) Validate() error {
 			if err := validateInterval(cc.Interval); err != nil {
 				return fmt.Errorf("tenants[%d].collectors[%q].interval: %w", i, name, err)
 			}
+		}
+
+		if err := validateBlobAccountURL(t.BlobIngest.AccountURL); err != nil {
+			return fmt.Errorf("tenants[%d].blob_ingest.account_url: %w", i, err)
 		}
 	}
 

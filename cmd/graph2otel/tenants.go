@@ -9,6 +9,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/admin"
 	"github.com/rknightion/graph2otel/internal/auth"
+	"github.com/rknightion/graph2otel/internal/blobpipeline"
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
@@ -143,6 +144,13 @@ func setupTenant(
 		}
 	}
 
+	// Blob collectors (read-only Azure Storage ingest, #89) — the one place
+	// graph2otel reads from outside Graph, for the signals Graph has no endpoint
+	// for at all. Configuring blob_ingest.account_url IS the opt-in: a tenant
+	// that has provisioned no storage account registers none of these, so a
+	// default deployment is untouched.
+	registerBlobCollectors(cfg, ta, caps, store, tlog, registry, skips)
+
 	status := collector.NewStatusTracker()
 	sched := collector.NewScheduler(emitter, collector.NewMemoryStore(),
 		collector.WithTenant(ta.TenantID),
@@ -155,6 +163,61 @@ func setupTenant(
 
 	tlog.Info("tenant started", "collectors", len(registry.Entries()))
 	return admin.CollectorSource{TenantID: ta.TenantID, Registry: registry, Status: status}, true
+}
+
+// registerBlobCollectors wires the tenant's blob-sourced collectors, if it has
+// configured a storage account to read from.
+//
+// A Source build failure skips only the blob collectors: the tenant's Graph
+// polling is unaffected, so a mistyped account URL or a missing storage role
+// degrades this one lane rather than taking the tenant down. The skip is
+// recorded per collector so the admin status page says why they are absent —
+// otherwise "blob ingest is silently doing nothing" looks identical to "the
+// data has not arrived yet", which is the documented way this path gets
+// misdiagnosed.
+func registerBlobCollectors(
+	cfg *config.Config,
+	ta *auth.TenantAuth,
+	caps license.Capabilities,
+	store *checkpoint.Store,
+	tlog *slog.Logger,
+	registry *collector.Registry,
+	skips map[admin.SkipKey]string,
+) {
+	accountURL := tenantBlobAccountURL(cfg, ta.TenantID)
+	if accountURL == "" {
+		return
+	}
+
+	src, err := blobpipeline.NewAzureSource(accountURL, ta.Cred)
+	if err != nil {
+		tlog.Error("blob ingest disabled: building the storage source failed",
+			"account_url", accountURL, "error", err)
+		for _, bf := range collectors.BlobAll() {
+			c := bf(collectors.BlobDeps{TenantID: ta.TenantID, Logger: tlog, Store: store})
+			skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] = "blob ingest unavailable: " + err.Error()
+		}
+		return
+	}
+
+	bdeps := collectors.BlobDeps{Source: src, TenantID: ta.TenantID, Logger: tlog, Store: store}
+	for _, bf := range collectors.BlobAll() {
+		c := bf(bdeps)
+		if interval, ok := gateCollector(c, ta, cfg, caps, tlog, skips); ok {
+			registry.Register(c, interval)
+		}
+	}
+}
+
+// tenantBlobAccountURL returns the storage account URL configured for tenantID,
+// or "" when blob ingest is off for it.
+func tenantBlobAccountURL(cfg *config.Config, tenantID string) string {
+	for _, t := range cfg.Tenants {
+		if t.TenantID == tenantID {
+			return t.BlobIngest.AccountURL
+		}
+	}
+	return ""
 }
 
 // gateCollector applies the three registration gates shared by snapshot and

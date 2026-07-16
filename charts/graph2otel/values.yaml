@@ -155,6 +155,17 @@ config:
       # collectors:
       #   sign_ins:
       #     enabled: false
+      #
+      # Optional read-only Azure Storage blob ingest — the one place graph2otel
+      # reads from outside Graph, for signals Graph has no endpoint for at all
+      # (MicrosoftGraphActivityLogs et al; see docs/blob-ingest.md). Setting
+      # account_url is the opt-in; unset (default) registers no blob collectors,
+      # so a cluster with no storage account is unaffected. Reuses this tenant's
+      # AZURE_* credential, which needs the DATA-plane role "Storage Blob Data
+      # Reader" on that account — Owner grants container listing but NOT blob
+      # content reads, and that failure looks exactly like "no data yet".
+      # blob_ingest:
+      #   account_url: "https://myaccount.blob.core.windows.net"
 
   otlp:
     # -- Export protocol: http | grpc | stdout (stdout = local debug).
