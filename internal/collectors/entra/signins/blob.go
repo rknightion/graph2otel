@@ -50,6 +50,15 @@ type blobSpec struct {
 	// container is "insights-logs-" + the diagnostic-settings category name,
 	// lowercased — the fixed naming Azure Monitor uses.
 	container string
+	// conflictsWith names the polled collector this category is a second
+	// TRANSPORT for — the same sign-in records, arriving by diagnostic settings
+	// instead of Graph. Empty means this category has no polled twin.
+	//
+	// It is a per-spec field rather than a method on the shared impl because
+	// the three specs disagree, and that disagreement is the whole point: two
+	// of them duplicate a polled stream and one is a disjoint dataset. See
+	// blobSpecs. Enforced by collectors.CheckConflicts at startup (#144).
+	conflictsWith []string
 }
 
 // blobSpecs is the set of sign-in categories with a mapper.
@@ -60,18 +69,32 @@ type blobSpec struct {
 // three — and "very probably" against imagination is exactly the reasoning that
 // produced three wrong "permanent gap" verdicts on this project (#109/#100/#130).
 // It lands when a tenant emits one. See #135.
+//
+// Note the conflictsWith column, which is NOT uniform and must not be made so
+// (#144). The two ".blob" categories are a second transport for records their
+// polled twin already emits — measured live on camden 2026-07-16, the polled
+// collector's own checkpoint seen_ids intersected against the ids in its blob
+// container gave 18/18 and 1375/1375, i.e. TOTAL overlap. Running both ships
+// every record twice into one stream, so the pair is refused at startup.
+// MicrosoftServicePrincipalSignInLogs declares nothing, because it duplicates
+// nothing: 160/160 sampled records were owned by Microsoft's own tenant, ZERO
+// ids overlapped the polled service-principal stream, and it has no Graph route
+// at all. Copying the declaration onto it — the obvious tidy-up, since it sits
+// in the same table — would suppress a stream that has no duplicate.
 var blobSpecs = []blobSpec{
 	{
 		name:      "entra.signins.microsoft_service_principal",
 		container: "insights-logs-microsoftserviceprincipalsigninlogs",
 	},
 	{
-		name:      "entra.signins.service_principal.blob",
-		container: "insights-logs-serviceprincipalsigninlogs",
+		name:          "entra.signins.service_principal.blob",
+		container:     "insights-logs-serviceprincipalsigninlogs",
+		conflictsWith: []string{"entra.signins.service_principal"},
 	},
 	{
-		name:      "entra.signins.non_interactive.blob",
-		container: "insights-logs-noninteractiveusersigninlogs",
+		name:          "entra.signins.non_interactive.blob",
+		container:     "insights-logs-noninteractiveusersigninlogs",
+		conflictsWith: []string{"entra.signins.non_interactive"},
 	},
 }
 
@@ -86,6 +109,9 @@ var blobSpecs = []blobSpec{
 // v1.0-stable source "beta" would contradict the entire reason group B exists.
 type blobCollectorImpl struct {
 	*blobpipeline.BlobCollector
+	// conflicts is this category's polled twin, if it has one. Carried per
+	// instance because the three specs sharing this type disagree about it.
+	conflicts []string
 }
 
 // RequiredCapability declares Entra ID P1, matching the polled streams.
@@ -97,6 +123,21 @@ type blobCollectorImpl struct {
 // arrived yet", the documented way this whole path gets misdiagnosed. A stated
 // skip reason on the status page beats a silent nothing.
 func (c *blobCollectorImpl) RequiredCapability() license.Capability { return license.CapEntraP1 }
+
+// ConflictsWith names the polled collector this category duplicates, so the
+// composition root refuses to start with both enabled (#144). It returns nil —
+// no conflict — for the category with no polled twin.
+//
+// The declaration lives on the blob side rather than the polled side because
+// this side is the one that KNOWS: signins.go's polled streams predate blob
+// ingest entirely, and a category is added here by someone who has just
+// verified what it overlaps. It also keeps the fact next to the evidence in
+// blobSpecs.
+//
+// Nothing derives this from the event name, and nothing may: every collector in
+// this package emits "entra.signin", including entra.signins.interactive, which
+// conflicts with none of them. Same name, disjoint records.
+func (c *blobCollectorImpl) ConflictsWith() []string { return c.conflicts }
 
 // newBlobCollector builds one sign-in blob collector from its spec. The cursor
 // namespace defaults to the container, and each spec has its own container, so
@@ -110,6 +151,7 @@ func newBlobCollector(s blobSpec, d collectors.BlobDeps) *blobCollectorImpl {
 	return &blobCollectorImpl{
 		BlobCollector: blobpipeline.NewBlobCollector(
 			s.name, blobInterval, d.TenantID, cfg, d.Source, d.Store, d.Logger),
+		conflicts: s.conflictsWith,
 	}
 }
 
@@ -204,4 +246,5 @@ func init() {
 var (
 	_ collector.SnapshotCollector = (*blobCollectorImpl)(nil)
 	_ license.CapabilityRequirer  = (*blobCollectorImpl)(nil)
+	_ collectors.ConflictsWith    = (*blobCollectorImpl)(nil)
 )

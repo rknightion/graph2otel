@@ -145,9 +145,25 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 	// Per-tenant Graph clients + collector schedulers. Each configured tenant
 	// gets its own client, license-gated collector set, and Scheduler goroutine
-	// bound to ctx; startTenants returns the admin status sources and skip
+	// bound to tenantCtx; startTenants returns the admin status sources and skip
 	// reasons. With zero tenants (stdout mode) this is a no-op.
-	sources, skips, waitTenants := startTenants(ctx, cfg, provider, logger)
+	//
+	// tenantCtx is a cancelable child of ctx purely so a fatal startup error can
+	// wind the schedulers back down: tenants are set up in order, so an error on
+	// the third has already launched the first two, and returning without
+	// canceling would leave them polling Graph while the process exits.
+	tenantCtx, cancelTenants := context.WithCancel(ctx)
+	defer cancelTenants()
+	sources, skips, waitTenants, err := startTenants(tenantCtx, cfg, provider, logger)
+	if err != nil {
+		// A collector config that must not run (#144). Fatal on purpose: this
+		// state ships every record twice while every collector reports healthy,
+		// so a warning would be a line in a log about a system that looks fine.
+		logger.Error("refusing to start", "error", err)
+		cancelTenants()
+		waitTenants()
+		return 1
+	}
 
 	// Self-observability cardinality accounting: the emitter Observes every
 	// data point's series into the tracker on the hot path; Report snapshots the

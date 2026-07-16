@@ -224,6 +224,30 @@ func (c *collectorImpl) CollectWindow(ctx context.Context, from, to time.Time, e
 	return to, nil
 }
 
+// ConflictsWith declares m365.unified_audit: the two are one signal over two
+// transports, emitting the same event name with the same record Id, so enabling
+// both ships every M365 audit record twice into one stream (#144).
+//
+// The composition root refuses to start rather than warning. Downstream dedupe
+// on `id` does work — which is exactly what makes the state dangerous, because
+// it looks fine until someone counts. Both collectors report success on every
+// tick and nothing carries provenance (#141), so the duplication is invisible
+// at the source and indistinguishable from real volume at the sink.
+//
+// The declaration is here rather than on m365.unified_audit because this
+// collector is the second transport: it was written knowing the other exists
+// (see the package doc), while m365.unified_audit predates it.
+//
+// Which one to disable is a genuine trade, not a formality — see the collector
+// reference. This one wins on transport (stable v1.0, 2,000 req/min, ~2 min to
+// content); m365.unified_audit wins on volume control (server-side
+// recordTypeFilters can take Teams while excluding the endpoint-DLP firehose,
+// which this API's five content-type buckets cannot express) at the cost of a
+// beta dependency.
+func (c *collectorImpl) ConflictsWith() []string {
+	return []string{"m365.unified_audit"}
+}
+
 // RequiredPermissions declares the least-privilege application role.
 //
 // ActivityFeed.Read alone covers the whole feed AND authorizes POST
@@ -287,6 +311,7 @@ func init() {
 // it silently never run.
 var (
 	_ collector.WindowCollector = (*collectorImpl)(nil)
+	_ collectors.ConflictsWith  = (*collectorImpl)(nil)
 )
 
 // creationTimeLayouts are the layouts tried, in order, against CreationTime.

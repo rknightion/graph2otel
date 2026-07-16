@@ -29,16 +29,25 @@ import (
 // per tenant) and the skip-reason map so the admin page can show both the
 // running collectors and the ones deliberately not registered.
 //
-// It never fails the process for a single tenant: an auth/client or license
-// error for one tenant is logged and that tenant is skipped, so a
-// misconfigured tenant can't take down the others. The returned wait func
-// blocks until every launched Scheduler has drained (after ctx is canceled).
+// A runtime failure never takes the process down for a single tenant's sake:
+// an auth/client or license error for one tenant is logged and that tenant is
+// skipped, so a misconfigured tenant can't take down the others. The returned
+// wait func blocks until every launched Scheduler has drained (after ctx is
+// canceled).
+//
+// The returned error is the narrow exception to that rule, and today it has
+// exactly one source: a tenant registering two transports for the same records
+// (#144). It is process-fatal because it is a config that was never working
+// rather than a runtime fault, so there is nothing to degrade to and nothing to
+// recover from — and the state it describes is invisible from the outside. The
+// caller must cancel ctx and drain wait before exiting; tenants set up before
+// the offending one may already be running.
 func startTenants(
 	ctx context.Context,
 	cfg *config.Config,
 	provider *telemetry.Provider,
 	logger *slog.Logger,
-) (sources []admin.CollectorSource, skips map[admin.SkipKey]string, wait func()) {
+) (sources []admin.CollectorSource, skips map[admin.SkipKey]string, wait func(), err error) {
 	skips = map[admin.SkipKey]string{}
 	var wg sync.WaitGroup
 
@@ -50,21 +59,28 @@ func startTenants(
 	auths, err := auth.BuildAll(cfg.Tenants)
 	if err != nil {
 		logger.Error("building tenant credentials", "error", err)
-		return nil, skips, wg.Wait
+		return nil, skips, wg.Wait, nil
 	}
 
 	for _, ta := range auths {
-		src, launched := setupTenant(ctx, ta, cfg, provider, logger, limiter, skips, &wg)
+		src, launched, ferr := setupTenant(ctx, ta, cfg, provider, logger, limiter, skips, &wg)
+		if ferr != nil {
+			return sources, skips, wg.Wait, ferr
+		}
 		if launched {
 			sources = append(sources, src)
 		}
 	}
-	return sources, skips, wg.Wait
+	return sources, skips, wg.Wait, nil
 }
 
-// setupTenant wires one tenant end to end. launched is false when the tenant
-// could not be brought up (client build failed) — its collectors are skipped
-// rather than aborting the whole process.
+// setupTenant wires one tenant end to end.
+//
+// launched is false when the tenant could not be brought up (client build
+// failed) — its collectors are skipped rather than aborting the whole process.
+// A non-nil error is the opposite call: a configuration that must not run at
+// all, so the caller aborts startup rather than continuing without this tenant.
+// See the conflict check below for why that distinction exists.
 func setupTenant(
 	ctx context.Context,
 	ta *auth.TenantAuth,
@@ -74,7 +90,7 @@ func setupTenant(
 	limiter *graphclient.WorkloadLimiter,
 	skips map[admin.SkipKey]string,
 	wg *sync.WaitGroup,
-) (admin.CollectorSource, bool) {
+) (admin.CollectorSource, bool, error) {
 	tlog := logger.With("tenant", ta.TenantID)
 	emitter := provider.Emitter()
 
@@ -85,7 +101,7 @@ func setupTenant(
 	})
 	if err != nil {
 		tlog.Error("building Graph client", "error", err)
-		return admin.CollectorSource{}, false
+		return admin.CollectorSource{}, false, nil
 	}
 
 	// License detection is best-effort: on failure, proceed with no premium
@@ -167,6 +183,23 @@ func setupTenant(
 	// these are default-on.
 	registerO365Collectors(cfg, ta, caps, store, tlog, emitter, registry, skips)
 
+	// Transport mutual-exclusion, checked AFTER every registration path above
+	// and before anything is scheduled (#144). Position is load-bearing: run
+	// between two paths and this silently stops seeing half the registry.
+	//
+	// This is the one condition that fails the PROCESS rather than skipping the
+	// tenant, and the exception is deliberate. Every other failure here is
+	// partial and recoverable at runtime — a dead credential, an unreachable
+	// storage account, a missing license — so degrading one tenant beats taking
+	// the fleet down. A conflicting pair is neither: it is a config that was
+	// never working, it cannot heal, and its whole failure mode is that it looks
+	// healthy while shipping every record twice into the operator's backend.
+	// Booting is the harmful outcome. #117 drew the same line for an unwritable
+	// checkpoint dir.
+	if err := checkRegistryConflicts(registry); err != nil {
+		return admin.CollectorSource{}, false, fmt.Errorf("tenant %s: %w", ta.TenantID, err)
+	}
+
 	status := collector.NewStatusTracker()
 	sched := collector.NewScheduler(emitter, collector.NewMemoryStore(),
 		collector.WithTenant(ta.TenantID),
@@ -178,7 +211,35 @@ func setupTenant(
 	})
 
 	tlog.Info("tenant started", "collectors", len(registry.Entries()))
-	return admin.CollectorSource{TenantID: ta.TenantID, Registry: registry, Status: status}, true
+	return admin.CollectorSource{TenantID: ta.TenantID, Registry: registry, Status: status}, true, nil
+}
+
+// checkRegistryConflicts refuses a tenant whose enabled collector set contains
+// two transports for the same records (#144).
+//
+// It walks the assembled REGISTRY rather than re-walking collectors.All(),
+// WindowAll(), BlobAll() and O365All(), and that is the whole reason it can be
+// trusted. Every construction path funnels into this one Registry, so reading
+// it sees all of them without knowing how many there are — a fifth path is
+// covered the day it lands, for free.
+//
+// The alternative is precisely the bug #139/#100 records: collectordoc.Rows
+// enumerated the registration paths by hand, O365All() landed as a fourth, and
+// TestCollectorAnnotationsCoverEveryCollector went GREEN over a collector
+// missing from the reference entirely — the gate passed because it was blind,
+// not because it was satisfied. A conflict check that goes blind is worse
+// still: it reports a config safe while it double-ships every record.
+//
+// What this shape moves the risk to is the CALL SITE — the check must run after
+// ALL registration, never between two paths. See setupTenant, where it is the
+// last thing before the scheduler launches.
+func checkRegistryConflicts(reg *collector.Registry) error {
+	entries := reg.Entries()
+	cs := make([]collector.Collector, 0, len(entries))
+	for _, e := range entries {
+		cs = append(cs, e.Collector)
+	}
+	return collectors.CheckConflicts(cs)
 }
 
 // initialLookback resolves a window collector's cold-start backfill window:

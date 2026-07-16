@@ -173,12 +173,12 @@ var annotations = map[string]Annotation{
 		Emits:    "`entra.signin`",
 	},
 	"entra.signins.service_principal.blob": {
-		Collects: "Service principal sign-in events via storage rather than the beta `signInEventTypes` filter. A drop-in equivalent of the polled twin — same event name, same attributes, same `id`, so the two are dedupe-able downstream if both run",
+		Collects: "Service principal sign-in events via storage rather than the beta `signInEventTypes` filter. A drop-in equivalent of the polled twin — same event name, same attributes, same `id`. Measured live at TOTAL id overlap with `entra.signins.service_principal` (1375/1375), so exactly one of the pair may be enabled; registering both is refused at startup",
 		Category: "ServicePrincipalSignInLogs",
 		Emits:    "`entra.signin`",
 	},
 	"entra.signins.non_interactive.blob": {
-		Collects: "Non-interactive sign-in events via storage rather than the beta `signInEventTypes` filter. A drop-in equivalent of the polled twin — same event name, same attributes, same `id`, so the two are dedupe-able downstream if both run",
+		Collects: "Non-interactive sign-in events via storage rather than the beta `signInEventTypes` filter. A drop-in equivalent of the polled twin — same event name, same attributes, same `id`. Measured live at TOTAL id overlap with `entra.signins.non_interactive` (18/18), so exactly one of the pair may be enabled; registering both is refused at startup",
 		Category: "NonInteractiveUserSignInLogs",
 		Emits:    "`entra.signin`",
 	},
@@ -310,14 +310,14 @@ var annotations = map[string]Annotation{
 
 	// ---- M365 — window collectors ----
 	"m365.unified_audit": {
-		Collects: "The M365 unified audit log, via the async query API: POST a query, poll it, page the result. Its records are not Entra's, so they land under a top-level `m365.audit` event name. Superseded by `m365.activity`, which reaches the same records over a stable v1.0 transport — leave only one of the two enabled",
+		Collects: "The M365 unified audit log, via the async query API: POST a query, poll it, page the result. Its records are not Entra's, so they land under a top-level `m365.audit` event name. The same signal as `m365.activity` over a different transport — NOT superseded by it. The two trade against each other: this one loses on transport (beta-only, a >10-minute async query, and it 429s on rapid query creation) and wins on volume control, because it sends server-side `recordTypeFilters` and can therefore take Teams while excluding the `DLPEndpoint` firehose — which `m365.activity`'s five content-type buckets cannot express. Worth nothing where log storage is free, decisive where it is billed per GB. The uncomfortable part: the cheaper path is the beta one. Exactly one of the two may be enabled; registering both is refused at startup",
 		Source:   "`POST /security/auditLog/queries` (beta — the documented v1.0 form 404s on a live tenant even under a token carrying the scope)",
 		Emits:    "`m365.audit`",
 	},
 	"m365.activity": {
-		Collects: "The same M365 unified audit records as `m365.unified_audit`, over the Office 365 Management Activity API instead: subscribe to a content type, list its content blobs, fetch each. Stable v1.0, 2,000 req/min per tenant, and no >10-minute async query — which is why this one is not Experimental. The API has NO server-side filtering, so `o365_activity.content_types` chooses what arrives and every record fetched is shipped. Defaults to Audit.Exchange + Audit.SharePoint; Audit.General is opt-in (it carries Teams, but also Endpoint DLP — 3,865 of 4,035 records on a 6-device tenant), and Audit.AzureActiveDirectory is omitted because `entra.signins.interactive` and `entra.directory_audits` already emit those records",
+		Collects: "The same M365 unified audit records as `m365.unified_audit`, over the Office 365 Management Activity API instead: subscribe to a content type, list its content blobs, fetch each. Wins on transport — stable v1.0, 2,000 req/min per tenant, content ~2 minutes behind the event, and no async query — which is why this one is not Experimental. Loses on volume control: the API has NO server-side filtering, so `o365_activity.content_types` is the only knob and every record fetched is shipped. Defaults to Audit.Exchange + Audit.SharePoint; Audit.General is opt-in (it is the only route to Teams here, and it was 3,865 of 4,035 records Endpoint DLP on a 6-device tenant — the firehose `m365.unified_audit` can filter out server-side and this cannot), and Audit.AzureActiveDirectory is omitted because `entra.signins.interactive` and `entra.directory_audits` already emit those records. Exactly one of the two may be enabled; registering both is refused at startup",
 		Source:   "`manage.office.com/api/v1.0/{tenant}/activity/feed` — a second first-party API, NOT Graph: different audience, and `POST /subscriptions/start` is a write (the second break in graph2otel's read-only property, after the reports-export job)",
-		Emits:    "`m365.audit` — the same event name and the same `id` as `m365.unified_audit`, deliberately: the Management API record IS the query API's `auditData` sub-object, so the two are drop-in equivalents and dedupe-able downstream",
+		Emits:    "`m365.audit` — the same event name and the same `id` as `m365.unified_audit`, deliberately: the Management API record IS the query API's `auditData` sub-object, so the two are drop-in equivalents and switching transports needs no downstream change",
 	},
 
 	// ---- Purview — snapshot collectors ----
