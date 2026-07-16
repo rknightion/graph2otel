@@ -106,12 +106,17 @@ jobs:
     with:
       release-tag: ${{ needs.release-please.outputs.tag_name }}
       install-cosign: true
-      # -p 2: build two targets at a time. The matrix is trimmed to 3 targets in
-      # .goreleaser.yaml (linux amd64/arm64 + darwin arm64); -p 2 is well below the
-      # 5-way parallelism that OOM-killed the runner (msgraph-heavy tree, see
-      # ci.yml) while halving the serial cost. NOTE: the shared binaries.yml
-      # reusable sets setup-go cache:false, so release builds don't get the
-      # cross-run build cache the ci snapshot job does — matrix-trim + -p 2 are the
-      # levers here. Dial back to -p 1 if OOM recurs.
+      # -p 2: build two targets at a time. The full 5-target matrix (see
+      # .goreleaser.yaml) at unbounded parallelism OOM-kills the 7 GB runner (the
+      # msgraph-heavy Go linker peaks ~3-4 GB per target); two concurrent linkers
+      # peak ~8 GB, which the swapfile set up in pre-cmd absorbs. NOTE: the shared
+      # binaries.yml reusable sets setup-go cache:false, so release builds don't
+      # get the cross-run build cache the ci snapshot job does — the swap + -p 2
+      # are the levers here.
       goreleaser-args: "release --clean --skip=docker -p 2"
-      pre-cmd: "go install github.com/anchore/syft/cmd/syft@v1.18.1 && go install github.com/google/go-licenses@v1.6.0"
+      # pre-cmd runs before goreleaser. First replace the runner's default 4 GB
+      # swap with 12 GB so the linker spills to /mnt (SSD) instead of OOM-killing
+      # the full-matrix cross-compile — the shared reusable exposes no runs-on, so
+      # this is how we add memory headroom without a paid larger runner (mirrors
+      # the swap step in ci.yml). Then the usual syft + go-licenses installs.
+      pre-cmd: "sudo swapoff -a || true; sudo rm -f /mnt/swapfile; sudo fallocate -l 12G /mnt/swapfile && sudo chmod 600 /mnt/swapfile && sudo mkswap /mnt/swapfile && sudo swapon /mnt/swapfile && go install github.com/anchore/syft/cmd/syft@v1.18.1 && go install github.com/google/go-licenses@v1.6.0"

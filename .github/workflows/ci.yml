@@ -90,8 +90,23 @@ jobs:
           # dependency tree is compiled once and restored on every subsequent
           # push, so a snapshot build only recompiles the packages that changed
           # instead of the whole tree cold. Build-cache objects are keyed per
-          # GOOS/GOARCH, so all three cross-compile targets cache independently.
+          # GOOS/GOARCH, so every cross-compile target caches independently.
           cache: true
+
+      # Replace the runner's default 4 GB swap with 12 GB. The standard runner is
+      # 2-core/7 GB and the msgraph-heavy Go linker peaks ~3-4 GB per target, so
+      # cross-compiling the full matrix in parallel OOM-kills the runner. Swap
+      # lets the linker spill to the (SSD-backed) /mnt disk instead of dying —
+      # slower only while actually swapping, but it makes the full matrix safe
+      # without a paid larger runner. Mirrored in release-please.yml's pre-cmd.
+      - name: Increase swap space
+        run: |
+          sudo swapoff -a || true
+          sudo rm -f /mnt/swapfile
+          sudo fallocate -l 12G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
 
       # Cross-compile every target + build archives/checksums. .goreleaser.yaml has
       # no docker pipeline (the real image build is the repo-root Dockerfile via
@@ -102,12 +117,11 @@ jobs:
         with:
           distribution: goreleaser
           version: "v2.16.0"
-          # -p 2 builds two targets concurrently. The full 5-target matrix at
-          # unbounded parallelism OOM-killed the runner (each Go compile+link of
-          # the msgraph-heavy tree is memory-hungry), which is why the matrix is
-          # now trimmed to 3 targets in .goreleaser.yaml; -p 2 is well below the
-          # 5-way peak that OOM'd, so it stays bounded while halving the serial
-          # cost. Release builds use the same cap. Dial back to -p 1 if OOM recurs.
+          # -p 2 builds two targets concurrently (the full 5-target matrix at
+          # unbounded parallelism is too memory-hungry even with swap). Two
+          # concurrent msgraph linkers peak ~8 GB — mostly RAM, lightly into the
+          # swap added above — so it stays fast while the swap prevents an OOM
+          # kill. Release builds use the same cap.
           args: release --snapshot --clean --skip=publish,sign,sbom -p 2
 
   docker-build:

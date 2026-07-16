@@ -42,23 +42,25 @@ builds:
       # image tags produced below.
       - -s -w -X main.version={{ .Version }}
     mod_timestamp: "{{ .CommitTimestamp }}"
-    # Runtime is Docker/Linux (the GHCR image is built from the repo-root
-    # Dockerfile, not here); darwin is only for Apple-Silicon local dev. So this
-    # is a deliberately trimmed 3-target matrix — linux/amd64, linux/arm64,
-    # darwin/arm64 — NOT the 5-target sibling default. Cross-compiling the
-    # msgraph-heavy tree is memory-hungry; fewer targets keep it fast and under
-    # the runner's memory ceiling. Intel-Mac devs build locally (go build); there
-    # is no windows target (this is a server-side agent).
-    goos: [linux, darwin]
+    # Full 5-target matrix (linux/darwin/windows × amd64/arm64, minus
+    # windows/arm64) — same as the sibling repos. Cross-compiling the
+    # msgraph-heavy tree is memory-hungry and OOM-killed the 7 GB runner at
+    # parallel builds; the CI/release jobs add a swapfile pre-step so the linker
+    # spills to disk instead of dying, which makes the full matrix safe. See the
+    # goreleaser-snapshot job in ci.yml and the binaries job in release-please.yml.
+    goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
     ignore:
-      - goos: darwin
-        goarch: amd64
+      - goos: windows
+        goarch: arm64
 
 archives:
   - id: graph2otel
     formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
 
 checksum:
   name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
