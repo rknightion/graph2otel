@@ -152,6 +152,16 @@ and queryability, never by confidentiality:
 - **The one genuine content exclusion is about SECRETS, not PII**, and it stays:
   `intune/auditevents` emits the **names** of changed `modifiedProperties` but never
   their old/new **values**, which can carry credentials and certificates.
+  **The exclusion is `modifiedProperties` values and NOTHING ELSE — do not generalize it by feel.**
+  It exists because for a credential or certificate change the old/new value IS the credential.
+  A neighbouring field is not covered just because it is also free-form. Worked example (#100,
+  2026-07-16): `m365.activity` first withheld `ExtendedProperties[].Value` too, reasoning that it
+  is a JSON-encoded string of unbounded, workload-defined shape. **That was #110/#111's error
+  again** — an argument about being awkward to MODEL, not about being unsafe to SHIP. Live those
+  values carry `additionalDetails` (`{"User-Agent":…,"AppId":…}`), `extendedAuditEventCategory`,
+  and `LoginError` (`";PP_E_BAD_PASSWORD;…"`) — anomalous-client and failed-logon signal, i.e.
+  exactly what a SIEM builds detections on. They are now **emitted**. If a workload is ever
+  *observed* putting a secret in one, change it then, on evidence — not on the shape of the field.
 - Default to **read-only, least-privilege** Graph API scopes; never request more than the
   declared signal needs.
 
@@ -325,6 +335,30 @@ and queryability, never by confidentiality:
   sign-ins do not agree on anything (`time`, `level`, `resourceId` casing, `durationMs` type all
   differ). Verify agreement against live samples before sharing a mapper; do not assume it either
   way.
+- **A cursor's clock and its eviction clock must be the SAME clock, and it is the ARRIVAL clock**
+  (#100 `o365pipeline`, mutation-proven). Record ids in a seen-set must be evicted on their
+  **blob's `contentCreated`** (arrival), never the record's own `CreationTime` (event). The
+  reference is explicit that *"one content blob can contain actions and events that occurred prior
+  to … an earlier content blob"* — so a 5-day-old record can arrive in a blob created today, and
+  evicting on its event time drops the id while its blob is still inside the overlap window and
+  re-listable, so the next tick re-emits it. Silent duplicates, from a dedupe that looks like it
+  works. **The rule is NOT "prefer arrival time"** — it is that the two clocks must match, which is
+  why `contentCreated` wins here while envelope `time` LOSES on the blob sign-ins (#135): same
+  rule, opposite answer, because re-listability is denominated in whatever the cursor is.
+- **An empty dedupe id poisons a seen-set forever if it is not guarded** (#100 `o365pipeline`,
+  mutation-proven). Writing a bare `"record:"` key for an id-less record makes it match **every**
+  later id-less record, so record two onward vanish silently across every blob and every tick. The
+  companion rule, which generalises: **undedupeable is degraded; misdated is wrong — only wrong
+  justifies a drop.** So a record with no id is still EMITTED (per #112; it is merely undedupeable,
+  and CreationTime/UPN/ClientIP/Operation still make a good log line), while a record with no
+  parseable event time is dropped (`telemetry/emitter.go` only sets a non-zero timestamp, so a zero
+  one is stamped on arrival and the record silently claims to have happened now).
+- **`internal/collectordoc` must walk EVERY registration path, or its gates pass because they are
+  BLIND** (#139/#100). `O365All()` landed as a fourth path and `collectordoc.Rows` +
+  `registrySnapshot` still walked only three — so `TestCollectorAnnotationsCoverEveryCollector`
+  went **green over a collector missing from the reference entirely**. A gate that cannot see a
+  collector is worse than no gate: it reports coverage it does not have. Both call sites now name
+  this incident in a comment. **Adding a fifth construction path means changing `Rows`' signature.**
 - **Compare blob timestamps as PARSED INSTANTS, never as strings — the string test lies** (#135,
   verified live 2026-07-16 on `AuditLogs`). A string-equality check of `time` vs
   `properties.activityDateTime` reports **0/9 identical**, which looks exactly like the sign-in bug
@@ -470,6 +504,31 @@ and queryability, never by confidentiality:
   job. **Granted + subscribed live 2026-07-16** (`ActivityFeed.Read` + `ActivityFeed.ReadDlp` on
   SP `ff238215-dd9d-49b4-8891-4a09cc3f0988`; `Audit.AzureActiveDirectory` + `DLP.All` enabled);
   client is `internal/o365activityclient`.
+- **`CreationTime` on a Management Activity API record is NOT RFC3339 — `time.Parse(time.RFC3339,
+  …)` FAILS and silently drops every record** (#100, verified live). It is documented UTC and
+  arrives **zone-less**: `"2015-06-29T20:03:19"` — no `Z`, no offset. The obvious layout is the
+  wrong one, and the failure is total rather than partial. `m365/activity` tries `RFC3339Nano`
+  first (so a future `Z` is honored) then falls back to `"2006-01-02T15:04:05.999999999"`, parsed
+  as UTC, with **no `time.Now()` fallback** — a stamped-on-arrival record silently claims to have
+  happened now, which is worse than dropping it.
+- **The Management API's docs declare camelCase enums; the WIRE returns PascalCase** (#100). Graph
+  declares `auditLogRecordType`/`userType` as camelCase (`regular`, `exchangeAdmin`); the live
+  record returns `"AzureActiveDirectory"` / `"System"`. #98 corroborates from the other direction —
+  the `recordTypeFilters` **request** takes camelCase (`exchangeAdmin`) while the **response**
+  returns PascalCase (`ExchangeAdmin`). So the query API passes the **classic O365 names straight
+  through** rather than serializing its declared enum, which is why the classic Management API
+  schema's own table is the convergence table for both transports.
+- **Microsoft's published `AuditLogRecordType` table does NOT cover ~27% of this tenant's live
+  record types** (#100, measured). Six of the 22 members #98 observed live are **absent from the
+  docs at any int** (`UAMOperation`, `MSDEIndicatorsSettings`, `MSDEResponseActions`,
+  `MSDEGeneralSettings`, `MAPGRemediation`, `AgentAdminActivity`), and RecordType **117**
+  (Workload=AppGovernance) is unlisted too. **The unknown-int path is not an edge case — it fires
+  on day one.** So `m365.activity` emits `record_type_id` **unconditionally** (the only lossless
+  form, and for those six the only record-type information that exists) and `record_type` only when
+  the int resolves. **Never guess a name**: a guessed name is a silent convergence break, an absent
+  one is visibly unknown. Rows the docs render with a **space** (`"Viva Engage"`=22,
+  `"Viva Goals"`=216) are deliberately OMITTED — an enum member cannot contain a space, so that is
+  post-rename display text and the wire keeps emitting the old name.
 - **Three "facts" about the O365 Management Activity API are WRONG — all three were believed on
   docs alone until measured live 2026-07-16** (#100). Do not re-assert any of them:
   - **There is NO 12-hour delay for first content.** Content listed ~2 minutes after
