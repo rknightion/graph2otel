@@ -133,10 +133,17 @@ func blobPrefix(tenantID string) string {
 // every one. So a blob-sourced sign-in and a polled sign-in are the same record,
 // and an attribute added for one source is automatically right for the other.
 //
-// The dedupe id mapSignIn returns is discarded: blobpipeline dedupes by byte
-// offset, not by id, so it has nothing to do here. (properties.id does equal the
-// polled signIn.id, so the two sources remain dedupe-able downstream on the `id`
-// attribute if anyone ever runs both.)
+// The dedupe id mapSignIn returns is discarded, because blobpipeline tracks
+// progress by byte offset and has nowhere to put it. That is a known gap rather
+// than a tidy fact: Azure's diagnostic-settings delivery is AT-LEAST-ONCE (~2.3%
+// of records arrive twice, byte-identical payload, fresh envelope `time`), so
+// these collectors ship those duplicates through today — see #138, which is
+// where that id would be threaded if the engine grows a seen-id set. It is not a
+// cursor bug: both copies are real distinct bytes, and the engine was verified
+// to emit each record exactly as many times as Azure wrote it.
+//
+// properties.id equals the polled signIn.id, so both the blob duplicates and any
+// polled/blob overlap are dedupe-able downstream on the `id` attribute today.
 func mapBlobSignIn(rec map[string]any) (telemetry.Event, bool) {
 	props := nested(rec, "properties")
 	if props == nil {
