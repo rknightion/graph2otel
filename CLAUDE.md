@@ -134,6 +134,13 @@ device names, sign-in IP addresses, group memberships). The boundary rule (see
 
 ## Project-wide gotchas
 
+- **Log attributes are Loki structured metadata, not stream labels** (#90, verified live
+  2026-07-16). Every log attribute graph2otel emits (`event_name`, `app_id`,
+  `activity_display_name`, `severity`, …) is Loki *structured metadata*; only `service_name`
+  is a stream label. So a `{event_name="entra.signin"}` stream selector matches **zero rows
+  silently** — the single most common way to build a Grafana alert that never fires. Always
+  `{service_name="graph2otel"} | event_name=`…` | attr=`…`` (label-filters after the
+  selector; `=~`/`!=`/`or`/`ip(…)` all work there). See `docs/signals.md`.
 - **No delta query exists** for any of the log-shaped endpoints (`signIns`,
   `directoryAudits`, `provisioning`, `riskDetections`, `riskyUsers`, Intune
   `auditEvents`). Every `WindowCollector` owns its own watermark — there is no

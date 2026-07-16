@@ -30,6 +30,28 @@ adjust a query one clause if your pipeline normalizes differently. This is exact
 convention the shipped [dashboards](https://github.com/rknightion/graph2otel/tree/main/dashboards)
 are built against.
 
+## Querying the logs in Loki — attributes are structured metadata, not stream labels
+
+Every attribute graph2otel puts on a log record (`event_name`, `app_id`,
+`user_principal_name`, `ip_address`, `activity_display_name`, `severity`, …) lands in Loki
+as **structured metadata**, not as a stream label. Only `service_name` (and the OTLP
+resource attributes) are stream labels. This changes how you write LogQL:
+
+- A stream selector on an attribute — `{event_name="entra.signin"}` — matches **nothing**
+  and returns zero rows silently. It is not an error; there just is no *stream label* by
+  that name.
+- Filter on attributes with a **`|` label-filter after** the `{service_name="graph2otel"}`
+  stream selector instead:
+
+  ```logql
+  {service_name="graph2otel"} | event_name=`entra.signin` | app_id=`<guid>` | status_error_code!=`0`
+  ```
+
+  `=~` regex, `!=`, `or`, and `ip("…")` matchers all work directly on structured metadata
+  after the selector. This is the form the shipped alert rules (e.g. the `entra-security-g2o`
+  group) and any dashboard log panel must use — building a Grafana alert on
+  `{event_name="…"}` is the single most common way to get a rule that silently never fires.
+
 ## Cardinality shape
 
 Every metric this project emits carries **bounded, tenant-shaped** label dimensions —
