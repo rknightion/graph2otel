@@ -79,9 +79,15 @@
 //
 // This makes the volume characteristic explicit, so an operator knows what
 // they are signing up for: log volume scales LINEARLY with tenant user
-// count, at DefaultInterval's cadence (15 minutes) — one record per user
-// per cycle. A 1,000-user tenant emits roughly 1,000 records every 15
-// minutes (~4,000/hour); a 50,000-user tenant emits roughly 200,000/hour.
+// count, at DefaultInterval's cadence (hourly) — one record per user per
+// cycle. A 1,000-user tenant emits roughly 1,000 records/hour (~24k/day); a
+// 50,000-user tenant roughly 50,000/hour (~1.2M/day). Nearly all of it is
+// identical to the previous cycle, which is the price of the state feed being
+// the surviving record. The interval is hourly rather than the 15 minutes
+// most posture collectors use precisely because of this — see DefaultInterval
+// and #115. Lowering it in config multiplies both the log volume and the
+// Graph paging load.
+//
 // This is orthogonal to the pagination-exceeded risk noted above (both scale
 // with user count, but the log twin adds no extra fetches), and is a
 // materially higher volume than the entra.risk log twin (which only emits
@@ -209,11 +215,19 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
-// DefaultInterval implements collector.Collector. Registration posture
-// drifts slowly and userRegistrationDetails has no delta query support (a
-// full read every cycle), so a longer interval matches this exporter's other
-// slow-drifting posture collectors (e.g. conditional access, licensing).
-func (c *Collector) DefaultInterval() time.Duration { return 15 * time.Minute }
+// DefaultInterval implements collector.Collector. Hourly, not the 15 minutes
+// most Entra posture collectors use, because this one is not like them: it is
+// the only posture collector that pages ONE ROW PER USER. entra.licensing and
+// entra.conditionalaccess also poll every 15 minutes, but they fetch a few
+// dozen bounded rows; this endpoint has no delta query, so every cycle is a
+// full read of the entire user directory — and the #114 log twin then emits a
+// record per user on top of that.
+//
+// Registration posture changes when a human enrolls an authenticator, so
+// 15-minute freshness bought nothing and cost 4x the Graph paging and 4x the
+// log volume (#115). This is a DEFAULT: an operator who genuinely wants faster
+// MFA posture can lower it in config.
+func (c *Collector) DefaultInterval() time.Duration { return time.Hour }
 
 // RequiredPermissions declares the least-privilege Graph application scope.
 // Per current Microsoft Graph docs, AuditLog.Read.All is the (only)
