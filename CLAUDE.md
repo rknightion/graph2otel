@@ -228,10 +228,19 @@ and queryability, never by confidentiality:
   tenant** (M2) — tighter than the general directory ceiling. Paging
   `/applications` + `/servicePrincipals` for credential data in a large tenant
   can approach it; keep `$select` minimal.
-- **Graph cannot see everything.** `MicrosoftGraphActivityLogs`,
-  `EnrichedOffice365AuditLogs`, `ADFSSignInLogs`, `NetworkAccessTrafficLogs`, and most of
-  Intune `OperationalLogs` have no Graph endpoint at all — they exist only via diagnostic
-  settings → Event Hub/Log Analytics. Specifics, all confirmed permanent:
+- **Graph cannot see everything** — but this list was **over-broad and is now narrower** (#130,
+  audited live 2026-07-16). **`NetworkAccessTrafficLogs` DOES have a Graph endpoint** and is
+  **removed** from this list: `GET /beta/networkAccess/logs/traffic` returns **403
+  `Authentication_MSGraphPermissionMissing`** whose message *names the scopes it wants* —
+  `NetworkAccess-Reports.Read.All` (least-privileged read) or `NetworkAccess.Read.All`. A 403
+  that names a scope is a **missing grant, not a missing endpoint**. (v1.0 400s — beta-only
+  route.) Not granted, because m7kni has **no Global Secure Access** and the category produces
+  **zero rows** here, so it could not be verified end-to-end — but the "no Graph endpoint at
+  all, confirmed permanent" claim was **wrong** and must not be re-asserted for GSA tenants.
+  The genuinely permanent ones — `MicrosoftGraphActivityLogs`, `EnrichedOffice365AuditLogs`,
+  `ADFSSignInLogs`, and Intune `OperationalLogs` — have no Graph endpoint and exist only via
+  diagnostic settings (→ **Storage**, per #89). Specifics, all confirmed permanent **and
+  re-audited against the non-Graph first-party API surface**:
   `EnrichedOffice365AuditLogs` is Sentinel-side ML enrichment synthesized downstream (no
   source API anywhere upstream, not just "not in Graph"). Intune **`OperationalLogs`** is
   the compliance-notification/SLA-alert *fired-event* stream (e.g. `AlertType: "Managed
@@ -275,9 +284,15 @@ and queryability, never by confidentiality:
   synthetic input, it does not list policies); **retention *policy* location bindings** via
   `Get/Set-RetentionCompliancePolicy` (but retention *label* **definitions** ARE Graph-
   exposed at `security/labels/retentionLabels` — only the policy binding is missing);
-  **label encryption activation** (Azure RMS, portal-only — but **re-check**: the
-  sensitivity-label catalog now exposes a `hasProtection` field per label, which may answer
-  this per-label, #126). Two notes: `DLP.All` sensitive-data content is **open** — the O365
+  **label encryption activation** — **this one is WRONG and is resolved** (#99, verified live
+  2026-07-16): it is **not** portal-only. The sensitivity-label catalog exposes **`hasProtection`
+  per label**, and it discriminates correctly on m7kni (`Highly Confidential`=True; Personal /
+  Public / General / Confidential=False). **No new scope needed** — `SensitivityLabel.Read` is
+  already granted. The residual (narrower) gap is the protection *template* detail — rights,
+  expiry — which stays unexposed. **Azure RMS is ruled out for label config**: its five app-only
+  roles are `Content.DelegatedReader/Writer/SuperUser/Writer` + `Application.Read.All` — all
+  about consuming/producing protected *content*, never reading label configuration — and
+  `api.aadrm.com` issues a token then serves an **IIS 404 HTML page**, not an API. Two notes: `DLP.All` sensitive-data content is **open** — the O365
   Management Activity API exposes an **`ActivityFeed.ReadDlp`** Application role, literally
   *"DLP policy events including detected sensitive data"*, which is the purpose-built answer
   and is being verified under #100; and the unified-audit-log toggle `Set-AdminAuditLogConfig`
@@ -304,6 +319,27 @@ and queryability, never by confidentiality:
   types actually mapped; **never `Audit.General` by default**). `POST /subscriptions/start` is
   a **write operation** — the second break in the read-only property, after the reports-export
   job.
+- **Re-audited and CONFIRMED PERMANENT — tested against the non-Graph first-party API surface,
+  do NOT re-chase** (#130 audit, 2026-07-16, probed as `graph2otel-poller`):
+  **the dedicated Microsoft Intune API (`0000000a-0000-0000-c000-000000000000`) exposes ZERO
+  app-only roles** — delegated-only, and `api.manage.microsoft.com` is NXDOMAIN. That is the
+  strongest possible negative: no grant, licence, or consent can ever unblock it for an
+  app-only poller, so Graph is the *only* Intune route and Intune `OperationalLogs` stays a
+  storage-path signal (#94). **`deviceManagement/monitoring/alertRecords`/`alertRules` is Cloud
+  PC-only** (every rule template is `cloudPc*`; no `deviceNotCompliant` template exists) — it is
+  NOT the OperationalLogs fired-alert stream even if granted. **DLP policy enumeration** has no
+  Graph route and the Purview Ecosystem API's 17 app-only roles are all
+  `ProcessContent`/`Assets`/`ProtectionScopes.Read` — **Purview APIs evaluate content against
+  policy, they never enumerate policy**; that pattern holds across the whole surface.
+  **Retention policy bindings** stay 500/Forbidden with `RecordsManagement.Read.All` present
+  (Application: Not supported).
+- **The `intune.devices` full-fleet page-walk is irreducible BY DESIGN, not by API limitation.**
+  `managedDeviceOverview` exists and IS already used as a bounded cross-check
+  (`intune.devices.overview.*`) — but it can never replace the walk, because
+  `manageddevices.go` emits a **log twin per device** and those per-device rows ARE the
+  deliverable, not merely an input to a count. Replacing the walk with a bounded count would
+  delete the twins and violate the hard rule above. (It also could not substitute even if the
+  rule allowed it: its OS summary sums to 9 against a real fleet of 10 — no Linux bucket.)
 - **When closing an issue as "redundant", state which question the test answered.** "Same rows"
   and "same fitness for purpose" are different claims. Both #100 and #109 were closed on the
   wrong question, and both wrong verdicts then propagated into this file's do-not-redo list,
