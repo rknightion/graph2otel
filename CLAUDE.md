@@ -325,6 +325,33 @@ and queryability, never by confidentiality:
   sign-ins do not agree on anything (`time`, `level`, `resourceId` casing, `durationMs` type all
   differ). Verify agreement against live samples before sharing a mapper; do not assume it either
   way.
+- **Compare blob timestamps as PARSED INSTANTS, never as strings — the string test lies** (#135,
+  verified live 2026-07-16 on `AuditLogs`). A string-equality check of `time` vs
+  `properties.activityDateTime` reports **0/9 identical**, which looks exactly like the sign-in bug
+  and points straight at "bind to `properties.*`, no fallback, the envelope is late". **It is
+  wrong**: as parsed instants the delta is **0.000s on every record**. The two differ only in
+  serialisation — `"2026-07-16T18:30:36.6431870Z"` (7-digit fraction, `Z`) vs
+  `"2026-07-16T18:30:36.643187+00:00"` (6-digit fraction, `+00:00`). So `AuditLogs` binds to `time`
+  like MGAL. The sign-in finding (#135/#137) survives this only because its deltas were 28–1077s —
+  i.e. it was right by **magnitude, not by method**. Re-run any envelope-timing comparison as
+  instants.
+- **`AuditLogs` is a THIRD envelope pattern and predicts neither of the other two** (#135, live
+  2026-07-16) — the concrete proof that a shared envelope helper across categories is wrong:
+
+  | field | MGAL | SignInLogs | **AuditLogs** |
+  | --- | --- | --- | --- |
+  | `time` vs event time | identical | ~31m late | **identical (as instant)** |
+  | `level` | `"Informational"` | `"4"` | **`"Informational"`** |
+  | `durationMs` (top level) | string | int `0` | **int `0`** |
+  | `resourceId` casing | `/TENANTS/…` | `/tenants/…` | **`/tenants/…`** |
+
+  It follows MGAL on timestamps + `level`, and SignInLogs on `durationMs` + casing.
+- **`AuditLogs` is NOT yet safely mappable, and the reason is the sample, not the schema** (#135).
+  The container holds **9 records and all 9 are the same Entra Cloud Sync heartbeat**
+  (`category=ProvisioningManagement`, `loggedByService=Account Provisioning`, `operationType=Read`).
+  Zero `targetResources[].modifiedProperties` in it — which does **not** mean the category lacks
+  them; a real audit event carries them, and the names-not-values exclusion applies. Nine
+  heartbeats is closer to documentation than to a live sample.
 - **The blob `properties` object IS the Graph `signIn` resource** (#135, verified field-for-field
   across live samples of all four sign-in categories). Every field the polled `mapSignIn` reads is
   present in every blob category, so `entra/signins` reuses ONE mapper for both the polled and blob
@@ -332,6 +359,15 @@ and queryability, never by confidentiality:
   attributes, same `id`. Do not write a second sign-in mapper; an attribute added for one source
   must be right for the other. (`properties.id` == the polled `signIn.id`, so the two are
   dedupe-able downstream if both run.)
+- **That "blob `properties` IS the Graph resource" finding GENERALISES beyond sign-ins — verified
+  on `AuditLogs`** (#131 q5, live 2026-07-16). The 9 `Sync_*` ids in `entra.directory_audits`'
+  checkpoint `seen_ids` are **byte-identical** to the 9 `properties.id` values in the
+  `insights-logs-auditlogs` blob. So the blob record is the same resource with the same identity,
+  and a `dual`-mode `AuditLogs` could reuse the polled mapper exactly as the sign-in streams reuse
+  `mapSignIn`. This contradicts #131's q5 worry that *"the blob record is the raw diagnostic shape;
+  the Graph record is Microsoft's normalised shape — these are NOT the same schema"*. **Two
+  categories is not a rule**: it means the raw-vs-normalised worry is not universal, NOT that it is
+  never true. Check per category.
 - **Azure diagnostic-settings delivery is AT-LEAST-ONCE: ~2.3% of blob records arrive more than
   once** (#138, measured live 2026-07-16 across every category with data; one event arrived
   **3×**). A re-delivery is a separate line — usually in the SAME hour blob — with a
@@ -389,11 +425,32 @@ and queryability, never by confidentiality:
   subscription→content-blob model built for continuous SIEM ingest (vs a **>10-minute** async
   query). Its content types are exhaustive by construction — **`Audit.General` is an explicit
   catch-all**, and `Audit.AzureActiveDirectory` is first-class — so there is **no coverage gap**
-  vs `auditLogQuery`. Its only real losses: **7-day content expiry** (moot — Loki rejects older
-  samples anyway) and **no server-side filtering** (real — so subscribe only to the content
-  types actually mapped; **never `Audit.General` by default**). `POST /subscriptions/start` is
-  a **write operation** — the second break in the read-only property, after the reports-export
-  job.
+  vs `auditLogQuery`. Its one real loss is **no server-side filtering** (so subscribe only to the
+  content types actually mapped; **never `Audit.General` by default**). `POST /subscriptions/start`
+  is a **write operation** — the second break in the read-only property, after the reports-export
+  job. **Granted + subscribed live 2026-07-16** (`ActivityFeed.Read` + `ActivityFeed.ReadDlp` on
+  SP `ff238215-dd9d-49b4-8891-4a09cc3f0988`; `Audit.AzureActiveDirectory` + `DLP.All` enabled);
+  client is `internal/o365activityclient`.
+- **Three "facts" about the O365 Management Activity API are WRONG — all three were believed on
+  docs alone until measured live 2026-07-16** (#100). Do not re-assert any of them:
+  - **There is NO 12-hour delay for first content.** Content listed ~2 minutes after
+    `POST /subscriptions/start`, with the oldest `contentCreated` **~22h BEFORE the subscription
+    existed** — Microsoft **backfills on subscribe**. Never build a "wait 12h before first poll"
+    behaviour, and never tell a reader an empty first poll is the expected state.
+  - **`/subscriptions/content` caps the range at 24 HOURS, not just the 7-day lookback.**
+    `startTime`/`endTime` must **both** be set or both omitted and be **≤24h apart**; a -9d request
+    returns **HTTP 400 `AF20055`**. Worse than the error: the API reference warns a >24h range that
+    *does* return 200 may be **silently partial**. So always chunk into ≤24h sub-windows
+    (`o365activityclient.MaxWindow`) — a naive watermark→now list works until a collector is down
+    over a day, then breaks or silently under-reads. Same class as the `$top` ceilings (IPC 500,
+    `/security/incidents` 50).
+  - **The "7-day content expiry" is UNVERIFIED and probably wrong.** Live: `contentCreated`
+    2026-07-15T20:45 with `contentExpiration` **2026-08-05T19:44 (~20 days)**. The docs conflate two
+    different bounds — `AF20051` is a *retrieval* bound ("older than 7 days cannot be retrieved");
+    `AF20030`/`AF20055` are a *startTime lookback* bound. Only the **lookback** bound is measured
+    (`MaxLookback`). **Always read `contentExpiration` off the wire; never derive an expiry from a
+    constant.** A test asserting `expiration - created == 7d` passed against a docs-built fixture
+    and encoded the misreading — it is now the inverted assertion.
 - **Re-audited and CONFIRMED PERMANENT — tested against the non-Graph first-party API surface,
   do NOT re-chase** (#130 audit, 2026-07-16, probed as `graph2otel-poller`):
   **the dedicated Microsoft Intune API (`0000000a-0000-0000-c000-000000000000`) exposes ZERO
