@@ -21,6 +21,21 @@ cardinality grows with **tenant size** (users, devices, sign-ins) is a bug; a
 series bounded by the number of **admin-configured objects** (policies, profiles,
 rings, agreements — dozens to hundreds) is within the rule.
 
+**This is a data-modeling rule, not a privacy control** (#112). It is enforced for
+cost and queryability — active-series billing, and the fact that a series keyed by
+a sign-in ID gets exactly one sample — not to withhold data from the backend. The
+"PII" in this document's title describes **what is exported and where it lands**;
+it does not describe an exclusion. Everything in `SECURITY.md`'s sensitivity list
+is exported by design.
+
+The rule's **second half**, added after this audit's original pass: per-entity data
+too high-cardinality for a metric label MUST still be emitted as a **log twin** —
+never dropped. The original audit checked only that nothing leaked *onto a metric*,
+which is why it passed two collectors (`entra.risk`, the Purview label collectors)
+that were silently discarding per-entity detail entirely. Those were fixed in #110
+and #111. **An audit pass must now check both directions**: nothing per-entity on a
+metric label, AND nothing per-entity fetched-then-dropped without a log twin.
+
 ## Scope of the review
 
 30 collector packages (18 Entra, 12 Intune families) + the framework

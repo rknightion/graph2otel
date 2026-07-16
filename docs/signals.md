@@ -54,14 +54,35 @@ resource attributes) are stream labels. This changes how you write LogQL:
 
 ## Cardinality shape
 
+**Metrics answer "how many"; logs answer "which one".** That is the single most useful
+thing to know when querying graph2otel — the two pipelines answer different questions, and
+per-entity detail lives in the logs.
+
 Every metric this project emits carries **bounded, tenant-shaped** label dimensions —
 counts by compliance state, operating system, policy name, risk level, license SKU, and
 similar admin-configured categories. None grow with tenant size (user count, device
-count, sign-in volume). High-cardinality per-entity data (UPNs, device IDs, IP
-addresses, correlation IDs) is confined to the **logs** pipeline as structured
-attributes, never a metric label — see [Security](security.md#the-cardinality-boundary-rule)
-for the full rule and [docs/pii-cardinality-audit.md](pii-cardinality-audit.md) for the
-audit that confirmed it holds against the actual collector source.
+count, sign-in volume). So a metric tells you *three users are high-risk*; it will never
+tell you *which* three.
+
+High-cardinality per-entity data (UPNs, device IDs, IP addresses, correlation IDs) is
+confined to the **logs** pipeline as structured attributes, never a metric label. It is
+**not withheld** — graph2otel exports it by design, and every bounded aggregate metric has
+a per-entity **log twin** carrying the detail behind it. To go from a metric to the
+entities behind it, query the matching log stream:
+
+| Question | Pipeline | Query |
+| --- | --- | --- |
+| How many users are at risk? | metric | `entra_risky_users_total{risk_level="high"}` |
+| **Which** users are at risk? | logs | `{service_name="graph2otel"} \| event_name=`entra.risky_user` \| risk_level=`high`` |
+
+Remember that log attributes are Loki **structured metadata**, not stream labels — the
+label-filter form above (`\| event_name=…`) is required; a `{event_name="…"}` selector
+matches zero rows silently. See the LogQL section above.
+
+See [Security](security.md#the-cardinality-boundary-rule) for the full rule — including
+why it is a cost/queryability rule rather than a privacy control — and
+[docs/pii-cardinality-audit.md](pii-cardinality-audit.md) for the audit that confirmed it
+holds against the actual collector source.
 
 ## Multi-tenant labeling
 

@@ -29,16 +29,25 @@
 // server order. $filter on activityDateTime does work empirically and is
 // what the watermark relies on.
 //
-// PII/secret redaction: a resource's modifiedProperties[] can carry
-// credential/certificate values, UPNs, or IPs in its oldValue/newValue
-// fields. mapAuditEvent NEVER emits those values — only the changed
-// property NAMES — so a secret that changed hands never lands in an OTLP
-// attribute.
+// Secret redaction — the ONE genuine content exclusion in graph2otel, and it is
+// about SECRETS, not PII: a resource's modifiedProperties[] carries arbitrary
+// oldValue/newValue payloads, which for a credential or certificate change is
+// the credential itself. mapAuditEvent NEVER emits those values — only the
+// changed property NAMES — so a secret that changed hands never lands in an
+// OTLP attribute. Do not "fix" this by emitting values: no SIEM framing
+// justifies shipping a private key to a log backend.
+//
+// PII is emphatically NOT excluded here, and must not be: this collector emits
+// the actor's UPN, user id, and IP address as attributes by design (see
+// mapAuditEvent). Those same modifiedProperties values may also contain UPNs or
+// IPs, but that is not why they are dropped — the actor identity is already
+// right there in the attribute set.
 //
 // Cardinality note (INVERTED from the metric collectors): these are LOGS,
 // so per-entity detail — the record id, correlationId, actor identifiers,
 // resource ids — belongs here as structured log attributes. That same data
-// must NEVER become a metric label; this package emits no metrics.
+// must NEVER become a metric label; this package emits no metrics. See
+// CLAUDE.md: the boundary is a data-modeling rule, not a privacy control.
 //
 // License gate: none declared. RequiredPermissions'
 // DeviceManagementApps.Read.All is a surprising scope for an audit endpoint
@@ -112,8 +121,10 @@ func newCollector(d collectors.WindowDeps) *collectorImpl {
 // mapAuditEvent turns one raw auditEvent record into its dedupe id (the
 // immutable record id) and the OTLP log Event. It sets only the attributes
 // actually present, and it NEVER emits a modifiedProperties old/new value —
-// only the changed property's name — since those values can carry
-// credentials, certificates, UPNs, or IPs.
+// only the changed property's name — since those values carry whatever the
+// changed property held, which for a credential/certificate change is the
+// secret itself. See the package doc: that exclusion is about secrets, not
+// PII — actor UPN/id/IP are emitted here deliberately.
 func mapAuditEvent(rec map[string]any) (string, telemetry.Event) {
 	id := str(rec, "id")
 	activityType := str(rec, "activityType")

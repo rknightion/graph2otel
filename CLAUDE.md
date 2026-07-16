@@ -115,20 +115,43 @@ release train and they must be bumped together, never independently. Renovate gr
 (see `renovate.json`); if you bump one by hand, bump the other to its matching release
 and re-run `make check`.
 
-## Cardinality & PII guidance
+## Cardinality: metrics carry aggregates, logs carry entities
 
-Entra ID and Intune data are **not** low-cardinality infrastructure metadata — sign-in
-logs, device compliance records, and directory objects carry real PII (UPNs/emails,
-device names, sign-in IP addresses, group memberships). The boundary rule (see
-`SECURITY.md` for the full rationale):
+**This is a data-modeling rule, not a privacy control.** Read that first — the old "PII
+guidance" framing caused real bugs (#110, #111) by reading as "graph2otel withholds PII."
+It does not. graph2otel exports UPNs, device names/serials/IMEIs, sign-in IPs and geo,
+group membership and cert thumbprints to the configured OTLP backend **by design** —
+eleven `WindowCollector`s exist to do exactly that, and `SECURITY.md` enumerates the full
+inventory. graph2otel is used as a SIEM feed; per-entity detail is the point. Treat the
+OTLP backend as a trusted sink and scope its credentials accordingly — that is the actual
+control, not withholding data.
 
-- **High-cardinality, per-entity data never becomes an OTEL metric label.** Per-user,
-  per-device, per-sign-in identifiers (UPN, device ID, IP address, correlation ID) belong
-  in the **logs** pipeline as structured attributes, not as metric label dimensions.
+The rule governs **which pipeline** each shape of data takes, and it is justified by cost
+and queryability, never by confidentiality:
+
+- **Per-entity data never becomes an OTEL metric label.** Per-user/per-device/per-sign-in
+  identifiers (UPN, device ID, IP, correlation ID) are log attributes, not metric label
+  dimensions. Grafana Cloud bills metrics on **active series**, so one series per UPN
+  grows with tenant size (hence the active-series cap, #105); a series keyed by a sign-in
+  or correlation ID gets exactly one sample ever — the pathological TSDB case. It also
+  buys nothing: a LogQL `count by` over the log twin answers the same question off data
+  already shipped.
 - **Metrics carry bounded, tenant-shaped aggregates** — counts by compliance state, by
   operating system, by policy, by risk level, by license SKU. A metric series whose
   cardinality grows with tenant size (rather than with the number of policies/states/
   categories) is a bug.
+- **HARD RULE — "not a metric label" means LOG TWIN, never dropped.** Any per-entity data
+  too high-cardinality for a metric label MUST still be emitted as a log. A snapshot
+  collector that fetches per-entity rows, decodes only the bounded enums to bucket a
+  count, and discards the rest is a **bug** — that data reaches no pipeline and the
+  collector can answer "how many" but never "which one". `telemetry.Emitter` exposes
+  `LogEvent`, so a `SnapshotCollector` emits both from one fetch — see
+  `entra/risk` for the reference shape (bounded gauge + one log per entity, no extra
+  Graph calls). Bounded-but-useless-as-a-series data (a label name, where every series
+  would be 1) takes the same path: log twin, not metric label, not dropped.
+- **The one genuine content exclusion is about SECRETS, not PII**, and it stays:
+  `intune/auditevents` emits the **names** of changed `modifiedProperties` but never
+  their old/new **values**, which can carry credentials and certificates.
 - Default to **read-only, least-privilege** Graph API scopes; never request more than the
   declared signal needs.
 

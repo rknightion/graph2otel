@@ -44,6 +44,10 @@ API app registration permissions accordingly.
 
 ## The cardinality boundary rule
 
+**This rule is not a privacy control, and it does not reduce what graph2otel exports.**
+Everything listed above is exported by design. The rule decides only **which pipeline**
+carries each shape of data, for cost and queryability reasons — not confidentiality.
+
 High-cardinality, per-entity data (per-user, per-device, per-sign-in event data — UPNs,
 device IDs, IP addresses, correlation IDs) is **never** attached as an OTEL metric label.
 That data belongs in the **logs** pipeline (sign-in logs, audit logs, provisioning logs,
@@ -51,8 +55,17 @@ Intune audit events) as structured log attributes, not as metric label dimension
 Metrics carry only **bounded, tenant-shaped aggregates** — counts by compliance state, by
 operating system, by policy, by risk level — never a metric series keyed by user or
 device identity. This is a hard modeling rule, not a tuning knob: a metric series whose
-cardinality grows with tenant size is a bug, not a feature request. See
+cardinality grows with tenant size is a bug, not a feature request. Backends bill metrics
+on active series, and a series keyed by a sign-in or correlation ID receives exactly one
+sample — the worst case for a time-series database.
+
+The rule has a **second half**: per-entity data too high-cardinality for a metric label
+MUST still be emitted as a **log** — never discarded. "Not a metric label" means "log
+twin". Every bounded aggregate metric has a per-entity log stream behind it, so you can
+always get from *how many* to *which ones*. See
 [Signals](signals.md#cardinality-shape) for how this maps onto the emitted namespaces.
+
+If you want less exposure, use the levers below — not the cardinality rule.
 
 ## Levers to reduce exposure
 

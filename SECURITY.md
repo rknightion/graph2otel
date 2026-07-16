@@ -85,6 +85,10 @@ need (see `README.md`'s auth section).
 
 ### The cardinality boundary rule
 
+**This rule is not a privacy control, and it does not reduce what graph2otel exports.**
+Everything in the inventory above is exported by design. The rule decides only **which
+pipeline** carries each shape of data, and it exists for cost and queryability reasons:
+
 High-cardinality, per-entity data (per-user, per-device, per-sign-in event data —
 UPNs, device IDs, IP addresses, correlation IDs) is **never** attached as an OTEL metric
 label. That data belongs in the **logs** pipeline (sign-in logs, audit logs, provisioning
@@ -93,7 +97,18 @@ Metrics carry only **bounded, tenant-shaped aggregates** — counts by complianc
 operating system, by policy, by risk level — never a metric series keyed by user or
 device identity. This is a hard modeling rule, not a tuning knob: a metric series that
 would grow with tenant size (rather than with the number of policies/states/categories) is
-a bug, not a feature request.
+a bug, not a feature request. Backends bill metrics on active series, and a series keyed
+by a sign-in or correlation ID receives exactly one sample — the worst case for a
+time-series database. A `count by` over the logs answers the same question anyway.
+
+The rule has a **second half**, which is what keeps it from becoming a data-loss rule:
+per-entity data too high-cardinality for a metric label MUST still be emitted as a **log**
+— never discarded. "Not a metric label" means "log twin". A collector that fetches
+per-entity rows and drops everything but a bucketed count is a bug, because that data then
+reaches no pipeline at all and the signal can answer "how many" but never "which one".
+
+If you need less exposure, the levers below are the supported way to get it — not the
+cardinality rule.
 
 ### Levers to reduce exposure
 
