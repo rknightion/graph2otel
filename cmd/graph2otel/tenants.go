@@ -103,7 +103,14 @@ func setupTenant(
 	// (48/min export bucket) transport for create/poll and a plain client for the
 	// unauthenticated SAS download.
 	exporter := exportjob.New(gc, exportjob.DefaultDownloader(), exportjob.Options{})
-	deps := collectors.Deps{Graph: gc, TenantID: ta.TenantID, Logger: tlog, Caps: caps, Export: exporter}
+	// One shared managedDevices fetcher per tenant: intune.devices (hourly) and
+	// intune.malware (30m) both page the same fleet list every cycle, so a 30m
+	// TTL lets whichever ticks first warm the cache and the other reuse it —
+	// halving the full-fleet page-walk on a large tenant (#87). 30m matches the
+	// shorter default interval; widening either interval past 30m (large-tenant
+	// tuning) just reduces the reuse rate, never correctness.
+	fleet := collectors.NewCachingFleetFetcher(gc, "https://graph.microsoft.com/v1.0", 30*time.Minute)
+	deps := collectors.Deps{Graph: gc, TenantID: ta.TenantID, Logger: tlog, Caps: caps, Export: exporter, Fleet: fleet}
 	for _, factory := range collectors.All() {
 		c := factory(deps)
 		if interval, ok := gateCollector(c, ta, cfg, caps, tlog, skips); ok {

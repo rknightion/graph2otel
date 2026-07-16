@@ -55,6 +55,13 @@ type Deps struct {
 	// those collectors use it; every other collector ignores it. The
 	// composition root builds one per tenant.
 	Export exportjob.Runner
+	// Fleet is the shared /deviceManagement/managedDevices fetcher (#87). Only
+	// intune.devices + intune.malware use it — both page the same fleet list
+	// every cycle, so the composition root builds one CachingFleetFetcher per
+	// tenant and injects it here so a single fetch serves both. When nil (unit
+	// tests), each collector falls back to its own DirectFleetFetcher, so its
+	// behavior is unchanged.
+	Fleet FleetFetcher
 }
 
 // Factory constructs one snapshot collector instance for a tenant. Window

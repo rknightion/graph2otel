@@ -215,6 +215,11 @@ type Collector struct {
 	g       collectors.GraphClient
 	baseURL string
 	logger  *slog.Logger
+	// fleet fetches the managedDevices list. Defaults to an uncached
+	// DirectFleetFetcher over g (so unit tests are unchanged); the composition
+	// root injects a shared CachingFleetFetcher via the factory so this and
+	// intune.malware page the fleet once between them (#87).
+	fleet collectors.FleetFetcher
 	// now returns the current time; overridable in tests so staleness
 	// bucketing is deterministic and assertable.
 	now func() time.Time
@@ -226,7 +231,13 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Collector{g: g, baseURL: defaultBaseURL, logger: logger, now: time.Now}
+	return &Collector{
+		g:       g,
+		baseURL: defaultBaseURL,
+		logger:  logger,
+		fleet:   &collectors.DirectFleetFetcher{G: g, URL: defaultBaseURL + "/deviceManagement/managedDevices" + managedDevicesSelect},
+		now:     time.Now,
+	}
 }
 
 // Name implements collector.SnapshotCollector.
@@ -311,7 +322,7 @@ func (c *Collector) collectOverview(ctx context.Context, e telemetry.Emitter) er
 // single malformed element is logged and skipped rather than failing the
 // whole aggregate.
 func (c *Collector) collectFleet(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/managedDevices"+managedDevicesSelect, nil)
+	raw, err := c.fleet.ManagedDevices(ctx)
 	if err != nil {
 		return err
 	}
@@ -364,6 +375,10 @@ var _ collector.SnapshotCollector = (*Collector)(nil)
 
 func init() {
 	collectors.Register(func(d collectors.Deps) collector.SnapshotCollector {
-		return New(d.Graph, d.Logger)
+		c := New(d.Graph, d.Logger)
+		if d.Fleet != nil {
+			c.fleet = d.Fleet // shared per-tenant fetch (#87)
+		}
+		return c
 	})
 }
