@@ -118,8 +118,9 @@ never materialized behind a queryable Graph endpoint. These are **confirmed-perm
 gaps, not "not built yet" — but they are not a dead end: the diagnostic-settings pipeline
 already emits most of them, and `graph2otel` **optionally reads that data straight out of
 an Azure Storage account**, so you still do not need an Azure Function or a Log Analytics
-workspace in the middle. It is opt-in (one config key), read-only, and costs pennies a
-month with no standing charge. See [`docs/blob-ingest.md`](docs/blob-ingest.md).
+workspace in the middle. It is opt-in (one config key), read-only, and measured at **~£0.85
+a month** on a small tenant with no standing charge — against £1.54 for Log Analytics and
+£8.34 standing for Event Hub. See [`docs/blob-ingest.md`](docs/blob-ingest.md).
 
 **Served this way today:** `MicrosoftGraphActivityLogs` (`entra.graph_activity`) and three
 sign-in categories — `MicrosoftServicePrincipalSignInLogs`

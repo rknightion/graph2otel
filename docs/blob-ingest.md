@@ -53,14 +53,27 @@ routes are complementary, split by signal type rather than competing for one slo
 
 ## What it costs
 
-**~£0.05–0.24/month** at ~0.7 GB/month, dominated by `MicrosoftGraphActivityLogs`. There
-is **no standing charge** — that was the point. Storage is ~£0.0145/GB/mo, reads
-~£0.0036/10K, and listing is billed at the write rate (~£0.0447/10K).
+**~£0.85/month** on a small tenant, dominated by `MicrosoftGraphActivityLogs`. There is
+**no standing charge** — that was the point.
 
-Log Analytics (£1.54/mo) and Event Hub (£8.34/mo standing) were both evaluated against
-this and closed. Event Hub's entire measured advantage was **12 seconds** of latency,
-because the ~4-minute delay is Entra-side — upstream of where the transport forks — so
-paying for a faster destination cannot buy back time already spent. Full evaluation: #89.
+The bill is almost entirely **write operations**, not storage: 0.7 GB/month of data costs
+about a penny, while the AppendBlock calls that put it there cost ~£0.81. Measured live at
+**247 appends/hour** (~10.6 KB per append — Azure batches roughly 4 records per call),
+which is ~180,000 appends/month at the ~£0.0447/10K write rate. Storage is ~£0.0145/GB/mo,
+reads ~£0.0036/10K, and **listing is billed at the write rate**.
+
+> **Corrected 2026-07-16.** An earlier estimate here said £0.05–0.24/month. That was wrong:
+> it assumed roughly one append per minute, and the real rate is ~4× that. The number is
+> exactly measurable rather than modelled — `append_blob_committed_block_count` is a direct
+> count of billable AppendBlock operations, because an append blob supports no other write.
+> Don't guess at the batching; read the counter.
+
+Log Analytics (£1.54/mo) and Event Hub (£8.34/mo standing) were both evaluated against this
+and closed. The correction does not reopen either — #89 pre-registered that the decision was
+not close enough for a 4× cost error to flip it, and it isn't. Event Hub's entire measured
+advantage was **12 seconds** of latency, because the ~4-minute delay is Entra-side — upstream
+of where the transport forks — so paying for a faster destination cannot buy back time
+already spent. Full evaluation: #89.
 
 ## Setup
 

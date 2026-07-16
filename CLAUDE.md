@@ -254,9 +254,15 @@ and queryability, never by confidentiality:
   throttled, async with a 30-day SLA, GDPR-only-authorised, and *"doesn't affect billing"*)
   and cannot receive Defender's streaming API at all; Event Hub costs **£8.34/mo standing**
   and buys only **~12 seconds** of latency, because the ~4-minute floor is Entra-side, not
-  destination-side. Storage is £0.05–0.24/mo, shared by #89 and #106, and blobs delete for
-  real. **The consumer is BUILT** (`internal/blobpipeline` + `entra.graph_activity`, live-verified
-  2026-07-16): see [`docs/blob-ingest.md`](docs/blob-ingest.md) and the README honest-scope
+  destination-side. Storage is **~£0.85/mo** (measured; the earlier £0.05–0.24 figure was WRONG —
+  it assumed ~1 append/min, the real rate is ~4× that at 247 appends/hr, and the bill is almost
+  all WRITE ops, not storage). The correction does NOT reopen the decision — #89 pre-registered
+  that it was not close enough for a 4× cost error to flip it. **Cost here is exactly measurable,
+  never modelled:** `append_blob_committed_block_count` is a direct count of billable AppendBlock
+  ops (an append blob supports no other write). Storage is shared by #89 and #106, and blobs
+  delete for real. **The consumer is BUILT** (`internal/blobpipeline` + `entra.graph_activity` +
+  three sign-in categories, live-verified 2026-07-16): see
+  [`docs/blob-ingest.md`](docs/blob-ingest.md) and the README honest-scope
   section, not Graph. Opt-in via one per-tenant key, `blob_ingest.account_url` — unset (the
   default) registers no blob collectors at all.
 - **Blob layout is NOT what Microsoft documents** (#89, verified live 2026-07-16). For a
