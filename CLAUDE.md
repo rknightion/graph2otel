@@ -658,3 +658,44 @@ and queryability, never by confidentiality:
   in unquoted fields** (Go's `encoding/csv` rejects with `"bare \""`). The `exportjob`
   parser strips the BOM and sets `LazyQuotes = true` + `FieldsPerRecord = -1`. Always send
   an explicit `select` — Microsoft warns default columns can change without notice.
+- **Intune export enum columns return NUMERIC CODES, not names — and the `_loc` sibling that
+  fixes it arrives free, except where it doesn't** (#142, measured live 2026-07-16 as
+  `graph2otel-poller` with the real collector select lists). No collector sets
+  `exportjob.Request.LocalizationType` (`omitempty`; the only setter in the tree is a test), so
+  the primary column carries the raw code:
+  `Platform` → `['1','2','3','5']`, `DeviceState` → `['0']`, `ProductStatus` → `['524288','524416']`.
+  Three traps, each producing a silently-wrong collector rather than an error:
+  (a) **Microsoft returns the localized `<Col>_loc` sibling ANYWAY** — `Select` does not suppress
+  it, so `Platform_loc`/`DeviceState_loc` are already fetched, header-keyed into the `Row` map,
+  and thrown away unread. The decoded name is on the wire today.
+  (b) **A bitmask field has NO `_loc` sibling.** `ProductStatus` is flags, not an enum:
+  `524288` = `noStatusFlagsSet` (2^19), `524416` = that `| 128`. So a name-keyed lookup table
+  (`productStatusBuckets`) can never hit, and its `"other"` fallback swallows 100% of the fleet
+  into a bucket that looks designed rather than broken. Never assume a `_loc` exists — check.
+  (c) **A fixture asserting a localized value hides all of it.** `appinstallreport_test.go:214`
+  asserts `"platform": "windows"` — a string the live API has never sent. That is why `platform=2`
+  shipped. Test enum columns against the wire, never against a hand-written name.
+  `AllDeviceCertificates` is **UNVERIFIED** — m7kni has zero device certificates (header row only,
+  and no `CertificateStatus_loc` in it). Do not claim `intune.cert_inventory` is broken without
+  measuring it on a tenant that has certificates.
+- **`docs/signals.md:89` is WRONG: domain metrics do NOT carry `tenant_id`** (#143, verified
+  2026-07-16). It claims *"Every metric carries a `tenant_id` label"* and tells dashboard authors
+  to filter every panel by it; both shipped domain dashboards obeyed, and
+  `entra-compliance-overview.json`'s ~24 panels therefore return **no data, always**.
+  `tenant_id` reaches a metric from exactly four self-obs sites (`collector/selfobs.go`,
+  `license/emit.go`, and the two `graphclient` transports). It is **not** a resource attribute
+  (`buildResource` never sees a tenant), there is **one** MeterProvider for the process (not one
+  per tenant), and the emitter injects nothing — so a metric's labels are exactly what the
+  collector passed, and no collector passes it. `registry.go:40-41`'s "the scheduler already
+  labels emitted telemetry with the tenant" repeats the same falsehood in code, where a collector
+  author will read it. `docs/pii-cardinality-audit.md:133` states it correctly, so the docs
+  already contradict each other.
+- **No emitted record says which TRANSPORT produced it** (#141, verified 2026-07-16). A
+  blob-ingested and a Graph-polled `entra.signin` are **byte-identical** — same event name, same
+  attributes, same body — because both correctly share `mapSignIn`. The `.blob` collector-name
+  suffix exists specifically to keep them separable, but the collector name never reaches a data
+  record (it lives only on `graph2otel.scrape.*`). So the ~2.3% at-least-once blob duplicates
+  (#138) cannot be attributed to a transport, and the blob-vs-poll split cannot be measured.
+  **A provenance attribute must NOT be named `source`** — that key is already overloaded three
+  ways (`certificates.go` uses it for which Graph endpoint; `riskdetections.go` passes through
+  Microsoft's own `source` field).
