@@ -239,9 +239,34 @@ and queryability, never by confidentiality:
   (`deviceManagement/notificationMessageTemplates`, config only), never the fired-alert
   event; distinct from compliance *state*, which the compliance/manageddevices collectors
   do poll (live-verified 2026-07-15, #94). graph2otel is not a full replacement for that
-  pipeline. **The escape hatch for all of these is the fallback-ingest path (Event Hub /
-  Log Analytics query) — see [`docs/event-hub-fallback.md`](docs/event-hub-fallback.md)
-  and the README honest-scope section**, not Graph.
+  pipeline. **The escape hatch for all of these is the fallback-ingest path — an Azure
+  Storage account fed by diagnostic settings** (#89, decided 2026-07-16). Log Analytics and
+  Event Hub were both evaluated and **rejected**: LA cannot express deletion (purge is
+  throttled, async with a 30-day SLA, GDPR-only-authorised, and *"doesn't affect billing"*)
+  and cannot receive Defender's streaming API at all; Event Hub costs **£8.34/mo standing**
+  and buys only **~12 seconds** of latency, because the ~4-minute floor is Entra-side, not
+  destination-side. Storage is £0.05–0.24/mo, shared by #89 and #106, and blobs delete for
+  real. See [`docs/event-hub-fallback.md`](docs/event-hub-fallback.md) (**name is stale — it
+  describes the rejected transport; rename when the consumer lands**) and the README
+  honest-scope section, not Graph.
+- **Blob layout is NOT what Microsoft documents** (#89, verified live 2026-07-16). For a
+  **tenant-level** (`microsoft.aadiam`) resource the prefix is **`tenantId=<guid>/`**, NOT the
+  documented `resourceId=/tenants/<tid>/providers/...` — every published example is
+  subscription-scoped. Full path:
+  `insights-logs-<category-lowercased>/tenantId=<guid>/y=/m=/d=/h=/m=00/PT1H.json`, JSON Lines,
+  **append blobs**. Coding to the docs yields a collector that finds nothing.
+- **A blob for a long-closed hour KEEPS GROWING** (#89, verified live). An `h=00` blob was still
+  being appended to **13 hours** after that hour closed — Azure backfills history into the
+  correct hour bucket, progressively. So **"the hour is closed, this blob is final" is FALSE**,
+  and a consumer must **re-check already-seen blobs for growth**, never walk forward and forget.
+  This is why the blob consumer is **read-only** and does not delete: deleting a "safely closed"
+  hour would have destroyed data still arriving. The 7-day lifecycle bounds the re-check set to
+  ~168 blobs/category, so re-listing everything each poll is tractable.
+- **Data-plane RBAC fails SILENTLY on Azure** (#89, verified live — the most dangerous trap on
+  this path, indistinguishable from "no data yet"). `Owner` grants blob **container** list/create
+  (control-plane) but **NOT** blob *content* reads — that needs **`Storage Blob Data Reader`**.
+  Worse for Event Hub: receiving needs **`Azure Event Hubs Data Receiver`**, and without it the
+  SDK returns **0 events with NO error** while the hub reports hundreds.
 - **Purview/M365 policy config is S&C-PowerShell-only — no Graph list/count** (#99).
   Several Purview surfaces have no Graph enumerable equivalent, so there is no "count of
   policies per mode" metric to build: **DLP policy authoring/simulation state** (Block vs
@@ -250,27 +275,67 @@ and queryability, never by confidentiality:
   synthetic input, it does not list policies); **retention *policy* location bindings** via
   `Get/Set-RetentionCompliancePolicy` (but retention *label* **definitions** ARE Graph-
   exposed at `security/labels/retentionLabels` — only the policy binding is missing);
-  **label encryption activation** (Azure RMS, portal-only). Confirmed permanent. Two
-  non-gaps to not re-chase: `DLP.All` sensitive-data content is **open/pending** a
-  live-verify of whether `security/auditLog/queries` mirrors it (not a settled gap); and
-  the unified-audit-log toggle `Set-AdminAuditLogConfig` (Exchange Online cmdlet) is a
-  fresh-tenant deployment prerequisite but is **already on for m7kni**, so not a blocker
-  there.
-- **Purview label enumeration is app-only-blocked on this tenant** (#109, verified live
-  2026-07-16). Neither Purview label collector returns data under app-only cert auth, even with
-  the correct read scope in the token: **sensitivity labels** —
-  `GET /security/dataSecurityAndGovernance/sensitivityLabels` → **403 `InsufficientGraphPermissions`**,
-  and every alternate (`/informationProtection/policy/labels`,
-  `/security/informationProtection/sensitivityLabels`, `/informationProtection/sensitivityLabels`,
-  their `/beta` forms) → 400/403; **retention labels** — `/security/labels/retentionLabels` and
-  `/security/triggerTypes/retentionEventTypes` → **HTTP 500 `DataInsightsRequestError`
-  "...FAILED - Forbidden"** (the Exchange compliance data-plane blocking the app identity), on
-  both v1.0 and beta. Both collectors treat these as skip-and-log, not failures —
-  `purview/labels.isUnavailable` matches `status 403/404` **and** the specific
+  **label encryption activation** (Azure RMS, portal-only — but **re-check**: the
+  sensitivity-label catalog now exposes a `hasProtection` field per label, which may answer
+  this per-label, #126). Two notes: `DLP.All` sensitive-data content is **open** — the O365
+  Management Activity API exposes an **`ActivityFeed.ReadDlp`** Application role, literally
+  *"DLP policy events including detected sensitive data"*, which is the purpose-built answer
+  and is being verified under #100; and the unified-audit-log toggle `Set-AdminAuditLogConfig`
+  (Exchange Online cmdlet) is a fresh-tenant deployment prerequisite but is **already on for
+  m7kni**, so not a blocker there.
+- **Microsoft Graph is NOT the only first-party API available** (#100, #126, 2026-07-16). An
+  app registration can hold Application permissions on many other first-party APIs, and two
+  "permanent gap" verdicts were overturned in one session by checking them. Live-verified as
+  present and **app-only capable** in this tenant: **Office 365 Management APIs**
+  (`c5393580-f805-4401-95e8-94b7a6ef2fc2`) exposing `ActivityFeed.Read`,
+  `ActivityFeed.ReadDlp`, `ServiceHealth.Read`. **Do NOT treat "no Graph endpoint" as "no
+  API"** — check the other first-party resources before recording a permanent gap.
+- **The O365 Management Activity API is NOT redundant** (#100 — **reopened**; its earlier
+  "closed as redundant" verdict was wrong and this entry previously told you not to re-chase
+  it). It was closed on a *data-equivalence* test ("same rows as `security/auditLog/queries`" —
+  true) when the question was *ingest fitness*, where it wins decisively: **stable v1.0** (vs
+  the audit query API being **beta-only**, which is the sole reason `m365.unified_audit` is
+  Experimental), **2,000 req/min per tenant** (vs 429-on-rapid-create, #98), and a
+  subscription→content-blob model built for continuous SIEM ingest (vs a **>10-minute** async
+  query). Its content types are exhaustive by construction — **`Audit.General` is an explicit
+  catch-all**, and `Audit.AzureActiveDirectory` is first-class — so there is **no coverage gap**
+  vs `auditLogQuery`. Its only real losses: **7-day content expiry** (moot — Loki rejects older
+  samples anyway) and **no server-side filtering** (real — so subscribe only to the content
+  types actually mapped; **never `Audit.General` by default**). `POST /subscriptions/start` is
+  a **write operation** — the second break in the read-only property, after the reports-export
+  job.
+- **When closing an issue as "redundant", state which question the test answered.** "Same rows"
+  and "same fitness for purpose" are different claims. Both #100 and #109 were closed on the
+  wrong question, and both wrong verdicts then propagated into this file's do-not-redo list,
+  where they actively suppressed re-investigation for months.
+- **Purview label enumeration: sensitivity labels WORK; only retention labels are blocked**
+  (#126, live-verified 2026-07-16 — this **corrects** #109, which was wrong). **Sensitivity
+  labels are NOT app-only-blocked.** #109 concluded "permanent app-only gap" after testing
+  the right endpoint with the *wrong scope*: the app held `InformationProtectionPolicy.Read.All`,
+  a different permission. Granting **`SensitivityLabel.Read`** (an Application role —
+  `allowedMemberTypes: ['Application']`) makes
+  `GET /security/dataSecurityAndGovernance/sensitivityLabels` return **200 with the full
+  tenant catalog**, on v1.0 and beta. `SensitivityLabels.Read.All` is **not** needed — the
+  least-privileged form serves tenant-wide labels.
+  **Gotcha: `displayName` is present but ALWAYS null — the value is in `name`.** Binding to
+  `displayName` (the obvious choice) emits empty labels and looks like a data bug.
+  **Retention labels ARE still blocked, and that half of #109 stands**:
+  `/security/labels/retentionLabels` and `/security/triggerTypes/retentionEventTypes` →
+  **HTTP 500 `DataInsightsRequestError` "...FAILED - Forbidden"** on both v1.0 and beta, with
+  `RecordsManagement.Read.All` present in the token — Microsoft documents **Application: Not
+  supported** for that endpoint. `purview/labels.isUnavailable` must keep matching the specific
   `DataInsightsRequestError`+`Forbidden` 500 pair (NOT bare `status 500` — a generic 500 must
-  still surface). These signals likely need delegated auth or a compliance-role-group membership
-  the app doesn't have; treat as a permanent app-only gap until Microsoft ships an
-  app-only-capable endpoint.
+  still surface) while **no longer swallowing sensitivity-label 403s**.
+  **The lesson, which cost a wrong "permanent" verdict:** a 403 means *missing consent* far more
+  often than *product limitation*. Before declaring an app-only gap, check the endpoint's
+  documented Application permission and confirm the app actually holds **that** role — not a
+  similarly-named one. `eDiscovery.Read.All` is the counter-example (#102): granted, in the
+  token, and it **still** 401s — so both outcomes are real; verify, never infer.
+- **Probe as `graph2otel-poller`, never as another app.** Any "can graph2otel see X?" answer is
+  only valid under the poller's own identity (`2c92ce28-126c-47c1-82b0-410b64502989`). Probing
+  with a different app registration reports *that* app's access and silently produces wrong
+  conclusions — this is exactly how #109's verdict went wrong. Note app-only tokens embed
+  `roles` at issue time, so a token minted before a grant will not carry it; mint a fresh one.
 - **Intune `managedDevices` has no `$count` segment** (M4, verified live). A
   `GET /deviceManagement/managedDevices/$count` returns **HTTP 400** — `"No OData
   route exists that match template ~/singleton/navigation/$count"` (its backend is
