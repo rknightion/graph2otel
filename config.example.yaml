@@ -104,6 +104,17 @@ profiling:
   mutex_profile_fraction: 5      # runtime.SetMutexProfileFraction; 0 = disabled
   block_profile_rate: 100000     # runtime.SetBlockProfileRate (ns, 100µs); 0 = disabled
 
+# cardinality governs output-side active-series limits (Grafana Cloud bills on
+# active series). metric_limit is a hard per-instrument cap: distinct attribute
+# sets beyond it collapse into the SDK's otel.metric.overflow series (dropped +
+# counted) instead of growing the bill, and graph2otel.series.active/.limit/
+# .overflowing report where each metric sits against it. graph2otel's metrics are
+# bounded aggregates, so the default 2000 is a blast-radius guard against a
+# mis-scoped label, not a normal constraint. Set 0 for unlimited.
+# Env: G2O_CARDINALITY__METRIC_LIMIT.
+cardinality:
+  metric_limit: 2000
+
 # checkpoint_dir is where window-log collectors persist their per-(tenant,
 # endpoint) watermarks so a restart resumes rather than re-fetching or dropping.
 checkpoint_dir: "./checkpoints"

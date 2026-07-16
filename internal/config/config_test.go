@@ -130,6 +130,37 @@ func TestLoadEnvNestedDoubleUnderscore(t *testing.T) {
 	}
 }
 
+// TestCardinalityDefaultAndEnvOverride verifies the metric_limit default and
+// that G2O_CARDINALITY__METRIC_LIMIT overrides it (#105).
+func TestCardinalityDefaultAndEnvOverride(t *testing.T) {
+	cfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Cardinality.MetricLimit != 2000 {
+		t.Errorf("default MetricLimit = %d, want 2000", cfg.Cardinality.MetricLimit)
+	}
+
+	t.Setenv("G2O_CARDINALITY__METRIC_LIMIT", "5000")
+	cfg, err = config.Load("")
+	if err != nil {
+		t.Fatalf("Load with env: %v", err)
+	}
+	if cfg.Cardinality.MetricLimit != 5000 {
+		t.Errorf("MetricLimit = %d, want env override 5000", cfg.Cardinality.MetricLimit)
+	}
+}
+
+// TestValidateRejectsNegativeMetricLimit: a negative cap is invalid (0 = unlimited).
+func TestValidateRejectsNegativeMetricLimit(t *testing.T) {
+	cfg := config.Default()
+	cfg.OTLP.Protocol = "stdout"
+	cfg.Cardinality.MetricLimit = -1
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate accepted a negative cardinality.metric_limit")
+	}
+}
+
 // TestLoadMissingFile: a config path that was explicitly given but cannot be
 // read is a hard error.
 func TestLoadMissingFile(t *testing.T) {

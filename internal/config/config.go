@@ -61,6 +61,8 @@ type Config struct {
 	Admin AdminConfig `yaml:"admin"`
 	// Profiling configures optional Pyroscope continuous profiling (#85).
 	Profiling ProfilingConfig `yaml:"profiling"`
+	// Cardinality governs output-side active-series limits (#105).
+	Cardinality CardinalityConfig `yaml:"cardinality"`
 	// CheckpointDir is the root directory for the file-based CheckpointStore
 	// (#7); each (tenant, endpoint) window poller persists its watermark there.
 	CheckpointDir string `yaml:"checkpoint_dir"`
@@ -84,6 +86,21 @@ type CollectorConfig struct {
 type AdminConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	Addr    string `yaml:"addr"`
+}
+
+// CardinalityConfig governs output-side series cardinality (#105). Grafana
+// Cloud bills on active series, and a mis-scoped metric label (an entity id
+// leaking into a metric dimension) can balloon series unbounded. The limit is a
+// hard per-instrument ceiling: distinct attribute sets beyond it collapse into
+// the SDK's otel.metric.overflow series (dropped + counted) rather than growing
+// the bill, and the graph2otel.series.active/.limit/.overflowing self-obs gauges
+// report where each metric sits against it.
+type CardinalityConfig struct {
+	// MetricLimit is the hard per-instrument cap on distinct active series.
+	// 0 (or negative) means unlimited (the OTEL SDK's own default of 2000 still
+	// applies as a backstop, but no explicit limit or overflow accounting is
+	// enforced by graph2otel). Env: G2O_CARDINALITY__METRIC_LIMIT.
+	MetricLimit int `yaml:"metric_limit"`
 }
 
 // ProfilingConfig configures optional continuous profiling. Everything here is
@@ -231,6 +248,14 @@ func Default() *Config {
 			MutexProfileFraction: 5,
 			BlockProfileRate:     100_000,
 		},
+		Cardinality: CardinalityConfig{
+			// A generous per-instrument default: graph2otel's metrics are bounded
+			// tenant-shaped aggregates (dozens–low-hundreds of series each), so
+			// 2000 is a blast-radius guard against a mis-scoped label, not a normal
+			// operating constraint. Matches the OTEL SDK's own default so the
+			// series.limit gauge is meaningful out of the box. Set 0 for unlimited.
+			MetricLimit: 2000,
+		},
 		CheckpointDir: "./checkpoints",
 	}
 }
@@ -333,6 +358,10 @@ func (c *Config) Validate() error {
 		if err := validateInterval(cc.Interval); err != nil {
 			return fmt.Errorf("collectors[%q].interval: %w", name, err)
 		}
+	}
+
+	if c.Cardinality.MetricLimit < 0 {
+		return fmt.Errorf("cardinality.metric_limit %d invalid: must be >= 0 (0 = unlimited)", c.Cardinality.MetricLimit)
 	}
 
 	if c.Profiling.Pyroscope.Enabled && c.Profiling.Pyroscope.ServerAddress == "" {

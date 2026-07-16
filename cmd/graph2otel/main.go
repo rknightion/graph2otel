@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/rknightion/graph2otel/internal/admin"
 	"github.com/rknightion/graph2otel/internal/collector"
@@ -22,6 +23,12 @@ import (
 
 // version is overridden at build time via -ldflags "-X main.version=...".
 var version = "dev"
+
+// selfObsReportInterval is how often the cardinality tracker snapshots and emits
+// the graph2otel.series.* self-observability gauges. It matches the telemetry
+// PeriodicReader's default export interval (60s) so each report covers exactly
+// one export window's distinct series.
+const selfObsReportInterval = 60 * time.Second
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -76,14 +83,15 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	// Telemetry provider: the single OTLP metrics+logs pipeline everything emits
 	// through. Built here so the process fails fast on a bad exporter config.
 	provider, err := telemetry.NewProvider(ctx, telemetry.Options{
-		ServiceName:    "graph2otel",
-		ServiceVersion: version,
-		Protocol:       cfg.OTLP.Protocol,
-		Endpoint:       cfg.OTLP.Endpoint,
-		InstanceID:     cfg.OTLP.GrafanaCloud.InstanceID,
-		Token:          cfg.OTLP.GrafanaCloud.Token.Reveal(),
-		SelfObsEnabled: true,
-		StdoutWriter:   stdout,
+		ServiceName:      "graph2otel",
+		ServiceVersion:   version,
+		Protocol:         cfg.OTLP.Protocol,
+		Endpoint:         cfg.OTLP.Endpoint,
+		InstanceID:       cfg.OTLP.GrafanaCloud.InstanceID,
+		Token:            cfg.OTLP.GrafanaCloud.Token.Reveal(),
+		SelfObsEnabled:   true,
+		CardinalityLimit: cfg.Cardinality.MetricLimit,
+		StdoutWriter:     stdout,
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "failed to build telemetry provider: %v\n", err)
@@ -114,6 +122,28 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	// bound to ctx; startTenants returns the admin status sources and skip
 	// reasons. With zero tenants (stdout mode) this is a no-op.
 	sources, skips, waitTenants := startTenants(ctx, cfg, provider, logger)
+
+	// Self-observability cardinality accounting: the emitter Observes every
+	// data point's series into the tracker on the hot path; Report snapshots the
+	// per-metric distinct-series counts and emits graph2otel.series.active/.limit/
+	// .overflowing once per export interval, then resets. Drive it on the metric
+	// export cadence (60s, matching the PeriodicReader default) so series.active
+	// reflects one interval's distinct series. No-op when self-obs is disabled
+	// (Cardinality() is nil).
+	if card := provider.Cardinality(); card != nil {
+		go func() {
+			t := time.NewTicker(selfObsReportInterval)
+			defer t.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+					card.Report(provider.Emitter())
+				}
+			}
+		}()
+	}
 
 	// Admin/health endpoint, fed the live per-tenant status sources and skip
 	// reasons. Start blocks until ctx is canceled, then shuts the server down
