@@ -230,6 +230,23 @@ func TestRetentionUnavailableIsSkipped(t *testing.T) {
 	}
 }
 
+func TestRetentionDataInsightsForbiddenIsSkipped(t *testing.T) {
+	// Live 2026-07-16: app-only access to retention labels is blocked at the
+	// Exchange compliance data-plane, which returns HTTP 500 wrapping
+	// DataInsightsRequestError "...FAILED - Forbidden". That specific signature is
+	// an app-only-unavailable condition, NOT a collector failure — it must skip
+	// gracefully (unlike the generic 500 in the test above, which still surfaces).
+	forbidden := `status 500: {"error":{"code":"UnknownError","message":"{\"ErrorCode\":\"DataInsightsRequestError\",\"Message\":\"DataInsights command(GET) FAILED - Forbidden. TargetServer = X.PROD.OUTLOOK.COM\"}"}}`
+	g := &fakeGraph{errs: map[string]error{
+		retentionURL:  errors.New("graphclient: GET " + retentionURL + ": " + forbidden),
+		eventTypesURL: errors.New("graphclient: GET " + eventTypesURL + ": " + forbidden),
+	}}
+	rec := telemetrytest.New()
+	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect on DataInsights Forbidden 500 should skip gracefully, got: %v", err)
+	}
+}
+
 func TestRetentionGatingMetadata(t *testing.T) {
 	c := NewRetention(&fakeGraph{}, nil)
 	if got := c.RequiredCapability(); got != license.CapPurviewRecordsMgmt {

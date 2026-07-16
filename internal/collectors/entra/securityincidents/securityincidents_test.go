@@ -227,6 +227,12 @@ func TestEndpointAndQueryShape(t *testing.T) {
 	if strings.Contains(u, "orderby") {
 		t.Errorf("first-page URL = %q, must NOT send $orderby (/security/incidents does not support it)", u)
 	}
+	// /security/incidents caps $top at 50 (live: $top=1000 -> HTTP 400 "The limit
+	// of '50' for Top query has been exceeded"). The engine default is 1000, so
+	// the collector must pin PageSize=50 or every live cycle 400s.
+	if !strings.Contains(u, "top=50") {
+		t.Errorf("first-page URL = %q, want $top=50 (/security/incidents caps $top at 50)", u)
+	}
 }
 
 // TestCollectorReEmitsAcrossPolls is the integration pass proving re-emit on

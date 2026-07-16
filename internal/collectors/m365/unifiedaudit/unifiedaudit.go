@@ -41,8 +41,15 @@ import (
 )
 
 const (
-	// createPath is the Graph v1.0 path that creates an audit-log query.
+	// createPath is the Graph path that creates an audit-log query.
 	createPath = "/security/auditLog/queries"
+	// betaBaseURL is the Graph beta service root. The audit query API is
+	// beta-only on the m7kni tenant (live 2026-07-16: POST /v1.0/security/
+	// auditLog/queries -> HTTP 404 UnknownError; POST /beta/... -> 201). Graph's
+	// docs list a v1.0 form, but it isn't served here — same beta-only reality
+	// as the signInEventTypes filter. So this Experimental collector targets
+	// beta via QueryConfig.BaseURLOverride.
+	betaBaseURL = "https://graph.microsoft.com/beta"
 	// name is the stable collector key / config key.
 	name = "m365.unified_audit"
 	// eventName is the OTLP LogRecord EventName every unified-audit record
@@ -199,14 +206,15 @@ func auditBody(operation, service, upn string) string {
 // (deps.JobClient) and checkpoint store (deps.Store).
 func newCollector(d collectors.WindowDeps) *collectorImpl {
 	cfg := jobpipeline.QueryConfig{
-		CreatePath:    createPath,
-		CheckpointKey: checkpointKey,
-		BuildRequest:  buildRequest,
-		Map:           mapRecord,
-		TimeField:     timeField,
-		SafetyLag:     safetyLag,
-		Overlap:       overlap,
-		PageSize:      pageSize,
+		CreatePath:      createPath,
+		BaseURLOverride: betaBaseURL,
+		CheckpointKey:   checkpointKey,
+		BuildRequest:    buildRequest,
+		Map:             mapRecord,
+		TimeField:       timeField,
+		SafetyLag:       safetyLag,
+		Overlap:         overlap,
+		PageSize:        pageSize,
 	}
 	jc := jobpipeline.NewJobCollector(name, interval, lag, d.TenantID, cfg, d.JobClient, d.Store)
 	return &collectorImpl{JobCollector: jc}

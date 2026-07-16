@@ -73,13 +73,24 @@ const (
 	retentionEventTypesMetric = "purview.retention.event_types.count"
 )
 
-// isUnavailable reports whether err is a 403/404 from a Purview security
-// endpoint being unavailable/unlicensed/app-only-unsupported on the tenant —
-// an expected "no data here" condition, not a failure. Matches the graphclient
-// error format ("...: status 403: ...").
+// isUnavailable reports whether err is a Purview security endpoint being
+// unavailable/unlicensed/app-only-unsupported on the tenant — an expected "no
+// data here" condition, not a failure. Matches the graphclient error format
+// ("...: status 403: ...").
+//
+// Three signatures, all confirmed live (2026-07-16):
+//   - status 403 / 404: endpoint unavailable / unlicensed (sensitivity labels).
+//   - status 500 wrapping DataInsightsRequestError "...FAILED - Forbidden": the
+//     Exchange compliance data-plane blocks the app-only identity for retention
+//     labels/event types, on both v1.0 and beta. This is matched by the SPECIFIC
+//     DataInsights+Forbidden pair, NOT by "status 500" alone — a generic 500
+//     must still surface as a real failure.
 func isUnavailable(err error) bool {
 	s := err.Error()
-	return strings.Contains(s, "status 403") || strings.Contains(s, "status 404")
+	if strings.Contains(s, "status 403") || strings.Contains(s, "status 404") {
+		return true
+	}
+	return strings.Contains(s, "DataInsightsRequestError") && strings.Contains(s, "Forbidden")
 }
 
 // ---------------------------------------------------------------------------

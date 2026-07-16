@@ -107,7 +107,11 @@ func newCollector(d collectors.WindowDeps) *collectorImpl {
 		// lastUpdateDateTime itself.
 		Flavor:          logpipeline.FlavorGtLt,
 		OrderByReliable: false,
-		Map:             mapIncident,
+		// /security/incidents caps $top at 50 (live: $top=1000 -> HTTP 400 "The
+		// limit of '50' for Top query has been exceeded"). The engine defaults
+		// PageSize to 1000, so pin it to 50 or every cycle 400s.
+		PageSize: 50,
+		Map:      mapIncident,
 	}
 	lc := logpipeline.NewLogCollector(name, interval, lag, d.TenantID, cfg, d.Fetcher, d.Store)
 	return &collectorImpl{LogCollector: lc}

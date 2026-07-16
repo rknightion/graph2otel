@@ -163,6 +163,16 @@ device names, sign-in IP addresses, group memberships). The boundary rule (see
   defaults `PageSize` to 1000, so IPC-workload window collectors must set
   `EndpointConfig.PageSize=500` explicitly. Watch for similar per-endpoint page-size ceilings
   on other paged endpoints (check when a paged collector 400s on page size).
+- **`/security/incidents` caps `$top` at 50, not 1000** (#109, verified live 2026-07-16). A
+  `GET /security/incidents?$top=1000` returns **HTTP 400** — `"The limit of '50' for Top query
+  has been exceeded. The value from the incoming request is '1000'."` Same class as the IPC
+  ceiling above; `entra.security_incidents` sets `EndpointConfig.PageSize=50`.
+- **The M365 audit query API is beta-only on this tenant** (#109, verified live 2026-07-16).
+  `POST /v1.0/security/auditLog/queries` returns **HTTP 404 `UnknownError`** (empty message)
+  even under a token carrying `AuditLogsQuery.Read.All`; `POST /beta/security/auditLog/queries`
+  returns **201**. Graph's docs list a v1.0 form, but it isn't served here — same beta-only
+  reality as `signInEventTypes`. `m365.unified_audit` targets beta via
+  `jobpipeline.QueryConfig.BaseURLOverride` and is `Experimental` (opt-in).
 - **Streams sharing a Graph path need distinct `CheckpointKey`s** (M3). The four sign-in
   collectors all poll `/auditLogs/signIns`; without a per-stream
   `logpipeline.EndpointConfig.CheckpointKey` they collide on one checkpoint namespace and
@@ -216,6 +226,21 @@ device names, sign-in IP addresses, group memberships). The boundary rule (see
   the unified-audit-log toggle `Set-AdminAuditLogConfig` (Exchange Online cmdlet) is a
   fresh-tenant deployment prerequisite but is **already on for m7kni**, so not a blocker
   there.
+- **Purview label enumeration is app-only-blocked on this tenant** (#109, verified live
+  2026-07-16). Neither Purview label collector returns data under app-only cert auth, even with
+  the correct read scope in the token: **sensitivity labels** —
+  `GET /security/dataSecurityAndGovernance/sensitivityLabels` → **403 `InsufficientGraphPermissions`**,
+  and every alternate (`/informationProtection/policy/labels`,
+  `/security/informationProtection/sensitivityLabels`, `/informationProtection/sensitivityLabels`,
+  their `/beta` forms) → 400/403; **retention labels** — `/security/labels/retentionLabels` and
+  `/security/triggerTypes/retentionEventTypes` → **HTTP 500 `DataInsightsRequestError`
+  "...FAILED - Forbidden"** (the Exchange compliance data-plane blocking the app identity), on
+  both v1.0 and beta. Both collectors treat these as skip-and-log, not failures —
+  `purview/labels.isUnavailable` matches `status 403/404` **and** the specific
+  `DataInsightsRequestError`+`Forbidden` 500 pair (NOT bare `status 500` — a generic 500 must
+  still surface). These signals likely need delegated auth or a compliance-role-group membership
+  the app doesn't have; treat as a permanent app-only gap until Microsoft ships an
+  app-only-capable endpoint.
 - **Intune `managedDevices` has no `$count` segment** (M4, verified live). A
   `GET /deviceManagement/managedDevices/$count` returns **HTTP 400** — `"No OData
   route exists that match template ~/singleton/navigation/$count"` (its backend is

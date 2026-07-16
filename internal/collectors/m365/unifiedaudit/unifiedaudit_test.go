@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -203,20 +204,27 @@ func TestCollectWindowEndToEnd(t *testing.T) {
 	if !reflect.DeepEqual(parsed.RecordTypeFilters, recordTypeFilters) {
 		t.Errorf("create body recordTypeFilters = %v, want %v", parsed.RecordTypeFilters, recordTypeFilters)
 	}
+	// The audit query API is beta-only on this tenant (live: POST /v1.0/... -> 404,
+	// POST /beta/... -> 201). The create URL must target the beta service root.
+	if got := fake.createURLs[0]; !strings.HasPrefix(got, "https://graph.microsoft.com/beta/security/auditLog/queries") {
+		t.Errorf("create URL = %q, want the /beta service root (audit query API is beta-only)", got)
+	}
 }
 
 // --- fake JobClient ---
 
 type fakeJobClient struct {
 	createBodies [][]byte
+	createURLs   []string
 	statuses     []string
 	statusCalls  int
 	records      []map[string]any // returned on the first records page regardless of URL
 	served       bool
 }
 
-func (f *fakeJobClient) CreateQuery(_ context.Context, _ string, body []byte) (string, string, error) {
+func (f *fakeJobClient) CreateQuery(_ context.Context, createURL string, body []byte) (string, string, error) {
 	f.createBodies = append(f.createBodies, body)
+	f.createURLs = append(f.createURLs, createURL)
 	return "query-1", jobpipeline.StatusNotStarted, nil
 }
 
