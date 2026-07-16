@@ -177,6 +177,107 @@ func TestBuildTenantStatuses_SkipReasonForOtherTenantIgnored(t *testing.T) {
 	}
 }
 
+func TestCollectorStatusFor_NextRunAndOverdue(t *testing.T) {
+	now := time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC)
+	interval := time.Hour
+
+	t.Run("next run computed from last start", func(t *testing.T) {
+		started := now.Add(-20 * time.Minute)
+		runs := map[string]collector.CollectorRun{
+			"c": {Runs: 1, LastStarted: started, LastFinished: started.Add(time.Second), LastSuccess: true},
+		}
+		cs := collectorStatusFor("c", interval, runs, nil, now)
+		// last start was 20m ago on a 60m interval -> ~40m until next run.
+		wantSec := int64((40 * time.Minute) / time.Second)
+		if cs.NextRunInSec != wantSec {
+			t.Errorf("NextRunInSec = %d, want %d", cs.NextRunInSec, wantSec)
+		}
+		if cs.NextRunIn == "" {
+			t.Errorf("NextRunIn is empty, want a human duration")
+		}
+		if cs.Overdue {
+			t.Errorf("Overdue = true, want false (within one interval)")
+		}
+	})
+
+	t.Run("overdue past twice the interval", func(t *testing.T) {
+		started := now.Add(-3 * time.Hour) // 3h ago on a 1h interval
+		runs := map[string]collector.CollectorRun{
+			"c": {Runs: 5, LastStarted: started, LastFinished: started.Add(time.Second), LastSuccess: true},
+		}
+		cs := collectorStatusFor("c", interval, runs, nil, now)
+		if !cs.Overdue {
+			t.Errorf("Overdue = false, want true (last start > 2 intervals ago)")
+		}
+		if cs.NextRunInSec != 0 {
+			t.Errorf("NextRunInSec = %d, want 0 (already due)", cs.NextRunInSec)
+		}
+	})
+
+	t.Run("no next run before first run", func(t *testing.T) {
+		cs := collectorStatusFor("c", interval, map[string]collector.CollectorRun{}, nil, now)
+		if cs.HasRun || cs.NextRunInSec != 0 || cs.NextRunIn != "" || cs.Overdue {
+			t.Errorf("unrun collector = %+v, want zero next-run/overdue", cs)
+		}
+	})
+}
+
+func TestSkipCategory(t *testing.T) {
+	cases := []struct {
+		reason string
+		want   string
+	}{
+		{"requires entra_p2", skipCatLicense},
+		{"disabled by config", skipCatDisabled},
+		{"beta; enable explicitly to opt in", skipCatExperimental},
+		{"something else entirely", ""},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		if got := skipCategory(tc.reason); got != tc.want {
+			t.Errorf("skipCategory(%q) = %q, want %q", tc.reason, got, tc.want)
+		}
+	}
+}
+
+func TestBuildTenantStatuses_SkipCategoryAndCounts(t *testing.T) {
+	tr, reg := runOnceAndTrack(t, "devices", errBoom) // one enabled, failing collector
+
+	tenants := buildTenantStatuses([]CollectorSource{
+		{TenantID: "tenant-a", Registry: reg, Status: tr},
+	}, map[SkipKey]string{
+		{TenantID: "tenant-a", Collector: "riskyusers"}:  "requires entra_p2",
+		{TenantID: "tenant-a", Collector: "auditbeta"}:   "beta; enable explicitly to opt in",
+		{TenantID: "tenant-a", Collector: "signins_off"}: "disabled by config",
+	}, time.Now())
+
+	ten := tenants[0]
+	// 1 enabled (failing) + 3 skipped rows.
+	if ten.EnabledCount != 1 {
+		t.Errorf("EnabledCount = %d, want 1", ten.EnabledCount)
+	}
+	if ten.FailingCount != 1 {
+		t.Errorf("FailingCount = %d, want 1", ten.FailingCount)
+	}
+	if ten.SkippedCount != 3 {
+		t.Errorf("SkippedCount = %d, want 3", ten.SkippedCount)
+	}
+
+	byName := map[string]CollectorStatus{}
+	for _, c := range ten.Collectors {
+		byName[c.Name] = c
+	}
+	if got := byName["riskyusers"].SkipCategory; got != skipCatLicense {
+		t.Errorf("riskyusers SkipCategory = %q, want %q", got, skipCatLicense)
+	}
+	if got := byName["auditbeta"].SkipCategory; got != skipCatExperimental {
+		t.Errorf("auditbeta SkipCategory = %q, want %q", got, skipCatExperimental)
+	}
+	if got := byName["signins_off"].SkipCategory; got != skipCatDisabled {
+		t.Errorf("signins_off SkipCategory = %q, want %q", got, skipCatDisabled)
+	}
+}
+
 func TestDeriveHealth_HealthyWhenAllSucceed(t *testing.T) {
 	tenants := []TenantStatus{{Collectors: []CollectorStatus{
 		{Name: "a", Enabled: true, HasRun: true, LastSuccess: true},

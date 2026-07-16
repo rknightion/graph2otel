@@ -20,6 +20,37 @@ const (
 // a collector drags overall health to "degraded".
 const consecutiveFailureThreshold = 3
 
+// overdueIntervalFactor is how many whole intervals a collector may go without
+// starting a run before the page flags it "overdue" (a wedged-ticker signal).
+const overdueIntervalFactor = 2
+
+// Skip categories classify why a collector the operator might expect to see was
+// never registered. They are derived from the free-form reason string the
+// composition root supplies (admin has no dependency on license/preflight), so
+// the page can style license gating differently from a deliberate opt-out.
+const (
+	skipCatLicense      = "license"      // license/permission tier missing ("requires ...")
+	skipCatDisabled     = "disabled"     // turned off in config ("disabled by config")
+	skipCatExperimental = "experimental" // beta, not opted into ("beta; enable ...")
+)
+
+// skipCategory buckets a skip-reason string into one of the skipCat* constants,
+// or "" when it matches none. It matches on the prefixes the composition root
+// (cmd/graph2otel/tenants.go) emits: "requires <cap>", "disabled by config",
+// and "beta; enable explicitly to opt in".
+func skipCategory(reason string) string {
+	switch {
+	case strings.HasPrefix(reason, "requires "):
+		return skipCatLicense
+	case strings.HasPrefix(reason, "disabled"):
+		return skipCatDisabled
+	case strings.HasPrefix(reason, "beta"):
+		return skipCatExperimental
+	default:
+		return ""
+	}
+}
+
 // CollectorSource pairs one tenant's registered collectors with the
 // StatusTracker its Scheduler records into. The admin package never keeps its
 // own copy of run state — it renders a fresh Snapshot()/HistorySnapshot() of
@@ -58,10 +89,17 @@ type ServiceInfo struct {
 	Uptime    string `json:"uptime"`
 }
 
-// TenantStatus is one tenant's collector table.
+// TenantStatus is one tenant's collector table plus a small roll-up used by the
+// page's per-tenant header. The counts are derived from Collectors: EnabledCount
+// is registered collectors, FailingCount those whose last run failed, PendingCount
+// those that have not run yet, and SkippedCount the skip-reason rows.
 type TenantStatus struct {
-	TenantID   string            `json:"tenant_id"`
-	Collectors []CollectorStatus `json:"collectors"`
+	TenantID     string            `json:"tenant_id"`
+	Collectors   []CollectorStatus `json:"collectors"`
+	EnabledCount int               `json:"enabled_count"`
+	FailingCount int               `json:"failing_count"`
+	PendingCount int               `json:"pending_count"`
+	SkippedCount int               `json:"skipped_count"`
 }
 
 // CollectorStatus is one row of a tenant's collector table: either a
@@ -70,9 +108,13 @@ type CollectorStatus struct {
 	Name string `json:"name"`
 	// Enabled is false for a collector the composition root chose not to
 	// register at all; SkipReason then explains why (e.g. "requires P2").
-	Enabled     bool   `json:"enabled"`
-	SkipReason  string `json:"skip_reason,omitempty"`
-	IntervalSec int64  `json:"interval_seconds,omitempty"`
+	Enabled bool `json:"enabled"`
+	// SkipReason is the raw reason a skipped collector was not registered;
+	// SkipCategory buckets it (see skipCategory) so the page can badge
+	// license-gating separately from a deliberate opt-out or a beta opt-in.
+	SkipReason   string `json:"skip_reason,omitempty"`
+	SkipCategory string `json:"skip_category,omitempty"`
+	IntervalSec  int64  `json:"interval_seconds,omitempty"`
 
 	HasRun         bool   `json:"has_run"`
 	Runs           int64  `json:"runs"`
@@ -92,6 +134,14 @@ type CollectorStatus struct {
 	// CollectorRun keeps only the most recent run's outcome.
 	StalenessSec int64  `json:"staleness_seconds,omitempty"`
 	Staleness    string `json:"staleness,omitempty"`
+	// NextRunInSec/NextRunIn estimate the time until the next scheduled tick
+	// (0 / "" when due or not yet run), derived from LastStarted+interval since
+	// the scheduler's ticker is anchored near run start. Overdue is set when the
+	// collector has not started a run in over overdueIntervalFactor intervals — a
+	// wedged-ticker signal, distinct from a run that simply failed.
+	NextRunInSec int64  `json:"next_run_in_seconds,omitempty"`
+	NextRunIn    string `json:"next_run_in,omitempty"`
+	Overdue      bool   `json:"overdue,omitempty"`
 	// DurationMsSeries/OutcomeSeries are the recent-run history (oldest
 	// first, aligned), feeding a duration sparkline and outcome strip.
 	DurationMsSeries []int64 `json:"duration_ms_series,omitempty"`
@@ -131,14 +181,31 @@ func buildTenantStatuses(sources []CollectorSource, skipReasons map[SkipKey]stri
 		}
 		sort.Strings(skipNames)
 		for _, name := range skipNames {
+			reason := skipReasons[SkipKey{TenantID: src.TenantID, Collector: name}]
 			rows = append(rows, CollectorStatus{
-				Name:       name,
-				Enabled:    false,
-				SkipReason: skipReasons[SkipKey{TenantID: src.TenantID, Collector: name}],
+				Name:         name,
+				Enabled:      false,
+				SkipReason:   reason,
+				SkipCategory: skipCategory(reason),
 			})
 		}
 
-		tenants = append(tenants, TenantStatus{TenantID: src.TenantID, Collectors: rows})
+		ten := TenantStatus{TenantID: src.TenantID, Collectors: rows}
+		for _, c := range rows {
+			switch {
+			case !c.Enabled:
+				ten.SkippedCount++
+			default:
+				ten.EnabledCount++
+				switch {
+				case !c.HasRun:
+					ten.PendingCount++
+				case !c.LastSuccess:
+					ten.FailingCount++
+				}
+			}
+		}
+		tenants = append(tenants, ten)
 	}
 	return tenants
 }
@@ -170,6 +237,18 @@ func collectorStatusFor(name string, interval time.Duration, runs map[string]col
 		}
 		cs.StalenessSec = int64(staleness / time.Second)
 		cs.Staleness = staleness.Round(time.Second).String()
+
+		if interval > 0 {
+			until := run.LastStarted.Add(interval).Sub(now)
+			if until < 0 { // due/overdue
+				until = 0
+			}
+			cs.NextRunInSec = int64(until / time.Second)
+			cs.NextRunIn = until.Round(time.Second).String()
+			if now.Sub(run.LastStarted) > overdueIntervalFactor*interval {
+				cs.Overdue = true
+			}
+		}
 	}
 	if h, ok := hist[name]; ok {
 		cs.DurationMsSeries = h.DurationMs
