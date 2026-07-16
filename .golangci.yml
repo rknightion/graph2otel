@@ -18,8 +18,12 @@ linters:
       locale: US
       # "signins" is our domain term for sign-in logs (package + identifiers);
       # misspell otherwise "corrects" it to "signings".
+      # "cancelled" is the literal Microsoft Graph auditLogQueryStatus wire value
+      # (verified against the Graph docs) — the API returns the British spelling,
+      # so the jobpipeline status constant and its collectors must match it.
       ignore-rules:
         - signins
+        - cancelled
   exclusions:
     generated: lax
     presets:
