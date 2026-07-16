@@ -35,6 +35,58 @@ func TestProvider_StdoutFlushesMetricOnShutdown(t *testing.T) {
 	}
 }
 
+// TestProvider_MetricsResourceOmitsServiceVersion asserts service.version is
+// NOT attached to the metrics resource (so Grafana Cloud's OTLP ingest cannot
+// promote it to a per-series label and churn the whole series set on every
+// :main redeploy — the #104 doubling), while the logs resource DOES keep it.
+// The stdout exporter prints each signal's Resource block, so a metrics-only
+// flush must not mention service.version, and a run that also emits a log must.
+func TestProvider_MetricsResourceOmitsServiceVersion(t *testing.T) {
+	ctx := context.Background()
+
+	// Metrics-only flush: the log batch processor has nothing to emit, so the
+	// buffer holds only ResourceMetrics — which must not carry service.version.
+	var metricsBuf bytes.Buffer
+	pm, err := telemetry.NewProvider(ctx, telemetry.Options{
+		ServiceName:    "graph2otel",
+		ServiceVersion: "v1.2.3-abcdef",
+		Protocol:       "stdout",
+		StdoutWriter:   &metricsBuf,
+		MetricInterval: time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("NewProvider: %v", err)
+	}
+	pm.Emitter().Counter("entra.test.counter", "1", "", 1, nil)
+	if err := pm.Shutdown(ctx); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+	if strings.Contains(metricsBuf.String(), "service.version") {
+		t.Fatalf("metrics resource carries service.version (#104 regression); got:\n%s", metricsBuf.String())
+	}
+
+	// A run that emits a log record must carry service.version on the logs
+	// resource (logs are never summed, so per-record version attribution is safe).
+	var logBuf bytes.Buffer
+	pl, err := telemetry.NewProvider(ctx, telemetry.Options{
+		ServiceName:    "graph2otel",
+		ServiceVersion: "v1.2.3-abcdef",
+		Protocol:       "stdout",
+		StdoutWriter:   &logBuf,
+		MetricInterval: time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("NewProvider: %v", err)
+	}
+	pl.Emitter().LogEvent(telemetry.Event{Name: "entra.test", Body: "hi"})
+	if err := pl.Shutdown(ctx); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+	if !strings.Contains(logBuf.String(), "service.version") {
+		t.Fatalf("logs resource dropped service.version; got:\n%s", logBuf.String())
+	}
+}
+
 // TestProvider_InvalidProtocolErrors asserts an unrecognized protocol is
 // rejected at construction rather than failing silently at export time.
 func TestProvider_InvalidProtocolErrors(t *testing.T) {

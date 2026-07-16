@@ -134,9 +134,16 @@ func metricProviderOptions(res *resource.Resource, cardinalityLimit int) []sdkme
 
 // NewProvider builds the telemetry pipeline for the given options.
 func NewProvider(ctx context.Context, opts Options) (*Provider, error) {
-	res, err := buildResource(ctx, opts)
+	// Two resources by design: metrics OMIT service.version (see buildResource
+	// — avoids the redeploy series-doubling in #104), logs KEEP it. Everything
+	// else (service.name, host/os/process detectors) is identical.
+	metricRes, err := buildResource(ctx, opts, false)
 	if err != nil {
-		return nil, fmt.Errorf("build resource: %w", err)
+		return nil, fmt.Errorf("build metrics resource: %w", err)
+	}
+	logRes, err := buildResource(ctx, opts, true)
+	if err != nil {
+		return nil, fmt.Errorf("build logs resource: %w", err)
 	}
 	metricExp, err := newMetricExporter(ctx, opts)
 	if err != nil {
@@ -152,12 +159,12 @@ func NewProvider(ctx context.Context, opts Options) (*Provider, error) {
 		interval = 60 * time.Second
 	}
 	mpOpts := append(
-		metricProviderOptions(res, opts.CardinalityLimit),
+		metricProviderOptions(metricRes, opts.CardinalityLimit),
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExp, sdkmetric.WithInterval(interval))),
 	)
 	mp := sdkmetric.NewMeterProvider(mpOpts...)
 	lp := sdklog.NewLoggerProvider(
-		sdklog.WithResource(res),
+		sdklog.WithResource(logRes),
 		sdklog.WithProcessor(sdklog.NewBatchProcessor(logExp)),
 	)
 
@@ -189,9 +196,21 @@ func (p *Provider) Shutdown(ctx context.Context) error {
 	return errors.Join(p.mp.Shutdown(ctx), p.lp.Shutdown(ctx))
 }
 
-func buildResource(ctx context.Context, opts Options) (*resource.Resource, error) {
+// buildResource builds the OTEL resource. includeServiceVersion controls
+// whether service.version is attached: it is TRUE for the logs resource and
+// FALSE for the metrics resource. The split exists because Grafana Cloud's OTLP
+// ingest promotes resource attributes to per-series labels — so putting
+// service.version (which, on the :main edge image, is the per-commit git SHA)
+// on the metrics resource churns a fresh series set on every redeploy. The old
+// series linger for the query lookback window (an OTLP push carries no
+// staleness signal, unlike a scrape target going down), so any panel that sums
+// across a bounded dimension doubles for ~5–10 min after each restart (#104).
+// Version stays fully discoverable via graph2otel.build_info (and target_info);
+// logs are never summed, so the logs resource keeps service.version for
+// per-record version attribution.
+func buildResource(ctx context.Context, opts Options, includeServiceVersion bool) (*resource.Resource, error) {
 	attrs := []attribute.KeyValue{attribute.String("service.name", opts.ServiceName)}
-	if opts.ServiceVersion != "" {
+	if includeServiceVersion && opts.ServiceVersion != "" {
 		attrs = append(attrs, attribute.String("service.version", opts.ServiceVersion))
 	}
 	// The schemaless WithAttributes block carries the service.* identity; the
