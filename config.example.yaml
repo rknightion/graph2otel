@@ -36,8 +36,8 @@ tenants:
     #     enabled: false
 
 otlp:
-  protocol: http # grpc | http | stdout
-  endpoint: "https://otlp-gateway-prod-us-central-0.grafana.net/otlp"
+  protocol: http # grpc | http | stdout (stdout = print signals to the console for local debug, no backend)
+  endpoint: "https://otlp-gateway-prod-us-central-0.grafana.net/otlp" # OTLP base URL (the exporter appends /v1/metrics and /v1/logs itself)
   grafana_cloud:
     instance_id: "" # Grafana Cloud OTLP instance ID
     token: "" # DO NOT set here — use G2O_OTLP__GRAFANA_CLOUD__TOKEN instead
@@ -81,8 +81,8 @@ collectors: {}
 # admin exposes an operator health/status HTTP endpoint (liveness + per-collector
 # status). Disabled by default; bind address defaults to :9090.
 admin:
-  enabled: false
-  addr: ":9090"
+  enabled: false # run the admin/health HTTP endpoint (liveness + per-collector status)
+  addr: ":9090" # bind address for the admin endpoint
 
 # profiling enables optional Grafana Pyroscope continuous profiling (default
 # off). It has no effect on the exporter's core job and a failure to reach
@@ -90,9 +90,9 @@ admin:
 # G2O_PROFILING__PYROSCOPE__BASIC_AUTH_PASSWORD, never in committed YAML.
 profiling:
   pyroscope:
-    enabled: false
+    enabled: false # run the Pyroscope continuous-profiling push agent
     # Grafana Cloud Profiles ingest endpoint (e.g. https://profiles-prod-NNN.grafana.net).
-    server_address: ""
+    server_address: "" # REQUIRED when enabled, e.g. http://pyroscope:4040 or https://profiles-prod-NNN.grafana.net
     basic_auth_user: "" # Grafana Cloud Profiles user/instance ID
     basic_auth_password: "" # DO NOT set here — use the env var above
     tenant_id: "" # optional; leave empty for Grafana Cloud
@@ -113,8 +113,8 @@ profiling:
 # mis-scoped label, not a normal constraint. Set 0 for unlimited.
 # Env: G2O_CARDINALITY__METRIC_LIMIT.
 cardinality:
-  metric_limit: 2000
+  metric_limit: 2000 # hard per-instrument active-series cap; beyond it the SDK collapses extras into otel.metric.overflow (0 = unlimited)
 
 # checkpoint_dir is where window-log collectors persist their per-(tenant,
 # endpoint) watermarks so a restart resumes rather than re-fetching or dropping.
-checkpoint_dir: "./checkpoints"
+checkpoint_dir: "./checkpoints" # root dir for the file-based CheckpointStore (mount a writable, persistent path in a container)

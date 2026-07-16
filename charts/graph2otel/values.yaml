@@ -190,6 +190,40 @@ config:
     enabled: true
     addr: ":9090"
 
+  # -- Optional Grafana Pyroscope continuous profiling (default off). Has no
+  # effect on the exporter's core job and a failure to reach Pyroscope is
+  # non-fatal. basic_auth_password is a credential — do NOT set it here; provide
+  # it via G2O_PROFILING__PYROSCOPE__BASIC_AUTH_PASSWORD in extraEnv from a
+  # Secret. The mutex/block sampling knobs are applied only while the Pyroscope
+  # push is enabled, so they cost nothing when profiling is off.
+  profiling:
+    pyroscope:
+      enabled: false
+      # -- Grafana Cloud Profiles ingest endpoint (e.g. https://profiles-prod-NNN.grafana.net). Required when enabled.
+      server_address: ""
+      # -- Grafana Cloud Profiles user/instance ID.
+      basic_auth_user: ""
+      # -- DO NOT set here — this key is informational only; provide it via G2O_PROFILING__PYROSCOPE__BASIC_AUTH_PASSWORD from a Secret.
+      basic_auth_password: ""
+      # -- X-Scope-OrgID for multi-tenant Pyroscope servers; leave empty for Grafana Cloud.
+      tenant_id: ""
+      # -- How often profiles are flushed; 0/omit uses the pyroscope default.
+      upload_rate: 15s
+      # -- Extra static profile tags; service_version is always set and cannot be overridden.
+      tags: {}
+    # -- runtime.SetMutexProfileFraction (0 = disabled).
+    mutex_profile_fraction: 5
+    # -- runtime.SetBlockProfileRate in ns, 100µs (0 = disabled).
+    block_profile_rate: 100000
+
+  # -- Output-side active-series governance (Grafana Cloud bills on active
+  # series). metric_limit is a hard per-instrument cap: distinct attribute sets
+  # beyond it collapse into the SDK's otel.metric.overflow series instead of
+  # growing the bill. graph2otel's metrics are bounded aggregates, so 2000 is a
+  # blast-radius guard, not a normal constraint. Set 0 for unlimited.
+  cardinality:
+    metric_limit: 2000
+
   # -- Where window-log collectors persist their per-(tenant, endpoint)
   # watermarks, so a restart resumes rather than re-fetching or dropping
   # data. Matches the checkpoint volume's mountPath below, so overriding this

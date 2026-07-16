@@ -2,6 +2,16 @@ package config
 
 import "strings"
 
+// listEnvKeys are the config keys whose environment value would be a
+// comma-separated list (the scalar []string fields). graph2otel's config
+// surface currently has NO []string field, so this registry is empty and the
+// env-var-reference generator classifies every sequence node (tenants) as
+// file-only. It exists so that a future []string field has an obvious home and
+// so TestListEnvKeysMatchesStringSliceFields can fail loudly if one is added
+// without registering it here — at which point envTransform must also be taught
+// to comma-split that variable's value.
+var listEnvKeys = map[string]bool{}
+
 // envKey maps a G2O_* environment variable name to its dotted config key:
 // strip the prefix, lowercase, and turn the "__" nesting delimiter into ".".
 // A single underscore inside a level is preserved (e.g. client_id stays
