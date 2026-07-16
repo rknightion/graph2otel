@@ -388,10 +388,23 @@ func (c *Collector) ensureSubscription(ctx context.Context, ct o365activityclien
 	return c.startSubscription(ctx, ct)
 }
 
-// startSubscription performs the write, tolerating an already-started
-// subscription (the API treats a re-start as an update).
+// startSubscription performs the write, tolerating a subscription that is
+// already enabled.
+//
+// The tolerance is NOT theoretical politeness — without it this collector fails
+// on every tick against any tenant whose subscriptions were started by anything
+// else (a previous deployment, another tool, an operator). Verified live
+// 2026-07-16: /subscriptions/start against an enabled content type returns
+//
+//	HTTP 400  AF20024: The subscription is already enabled. No property change.
+//
+// The reference says a re-start "is used to update the properties of an active
+// webhook", i.e. that it is a safe no-op, and omits AF20024 from its error table
+// altogether. Both are wrong. This comment previously claimed the tolerance
+// existed while the code did not implement it — the claim was inherited from the
+// docs and never tested, so the bug shipped and was caught only on a live tenant.
 func (c *Collector) startSubscription(ctx context.Context, ct o365activityclient.ContentType) error {
-	if _, err := c.client.StartSubscription(ctx, ct); err != nil {
+	if _, err := c.client.StartSubscription(ctx, ct); err != nil && !o365activityclient.IsAlreadyEnabled(err) {
 		return fmt.Errorf("o365pipeline: %s: start subscription %s: %w", c.cfg.CollectorName, ct, err)
 	}
 	c.mu.Lock()

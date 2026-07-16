@@ -40,6 +40,24 @@ const (
 	// tenant or service admin. Content cannot be listed or retrieved until it is
 	// restarted; also a skip-gracefully condition.
 	CodeSubscriptionDisabled = "AF20023"
+	// CodeAlreadyEnabled (AF20024): /subscriptions/start was called for a content
+	// type whose subscription is already enabled, with nothing to change.
+	//
+	// This code is UNDOCUMENTED and contradicts the reference, which says a
+	// re-start "is used to update the properties of an active webhook" — i.e.
+	// that it is a safe idempotent no-op. It is not: the wire returns
+	//
+	//	HTTP 400  AF20024: The subscription is already enabled. No property change.
+	//
+	// Verified live 2026-07-16, and it is absent from the reference's own error
+	// table (which lists AF20020-23 then jumps to AF20030). It made m365.activity
+	// fail on EVERY tick against a tenant whose subscriptions were already on.
+	//
+	// It is a SUCCESS condition, not a failure: the desired state — an enabled
+	// subscription — already holds. IsAlreadyEnabled exists so a caller starting
+	// subscriptions idempotently can say so explicitly rather than pattern-matching
+	// a 400.
+	CodeAlreadyEnabled = "AF20024"
 	// CodeInvalidTimeRange (AF20030) and CodeInvalidTimeRangeAlt (AF20055) both
 	// report the same rule: startTime and endTime must both be present (or both
 	// omitted), be at most 24 hours apart, and start no more than 7 days in the
@@ -157,6 +175,14 @@ func IsNoSubscription(err error) bool { return HasCode(err, CodeNoSubscription) 
 // IsSubscriptionDisabled reports whether err is AF20023 — an admin disabled the
 // subscription. Content is unavailable until it is restarted.
 func IsSubscriptionDisabled(err error) bool { return HasCode(err, CodeSubscriptionDisabled) }
+
+// IsAlreadyEnabled reports whether err is AF20024 — /subscriptions/start was
+// called for a content type that is already enabled, with nothing to change.
+//
+// Treat it as SUCCESS. The desired state already holds; the API just declines to
+// say so with a 2xx. See CodeAlreadyEnabled for why this exists at all — the
+// reference documents a re-start as a safe update and omits this code entirely.
+func IsAlreadyEnabled(err error) bool { return HasCode(err, CodeAlreadyEnabled) }
 
 // IsContentNotFound reports whether err is AF20050 — the content blob does not
 // exist.

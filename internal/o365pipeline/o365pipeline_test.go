@@ -782,3 +782,47 @@ func mustOnlyFile(t *testing.T, dir string) string {
 	t.Fatalf("no checkpoint file in %s", dir)
 	return ""
 }
+
+// TestCollectToleratesAnAlreadyEnabledSubscription pins the fix for a bug that
+// shipped and was caught only on a live tenant.
+//
+// /subscriptions/start against an already-enabled content type returns HTTP 400
+// AF20024 ("The subscription is already enabled. No property change."). The
+// reference says a re-start "is used to update the properties of an active
+// webhook" — a safe no-op — and omits AF20024 from its error table entirely.
+// Both are wrong.
+//
+// This is the STEADY STATE, not an edge case: any tenant whose subscriptions
+// were started by a previous deployment, another tool, or an operator hits it on
+// every tick. Untolerated, the collector never collects — it fails at the first
+// step, forever, while looking like a transient API error.
+//
+// The old fake returned 200 unconditionally, which is why no test caught this. A
+// fake kinder than the wire proves nothing about the wire.
+func TestCollectToleratesAnAlreadyEnabledSubscription(t *testing.T) {
+	base := testBase()
+	api := newFakeAPI(t, blobSpec{
+		contentType: "Audit.Exchange",
+		contentID:   "c1",
+		created:     base.Add(30 * time.Minute),
+		records:     []map[string]any{{"Id": "r1"}},
+	})
+	// Both content types are already on, exactly as m7kni was.
+	api.alreadyEnabledFor["Audit.Exchange"] = true
+	api.alreadyEnabledFor["Audit.SharePoint"] = true
+
+	c := New(api.client(t), newStore(t), testConfig(
+		o365activityclient.ContentExchange, o365activityclient.ContentSharePoint))
+
+	rc := telemetrytest.New()
+	if err := c.Collect(context.Background(), base, base.Add(2*time.Hour), rc.Emitter()); err != nil {
+		t.Fatalf("Collect failed against already-enabled subscriptions: %v\n"+
+			"AF20024 means the desired state ALREADY HOLDS — it is success, not failure", err)
+	}
+
+	// The real proof is not that Collect returned nil: it is that the run got
+	// past the write and actually collected.
+	if got := len(rc.LogRecords()); got != 1 {
+		t.Errorf("emitted %d records, want 1 — the collector must proceed past an already-enabled subscription, not stop at it", got)
+	}
+}

@@ -89,13 +89,18 @@ type fakeAPI struct {
 	// noSubscriptionFor makes subscriptions/content fail with AF20022 for these
 	// content types until subscriptions/start is called for them.
 	noSubscriptionFor map[string]bool
+	// alreadyEnabledFor makes subscriptions/start fail with AF20024 for these
+	// content types — the real API's response when the subscription is already
+	// on, which is the steady state on any tenant whose subscriptions were
+	// started by a previous deployment, another tool, or an operator.
+	alreadyEnabledFor map[string]bool
 
 	srv *httptest.Server
 }
 
 func newFakeAPI(t *testing.T, blobs ...blobSpec) *fakeAPI {
 	t.Helper()
-	f := &fakeAPI{blobs: blobs, noSubscriptionFor: map[string]bool{}}
+	f := &fakeAPI{blobs: blobs, noSubscriptionFor: map[string]bool{}, alreadyEnabledFor: map[string]bool{}}
 	f.srv = httptest.NewServer(http.HandlerFunc(f.handle))
 	t.Cleanup(f.srv.Close)
 	return f
@@ -119,7 +124,23 @@ func (f *fakeAPI) handleStart(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	f.starts = append(f.starts, ct)
 	delete(f.noSubscriptionFor, ct)
+	already := f.alreadyEnabledFor[ct]
 	f.mu.Unlock()
+
+	// AF20024 is what the REAL API returns when the content type is already
+	// enabled — an undocumented 400 for an operation the reference describes as a
+	// safe update. This fake returned 200 unconditionally until 2026-07-16, which
+	// is precisely why the engine shipped without tolerating it and failed on
+	// every tick against a live tenant. A fake that is kinder than the wire tests
+	// nothing about the wire.
+	if already {
+		w.WriteHeader(http.StatusBadRequest)
+		writeJSON(w, map[string]any{"error": map[string]any{
+			"code":    o365activityclient.CodeAlreadyEnabled,
+			"message": "The subscription is already enabled. No property change.",
+		}})
+		return
+	}
 	writeJSON(w, o365activityclient.Subscription{ContentType: ct, Status: o365activityclient.StatusEnabled})
 }
 
