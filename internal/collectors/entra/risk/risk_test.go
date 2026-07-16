@@ -7,6 +7,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -36,14 +37,18 @@ const base = "https://graph.microsoft.com/v1.0"
 const usersURL = base + "/identityProtection/riskyUsers"
 const spsURL = base + "/identityProtection/riskyServicePrincipals"
 
+// The per-entity fields below (UPN, appId, display names) MUST reach the log
+// twin and MUST NOT reach any metric attribute — see TestCollectNoPerEntitySeries
+// for the metric half of that boundary and the log-twin tests for the other.
+// u2 is deliberately sparse: it exercises the omit-absent-attrs path.
 const usersBody = `{"value":[
-	{"id":"u1","riskLevel":"high","riskState":"atRisk","userPrincipalName":"should-not-leak@example.com"},
+	{"id":"u1","riskLevel":"high","riskState":"atRisk","riskDetail":"userPassedMFADrivenByRiskBasedPolicy","riskLastUpdatedDateTime":"2026-07-16T09:00:00Z","userPrincipalName":"alice@example.com","userDisplayName":"Alice Example"},
 	{"id":"u2","riskLevel":"high","riskState":"atRisk"},
-	{"id":"u3","riskLevel":"medium","riskState":"confirmedCompromised"}
+	{"id":"u3","riskLevel":"medium","riskState":"confirmedCompromised","userPrincipalName":"carol@example.com","userDisplayName":"Carol Example"}
 ]}`
 
 const spsBody = `{"value":[
-	{"id":"sp1","riskLevel":"low","riskState":"remediated","appId":"should-not-leak-app-id"}
+	{"id":"sp1","riskLevel":"low","riskState":"remediated","riskDetail":"adminConfirmedServicePrincipalCompromised","riskLastUpdatedDateTime":"2026-07-16T08:30:00Z","appId":"11111111-2222-3333-4444-555555555555","displayName":"Legacy Sync App","servicePrincipalType":"Application"}
 ]}`
 
 func fullFixture() *fakeGraph {
@@ -121,6 +126,150 @@ func TestCollectNoPerEntitySeries(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// logsNamed returns the recorded log records carrying the given EventName.
+func logsNamed(recs []telemetrytest.LogRecord, name string) []telemetrytest.LogRecord {
+	var out []telemetrytest.LogRecord
+	for _, r := range recs {
+		if r.EventName == name {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// TestCollectEmitsRiskyUserLogTwin is the other half of the cardinality
+// boundary: the per-entity detail the gauge cannot carry must land in the LOGS
+// pipeline, not be dropped. Without it the collector answers "how much risk"
+// but never "which user" — the question an analyst actually asks.
+func TestCollectEmitsRiskyUserLogTwin(t *testing.T) {
+	rec := telemetrytest.New()
+	if err := New(fullFixture(), bothCaps(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	got := logsNamed(rec.LogRecords(), eventRiskyUser)
+	if len(got) != 3 {
+		t.Fatalf("emitted %d %s logs, want 3 (one per risky user)", len(got), eventRiskyUser)
+	}
+
+	var alice *telemetrytest.LogRecord
+	for i := range got {
+		if got[i].Attrs["id"] == "u1" {
+			alice = &got[i]
+		}
+	}
+	if alice == nil {
+		t.Fatalf("no log for risky user u1; got %v", got)
+	}
+
+	want := map[string]string{
+		"id":                  "u1",
+		"user_principal_name": "alice@example.com",
+		"user_display_name":   "Alice Example",
+		"risk_level":          "high",
+		"risk_state":          "atRisk",
+		"risk_detail":         "userPassedMFADrivenByRiskBasedPolicy",
+		"risk_last_updated":   "2026-07-16T09:00:00Z",
+	}
+	for k, v := range want {
+		if alice.Attrs[k] != v {
+			t.Errorf("risky-user log attr %q = %q, want %q", k, alice.Attrs[k], v)
+		}
+	}
+}
+
+// TestLogTwinSeverityTracksRiskLevel drives the mapper directly (the
+// securityincidents idiom) so the assertion compares telemetry.Severity values
+// rather than the recorder's already-translated OTEL wire numbers. Only "high"
+// escalates — everything else is routine background state.
+func TestLogTwinSeverityTracksRiskLevel(t *testing.T) {
+	for _, tc := range []struct {
+		level string
+		want  telemetry.Severity
+	}{
+		{"high", telemetry.SeverityWarn},
+		{"High", telemetry.SeverityWarn}, // Graph casing is not guaranteed
+		{"medium", telemetry.SeverityInfo},
+		{"low", telemetry.SeverityInfo},
+		{"none", telemetry.SeverityInfo},
+		{"", telemetry.SeverityInfo},
+	} {
+		ev := logTwin(riskyEntity{ID: "u1", RiskLevel: tc.level, RiskState: "atRisk"}, usersHalf)
+		if ev.Severity != tc.want {
+			t.Errorf("risk_level=%q severity = %v, want %v", tc.level, ev.Severity, tc.want)
+		}
+	}
+}
+
+// TestCollectEmitsRiskyServicePrincipalLogTwin covers the workload-identity
+// half, whose per-entity shape differs (appId/displayName, no UPN).
+func TestCollectEmitsRiskyServicePrincipalLogTwin(t *testing.T) {
+	rec := telemetrytest.New()
+	if err := New(fullFixture(), bothCaps(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	got := logsNamed(rec.LogRecords(), eventRiskySP)
+	if len(got) != 1 {
+		t.Fatalf("emitted %d %s logs, want 1", len(got), eventRiskySP)
+	}
+
+	want := map[string]string{
+		"id":                     "sp1",
+		"app_id":                 "11111111-2222-3333-4444-555555555555",
+		"display_name":           "Legacy Sync App",
+		"service_principal_type": "Application",
+		"risk_level":             "low",
+		"risk_state":             "remediated",
+		"risk_detail":            "adminConfirmedServicePrincipalCompromised",
+		"risk_last_updated":      "2026-07-16T08:30:00Z",
+	}
+	for k, v := range want {
+		if got[0].Attrs[k] != v {
+			t.Errorf("risky-SP log attr %q = %q, want %q", k, got[0].Attrs[k], v)
+		}
+	}
+}
+
+// TestLogTwinOmitsAbsentAttrs asserts a sparse entity (u2 — no UPN, no
+// riskDetail) omits those attributes rather than emitting empty strings.
+func TestLogTwinOmitsAbsentAttrs(t *testing.T) {
+	rec := telemetrytest.New()
+	if err := New(fullFixture(), bothCaps(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	for _, r := range logsNamed(rec.LogRecords(), eventRiskyUser) {
+		if r.Attrs["id"] != "u2" {
+			continue
+		}
+		for _, k := range []string{"user_principal_name", "user_display_name", "risk_detail", "risk_last_updated"} {
+			if v, ok := r.Attrs[k]; ok {
+				t.Errorf("sparse entity emitted absent attr %q = %q, want it omitted", k, v)
+			}
+		}
+		return
+	}
+	t.Fatal("no log for sparse risky user u2")
+}
+
+// TestUnlicensedHalfEmitsNoLogTwin asserts the license gate short-circuits the
+// log twin too — an unlicensed half must emit nothing, not empty logs.
+func TestUnlicensedHalfEmitsNoLogTwin(t *testing.T) {
+	rec := telemetrytest.New()
+	caps := license.Capabilities{license.CapEntraP2: true}
+	if err := New(fullFixture(), caps, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	if got := logsNamed(rec.LogRecords(), eventRiskySP); len(got) != 0 {
+		t.Errorf("unlicensed workload-identity half emitted %d logs, want 0", len(got))
+	}
+	if got := logsNamed(rec.LogRecords(), eventRiskyUser); len(got) != 3 {
+		t.Errorf("licensed half emitted %d logs, want 3", len(got))
 	}
 }
 
