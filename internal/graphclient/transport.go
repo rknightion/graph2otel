@@ -17,6 +17,15 @@ import (
 const (
 	metricHTTPClientDuration = "graph2otel.http.client.request.duration"
 
+	// metricHTTPClient4xx / metricHTTPClient5xx count graph2otel's OWN outbound
+	// Graph responses that returned a 4xx / 5xx, in the graph2otel.* self-obs
+	// namespace. This is deliberately NARROWER than the tenant-wide
+	// MicrosoftGraphActivityLogs 403-burst signal — it sees only graph2otel's
+	// own calls, never other apps' Graph traffic. Attributes are bounded:
+	// tenant + workload class + status code, never per-request/PII.
+	metricHTTPClient4xx = "graph2otel.graphclient.http_4xx"
+	metricHTTPClient5xx = "graph2otel.graphclient.http_5xx"
+
 	attrHTTPMethod     = "http.request.method"
 	attrServerAddress  = "server.address"
 	attrHTTPStatusCode = "http.response.status_code"
@@ -34,8 +43,9 @@ const defaultHTTPClientTimeout = 100 * time.Second
 // duration histogram per request through the Emitter, or is a pass-through when
 // the Emitter is nil.
 type instrumentedTransport struct {
-	next    http.RoundTripper
-	emitter telemetry.Emitter
+	next     http.RoundTripper
+	emitter  telemetry.Emitter
+	tenantID string
 }
 
 func (t *instrumentedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -52,11 +62,38 @@ func (t *instrumentedTransport) RoundTrip(req *http.Request) (*http.Response, er
 	}
 	if resp != nil {
 		attrs[attrHTTPStatusCode] = resp.StatusCode
+		t.recordHTTPError(req, resp.StatusCode)
 	}
 	// Default histogram bounds (seconds) sized for Graph call latencies.
 	t.emitter.Histogram(metricHTTPClientDuration, "s", "Duration of an outbound Microsoft Graph HTTP request.",
 		elapsed, []float64{0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30}, attrs)
 	return resp, err
+}
+
+// recordHTTPError increments the graph2otel.graphclient.http_4xx / http_5xx
+// self-obs counter when this attempt's response was a client (4xx) or server
+// (5xx) error. 2xx/3xx are not counted. Runs once per physical attempt (this
+// transport sits under Kiota's retry handler), so a retried request contributes
+// one increment per attempt. Attributes are bounded — tenant, workload class,
+// status code — carrying no per-request/PII cardinality. The caller has already
+// guarded emitter != nil.
+func (t *instrumentedTransport) recordHTTPError(req *http.Request, statusCode int) {
+	var name, desc string
+	switch {
+	case statusCode >= 400 && statusCode < 500:
+		name = metricHTTPClient4xx
+		desc = "Count of 4xx responses graph2otel received from its own outbound Microsoft Graph calls."
+	case statusCode >= 500 && statusCode < 600:
+		name = metricHTTPClient5xx
+		desc = "Count of 5xx responses graph2otel received from its own outbound Microsoft Graph calls."
+	default:
+		return
+	}
+	t.emitter.Counter(name, "1", desc, 1, telemetry.Attrs{
+		attrTenantID:       t.tenantID,
+		attrWorkload:       string(ClassifyWorkload(req.URL.Path)),
+		attrHTTPStatusCode: statusCode,
+	})
 }
 
 // buildMiddlewares returns Kiota's DEFAULT middleware chain (retry, redirect,
@@ -117,7 +154,7 @@ func newGraphHTTPClient(opts Options) *http.Client {
 			emitter:  opts.Emitter,
 		}
 	}
-	instrumented := &instrumentedTransport{next: base, emitter: opts.Emitter}
+	instrumented := &instrumentedTransport{next: base, emitter: opts.Emitter, tenantID: opts.TenantID}
 	transport := nethttplibrary.NewCustomTransportWithParentTransport(instrumented, buildMiddlewares(opts)...)
 	return &http.Client{
 		Transport: transport,
