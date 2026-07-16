@@ -302,6 +302,43 @@ and queryability, never by confidentiality:
   `/tenants/…/Microsoft.aadiam` on SignInLogs). Never match on it.
   Records are JSON Lines with **CRLF** terminators. The `properties.__UDI_RequiredFields_*` keys
   are Microsoft's internal ingestion plumbing — drop them.
+- **The blob envelope `time` is the INGESTION time, and on sign-in categories it is NOT the event
+  time** (#135, verified live 2026-07-16 across ~700 records of all three sign-in categories).
+  `time` and `properties.createdDateTime` were **never** equal — 0 of 700 — and the gap is
+  **VARIABLE (28s–1077s)**, so it cannot even be recovered by subtracting a constant. Bind sign-in
+  timestamps to **`properties.createdDateTime`**, with **no fallback** to `time` (a fallback
+  silently reintroduces the bug). `MicrosoftGraphActivityLogs` binds to `time` and is **correct**
+  to — there `time` == `properties.timeGenerated` byte-for-byte. That is the trap: the shipped
+  neighboring collector models the opposite rule, so **copying it onto a sign-in stream backdates
+  every record by a random couple of minutes, with no error**. The earlier "31 minutes" figure on
+  #135 was n=1 and is NOT a constant.
+- **The blob envelope IS consistent within a category family, and is NOT across families** (#135).
+  This refines the "map per category" rule rather than contradicting it: the three sign-in
+  categories were diffed field-by-field and share one schema with **zero type conflicts** (their
+  only differences are additive optional fields), so they correctly share ONE mapper. MGAL vs
+  sign-ins do not agree on anything (`time`, `level`, `resourceId` casing, `durationMs` type all
+  differ). Verify agreement against live samples before sharing a mapper; do not assume it either
+  way.
+- **The blob `properties` object IS the Graph `signIn` resource** (#135, verified field-for-field
+  across live samples of all four sign-in categories). Every field the polled `mapSignIn` reads is
+  present in every blob category, so `entra/signins` reuses ONE mapper for both the polled and blob
+  paths and the two sources are drop-in equivalents — same `entra.signin` event name, same
+  attributes, same `id`. Do not write a second sign-in mapper; an attribute added for one source
+  must be right for the other. (`properties.id` == the polled `signIn.id`, so the two are
+  dedupe-able downstream if both run.)
+- **Azure diagnostic-settings delivery is AT-LEAST-ONCE: ~2.3% of blob records arrive more than
+  once** (#138, measured live 2026-07-16 across every category with data; one event arrived
+  **3×**). A re-delivery is a separate line — usually in the SAME hour blob — with a
+  **byte-identical `properties` payload** and a **fresh envelope `time`** (one `h=04` blob held the
+  same sign-in at line 15 / envelope `04:09:50` and line 20 / envelope `04:16:16`). **This is not a
+  cursor bug and the cursor cannot fix it**: both copies are real distinct bytes. Proven exact —
+  across a cold start plus a restart, for all 1,035 emitted ids the emitted count **equalled** the
+  in-blob count, with zero over-emission and zero loss. So a cross-run "duplicate" on restart is
+  Azure re-delivering into newly-appended bytes, NOT a checkpoint bug — do not "fix" the cursor.
+  Consequence: `logpipeline` dedupes (seen-id set in its checkpoint) but **`blobpipeline` does
+  not**, so blob-sourced collectors ship ~2.3% duplicates today, `entra.graph_activity` included.
+  Rates: MGAL 302/11,134 (2.71%), spsp 18/771, mspsp 6/216, niu 1/40. Measured DURING enablement
+  backfill — re-measure post-backfill (#137) before treating 2.3% as steady-state.
 - **A blob-sourced collector is a `SnapshotCollector`, not a `WindowCollector`** — the interface
   split is about the CURSOR, not the signal shape. A blob collector emits logs but cannot use a
   scheduler-supplied `[from, to]` range (see the backfill entry above), so `Collect(ctx, e)` is

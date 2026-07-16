@@ -13,13 +13,39 @@ The Azure SDK lives behind one interface (`blobpipeline.Source`, implemented in
 
 ## What it is for
 
-| signal | why blob |
-| --- | --- |
-| `MicrosoftGraphActivityLogs` | **No Graph endpoint, permanently.** Graph's own per-request API-call telemetry. ~70% of billable diagnostic volume. Shipped as `entra.graph_activity`. |
-| `MicrosoftServicePrincipalSignInLogs` | **No Graph endpoint.** Microsoft first-party service-to-service auth — a different dataset from `entra.signins.service_principal`, which only ever returns *your own* service principals. |
-| Intune `OperationalLogs` | **No Graph endpoint** (#94). The compliance-alert *fired-event* stream; Graph exposes only the notification templates. |
-| `NonInteractiveUserSignInLogs`, `ServicePrincipalSignInLogs`, `ManagedIdentitySignInLogs` | Graph *can* serve these, but only on `/beta` — the `signInEventTypes` filter is beta-only, which is why the polled versions are `Experimental`. Diagnostic settings emit them as first-class categories: no filter, no beta. |
-| `AuditLogs`, `ProvisioningLogs` | Covered by Graph for **metrics**; blob supplies the **log** side under the dual-ship model (#131). |
+| signal | collector | why blob |
+| --- | --- | --- |
+| `MicrosoftGraphActivityLogs` | `entra.graph_activity` | **No Graph endpoint, permanently.** Graph's own per-request API-call telemetry. ~70% of billable diagnostic volume. |
+| `MicrosoftServicePrincipalSignInLogs` | `entra.signins.microsoft_service_principal` | **No Graph endpoint.** Microsoft first-party service-to-service auth. Live-verified a genuinely different dataset from `entra.signins.service_principal` — see below. |
+| `ServicePrincipalSignInLogs` | `entra.signins.service_principal.blob` | Retires a `/beta` dependency (see below). |
+| `NonInteractiveUserSignInLogs` | `entra.signins.non_interactive.blob` | Retires a `/beta` dependency (see below). |
+| `ManagedIdentitySignInLogs` | — | Same case as the two above, but **not built**: the container does not exist on the verification tenant, so there is no live sample to map against and this project does not map from documentation (#135). |
+| Intune `OperationalLogs` | — | **No Graph endpoint** (#94). The compliance-alert *fired-event* stream; Graph exposes only the notification templates. |
+| `AuditLogs`, `ProvisioningLogs` | — | Covered by Graph for **metrics**; blob supplies the **log** side under the dual-ship model (#131). |
+
+### The sign-in collectors
+
+The three shipped sign-in collectors emit `entra.signin` — the **same event name and the same
+attributes** as the polled streams, because the diagnostic-settings `properties` object *is* the
+Graph `signIn` resource (verified field-for-field against live samples of all four sign-in
+categories). They share one mapper with the polled path, so the two sources are indistinguishable
+downstream and an attribute added for one is automatically right for the other.
+
+**`MicrosoftServicePrincipalSignInLogs` is not a duplicate of `ServicePrincipalSignInLogs`.**
+Live-verified 2026-07-16: every sampled record in the former was owned by Microsoft's own tenant
+(`f8cdef31-…`) and every record in the latter by the local tenant, with **zero** sign-in ids
+overlapping. The two partition cleanly by app ownership, which is why the polled
+`entra.signins.service_principal` — restricted to your own service principals — can never surface
+the first-party half.
+
+**The `.blob` suffix** marks a collector whose polled twin exists; the two are separate config keys
+with separate intervals. They are **not Experimental** (configuring `blob_ingest.account_url` is
+already the opt-in, and unlike the polled twins these are v1.0-stable sources), and they declare
+Entra ID P1 so a Free tenant gets a stated skip rather than a silent empty container.
+
+Running a `.blob` collector **and** its polled twin ships each sign-in twice. The polled twins are
+`Experimental` and therefore off by default, so this needs a deliberate act; if you do both, dedupe
+downstream on the `id` attribute, which is identical across the two sources.
 
 Blob is **not** a general replacement for polling. Metrics want freshness and blob is
 floored at ~4 minutes; logs want completeness and blob has no throttle ceiling. The two
@@ -112,6 +138,36 @@ and it is not derivable from the clock. Hence:
 
 Backfill on enablement is **good news**, incidentally: turning the destination on recovers
 history rather than starting from zero.
+
+### Azure delivers at-least-once: ~2.3% of records arrive more than once
+
+Measured live 2026-07-16 across every category with data — a consistent **2.3%–2.8%**, with one
+event observed delivered **three** times:
+
+| category | records | re-delivered |
+| --- | ---: | ---: |
+| `MicrosoftGraphActivityLogs` | 11,134 | 302 (2.71%) |
+| `ServicePrincipalSignInLogs` | 771 | 18 (2.33%) |
+| `MicrosoftServicePrincipalSignInLogs` | 216 | 6 (2.78%) |
+| `NonInteractiveUserSignInLogs` | 40 | 1 (2.50%) |
+
+A re-delivered event is written as a **separate line**, usually into the same hour blob, with a
+**byte-identical `properties` payload** and a **fresh envelope `time`**. One `h=04` blob carried the
+same sign-in at line 15 (envelope `04:09:50`) and line 20 (envelope `04:16:16`) — identical `id`,
+`createdDateTime`, `correlationId`, and `uniqueTokenIdentifier`, 6.4 minutes apart.
+
+**This is not a cursor bug and it is not fixable by the cursor.** Both copies are real, distinct
+bytes; a byte-offset cursor consuming them exactly once is behaving correctly. Verified directly:
+across a cold start plus a restart, for all 1,035 emitted ids, the number of times graph2otel
+emitted a record **exactly equalled** the number of times Azure wrote it — no over-emission, no
+loss.
+
+The consequence is real and currently unmitigated: **blob-sourced collectors ship Azure's
+duplicates through to your backend.** The polled path does not have this problem — `logpipeline`
+carries a seen-id set in its checkpoint and dedupes. `blobpipeline` has no equivalent, so ~2.3% of
+blob-sourced records are duplicates. Every collector emits the identifying attribute (`id` for
+sign-ins, `request_id` for Graph activity), so downstream dedupe is possible today. Closing the gap
+in the engine is **#138**.
 
 ### Field types are inconsistent within a single record
 

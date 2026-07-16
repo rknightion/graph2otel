@@ -121,8 +121,18 @@ an Azure Storage account**, so you still do not need an Azure Function or a Log 
 workspace in the middle. It is opt-in (one config key), read-only, and costs pennies a
 month with no standing charge. See [`docs/blob-ingest.md`](docs/blob-ingest.md).
 
-`MicrosoftGraphActivityLogs` is **served this way today** (`entra.graph_activity`); the
-remaining categories below are the roadmap for the same path.
+**Served this way today:** `MicrosoftGraphActivityLogs` (`entra.graph_activity`) and three
+sign-in categories — `MicrosoftServicePrincipalSignInLogs`
+(`entra.signins.microsoft_service_principal`, which has no Graph route at all),
+`ServicePrincipalSignInLogs` and `NonInteractiveUserSignInLogs` (the `.blob` collectors,
+which reach those streams on a v1.0-stable source instead of the `/beta`-only
+`signInEventTypes` filter the polled versions need). The remaining categories below are the
+roadmap for the same path.
+
+One honest caveat: Azure's diagnostic-settings pipeline is **at-least-once**, so roughly
+2.3% of blob-sourced records arrive twice and graph2otel currently passes those duplicates
+through (the polled path dedupes; see [#138](https://github.com/rknightion/graph2otel/issues/138)).
+Every record carries its identifying attribute, so a backend-side dedupe works today.
 
 **Log categories with no Graph endpoint (confirmed permanent):**
 
@@ -134,6 +144,12 @@ remaining categories below are the roadmap for the same path.
   `graph2otel.graphclient.http_5xx` self-observability counters cover only **graph2otel's
   own** outbound Graph responses — a narrow substitute for "is our poller hitting Graph
   friction," never the tenant-wide 403-burst signal across every app.
+- **`MicrosoftServicePrincipalSignInLogs`** ✅ **served via blob ingest** — Microsoft's own
+  first-party service-to-service auth against your tenant. Offered "as an opt-in through
+  diagnostic settings only"; there is no API. Live-verified a genuinely different dataset
+  from the polled `entra.signins.service_principal`, which only ever returns *your own*
+  service principals: every sampled record here was owned by Microsoft's tenant, every
+  record there by the local tenant, and **zero** sign-in ids overlapped.
 - **`EnrichedOffice365AuditLogs`** — a Sentinel / Log-Analytics-side ML **enrichment**
   table (fields layered onto raw M365 activity by Sentinel itself). It has no source API
   in Graph *or* the O365 Management Activity API — it is synthesized downstream and does
