@@ -5,10 +5,39 @@
 //
 // Over-privileged consent -- a delegated grant of a high-privilege scope, or
 // an application permission granting a sensitive Graph/Exchange app role -- is
-// a key attack path in Entra tenants. This collector never emits a per-grant
-// or per-service-principal series (oauth2PermissionGrants alone can run into
-// the tens of thousands in a large tenant); it only emits the bounded
-// privilege x consent-type classification counts.
+// a key attack path in Entra tenants ("illicit consent grant"). Knowing "N
+// high-privilege grants exist" is not enough to act on; an analyst needs to
+// know WHICH client, principal, or app role holds one.
+//
+// # A twin scoped to the high-privilege slice only, never every grant
+//
+// This collector emits TWO things per cycle, from the SAME fetch:
+//
+//   - a bounded GAUGE counted by consent_type x privilege -- the aggregate;
+//   - one LOG record (entra.consent_grant) per grant/assignment ALREADY
+//     classified "privileged" -- the identifying detail the gauge cannot
+//     carry: client/principal/resource ids, the scope or app role granted,
+//     and (application side only) the display names Graph already returns
+//     inline on appRoleAssignment, at no extra call.
+//
+// Deliberately NOT twinned: standard-privilege grants. oauth2PermissionGrants
+// alone can run into the tens of thousands in a large tenant -- exactly the
+// volume problem that ruled out a per-grant metric SERIES in the first place.
+// Twinning every grant into logs would reimport that same problem into Loki
+// instead of OTEL metrics. The high-privilege slice is the opposite shape:
+// low volume (a handful of grants against a handful of allowlisted
+// scopes/roles) and high signal (each one is worth an analyst's attention) --
+// exactly what a log twin should carry. See entra/risk (#110) for the general
+// rule this collector follows: per-entity identity is never a metric label,
+// but "not a metric label" means "log twin", not "dropped".
+//
+// This is a STATE feed, not an event stream: a still-live high-privilege
+// grant is re-emitted every cycle for as long as it exists (Timestamp is left
+// zero, i.e. poll time), which is what makes "which high-privilege grants
+// existed as of last Tuesday" answerable from the logs pipeline alone.
+//
+// Per-grant/per-principal identity never becomes a metric label regardless of
+// privilege -- see SECURITY.md's cardinality boundary.
 package consent
 
 import (
@@ -33,6 +62,11 @@ const collectorName = "entra.consent"
 // metricName is the single gauge this collector emits, sliced by the bounded
 // (consent_type, privilege) classification.
 const metricName = "entra.consent.grants.total"
+
+// eventConsentGrant is the log EventName for the high-privilege consent-grant
+// twin -- one record per grant/assignment already classified "privileged".
+// See the package doc's "twin scoped to the high-privilege slice" section.
+const eventConsentGrant = "entra.consent_grant"
 
 // defaultBaseURL is the Graph v1.0 root.
 const defaultBaseURL = "https://graph.microsoft.com/v1.0"
@@ -110,9 +144,20 @@ var resourceApps = []resourceApp{
 }
 
 // oauth2Grant is the subset of the oauth2PermissionGrant resource this
-// collector needs.
+// collector needs: Scope classifies to a (privilege) count; the rest
+// (ID/ClientID/ConsentType/PrincipalID/ResourceID) are raw identifying fields
+// that go ONLY to the high-privilege log twin, never to a metric attribute --
+// see delegatedGrantLogTwin. Field names verified against
+// learn.microsoft.com/graph/api/resources/oauth2permissiongrant. PrincipalID
+// is empty whenever ConsentType is "AllPrincipals" (admin-consent-for-all
+// grants have no single principal) -- setStr omits it in that case.
 type oauth2Grant struct {
-	Scope string `json:"scope"`
+	ID          string `json:"id"`
+	ClientID    string `json:"clientId"`
+	ConsentType string `json:"consentType"`
+	PrincipalID string `json:"principalId"`
+	ResourceID  string `json:"resourceId"`
+	Scope       string `json:"scope"`
 }
 
 // servicePrincipalLookup is the subset of a servicePrincipal resource needed
@@ -130,10 +175,20 @@ type appRole struct {
 }
 
 // appRoleAssignment is the subset of the appRoleAssignment resource this
-// collector needs -- just enough to classify, never a per-principal
-// identifier.
+// collector needs: AppRoleID classifies to a (privilege) count; the rest are
+// raw identifying fields that go ONLY to the high-privilege log twin, never
+// to a metric attribute -- see appRoleAssignmentLogTwin. Field names verified
+// against learn.microsoft.com/graph/api/resources/approleassignment.
+// PrincipalDisplayName/ResourceDisplayName are returned inline by Graph on
+// this resource -- twinning them is free, no extra lookup call needed.
 type appRoleAssignment struct {
-	AppRoleID string `json:"appRoleId"`
+	ID                   string `json:"id"`
+	AppRoleID            string `json:"appRoleId"`
+	PrincipalID          string `json:"principalId"`
+	PrincipalDisplayName string `json:"principalDisplayName"`
+	PrincipalType        string `json:"principalType"`
+	ResourceID           string `json:"resourceId"`
+	ResourceDisplayName  string `json:"resourceDisplayName"`
 }
 
 // Collector polls the OAuth consent surface: delegated permission grants and
@@ -186,13 +241,13 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	}
 	var errs []error
 
-	if err := c.collectDelegatedGrants(ctx, counts[consentTypeDelegated]); err != nil {
+	if err := c.collectDelegatedGrants(ctx, e, counts[consentTypeDelegated]); err != nil {
 		c.logger.Warn("oauth2PermissionGrants collection failed", "collector", collectorName, "error", err)
 		errs = append(errs, fmt.Errorf("oauth2PermissionGrants: %w", err))
 	}
 
 	for _, ra := range resourceApps {
-		if err := c.collectResourceAppRoleAssignments(ctx, ra, counts[consentTypeApplication]); err != nil {
+		if err := c.collectResourceAppRoleAssignments(ctx, e, ra, counts[consentTypeApplication]); err != nil {
 			c.logger.Warn("app role assignment collection failed", "collector", collectorName, "resource", ra.label, "error", err)
 			errs = append(errs, fmt.Errorf("%s: %w", ra.label, err))
 		}
@@ -225,7 +280,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // directorycounts collector, classifying by scope content requires reading
 // every grant's `scope` field, so there is no cheaper aggregate-only Graph
 // query available today.
-func (c *Collector) collectDelegatedGrants(ctx context.Context, tally map[string]int64) error {
+func (c *Collector) collectDelegatedGrants(ctx context.Context, e telemetry.Emitter, tally map[string]int64) error {
 	grants, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/oauth2PermissionGrants", nil)
 	if err != nil {
 		return err
@@ -237,6 +292,7 @@ func (c *Collector) collectDelegatedGrants(ctx context.Context, tally map[string
 		}
 		if grantHasHighPrivilegeScope(g.Scope) {
 			tally[privilegeHigh]++
+			e.LogEvent(delegatedGrantLogTwin(g))
 		} else {
 			tally[privilegeStandard]++
 		}
@@ -256,7 +312,7 @@ func (c *Collector) collectDelegatedGrants(ctx context.Context, tally map[string
 // the work to len(resourceApps) resolutions plus one paged list per resolved
 // resource, scaling with the number of apps granted a role on that resource
 // rather than with total tenant service principal count.
-func (c *Collector) collectResourceAppRoleAssignments(ctx context.Context, ra resourceApp, tally map[string]int64) error {
+func (c *Collector) collectResourceAppRoleAssignments(ctx context.Context, e telemetry.Emitter, ra resourceApp, tally map[string]int64) error {
 	sp, err := c.resolveResourceServicePrincipal(ctx, ra.appID)
 	if err != nil {
 		return err
@@ -279,8 +335,10 @@ func (c *Collector) collectResourceAppRoleAssignments(ctx context.Context, ra re
 		if err := json.Unmarshal(raw, &a); err != nil {
 			return fmt.Errorf("decode appRoleAssignment: %w", err)
 		}
-		if highPrivilegeAppRoles[roleNames[a.AppRoleID]] {
+		roleValue := roleNames[a.AppRoleID]
+		if highPrivilegeAppRoles[roleValue] {
 			tally[privilegeHigh]++
+			e.LogEvent(appRoleAssignmentLogTwin(a, ra, roleValue))
 		} else {
 			tally[privilegeStandard]++
 		}
@@ -323,6 +381,80 @@ func grantHasHighPrivilegeScope(scope string) bool {
 		}
 	}
 	return false
+}
+
+// delegatedGrantLogTwin renders a high-privilege delegated permission grant as
+// an OTLP log record. Only called for a grant already classified
+// "privileged" (see collectDelegatedGrants) -- a standard-scope grant never
+// reaches here, which is the whole point of scoping the twin (see the package
+// doc).
+//
+// Timestamp is left zero ("now", i.e. poll time): this is a STATE feed, the
+// same live grant is re-emitted every cycle for as long as it exists, and
+// oauth2PermissionGrant carries no timestamp of its own to stamp it with
+// instead -- see risk.logTwin for the fuller rationale behind this choice.
+func delegatedGrantLogTwin(g oauth2Grant) telemetry.Event {
+	attrs := telemetry.Attrs{}
+	setStr(attrs, "id", g.ID)
+	setStr(attrs, "consent_type", consentTypeDelegated)
+	setStr(attrs, "privilege", privilegeHigh)
+	setStr(attrs, "client_id", g.ClientID)
+	setStr(attrs, "principal_id", g.PrincipalID)
+	setStr(attrs, "resource_id", g.ResourceID)
+	setStr(attrs, "scope", g.Scope)
+
+	return telemetry.Event{
+		Name:     eventConsentGrant,
+		Body:     fmt.Sprintf("high-privilege delegated consent grant: client=%s scope=%q", g.ClientID, g.Scope),
+		Severity: telemetry.SeverityWarn,
+		Attrs:    attrs,
+	}
+}
+
+// appRoleAssignmentLogTwin renders a high-privilege application-permission
+// (app role) assignment as an OTLP log record. Only called for an assignment
+// already classified "privileged" (see collectResourceAppRoleAssignments).
+// ra is the bounded, hard-coded resourceApps entry being scanned (its label
+// is a fixed string, never a per-tenant value); roleValue is the appRoleId
+// already resolved against the resource service principal's appRoles during
+// classification -- reused here, not looked up again.
+func appRoleAssignmentLogTwin(a appRoleAssignment, ra resourceApp, roleValue string) telemetry.Event {
+	attrs := telemetry.Attrs{}
+	setStr(attrs, "id", a.ID)
+	setStr(attrs, "consent_type", consentTypeApplication)
+	setStr(attrs, "privilege", privilegeHigh)
+	setStr(attrs, "resource_label", ra.label)
+	setStr(attrs, "resource_id", a.ResourceID)
+	setStr(attrs, "resource_display_name", a.ResourceDisplayName)
+	setStr(attrs, "app_role_id", a.AppRoleID)
+	setStr(attrs, "app_role", roleValue)
+	setStr(attrs, "principal_id", a.PrincipalID)
+	setStr(attrs, "principal_display_name", a.PrincipalDisplayName)
+	setStr(attrs, "principal_type", a.PrincipalType)
+
+	return telemetry.Event{
+		Name:     eventConsentGrant,
+		Body:     fmt.Sprintf("high-privilege application consent grant: resource=%s app_role=%s principal=%s", ra.label, roleValue, principalDisplayOrID(a)),
+		Severity: telemetry.SeverityWarn,
+		Attrs:    attrs,
+	}
+}
+
+// principalDisplayOrID picks the most human-readable identifier an app role
+// assignment carries for its principal, falling back to the raw principal id.
+func principalDisplayOrID(a appRoleAssignment) string {
+	if a.PrincipalDisplayName != "" {
+		return a.PrincipalDisplayName
+	}
+	return a.PrincipalID
+}
+
+// setStr adds key=val only when val is non-empty, so an absent field emits no
+// attribute rather than an empty one.
+func setStr(attrs telemetry.Attrs, key, val string) {
+	if val != "" {
+		attrs[key] = val
+	}
 }
 
 func init() {

@@ -49,8 +49,18 @@ const directoryRolesBody = `{
 const gaMembersURL = base + "/directoryRoles/role-ga/members"
 const hdMembersURL = base + "/directoryRoles/role-hd/members"
 
-const gaMembersBody = `{"value": [{"id": "u1"}, {"id": "u2"}]}`
-const hdMembersBody = `{"value": [{"id": "u3"}]}`
+// Directory-role members are a polymorphic directoryObject collection, so the
+// shape differs per member kind (@odata.type discriminates). u2 is deliberately
+// sparse — it exercises the omit-absent-attrs path — and sp1 is a service
+// principal, which carries appId instead of a UPN.
+const gaMembersBody = `{"value": [
+	{"@odata.type": "#microsoft.graph.user", "id": "u1", "displayName": "Alice Example", "userPrincipalName": "alice@example.com"},
+	{"id": "u2"},
+	{"@odata.type": "#microsoft.graph.servicePrincipal", "id": "sp1", "displayName": "Automation App", "appId": "11111111-2222-3333-4444-555555555555"}
+]}`
+const hdMembersBody = `{"value": [
+	{"@odata.type": "#microsoft.graph.user", "id": "u3", "displayName": "Carol Example", "userPrincipalName": "carol@example.com"}
+]}`
 
 const activeInstancesURL = base + "/roleManagement/directory/roleAssignmentScheduleInstances?$expand=roleDefinition"
 const eligibleInstancesURL = base + "/roleManagement/directory/roleEligibilityScheduleInstances?$expand=roleDefinition"
@@ -96,7 +106,7 @@ func TestCollectEmitsStandingMemberCountsOnFreeTier(t *testing.T) {
 	for _, p := range rec.MetricPoints(membersMetricName) {
 		got[p.Attrs["role_name"]] = p.Value
 	}
-	want := map[string]float64{"Global Administrator": 2, "Helpdesk Administrator": 1}
+	want := map[string]float64{"Global Administrator": 3, "Helpdesk Administrator": 1}
 	if len(got) != len(want) {
 		t.Fatalf("got %d series, want %d: %v", len(got), len(want), got)
 	}
@@ -195,6 +205,166 @@ func TestCollectNeverEmitsPerPrincipalSeries(t *testing.T) {
 					t.Errorf("%s point has unexpected attribute %q (must be bounded role/assignment-type only): %v", name, k, p.Attrs)
 				}
 			}
+		}
+	}
+}
+
+// logsNamed returns the recorded log records carrying the given EventName.
+func logsNamed(recs []telemetrytest.LogRecord, name string) []telemetrytest.LogRecord {
+	var out []telemetrytest.LogRecord
+	for _, r := range recs {
+		if r.EventName == name {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// byPrincipal indexes role-member twins by their principal_id attribute.
+func byPrincipal(recs []telemetrytest.LogRecord) map[string]telemetrytest.LogRecord {
+	out := map[string]telemetrytest.LogRecord{}
+	for _, r := range recs {
+		out[r.Attrs["principal_id"]] = r
+	}
+	return out
+}
+
+// TestStandingMembersEmitLogTwin is the point of #114's top finding: the
+// collector already pages every member object, so the identity of every Global
+// Admin is in memory — it was being discarded and only len() kept. "Who is in
+// Global Admin" must be answerable from the logs.
+func TestStandingMembersEmitLogTwin(t *testing.T) {
+	rec := telemetrytest.New()
+	if err := New(&fakeGraph{bodies: allBodies()}, license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	twins := logsNamed(rec.LogRecords(), eventRoleMember)
+	standing := []telemetrytest.LogRecord{}
+	for _, r := range twins {
+		if r.Attrs["assignment_type"] == "standing" {
+			standing = append(standing, r)
+		}
+	}
+	if len(standing) != 4 {
+		t.Fatalf("got %d standing role-member twins, want 4 (3 GA + 1 helpdesk): %+v", len(standing), standing)
+	}
+
+	got := byPrincipal(standing)
+
+	// A user member carries its UPN; the role name matches the gauge's dimension.
+	alice, ok := got["u1"]
+	if !ok {
+		t.Fatalf("no twin for member u1; got %v", got)
+	}
+	want := map[string]string{
+		"principal_id":                  "u1",
+		"principal_type":                "user",
+		"principal_display_name":        "Alice Example",
+		"principal_user_principal_name": "alice@example.com",
+		"role_name":                     "Global Administrator",
+		"role_id":                       "role-ga",
+		"assignment_type":               "standing",
+	}
+	for k, v := range want {
+		if alice.Attrs[k] != v {
+			t.Errorf("standing twin attr %q = %q, want %q", k, alice.Attrs[k], v)
+		}
+	}
+
+	// A service-principal member carries appId instead of a UPN.
+	sp, ok := got["sp1"]
+	if !ok {
+		t.Fatalf("no twin for member sp1; got %v", got)
+	}
+	if sp.Attrs["principal_type"] != "service_principal" {
+		t.Errorf("SP twin principal_type = %q, want service_principal", sp.Attrs["principal_type"])
+	}
+	if sp.Attrs["principal_app_id"] != "11111111-2222-3333-4444-555555555555" {
+		t.Errorf("SP twin principal_app_id = %q, want the appId", sp.Attrs["principal_app_id"])
+	}
+	if _, ok := sp.Attrs["principal_user_principal_name"]; ok {
+		t.Error("SP twin must not carry a user_principal_name attr")
+	}
+
+	// A sparse member omits absent attrs rather than emitting empty strings.
+	sparse, ok := got["u2"]
+	if !ok {
+		t.Fatalf("no twin for sparse member u2; got %v", got)
+	}
+	for _, k := range []string{"principal_display_name", "principal_user_principal_name", "principal_app_id"} {
+		if v, ok := sparse.Attrs[k]; ok {
+			t.Errorf("sparse member emitted absent attr %q = %q, want it omitted", k, v)
+		}
+	}
+	if sparse.Attrs["principal_type"] != "unknown" {
+		t.Errorf("member with no @odata.type = %q, want unknown", sparse.Attrs["principal_type"])
+	}
+}
+
+// TestPIMAssignmentsEmitLogTwin covers the other half: scheduleInstance never
+// decoded principalId even though the response carries it, so "who is ELIGIBLE
+// for Global Admin" was equally unanswerable.
+func TestPIMAssignmentsEmitLogTwin(t *testing.T) {
+	rec := telemetrytest.New()
+	if err := New(&fakeGraph{bodies: allBodies()}, capsWithP2(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	twins := logsNamed(rec.LogRecords(), eventRoleMember)
+	pim := []telemetrytest.LogRecord{}
+	for _, r := range twins {
+		if t := r.Attrs["assignment_type"]; t == "active" || t == "eligible" {
+			pim = append(pim, r)
+		}
+	}
+	if len(pim) != 4 {
+		t.Fatalf("got %d PIM twins, want 4 (3 active + 1 eligible): %+v", len(pim), pim)
+	}
+
+	got := byPrincipal(pim)
+
+	// p1 is a permanent active assignment (endDateTime null) — the standout risk
+	// the gauge already counts separately.
+	p1, ok := got["p1"]
+	if !ok {
+		t.Fatalf("no twin for PIM principal p1; got %v", got)
+	}
+	if p1.Attrs["assignment_type"] != "active" {
+		t.Errorf("p1 assignment_type = %q, want active", p1.Attrs["assignment_type"])
+	}
+	if p1.Attrs["permanent"] != "true" {
+		t.Errorf("p1 permanent = %q, want \"true\" (endDateTime is null)", p1.Attrs["permanent"])
+	}
+	if _, ok := p1.Attrs["end_date_time"]; ok {
+		t.Error("a permanent assignment must not carry an end_date_time attr")
+	}
+
+	// p2 is time-bound.
+	p2 := got["p2"]
+	if p2.Attrs["permanent"] != "false" {
+		t.Errorf("p2 permanent = %q, want \"false\"", p2.Attrs["permanent"])
+	}
+	if p2.Attrs["end_date_time"] != "2026-08-01T00:00:00Z" {
+		t.Errorf("p2 end_date_time = %q, want the fixture value", p2.Attrs["end_date_time"])
+	}
+
+	// p4 is eligible, not active.
+	if got["p4"].Attrs["assignment_type"] != "eligible" {
+		t.Errorf("p4 assignment_type = %q, want eligible", got["p4"].Attrs["assignment_type"])
+	}
+}
+
+// TestFreeTierEmitsNoPIMTwin asserts the license gate short-circuits the twin
+// too — a Free tenant emits standing twins but no PIM ones.
+func TestFreeTierEmitsNoPIMTwin(t *testing.T) {
+	rec := telemetrytest.New()
+	if err := New(&fakeGraph{bodies: allBodies()}, license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	for _, r := range logsNamed(rec.LogRecords(), eventRoleMember) {
+		if at := r.Attrs["assignment_type"]; at != "standing" {
+			t.Errorf("Free tenant emitted a %q twin (principal %q); PIM must be gated", at, r.Attrs["principal_id"])
 		}
 	}
 }

@@ -1,11 +1,36 @@
-// Package credentialexpiry is the flagship Entra compliance-metrics
-// collector: application (app-registration) and service-principal credential
-// (secret + certificate) expiry, aggregated into a fixed set of bucket
-// counters. It pages `/applications` and `/servicePrincipals` selecting only
-// keyCredentials and passwordCredentials, buckets every credential's
-// endDateTime relative to "now", and emits ONLY the bounded aggregate —
-// never a per-credential or per-app series. See the cardinality note below;
-// this is the load-bearing decision for this collector.
+// Package credentialexpiry is the flagship Entra compliance collector:
+// application (app-registration) and service-principal credential (secret +
+// certificate) expiry. It pages `/applications` and `/servicePrincipals`
+// selecting keyCredentials, passwordCredentials, and the owning entity's
+// id/appId/displayName, then emits BOTH sides of the cardinality boundary
+// from that single fetch:
+//
+//   - a bounded GAUGE counted by owner_type x credential_type x expiry_bucket
+//     (fixed cardinality regardless of tenant size, never a per-app or
+//     per-credential series);
+//   - one LOG record per credential (entra.app_credential) carrying the
+//     per-entity detail the gauge cannot: which app/service principal, which
+//     key, and its dates.
+//
+// The log twin is not optional garnish — it is the other half of the rule.
+// This collector previously decoded only endDateTime and discarded appId,
+// displayName, and every key identifier, so it could answer "N credentials
+// expire in 7 days" but never "WHICH app" — unactionable for both outage
+// prevention and incident rotation-priority. That was a bug (#114), not a
+// privacy control: graph2otel exports this detail by design, and the logs
+// pipeline is where it belongs. See SECURITY.md.
+//
+// This is a STATE feed, not an event stream: a credential is re-emitted every
+// cycle for as long as it exists, which is what makes "which credentials were
+// live on date X" answerable. Volume scales with the credential population
+// (bounded by tenant size), not with the poll interval.
+//
+// Deliberately NOT decoded, ever: keyCredential.key (the certificate's raw
+// public key material) and passwordCredential.secretText/hint (secret-bearing
+// or secret-derived — secretText is write-once and never returned by a GET
+// anyway, and hint leaks three characters of the actual password). Only
+// customKeyIdentifier (a thumbprint-like public identifier, not secret
+// material) is decoded for certificates.
 package credentialexpiry
 
 import (
@@ -27,6 +52,11 @@ const collectorName = "entra.credential_expiry"
 
 // metricName is the single gauge this collector emits.
 const metricName = "entra.credentials.expiring.total"
+
+// eventAppCredential is the log twin's EventName: one record per credential
+// per cycle, carrying the per-entity detail the gauge cannot. See the
+// package doc.
+const eventAppCredential = "entra.app_credential" //nolint:gosec // G101 false positive: a log event name, not a credential
 
 // defaultBaseURL is the Graph v1.0 root.
 const defaultBaseURL = "https://graph.microsoft.com/v1.0"
@@ -68,24 +98,46 @@ var ownerTypes = []ownerType{
 	{"service_principal", "/servicePrincipals"},
 }
 
-// selectQuery is deliberately minimal: only the two credential collections
-// are requested, and within them only endDateTime is ever read. No appId,
-// displayName, or keyId is fetched — this collector has no use for
-// per-entity identity, so it never asks Graph for it.
-const selectQuery = "$select=keyCredentials,passwordCredentials"
+// selectQuery requests exactly what the metric and its log twin need: the
+// two credential collections, plus the minimal identity (id/appId/
+// displayName) needed to say WHICH app/service principal a credential
+// belongs to. Nothing wider — see the CLAUDE.md gotcha on the ~150 req/min
+// throttle for $select=keyCredentials on a collection GET.
+const selectQuery = "$select=id,appId,displayName,keyCredentials,passwordCredentials"
 
 // credential is the subset of keyCredential/passwordCredential this collector
-// reads. Both resource types carry endDateTime with identical semantics, so
-// one struct field covers either.
+// reads (field names verified against learn.microsoft.com). Both resource
+// types share keyId/displayName/startDateTime/endDateTime with identical
+// semantics; CustomKeyIdentifier/Type/Usage are meaningful for keyCredential
+// (certificate) only and are simply left zero for passwordCredential
+// (secret) entries, since neither is emitted for that credential type (see
+// credentialLogTwin).
+//
+// keyCredential.key (raw public key blob) and passwordCredential.secretText/
+// hint are deliberately NOT fields here — see the package doc.
 type credential struct {
-	EndDateTime string `json:"endDateTime"`
+	KeyID         string `json:"keyId"`
+	DisplayName   string `json:"displayName"`
+	StartDateTime string `json:"startDateTime"`
+	EndDateTime   string `json:"endDateTime"`
+
+	// keyCredential (certificate) only.
+	CustomKeyIdentifier string `json:"customKeyIdentifier"`
+	Type                string `json:"type"`
+	Usage               string `json:"usage"`
 }
 
-// appCredentials is the subset of the application/servicePrincipal resource
-// this collector reads. Deliberately does not decode appId, displayName, id,
-// or any keyId/customKeyIdentifier — those never enter memory here, so they
-// can never leak into a metric label by accident.
-type appCredentials struct {
+// ownerEntity is the subset of the application/servicePrincipal resource this
+// collector reads: its two credential collections, plus enough identity
+// (id/appId/displayName) to say WHICH app or service principal a credential
+// belongs to in the log twin. The metric side never reads these identity
+// fields off of this struct — only Collect's owner_type loop variable
+// (application/service_principal) reaches the gauge.
+type ownerEntity struct {
+	ID          string `json:"id"`
+	AppID       string `json:"appId"`
+	DisplayName string `json:"displayName"`
+
 	KeyCredentials      []credential `json:"keyCredentials"`
 	PasswordCredentials []credential `json:"passwordCredentials"`
 }
@@ -131,17 +183,21 @@ func (c *Collector) DefaultInterval() time.Duration { return 15 * time.Minute }
 // docs; Directory.Read.All is a higher-privileged alternative, not required).
 func (c *Collector) RequiredPermissions() []string { return []string{"Application.Read.All"} }
 
-// Collect pages each owner type's credentials and buckets every credential's
-// endDateTime relative to now. A fetch failure on one owner type is logged
-// and that owner type's buckets are omitted from the snapshot entirely
-// (rather than reported as a false zero), but the other owner type still
-// emits; the aggregated error is returned so the partial failure is visible
-// in scrape self-obs without hiding the data that did succeed.
+// Collect pages each owner type's credentials, buckets every credential's
+// endDateTime relative to now, and emits BOTH sides of the cardinality
+// boundary from that single fetch: the bounded GaugeSnapshot, and one log
+// record per credential carrying the per-entity detail the gauge cannot. A
+// fetch failure on one owner type is logged and that owner type's buckets
+// (and log twins) are omitted from the snapshot entirely (rather than
+// reported as a false zero), but the other owner type still emits; the
+// aggregated error is returned so the partial failure is visible in scrape
+// self-obs without hiding the data that did succeed.
 //
-// Cardinality (NON-NEGOTIABLE): only the bucket counters are emitted. No
-// appId, displayName, or keyId is ever read from the response, let alone
-// attached to a metric point — per-credential/per-app detail belongs in the
-// logs pipeline (M3/M5), never in this gauge.
+// Cardinality (NON-NEGOTIABLE): only owner_type/credential_type/expiry_bucket
+// ever reach the gauge's attributes. appId/displayName/id/keyId ARE decoded
+// (see ownerEntity/credential above) but flow ONLY into the log twin
+// (credentialLogTwin) — never into a telemetry.GaugePoint. See the package
+// doc and TestCollectMetricsNeverCarryPerEntityAttrs.
 func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	now := c.now()
 	counts := map[bucketKey]int64{}
@@ -166,16 +222,16 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		}
 
 		for _, raw := range items {
-			var ac appCredentials
-			if err := json.Unmarshal(raw, &ac); err != nil {
+			var ent ownerEntity
+			if err := json.Unmarshal(raw, &ent); err != nil {
 				c.logger.Warn("credential entry decode failed", "collector", collectorName, "owner_type", ot.attr, "error", err)
 				continue
 			}
-			for _, cred := range ac.KeyCredentials {
-				c.bucketCredential(counts, ot.attr, "certificate", cred.EndDateTime, now)
+			for _, cred := range ent.KeyCredentials {
+				c.processCredential(e, counts, ot, "certificate", ent, cred, now)
 			}
-			for _, cred := range ac.PasswordCredentials {
-				c.bucketCredential(counts, ot.attr, "secret", cred.EndDateTime, now)
+			for _, cred := range ent.PasswordCredentials {
+				c.processCredential(e, counts, ot, "secret", ent, cred, now)
 			}
 		}
 	}
@@ -197,23 +253,38 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	return errors.Join(errs...)
 }
 
-// bucketCredential parses endDateTime and increments the matching bucket. An
-// unparsable or empty endDateTime is logged and skipped — it is a single
-// malformed data point, not a Graph API failure, so it does not surface as a
-// Collect error.
-func (c *Collector) bucketCredential(counts map[bucketKey]int64, owner, credType, endDateTime string, now time.Time) {
-	end, err := time.Parse(time.RFC3339, endDateTime)
+// processCredential buckets one credential's endDateTime and emits its log
+// twin. An unparsable or empty endDateTime is logged and the credential is
+// skipped entirely — from both the bucket AND the log twin, since
+// expiry_bucket (a field on every log record) cannot be computed for it, and
+// this is a single malformed data point, not a Graph API failure, so it does
+// not surface as a Collect error.
+func (c *Collector) processCredential(e telemetry.Emitter, counts map[bucketKey]int64, owner ownerType, credType string, ent ownerEntity, cred credential, now time.Time) {
+	end, err := parseEndDateTime(cred.EndDateTime)
 	if err != nil {
-		var perr error
-		end, perr = time.Parse(time.RFC3339Nano, endDateTime)
-		if perr != nil {
-			c.logger.Warn("credential endDateTime unparsable, skipping",
-				"collector", collectorName, "owner_type", owner, "credential_type", credType, "error", err)
-			return
-		}
+		c.logger.Warn("credential endDateTime unparsable, skipping",
+			"collector", collectorName, "owner_type", owner.attr, "credential_type", credType, "error", err)
+		return
 	}
 	bucket := expiryBucketFor(now, end)
-	counts[bucketKey{owner, credType, bucket}]++
+	counts[bucketKey{owner.attr, credType, bucket}]++
+	e.LogEvent(credentialLogTwin(owner, credType, ent, cred, bucket))
+}
+
+// parseEndDateTime accepts either RFC3339 or RFC3339Nano, matching the two
+// forms Graph is observed to return for DateTimeOffset fields. On failure it
+// returns the RFC3339 parse error (the more informative of the two for a
+// malformed value).
+func parseEndDateTime(s string) (time.Time, error) {
+	end, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		var perr error
+		end, perr = time.Parse(time.RFC3339Nano, s)
+		if perr != nil {
+			return time.Time{}, err
+		}
+	}
+	return end, nil
 }
 
 // expiryBucketFor maps an endDateTime to one of the fixed expiryBuckets,
@@ -231,6 +302,86 @@ func expiryBucketFor(now, end time.Time) string {
 		return "lt_90d"
 	default:
 		return "gt_90d"
+	}
+}
+
+// credentialLogTwin renders one credential as an OTLP log record — the
+// per-entity detail (which app, which key, which dates) the bounded gauge
+// cannot carry. See the package doc.
+//
+// Certificate-only fields (custom_key_identifier/key_type/key_usage) are
+// attached only when credType is "certificate": they come from keyCredential,
+// which passwordCredential does not carry, so attaching them for a secret
+// would either be a stale zero value or (worse) accidentally wired to the
+// wrong field in a future edit. setStr's omit-if-empty behavior would mask
+// that mistake, so the certificate-only fields are gated explicitly instead.
+func credentialLogTwin(owner ownerType, credType string, ent ownerEntity, cred credential, bucket string) telemetry.Event {
+	attrs := telemetry.Attrs{}
+	setStr(attrs, "owner_type", owner.attr)
+	setStr(attrs, "app_id", ent.AppID)
+	setStr(attrs, "app_object_id", ent.ID)
+	setStr(attrs, "display_name", ent.DisplayName)
+	setStr(attrs, "credential_type", credType)
+	setStr(attrs, "key_id", cred.KeyID)
+	setStr(attrs, "credential_display_name", cred.DisplayName)
+	setStr(attrs, "start_date_time", cred.StartDateTime)
+	setStr(attrs, "end_date_time", cred.EndDateTime)
+	setStr(attrs, "expiry_bucket", bucket)
+	if credType == "certificate" {
+		setStr(attrs, "custom_key_identifier", cred.CustomKeyIdentifier)
+		setStr(attrs, "key_type", cred.Type)
+		setStr(attrs, "key_usage", cred.Usage)
+	}
+
+	// Only "expired" and "lt_7d" escalate to WARN: those are the two buckets
+	// this collector's own boundaries already treat as actionable-now (a
+	// dead credential, or one about to become one within a week). lt_30d/
+	// lt_90d/gt_90d are routine background state on any real tenant, and
+	// warning on them would make the severity dimension useless for
+	// filtering — the same reasoning the risk collector applies to
+	// riskLevel, applied here to expiry_bucket since this resource has no
+	// risk-level field of its own.
+	sev := telemetry.SeverityInfo
+	if bucket == "expired" || bucket == "lt_7d" {
+		sev = telemetry.SeverityWarn
+	}
+
+	return telemetry.Event{
+		Name: eventAppCredential,
+		Body: fmt.Sprintf("%s credential %s for %s %s: expiry_bucket=%s end_date_time=%s",
+			credType, displayOfCredential(cred), owner.attr, displayOfEntity(ent), bucket, cred.EndDateTime),
+		Severity: sev,
+		Attrs:    attrs,
+	}
+}
+
+// displayOfEntity picks the most human-readable identifier the owning
+// app/service principal carries, falling back through to its object id.
+func displayOfEntity(ent ownerEntity) string {
+	for _, s := range []string{ent.DisplayName, ent.AppID, ent.ID} {
+		if s != "" {
+			return s
+		}
+	}
+	return "unknown"
+}
+
+// displayOfCredential picks the most human-readable identifier a credential
+// carries, falling back to its keyId.
+func displayOfCredential(cred credential) string {
+	for _, s := range []string{cred.DisplayName, cred.KeyID} {
+		if s != "" {
+			return s
+		}
+	}
+	return "unknown"
+}
+
+// setStr adds key=val only when val is non-empty, so an absent field emits no
+// attribute rather than an empty one.
+func setStr(attrs telemetry.Attrs, key, val string) {
+	if val != "" {
+		attrs[key] = val
 	}
 }
 

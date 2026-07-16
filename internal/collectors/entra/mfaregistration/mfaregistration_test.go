@@ -3,10 +3,12 @@ package mfaregistration
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -36,16 +38,18 @@ func (f *fakeGraph) RawGetWithHeaders(_ context.Context, url string, headers map
 var _ collectors.GraphClient = (*fakeGraph)(nil)
 
 // sampleUsers is five userRegistrationDetails records exercising every
-// feature flag combination and a handful of registered methods. Only the
-// fields this collector actually decodes are populated; userPrincipalName /
-// userDisplayName / id are per-entity identifiers this collector must never
-// read into a metric label, so fixtures below include none.
+// feature flag combination and a handful of registered methods, PLUS the
+// per-entity identity fields (id/userPrincipalName/userDisplayName/
+// lastUpdatedDateTime) that only the log twin reads — see
+// TestCollectNoPerEntitySeries for the assertion that these never reach a
+// metric attribute despite being decoded here. u4 (dave-admin) is the
+// admin-without-MFA-capability case the log twin's severity mapping escalates.
 const sampleUsers = `
-{"isAdmin":true,"isMfaRegistered":true,"isMfaCapable":true,"isSsprRegistered":false,"isSsprEnabled":true,"isSsprCapable":false,"isPasswordlessCapable":false,"methodsRegistered":["microsoftAuthenticatorPush","sms"]},
-{"isAdmin":false,"isMfaRegistered":true,"isMfaCapable":true,"isSsprRegistered":true,"isSsprEnabled":true,"isSsprCapable":true,"isPasswordlessCapable":true,"methodsRegistered":["fido2SecurityKey"]},
-{"isAdmin":false,"isMfaRegistered":false,"isMfaCapable":false,"isSsprRegistered":false,"isSsprEnabled":false,"isSsprCapable":false,"isPasswordlessCapable":false,"methodsRegistered":[]},
-{"isAdmin":true,"isMfaRegistered":false,"isMfaCapable":false,"isSsprRegistered":true,"isSsprEnabled":true,"isSsprCapable":true,"isPasswordlessCapable":false,"methodsRegistered":["sms"]},
-{"isAdmin":false,"isMfaRegistered":true,"isMfaCapable":false,"isSsprRegistered":false,"isSsprEnabled":true,"isSsprCapable":false,"isPasswordlessCapable":false,"methodsRegistered":["microsoftAuthenticatorPush"]}
+{"id":"u1","userPrincipalName":"alice@example.com","userDisplayName":"Alice Example","lastUpdatedDateTime":"2026-07-15T10:00:00Z","isAdmin":true,"isMfaRegistered":true,"isMfaCapable":true,"isSsprRegistered":false,"isSsprEnabled":true,"isSsprCapable":false,"isPasswordlessCapable":false,"methodsRegistered":["microsoftAuthenticatorPush","sms"]},
+{"id":"u2","userPrincipalName":"bob@example.com","userDisplayName":"Bob Example","lastUpdatedDateTime":"2026-07-15T10:05:00Z","isAdmin":false,"isMfaRegistered":true,"isMfaCapable":true,"isSsprRegistered":true,"isSsprEnabled":true,"isSsprCapable":true,"isPasswordlessCapable":true,"methodsRegistered":["fido2SecurityKey"]},
+{"id":"u3","userPrincipalName":"carol@example.com","userDisplayName":"Carol Example","lastUpdatedDateTime":"2026-07-15T10:10:00Z","isAdmin":false,"isMfaRegistered":false,"isMfaCapable":false,"isSsprRegistered":false,"isSsprEnabled":false,"isSsprCapable":false,"isPasswordlessCapable":false,"methodsRegistered":[]},
+{"id":"u4","userPrincipalName":"dave-admin@example.com","userDisplayName":"Dave Admin","lastUpdatedDateTime":"2026-07-15T10:15:00Z","isAdmin":true,"isMfaRegistered":false,"isMfaCapable":false,"isSsprRegistered":true,"isSsprEnabled":true,"isSsprCapable":true,"isPasswordlessCapable":false,"methodsRegistered":["sms"]},
+{"id":"u5","userPrincipalName":"erin@example.com","userDisplayName":"Erin Example","lastUpdatedDateTime":"2026-07-15T10:20:00Z","isAdmin":false,"isMfaRegistered":true,"isMfaCapable":false,"isSsprRegistered":false,"isSsprEnabled":true,"isSsprCapable":false,"isPasswordlessCapable":false,"methodsRegistered":["microsoftAuthenticatorPush"]}
 `
 
 func page(usersJSON string) string {
@@ -216,10 +220,146 @@ func TestRequiredCapabilityIsEntraP1(t *testing.T) {
 	}
 }
 
+// logsNamed returns the recorded log records carrying the given EventName.
+func logsNamed(recs []telemetrytest.LogRecord, name string) []telemetrytest.LogRecord {
+	var out []telemetrytest.LogRecord
+	for _, r := range recs {
+		if r.EventName == name {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// TestSelectRequestsIdentityFields pins the $select widening: without id,
+// userPrincipalName, userDisplayName, and lastUpdatedDateTime on the wire,
+// the log twin below would have nothing per-entity to emit. Asserting on the
+// request URL itself means a future trim of $select cannot silently break
+// the twin without a test failing here.
+func TestSelectRequestsIdentityFields(t *testing.T) {
+	for _, want := range []string{"id", "userPrincipalName", "userDisplayName", "lastUpdatedDateTime"} {
+		if !strings.Contains(requestURL, want) {
+			t.Errorf("requestURL %q missing $select field %q", requestURL, want)
+		}
+	}
+}
+
+// TestCollectEmitsUserRegistrationLogTwinForEveryUser is the maintainer
+// decision from #114: EVERY user row is twinned, not just posture failures,
+// because graph2otel's log pipeline is the surviving SIEM record and
+// filtering to "problem rows only" would break "did this user have MFA last
+// month" correlation.
+func TestCollectEmitsUserRegistrationLogTwinForEveryUser(t *testing.T) {
+	g := &fakeGraph{bodies: fullFixture()}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	got := logsNamed(rec.LogRecords(), eventUserRegistration)
+	if len(got) != 5 {
+		t.Fatalf("emitted %d %s logs, want 5 (one per user, including posture successes)", len(got), eventUserRegistration)
+	}
+}
+
+// TestCollectEmitsUserRegistrationLogTwinAttrs checks the per-user detail
+// (u1/alice) that the bounded metrics can never carry: identity, timestamp,
+// and every posture flag as a string.
+func TestCollectEmitsUserRegistrationLogTwinAttrs(t *testing.T) {
+	g := &fakeGraph{bodies: fullFixture()}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	got := logsNamed(rec.LogRecords(), eventUserRegistration)
+	var alice *telemetrytest.LogRecord
+	for i := range got {
+		if got[i].Attrs["id"] == "u1" {
+			alice = &got[i]
+		}
+	}
+	if alice == nil {
+		t.Fatalf("no log for user u1; got %v", got)
+	}
+
+	want := map[string]string{
+		"id":                   "u1",
+		"user_principal_name":  "alice@example.com",
+		"user_display_name":    "Alice Example",
+		"last_updated":         "2026-07-15T10:00:00Z",
+		"is_admin":             "true",
+		"mfa_registered":       "true",
+		"mfa_capable":          "true",
+		"sspr_registered":      "false",
+		"sspr_enabled":         "true",
+		"sspr_capable":         "false",
+		"passwordless_capable": "false",
+		"methods_registered":   "microsoftAuthenticatorPush,sms",
+	}
+	for k, v := range want {
+		if alice.Attrs[k] != v {
+			t.Errorf("user registration log attr %q = %q, want %q", k, alice.Attrs[k], v)
+		}
+	}
+}
+
+// TestLogTwinOmitsAbsentAttrs drives logTwin directly with a zero-value
+// record: identity/timestamp/methods fields must be omitted when empty
+// (never emitted as ""), while the boolean posture flags always appear
+// (they're never legitimately "absent" — a decoded bool is always true or
+// false, so they're plain string assignments rather than setStr-omitted).
+func TestLogTwinOmitsAbsentAttrs(t *testing.T) {
+	ev := logTwin(userRegistrationDetail{})
+	for _, k := range []string{"id", "user_principal_name", "user_display_name", "last_updated", "methods_registered"} {
+		if v, ok := ev.Attrs[k]; ok {
+			t.Errorf("zero-value record emitted absent attr %q = %q, want it omitted", k, v)
+		}
+	}
+	for _, k := range []string{"is_admin", "mfa_registered", "mfa_capable", "sspr_registered", "sspr_enabled", "sspr_capable", "passwordless_capable"} {
+		if _, ok := ev.Attrs[k]; !ok {
+			t.Errorf("zero-value record missing boolean attr %q, want it present (as \"false\")", k)
+		}
+	}
+}
+
+// TestLogTwinSeverityAdminWithoutMfaCapableWarns pins the severity choice:
+// an admin who cannot currently complete a policy-compliant MFA challenge
+// (isMfaCapable false — the operationally meaningful "can't actually MFA"
+// signal, a superset of isMfaRegistered false since a registered-but-
+// policy-disallowed method registers true/false respectively) is the
+// standout risk and escalates to Warn. Every other combination, including a
+// non-admin with no MFA at all, stays Info — routine background posture on
+// any real tenant, and warning on it would make the severity dimension
+// useless for filtering (same reasoning as entra/risk's "only high
+// escalates").
+func TestLogTwinSeverityAdminWithoutMfaCapableWarns(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		isAdmin    bool
+		mfaCapable bool
+		want       telemetry.Severity
+	}{
+		{"admin not mfa-capable", true, false, telemetry.SeverityWarn},
+		{"admin mfa-capable", true, true, telemetry.SeverityInfo},
+		{"non-admin not mfa-capable", false, false, telemetry.SeverityInfo},
+		{"non-admin mfa-capable", false, true, telemetry.SeverityInfo},
+	} {
+		ev := logTwin(userRegistrationDetail{IsAdmin: tc.isAdmin, IsMfaCapable: tc.mfaCapable})
+		if ev.Severity != tc.want {
+			t.Errorf("%s: severity = %v, want %v", tc.name, ev.Severity, tc.want)
+		}
+	}
+}
+
 // TestNoPerEntitySeries guards the cardinality rule: none of this
 // collector's metrics may carry a per-user identifier (userPrincipalName,
-// userDisplayName, id) as an attribute, and the per-user detail endpoint
-// must never be paged into anything but a bounded aggregate.
+// userDisplayName, id) as an attribute, even though those fields ARE now
+// decoded (for the log twin above) — the per-user detail endpoint must
+// still never be paged into anything but a bounded aggregate on the metric
+// side.
 func TestNoPerEntitySeries(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -39,8 +40,8 @@ var _ collectors.GraphClient = (*fakeGraph)(nil)
 
 const (
 	base    = "https://graph.microsoft.com/v1.0"
-	appsURL = base + "/applications?$select=keyCredentials,passwordCredentials"
-	spURL   = base + "/servicePrincipals?$select=keyCredentials,passwordCredentials"
+	appsURL = base + "/applications?$select=id,appId,displayName,keyCredentials,passwordCredentials"
+	spURL   = base + "/servicePrincipals?$select=id,appId,displayName,keyCredentials,passwordCredentials"
 )
 
 // fixedNow anchors every bucket-boundary computation in the tests so they are
@@ -58,16 +59,30 @@ func withFixedClock(c *Collector) *Collector {
 	return c
 }
 
+// logsNamed returns the recorded log records carrying the given EventName.
+func logsNamed(recs []telemetrytest.LogRecord, name string) []telemetrytest.LogRecord {
+	var out []telemetrytest.LogRecord
+	for _, r := range recs {
+		if r.EventName == name {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 func TestCollectBucketsCredentialsByOwnerTypeCredentialTypeAndWindow(t *testing.T) {
 	apps := `{"value":[
-		{"keyCredentials":[{"endDateTime":"` + at(-1*day) + `"},{"endDateTime":"` + at(3*day) + `"}],
-		 "passwordCredentials":[{"endDateTime":"` + at(15*day) + `"}]},
-		{"keyCredentials":[{"endDateTime":"` + at(200*day) + `"}],
-		 "passwordCredentials":[{"endDateTime":"` + at(60*day) + `"},{"endDateTime":"` + at(7*day) + `"}]}
+		{"id":"app-obj-1","appId":"11111111-1111-1111-1111-111111111111","displayName":"App One",
+		 "keyCredentials":[{"keyId":"cert-1","endDateTime":"` + at(-1*day) + `"},{"keyId":"cert-2","endDateTime":"` + at(3*day) + `"}],
+		 "passwordCredentials":[{"keyId":"pwd-1","endDateTime":"` + at(15*day) + `"}]},
+		{"id":"app-obj-2","appId":"22222222-2222-2222-2222-222222222222","displayName":"App Two",
+		 "keyCredentials":[{"keyId":"cert-3","endDateTime":"` + at(200*day) + `"}],
+		 "passwordCredentials":[{"keyId":"pwd-2","endDateTime":"` + at(60*day) + `"},{"keyId":"pwd-3","endDateTime":"` + at(7*day) + `"}]}
 	]}`
 	sps := `{"value":[
-		{"keyCredentials":[{"endDateTime":"` + at(0) + `"}],
-		 "passwordCredentials":[{"endDateTime":"` + at(91*day) + `"}]}
+		{"id":"sp-obj-1","appId":"33333333-3333-3333-3333-333333333333","displayName":"SP One",
+		 "keyCredentials":[{"keyId":"cert-4","endDateTime":"` + at(0) + `"}],
+		 "passwordCredentials":[{"keyId":"pwd-4","endDateTime":"` + at(91*day) + `"}]}
 	]}`
 
 	g := &fakeGraph{bodies: map[string]string{appsURL: apps, spURL: sps}}
@@ -122,11 +137,12 @@ func TestCollectBucketsCredentialsByOwnerTypeCredentialTypeAndWindow(t *testing.
 	}
 }
 
-// TestCollectCardinalityIsBoundedByTenantScale pins the flagship cardinality
-// guarantee: however many applications/service principals/credentials a
-// tenant has, only the fixed 20-series aggregate is emitted, and no attribute
-// carries per-entity identity.
-func TestCollectCardinalityIsBoundedByTenantScale(t *testing.T) {
+// TestCollectMetricsNeverCarryPerEntityAttrs pins the flagship cardinality
+// guarantee even though this collector now decodes rich per-entity identity
+// (appId/displayName/id/keyId) for the log twin: none of that identity may
+// ever reach a metric attribute, however many applications/service
+// principals/credentials a tenant has.
+func TestCollectMetricsNeverCarryPerEntityAttrs(t *testing.T) {
 	var apps strings.Builder
 	apps.WriteString(`{"value":[`)
 	const n = 2000
@@ -134,7 +150,8 @@ func TestCollectCardinalityIsBoundedByTenantScale(t *testing.T) {
 		if i > 0 {
 			apps.WriteString(",")
 		}
-		apps.WriteString(`{"keyCredentials":[{"endDateTime":"` + at(200*day) + `","keyId":"11111111-1111-1111-1111-111111111111","displayName":"whatever"}],"passwordCredentials":[]}`)
+		apps.WriteString(`{"id":"app-` + string(rune('a'+i%26)) + `","appId":"11111111-1111-1111-1111-111111111111","displayName":"whatever",` +
+			`"keyCredentials":[{"keyId":"11111111-1111-1111-1111-111111111111","displayName":"whatever","endDateTime":"` + at(200*day) + `","customKeyIdentifier":"abc123","type":"AsymmetricX509Cert","usage":"Verify"}],"passwordCredentials":[]}`)
 	}
 	apps.WriteString(`]}`)
 
@@ -151,7 +168,11 @@ func TestCollectCardinalityIsBoundedByTenantScale(t *testing.T) {
 		t.Fatalf("got %d series for %d source credentials, want 20 (bounded, not per-entity)", len(pts), n)
 	}
 
-	forbidden := []string{"app_id", "appId", "app_display_name", "displayName", "display_name", "key_id", "keyId", "id"}
+	forbidden := []string{
+		"app_id", "appId", "app_object_id", "app_display_name", "displayName", "display_name",
+		"key_id", "keyId", "id", "custom_key_identifier", "key_type", "key_usage",
+		"start_date_time", "end_date_time",
+	}
 	for _, p := range pts {
 		for _, bad := range forbidden {
 			if _, ok := p.Attrs[bad]; ok {
@@ -174,10 +195,16 @@ func TestCollectCardinalityIsBoundedByTenantScale(t *testing.T) {
 	if total != n {
 		t.Errorf("gt_90d application/certificate count = %v, want %v", total, n)
 	}
+
+	logs := logsNamed(rec.LogRecords(), eventAppCredential)
+	if len(logs) != n {
+		t.Errorf("emitted %d %s logs, want %d (one per credential)", len(logs), eventAppCredential, n)
+	}
 }
 
 func TestCollectIsResilientToPerOwnerTypeError(t *testing.T) {
-	apps := `{"value":[{"keyCredentials":[{"endDateTime":"` + at(200*day) + `"}],"passwordCredentials":[]}]}`
+	apps := `{"value":[{"id":"app-obj-1","appId":"aaaaaaaa-1111-1111-1111-111111111111","displayName":"App",
+		"keyCredentials":[{"keyId":"cert-1","endDateTime":"` + at(200*day) + `"}],"passwordCredentials":[]}]}`
 	g := &fakeGraph{
 		bodies: map[string]string{appsURL: apps},
 		errs:   map[string]error{spURL: errors.New("throttled")},
@@ -199,11 +226,16 @@ func TestCollectIsResilientToPerOwnerTypeError(t *testing.T) {
 			t.Errorf("service_principal series should be absent when its fetch failed, got %v", p.Attrs)
 		}
 	}
+
+	if got := logsNamed(rec.LogRecords(), eventAppCredential); len(got) != 1 {
+		t.Errorf("emitted %d %s logs, want 1 (only application's credential; servicePrincipal fetch failed)", len(got), eventAppCredential)
+	}
 }
 
-func TestCollectSkipsUnparsableEndDateTimeWithoutFailing(t *testing.T) {
+func TestCollectSkipsUnparsableEndDateTimeWithoutFailingOrLogging(t *testing.T) {
 	apps := `{"value":[
-		{"keyCredentials":[{"endDateTime":"not-a-date"},{"endDateTime":"` + at(200*day) + `"}],"passwordCredentials":[]}
+		{"id":"app-obj-1","appId":"aaaaaaaa-1111-1111-1111-111111111111","displayName":"App",
+		 "keyCredentials":[{"keyId":"cert-bad","endDateTime":"not-a-date"},{"keyId":"cert-good","endDateTime":"` + at(200*day) + `"}],"passwordCredentials":[]}
 	]}`
 	g := &fakeGraph{bodies: map[string]string{appsURL: apps, spURL: `{"value":[]}`}}
 	rec := telemetrytest.New()
@@ -220,6 +252,16 @@ func TestCollectSkipsUnparsableEndDateTimeWithoutFailing(t *testing.T) {
 				t.Errorf("gt_90d application/certificate = %v, want 1 (the unparsable entry must be skipped, not counted)", p.Value)
 			}
 		}
+	}
+
+	// The unparsable entry must not produce a log twin either — its
+	// expiry_bucket cannot be computed, so there is nothing correct to log.
+	logs := logsNamed(rec.LogRecords(), eventAppCredential)
+	if len(logs) != 1 {
+		t.Fatalf("emitted %d %s logs, want 1 (only the parsable credential)", len(logs), eventAppCredential)
+	}
+	if logs[0].Attrs["key_id"] != "cert-good" {
+		t.Errorf("logged credential key_id = %q, want %q", logs[0].Attrs["key_id"], "cert-good")
 	}
 }
 
@@ -249,5 +291,140 @@ func TestNameIntervalAndPermissions(t *testing.T) {
 	perms := c.RequiredPermissions()
 	if len(perms) != 1 || perms[0] != "Application.Read.All" {
 		t.Errorf("RequiredPermissions = %v, want [Application.Read.All]", perms)
+	}
+}
+
+// TestCollectEmitsAppCredentialLogTwin is the other half of the cardinality
+// boundary: the per-credential detail the gauge cannot carry (which app, which
+// key, which dates) must land in the LOGS pipeline, not be dropped. Without it
+// the collector can answer "N credentials expire in 7 days" but never "WHICH
+// app" — unactionable for both outage prevention and incident response.
+func TestCollectEmitsAppCredentialLogTwin(t *testing.T) {
+	apps := `{"value":[
+		{"id":"app-obj-1","appId":"11111111-1111-1111-1111-111111111111","displayName":"Payments API",
+		 "keyCredentials":[{"keyId":"cert-1","displayName":"prod cert","startDateTime":"` + at(-300*day) + `","endDateTime":"` + at(3*day) + `","customKeyIdentifier":"deadbeef","type":"AsymmetricX509Cert","usage":"Verify"}],
+		 "passwordCredentials":[{"keyId":"pwd-1","displayName":"ci secret","startDateTime":"` + at(-300*day) + `","endDateTime":"` + at(15*day) + `"}]}
+	]}`
+	g := &fakeGraph{bodies: map[string]string{appsURL: apps, spURL: `{"value":[]}`}}
+	rec := telemetrytest.New()
+	c := withFixedClock(New(g, nil))
+
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	got := logsNamed(rec.LogRecords(), eventAppCredential)
+	if len(got) != 2 {
+		t.Fatalf("emitted %d %s logs, want 2 (one per credential)", len(got), eventAppCredential)
+	}
+
+	var cert, secret *telemetrytest.LogRecord
+	for i := range got {
+		switch got[i].Attrs["credential_type"] {
+		case "certificate":
+			cert = &got[i]
+		case "secret":
+			secret = &got[i]
+		}
+	}
+	if cert == nil || secret == nil {
+		t.Fatalf("expected one certificate and one secret log, got %+v", got)
+	}
+
+	wantCert := map[string]string{
+		"owner_type":              "application",
+		"app_id":                  "11111111-1111-1111-1111-111111111111",
+		"app_object_id":           "app-obj-1",
+		"display_name":            "Payments API",
+		"credential_type":         "certificate",
+		"key_id":                  "cert-1",
+		"credential_display_name": "prod cert",
+		"start_date_time":         at(-300 * day),
+		"end_date_time":           at(3 * day),
+		"expiry_bucket":           "lt_7d",
+		"custom_key_identifier":   "deadbeef",
+		"key_type":                "AsymmetricX509Cert",
+		"key_usage":               "Verify",
+	}
+	for k, v := range wantCert {
+		if cert.Attrs[k] != v {
+			t.Errorf("cert log attr %q = %q, want %q", k, cert.Attrs[k], v)
+		}
+	}
+
+	wantSecret := map[string]string{
+		"owner_type":              "application",
+		"app_id":                  "11111111-1111-1111-1111-111111111111",
+		"app_object_id":           "app-obj-1",
+		"display_name":            "Payments API",
+		"credential_type":         "secret",
+		"key_id":                  "pwd-1",
+		"credential_display_name": "ci secret",
+		"start_date_time":         at(-300 * day),
+		"end_date_time":           at(15 * day),
+		"expiry_bucket":           "lt_30d",
+	}
+	for k, v := range wantSecret {
+		if secret.Attrs[k] != v {
+			t.Errorf("secret log attr %q = %q, want %q", k, secret.Attrs[k], v)
+		}
+	}
+	// Secrets never carry certificate-only fields, even when absent from the
+	// source JSON (they'd decode as zero values otherwise).
+	for _, k := range []string{"custom_key_identifier", "key_type", "key_usage"} {
+		if _, ok := secret.Attrs[k]; ok {
+			t.Errorf("secret log unexpectedly carries certificate-only attr %q: %v", k, secret.Attrs)
+		}
+	}
+
+	// The secret material itself must never be logged: no attribute holding a
+	// raw key blob or generated password can appear, under any key name.
+	forbiddenSecretAttrs := []string{"key", "secretText", "secret_text", "hint"}
+	for _, r := range got {
+		for _, bad := range forbiddenSecretAttrs {
+			if _, ok := r.Attrs[bad]; ok {
+				t.Errorf("log carries forbidden secret-bearing attribute %q: %v", bad, r.Attrs)
+			}
+		}
+	}
+}
+
+// TestLogTwinOmitsAbsentAttrs asserts a sparse credential (no displayName, no
+// customKeyIdentifier) omits those attributes rather than emitting empty
+// strings — setStr's contract.
+func TestLogTwinOmitsAbsentAttrs(t *testing.T) {
+	ev := credentialLogTwin(ownerTypes[0], "secret", ownerEntity{ID: "app-1"}, credential{KeyID: "pwd-1", EndDateTime: at(0)}, "expired")
+	for _, k := range []string{"app_id", "display_name", "credential_display_name", "start_date_time", "custom_key_identifier", "key_type", "key_usage"} {
+		if v, ok := ev.Attrs[k]; ok {
+			t.Errorf("absent field %q should be omitted, got %q", k, v)
+		}
+	}
+	if ev.Attrs["app_object_id"] != "app-1" {
+		t.Errorf("app_object_id = %v, want app-1", ev.Attrs["app_object_id"])
+	}
+	if ev.Attrs["key_id"] != "pwd-1" {
+		t.Errorf("key_id = %v, want pwd-1", ev.Attrs["key_id"])
+	}
+}
+
+// TestLogTwinSeverityTracksExpiryBucket drives the mapper directly. Only
+// already-expired and imminently-expiring (<7d) credentials escalate to WARN —
+// the same "actionable now" cut the collector's own bucket boundaries encode;
+// everything else is routine background state.
+func TestLogTwinSeverityTracksExpiryBucket(t *testing.T) {
+	for _, tc := range []struct {
+		bucket string
+		want   telemetry.Severity
+	}{
+		{"expired", telemetry.SeverityWarn},
+		{"lt_7d", telemetry.SeverityWarn},
+		{"lt_30d", telemetry.SeverityInfo},
+		{"lt_90d", telemetry.SeverityInfo},
+		{"gt_90d", telemetry.SeverityInfo},
+	} {
+		ev := credentialLogTwin(ownerTypes[0], "certificate", ownerEntity{ID: "app-1"}, credential{KeyID: "k1"}, tc.bucket)
+		if ev.Severity != tc.want {
+			t.Errorf("expiry_bucket=%q severity = %v, want %v", tc.bucket, ev.Severity, tc.want)
+		}
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -207,6 +208,181 @@ func TestCollectEmitsOnlyBoundedSeriesRegardlessOfGrantVolume(t *testing.T) {
 				t.Errorf("unexpected attribute key %q on emitted series (potential cardinality leak)", k)
 			}
 		}
+	}
+}
+
+// logsNamed returns the recorded log records carrying the given EventName.
+func logsNamed(recs []telemetrytest.LogRecord, name string) []telemetrytest.LogRecord {
+	var out []telemetrytest.LogRecord
+	for _, r := range recs {
+		if r.EventName == name {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// TestCollectTwinsOnlyHighPrivilegeDelegatedGrants is the scoping guard for the
+// delegated side: g1 (standard scope) must NOT produce a log; g2 (a
+// Directory.ReadWrite.All grant) must produce exactly one, carrying the raw
+// identifying fields the metric can never hold.
+func TestCollectTwinsOnlyHighPrivilegeDelegatedGrants(t *testing.T) {
+	bodies := merge(emptyResourceLookups(), map[string]string{
+		grantsURL: `{"value":[
+			{"id":"g1","clientId":"c1","consentType":"Principal","principalId":"p1","resourceId":"r1","scope":"User.Read"},
+			{"id":"g2","clientId":"c2","consentType":"AllPrincipals","resourceId":"r2","scope":"User.Read Directory.ReadWrite.All"}
+		]}`,
+	})
+	g := &fakeGraph{bodies: bodies}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	all := logsNamed(rec.LogRecords(), eventConsentGrant)
+	var delegated []telemetrytest.LogRecord
+	for _, r := range all {
+		if r.Attrs["consent_type"] == consentTypeDelegated {
+			delegated = append(delegated, r)
+		}
+	}
+	if len(delegated) != 1 {
+		t.Fatalf("emitted %d delegated %s logs, want 1 (standard-scope grant g1 must not be twinned)", len(delegated), eventConsentGrant)
+	}
+
+	r := delegated[0]
+	want := map[string]string{
+		"id":           "g2",
+		"consent_type": "delegated",
+		"privilege":    "privileged",
+		"client_id":    "c2",
+		"resource_id":  "r2",
+		"scope":        "User.Read Directory.ReadWrite.All",
+	}
+	for k, v := range want {
+		if r.Attrs[k] != v {
+			t.Errorf("delegated grant log attr %q = %q, want %q", k, r.Attrs[k], v)
+		}
+	}
+	if v, ok := r.Attrs["principal_id"]; ok {
+		t.Errorf("AllPrincipals grant (empty principalId) emitted principal_id attr %q, want omitted", v)
+	}
+}
+
+// TestCollectTwinsOnlyHighPrivilegeAppRoleAssignments is the scoping guard for
+// the application side: the two role-user-read (standard) assignments must
+// NOT produce logs; the one role-directory-rw (privileged) assignment must,
+// carrying the display names Graph already returns inline plus the resolved
+// app role value.
+func TestCollectTwinsOnlyHighPrivilegeAppRoleAssignments(t *testing.T) {
+	graphSP := resourceApps[0]
+	otherSP := resourceApps[1]
+
+	spBody := `{"value":[{"id":"graph-sp-id","appRoles":[
+		{"id":"role-directory-rw","value":"Directory.ReadWrite.All"},
+		{"id":"role-user-read","value":"User.Read.All"}
+	]}]}`
+	assignments := `{"value":[
+		{"id":"a1","appRoleId":"role-directory-rw","principalId":"p1","principalDisplayName":"Contoso Sync","principalType":"ServicePrincipal","resourceId":"graph-sp-id","resourceDisplayName":"Microsoft Graph"},
+		{"id":"a2","appRoleId":"role-user-read","principalId":"p2","principalDisplayName":"Some App","principalType":"ServicePrincipal","resourceId":"graph-sp-id","resourceDisplayName":"Microsoft Graph"},
+		{"id":"a3","appRoleId":"role-user-read","principalId":"p3","principalDisplayName":"Other App","principalType":"ServicePrincipal","resourceId":"graph-sp-id","resourceDisplayName":"Microsoft Graph"}
+	]}`
+
+	bodies := map[string]string{
+		grantsURL:                    `{"value":[]}`,
+		spFilterURL(graphSP.appID):   spBody,
+		assignedToURL("graph-sp-id"): assignments,
+		spFilterURL(otherSP.appID):   `{"value":[]}`,
+	}
+	g := &fakeGraph{bodies: bodies}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	all := logsNamed(rec.LogRecords(), eventConsentGrant)
+	var application []telemetrytest.LogRecord
+	for _, r := range all {
+		if r.Attrs["consent_type"] == consentTypeApplication {
+			application = append(application, r)
+		}
+	}
+	if len(application) != 1 {
+		t.Fatalf("emitted %d application %s logs, want 1 (the two standard role-user-read assignments must not be twinned)", len(application), eventConsentGrant)
+	}
+
+	r := application[0]
+	want := map[string]string{
+		"id":                     "a1",
+		"consent_type":           "application",
+		"privilege":              "privileged",
+		"resource_label":         "microsoft_graph",
+		"resource_id":            "graph-sp-id",
+		"resource_display_name":  "Microsoft Graph",
+		"app_role_id":            "role-directory-rw",
+		"app_role":               "Directory.ReadWrite.All",
+		"principal_id":           "p1",
+		"principal_display_name": "Contoso Sync",
+		"principal_type":         "ServicePrincipal",
+	}
+	for k, v := range want {
+		if r.Attrs[k] != v {
+			t.Errorf("app role assignment log attr %q = %q, want %q", k, r.Attrs[k], v)
+		}
+	}
+}
+
+// TestLogTwinNeverReachesMetricAttrs re-runs the mixed high/standard fixtures
+// above and asserts that none of the per-entity fields carried by the log
+// twin (id, client_id, principal_id, resource_id, scope, app_role_id, ...)
+// ever leak onto a metric point's attributes -- the metric stays bounded to
+// (consent_type, privilege) regardless of what the log twin now carries.
+func TestLogTwinNeverReachesMetricAttrs(t *testing.T) {
+	bodies := merge(emptyResourceLookups(), map[string]string{
+		grantsURL: `{"value":[
+			{"id":"g1","clientId":"c1","consentType":"Principal","principalId":"p1","resourceId":"r1","scope":"User.Read"},
+			{"id":"g2","clientId":"c2","consentType":"AllPrincipals","resourceId":"r2","scope":"Directory.ReadWrite.All"}
+		]}`,
+	})
+	g := &fakeGraph{bodies: bodies}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	for _, p := range rec.MetricPoints(metricName) {
+		for k := range p.Attrs {
+			if k != "consent_type" && k != "privilege" {
+				t.Errorf("metric %s has unexpected attribute %q (per-entity leak from the log twin?): %v", metricName, k, p.Attrs)
+			}
+		}
+	}
+}
+
+// TestConsentGrantLogTwinSeverityIsWarn drives the log-twin builders directly
+// (the risk-collector idiom) so the assertion compares telemetry.Severity
+// values rather than the recorder's already-translated OTEL wire numbers.
+// Every twinned grant is, by definition, already classified high-privilege --
+// there is no lower-severity case to branch on here (contrast risk.logTwin,
+// which twins every risk level and escalates only "high").
+func TestConsentGrantLogTwinSeverityIsWarn(t *testing.T) {
+	delegatedEv := delegatedGrantLogTwin(oauth2Grant{ID: "g1", ClientID: "c1", Scope: "Directory.ReadWrite.All"})
+	if delegatedEv.Severity != telemetry.SeverityWarn {
+		t.Errorf("delegated grant twin severity = %v, want SeverityWarn", delegatedEv.Severity)
+	}
+	if delegatedEv.Name != eventConsentGrant {
+		t.Errorf("delegated grant twin EventName = %q, want %q", delegatedEv.Name, eventConsentGrant)
+	}
+
+	appEv := appRoleAssignmentLogTwin(appRoleAssignment{ID: "a1", AppRoleID: "role1"}, resourceApps[0], "Directory.ReadWrite.All")
+	if appEv.Severity != telemetry.SeverityWarn {
+		t.Errorf("app role assignment twin severity = %v, want SeverityWarn", appEv.Severity)
+	}
+	if appEv.Name != eventConsentGrant {
+		t.Errorf("app role assignment twin EventName = %q, want %q", appEv.Name, eventConsentGrant)
 	}
 }
 

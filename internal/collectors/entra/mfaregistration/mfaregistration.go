@@ -2,7 +2,9 @@
 // registration-posture collector: tenant-wide counts of users registered
 // for/capable of MFA, SSPR, and passwordless auth, plus per-method
 // registration counts and an admin-vs-non-admin MFA-capable split — the
-// compliance-KPI signal from issue #69.
+// compliance-KPI signal from issue #69 — PLUS a log twin of the same fetch,
+// one entra.user_registration OTEL log record per user per cycle carrying
+// the per-user identity the metrics can never carry. See "Log twin" below.
 //
 // # Why userRegistrationDetails, not the two summary functions
 //
@@ -49,6 +51,46 @@
 // could see this collector's fetch fail with GetAllValues' pagination-exceeded
 // error. Revisit if Microsoft ships an application-permission-compatible
 // aggregate for this report.
+//
+// The log twin below (per-user identity) does not change this: it decodes
+// and emits from the SAME fetch, adding zero Graph calls and zero additional
+// pages — the pagination-exceeded risk is a function of user count alone,
+// unaffected by what this collector does with each row once fetched.
+//
+// # Log twin: per-user identity, and its volume cost
+//
+// userRegistrationDetails' per-user identity fields (userPrincipalName,
+// userDisplayName, id, lastUpdatedDateTime) were previously excluded at the
+// $select level and never crossed the wire at all — so this collector could
+// answer "how many admins lack MFA" but never "WHICH admins", arguably the
+// single most-asked identity-posture question there is. That was a bug
+// (#112's framing issue, not a deliberate privacy control — see below), so
+// $select now also requests those four fields, and each decoded row is
+// additionally emitted as an entra.user_registration OTEL log record
+// carrying them plus every posture flag (mfa/sspr/passwordless
+// registered/capable/enabled, methodsRegistered).
+//
+// Per the maintainer decision on #114, EVERY user row is twinned each
+// cycle, not just posture failures: graph2otel's log pipeline is the
+// surviving SIEM record for this signal, and filtering to "problem rows
+// only" would break the correlation a SIEM exists to do ("did this user
+// have MFA registered last month"). This is a STATE feed, like the metrics
+// above: a user is re-emitted every cycle regardless of posture.
+//
+// This makes the volume characteristic explicit, so an operator knows what
+// they are signing up for: log volume scales LINEARLY with tenant user
+// count, at DefaultInterval's cadence (15 minutes) — one record per user
+// per cycle. A 1,000-user tenant emits roughly 1,000 records every 15
+// minutes (~4,000/hour); a 50,000-user tenant emits roughly 200,000/hour.
+// This is orthogonal to the pagination-exceeded risk noted above (both scale
+// with user count, but the log twin adds no extra fetches), and is a
+// materially higher volume than the entra.risk log twin (which only emits
+// for the, typically small, currently-risky population).
+//
+// Identity is never a metric label here (CLAUDE.md's cardinality rule):
+// the three status/method/admin-split gauges above stay bounded by their
+// fixed enum/method dimensions regardless of tenant size — see
+// TestNoPerEntitySeries.
 package mfaregistration
 
 import (
@@ -56,6 +98,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collector"
@@ -76,15 +120,21 @@ const (
 	adminMfaCapableMetricName = "entra.mfa.registration.admin_mfa_capable.total"
 )
 
+// eventUserRegistration is the log-twin OTLP LogRecord EventName, one per
+// user per cycle — see the package doc's "Log twin" section. Frozen by #114.
+const eventUserRegistration = "entra.user_registration"
+
 // defaultBaseURL is the Graph v1.0 root.
 const defaultBaseURL = "https://graph.microsoft.com/v1.0"
 
-// requestURL is the userRegistrationDetails read this collector issues. A
-// $select trims the response to only the fields this collector aggregates —
-// every per-user identifier (id, userPrincipalName, userDisplayName) is
-// deliberately left off the wire, never merely dropped after decoding.
+// requestURL is the userRegistrationDetails read this collector issues. The
+// $select trims the response to exactly the fields this collector reads:
+// the seven posture booleans + methodsRegistered feed the bounded metrics
+// below, and id/userPrincipalName/userDisplayName/lastUpdatedDateTime feed
+// ONLY the per-user log twin (see the package doc) — never a metric label.
 const requestPath = "/reports/authenticationMethods/userRegistrationDetails" +
-	"?$select=isAdmin,isMfaRegistered,isMfaCapable,isSsprRegistered,isSsprEnabled,isSsprCapable,isPasswordlessCapable,methodsRegistered"
+	"?$select=isAdmin,isMfaRegistered,isMfaCapable,isSsprRegistered,isSsprEnabled,isSsprCapable,isPasswordlessCapable,methodsRegistered," +
+	"id,userPrincipalName,userDisplayName,lastUpdatedDateTime"
 
 var requestURL = defaultBaseURL + requestPath
 
@@ -110,11 +160,16 @@ var registrationStatuses = []registrationStatus{
 	{"passwordless_capable", func(u userRegistrationDetail) bool { return u.IsPasswordlessCapable }},
 }
 
-// userRegistrationDetail mirrors only the fields of the Graph
-// userRegistrationDetails resource this collector reads. userPrincipalName,
-// userDisplayName, id, lastUpdatedDateTime and every other per-user field are
-// deliberately never decoded here — see the package doc and CLAUDE.md's
-// cardinality rule.
+// userRegistrationDetail mirrors the fields of the Graph
+// userRegistrationDetails resource this collector reads. The seven posture
+// fields feed the bounded metrics (see registrationStatuses / Collect);
+// ID/UserPrincipalName/UserDisplayName/LastUpdatedDateTime feed ONLY the
+// entra.user_registration log twin (logTwin) — CLAUDE.md's cardinality rule
+// means they must never reach a metric label, but "not a metric label"
+// means "log twin", not "dropped" (see the package doc's Log-twin section
+// and TestNoPerEntitySeries, which pins the metric side of that boundary).
+// Field names/casing verified against learn.microsoft.com/graph/api/
+// resources/userregistrationdetails (v1.0), 2026-07-16.
 type userRegistrationDetail struct {
 	IsAdmin               bool     `json:"isAdmin"`
 	IsMfaRegistered       bool     `json:"isMfaRegistered"`
@@ -124,6 +179,12 @@ type userRegistrationDetail struct {
 	IsSsprCapable         bool     `json:"isSsprCapable"`
 	IsPasswordlessCapable bool     `json:"isPasswordlessCapable"`
 	MethodsRegistered     []string `json:"methodsRegistered"`
+
+	// Log-twin-only identity fields — never read into a metric attribute.
+	ID                  string `json:"id"`
+	UserPrincipalName   string `json:"userPrincipalName"`
+	UserDisplayName     string `json:"userDisplayName"`
+	LastUpdatedDateTime string `json:"lastUpdatedDateTime"`
 }
 
 // Collector polls the MFA/auth-methods registration report.
@@ -174,6 +235,11 @@ func (c *Collector) RequiredCapability() license.Capability { return license.Cap
 // per-method registration counts, and an admin-vs-non-admin MFA-capable
 // split. No advanced $filter/$search/$count is used (a $select-trimmed full
 // read, aggregated client-side), so no ConsistencyLevel header is required.
+//
+// It ALSO emits one entra.user_registration log record per user, from the
+// same decoded rows, carrying the per-user identity the metrics above can
+// never carry — see the package doc's "Log twin" section. Every row is
+// twinned, not just posture failures (the #114 maintainer decision).
 func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+requestPath, nil)
 	if err != nil {
@@ -208,6 +274,8 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 				nonAdminMfaCapable++
 			}
 		}
+
+		e.LogEvent(logTwin(u))
 	}
 
 	statusPoints := make([]telemetry.GaugePoint, 0, len(registrationStatuses))
@@ -237,6 +305,78 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		})
 
 	return nil
+}
+
+// logTwin renders one userRegistrationDetails row as an OTLP log record.
+//
+// Timestamp is deliberately left zero ("now", i.e. poll time) rather than
+// set to LastUpdatedDateTime — this is a STATE feed like entra.risk's, and
+// every user is re-emitted every cycle regardless of posture, so stamping
+// each record with Graph's last-assessment time would pile every repeat
+// onto one instant. The assessment time is preserved as the last_updated
+// attribute instead.
+func logTwin(u userRegistrationDetail) telemetry.Event {
+	attrs := telemetry.Attrs{}
+	setStr(attrs, "id", u.ID)
+	setStr(attrs, "user_principal_name", u.UserPrincipalName)
+	setStr(attrs, "user_display_name", u.UserDisplayName)
+	setStr(attrs, "last_updated", u.LastUpdatedDateTime)
+	setStr(attrs, "methods_registered", strings.Join(u.MethodsRegistered, ","))
+
+	// The seven posture booleans are always decoded (never legitimately
+	// absent), so they're direct string assignments rather than
+	// setStr-omitted — house convention is string-typed log attributes
+	// (Loki structured metadata is string on the wire), not omission of a
+	// real false value.
+	attrs["is_admin"] = strconv.FormatBool(u.IsAdmin)
+	attrs["mfa_registered"] = strconv.FormatBool(u.IsMfaRegistered)
+	attrs["mfa_capable"] = strconv.FormatBool(u.IsMfaCapable)
+	attrs["sspr_registered"] = strconv.FormatBool(u.IsSsprRegistered)
+	attrs["sspr_enabled"] = strconv.FormatBool(u.IsSsprEnabled)
+	attrs["sspr_capable"] = strconv.FormatBool(u.IsSsprCapable)
+	attrs["passwordless_capable"] = strconv.FormatBool(u.IsPasswordlessCapable)
+
+	// Only an admin who cannot currently complete a policy-compliant MFA
+	// challenge escalates: IsMfaCapable (not IsMfaRegistered) is the
+	// operationally meaningful "can this admin actually MFA right now"
+	// signal — a user can have IsMfaRegistered true with IsMfaCapable false
+	// when their registered method is no longer allowed by the
+	// authentication methods policy, which is still a real gap for an
+	// admin. Every other combination, including a non-admin with no MFA at
+	// all, stays Info — routine background posture on any real tenant, and
+	// warning on it would make the severity dimension useless for
+	// filtering (same reasoning as entra/risk's "only high escalates").
+	sev := telemetry.SeverityInfo
+	if u.IsAdmin && !u.IsMfaCapable {
+		sev = telemetry.SeverityWarn
+	}
+
+	return telemetry.Event{
+		Name:     eventUserRegistration,
+		Body:     fmt.Sprintf("user registration status: %s mfa_capable=%t mfa_registered=%t", displayOf(u), u.IsMfaCapable, u.IsMfaRegistered),
+		Severity: sev,
+		Attrs:    attrs,
+	}
+}
+
+// displayOf picks the most human-readable identifier a user row carries,
+// falling back to the id (never returning empty).
+func displayOf(u userRegistrationDetail) string {
+	for _, s := range []string{u.UserPrincipalName, u.UserDisplayName, u.ID} {
+		if s != "" {
+			return s
+		}
+	}
+	return "unknown"
+}
+
+// setStr adds key=val to attrs only when val is non-empty, so an absent
+// field (e.g. an identity field on a sparse row) emits no attribute rather
+// than an empty one.
+func setStr(attrs telemetry.Attrs, key, val string) {
+	if val != "" {
+		attrs[key] = val
+	}
 }
 
 func init() {

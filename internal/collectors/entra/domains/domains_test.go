@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -120,6 +121,83 @@ func TestCollectEmitsNoPerDomainSeries(t *testing.T) {
 			if k != "authentication_type" && k != "is_verified" {
 				t.Errorf("unexpected attribute key %q (possible cardinality/PII violation)", k)
 			}
+		}
+	}
+}
+
+func TestCollectEmitsLogTwinPerDomain(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{domainsURL: fourDomainsBody}}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	recs := rec.LogRecords()
+	if len(recs) != 4 {
+		t.Fatalf("got %d log records, want 4 (one per domain)", len(recs))
+	}
+
+	byID := map[string]telemetrytest.LogRecord{}
+	for _, r := range recs {
+		if r.EventName != "entra.domain" {
+			t.Errorf("EventName = %q, want entra.domain", r.EventName)
+		}
+		byID[r.Attrs["id"]] = r
+	}
+
+	contoso, ok := byID["contoso.com"]
+	if !ok {
+		t.Fatal("no log record for contoso.com")
+	}
+	want := map[string]string{
+		"id":                  "contoso.com",
+		"authentication_type": "managed",
+		"is_verified":         "true",
+		"is_default":          "true",
+		"is_initial":          "false",
+		"is_root":             "false",
+		"is_admin_managed":    "false",
+		"supported_services":  "Email",
+	}
+	for k, v := range want {
+		if contoso.Attrs[k] != v {
+			t.Errorf("contoso.com attr %s = %q, want %q (all: %v)", k, contoso.Attrs[k], v, contoso.Attrs)
+		}
+	}
+
+	sub, ok := byID["sub.contoso.com"]
+	if !ok {
+		t.Fatal("no log record for sub.contoso.com")
+	}
+	if _, present := sub.Attrs["supported_services"]; present {
+		t.Errorf("sub.contoso.com supported_services = %q, want absent (empty list omitted)", sub.Attrs["supported_services"])
+	}
+}
+
+func TestCollectLogTwinSeverityEscalatesForUnverifiedOrFederatedDomain(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{domainsURL: fourDomainsBody}}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	bySeverity := map[string]string{}
+	for _, r := range rec.LogRecords() {
+		bySeverity[r.Attrs["id"]] = r.SeverityText
+	}
+
+	wantWarn := map[string]bool{
+		"contoso.com":     false, // managed, verified -> Info
+		"sub.contoso.com": true,  // managed, unverified -> Warn
+		"fabrikam.com":    true,  // federated, verified -> Warn
+		"adatum.com":      true,  // federated, unverified -> Warn
+	}
+	for id, warn := range wantWarn {
+		got := bySeverity[id] == telemetry.SeverityWarn.String()
+		if got != warn {
+			t.Errorf("domain %s: severity=%s, want Warn=%v", id, bySeverity[id], warn)
 		}
 	}
 }

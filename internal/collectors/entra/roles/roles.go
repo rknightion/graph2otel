@@ -1,9 +1,38 @@
 // Package roles is the Entra privileged-access-posture collector: standing
-// directory-role membership counts (Free, every tier) plus PIM active/
-// eligible/permanent assignment counts (P2-gated, partial degrade). Global
-// Admin count and similar headline compliance figures are just one bounded
-// role_name value within the standing-membership series, not a separate
-// metric.
+// directory-role membership (Free, every tier) plus PIM active/eligible/
+// permanent assignments (P2-gated, partial degrade). Global Admin count and
+// similar headline compliance figures are just one bounded role_name value
+// within the standing-membership series, not a separate metric.
+//
+// # Both sides of the cardinality boundary, from one fetch
+//
+// Each half emits TWO things per cycle, from fetches it was already making:
+//
+//   - bounded GAUGES counted by role_name x assignment_type — the aggregate;
+//   - one entra.role_member LOG per principal, carrying who actually holds the
+//     role: object id, principal type, display name, UPN (users) or appId
+//     (service principals), and for PIM the permanence/expiry.
+//
+// The log twin is the other half of the rule, not garnish. Per-principal
+// identity must never become a metric label (a series per admin grows with
+// tenant size), but "not a metric label" means "log twin", NOT "dropped".
+// This collector previously paged every member object and then kept only
+// len(members) — so the identity of every Global Admin was decoded into memory
+// and thrown away, and "WHO is in Global Admin" was unanswerable. Same for the
+// PIM half, which never decoded principalId at all despite it being right
+// there in the response. That was a bug (#114), not a privacy control: the
+// logs pipeline is where this belongs. See SECURITY.md.
+//
+// This is a STATE feed: every member is re-emitted each cycle for as long as
+// they hold the role, which is what makes "who was Global Admin on the 3rd"
+// answerable. Volume scales with the number of privileged principals (small by
+// definition — a tenant with thousands of Global Admins has a bigger problem
+// than log volume), not with tenant size.
+//
+// Severity is Info throughout, deliberately. Role membership is state, not an
+// anomaly: warning on it would fire every cycle for every admin and make the
+// severity dimension useless. The value here is queryability and change
+// detection over time, not alerting.
 package roles
 
 import (
@@ -12,6 +41,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collector"
@@ -62,10 +92,129 @@ type directoryRole struct {
 	DisplayName string `json:"displayName"`
 }
 
+// eventRoleMember is the OTLP LogRecord EventName every role-membership twin
+// carries — standing members and PIM assignments alike, discriminated by the
+// assignment_type attribute ("standing" / "active" / "eligible", the same
+// vocabulary the gauges use).
+const eventRoleMember = "entra.role_member"
+
+// roleMember is one element of the polymorphic directoryObject collection
+// returned by GET /directoryRoles/{id}/members. The kind is discriminated by
+// @odata.type: a user carries userPrincipalName, a service principal carries
+// appId, and a group/device carries neither — so one struct decodes all of
+// them and logTwin omits whatever is absent.
+type roleMember struct {
+	ODataType         string `json:"@odata.type"`
+	ID                string `json:"id"`
+	DisplayName       string `json:"displayName"`
+	UserPrincipalName string `json:"userPrincipalName"`
+	AppID             string `json:"appId"`
+}
+
+// principalTypes maps the @odata.type discriminator to graph2otel's bounded
+// principal_type vocabulary. Anything unrecognized (or absent) collapses to
+// "unknown" rather than leaking a raw OData type string.
+var principalTypes = map[string]string{
+	"#microsoft.graph.user":             "user",
+	"#microsoft.graph.servicePrincipal": "service_principal",
+	"#microsoft.graph.group":            "group",
+	"#microsoft.graph.device":           "device",
+	"#microsoft.graph.orgContact":       "org_contact",
+}
+
+// principalType normalizes a member's @odata.type.
+func principalType(odataType string) string {
+	if t, ok := principalTypes[odataType]; ok {
+		return t
+	}
+	return "unknown"
+}
+
+// memberLogTwin renders one standing directory-role member as a log record.
+//
+// Severity is Info for every member, deliberately: standing role membership is
+// STATE, not an anomaly. A tenant's Global Admins are re-emitted every cycle,
+// so warning on them would fire constantly and make the severity dimension
+// useless. The value here is queryability ("who holds this role, and when did
+// that set change"), not alerting.
+func memberLogTwin(m roleMember, role directoryRole) telemetry.Event {
+	attrs := telemetry.Attrs{}
+	setStr(attrs, "assignment_type", "standing")
+	setStr(attrs, "role_name", role.DisplayName)
+	setStr(attrs, "role_id", role.ID)
+	setStr(attrs, "principal_id", m.ID)
+	setStr(attrs, "principal_type", principalType(m.ODataType))
+	setStr(attrs, "principal_display_name", m.DisplayName)
+	setStr(attrs, "principal_user_principal_name", m.UserPrincipalName)
+	setStr(attrs, "principal_app_id", m.AppID)
+
+	who := m.UserPrincipalName
+	if who == "" {
+		who = m.DisplayName
+	}
+	if who == "" {
+		who = m.ID
+	}
+	return telemetry.Event{
+		Name:     eventRoleMember,
+		Body:     fmt.Sprintf("%s: standing member %s", role.DisplayName, who),
+		Severity: telemetry.SeverityInfo,
+		Attrs:    attrs,
+	}
+}
+
+// pimLogTwin renders one PIM schedule instance (active or eligible) as a log
+// record. Severity is Info for the same reason as memberLogTwin — this is
+// state, not an event.
+//
+// principal_id is the only identifier available: these endpoints return a bare
+// principalId and the collector requests $expand=roleDefinition but NOT
+// $expand=principal, so no UPN/display name is on the wire. Resolving it would
+// mean either widening the expand (unverified cost against the live tenant) or
+// a per-principal fan-out (a Graph call per assignment). Left as-is
+// deliberately; the id joins to entra.role_member's standing twins and to the
+// sign-in logs, so it is not a dead end.
+func pimLogTwin(inst scheduleInstance, assignmentType string) telemetry.Event {
+	attrs := telemetry.Attrs{}
+	setStr(attrs, "assignment_type", assignmentType)
+	setStr(attrs, "role_name", inst.roleName())
+	setStr(attrs, "principal_id", inst.PrincipalID)
+
+	permanent := inst.EndDateTime == nil
+	setStr(attrs, "permanent", strconv.FormatBool(permanent))
+	if !permanent {
+		setStr(attrs, "end_date_time", *inst.EndDateTime)
+	}
+
+	kind := "time-bound"
+	if permanent {
+		kind = "permanent"
+	}
+	return telemetry.Event{
+		Name:     eventRoleMember,
+		Body:     fmt.Sprintf("%s: %s PIM assignment for %s (%s)", inst.roleName(), assignmentType, inst.PrincipalID, kind),
+		Severity: telemetry.SeverityInfo,
+		Attrs:    attrs,
+	}
+}
+
+// setStr adds key=val only when val is non-empty, so an absent field (a group
+// member has no UPN, a user member has no appId) emits no attribute rather than
+// an empty one.
+func setStr(attrs telemetry.Attrs, key, val string) {
+	if val != "" {
+		attrs[key] = val
+	}
+}
+
 // scheduleInstance mirrors the fields shared by unifiedRoleAssignmentScheduleInstance
 // and unifiedRoleEligibilityScheduleInstance that this collector reads, with
 // $expand=roleDefinition requested so RoleDefinition.DisplayName is populated.
 type scheduleInstance struct {
+	// PrincipalID identifies who holds (or is eligible for) the role. It is
+	// dropped from the bounded gauge — a per-principal series would grow with
+	// tenant size — and carried by the log twin instead.
+	PrincipalID    string             `json:"principalId"`
 	EndDateTime    *string            `json:"endDateTime"`
 	RoleDefinition *roleDefinitionRef `json:"roleDefinition"`
 }
@@ -188,6 +337,19 @@ func (c *Collector) collectStandingMembers(ctx context.Context, e telemetry.Emit
 			errs = append(errs, fmt.Errorf("members(%s): %w", role.DisplayName, err))
 			continue
 		}
+
+		// The member objects are already fully in hand here, so the twin costs
+		// no extra Graph call. A member that fails to decode still counts
+		// toward the gauge (it exists) but emits no twin.
+		for _, m := range members {
+			var member roleMember
+			if err := json.Unmarshal(m, &member); err != nil {
+				c.logger.Warn("skipping unparseable directoryRole member", "collector", collectorName, "role", role.DisplayName, "error", err)
+				continue
+			}
+			e.LogEvent(memberLogTwin(member, role))
+		}
+
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(len(members)),
 			Attrs: telemetry.Attrs{"role_name": role.DisplayName},
@@ -223,6 +385,7 @@ func (c *Collector) collectPIMAssignments(ctx context.Context, e telemetry.Emitt
 			if inst.EndDateTime == nil {
 				permanentByRole[name]++
 			}
+			e.LogEvent(pimLogTwin(inst, "active"))
 		}
 	}
 
@@ -239,6 +402,7 @@ func (c *Collector) collectPIMAssignments(ctx context.Context, e telemetry.Emitt
 				continue
 			}
 			eligibleByRole[inst.roleName()]++
+			e.LogEvent(pimLogTwin(inst, "eligible"))
 		}
 	}
 
