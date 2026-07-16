@@ -79,6 +79,12 @@ func (c *JobCollector) CollectWindow(ctx context.Context, from, to time.Time, e 
 		resumeFrom = cp.Watermark.Add(-cfg.Overlap)
 	}
 
+	// Let Run write the checkpoint the moment it has a query id, so a process
+	// killed during the (live-measured >10-minute, #100) poll loop leaves that id
+	// on disk for the next start to adopt (#118). Without this the Save below is
+	// the only write, and a Run that never returns never reaches it.
+	cfg.Persist = func(cp *checkpoint.Checkpoint) error { return c.Store.Save(cp) }
+
 	hw, err := Run(ctx, cfg, cp, resumeFrom, to, c.Client, e)
 	if err != nil {
 		return cp.Watermark, fmt.Errorf("jobpipeline: %s: run: %w", c.NameField, err)

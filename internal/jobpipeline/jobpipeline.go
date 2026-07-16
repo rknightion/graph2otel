@@ -75,6 +75,19 @@ const (
 	// (15/30/60 min) is the primary throttle guard; this handles a transient
 	// collision, not a tight submit loop.
 	DefaultCreateMaxRetries = 3
+	// DefaultJobMaxAge is how long a persisted in-flight query id stays
+	// adoptable (#118). Past it the id is presumed dead, dropped, and replaced by
+	// a fresh query.
+	//
+	// The number: a status poll that ERRORS is deliberately not terminal (a
+	// transient 429/5xx must not orphan a healthy query), so a query id that
+	// fails every poll — deleted server-side, say — would otherwise wedge the
+	// collector forever. Age is the only escape hatch, so this bounds the wedge.
+	// One hour is ~6x the >10-minute completion observed live (#100) and about
+	// two ticks of the 30-minute unified-audit interval: long enough that a
+	// genuinely slow query is never thrown away, short enough that a dead one
+	// costs at most a couple of ticks.
+	DefaultJobMaxAge = time.Hour
 )
 
 // Job status values returned by the query resource. Terminal states are
@@ -164,6 +177,25 @@ type QueryConfig struct {
 	// CreateMaxRetries bounds create retries after the first attempt; defaults to
 	// DefaultCreateMaxRetries. Set negative to disable retries entirely.
 	CreateMaxRetries int
+	// JobMaxAge bounds how long a persisted in-flight query id stays adoptable;
+	// defaults to DefaultJobMaxAge. A NEGATIVE value disables adoption entirely —
+	// every tick creates a fresh query, the pre-#118 behavior — which exists as an
+	// escape hatch: this feature resumes against throttle-sensitive APIs, so there
+	// has to be a way to switch it off per-endpoint without reverting the code.
+	JobMaxAge time.Duration
+
+	// Persist, when non-nil, durably records cp at the one point during a Run
+	// where it matters: immediately after a query is created, BEFORE the poll
+	// loop. That ordering is the whole point — a process killed mid-poll (the
+	// #118 case: >10 minutes of a 30-minute cycle live, #100) must find the query
+	// id on disk to adopt it. Waiting for the caller's end-of-run Save would
+	// persist nothing, because a Run that dies mid-poll never reaches it.
+	//
+	// Run itself does not otherwise touch storage, so this stays a hook rather
+	// than a *checkpoint.Store: Run remains testable with no filesystem, and
+	// JobCollector supplies Store.Save (collector.go). Nil disables persistence,
+	// which is exactly the pre-#118 behavior.
+	Persist func(cp *checkpoint.Checkpoint) error
 
 	// Now returns the current time; defaults to time.Now. Injectable for tests.
 	Now func() time.Time
@@ -196,6 +228,9 @@ func (cfg QueryConfig) withDefaults() QueryConfig {
 	}
 	if cfg.CreateMaxRetries == 0 {
 		cfg.CreateMaxRetries = DefaultCreateMaxRetries
+	}
+	if cfg.JobMaxAge == 0 {
+		cfg.JobMaxAge = DefaultJobMaxAge
 	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
@@ -234,12 +269,13 @@ func ctxSleep(ctx context.Context, d time.Duration) error {
 	}
 }
 
-// Run submits a query for [from, to], polls it to a terminal status, pages its
-// results, dedupes against cp.SeenIDs, emits each newly-seen record as an OTLP
-// log through e, and returns the new high-water mark. It mutates cp in place
-// (Watermark, OverlapWindow, SeenIDs) but does NOT persist it — the caller owns
-// persistence (checkpoint.Store.Save), so Run stays testable without a
-// filesystem. JobCollector.CollectWindow (collector.go) Loads, Runs, and Saves.
+// Run adopts cp's in-flight query or submits a new one for [from, to], polls it
+// to a terminal status, pages its results, dedupes against cp.SeenIDs, emits each
+// newly-seen record as an OTLP log through e, and returns the new high-water mark.
+// It mutates cp in place (Watermark, OverlapWindow, SeenIDs, InFlight) and
+// persists it at exactly one point mid-run — right after a create, via
+// cfg.Persist (see #118 and the field's doc) — leaving the rest of persistence to
+// the caller. JobCollector.CollectWindow (collector.go) Loads, Runs, and Saves.
 //
 // On a failed/cancelled query, or any create/poll/page error, Run returns the
 // current watermark unchanged (wrapped error) so the window is retried next
@@ -250,27 +286,91 @@ func Run(ctx context.Context, cfg QueryConfig, cp *checkpoint.Checkpoint, from, 
 		return cp.Watermark, fmt.Errorf("jobpipeline: %s: BuildRequest and Map are required", cfg.CreatePath)
 	}
 
-	body, err := cfg.BuildRequest(from, to)
+	queryID, windowTo, err := resumeOrCreate(ctx, cfg, cp, from, to, client)
 	if err != nil {
-		return cp.Watermark, fmt.Errorf("jobpipeline: %s: build request: %w", cfg.CreatePath, err)
-	}
-
-	queryID, err := createWithBackoff(ctx, cfg, client, body)
-	if err != nil {
-		return cp.Watermark, fmt.Errorf("jobpipeline: %s: create query: %w", cfg.CreatePath, err)
+		return cp.Watermark, err
 	}
 
 	queryURL := cfg.baseURL() + cfg.CreatePath + "/" + queryID
 	if err := pollToSucceeded(ctx, cfg, client, queryURL); err != nil {
+		// A failed/cancelled query can never succeed, so keeping its id would only
+		// waste the next tick re-polling it. Every other poll failure is transient
+		// by assumption and KEEPS the id — that is the resume path, and clearing it
+		// on a 429 would put back the duplicate create this all exists to remove.
+		if errors.Is(err, ErrJobFailed) || errors.Is(err, ErrJobCancelled) {
+			cp.InFlight = nil
+			persist(cfg, cp)
+		}
 		return cp.Watermark, fmt.Errorf("jobpipeline: %s: %w", cfg.CreatePath, err)
 	}
 
+	// A paging failure keeps the in-flight id deliberately: the query itself
+	// succeeded and its records are still sitting there, so the next tick adopts
+	// it and re-drains rather than re-running the whole query server-side. No
+	// records were emitted (drainRecords collects every page before emitAndAdvance
+	// runs), so nothing is duplicated by doing so.
 	records, err := drainRecords(ctx, cfg, client, queryURL)
 	if err != nil {
 		return cp.Watermark, fmt.Errorf("jobpipeline: %s: page records: %w", cfg.CreatePath, err)
 	}
 
-	return emitAndAdvance(cfg, cp, records, to, e), nil
+	cp.InFlight = nil
+	// windowTo, not `to`: an adopted query covers only as far as its own window,
+	// which may be behind this tick's `to`. Advancing to `to` would skip the gap.
+	return emitAndAdvance(cfg, cp, records, windowTo, e), nil
+}
+
+// adoptable reports whether j should be resumed for a tick requesting [from, to]:
+// it must not be presumed dead (Expired) and must still cover the right window
+// (CoversWindow). A negative JobMaxAge switches adoption off outright.
+func (cfg QueryConfig) adoptable(j *checkpoint.InFlightJob, from, to time.Time) bool {
+	if j == nil || cfg.JobMaxAge < 0 {
+		return false
+	}
+	return !j.Expired(cfg.Now(), cfg.JobMaxAge) && j.CoversWindow(from, to)
+}
+
+// resumeOrCreate returns the query id to poll and the window it actually covers:
+// cp's in-flight query when it is still adoptable, otherwise a newly created one.
+// A newly created id is persisted before returning, so a caller killed during the
+// poll loop leaves an adoptable record behind.
+func resumeOrCreate(ctx context.Context, cfg QueryConfig, cp *checkpoint.Checkpoint, from, to time.Time, client JobClient) (queryID string, windowTo time.Time, err error) {
+	if j := cp.InFlight; j != nil {
+		if cfg.adoptable(j, from, to) {
+			return j.ID, j.WindowTo, nil
+		}
+		cp.InFlight = nil
+	}
+
+	body, err := cfg.BuildRequest(from, to)
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("jobpipeline: %s: build request: %w", cfg.CreatePath, err)
+	}
+
+	id, err := createWithBackoff(ctx, cfg, client, body)
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("jobpipeline: %s: create query: %w", cfg.CreatePath, err)
+	}
+
+	cp.InFlight = &checkpoint.InFlightJob{ID: id, CreatedAt: cfg.Now(), WindowFrom: from, WindowTo: to}
+	persist(cfg, cp)
+	return id, to, nil
+}
+
+// persist calls cfg.Persist, ignoring its error deliberately.
+//
+// The job is already created server-side by the time this runs, so failing the
+// run here would waste that job AND emit nothing — strictly worse than carrying
+// on with an unpersisted id, which merely degrades to the pre-#118 behavior
+// (a restart orphans it). The failure is not swallowed either: the caller's own
+// end-of-run Save writes the same file and surfaces the same error through
+// CollectWindow, and an unwritable checkpoint dir already fails the process at
+// startup (#117).
+func persist(cfg QueryConfig, cp *checkpoint.Checkpoint) {
+	if cfg.Persist == nil {
+		return
+	}
+	_ = cfg.Persist(cp)
 }
 
 // createWithBackoff creates the query, retrying transient failures (chiefly the

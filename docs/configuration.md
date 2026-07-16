@@ -26,6 +26,7 @@ name (e.g. `client_id`, `log_level`) is preserved as-is — only level boundarie
 | `admin.enabled` | `G2O_ADMIN__ENABLED` |
 | `admin.addr` | `G2O_ADMIN__ADDR` |
 | `checkpoint_dir` | `G2O_CHECKPOINT_DIR` |
+| `backfill.initial_lookback` | `G2O_BACKFILL__INITIAL_LOOKBACK` |
 | `collectors.sign_ins.enabled` | `G2O_COLLECTORS__SIGN_INS__ENABLED` |
 | `collectors.sign_ins.interval` | `G2O_COLLECTORS__SIGN_INS__INTERVAL` |
 
@@ -139,6 +140,40 @@ Root directory for the file-based checkpoint store. Every window (log-stream) co
 persists its per-(tenant, endpoint) watermark under here, namespaced so a restart
 resumes from `watermark - overlap` rather than re-fetching or dropping data across
 out-of-order arrivals. See [Architecture](architecture.md#checkpointing).
+
+### `backfill`
+
+```yaml
+backfill:
+  initial_lookback: 0s
+```
+
+How far back a window (log) collector reaches on a **cold start** — no checkpoint yet:
+a new tenant, a wiped volume, a first deploy. It bounds how much history that start
+recovers.
+
+`0` (the default) means *use each collector's own built-in lookback*, which is not one
+value: most streams use 1h, `m365.unified_audit` 4h, `entra.security_incidents` 24h —
+each tuned to its endpoint's data latency and throttling ceiling. A non-zero value
+replaces **all** of them, so set it for a deliberate recovery rather than as a permanent
+default.
+
+It does not affect the steady state. Once a checkpoint exists, polling resumes from the
+watermark, and a gap longer than a collector's max window is walked forward in capped
+chunks across successive ticks — losslessly. This key only governs the case where there
+is no checkpoint to resume from.
+
+> **There is a ceiling, and exceeding it fails silently.** graph2otel ships logs over
+> OTLP into Loki, which rejects samples older than `reject_old_samples_max_age` — about
+> **13 days** on Grafana Cloud. A larger `initial_lookback` is not a longer recovery: it
+> is a guaranteed drop at ingest. graph2otel polls Graph for the history, maps it, ships
+> it, and reports no error, while the backend discards everything past its window. You
+> see Graph calls being made, a clean log, and no data in Grafana — which is worse than
+> a short lookback, because it looks like it is working.
+>
+> graph2otel **warns** past ~13d but deliberately does **not** clamp: a self-hosted Loki
+> may be configured wider, and a non-Loki OTLP sink has its own rules, so graph2otel does
+> not presume to know your backend's retention. If yours accepts more, ignore the warning.
 
 ## Secrets — what never belongs in this file
 

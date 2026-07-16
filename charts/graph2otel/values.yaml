@@ -235,6 +235,18 @@ config:
   cardinality:
     metric_limit: 2000
 
+  backfill:
+    # -- Cold-start backfill window for window (log) collectors — no checkpoint
+    # yet: a new tenant, a wiped volume, a first deploy. 0 means "use each
+    # collector's own built-in lookback" (most 1h; m365.unified_audit 4h;
+    # entra.security_incidents 24h); a non-zero value replaces all of them.
+    # Does not affect the steady state, where polling resumes from the
+    # watermark. CEILING: Loki rejects samples older than
+    # reject_old_samples_max_age (~13d on Grafana Cloud), so a larger value is
+    # not a longer recovery — it is a silent drop at ingest. graph2otel warns
+    # past ~13d but does not clamp (your sink may accept more).
+    initial_lookback: 0s
+
   # -- Where window-log collectors persist their per-(tenant, endpoint)
   # watermarks, so a restart resumes rather than re-fetching or dropping
   # data. Matches the checkpoint volume's mountPath below, so overriding this

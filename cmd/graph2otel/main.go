@@ -81,6 +81,15 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	logger.Info("graph2otel starting",
 		"version", version, "otlp_protocol", cfg.OTLP.Protocol, "tenants", len(cfg.Tenants))
 
+	// Advisories: valid settings that take effect exactly as written and are
+	// still probably not what was meant (#118). Logged rather than fatal — each
+	// one is a judgment about a backend graph2otel cannot inspect, so refusing to
+	// start would break a correctly-configured deployment. Emitted here rather
+	// than from Validate because they need the logger, which needs the config.
+	for _, w := range cfg.Warnings() {
+		logger.Warn("config advisory", "detail", w)
+	}
+
 	// Telemetry provider: the single OTLP metrics+logs pipeline everything emits
 	// through. Built here so the process fails fast on a bad exporter config.
 	provider, err := telemetry.NewProvider(ctx, telemetry.Options{

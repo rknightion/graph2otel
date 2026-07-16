@@ -98,12 +98,22 @@ func setupTenant(
 
 	registry := collector.NewRegistry()
 
+	// The file-based checkpoint store, shared by everything that needs to survive
+	// a restart: window collectors' watermarks (logpipeline + jobpipeline) and both
+	// async engines' in-flight job ids (#118).
+	store := checkpoint.NewStore(cfg.CheckpointDir)
+
 	// Snapshot collectors (metric-shaped inventory polls). exporter runs the
 	// Intune reports export-job pipeline (POST → poll → download → parse) for the
 	// M5 export-based report collectors; it shares gc's instrumented, rate-limited
 	// (48/min export bucket) transport for create/poll and a plain client for the
-	// unauthenticated SAS download.
-	exporter := exportjob.New(gc, exportjob.DefaultDownloader(), exportjob.Options{})
+	// unauthenticated SAS download. Store/TenantID let it resume an export job it
+	// created but had not downloaded when the process restarted, rather than
+	// POSTing a second one against that same 48/min budget (#118).
+	exporter := exportjob.New(gc, exportjob.DefaultDownloader(), exportjob.Options{
+		Store:    store,
+		TenantID: ta.TenantID,
+	})
 	// One shared managedDevices fetcher per tenant: intune.devices (hourly) and
 	// intune.malware (30m) both page the same fleet list every cycle, so a 30m
 	// TTL lets whichever ticks first warm the cache and the other reuse it —
@@ -124,7 +134,6 @@ func setupTenant(
 	// transport (one PageFetcher over gc) and the file-based checkpoint store.
 	fetcher := logpipeline.NewGraphPageFetcher(gc)
 	jobClient := jobpipeline.NewGraphJobClient(gc)
-	store := checkpoint.NewStore(cfg.CheckpointDir)
 	wdeps := collectors.WindowDeps{
 		Graph:     gc,
 		TenantID:  ta.TenantID,
@@ -140,7 +149,7 @@ func setupTenant(
 			continue
 		}
 		if interval, ok := gateCollector(rw.Collector, ta, cfg, caps, tlog, skips); ok {
-			registry.RegisterWindow(rw.Collector, interval, rw.InitialLookback, rw.MaxWindow)
+			registry.RegisterWindow(rw.Collector, interval, initialLookback(cfg, rw), rw.MaxWindow)
 		}
 	}
 
@@ -163,6 +172,22 @@ func setupTenant(
 
 	tlog.Info("tenant started", "collectors", len(registry.Entries()))
 	return admin.CollectorSource{TenantID: ta.TenantID, Registry: registry, Status: status}, true
+}
+
+// initialLookback resolves a window collector's cold-start backfill window:
+// backfill.initial_lookback when the operator set one, else the collector's own
+// built-in value (#118).
+//
+// This is the single place the config key is applied, deliberately. Threading it
+// through WindowDeps into every collector factory would mean nine collectors each
+// re-deciding the same precedence — and one that forgot would silently ignore the
+// key. The factories keep declaring the value they were tuned with; the override
+// happens once, here, at registration.
+func initialLookback(cfg *config.Config, rw collectors.RegisteredWindow) time.Duration {
+	if cfg.Backfill.InitialLookback > 0 {
+		return cfg.Backfill.InitialLookback
+	}
+	return rw.InitialLookback
 }
 
 // registerBlobCollectors wires the tenant's blob-sourced collectors, if it has

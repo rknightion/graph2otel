@@ -15,6 +15,20 @@ import "time"
 // schemaVersion identifies the on-disk Checkpoint layout, so a future format
 // change can detect and migrate (or reject) an older file instead of
 // silently misinterpreting it.
+//
+// When to bump it, because this is easy to get wrong in both directions:
+// version an INCOMPATIBLE change — a field whose meaning, units or type
+// changed, a rename, a removal, anything a reader could misinterpret. Do NOT
+// version an ADDITIVE, OPTIONAL field. Adding one is compatible in both
+// directions already: a new binary reading an old file sees the field absent and
+// falls back, and an old binary reading a new file ignores it (encoding/json
+// drops unknown fields) and degrades to its previous behavior. Bumping for an
+// additive field would signal an incompatible layout to a future reader that
+// gates on this number, which is a lie that costs a needless migration path.
+//
+// InFlight (#118) is exactly that additive/optional case, so it did NOT bump
+// this — see TestCheckpointSchemaBackwardTolerance and
+// TestCheckpointSchemaForwardTolerance, which pin both directions of that claim.
 const schemaVersion = 1
 
 // Checkpoint is the durable cursor for one (TenantID, Endpoint) window
@@ -41,6 +55,12 @@ type Checkpoint struct {
 	// SeenIDs is the bounded set of event ids observed within the current
 	// overlap window, used to dedupe the re-queried range on restart.
 	SeenIDs SeenIDs `json:"seen_ids"`
+	// InFlight is the server-side async job this poller created but had not
+	// finished consuming when the checkpoint was last written, so a restart can
+	// adopt it rather than orphan it and submit a second one (#118). Nil — and
+	// omitted from the file — for every collector on the plain paged-GET engine
+	// (logpipeline), which creates no jobs at all.
+	InFlight *InFlightJob `json:"in_flight,omitempty"`
 }
 
 // EvictStale prunes SeenIDs entries older than Watermark - OverlapWindow,

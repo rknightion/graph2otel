@@ -63,6 +63,9 @@ type Config struct {
 	Profiling ProfilingConfig `yaml:"profiling"`
 	// Cardinality governs output-side active-series limits (#105).
 	Cardinality CardinalityConfig `yaml:"cardinality"`
+	// Backfill tunes how much history a cold-started window collector recovers
+	// (#118).
+	Backfill BackfillConfig `yaml:"backfill"`
 	// CheckpointDir is the root directory for the file-based CheckpointStore
 	// (#7); each (tenant, endpoint) window poller persists its watermark there.
 	CheckpointDir string `yaml:"checkpoint_dir"`
@@ -101,6 +104,34 @@ type CardinalityConfig struct {
 	// applies as a backstop, but no explicit limit or overflow accounting is
 	// enforced by graph2otel). Env: G2O_CARDINALITY__METRIC_LIMIT.
 	MetricLimit int `yaml:"metric_limit"`
+}
+
+// BackfillConfig tunes the cold-start backfill window shared by every window
+// (log) collector (#118).
+//
+// It applies only to WINDOW collectors, deliberately. A snapshot collector
+// re-derives its whole state every tick, so a missed metric tick costs nothing
+// and there is no history for it to recover — backfill is meaningless there.
+type BackfillConfig struct {
+	// InitialLookback overrides how far back a window collector reaches on a COLD
+	// START — no checkpoint yet: a new tenant, a wiped volume, a first deploy. It
+	// bounds how much history that start recovers, and therefore how long an
+	// outage can be before events are lost for good.
+	//
+	// 0 (the default) means "use each collector's own built-in lookback", which
+	// is NOT one value: most streams use 1h, m365.unified_audit 4h,
+	// entra.security_incidents 24h — tuned per endpoint's latency and throttling
+	// ceiling. A non-zero value here replaces ALL of them, so set it for a
+	// deliberate recovery (a long outage, a fresh volume) rather than as a
+	// permanent default.
+	//
+	// It does NOT affect the steady state: once a checkpoint exists, polling
+	// resumes from the watermark and the MaxWindow clamp walks a long gap forward
+	// in chunks losslessly. This is only the no-checkpoint case.
+	//
+	// There is a downstream CEILING on what any of this buys — see Warnings and
+	// backendAcceptWindow. Env: G2O_BACKFILL__INITIAL_LOOKBACK.
+	InitialLookback time.Duration `yaml:"initial_lookback"`
 }
 
 // ProfilingConfig configures optional continuous profiling. Everything here is
@@ -397,7 +428,52 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("profiling.pyroscope.server_address is required when profiling.pyroscope.enabled is true")
 	}
 
+	if c.Backfill.InitialLookback < 0 {
+		return fmt.Errorf("backfill.initial_lookback %v invalid: must be >= 0 (0 means use each collector's built-in lookback)",
+			c.Backfill.InitialLookback)
+	}
+
 	return nil
+}
+
+// backendAcceptWindow is how far back the OTLP backend is ASSUMED to accept log
+// samples. Grafana Cloud's Loki rejects samples older than its
+// reject_old_samples_max_age, which the maintainer puts at ~13 days (#118, #89 —
+// which sets its blob lifecycle to 7 days for the same reason).
+//
+// It is deliberately a warning threshold and NOT a clamp. graph2otel cannot know
+// every backend's retention policy: a self-hosted Loki may be configured wider,
+// and a non-Loki OTLP sink has entirely different rules. Clamping would silently
+// break a correctly-configured deployment, which is the same class of mistake as
+// the failure it guards against. So the value takes effect as written and the
+// operator is told what to expect.
+const backendAcceptWindow = 13 * 24 * time.Hour
+
+// Warnings returns non-fatal configuration advisories: settings that are valid,
+// take effect exactly as written, and are still very likely not what the operator
+// meant. It is separate from Validate because none of these should stop the
+// process — the caller logs them (see cmd/graph2otel).
+func (c *Config) Warnings() []string {
+	var out []string
+
+	// A lookback beyond the backend's accept window is NOT a longer recovery — it
+	// is a guaranteed silent drop at ingest, and that is worse than a short
+	// lookback precisely because it looks like it is working: graph2otel pages
+	// Graph for the history, maps it, ships it, reports no error, and Loki drops
+	// everything past its window on arrival. The operator sees Graph calls being
+	// made, a clean log, and no data in Grafana. This warning is the only thing
+	// connecting that symptom to this setting.
+	if c.Backfill.InitialLookback > backendAcceptWindow {
+		out = append(out, fmt.Sprintf(
+			"backfill.initial_lookback is %v, beyond the ~%v that Grafana Cloud's Loki accepts old samples within "+
+				"(reject_old_samples_max_age). graph2otel will poll Graph for that history, map it and ship it, and the "+
+				"backend will silently REJECT every record older than its accept window — no error here, no data in Grafana. "+
+				"This is not clamped, because a self-hosted Loki or a non-Loki OTLP sink may accept more: if yours does, "+
+				"ignore this. Otherwise reduce it to %v or less",
+			c.Backfill.InitialLookback, backendAcceptWindow, backendAcceptWindow))
+	}
+
+	return out
 }
 
 // minInterval is the smallest permitted collector poll interval. A positive

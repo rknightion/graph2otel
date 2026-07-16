@@ -23,6 +23,12 @@ type fakeJobClient struct {
 
 	statuses    []string
 	statusCalls int
+	// statusErr, when non-nil, is returned by every QueryStatus call — used to
+	// model a process that never gets its query to a terminal state.
+	statusErr error
+	// statusURLs records the query URL each status poll was made against, so a
+	// test can prove WHICH job id was polled (adopted vs freshly created).
+	statusURLs []string
 
 	pages     map[string]fakePage
 	pageCalls int
@@ -40,12 +46,17 @@ func (f *fakeJobClient) CreateQuery(_ context.Context, _ string, body []byte) (s
 	if i < len(f.createErrs) && f.createErrs[i] != nil {
 		return "", "", f.createErrs[i]
 	}
-	return "query-1", StatusNotStarted, nil
+	// Distinct id per create, so a test can tell an adopted job from a second one.
+	return "query-" + strconv.Itoa(f.createCalls), StatusNotStarted, nil
 }
 
-func (f *fakeJobClient) QueryStatus(_ context.Context, _ string) (string, error) {
+func (f *fakeJobClient) QueryStatus(_ context.Context, queryURL string) (string, error) {
+	f.statusURLs = append(f.statusURLs, queryURL)
 	i := f.statusCalls
 	f.statusCalls++
+	if f.statusErr != nil {
+		return "", f.statusErr
+	}
 	if i < len(f.statuses) {
 		return f.statuses[i], nil
 	}
