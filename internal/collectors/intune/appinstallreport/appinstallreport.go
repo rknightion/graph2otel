@@ -16,11 +16,42 @@
 // per-app export-job fan-out (against a 48-req/min-per-app export budget).
 // This collector instead requests AppInstallStatusAggregate, which has no
 // required filter and returns one pre-aggregated row per app with the five
-// device-count columns this collector's metric is built from directly. The
-// per-device detail (install-state-detail, error code, device identity) that
-// only DeviceInstallStatusByApp carries is therefore NOT available from this
-// collector in v1 — deliberately deferred rather than built as a per-app
-// fan-out; see the tracking issue for a possible follow-up.
+// device-count columns this collector's metric is built from directly.
+//
+// Cardinality (#83, live-verified): app_name is NOT a metric label, and must
+// never become one again — there is a guard test. AppInstallStatusAggregate
+// returns a row for every app in the tenant's Intune CATALOG, not just the
+// admin-deployed ones, so app_name is unbounded in the sense that matters: it
+// scales with the catalog, not with the fleet. On the 6-device m7kni lab
+// tenant it took 341 distinct values, and 341 apps x 5 install states x 4
+// platforms produced 1,870 active series from this one collector — a real
+// enterprise catalog would produce tens of thousands. The metric therefore
+// sums the per-app counts into install_state x platform (both fixed by
+// Microsoft's schema: five columns x the platform enum, ~20 series regardless
+// of tenant size), and every app's own row is emitted as an
+// intune.app_install_status log event instead. Capping app_name to a top-N
+// allow-list was considered and rejected: the log twin is obligatory either
+// way (see below), and once the per-app detail is in the logs a LogQL
+// `count by (app_name)` answers the same question off data already shipped,
+// so the label buys nothing.
+//
+// The summed gauge counts app INSTALLATIONS, not distinct devices — a device
+// running ten apps contributes to ten rows — which is why the metric is named
+// intune.app_install_status.installations with unit {installation} rather than
+// the ".devices"/{device} it carried before #83. That name was inherited from
+// the pre-#83 shape, where each point WAS one app's device count and the name
+// was accurate; summing across apps made it a lie. Distinct devices are not
+// obtainable here at any name: the report has no device rows to deduplicate
+// (see below). Do not "restore" the old name. The per-app numbers on the log
+// twin are the exact export values.
+//
+// The log twin is per-APP, not per-device: AppInstallStatusAggregate carries
+// no device rows at all. The per-device detail (install-state-detail, error
+// code, device identity) that only DeviceInstallStatusByApp carries is
+// therefore NOT available from this collector — an absent data shape in the
+// only report that works fleet-wide, not a deferred log twin. Building it
+// would mean a per-app export-job fan-out against the 48-req/min-per-app
+// export budget; see the tracking issue for a possible follow-up.
 package appinstallreport
 
 import (
@@ -42,9 +73,16 @@ import (
 // self-observability, and the admin status page.
 const collectorName = "intune.app_install_status"
 
-// deviceInstallStatusMetricName is the bounded per-app/install-state device
-// count gauge this collector emits.
-const deviceInstallStatusMetricName = "intune.app_install_status.devices"
+// installationsMetricName is the bounded install-state/platform gauge this
+// collector emits. It counts app INSTALLATIONS, not distinct devices — see the
+// package doc's cardinality note for why distinct devices are not obtainable
+// from this report, and why the name must not drift back to ".devices".
+const installationsMetricName = "intune.app_install_status.installations"
+
+// eventName is the OTLP LogRecord EventName every per-app row carries. The
+// per-app detail lives here rather than on the metric — see the package doc's
+// cardinality note (#83).
+const eventName = "intune.app_install_status"
 
 // reportName is the export report catalog name this collector requests.
 // LIVE-VERIFIED 2026-07-15: DeviceInstallStatusByApp 400s fleet-wide (needs a
@@ -128,9 +166,20 @@ func (c *Collector) RequiredPermissions() []string {
 	return []string{"DeviceManagementManagedDevices.ReadWrite.All"}
 }
 
-// Collect runs the AppInstallStatusAggregate export job and emits one bounded
-// gauge point per (app, install state, platform) from its pre-aggregated
-// device-count columns. Any export failure (missing write scope, a job that
+// seriesKey is the aggregation key for the device-count gauge: the complete
+// set of dimensions that survive the #83 fix. Both are bounded by Microsoft's
+// report schema (five fixed columns x the app-platform enum), never by tenant
+// size — which is the whole point of aggregating here rather than emitting a
+// point per app.
+type seriesKey struct {
+	state    string
+	platform string
+}
+
+// Collect runs the AppInstallStatusAggregate export job, sums its
+// pre-aggregated device-count columns across every app into the bounded
+// install_state x platform gauge, and emits one log event per app row carrying
+// the per-app detail. Any export failure (missing write scope, a job that
 // reports failed, or a SAS url that expired before download) is logged and
 // swallowed rather than treated as a scheduler-visible error — see the
 // package doc and the exportjob seam's sentinel errors.
@@ -150,33 +199,80 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		return nil
 	}
 
-	points := make([]telemetry.GaugePoint, 0, len(rows)*len(installStateColumns))
+	counts := map[seriesKey]float64{}
 	for _, row := range rows {
-		appName := row["DisplayName"]
-		if appName == "" {
-			appName = "unknown"
-		}
 		platform := row["Platform"]
 		if platform == "" {
 			platform = "unknown"
 		}
 
 		for _, isc := range installStateColumns {
-			points = append(points, telemetry.GaugePoint{
-				Value: c.parseCount(row[isc.column], appName, isc.column),
-				Attrs: telemetry.Attrs{"app_name": appName, "install_state": isc.state, "platform": platform},
-			})
+			counts[seriesKey{state: isc.state, platform: platform}] += c.parseCount(row[isc.column], row["DisplayName"], isc.column)
 		}
+
+		e.LogEvent(appLogEvent(row))
 	}
-	e.GaugeSnapshot(deviceInstallStatusMetricName, "{device}", "Intune managed devices by per-app install state, from the AppInstallStatusAggregate export report.", points)
+
+	points := make([]telemetry.GaugePoint, 0, len(counts))
+	for k, v := range counts {
+		points = append(points, telemetry.GaugePoint{
+			Value: v,
+			Attrs: telemetry.Attrs{"install_state": k.state, "platform": k.platform},
+		})
+	}
+	e.GaugeSnapshot(installationsMetricName, "{installation}", "Intune app installations by install state and platform, summed across every app in the AppInstallStatusAggregate export report. A device counts once per app it has, so this counts installations, not distinct devices; see the intune.app_install_status log event for per-app detail.", points)
 
 	return nil
 }
 
-// parseCount parses one device-count column's string value. An empty value
-// (column absent from this row) is silently 0; a non-empty but unparsable
-// value is logged and treated as 0 rather than dropping the whole app's
-// gauge points.
+// appLogEvent builds the per-app intune.app_install_status log event for one
+// AppInstallStatusAggregate row. The app's identity (name, id, publisher) and
+// its five raw per-state device counts live here as structured attributes
+// instead of metric labels — see the package doc's cardinality note (#83).
+// Counts are carried as the export's raw column values, so a value the metric
+// path could not parse (and therefore counted as 0) stays visible here rather
+// than being silently normalized away.
+//
+// Severity escalates to WARN when any install failed: a failing app deployment
+// is worth an operator's attention, a clean row is not.
+func appLogEvent(row exportjob.Row) telemetry.Event {
+	attrs := telemetry.Attrs{}
+	setStr(attrs, "app_name", row["DisplayName"])
+	setStr(attrs, "app_id", row["ApplicationId"])
+	setStr(attrs, "platform", row["Platform"])
+	setStr(attrs, "publisher", row["Publisher"])
+	setStr(attrs, "installed_device_count", row["InstalledDeviceCount"])
+	setStr(attrs, "failed_device_count", row["FailedDeviceCount"])
+	setStr(attrs, "not_applicable_device_count", row["NotApplicableDeviceCount"])
+	setStr(attrs, "not_installed_device_count", row["NotInstalledDeviceCount"])
+	setStr(attrs, "pending_install_device_count", row["PendingInstallDeviceCount"])
+
+	severity := telemetry.SeverityInfo
+	if v, err := strconv.ParseFloat(row["FailedDeviceCount"], 64); err == nil && v > 0 {
+		severity = telemetry.SeverityWarn
+	}
+
+	return telemetry.Event{
+		Name:     eventName,
+		Body:     "Intune app install status",
+		Severity: severity,
+		Attrs:    attrs,
+	}
+}
+
+// setStr sets attrs[key] to val, unless val is empty — an absent export column
+// stays absent from the log record rather than appearing as "".
+func setStr(attrs telemetry.Attrs, key, val string) {
+	if val != "" {
+		attrs[key] = val
+	}
+}
+
+// parseCount parses one device-count column's string value, contributing it to
+// the aggregate. An empty value (column absent from this row) is silently 0; a
+// non-empty but unparsable value is logged and treated as 0 rather than
+// failing the whole aggregate. The raw value stays visible on the row's log
+// twin either way (see appLogEvent).
 func (c *Collector) parseCount(raw, appName, column string) float64 {
 	if raw == "" {
 		return 0

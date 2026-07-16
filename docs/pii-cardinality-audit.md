@@ -46,6 +46,16 @@ twin: `entra.roles`, `entra.consent`, `entra.credential_expiry`,
 `intune.malware`, `intune.manageddevices`, `intune.certificates`,
 `intune.appprotection`, plus the two Purview label collectors.
 
+**One more was missed by that sweep and fixed in #83:** `intune.app_install_status`.
+The sweep recorded `intune/defenderreport` and `intune/certinventoryreport` as the
+export-report collectors that "already emit a log twin" and moved on — but the third
+export-report collector had the same shape and no twin: it fetched a row per app,
+bucketed a device count, and discarded the rest. It was missed because this document
+already *claimed* it emitted per-row logs (see Logs below), so a sweep checking the
+docs rather than `grep LogEvent` on the package would tick it off. **A wrong claim in
+an audit doc does not just fail to catch a bug — it actively hides it from the next
+audit.** Check the source, not this file.
+
 **Two are audited, deliberate exceptions with no twin** — recorded here so a future
 sweep does not re-litigate them, and documented in their package docs:
 
@@ -86,6 +96,27 @@ one of:
   `group_tag`, cert `issuer`, detected-app / UXA app-name allow-lists). Within
   the rule.
 
+**Corrected by #83 — this section's original PASS was wrong.** It classified
+`intune.app_install_status`'s `app_name` under "admin-configured object name"
+above and passed it on that basis. Live data refuted both halves of that
+classification: the AppInstallStatusAggregate report returns a row for every app
+in the tenant's Intune **catalog**, not the set an admin deployed, so `app_name`
+was bounded by the catalog rather than by admin-created objects; and it carried
+no `"other"` cap despite the sentence above asserting free-text labels are capped.
+On the 6-device m7kni lab tenant it took **341** distinct values, and
+341 × 5 install states × 4 platforms produced **1,870 active series from that one
+collector** — scaling with the app catalog, so an enterprise catalog would produce
+tens of thousands. Fixed in #83 by dropping `app_name` to the collector's new
+`intune.app_install_status` log twin and summing the metric into
+`install_state` × `platform` (~20 series, fixed by Microsoft's report schema).
+A guard test now fails if `app_name` is reintroduced as a label.
+
+**The generalizable lesson:** "it's an object name, so it's admin-bounded" is an
+inference about the *source data*, not an observation of it — and here the
+inference was wrong in a way only live data exposed. An entity name is bounded by
+whatever populates the collection it came from; check what that actually is
+(catalog vs deployment, tenant-wide vs admin-created) before granting it a label.
+
 Explicitly verified that the highest-risk collectors read **no** per-entity field
 into their metric path at all: `intune.manageddevices` and `intune.malware` never
 read device ID/serial/IMEI/name/UPN; `entra.risk` and `entra.signinactivity`
@@ -110,11 +141,20 @@ WindowCollectors (`entra.signins` ×4, `entra.directory_audit`,
 `entra.provisioning`, `entra.risk_detection`, `entra.security_alert`,
 `intune.audit_event`, `intune.enrollment_event`, `intune.autopilot_event`) and
 the three export-report per-row logs (`intune.device_certificate`,
-`intune.defender_agent`, and the app-install per-device rows) carry the expected
+`intune.defender_agent`, `intune.app_install_status`) carry the expected
 per-entity attributes: UPNs, user/device IDs, device names/serials, IPs,
 locations, correlation/request/incident IDs, certificate thumbprints/serials/
 subjects, provisioning identity IDs/names, sign-in resource/SP IDs/names. All of
 this is legitimate log-attribute payload.
+
+`intune.app_install_status` is the exception to that attribute list: it is a
+per-**app** twin, not a per-entity one, carrying app identity (name, id,
+publisher, platform) and the five raw per-state device counts. Its source report
+(AppInstallStatusAggregate) has no device rows at all, so there is no per-device
+identity for it to carry — see the collector's package doc. **This entry also
+corrects a false claim in this document's original pass**, which asserted the
+app-install collector emitted "per-device rows"; it emitted no logs whatsoever
+until #83, and per-device detail is not obtainable from its report regardless.
 
 One deliberate protection confirmed in code: `intune.audit_event` emits the
 **names** of changed properties (`modified_property_names`) but **never** their
@@ -159,3 +199,13 @@ corrected against actual emission; permission scopes least-privilege with the on
 documented, opt-in export-job write exception, and its preflight record fixed.
 The one minor observation (agreements object-ID label) is bounded and tracked as
 post-1.0 polish, not a release blocker.
+
+**This verdict has been wrong three times, and each time in the same way.** The
+original pass cleared `entra.risk` and the Purview label collectors (#110, #111 —
+fetched-then-dropped), and cleared `intune.app_install_status`'s `app_name` on an
+inference about the source data that live telemetry refuted (#83, 1,870 series
+from a 6-device tenant). Every one of those was found by looking at **live
+emission or collector source**, never by re-reading this document — which by then
+was asserting the bug did not exist. Treat a "PASS" here as a record of what was
+checked on a given date, not as a property of the code: re-derive it from
+`grep -rn 'GaugeSnapshot\|LogEvent'` and a live series count before relying on it.
