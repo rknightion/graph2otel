@@ -237,8 +237,32 @@ func TestCollectEscalatesSeverityForFailedOrRevoked(t *testing.T) {
 	if len(logs) != 1 {
 		t.Fatalf("got %d log records, want 1", len(logs))
 	}
-	if logs[0].Severity < int(telemetry.SeverityWarn) {
-		t.Errorf("revoked certificate log severity = %+v, want WARN", logs[0])
+	// Compare SeverityText, not the numeric severity: LogRecord.SeverityNumber
+	// is the OTEL wire scale (WARN=13), telemetry.SeverityWarn is this
+	// project's enum (Warn=1), and the previous form of this assertion compared
+	// across them — `13 < 1` — so it could never fail (#113).
+	if logs[0].SeverityText != telemetry.SeverityWarn.String() {
+		t.Errorf("revoked certificate log severity = %q, want %q", logs[0].SeverityText, telemetry.SeverityWarn)
+	}
+}
+
+// TestCollectDoesNotEscalateSeverityForHealthy is the negative half of the
+// assertion above. Without it, a collector that marked EVERY certificate WARN
+// would still pass — which is exactly how the #113 bug hid: the old assertion
+// was vacuous in both directions.
+func TestCollectDoesNotEscalateSeverityForHealthy(t *testing.T) {
+	rows := []exportjob.Row{row("Contoso Issuing CA", "issued", nil)}
+	rec := telemetrytest.New()
+	c := newTestCollector(&fakeRunner{rows: rows})
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	logs := rec.LogRecords()
+	if len(logs) != 1 {
+		t.Fatalf("got %d log records, want 1", len(logs))
+	}
+	if logs[0].SeverityText != telemetry.SeverityInfo.String() {
+		t.Errorf("healthy certificate log severity = %q, want %q", logs[0].SeverityText, telemetry.SeverityInfo)
 	}
 }
 

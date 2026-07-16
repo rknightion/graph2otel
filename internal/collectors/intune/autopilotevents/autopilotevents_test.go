@@ -8,6 +8,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -143,11 +144,14 @@ func TestMapAutopilotEventRetryRecordsHaveDistinctIDs(t *testing.T) {
 	if idFail == idSuccess {
 		t.Fatalf("retry records must not share a dedupe id: %q == %q", idFail, idSuccess)
 	}
-	if evFail.Severity != 2 {
-		t.Errorf("first attempt (failed) severity = %v, want Error", evFail.Severity)
+	// Compare the named constants, not raw ints: telemetry.Severity (Info=0,
+	// Warn=1, Error=2) and the OTEL wire scale (INFO=9, WARN=13, ERROR=17) are
+	// different, and bare numbers are how that gets confused (#113).
+	if evFail.Severity != telemetry.SeverityError {
+		t.Errorf("first attempt (failed) severity = %v, want %v", evFail.Severity, telemetry.SeverityError)
 	}
-	if evSuccess.Severity != 0 {
-		t.Errorf("retry attempt (success) severity = %v, want Info", evSuccess.Severity)
+	if evSuccess.Severity != telemetry.SeverityInfo {
+		t.Errorf("retry attempt (success) severity = %v, want %v", evSuccess.Severity, telemetry.SeverityInfo)
 	}
 }
 

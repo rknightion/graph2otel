@@ -42,9 +42,23 @@ type LogRecord struct {
 	Body         string
 	SeverityText string
 	EventName    string    // the OTLP LogRecord EventName field (log v0.20.0+)
-	Severity     int       // OTEL log severity value
 	Timestamp    time.Time // the LogRecord Timestamp (zero when the emitter left it unset)
 	Attrs        map[string]string
+
+	// SeverityNumber is the OTEL wire severity (log.SeverityInfo=9,
+	// SeverityWarn=13, SeverityError=17) — NOT this project's
+	// telemetry.Severity enum (Info=0, Warn=1, Error=2). The two are different
+	// scales, and conflating them is a live trap: `rec.SeverityNumber <
+	// int(telemetry.SeverityWarn)` reads as "not at least a warning" but
+	// evaluates 13 < 1, so it is false for EVERY record and the assertion can
+	// never fail (#113).
+	//
+	// It is deliberately typed log.Severity rather than int so that comparison
+	// is a COMPILE error instead of a silently-passing test. Assert on
+	// SeverityText ("WARN"), or better, drive the collector's mapper directly
+	// and compare telemetry.Severity values — see entra/securityincidents or
+	// entra/risk for that idiom.
+	SeverityNumber log.Severity
 }
 
 // Recorder wires a telemetry.Emitter to in-memory readers.
@@ -226,12 +240,12 @@ func flattenLogRecord(rec sdklog.Record) LogRecord {
 		return true
 	})
 	return LogRecord{
-		Body:         rec.Body().AsString(),
-		SeverityText: rec.SeverityText(),
-		EventName:    rec.EventName(),
-		Severity:     int(rec.Severity()),
-		Timestamp:    rec.Timestamp(),
-		Attrs:        attrs,
+		Body:           rec.Body().AsString(),
+		SeverityText:   rec.SeverityText(),
+		EventName:      rec.EventName(),
+		SeverityNumber: rec.Severity(),
+		Timestamp:      rec.Timestamp(),
+		Attrs:          attrs,
 	}
 }
 
