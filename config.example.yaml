@@ -49,6 +49,34 @@ tenants:
     # container listing but not blob content reads).
     # blob_ingest:
     #   account_url: "https://myaccount.blob.core.windows.net"
+    #
+    # Optional: which Office 365 Management Activity API content types the
+    # m365.activity collector subscribes to. Unlike blob_ingest this is NOT an
+    # opt-in to run the collector — m365.activity is default-on, because its
+    # transport is stable v1.0 (unlike m365.unified_audit's beta query API).
+    # This block only widens what it fetches.
+    #
+    # Unset (the default) subscribes to Audit.Exchange + Audit.SharePoint.
+    # Valid: Audit.AzureActiveDirectory, Audit.Exchange, Audit.SharePoint,
+    # Audit.General, DLP.All.
+    #
+    # The API has NO server-side filtering, so a content type is all-or-nothing:
+    # subscribing means fetching every record it carries, and every record
+    # fetched is shipped as a log (there is no record-type include-list — see
+    # docs/signals.md on why per-entity rows are never fetched-then-dropped).
+    #
+    # Audit.General is opt-in because of that: measured on a 6-device tenant it
+    # carries 4,035 records/23h, of which 3,865 are Endpoint DLP file activity,
+    # 165 SecurityComplianceCenter and 3 Teams. If you want Teams admin activity
+    # you fetch the whole catch-all to get it, and that ratio grows with your
+    # fleet. For a SIEM that Endpoint DLP stream is a feature — per-file hashes,
+    # device and user — so enable it deliberately, not by accident.
+    #
+    # Audit.AzureActiveDirectory is omitted from the default because
+    # entra.signins.interactive and entra.directory_audits already emit those
+    # records; adding it here ships them twice.
+    # o365_activity:
+    #   content_types: ["Audit.Exchange", "Audit.SharePoint", "Audit.General"]
 
 otlp:
   protocol: http # grpc | http | stdout (stdout = print signals to the console for local debug, no backend)

@@ -279,18 +279,32 @@ func CheckAnnotations(registered []string) error {
 }
 
 // Rows builds the full row set from a registry snapshot: the constructed
-// collectors from collectors.All(), WindowAll(), and BlobAll() respectively,
-// each already built from its factory with zero Deps.
+// collectors from collectors.All(), WindowAll(), BlobAll() and O365All()
+// respectively, each already built from its factory with zero Deps.
 //
 // They arrive as []any so this package never imports internal/collectors — it
 // reads every fact through the same optional interfaces the composition root
 // asserts on, which is what keeps the doc honest about what will actually run.
-func Rows(snapshot, window, blob []any) ([]Row, error) {
+//
+// EVERY registration path must be passed here. A path this function does not
+// walk is invisible to the reference AND to all three drift gates — which then
+// pass because they are blind, not because they are satisfied. That is exactly
+// what happened when O365All() landed (#100) without being added here: the
+// annotation gate went green over a collector it could not see. If a fifth
+// construction path is ever added, this signature changes with it.
+//
+// O365 collectors are KindWindow because that is what they are: they register
+// via RegisterWindow and their cursor is a time watermark. Their source being a
+// second first-party API rather than Graph is not a cursor distinction, and the
+// kind split here is about the cursor. (Contrast blob collectors, which get
+// their own kind because a byte-offset-per-blob cursor genuinely cannot express
+// a [from, to] window.)
+func Rows(snapshot, window, blob, o365 []any) ([]Row, error) {
 	var rows []Row
 	for _, group := range []struct {
 		kind Kind
 		cs   []any
-	}{{KindSnapshot, snapshot}, {KindWindow, window}, {KindBlob, blob}} {
+	}{{KindSnapshot, snapshot}, {KindWindow, window}, {KindBlob, blob}, {KindWindow, o365}} {
 		for _, c := range group.cs {
 			facts, ok := c.(collectorFacts)
 			if !ok {

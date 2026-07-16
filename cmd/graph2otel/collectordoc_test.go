@@ -31,7 +31,15 @@ var updateCollectorDoc = flag.Bool("update", false, "rewrite generated golden fi
 
 // registrySnapshot constructs every registered collector exactly as the tenant
 // loop does, minus the dependencies.
-func registrySnapshot() (snapshot, window, blob []any) {
+//
+// EVERY registration path must be walked here. A path this function forgets is
+// invisible to all three gates below, which then pass because they cannot see
+// the collector rather than because it is documented — a green gate over an
+// undocumented collector, which is worse than no gate at all. That is not
+// hypothetical: O365All() (#100) was added as a fourth path and the annotation
+// gate went green over a collector missing from the reference entirely. If a
+// fifth path lands, it is added here too.
+func registrySnapshot() (snapshot, window, blob, o365 []any) {
 	for _, f := range collectors.All() {
 		snapshot = append(snapshot, f(collectors.Deps{}))
 	}
@@ -45,14 +53,21 @@ func registrySnapshot() (snapshot, window, blob []any) {
 	for _, f := range collectors.BlobAll() {
 		blob = append(blob, f(collectors.BlobDeps{}))
 	}
-	return snapshot, window, blob
+	for _, f := range collectors.O365All() {
+		rw := f(collectors.O365Deps{})
+		if rw.Collector == nil {
+			continue
+		}
+		o365 = append(o365, rw.Collector)
+	}
+	return snapshot, window, blob, o365
 }
 
 func registeredNames(t *testing.T) []string {
 	t.Helper()
-	snapshot, window, blob := registrySnapshot()
+	snapshot, window, blob, o365 := registrySnapshot()
 	var names []string
-	for _, group := range [][]any{snapshot, window, blob} {
+	for _, group := range [][]any{snapshot, window, blob, o365} {
 		for _, c := range group {
 			n, ok := c.(interface{ Name() string })
 			if !ok {
@@ -96,8 +111,8 @@ func TestEveryCollectorNameIsUnique(t *testing.T) {
 func TestCollectorReferenceDocInSync(t *testing.T) {
 	docPath := filepath.Join("..", "..", "docs", "collectors.md")
 
-	snapshot, window, blob := registrySnapshot()
-	rows, err := collectordoc.Rows(snapshot, window, blob)
+	snapshot, window, blob, o365 := registrySnapshot()
+	rows, err := collectordoc.Rows(snapshot, window, blob, o365)
 	if err != nil {
 		t.Fatalf("rows: %v", err)
 	}

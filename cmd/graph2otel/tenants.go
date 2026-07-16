@@ -19,6 +19,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/jobpipeline"
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
+	"github.com/rknightion/graph2otel/internal/o365activityclient"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -160,6 +161,12 @@ func setupTenant(
 	// default deployment is untouched.
 	registerBlobCollectors(cfg, ta, caps, store, tlog, registry, skips)
 
+	// O365 Management Activity API collectors (#100) — the second non-Graph
+	// first-party API. Unlike blob ingest this needs no infrastructure opt-in:
+	// the tenant's existing credential just requests a different audience, so
+	// these are default-on.
+	registerO365Collectors(cfg, ta, caps, store, tlog, emitter, registry, skips)
+
 	status := collector.NewStatusTracker()
 	sched := collector.NewScheduler(emitter, collector.NewMemoryStore(),
 		collector.WithTenant(ta.TenantID),
@@ -232,6 +239,123 @@ func registerBlobCollectors(
 			registry.Register(c, interval)
 		}
 	}
+}
+
+// registerO365Collectors wires the tenant's Office 365 Management Activity API
+// collectors (#100).
+//
+// Unlike registerBlobCollectors there is no infrastructure gate: this API needs
+// no storage account and no extra credential, only the tenant's existing one
+// requesting the manage.office.com audience instead of Graph's. So these are
+// default-on, which is the entire point — m365.unified_audit is Experimental
+// only because the audit-query API it polls is beta-only, and this transport is
+// stable v1.0.
+//
+// A client build failure skips only these collectors, exactly as a blob Source
+// failure skips only that lane: the tenant's Graph polling is unaffected, and
+// the skip is recorded per collector so the admin page says why they are absent.
+// "Silently doing nothing" and "no data yet" must never look alike — that is the
+// documented way this whole class of path gets misdiagnosed.
+func registerO365Collectors(
+	cfg *config.Config,
+	ta *auth.TenantAuth,
+	caps license.Capabilities,
+	store *checkpoint.Store,
+	tlog *slog.Logger,
+	emitter telemetry.Emitter,
+	registry *collector.Registry,
+	skips map[admin.SkipKey]string,
+) {
+	types, err := tenantO365ContentTypes(cfg, ta.TenantID)
+	if err != nil {
+		tlog.Error("o365 activity disabled: invalid content_types", "error", err)
+		recordO365Skips(store, ta, tlog, skips, "o365 activity unavailable: "+err.Error())
+		return
+	}
+
+	client, err := o365activityclient.NewClient(ta, o365activityclient.Options{
+		Emitter: emitter,
+		// PublisherIdentifier is the tenant's OWN GUID, deliberately. Microsoft's
+		// reference calls it "the tenant GUID of the vendor coding against the
+		// API ... not the GUID of the customer", but that model is being retired:
+		// the same page says "We're moving from a publisher-level limit to a
+		// tenant-level limit", and the AF429 error text spells out
+		// "PublisherId={1} = Tenant GUID used as PublisherIdentifier".
+		//
+		// The vendor reading would also be actively wrong for an OSS tool: every
+		// graph2otel deployment worldwide would send the same publisher GUID and
+		// pool into ONE shared quota — precisely the behavior the docs describe
+		// escaping. Sending each tenant's own GUID gets each its own 2,000/min.
+		PublisherIdentifier: ta.TenantID,
+		Limiter:             o365activityclient.NewLimiter(),
+	})
+	if err != nil {
+		tlog.Error("o365 activity disabled: building the client failed", "error", err)
+		recordO365Skips(store, ta, tlog, skips, "o365 activity unavailable: "+err.Error())
+		return
+	}
+
+	odeps := collectors.O365Deps{
+		Client:       client,
+		ContentTypes: types,
+		TenantID:     ta.TenantID,
+		Logger:       tlog,
+		Store:        store,
+	}
+	for _, of := range collectors.O365All() {
+		rw := of(odeps)
+		if rw.Collector == nil {
+			continue
+		}
+		if interval, ok := gateCollector(rw.Collector, ta, cfg, caps, tlog, skips); ok {
+			registry.RegisterWindow(rw.Collector, interval, initialLookback(cfg, rw), rw.MaxWindow)
+		}
+	}
+}
+
+// recordO365Skips marks every O365 collector absent-with-a-reason. Constructed
+// with a nil Client purely to read each collector's Name(); the factories do no
+// I/O at construction.
+func recordO365Skips(
+	store *checkpoint.Store,
+	ta *auth.TenantAuth,
+	tlog *slog.Logger,
+	skips map[admin.SkipKey]string,
+	reason string,
+) {
+	for _, of := range collectors.O365All() {
+		rw := of(collectors.O365Deps{TenantID: ta.TenantID, Logger: tlog, Store: store})
+		if rw.Collector == nil {
+			continue
+		}
+		skips[admin.SkipKey{TenantID: ta.TenantID, Collector: rw.Collector.Name()}] = reason
+	}
+}
+
+// tenantO365ContentTypes resolves and validates the tenant's configured content
+// types. A nil result means "unset" — the collector then uses its own default.
+//
+// Validation is here rather than in the collector so a typo fails loudly at
+// startup instead of becoming a silent 400 on every tick.
+func tenantO365ContentTypes(cfg *config.Config, tenantID string) ([]o365activityclient.ContentType, error) {
+	for _, t := range cfg.Tenants {
+		if t.TenantID != tenantID {
+			continue
+		}
+		if len(t.O365Activity.ContentTypes) == 0 {
+			return nil, nil
+		}
+		out := make([]o365activityclient.ContentType, 0, len(t.O365Activity.ContentTypes))
+		for _, s := range t.O365Activity.ContentTypes {
+			ct := o365activityclient.ContentType(s)
+			if !ct.Valid() {
+				return nil, fmt.Errorf("unknown content type %q (valid: %v)", s, o365activityclient.ContentTypes())
+			}
+			out = append(out, ct)
+		}
+		return out, nil
+	}
+	return nil, nil
 }
 
 // tenantBlobAccountURL returns the storage account URL configured for tenantID,

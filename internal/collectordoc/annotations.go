@@ -310,9 +310,14 @@ var annotations = map[string]Annotation{
 
 	// ---- M365 — window collectors ----
 	"m365.unified_audit": {
-		Collects: "The M365 unified audit log, via the async query API: POST a query, poll it, page the result. Its records are not Entra's, so they land under a top-level `m365.audit` event name",
+		Collects: "The M365 unified audit log, via the async query API: POST a query, poll it, page the result. Its records are not Entra's, so they land under a top-level `m365.audit` event name. Superseded by `m365.activity`, which reaches the same records over a stable v1.0 transport — leave only one of the two enabled",
 		Source:   "`POST /security/auditLog/queries` (beta — the documented v1.0 form 404s on a live tenant even under a token carrying the scope)",
 		Emits:    "`m365.audit`",
+	},
+	"m365.activity": {
+		Collects: "The same M365 unified audit records as `m365.unified_audit`, over the Office 365 Management Activity API instead: subscribe to a content type, list its content blobs, fetch each. Stable v1.0, 2,000 req/min per tenant, and no >10-minute async query — which is why this one is not Experimental. The API has NO server-side filtering, so `o365_activity.content_types` chooses what arrives and every record fetched is shipped. Defaults to Audit.Exchange + Audit.SharePoint; Audit.General is opt-in (it carries Teams, but also Endpoint DLP — 3,865 of 4,035 records on a 6-device tenant), and Audit.AzureActiveDirectory is omitted because `entra.signins.interactive` and `entra.directory_audits` already emit those records",
+		Source:   "`manage.office.com/api/v1.0/{tenant}/activity/feed` — a second first-party API, NOT Graph: different audience, and `POST /subscriptions/start` is a write (the second break in graph2otel's read-only property, after the reports-export job)",
+		Emits:    "`m365.audit` — the same event name and the same `id` as `m365.unified_audit`, deliberately: the Management API record IS the query API's `auditData` sub-object, so the two are drop-in equivalents and dedupe-able downstream",
 	},
 
 	// ---- Purview — snapshot collectors ----

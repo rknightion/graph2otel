@@ -180,6 +180,46 @@ type TenantConfig struct {
 	// the one place graph2otel reads from outside Graph. Off unless an account
 	// URL is set.
 	BlobIngest BlobIngestConfig `yaml:"blob_ingest"`
+	// O365Activity configures the Office 365 Management Activity API collector
+	// (#100). Unlike BlobIngest this needs no opt-in to run at all — the
+	// collector is default-on — so this block only widens what it subscribes to.
+	O365Activity O365ActivityConfig `yaml:"o365_activity"`
+}
+
+// O365ActivityConfig selects which Management Activity API content types the
+// m365.activity collector subscribes to for a tenant (#100).
+//
+// This is config rather than a constant because the API has NO server-side
+// filtering, so a content type is all-or-nothing: subscribing means fetching
+// every record it carries, and there is no request that says "Teams only".
+//
+// The numbers that shape the default, measured on m7kni over 23h: Audit.General
+// carries 4,035 records, of which 3,865 are Endpoint DLP file activity, 165 are
+// SecurityComplianceCenter and 3 are Teams. So a tenant that wants Teams admin
+// activity fetches the entire catch-all to get it, and that ratio scales with
+// fleet size while the Teams benefit does not.
+type O365ActivityConfig struct {
+	// ContentTypes overrides which content types this tenant subscribes to.
+	// Empty (the default) uses the collector's built-in set: Audit.Exchange +
+	// Audit.SharePoint. Valid members are Audit.AzureActiveDirectory,
+	// Audit.Exchange, Audit.SharePoint, Audit.General and DLP.All.
+	//
+	// The two deliberate omissions from the default, both for reasons that are
+	// not "volume costs money":
+	//
+	//   - Audit.General is opt-in because graph2otel is deployed by operators
+	//     who pay per GB downstream, and defaulting them into a workload they
+	//     never asked for is the wrong way round. It is a genuine feature for a
+	//     SIEM — Endpoint DLP carries per-file hashes, device and user, which is
+	//     exfiltration and ransomware signal, not noise — so when it IS set,
+	//     every record ships. There is no record-type include-list: fetching
+	//     per-entity rows and discarding them is the bug #112 calls out by name.
+	//
+	//   - Audit.AzureActiveDirectory is omitted because entra.signins.interactive
+	//     and entra.directory_audits already emit those records, both are
+	//     logs-only collectors, and both are default-on — so subscribing here
+	//     duplicates them into the same pipeline.
+	ContentTypes []string `yaml:"content_types"`
 }
 
 // BlobIngestConfig points a tenant's blob-sourced collectors at the Azure

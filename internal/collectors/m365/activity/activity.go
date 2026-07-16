@@ -1,0 +1,520 @@
+// Package activity is the Microsoft 365 unified-audit log source over the
+// Office 365 Management Activity API — the subscribe/list/fetch content feed at
+// manage.office.com, rather than Graph (#100).
+//
+// # Why this exists when m365.unified_audit already ships this signal
+//
+// Not for different data — for a STABLE transport. m365.unified_audit is
+// Experimental for exactly one reason: POST /security/auditLog/queries is
+// beta-only on a real tenant (live 2026-07-16: /v1.0 -> HTTP 404, /beta -> 201).
+// This API is v1.0 stable, quotes 2,000 req/min per tenant rather than
+// 429-ing on rapid query creation (#98), and is built for continuous SIEM
+// ingest (subscription -> content blobs) instead of a >10-minute async query.
+// Dropping the beta dependency IS the deliverable, which is why this collector
+// is default-on and not Experimental.
+//
+// #100 was previously closed as "redundant" on a data-equivalence test ("same
+// rows as the query API" — true) when the question was ingest fitness. That was
+// the wrong question, and this package is the reopened answer.
+//
+// # This collector and m365.unified_audit are the SAME signal
+//
+// The Management API record IS the query API's auditData sub-object: the query
+// API WRAPS the classic O365 Management schema, this API serves it RAW at the
+// top level. (Same relationship as blob `properties` == the Graph resource, and
+// the same conclusion as entra/signins' polled-vs-blob sources.) So both emit
+// the SAME event name "m365.audit" with the SAME record Id, and are drop-in
+// equivalents that dedupe against each other downstream on the `id` attribute.
+//
+// That equivalence is a CONTRACT, not a coincidence, and holding it up costs
+// real work: the two sources disagree on the type of RecordType and UserType
+// (int here, string there), on the casing of ClientIP, on where Workload lives,
+// and on whether `service` exists at all. See recordtypes.go, and mapRecord's
+// comments per field. Any attribute added here must be checked against
+// unifiedaudit.mapRecord, and vice versa.
+//
+// Running both at once therefore DUPLICATES every overlapping record. That is
+// degraded, not broken (same id, so downstream dedupe works), and it resolves
+// when m365.unified_audit is retired — which is deliberately not part of this
+// change, so the two can coexist while this one is proven live.
+//
+// # Ship everything fetched
+//
+// No record-type include-list. m365.unified_audit filters server-side because
+// the query API can; this API has NO server-side filtering at all, so filtering
+// here would mean fetching per-entity rows and discarding them — a bug under
+// #112's hard rule. record_type and workload are attributes; consumers filter
+// in LogQL. Volume is instead controlled at the SUBSCRIPTION, by choosing which
+// content types to enable (config), which is a real server-side choice.
+//
+// # Namespace and cardinality
+//
+// M365 activity is neither an Entra nor an Intune signal, so it shares the
+// top-level "m365.audit" log EventName with its sibling. This collector emits
+// only LOGS and no metrics.
+//
+// Cardinality note (INVERTED from the metric collectors): these are LOGS, so
+// per-entity detail — the record id, UPN, client IP, object id, actor ids —
+// belongs here as structured log attributes. That same data must NEVER become a
+// metric label. See CLAUDE.md: the boundary is a data-modeling rule, not a
+// privacy control.
+//
+// # Secret redaction — the ONE genuine content exclusion
+//
+// These records carry ModifiedProperties with OldValue/NewValue, which for a
+// credential or certificate change IS the credential. mapRecord emits the
+// changed property NAMES and never their values, exactly as intune/auditevents
+// does. ExtendedProperties gets the same treatment for a related reason: its
+// Value is a JSON-ENCODED STRING (#100) of unbounded, workload-defined shape.
+//
+// PII is emphatically NOT excluded and must not be: UPN, client IP and object
+// id are emitted here by design — graph2otel is a SIEM feed.
+//
+// # The read-only property
+//
+// POST /subscriptions/start is a WRITE — the second break in graph2otel's
+// read-only property after the Intune reports-export job. It creates a
+// subscription rather than mutating tenant data, and ActivityFeed.Read (a read
+// scope) authorizes it, so the break is narrower than the export-job one. It is
+// still a write. The engine owns when it happens; this package only declares
+// the scope.
+//
+// See GitHub issue #100.
+package activity
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"time"
+
+	"github.com/rknightion/graph2otel/internal/collector"
+	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/o365activityclient"
+	"github.com/rknightion/graph2otel/internal/o365pipeline"
+	"github.com/rknightion/graph2otel/internal/telemetry"
+)
+
+// Schedule tuning. Unlike m365.unified_audit — whose 30-minute floor exists
+// because creating queries in rapid succession returns HTTP 429 (#98) — this
+// API quotes 2,000 req/min per tenant and content lists ~2 MINUTES after the
+// event (live, #100), so the cadence is set by usefulness rather than by
+// throttling. One tick is one list plus one fetch per NEW blob per content
+// type; on the live tenant that is ~22 fetches/day.
+//
+// lag keeps the window's upper bound off "now": records land minutes behind the
+// event, and blobs are explicitly non-sequential ("one content blob can contain
+// events that occurred prior to an earlier content blob"), so querying up to now
+// would repeatedly miss late arrivals. The engine's own overlap + dual
+// contentId/record-Id dedupe is what actually catches them; lag just avoids
+// making it do that work every tick.
+const (
+	interval        = 10 * time.Minute
+	lag             = 5 * time.Minute
+	initialLookback = 4 * time.Hour
+	// maxWindow matches the API's hard 24h range cap on /subscriptions/content.
+	// Over that, the API rejects with AF20055 or — worse — returns HTTP 200 with
+	// SILENTLY PARTIAL results. o365activityclient chunks internally so a wider
+	// window would still be correct, but keeping it at the cap keeps one tick to
+	// one request per content type.
+	maxWindow = 24 * time.Hour
+)
+
+// defaultContentTypes is what a default deployment subscribes to.
+//
+// This API has NO server-side filtering, so the subscription is the only place
+// volume can be controlled — which makes this a cost decision taken on other
+// operators' behalf, not a technical one. graph2otel is public OSS and other
+// operators pay per GB; Loki being free on the verification tenant is not a
+// reason to ship everyone a firehose.
+//
+// Deliberately excluded, each for its own reason:
+//
+//   - Audit.General: 95.8% endpoint-DLP noise live (3,865 of 4,035 records from
+//     ONE host on a SIX-device tenant, #100) — precisely the record type #98
+//     already excluded as "high volume, low signal". Opt-in. Note the cost of
+//     enabling it is bandwidth and CPU, NOT quota: 22 fetches/day against a
+//     2,000 req/min ceiling. Affordable but absurd.
+//   - Audit.AzureActiveDirectory: duplicates entra.directory_audits and
+//     entra.signins.interactive (a live blob held 8 UserLoggedIn of 20 records,
+//     #100). Both are logs-only, so running them together ships dupes.
+//   - DLP.All: needs the ActivityFeed.ReadDlp role this collector does not
+//     declare, and had zero content live (m7kni has no DLP policy matches), so
+//     its record shape is unverified.
+//
+// Once enabled, a content type ships EVERY record it carries — no record-type
+// include-list. #112: fetching per-entity rows and discarding them is a bug.
+var defaultContentTypes = []o365activityclient.ContentType{
+	o365activityclient.ContentExchange,
+	o365activityclient.ContentSharePoint,
+}
+
+const (
+	// collectorName is the stable collector key / config key.
+	collectorName = "m365.activity"
+	// eventName is the OTLP LogRecord EventName every record carries. It is
+	// deliberately IDENTICAL to m365.unified_audit's: the two are one signal
+	// over two transports, and forking the name would make them un-joinable
+	// (see the package doc).
+	eventName = "m365.audit"
+	// checkpointKey namespaces this collector's cursor. It is deliberately NOT
+	// interchangeable with m365.unified_audit's: that one stores a query
+	// watermark over createdDateTime, this one a watermark plus seen contentIds
+	// and record Ids over contentCreated. Sharing a namespace would make each
+	// dedupe the other's records away. Distinct keys are also why the two can
+	// coexist during migration rather than needing a checkpoint conversion.
+	checkpointKey = "/activity/feed/subscriptions/content#m365"
+)
+
+// collectorImpl adapts the o365pipeline engine to the interfaces the
+// composition root type-asserts on.
+//
+// The adapter exists because o365pipeline.Collector exposes Collect(ctx, from,
+// to, e) error while collector.WindowCollector wants CollectWindow returning a
+// high-water mark, plus Name/DefaultInterval/Lag. logpipeline and jobpipeline
+// each ship their own wrapper (LogCollector, JobCollector) for this; o365pipeline
+// does not, so it lives here. If a second o365pipeline collector ever lands,
+// this belongs in the engine instead.
+//
+// It is deliberately NOT Experimental — see the package doc.
+type collectorImpl struct {
+	*o365pipeline.Collector
+}
+
+// Name implements collector.Collector.
+func (c *collectorImpl) Name() string { return collectorName }
+
+// DefaultInterval implements collector.Collector.
+func (c *collectorImpl) DefaultInterval() time.Duration { return interval }
+
+// Lag implements collector.WindowCollector.
+func (c *collectorImpl) Lag() time.Duration { return lag }
+
+// CollectWindow implements collector.WindowCollector by delegating to the
+// engine.
+//
+// It returns `to` as the high-water mark, which is cosmetic rather than load-
+// bearing: the engine keeps its OWN durable watermark (plus seen contentIds and
+// record Ids) in the checkpoint store and resumes from watermark-overlap,
+// ignoring the scheduler's `from` once that watermark exists. The scheduler's
+// separate checkpoint is therefore not this feed's real cursor, and a zero
+// return would be equivalent — the scheduler substitutes `to` for a zero hwm.
+// Returning it explicitly says so out loud.
+func (c *collectorImpl) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter) (time.Time, error) {
+	// Collect is the embedded o365pipeline.Collector's method, not this type's.
+	if err := c.Collect(ctx, from, to, e); err != nil {
+		return time.Time{}, err
+	}
+	return to, nil
+}
+
+// RequiredPermissions declares the least-privilege application role.
+//
+// ActivityFeed.Read alone covers the whole feed AND authorizes POST
+// /subscriptions/start — the WRITE that is graph2otel's second read-only break
+// after the Intune reports-export job. That the write needs no ReadWrite scope
+// is what makes this break the narrower of the two; the export job genuinely
+// requires a DeviceManagement*.ReadWrite.All.
+//
+// ActivityFeed.ReadDlp is deliberately NOT declared: it gates DLP.All's
+// sensitive-data detail, which is not a default content type. A tenant opting
+// into DLP.All needs that role granted separately.
+func (c *collectorImpl) RequiredPermissions() []string {
+	return []string{"ActivityFeed.Read"}
+}
+
+// newCollector builds the M365 activity collector for one tenant, wiring the
+// engine to the tenant's Management Activity API client and checkpoint store.
+//
+// The tenant's configured ContentTypes REPLACE the default rather than extend
+// it: this API has no server-side filtering, so every subscribed content type
+// is fetched in full, and quietly adding the default to an explicit config would
+// double an operator's bill without their asking.
+//
+// The cold-start lookback lives in exactly ONE place: this collector's
+// RegisteredWindow.InitialLookback, which collector.nextWindow honors when it
+// computes [from, to]. o365pipeline.EndpointConfig deliberately has no lookback
+// field to set — it briefly did, and setting it in both places would have let
+// the engine and the scheduler disagree about the same window, with the
+// scheduler winning silently. On a cold start the engine now takes our `from`
+// verbatim; on a warm tick it ignores it and resumes from watermark minus
+// o365pipeline.DefaultOverlap. The 7-day API bound stays enforced either way:
+// the client's ListContent clamps startTime and warns when it fires, so an
+// over-eager lookback here is clamped rather than rejected.
+func newCollector(d collectors.O365Deps) *collectorImpl {
+	contentTypes := d.ContentTypes
+	if len(contentTypes) == 0 {
+		contentTypes = defaultContentTypes
+	}
+	cfg := o365pipeline.EndpointConfig{
+		CollectorName: collectorName,
+		ContentTypes:  contentTypes,
+		CheckpointKey: checkpointKey,
+		EventName:     eventName,
+		Map:           mapRecord,
+	}
+	return &collectorImpl{Collector: o365pipeline.New(d.Client, d.Store, cfg)}
+}
+
+func init() {
+	collectors.RegisterO365(func(d collectors.O365Deps) collectors.RegisteredWindow {
+		return collectors.RegisteredWindow{
+			Collector:       newCollector(d),
+			InitialLookback: initialLookback,
+			MaxWindow:       maxWindow,
+		}
+	})
+}
+
+// Compile-time checks that the collector satisfies every interface the
+// composition root type-asserts on. Failing the WindowCollector one would make
+// it silently never run.
+var (
+	_ collector.WindowCollector = (*collectorImpl)(nil)
+)
+
+// creationTimeLayouts are the layouts tried, in order, against CreationTime.
+//
+// THE trap on this path: CreationTime is documented UTC but arrives with NO
+// ZONE and NO Z — "2015-06-29T20:03:19" (Microsoft's own documented example,
+// mirrored in o365activityclient/content_test.go). time.Parse(time.RFC3339, …)
+// FAILS on that outright, so the obvious layout drops every record silently.
+//
+// RFC3339Nano is tried first anyway so that a Z or an offset — should Microsoft
+// ever start sending one — is honored rather than misread. The zone-less
+// layout is second and, having no zone in the layout, time.Parse returns it as
+// UTC, which is what the schema says it is. Its ".999999999" makes fractional
+// seconds optional, so it covers both "…:19" and "…:19.123".
+var creationTimeLayouts = []string{
+	time.RFC3339Nano,
+	"2006-01-02T15:04:05.999999999",
+}
+
+// mapRecord turns one raw Management Activity API record into its dedupe id
+// (the record's immutable Id) and the OTLP log Event.
+//
+// ok=false DROPS the record, and there is exactly ONE reason for it: no
+// parseable CreationTime. There is deliberately no "now" fallback — a zero
+// Timestamp means "now" to telemetry.Event, so falling back would stamp a stale
+// record with the poll time and silently misplace it in time, which is the #135
+// bug exactly. A wrong timestamp surfaces as nothing at all; a dropped record
+// surfaces as a drop.
+//
+// A record with no Id is NOT dropped, and that is deliberate: it is emitted with
+// an empty dedupe id, per #112 (data reaching no pipeline is a bug) and per the
+// engine's stated contract, which honors an empty id. Such a record cannot be
+// deduped, but every record on this API carries an Id — it is mandatory in the
+// Common Schema — so this is a should-never-happen path, and shipping an
+// undedupeable record beats silently discarding one.
+//
+// Every attribute below that has a query-API twin MUST agree with
+// unifiedaudit.mapRecord's value for the same event — see the package doc.
+// It sets only the attributes actually present, so a record without a UPN or
+// client IP omits them rather than emitting empty ones.
+func mapRecord(rec map[string]any) (string, telemetry.Event, bool) {
+	ts, ok := eventTime(rec)
+	if !ok {
+		return "", telemetry.Event{}, false
+	}
+	id := str(rec, "Id")
+
+	operation := str(rec, "Operation")
+	// `service` is ABSENT on this API. The query API emits it, and on the live
+	// #98 record it was byte-identical to auditData.Workload — so Workload
+	// feeds both attributes, keeping `service` present on both transports
+	// rather than leaving a hole on one.
+	workload := str(rec, "Workload")
+	// UserId on the classic schema is the actor's UPN (Microsoft's own example:
+	// "admin@contoso.onmicrosoft.com"). It maps to `user_id`, the query API's
+	// direct twin. `user_principal_name` is deliberately NOT synthesized from
+	// it: the classic schema has no separate UPN field, and copying UserId into
+	// a second attribute would be inventing a value rather than converging on
+	// one. See the issue — this is flagged for live confirmation.
+	userID := str(rec, "UserId")
+	result := str(rec, "ResultStatus")
+
+	attrs := telemetry.Attrs{}
+	setStr(attrs, "id", id)
+	setStr(attrs, "operation", operation)
+	setStr(attrs, "workload", workload)
+	setStr(attrs, "service", workload)
+	setStr(attrs, "result_status", result)
+	setStr(attrs, "user_id", userID)
+	setStr(attrs, "user_key", str(rec, "UserKey"))
+	// ClientIP here, clientIp on the query API — same attribute either way.
+	setStr(attrs, "client_ip", str(rec, "ClientIP"))
+	setStr(attrs, "object_id", str(rec, "ObjectId"))
+	setStr(attrs, "organization_id", str(rec, "OrganizationId"))
+
+	// RecordType / UserType are INTs here and STRINGs on the query API. Emit
+	// the int unconditionally (it is the only lossless form, and Microsoft's
+	// published table does not cover every value this tenant emits) and the
+	// converged name only when it resolves — never a guess. See recordtypes.go.
+	if n, present := num(rec, "RecordType"); present {
+		attrs["record_type_id"] = itoa(n)
+		if name, known := recordTypeName(n); known {
+			attrs["record_type"] = name
+		}
+	}
+	if n, present := num(rec, "UserType"); present {
+		attrs["user_type_id"] = itoa(n)
+		if name, known := userTypeName(n); known {
+			attrs["user_type"] = name
+		}
+	}
+	if n, present := num(rec, "Version"); present {
+		attrs["version"] = itoa(n)
+	}
+	// AzureActiveDirectoryEventType is an int enum with no query-API twin
+	// (unifiedaudit does not read auditData for it), so it is additive-only and
+	// carries no convergence risk. It is emitted un-named: no live sample pins
+	// its int-to-name mapping, and recordtypes.go's rule is that a guessed name
+	// is worse than none.
+	if n, present := num(rec, "AzureActiveDirectoryEventType"); present {
+		attrs["azure_ad_event_type"] = itoa(n)
+	}
+
+	// SECURITY: names only, never OldValue/NewValue — those can carry
+	// credentials and certificates. The names must still be emitted: excluding
+	// the values must not decay into dropping the field (#112).
+	setStrs(attrs, "modified_property_names", namesOf(rec, "ModifiedProperties", "Name"))
+	// ExtendedProperties[].Value is a JSON-encoded string of unbounded,
+	// workload-defined shape (#100), so it gets the same names-only treatment
+	// until a live audit of the value shapes says otherwise.
+	setStrs(attrs, "extended_property_names", namesOf(rec, "ExtendedProperties", "Name"))
+	// Actor[] is per-entity identity data with no query-API twin. #112: it must
+	// reach a pipeline rather than the floor, and a log attribute is where
+	// per-entity data belongs.
+	setStrs(attrs, "actor_ids", namesOf(rec, "Actor", "ID"))
+
+	// Severity uses the same predicate as unifiedaudit.mapRecord, so the same
+	// event cannot arrive INFO from one transport and WARN from the other. The
+	// vocabulary spans both "Failed" (classic) and "Failure" (Entra).
+	sev := telemetry.SeverityInfo
+	if result == "Failed" || result == "Failure" {
+		sev = telemetry.SeverityWarn
+	}
+
+	return id, telemetry.Event{
+		Name:      eventName,
+		Body:      auditBody(operation, workload, userID),
+		Severity:  sev,
+		Timestamp: ts,
+		Attrs:     attrs,
+	}, true
+}
+
+// eventTime resolves the record's event time from CreationTime, and from
+// nothing else. See creationTimeLayouts for why the layout list is not just
+// RFC3339, and mapRecord for why there is no fallback.
+func eventTime(rec map[string]any) (time.Time, bool) {
+	raw := str(rec, "CreationTime")
+	if raw == "" {
+		return time.Time{}, false
+	}
+	for _, layout := range creationTimeLayouts {
+		if t, err := time.Parse(layout, raw); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
+// auditBody builds a short human-readable summary line, in the same shape
+// unifiedaudit.auditBody produces, so the two transports read identically in a
+// log pane.
+func auditBody(operation, service, who string) string {
+	if who == "" {
+		who = "unknown principal"
+	}
+	if operation == "" {
+		operation = "activity"
+	}
+	if service == "" {
+		return fmt.Sprintf("%s by %s", operation, who)
+	}
+	return fmt.Sprintf("%s by %s [%s]", operation, who, service)
+}
+
+// --- small defensive accessors for untyped JSON ---
+
+func str(m map[string]any, key string) string {
+	s, _ := m[key].(string)
+	return s
+}
+
+// num coerces a JSON number field to int64, tolerating every representation it
+// could plausibly arrive as.
+//
+// float64 is the one that actually happens — encoding/json decodes every JSON
+// number into map[string]any as float64, so a .(int) assertion would silently
+// match nothing. The rest are defense against the #89 lesson that Microsoft's
+// field types are not stable across sources or even within one record: this
+// same field is already a string on the query API.
+func num(m map[string]any, key string) (int64, bool) {
+	switch v := m[key].(type) {
+	case float64:
+		return int64(v), true
+	case int:
+		return int64(v), true
+	case int64:
+		return v, true
+	case json.Number:
+		n, err := v.Int64()
+		return n, err == nil
+	case string:
+		n, err := strconv.ParseInt(v, 10, 64)
+		return n, err == nil
+	default:
+		return 0, false
+	}
+}
+
+// namesOf extracts field `field` from every object in the array at rec[key],
+// skipping anything that is not a string. It is the ONLY way this package reads
+// ModifiedProperties and ExtendedProperties, which is what structurally
+// prevents an OldValue/NewValue from ever reaching an attribute.
+func namesOf(m map[string]any, key, field string) []string {
+	arr, ok := m[key].([]any)
+	if !ok {
+		return nil
+	}
+	var out []string
+	for _, e := range arr {
+		obj, ok := e.(map[string]any)
+		if !ok {
+			continue
+		}
+		if v := str(obj, field); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// itoa renders an enum/scalar int as a string.
+//
+// Every attribute this package emits is a string, matching every sibling
+// collector (intune/auditevents, entra/signins) and the backend: a log
+// attribute becomes Loki STRUCTURED METADATA, which is string-valued, so an
+// int64 attribute buys no fidelity downstream. It also costs: telemetrytest
+// cannot render a log.Int64 ("AsString: invalid Kind"), so an int-valued
+// attribute reads as empty in any recorder-based assertion — a silent trap for
+// the next test written here.
+func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+
+// setStr adds key=val only when val is non-empty, so absent fields don't emit
+// empty attributes.
+func setStr(attrs telemetry.Attrs, key, val string) {
+	if val != "" {
+		attrs[key] = val
+	}
+}
+
+// setStrs adds key=vals only when vals is non-empty.
+func setStrs(attrs telemetry.Attrs, key string, vals []string) {
+	if len(vals) > 0 {
+		attrs[key] = vals
+	}
+}
