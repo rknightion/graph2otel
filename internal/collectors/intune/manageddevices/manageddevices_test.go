@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -77,6 +79,17 @@ func device(compliance, os string, encrypted bool, lastSync *time.Time) map[stri
 func daysAgo(d int) *time.Time {
 	t := fixedNow.Add(-time.Duration(d) * 24 * time.Hour)
 	return &t
+}
+
+// deviceWithIdentity is device() plus the log-twin-only identity fields
+// (id, deviceName, serialNumber, userPrincipalName) - #114.
+func deviceWithIdentity(compliance, os string, encrypted bool, lastSync *time.Time, id, name, serial, upn string) map[string]any {
+	d := device(compliance, os, encrypted, lastSync)
+	d["id"] = id
+	d["deviceName"] = name
+	d["serialNumber"] = serial
+	d["userPrincipalName"] = upn
+	return d
 }
 
 const overviewFixture = `{
@@ -350,6 +363,143 @@ func TestNoPerDeviceAttributes(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// TestNewWiresFleetFetcherWithWidenedSelect pins the #114 acceptance
+// criterion that the fleet-wide $select actually requests the identity
+// fields the log twin needs, on the real request URL New() wires up - so a
+// future trim of managedDevicesSelect can't silently break the twin.
+func TestNewWiresFleetFetcherWithWidenedSelect(t *testing.T) {
+	c := New(&fakeGraph{}, nil)
+	df, ok := c.fleet.(*collectors.DirectFleetFetcher)
+	if !ok {
+		t.Fatalf("fleet fetcher = %T, want *collectors.DirectFleetFetcher", c.fleet)
+	}
+	for _, field := range []string{"id", "deviceName", "serialNumber", "userPrincipalName", "complianceState", "operatingSystem", "isEncrypted", "lastSyncDateTime"} {
+		if !strings.Contains(df.URL, field) {
+			t.Errorf("fleet fetcher URL = %q, missing field %q required for the intune.managed_device log twin", df.URL, field)
+		}
+	}
+}
+
+// TestCollectEmitsOneLogTwinPerDevice pins the #114 maintainer decision to
+// twin EVERY device row per cycle, not just non-compliant ones - the log
+// pipeline is the surviving per-entity record.
+func TestCollectEmitsOneLogTwinPerDevice(t *testing.T) {
+	g := &fakeGraph{bodies: fullFixtureBodies()}
+	rec := telemetrytest.New()
+
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	logs := rec.LogRecords()
+	if len(logs) != 4 {
+		t.Fatalf("got %d log records, want 4 (one per device in the fixture)", len(logs))
+	}
+	for _, l := range logs {
+		if l.EventName != eventManagedDevice {
+			t.Errorf("EventName = %q, want %q", l.EventName, eventManagedDevice)
+		}
+	}
+}
+
+// TestLogTwinCarriesDeviceIdentityAndState asserts the per-device log record
+// carries the identity fields the fleet-wide $select deliberately withheld
+// from every metric, alongside the raw (unbucketed) state fields.
+func TestLogTwinCarriesDeviceIdentityAndState(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		overviewURL(): overviewFixture,
+		fleetURL():    devicesPage(deviceWithIdentity("compliant", "Windows 10", true, daysAgo(0), "dev-1", "LAPTOP-A", "SN123", "alice@example.com")),
+	}}
+	rec := telemetrytest.New()
+
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	logs := rec.LogRecords()
+	if len(logs) != 1 {
+		t.Fatalf("got %d log records, want 1", len(logs))
+	}
+	l := logs[0]
+	want := map[string]string{
+		"id":                  "dev-1",
+		"device_name":         "LAPTOP-A",
+		"serial_number":       "SN123",
+		"user_principal_name": "alice@example.com",
+		"compliance_state":    "compliant",
+		"operating_system":    "Windows 10",
+		"is_encrypted":        "true",
+		"staleness_bucket":    "under_1d",
+	}
+	for k, v := range want {
+		if l.Attrs[k] != v {
+			t.Errorf("attr %s = %q, want %q (all attrs: %+v)", k, l.Attrs[k], v, l.Attrs)
+		}
+	}
+	if l.SeverityText != telemetry.SeverityInfo.String() {
+		t.Errorf("severity = %s, want %s for a compliant, encrypted, freshly-synced device", l.SeverityText, telemetry.SeverityInfo)
+	}
+}
+
+// TestLogTwinSeverityEscalatesForNoncompliantUnencryptedOrStale pins the
+// three independent Warn triggers: non-compliant, unencrypted, or
+// sync-stale beyond 30 days.
+func TestLogTwinSeverityEscalatesForNoncompliantUnencryptedOrStale(t *testing.T) {
+	cases := []struct {
+		name       string
+		compliance string
+		encrypted  bool
+		lastSync   *time.Time
+	}{
+		{"noncompliant", "noncompliant", true, daysAgo(0)},
+		{"unencrypted", "compliant", false, daysAgo(0)},
+		{"stale", "compliant", true, daysAgo(45)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := &fakeGraph{bodies: map[string]string{
+				overviewURL(): overviewFixture,
+				fleetURL():    devicesPage(device(tc.compliance, "Windows 10", tc.encrypted, tc.lastSync)),
+			}}
+			rec := telemetrytest.New()
+
+			if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+				t.Fatalf("Collect: %v", err)
+			}
+
+			logs := rec.LogRecords()
+			if len(logs) != 1 {
+				t.Fatalf("got %d log records, want 1", len(logs))
+			}
+			if logs[0].SeverityText != telemetry.SeverityWarn.String() {
+				t.Errorf("severity = %s, want %s for case %q", logs[0].SeverityText, telemetry.SeverityWarn, tc.name)
+			}
+		})
+	}
+}
+
+// TestLogTwinSeverityIsInfoForHealthyCompliantEncryptedFreshDevice guards
+// against over-eager escalation: a device satisfying none of the three Warn
+// triggers must stay Info.
+func TestLogTwinSeverityIsInfoForHealthyCompliantEncryptedFreshDevice(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		overviewURL(): overviewFixture,
+		fleetURL():    devicesPage(device("compliant", "macOS", true, daysAgo(1))),
+	}}
+	rec := telemetrytest.New()
+
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	logs := rec.LogRecords()
+	if len(logs) != 1 {
+		t.Fatalf("got %d log records, want 1", len(logs))
+	}
+	if logs[0].SeverityText != telemetry.SeverityInfo.String() {
+		t.Errorf("severity = %s, want %s", logs[0].SeverityText, telemetry.SeverityInfo)
 	}
 }
 

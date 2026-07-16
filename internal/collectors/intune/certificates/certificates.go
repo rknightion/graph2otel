@@ -2,7 +2,19 @@
 // bounded aggregate gauges over device-issued and user-imported certificate
 // state, so an operator can see "how many certs are about to expire" and
 // "how many certs are stuck in a failed/pending issuance state" without a
-// per-certificate series.
+// per-certificate series, PLUS a log twin of the same fetch — one OTEL log
+// record per certificate (intune.device_certificate) carrying the per-cert
+// identity the gauges never carry: device/user display name, thumbprint,
+// serial number, issuer, and issuance/expiry timestamps. A failed cert or a
+// stuck VPN/Wi-Fi/S-MIME certificate is an outage waiting to happen, and the
+// thumbprint is what a cert-misuse investigation keys on — dropping that
+// detail (as this collector previously did, #114) meant graph2otel could say
+// "how many" but never "WHICH certificate". Both certificate sources
+// (managedDeviceCertificateState and userPfxCertificate) emit the SAME
+// EventName with a "source" attribute distinguishing them, since they are
+// the same signal from an operator's point of view. Private key material
+// (userPFXCertificate's encryptedPfxBlob/encryptedPfxPassword) is never
+// decoded or emitted — see userPfxCertificate's type doc.
 //
 // Two beta-only Graph resources feed the same two metrics:
 //
@@ -44,6 +56,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -62,6 +75,14 @@ const (
 	daysUntilExpiryMetricName = "intune.certificate.days_until_expiry"
 	stateCountMetricName      = "intune.certificate.state.count"
 )
+
+// eventDeviceCertificate is the log-twin EventName shared by BOTH certificate
+// sources this collector aggregates (managedDeviceCertificateState and
+// userPfxCertificate) — one record per certificate per cycle, carrying the
+// identity/thumbprint detail the two gauges above cannot. A "source"
+// attribute ("managed_device" / "user_pfx") distinguishes which Graph
+// resource produced a given record. See the package doc.
+const eventDeviceCertificate = "intune.device_certificate"
 
 // betaBaseURL is the Graph beta root. Both source resources
 // (managedDeviceCertificateState, userPFXCertificate) are beta-only — see the
@@ -232,22 +253,58 @@ type deviceConfigListItem struct {
 }
 
 // certificateState is the subset of the managedDeviceCertificateState
-// resource this collector aggregates on. Intentionally narrow - no id,
-// deviceDisplayName, userDisplayName, thumbprint, or serial number is ever
-// read, since those are unbounded per-entity identifiers that must never
-// become metric labels.
+// resource this collector reads (verified live against the beta docs,
+// 2026-07-16:
+// https://learn.microsoft.com/en-us/graph/api/resources/intune-deviceconfig-manageddevicecertificatestate?view=graph-rest-beta).
+// CertificateIssuanceState/CertificateProfileDisplayName/
+// CertificateExpirationDateTime bucket the two metrics; every other field
+// here feeds ONLY the intune.device_certificate log twin, never a metric
+// label (id, device/user display name, thumbprint, serial number, issuer,
+// key length, subject name/SAN format, revoke status, issuance/last-change
+// timestamps, error code) - see the package doc. Deliberately still excludes
+// certificateKeyUsage, certificateValidityPeriod(Units), certificateKeyStorageProvider,
+// devicePlatform's less useful siblings, and certificateEnhancedKeyUsage/
+// certificateSubjectNameFormatString/certificateSubjectAlternativeNameFormatString
+// - lower-value fields for an investigation twin than the ones decoded below.
 type certificateState struct {
-	CertificateIssuanceState      string     `json:"certificateIssuanceState"`
-	CertificateProfileDisplayName string     `json:"certificateProfileDisplayName"`
-	CertificateExpirationDateTime *time.Time `json:"certificateExpirationDateTime"`
+	ID                                          string     `json:"id"`
+	DevicePlatform                              string     `json:"devicePlatform"`
+	CertificateIssuanceState                    string     `json:"certificateIssuanceState"`
+	CertificateProfileDisplayName               string     `json:"certificateProfileDisplayName"`
+	CertificateExpirationDateTime               *time.Time `json:"certificateExpirationDateTime"`
+	CertificateIssuanceDateTime                 *time.Time `json:"certificateIssuanceDateTime"`
+	CertificateLastIssuanceStateChangedDateTime *time.Time `json:"certificateLastIssuanceStateChangedDateTime"`
+	DeviceDisplayName                           string     `json:"deviceDisplayName"`
+	UserDisplayName                             string     `json:"userDisplayName"`
+	CertificateThumbprint                       string     `json:"certificateThumbprint"`
+	CertificateSerialNumber                     string     `json:"certificateSerialNumber"`
+	CertificateIssuer                           string     `json:"certificateIssuer"`
+	CertificateRevokeStatus                     string     `json:"certificateRevokeStatus"`
+	CertificateSubjectNameFormat                string     `json:"certificateSubjectNameFormat"`
+	CertificateSubjectAlternativeNameFormat     string     `json:"certificateSubjectAlternativeNameFormat"`
+	CertificateKeyLength                        int        `json:"certificateKeyLength"`
+	CertificateErrorCode                        int        `json:"certificateErrorCode"`
 }
 
 // userPfxCertificate is the subset of the userPFXCertificate resource this
-// collector aggregates on. No id, thumbprint, or userPrincipalName is ever
-// read - see the type doc above.
+// collector reads (verified live against the beta docs, 2026-07-16:
+// https://learn.microsoft.com/en-us/graph/api/resources/intune-raimportcerts-userpfxcertificate?view=graph-rest-beta).
+// IntendedPurpose/ExpirationDateTime bucket the metrics; ID/UserPrincipalName/
+// Thumbprint/StartDateTime/ProviderName/KeyName feed ONLY the
+// intune.device_certificate log twin (source=user_pfx), never a metric
+// label. encryptedPfxBlob and encryptedPfxPassword — the two fields this
+// resource documents as carrying the certificate's private key material — are
+// DELIBERATELY not decoded here and therefore can never reach either output;
+// see the package doc.
 type userPfxCertificate struct {
+	ID                 string     `json:"id"`
+	UserPrincipalName  string     `json:"userPrincipalName"`
+	Thumbprint         string     `json:"thumbprint"`
 	IntendedPurpose    string     `json:"intendedPurpose"`
+	StartDateTime      *time.Time `json:"startDateTime"`
 	ExpirationDateTime *time.Time `json:"expirationDateTime"`
+	ProviderName       string     `json:"providerName"`
+	KeyName            string     `json:"keyName"`
 }
 
 // bucketKey is the shared aggregation key for the days_until_expiry metric:
@@ -309,12 +366,12 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	states := map[string]int64{}
 	capper := newProfileNameCapper()
 
-	if err := c.collectManagedDeviceCertificateStates(ctx, now, days, states, capper); err != nil {
+	if err := c.collectManagedDeviceCertificateStates(ctx, e, now, days, states, capper); err != nil {
 		c.logger.Warn("certificates: managedDeviceCertificateStates failed", "collector", collectorName, "error", err)
 		errs = append(errs, fmt.Errorf("managed device certificate states: %w", err))
 	}
 
-	if err := c.collectUserPfxCertificates(ctx, now, days, states, capper); err != nil {
+	if err := c.collectUserPfxCertificates(ctx, e, now, days, states, capper); err != nil {
 		c.logger.Warn("certificates: userPfxCertificates failed", "collector", collectorName, "error", err)
 		errs = append(errs, fmt.Errorf("user pfx certificates: %w", err))
 	}
@@ -344,7 +401,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // endpoint unavailable/unlicensed on this tenant, or a cast Graph doesn't
 // support) is skipped-and-logged for the affected call, not treated as a
 // failure.
-func (c *Collector) collectManagedDeviceCertificateStates(ctx context.Context, now time.Time, days map[bucketKey]int64, states map[string]int64, capper *profileNameCapper) error {
+func (c *Collector) collectManagedDeviceCertificateStates(ctx context.Context, e telemetry.Emitter, now time.Time, days map[bucketKey]int64, states map[string]int64, capper *profileNameCapper) error {
 	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/deviceConfigurations", nil)
 	if err != nil {
 		if isUnavailable(err) {
@@ -394,6 +451,7 @@ func (c *Collector) collectManagedDeviceCertificateStates(ctx context.Context, n
 
 			days[bucketKey{expiryBucket: expiryBucket, state: stateBucket, profileName: bucketName}]++
 			states[stateBucket]++
+			e.LogEvent(managedDeviceCertLogTwin(st, stateBucket, expiryBucket))
 		}
 	}
 	return errors.Join(errs...)
@@ -404,7 +462,7 @@ func (c *Collector) collectManagedDeviceCertificateStates(ctx context.Context, n
 // bucket - see the package doc for why this resource can't populate the
 // managedDeviceCertificateState issuance-state buckets. A 403/404 is
 // skipped-and-logged, not treated as a failure.
-func (c *Collector) collectUserPfxCertificates(ctx context.Context, now time.Time, days map[bucketKey]int64, states map[string]int64, capper *profileNameCapper) error {
+func (c *Collector) collectUserPfxCertificates(ctx context.Context, e telemetry.Emitter, now time.Time, days map[bucketKey]int64, states map[string]int64, capper *profileNameCapper) error {
 	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/userPfxCertificates", nil)
 	if err != nil {
 		if isUnavailable(err) {
@@ -429,8 +487,133 @@ func (c *Collector) collectUserPfxCertificates(ctx context.Context, now time.Tim
 
 		days[bucketKey{expiryBucket: expiryBucket, state: pfxImportedState, profileName: profileName}]++
 		states[pfxImportedState]++
+		e.LogEvent(userPfxCertLogTwin(pfx, expiryBucket))
 	}
 	return nil
+}
+
+// managedDeviceCertLogTwin renders one managedDeviceCertificateState as an
+// OTLP log record. stateBucket/expiryBucket are the already-collapsed metric
+// buckets, passed in so the twin and the gauges never disagree, and so
+// severity can key off the same "failed" / "expired" classification the
+// metrics use.
+//
+// Severity escalates to Warn for a failed issuance or an expired
+// certificate — either is the concrete "something is broken right now"
+// signal an operator acts on (a stuck/failed cert is an outage waiting to
+// happen for whatever VPN/Wi-Fi/email flow depends on it); every other state
+// (issued, pending, revoked, deleted, unknown) stays Info.
+func managedDeviceCertLogTwin(st certificateState, stateBucket, expiryBucket string) telemetry.Event {
+	attrs := telemetry.Attrs{"source": "managed_device"}
+	setStr(attrs, "id", st.ID)
+	setStr(attrs, "device_platform", st.DevicePlatform)
+	setStr(attrs, "device_display_name", st.DeviceDisplayName)
+	setStr(attrs, "user_display_name", st.UserDisplayName)
+	setStr(attrs, "certificate_profile_name", st.CertificateProfileDisplayName)
+	setStr(attrs, "thumbprint", st.CertificateThumbprint)
+	setStr(attrs, "serial_number", st.CertificateSerialNumber)
+	setStr(attrs, "issuer", st.CertificateIssuer)
+	setStr(attrs, "issuance_state", st.CertificateIssuanceState)
+	setStr(attrs, "revoke_status", st.CertificateRevokeStatus)
+	setStr(attrs, "subject_name_format", st.CertificateSubjectNameFormat)
+	setStr(attrs, "subject_alternative_name_format", st.CertificateSubjectAlternativeNameFormat)
+	if st.CertificateKeyLength != 0 {
+		attrs["key_length"] = strconv.Itoa(st.CertificateKeyLength)
+	}
+	if st.CertificateErrorCode != 0 {
+		attrs["error_code"] = strconv.Itoa(st.CertificateErrorCode)
+	}
+	setStr(attrs, "expiration_date_time", formatTimePtr(st.CertificateExpirationDateTime))
+	setStr(attrs, "issuance_date_time", formatTimePtr(st.CertificateIssuanceDateTime))
+	setStr(attrs, "last_issuance_state_changed_date_time", formatTimePtr(st.CertificateLastIssuanceStateChangedDateTime))
+
+	sev := telemetry.SeverityInfo
+	if stateBucket == "failed" || expiryBucket == expiryExpired {
+		sev = telemetry.SeverityWarn
+	}
+
+	return telemetry.Event{
+		Name:     eventDeviceCertificate,
+		Body:     fmt.Sprintf("managed device certificate %s: issuance_state=%s", managedCertDisplayOf(st), st.CertificateIssuanceState),
+		Severity: sev,
+		Attrs:    attrs,
+	}
+}
+
+// managedCertDisplayOf picks the most human-readable identifier a
+// managedDeviceCertificateState carries, falling back through thumbprint and
+// device name to id (there is no reliable link back to managedDevice.id -
+// see the package doc).
+func managedCertDisplayOf(st certificateState) string {
+	for _, s := range []string{st.CertificateThumbprint, st.DeviceDisplayName, st.ID} {
+		if s != "" {
+			return s
+		}
+	}
+	return "unknown"
+}
+
+// userPfxCertLogTwin renders one userPfxCertificate as an OTLP log record.
+// encryptedPfxBlob/encryptedPfxPassword are never decoded (see
+// userPfxCertificate's type doc) so they can never appear here regardless of
+// what this function does.
+//
+// Severity escalates to Warn for an expired certificate - the same "something
+// is broken right now" signal as the managed-device twin above. This
+// resource has no issuance-state field (see pfxImportedState), so expiry is
+// the only Warn trigger.
+func userPfxCertLogTwin(pfx userPfxCertificate, expiryBucket string) telemetry.Event {
+	attrs := telemetry.Attrs{"source": "user_pfx"}
+	setStr(attrs, "id", pfx.ID)
+	setStr(attrs, "user_principal_name", pfx.UserPrincipalName)
+	setStr(attrs, "thumbprint", pfx.Thumbprint)
+	setStr(attrs, "intended_purpose", pfx.IntendedPurpose)
+	setStr(attrs, "provider_name", pfx.ProviderName)
+	setStr(attrs, "key_name", pfx.KeyName)
+	setStr(attrs, "start_date_time", formatTimePtr(pfx.StartDateTime))
+	setStr(attrs, "expiration_date_time", formatTimePtr(pfx.ExpirationDateTime))
+
+	sev := telemetry.SeverityInfo
+	if expiryBucket == expiryExpired {
+		sev = telemetry.SeverityWarn
+	}
+
+	return telemetry.Event{
+		Name:     eventDeviceCertificate,
+		Body:     fmt.Sprintf("user pfx certificate %s: intended_purpose=%s", userPfxDisplayOf(pfx), pfx.IntendedPurpose),
+		Severity: sev,
+		Attrs:    attrs,
+	}
+}
+
+// userPfxDisplayOf picks the most human-readable identifier a
+// userPfxCertificate carries, falling back through thumbprint and UPN to id.
+func userPfxDisplayOf(pfx userPfxCertificate) string {
+	for _, s := range []string{pfx.Thumbprint, pfx.UserPrincipalName, pfx.ID} {
+		if s != "" {
+			return s
+		}
+	}
+	return "unknown"
+}
+
+// formatTimePtr renders a nullable Graph timestamp as RFC3339, or "" when nil
+// or zero - setStr then omits the attribute entirely rather than emitting an
+// empty value.
+func formatTimePtr(t *time.Time) string {
+	if t == nil || t.IsZero() {
+		return ""
+	}
+	return t.Format(time.RFC3339)
+}
+
+// setStr adds key=val to attrs only when val is non-empty, so an absent
+// string field emits no attribute rather than an empty one - matches the
+// entra/risk and purview/labels reference collectors.
+func setStr(attrs telemetry.Attrs, key, val string) {
+	if val != "" {
+		attrs[key] = val
+	}
 }
 
 // isUnavailable reports whether err is a 4xx from a beta endpoint being

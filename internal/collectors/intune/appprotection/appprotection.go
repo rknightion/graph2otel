@@ -12,14 +12,39 @@
 // exception, provided the result collapses into bounded buckets" pattern
 // documented on internal/collectors/intune/manageddevices. No per-entity
 // field (userId, appIdentifier detail beyond its coarse platform, deviceTag)
-// is ever read into a metric label here; that data belongs in the M5 logs
-// pipeline, never a metric dimension.
+// is ever read into a metric label here - that data belongs in the logs
+// pipeline (see "Metric/log split" below), never a metric dimension.
 //
 // windowsInformationProtectionPolicies and mdmWindowsInformationProtectionPolicies
 // are both v1.0 (not beta) but represent a legacy WIP-without-MAM-SDK
 // surface Microsoft has deprecated in favor of MAM app protection policies;
 // they are tracked here only as a coarse legacy policy count, not broken out
 // further.
+//
+// # Metric/log split (#114)
+//
+// The managedAppRegistrations flagged-reason rollup used to read only
+// flaggedReasons and appIdentifier's coarse platform, discarding userId and
+// deviceTag entirely - so "which user has a rooted device running a managed
+// app" was unanswerable even in principle. That was the bug (#112/#114), not
+// a privacy control: per-entity identity must never become a metric LABEL,
+// but "never a label" means "log twin", not "dropped".
+//
+// Unlike manageddevices/mfaregistration (twinned EVERY row per #114's
+// maintainer decision, because those collections are bounded by device/user
+// count), managedAppRegistrations is a user x app CROSS PRODUCT that can run
+// into the tens/hundreds of thousands per the package doc above - the same
+// unbounded-volume shape that got entra.consent's per-grant twin scoped down
+// to "high-privilege grants only" rather than every grant. So this collector
+// twins only registrations carrying an actual flagged reason (anything but
+// the bounded "none" bucket, including an unrecognized future reason bucketed
+// "other" - surfaced rather than silently dropped) as the
+// intune.app_registration log record, carrying userId/deviceTag/platform/
+// flagged_reasons. An unflagged registration contributes only to the
+// flagged_registrations gauge, never a log. Severity escalates to Warn only
+// for a recognized rooted/jailbroken signal (the rootedDevice bucket) - an
+// unrecognized reason is still twinned but stays Info, since its meaning
+// isn't known yet.
 package appprotection
 
 import (
@@ -50,6 +75,11 @@ const (
 	flaggedRegistrationsMetricName = "intune.app_protection.flagged_registrations"
 	wipPolicyCountMetricName       = "intune.wip.policy.count"
 )
+
+// eventAppRegistration is the OTLP LogRecord EventName for the per-flagged-
+// registration log twin emitted alongside flaggedRegistrationsMetricName -
+// see the package doc's "Metric/log split" section. Frozen by #114.
+const eventAppRegistration = "intune.app_registration"
 
 // defaultBaseURL is the Graph v1.0 root. Every endpoint this collector polls
 // is v1.0 - this collector is NOT Experimental.
@@ -123,21 +153,52 @@ func registrationPlatformFor(odataType string) string {
 	}
 }
 
-// appIdentifier is the narrow subset of managedAppRegistration.appIdentifier
-// this collector reads - only its @odata.type, to bucket a coarse platform.
-// The concrete packageId/bundleId fields are per-app identifiers and are
-// deliberately never read here.
+// appIdentifier mirrors the fields of managedAppRegistration.appIdentifier
+// this collector reads. ODataType feeds the bounded platform bucket on the
+// METRIC (registrationPlatformFor) and is never anything else. PackageID and
+// BundleID are the polymorphic subtype's own concrete per-app identifier -
+// androidMobileAppIdentifier.packageId (verified against
+// learn.microsoft.com/en-us/graph/api/resources/intune-mam-androidmobileappidentifier)
+// and iosMobileAppIdentifier.bundleId (intune-mam-iosmobileappidentifier) -
+// mutually exclusive per platform, since a registration decodes as exactly
+// one subtype. These ride onto the intune.app_registration log twin ONLY,
+// for flagged registrations, as a single app_identifier attribute (see
+// registrationLogTwin) - never a metric label. This collector used to decode
+// only @odata.type and throw the concrete identifier away entirely: that was
+// the #112 decode-and-drop bug, not a privacy control - "which app" is a
+// material part of "which user has a rooted device running a managed app",
+// and the concrete app set in a tenant is small and admin-configured (dozens
+// of managed apps), so it was never a cardinality problem for the log side
+// either.
 type appIdentifier struct {
 	ODataType string `json:"@odata.type"`
+	PackageID string `json:"packageId"`
+	BundleID  string `json:"bundleId"`
+}
+
+// concreteAppID returns whichever of PackageID/BundleID is present - the two
+// are mutually exclusive per platform subtype, so at most one is ever
+// non-empty.
+func (a appIdentifier) concreteAppID() string {
+	if a.PackageID != "" {
+		return a.PackageID
+	}
+	return a.BundleID
 }
 
 // managedAppRegistration is the subset of the managedAppRegistration
-// resource this collector aggregates on. userId, deviceTag, deviceName, and
-// every other per-entity identifier documented on the resource are
-// deliberately never read - see the package doc.
+// resource this collector reads. FlaggedReasons/AppIdentifier feed the
+// bounded flagged_registrations gauge; UserID/DeviceTag are per-entity
+// identifiers that must NEVER become a metric label, but ride along onto the
+// intune.app_registration log twin for FLAGGED registrations only - see the
+// package doc's "Metric/log split" section. deviceName and every other
+// per-entity identifier documented on the resource remain unread: not needed
+// by either output.
 type managedAppRegistration struct {
 	FlaggedReasons []string       `json:"flaggedReasons"`
 	AppIdentifier  *appIdentifier `json:"appIdentifier"`
+	UserID         string         `json:"userId"`
+	DeviceTag      string         `json:"deviceTag"`
 }
 
 // Collector polls the Intune MAM app protection / configuration surface and
@@ -259,7 +320,7 @@ type registrationBucketKey struct {
 // exactly once per reason it carries. A single malformed element is logged
 // and skipped rather than failing the whole aggregate.
 func (c *Collector) collectFlaggedRegistrations(ctx context.Context, e telemetry.Emitter) error {
-	url := c.baseURL + "/deviceAppManagement/managedAppRegistrations?$select=flaggedReasons,appIdentifier&$top=999"
+	url := c.baseURL + "/deviceAppManagement/managedAppRegistrations?$select=flaggedReasons,appIdentifier,userId,deviceTag&$top=999"
 	raw, err := collectors.GetAllValues(ctx, c.g, url, nil)
 	if err != nil {
 		c.logger.Warn("appprotection: managedAppRegistrations fetch failed", "collector", collectorName, "error", err)
@@ -281,8 +342,21 @@ func (c *Collector) collectFlaggedRegistrations(ctx context.Context, e telemetry
 		if len(reasons) == 0 {
 			reasons = []string{"none"}
 		}
+		reasonBuckets := make([]string, 0, len(reasons))
+		flagged := false
 		for _, reason := range reasons {
-			counts[registrationBucketKey{reason: flaggedReasonBucketFor(reason), platform: platform}]++
+			bucket := flaggedReasonBucketFor(reason)
+			counts[registrationBucketKey{reason: bucket, platform: platform}]++
+			reasonBuckets = append(reasonBuckets, bucket)
+			if bucket != "none" {
+				flagged = true
+			}
+		}
+		// Only FLAGGED registrations get a log twin - see the package doc's
+		// "Metric/log split" section for why every registration is not
+		// twinned (unlike manageddevices/mfaregistration).
+		if flagged {
+			e.LogEvent(registrationLogTwin(reg, platform, reasonBuckets))
 		}
 	}
 
@@ -296,6 +370,62 @@ func (c *Collector) collectFlaggedRegistrations(ctx context.Context, e telemetry
 	e.GaugeSnapshot(flaggedRegistrationsMetricName, "{registration}", "Intune managed app registrations, by aggregated flagged reason and platform (never a per-user or per-app series).", points)
 
 	return nil
+}
+
+// setStr adds key=val to attrs only when val is non-empty, so an absent field
+// emits no attribute rather than an empty one (matches entra/risk and
+// purview/labels - the frozen #114 seam).
+func setStr(attrs telemetry.Attrs, key, val string) {
+	if val != "" {
+		attrs[key] = val
+	}
+}
+
+// registrationLogTwin renders one FLAGGED managedAppRegistration as the
+// intune.app_registration OTLP log record - the per-registration identity
+// (userId, deviceTag, and the concrete per-app identifier) the
+// flagged_registrations gauge cannot carry, alongside the bucketed flagged
+// reasons and platform. Timestamp is left zero (poll time): this is a state
+// feed re-emitted every cycle for as long as the registration stays flagged,
+// not an event stream.
+//
+// The concrete app identifier (packageId/bundleId, see appIdentifier) is
+// emitted as a SINGLE app_identifier attribute rather than two separately-
+// named attributes: the two are mutually exclusive per platform (a
+// registration is exactly one subtype), so two attrs would mean one is
+// always absent - one attribute that means "whichever concrete identifier
+// this platform carries" reads better paired with the platform attribute
+// than two sparse ones would.
+//
+// Severity escalates to Warn only for a recognized rooted/jailbroken signal
+// (the "rooted_device" bucket) - an unrecognized future reason (bucketed
+// "other") is still twinned, never silently dropped, but stays Info since its
+// meaning isn't known yet.
+func registrationLogTwin(reg managedAppRegistration, platform string, reasonBuckets []string) telemetry.Event {
+	attrs := telemetry.Attrs{}
+	setStr(attrs, "user_id", reg.UserID)
+	setStr(attrs, "device_tag", reg.DeviceTag)
+	setStr(attrs, "platform", platform)
+	if reg.AppIdentifier != nil {
+		setStr(attrs, "app_identifier", reg.AppIdentifier.concreteAppID())
+	}
+	reasonsJoined := strings.Join(reasonBuckets, ",")
+	setStr(attrs, "flagged_reasons", reasonsJoined)
+
+	sev := telemetry.SeverityInfo
+	for _, b := range reasonBuckets {
+		if b == "rooted_device" {
+			sev = telemetry.SeverityWarn
+			break
+		}
+	}
+
+	return telemetry.Event{
+		Name:     eventAppRegistration,
+		Body:     fmt.Sprintf("flagged managed app registration (%s): %s", platform, reasonsJoined),
+		Severity: sev,
+		Attrs:    attrs,
+	}
 }
 
 // wipPolicyPage is the odata envelope a WIP policy list page decodes into.

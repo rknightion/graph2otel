@@ -12,6 +12,31 @@
 // calls per cycle on a large fleet and is deferred to the M5 export-job
 // subsystem rather than shipped as an opt-in flag with no config plumbing to
 // gate it yet (see the package doc on Collect for detail).
+//
+// # Metric/log split (#114)
+//
+// Every device contributes to TWO outputs from the one fleet-wide paged
+// fetch: the bounded compliance/OS/encryption/staleness gauges described
+// above (never carrying a per-device attribute), and one intune.managed_device
+// log record per device per cycle, carrying the identity fields the gauges
+// cannot - id, deviceName, serialNumber, userPrincipalName - alongside the
+// raw (unbucketed) complianceState/operatingSystem/isEncrypted/
+// lastSyncDateTime. This fleet-wide $select used to deliberately EXCLUDE
+// those identity fields entirely, which made "which device is
+// non-compliant/unencrypted/stale" unanswerable even in principle - that was
+// the bug (#112/#114), not a privacy control: per-entity identity must never
+// become a metric LABEL, but "never a label" means "log twin", not "dropped".
+//
+// Every device is twinned, not just the non-compliant ones - a maintainer
+// decision recorded on #114: the log pipeline is the surviving per-entity
+// record (the SIEM record of last resort), so filtering to "problem rows
+// only" would break correlation questions like "was device X enrolled on
+// date Y". Volume is therefore NOT bounded - it scales with fleet size x poll
+// interval, one record per device every cycle (DefaultInterval is hourly, so
+// a 10,000-device fleet is 10,000 log records/hour). Severity escalates to
+// Warn for the states that actually need attention - non-compliant
+// (noncompliant/conflict/error), unencrypted, or sync-stale beyond 30 days -
+// and stays Info otherwise; see deviceLogSeverity.
 package manageddevices
 
 import (
@@ -20,6 +45,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -51,12 +77,19 @@ const (
 // Experimental.
 const defaultBaseURL = "https://graph.microsoft.com/v1.0"
 
-// managedDevicesSelect limits the fleet-wide paged fetch to only the four
-// fields this collector aggregates on, keeping the per-page payload small
-// across a full-fleet walk that cannot otherwise be bounded by a server-side
-// filter (managedDevices only annotates a handful of unrelated properties for
-// $filter - see the package/issue notes).
-const managedDevicesSelect = "?$select=complianceState,operatingSystem,isEncrypted,lastSyncDateTime"
+// eventManagedDevice is the OTLP LogRecord EventName for the per-device log
+// twin emitted alongside the fleet gauges - see the package doc's "Metric/log
+// split" section. Frozen by #114.
+const eventManagedDevice = "intune.managed_device"
+
+// managedDevicesSelect limits the fleet-wide paged fetch to the fields the
+// bounded gauges aggregate on (complianceState, operatingSystem, isEncrypted,
+// lastSyncDateTime) PLUS the per-device identity fields the intune.managed_device
+// log twin carries (id, deviceName, serialNumber, userPrincipalName) - #114.
+// Widening this further should stay deliberate: every field here rides along
+// on a full-fleet page walk (see the package/issue notes on why full-fleet
+// paging is the accepted exception for this endpoint).
+const managedDevicesSelect = "?$select=id,complianceState,operatingSystem,isEncrypted,lastSyncDateTime,deviceName,serialNumber,userPrincipalName"
 
 // complianceBuckets maps every documented managedDevice complianceState
 // value (https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-manageddevice)
@@ -147,15 +180,99 @@ func stalenessBucketFor(now time.Time, lastSync *time.Time) string {
 	}
 }
 
+// deviceLogSeverity picks the intune.managed_device log twin's severity: Warn
+// for the states an operator actually needs to act on - non-compliant
+// (including the conflict/error compliance states, not just the literal
+// "noncompliant" value), unencrypted, or sync-stale beyond 30 days - Info
+// otherwise. The three triggers are independently sufficient; a device
+// matching more than one still gets a single Warn (this reports the fact of
+// needing attention, not which reason(s) apply - the reason is still visible
+// via the twin's own attributes).
+func deviceLogSeverity(complianceBucket string, encrypted bool, stalenessBucket string) telemetry.Severity {
+	switch complianceBucket {
+	case "noncompliant", "conflict", "error":
+		return telemetry.SeverityWarn
+	}
+	if !encrypted {
+		return telemetry.SeverityWarn
+	}
+	if stalenessBucket == stalenessOver30Days {
+		return telemetry.SeverityWarn
+	}
+	return telemetry.SeverityInfo
+}
+
+// setStr adds key=val to attrs only when val is non-empty, so an absent field
+// emits no attribute rather than an empty one (matches entra/risk and
+// purview/labels - the frozen #114 seam).
+func setStr(attrs telemetry.Attrs, key, val string) {
+	if val != "" {
+		attrs[key] = val
+	}
+}
+
+// deviceLogTwin renders one managedDevice as the intune.managed_device OTLP
+// log record - the per-device identity and raw state the fleet gauges above
+// cannot carry (see the package doc). complianceBucket/stalenessBucket are
+// passed in from collectFleet's own bucketing so the twin never redoes that
+// work.
+//
+// Timestamp is deliberately left zero ("now", i.e. poll time): this is a
+// STATE feed, not an event stream - the same device re-emits every cycle for
+// as long as it stays enrolled, which is what makes "was device X enrolled on
+// date Y" answerable (see the package doc).
+func deviceLogTwin(d managedDevice, complianceBucket, stalenessBucket string) telemetry.Event {
+	attrs := telemetry.Attrs{}
+	setStr(attrs, "id", d.ID)
+	setStr(attrs, "device_name", d.DeviceName)
+	setStr(attrs, "serial_number", d.SerialNumber)
+	setStr(attrs, "user_principal_name", d.UserPrincipalName)
+	setStr(attrs, "compliance_state", d.ComplianceState)
+	setStr(attrs, "operating_system", d.OperatingSystem)
+	attrs["is_encrypted"] = strconv.FormatBool(d.IsEncrypted)
+	attrs["staleness_bucket"] = stalenessBucket
+	if d.LastSyncDateTime != nil && !d.LastSyncDateTime.IsZero() {
+		attrs["last_sync_date_time"] = d.LastSyncDateTime.Format(time.RFC3339)
+	}
+
+	name := d.DeviceName
+	if name == "" {
+		name = d.SerialNumber
+	}
+	if name == "" {
+		name = d.ID
+	}
+	if name == "" {
+		name = "unknown"
+	}
+
+	return telemetry.Event{
+		Name:     eventManagedDevice,
+		Body:     fmt.Sprintf("managed device %s: compliance_state=%s operating_system=%s is_encrypted=%t", name, d.ComplianceState, d.OperatingSystem, d.IsEncrypted),
+		Severity: deviceLogSeverity(complianceBucket, d.IsEncrypted, stalenessBucket),
+		Attrs:    attrs,
+	}
+}
+
 // managedDevice is the subset of the managedDevice resource this collector
-// aggregates on. It is intentionally narrow - no id, serialNumber, imei,
-// deviceName, or userPrincipalName field is ever read, since those are
-// unbounded per-entity identifiers that must never become metric labels.
+// reads. ComplianceState/OperatingSystem/IsEncrypted/LastSyncDateTime feed the
+// bounded gauges (bucketed - see complianceBucketFor/osBucketFor/
+// stalenessBucketFor) AND ride along raw onto the intune.managed_device log
+// twin. ID/DeviceName/SerialNumber/UserPrincipalName are per-entity
+// identifiers that must NEVER become a metric label - but "never a metric
+// label" means "log twin", not "dropped" (see the package doc's "Metric/log
+// split" section and #114): this collector used to omit them from the Graph
+// request entirely, which was the bug, not a privacy control.
 type managedDevice struct {
 	ComplianceState  string     `json:"complianceState"`
 	OperatingSystem  string     `json:"operatingSystem"`
 	IsEncrypted      bool       `json:"isEncrypted"`
 	LastSyncDateTime *time.Time `json:"lastSyncDateTime"`
+
+	ID                string `json:"id"`
+	DeviceName        string `json:"deviceName"`
+	SerialNumber      string `json:"serialNumber"`
+	UserPrincipalName string `json:"userPrincipalName"`
 }
 
 // managedDeviceOverview is the managedDeviceOverview singleton
@@ -344,7 +461,9 @@ func (c *Collector) collectFleet(ctx context.Context, e telemetry.Emitter) error
 		if d.IsEncrypted {
 			encrypted[os]++
 		}
-		staleness[stalenessBucketFor(now, d.LastSyncDateTime)]++
+		staleBucket := stalenessBucketFor(now, d.LastSyncDateTime)
+		staleness[staleBucket]++
+		e.LogEvent(deviceLogTwin(d, compliance, staleBucket))
 	}
 
 	countPoints := make([]telemetry.GaugePoint, 0, len(counts))

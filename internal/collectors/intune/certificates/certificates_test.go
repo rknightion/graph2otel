@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -88,6 +89,32 @@ func pfxCert(purpose string, expiry *time.Time) map[string]any {
 	} else {
 		p["expirationDateTime"] = nil
 	}
+	return p
+}
+
+// certStateFull layers identity/thumbprint fields onto certState, for tests
+// that assert on the log twin's per-certificate detail rather than just the
+// bounded metric buckets.
+func certStateFull(profileName, issuanceState string, expiry *time.Time, id, deviceDisplayName, userDisplayName, thumbprint, serial string) map[string]any {
+	s := certState(profileName, issuanceState, expiry)
+	s["id"] = id
+	s["deviceDisplayName"] = deviceDisplayName
+	s["userDisplayName"] = userDisplayName
+	s["certificateThumbprint"] = thumbprint
+	s["certificateSerialNumber"] = serial
+	return s
+}
+
+// pfxCertFull layers identity/thumbprint fields (plus the two private-key
+// fields, to prove they never reach the log twin even when present on the
+// wire) onto pfxCert.
+func pfxCertFull(purpose string, expiry *time.Time, id, upn, thumbprint string) map[string]any {
+	p := pfxCert(purpose, expiry)
+	p["id"] = id
+	p["userPrincipalName"] = upn
+	p["thumbprint"] = thumbprint
+	p["encryptedPfxBlob"] = "c2VjcmV0LWJsb2I="
+	p["encryptedPfxPassword"] = "super-secret-password"
 	return p
 }
 
@@ -242,6 +269,165 @@ func TestCollectAggregatesUserPfxCertificates(t *testing.T) {
 	for k, v := range want {
 		if got[k] != v {
 			t.Errorf("%s = %v, want %v (all: %v)", k, got[k], v, got)
+		}
+	}
+}
+
+func TestCollectEmitsLogTwinPerManagedDeviceCertificate(t *testing.T) {
+	bodies := map[string]string{
+		deviceConfigsURL(): page(
+			deviceConfig("profile-1", "Corp Wifi Certs", "#microsoft.graph.iosScepCertificateProfile"),
+		),
+		certStatesURL("profile-1", "iosScepCertificateProfile"): page(
+			certStateFull("Corp Wifi Certs", "issued", daysFromNow(120), "state-1", "DEVICE-01", "user1@contoso.com", "AA11BB22", "SN-001"),
+			certStateFull("Corp Wifi Certs", "issueFailed", nil, "state-2", "DEVICE-02", "user2@contoso.com", "CC33DD44", "SN-002"),
+		),
+		userPfxURL(): page(),
+	}
+	g := &fakeGraph{bodies: bodies}
+	rec := telemetrytest.New()
+
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	recs := rec.LogRecords()
+	if len(recs) != 2 {
+		t.Fatalf("got %d log records, want 2 (one per certificate)", len(recs))
+	}
+
+	byID := map[string]telemetrytest.LogRecord{}
+	for _, r := range recs {
+		if r.EventName != eventDeviceCertificate {
+			t.Errorf("EventName = %q, want %q", r.EventName, eventDeviceCertificate)
+		}
+		byID[r.Attrs["id"]] = r
+	}
+
+	issued, ok := byID["state-1"]
+	if !ok {
+		t.Fatal("no log record for state-1")
+	}
+	want := map[string]string{
+		"source":              "managed_device",
+		"id":                  "state-1",
+		"device_display_name": "DEVICE-01",
+		"user_display_name":   "user1@contoso.com",
+		"thumbprint":          "AA11BB22",
+		"serial_number":       "SN-001",
+		"issuance_state":      "issued",
+	}
+	for k, v := range want {
+		if issued.Attrs[k] != v {
+			t.Errorf("state-1 attr %s = %q, want %q (all: %v)", k, issued.Attrs[k], v, issued.Attrs)
+		}
+	}
+	if issued.SeverityText != telemetry.SeverityInfo.String() {
+		t.Errorf("state-1 severity = %s, want Info (issued, not expired)", issued.SeverityText)
+	}
+
+	failed, ok := byID["state-2"]
+	if !ok {
+		t.Fatal("no log record for state-2")
+	}
+	if failed.Attrs["issuance_state"] != "issueFailed" {
+		t.Errorf("state-2 issuance_state = %q, want issueFailed", failed.Attrs["issuance_state"])
+	}
+	if failed.SeverityText != telemetry.SeverityWarn.String() {
+		t.Errorf("state-2 severity = %s, want Warn (failed issuance)", failed.SeverityText)
+	}
+}
+
+func TestCollectLogTwinEscalatesSeverityForExpiredManagedDeviceCertificate(t *testing.T) {
+	bodies := map[string]string{
+		deviceConfigsURL(): page(
+			deviceConfig("profile-1", "Corp Wifi Certs", "#microsoft.graph.iosScepCertificateProfile"),
+		),
+		certStatesURL("profile-1", "iosScepCertificateProfile"): page(
+			certStateFull("Corp Wifi Certs", "issued", daysFromNow(-5), "state-expired", "DEVICE-03", "", "EE55FF66", "SN-003"),
+		),
+		userPfxURL(): page(),
+	}
+	g := &fakeGraph{bodies: bodies}
+	rec := telemetrytest.New()
+
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	recs := rec.LogRecords()
+	if len(recs) != 1 {
+		t.Fatalf("got %d log records, want 1", len(recs))
+	}
+	if recs[0].SeverityText != telemetry.SeverityWarn.String() {
+		t.Errorf("severity = %s, want Warn (expired, even though issuance_state=issued)", recs[0].SeverityText)
+	}
+}
+
+func TestCollectEmitsLogTwinPerUserPfxCertificate(t *testing.T) {
+	bodies := map[string]string{
+		deviceConfigsURL(): page(),
+		userPfxURL(): page(
+			pfxCertFull("smimeEncryption", daysFromNow(45), "pfx-1", "user3@contoso.com", "1122AABB"),
+		),
+	}
+	g := &fakeGraph{bodies: bodies}
+	rec := telemetrytest.New()
+
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	recs := rec.LogRecords()
+	if len(recs) != 1 {
+		t.Fatalf("got %d log records, want 1", len(recs))
+	}
+	r := recs[0]
+	if r.EventName != eventDeviceCertificate {
+		t.Errorf("EventName = %q, want %q", r.EventName, eventDeviceCertificate)
+	}
+	want := map[string]string{
+		"source":              "user_pfx",
+		"id":                  "pfx-1",
+		"user_principal_name": "user3@contoso.com",
+		"thumbprint":          "1122AABB",
+		"intended_purpose":    "smimeEncryption",
+	}
+	for k, v := range want {
+		if r.Attrs[k] != v {
+			t.Errorf("attr %s = %q, want %q (all: %v)", k, r.Attrs[k], v, r.Attrs)
+		}
+	}
+	if r.SeverityText != telemetry.SeverityInfo.String() {
+		t.Errorf("severity = %s, want Info (not expired)", r.SeverityText)
+	}
+}
+
+// TestLogTwinNeverCarriesPrivateKeyMaterial pins the acceptance criterion
+// that userPFXCertificate's encryptedPfxBlob/encryptedPfxPassword - the two
+// fields Graph documents as carrying private key material - never reach the
+// log twin, even when present in the raw wire payload (pfxCertFull sets both).
+func TestLogTwinNeverCarriesPrivateKeyMaterial(t *testing.T) {
+	bodies := map[string]string{
+		deviceConfigsURL(): page(),
+		userPfxURL(): page(
+			pfxCertFull("vpn", daysFromNow(10), "pfx-2", "user4@contoso.com", "9900CCDD"),
+		),
+	}
+	g := &fakeGraph{bodies: bodies}
+	rec := telemetrytest.New()
+
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	for _, r := range rec.LogRecords() {
+		for _, forbidden := range []string{
+			"encryptedPfxBlob", "encrypted_pfx_blob", "encryptedPfxPassword", "encrypted_pfx_password",
+		} {
+			if _, present := r.Attrs[forbidden]; present {
+				t.Errorf("log record carries forbidden private-key attribute %q", forbidden)
+			}
 		}
 	}
 }
