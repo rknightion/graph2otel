@@ -135,7 +135,17 @@ func (s *Store) Save(cp *Checkpoint) error {
 		return fmt.Errorf("encode checkpoint: %w", err)
 	}
 
-	path := s.path(key)
+	return s.writeAtomic(s.path(key), data)
+}
+
+// writeAtomic writes data to path via a temp file in the same directory
+// followed by a rename, so a crash mid-write can never leave a corrupt or
+// partial file in place of the last good one. It creates the store's directory
+// on first use. Callers must hold the key's lock.
+func (s *Store) writeAtomic(path string, data []byte) error {
+	if err := os.MkdirAll(s.dir, 0o750); err != nil {
+		return fmt.Errorf("create checkpoint dir %s: %w", s.dir, err)
+	}
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return fmt.Errorf("write temp checkpoint %s: %w", tmp, err)
