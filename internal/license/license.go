@@ -48,6 +48,18 @@ const (
 	// CapIntune is Microsoft Intune (service plan INTUNE_A) — required for
 	// device compliance and Intune reporting endpoints.
 	CapIntune Capability = "intune"
+	// CapPurviewInfoProtection is Microsoft Purview Information Protection
+	// (sensitivity labels) — granted by the MIP content-label service plans
+	// MIP_S_CLP1 ("Information Protection for Office 365 - Standard", E3-level)
+	// or MIP_S_CLP2 ("... - Premium", E5-level). Required to read the tenant's
+	// sensitivity-label catalog via
+	// /security/dataSecurityAndGovernance/sensitivityLabels.
+	CapPurviewInfoProtection Capability = "purview_information_protection"
+	// CapPurviewRecordsMgmt is Microsoft Purview Records Management (service
+	// plan RECORDS_MANAGEMENT) — required to read the tenant's retention-label
+	// catalog via /security/labels/retentionLabels and the retention event
+	// types via /security/triggerTypes/retentionEventTypes.
+	CapPurviewRecordsMgmt Capability = "purview_records_management"
 )
 
 // The canonical service-plan GUIDs backing servicePlanCapability, exported as
@@ -60,6 +72,14 @@ const (
 	guidEntraP2           = "eec0eb4f-6444-4f95-aba0-50c24d67f998" // AAD_PREMIUM_P2
 	guidWorkloadIDPremium = "7dc0e92d-bf15-401d-907e-0884efe7c760" // AAD_WRKLDID_P2
 	guidIntune            = "c1ec4a95-1f05-45b3-a911-aa3fa01094f5" // INTUNE_A
+	// guidMIPContentLabelP1/P2 are the two Microsoft Information Protection
+	// content-label service plans; either one grants CapPurviewInfoProtection
+	// (a tenant licensed at E5 holds both, at E3 only P1). Friendly names in
+	// the licensing reference: "Information Protection for Office 365 -
+	// Standard" (P1) / "- Premium" (P2).
+	guidMIPContentLabelP1 = "5136a095-5cf0-4aff-bec3-e84448b38ea5" // MIP_S_CLP1
+	guidMIPContentLabelP2 = "efb0351d-3b08-4503-993d-383af8de41e3" // MIP_S_CLP2
+	guidRecordsManagement = "65cc641f-cccd-4643-97e0-a17e3045e541" // RECORDS_MANAGEMENT
 )
 
 // servicePlanCapability maps a Microsoft Graph service-plan GUID
@@ -84,6 +104,12 @@ var servicePlanCapability = map[string]Capability{
 	guidEntraP2:           CapEntraP2,
 	guidWorkloadIDPremium: CapWorkloadIdentitiesPremium,
 	guidIntune:            CapIntune,
+	// Both MIP content-label plans map to the one InfoProtection capability:
+	// reading the sensitivity-label catalog needs the entitlement, not a
+	// specific P1-vs-P2 tier.
+	guidMIPContentLabelP1: CapPurviewInfoProtection,
+	guidMIPContentLabelP2: CapPurviewInfoProtection,
+	guidRecordsManagement: CapPurviewRecordsMgmt,
 }
 
 // provisioningStatusEnabled is the subscribedSkus servicePlanInfo

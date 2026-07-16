@@ -25,6 +25,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/roles"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/securescore"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/securityalerts"
+	_ "github.com/rknightion/graph2otel/internal/collectors/entra/securityincidents"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/signinactivity"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/signins"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/users"
@@ -51,4 +52,6 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/scripts"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/settingscatalog"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/updates"
+	_ "github.com/rknightion/graph2otel/internal/collectors/m365/unifiedaudit"
+	_ "github.com/rknightion/graph2otel/internal/collectors/purview/labels"
 )

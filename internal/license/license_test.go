@@ -59,6 +59,29 @@ func TestDetect(t *testing.T) {
 			want:  Capabilities{CapIntune: true},
 		},
 		{
+			name:  "purview information protection via MIP content label P1 (E3 standard)",
+			plans: []ServicePlan{plan(guidMIPContentLabelP1, "MIP_S_CLP1", "Success")},
+			want:  Capabilities{CapPurviewInfoProtection: true},
+		},
+		{
+			name:  "purview information protection via MIP content label P2 (E5 premium)",
+			plans: []ServicePlan{plan(guidMIPContentLabelP2, "MIP_S_CLP2", "Success")},
+			want:  Capabilities{CapPurviewInfoProtection: true},
+		},
+		{
+			name:  "purview records management",
+			plans: []ServicePlan{plan(guidRecordsManagement, "RECORDS_MANAGEMENT", "Success")},
+			want:  Capabilities{CapPurviewRecordsMgmt: true},
+		},
+		{
+			name: "purview info protection + records management together (E5 compliance shape)",
+			plans: []ServicePlan{
+				plan(guidMIPContentLabelP2, "MIP_S_CLP2", "Success"),
+				plan(guidRecordsManagement, "RECORDS_MANAGEMENT", "Success"),
+			},
+			want: Capabilities{CapPurviewInfoProtection: true, CapPurviewRecordsMgmt: true},
+		},
+		{
 			name: "P1 + Intune but not P2 (a real non-linear combination)",
 			plans: []ServicePlan{
 				plan(guidEntraP1, "AAD_PREMIUM", "Success"),

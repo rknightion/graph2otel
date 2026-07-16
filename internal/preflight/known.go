@@ -66,4 +66,15 @@ var DocumentedRequiredScopes = map[string][]string{
 	"intune (reports export — see the ReadWrite exception note)": {
 		"DeviceManagementManagedDevices.ReadWrite.All",
 	},
+	"entra / defender (security alerts & incidents)": {
+		"SecurityAlert.Read.All",
+		"SecurityIncident.Read.All",
+	},
+	"m365 (unified audit — Purview Audit, experimental)": {
+		"AuditLogsQuery.Read.All",
+	},
+	"purview (sensitivity & retention labels)": {
+		"InformationProtectionPolicy.Read.All",
+		"RecordsManagement.Read.All",
+	},
 }
