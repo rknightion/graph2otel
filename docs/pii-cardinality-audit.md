@@ -36,6 +36,32 @@ that were silently discarding per-entity detail entirely. Those were fixed in #1
 and #111. **An audit pass must now check both directions**: nothing per-entity on a
 metric label, AND nothing per-entity fetched-then-dropped without a log twin.
 
+## The both-directions sweep (complete, #114)
+
+All 38 snapshot collectors were audited in the second direction. Roughly 20 are pure
+`$count`/pre-aggregated-report shapes — no per-entity data ever reaches memory, so
+there is nothing to drop. Twelve had the decode-and-drop shape and now emit a log
+twin: `entra.roles`, `entra.consent`, `entra.credential_expiry`,
+`entra.signin_activity`, `entra.mfaregistration`, `entra.domains`, `entra.risk`,
+`intune.malware`, `intune.manageddevices`, `intune.certificates`,
+`intune.appprotection`, plus the two Purview label collectors.
+
+**Two are audited, deliberate exceptions with no twin** — recorded here so a future
+sweep does not re-litigate them, and documented in their package docs:
+
+- `entra.agreements` — ToU acceptance is a legal/HR/compliance question, not a
+  security signal.
+- `intune.endpointanalytics` — boot/startup performance is an ops question; the
+  Intune console answers it better.
+
+**Root cause worth remembering.** These were not accidents. `signinactivity` deferred
+its twin to "M3/M5" *"consistent with the credential-expiry collector's decision"*,
+and `malware` deferred to `windowsDeviceMalwareStates` "deferred to M5" — a lineage of
+collectors each citing the last as precedent for deferring work that never got built,
+with the "PII guidance" framing making the deferral look principled. No collector
+should cite a milestone deferral for a milestone that has passed; if one does, it is
+unfinished work wearing a rationale.
+
 ## Scope of the review
 
 30 collector packages (18 Entra, 12 Intune families) + the framework

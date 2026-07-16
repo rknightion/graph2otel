@@ -192,8 +192,16 @@ func (o overview) points() []telemetry.GaugePoint {
 // startupHistory is the subset of the v1.0 userExperienceAnalyticsDeviceStartupHistory
 // resource this collector reads
 // (https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-userexperienceanalyticsdevicestartuphistory).
-// deviceId is deliberately never read - it is a per-device identifier and
-// this endpoint's rows are rolled straight into bounded histograms.
+// deviceId is not read, and this collector deliberately has NO log twin.
+//
+// That is a real decision, not the #112 framing bug, so do not "fix" it by
+// adding one: #114 gave a twin to every snapshot collector that was dropping
+// per-entity data a metric could not carry, and audited this one as an
+// exception. Startup/boot-performance attribution is an ops question, not a
+// security one — Intune's own Endpoint Analytics console answers "which device
+// boots slowly" better than a log stream would, and these rows roll straight
+// into bounded histograms. Reconsider only if boot performance becomes a
+// security signal for someone.
 type startupHistory struct {
 	TotalBootTimeInMs  float64 `json:"totalBootTimeInMs"`
 	TotalLoginTimeInMs float64 `json:"totalLoginTimeInMs"`
