@@ -64,8 +64,23 @@
 // These records carry ModifiedProperties with OldValue/NewValue, which for a
 // credential or certificate change IS the credential. mapRecord emits the
 // changed property NAMES and never their values, exactly as intune/auditevents
-// does. ExtendedProperties gets the same treatment for a related reason: its
-// Value is a JSON-ENCODED STRING (#100) of unbounded, workload-defined shape.
+// does. That is the whole exclusion.
+//
+// ExtendedProperties[].Value IS emitted, and the earlier decision to withhold it
+// was wrong. It was withheld on a SHAPE argument — the value is a JSON-encoded
+// string (#100) of unbounded, workload-defined form — but "awkward to model" is
+// not "unsafe to ship", and CLAUDE.md is explicit that reading the exclusion as
+// general caution is what produced #110 and #111. What these values actually
+// carry, live: additionalDetails ({"User-Agent":…,"AppId":…}),
+// extendedAuditEventCategory ("ServicePrincipal"), and LoginError
+// ("…;PP_E_BAD_PASSWORD;The entered and stored passwords do not match."). For a
+// SIEM that is the signal, not the noise — anomalous user agents and repeated
+// login errors are what you build detections on. Withholding them would be #83
+// exactly: fetch a per-entity row, judge it too messy to keep, and it reaches no
+// pipeline at all.
+//
+// The line, stated so it is not re-drawn by feel: ModifiedProperties values are
+// excluded because they can BE a credential. Nothing else is excluded.
 //
 // PII is emphatically NOT excluded and must not be: UPN, client IP and object
 // id are emitted here by design — graph2otel is a SIEM feed.
@@ -379,10 +394,21 @@ func mapRecord(rec map[string]any) (string, telemetry.Event, bool) {
 	// credentials and certificates. The names must still be emitted: excluding
 	// the values must not decay into dropping the field (#112).
 	setStrs(attrs, "modified_property_names", namesOf(rec, "ModifiedProperties", "Name"))
-	// ExtendedProperties[].Value is a JSON-encoded string of unbounded,
-	// workload-defined shape (#100), so it gets the same names-only treatment
-	// until a live audit of the value shapes says otherwise.
+	// ExtendedProperties values ARE emitted, unlike ModifiedProperties'. They are
+	// event metadata, not changed-property values, and cannot BE a credential:
+	// live they carry additionalDetails ({"User-Agent":…,"AppId":…}),
+	// extendedAuditEventCategory, and LoginError. A SIEM builds detections on
+	// exactly those. They were withheld in a first pass because the value is a
+	// JSON-encoded string of workload-defined shape (#100) — but that is an
+	// argument about being awkward to model, not about being unsafe, and
+	// withholding per-entity data for tidiness is #83's bug and #110/#111's
+	// reasoning error.
+	//
+	// Names and values are parallel slices, index-aligned, rather than one
+	// attribute per property name: the names are workload-defined and unbounded,
+	// so attribute-per-name would mint unbounded attribute KEYS.
 	setStrs(attrs, "extended_property_names", namesOf(rec, "ExtendedProperties", "Name"))
+	setStrs(attrs, "extended_property_values", namesOf(rec, "ExtendedProperties", "Value"))
 	// Actor[] is per-entity identity data with no query-API twin. #112: it must
 	// reach a pipeline rather than the floor, and a log attribute is where
 	// per-entity data belongs.

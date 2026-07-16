@@ -383,33 +383,58 @@ func TestMapRecordNeverEmitsModifiedPropertyValues(t *testing.T) {
 	}
 }
 
-// TestMapRecordNeverEmitsExtendedPropertyValues pins the same treatment for
-// ExtendedProperties. Its Value is a JSON-ENCODED STRING — a nested document
-// inside a string field (#100) — of unbounded, workload-defined shape, so the
-// same "names, not values" rule applies until a live audit of the value shapes
-// says otherwise.
-func TestMapRecordNeverEmitsExtendedPropertyValues(t *testing.T) {
-	const payload = `{"appId":"app-guid","secretText":"do-not-ship-me"}`
+// TestMapRecordEmitsExtendedPropertyValues pins the OPPOSITE of
+// ModifiedProperties, deliberately.
+//
+// A first pass withheld these values too, reasoning that the Value is a
+// JSON-ENCODED STRING — a nested document inside a string field (#100) — of
+// unbounded, workload-defined shape. That is an argument about being awkward to
+// model, not about being unsafe, and CLAUDE.md is explicit that reading the
+// secret exclusion as general caution is what produced #110 and #111. Live,
+// these carry additionalDetails ({"User-Agent":…,"AppId":…}),
+// extendedAuditEventCategory, and LoginError (";PP_E_BAD_PASSWORD;…") — the
+// anomalous-client and failed-logon signal a SIEM builds detections on.
+// Withholding it would be #83 exactly: fetch a per-entity row, judge it too
+// messy to keep, and it reaches no pipeline at all.
+//
+// The line: ModifiedProperties values are excluded because they can BE a
+// credential. Nothing else is. If a workload is ever observed putting a secret
+// in an ExtendedProperties value, this test is the place that changes — on
+// evidence, not on the shape of the field.
+func TestMapRecordEmitsExtendedPropertyValues(t *testing.T) {
+	const payload = `{"User-Agent":"Mozilla/5.0 Chrome/151","AppId":"app-guid"}`
 
 	rec := liveRecord()
 	rec["ExtendedProperties"] = []any{
 		map[string]any{"Name": "additionalDetails", "Value": payload},
+		map[string]any{"Name": "extendedAuditEventCategory", "Value": "ServicePrincipal"},
 	}
 
 	_, ev, ok := mapRecord(rec)
 	if !ok {
 		t.Fatal("mapRecord returned ok=false")
 	}
-	for k, v := range ev.Attrs {
-		for _, s := range flattenAttr(v) {
-			if strings.Contains(s, "do-not-ship-me") {
-				t.Errorf("attr %q leaked an ExtendedProperties value: %q", k, s)
-			}
-		}
-	}
+
 	names, isSlice := ev.Attrs["extended_property_names"].([]string)
 	if !isSlice || !slices.Contains(names, "additionalDetails") {
-		t.Errorf("extended_property_names = %v, want []string containing additionalDetails", ev.Attrs["extended_property_names"])
+		t.Errorf("extended_property_names = %v, want it to contain additionalDetails", ev.Attrs["extended_property_names"])
+	}
+
+	values, isSlice := ev.Attrs["extended_property_values"].([]string)
+	if !isSlice {
+		t.Fatalf("extended_property_values = %v (%T), want []string — these are event metadata and must reach a pipeline (#112)", ev.Attrs["extended_property_values"], ev.Attrs["extended_property_values"])
+	}
+	if !slices.Contains(values, payload) {
+		t.Errorf("extended_property_values = %v, want it to carry the additionalDetails payload verbatim", values)
+	}
+
+	// Index alignment is the whole contract of two parallel slices: names[i]
+	// must describe values[i], or the pair is worse than useless.
+	if len(names) != len(values) {
+		t.Fatalf("extended_property_names (%d) and extended_property_values (%d) must be index-aligned", len(names), len(values))
+	}
+	if i := slices.Index(names, "extendedAuditEventCategory"); i < 0 || values[i] != "ServicePrincipal" {
+		t.Errorf("names/values are not index-aligned: %v vs %v", names, values)
 	}
 }
 
@@ -472,6 +497,7 @@ func TestLogAttrKeySetIsExact(t *testing.T) {
 		"azure_ad_event_type",
 		"client_ip",
 		"extended_property_names",
+		"extended_property_values",
 		"id",
 		"modified_property_names",
 		"object_id",
