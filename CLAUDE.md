@@ -189,10 +189,33 @@ device names, sign-in IP addresses, group memberships). The boundary rule (see
   `/applications` + `/servicePrincipals` for credential data in a large tenant
   can approach it; keep `$select` minimal.
 - **Graph cannot see everything.** `MicrosoftGraphActivityLogs`,
-  `EnrichedOffice365AuditLogs`, and most of Intune `OperationalLogs` have no Graph
-  endpoint at all — they exist only via diagnostic settings → Event Hub/Log Analytics.
-  graph2otel is not a full replacement for that pipeline; see the README's honest-scope
-  section.
+  `EnrichedOffice365AuditLogs`, `ADFSSignInLogs`, `NetworkAccessTrafficLogs`, and most of
+  Intune `OperationalLogs` have no Graph endpoint at all — they exist only via diagnostic
+  settings → Event Hub/Log Analytics. Specifics, all confirmed permanent:
+  `EnrichedOffice365AuditLogs` is Sentinel-side ML enrichment synthesized downstream (no
+  source API anywhere upstream, not just "not in Graph"). Intune **`OperationalLogs`** is
+  the compliance-notification/SLA-alert *fired-event* stream (e.g. `AlertType: "Managed
+  Device Not Compliant"`) — Graph exposes only the notification *templates*
+  (`deviceManagement/notificationMessageTemplates`, config only), never the fired-alert
+  event; distinct from compliance *state*, which the compliance/manageddevices collectors
+  do poll (live-verified 2026-07-15, #94). graph2otel is not a full replacement for that
+  pipeline. **The escape hatch for all of these is the fallback-ingest path (Event Hub /
+  Log Analytics query) — see [`docs/event-hub-fallback.md`](docs/event-hub-fallback.md)
+  and the README honest-scope section**, not Graph.
+- **Purview/M365 policy config is S&C-PowerShell-only — no Graph list/count** (#99).
+  Several Purview surfaces have no Graph enumerable equivalent, so there is no "count of
+  policies per mode" metric to build: **DLP policy authoring/simulation state** (Block vs
+  TestWithNotifications, covered locations) via `Get/Set-DlpCompliancePolicy` /
+  `Get/Set-DlpComplianceRule` (Graph's `protectionScopes/compute` only *evaluates*
+  synthetic input, it does not list policies); **retention *policy* location bindings** via
+  `Get/Set-RetentionCompliancePolicy` (but retention *label* **definitions** ARE Graph-
+  exposed at `security/labels/retentionLabels` — only the policy binding is missing);
+  **label encryption activation** (Azure RMS, portal-only). Confirmed permanent. Two
+  non-gaps to not re-chase: `DLP.All` sensitive-data content is **open/pending** a
+  live-verify of whether `security/auditLog/queries` mirrors it (not a settled gap); and
+  the unified-audit-log toggle `Set-AdminAuditLogConfig` (Exchange Online cmdlet) is a
+  fresh-tenant deployment prerequisite but is **already on for m7kni**, so not a blocker
+  there.
 - **Intune `managedDevices` has no `$count` segment** (M4, verified live). A
   `GET /deviceManagement/managedDevices/$count` returns **HTTP 400** — `"No OData
   route exists that match template ~/singleton/navigation/$count"` (its backend is

@@ -113,22 +113,71 @@ detections, and Intune audit events — with **no diagnostic settings and no Log
 workspace required**, and for Intune compliance state, Graph is measurably fresher than
 the diagnostic-settings export (minutes vs. a 24-48h export lag).
 
-It is **not** a full replacement for Azure Monitor diagnostic settings. A small set of
-log categories are never materialized behind a queryable Graph endpoint — the diagnostic
-settings pipeline is the *only* way to get them:
+It is **not** a full replacement for Azure Monitor diagnostic settings. Some signals are
+never materialized behind a queryable Graph endpoint. These are **confirmed-permanent**
+gaps, not "not built yet" — but they are not a dead end: the diagnostic-settings pipeline
+already emits most of them, and `graph2otel` can optionally consume that data directly
+(Event Hub, or a Log Analytics query) instead of running a separate Function in the
+middle. See [`docs/event-hub-fallback.md`](docs/event-hub-fallback.md) for that
+fallback-ingest design (deferred — design only, nothing shipped yet).
+
+**Log categories with no Graph endpoint (confirmed permanent):**
 
 - **`MicrosoftGraphActivityLogs`** — ironically, the log of Graph API calls themselves.
-  No query endpoint exists at all.
-- **`EnrichedOffice365AuditLogs`** — the M365 Unified Audit Log; owned by Purview / the
-  Office 365 Management Activity API, not Graph.
-- **Most of Intune `OperationalLogs`** — only the enrollment-failure slice has a Graph
-  equivalent (`enrollmentTroubleshootingEvent`); the rest doesn't.
-- **`ADFSSignInLogs`** and **`NetworkAccessTrafficLogs`** — mostly diagnostic-settings-only
+  No query endpoint exists at all. The `graph2otel.graphclient.http_4xx` /
+  `graph2otel.graphclient.http_5xx` self-observability counters record only **graph2otel's
+  own** outbound Graph responses (by tenant, workload, and status code) — they are a narrow
+  substitute for "is our poller hitting Graph friction," not for the tenant-wide
+  `MicrosoftGraphActivityLogs` 403-burst signal, which reports every app's calls to Graph
+  and has no equivalent Graph endpoint to poll.
+- **`EnrichedOffice365AuditLogs`** — a Sentinel / Log-Analytics-side ML **enrichment**
+  table (fields layered onto raw M365 activity by Sentinel itself). It has no source API
+  in Graph *or* the O365 Management Activity API — it is synthesized downstream and does
+  not exist as a retrievable source anywhere upstream.
+- **Most of Intune `OperationalLogs`** — the compliance-notification / SLA-alert
+  fired-event stream (e.g. `AlertType: "Managed Device Not Compliant"`) has no Graph read
+  resource; Graph exposes only the notification *templates*
+  (`deviceManagement/notificationMessageTemplates`, config only). Only the
+  enrollment-failure slice has a Graph event equivalent (`enrollmentTroubleshootingEvent`).
+  Distinct from compliance *state*, which `graph2otel` does poll.
+- **`ADFSSignInLogs`** and **`NetworkAccessTrafficLogs`** — diagnostic-settings-only
   (Connect Health agent stream / Global Secure Access, respectively).
 
-If you need any of those, you still need diagnostic settings → Event Hub or Log
-Analytics for that specific category — `graph2otel` is the no-infrastructure default for
-the rest, not a total replacement for Azure Monitor integration.
+For any of these, the fallback path above (Event Hub near-real-time, Log Analytics query
+as a narrow at-rest fallback) is the answer — you still need diagnostic settings feeding
+that pipeline, but `graph2otel` can consume it directly rather than a bespoke Function.
+
+**Purview / M365 configuration state with no Graph endpoint (confirmed permanent):**
+
+These are policy/config surfaces exposed only through Security & Compliance PowerShell (or
+a portal), with no Graph list/count equivalent — so there is no "count of policies in each
+mode" metric to build:
+
+- **DLP policy authoring / simulation state** (Block vs TestWithNotifications mode, which
+  locations a policy covers) — S&C PowerShell only (`Get/Set-DlpCompliancePolicy`,
+  `Get/Set-DlpComplianceRule`). Graph's only DLP-adjacent surface,
+  `protectionScopes/compute`, evaluates what *would* apply to synthetic input; it is not
+  an enumerable policy list.
+- **Retention *policy* location bindings** — S&C PowerShell only
+  (`Get/Set-RetentionCompliancePolicy`). Note retention *label* **definitions** *are*
+  Graph-exposed (`security/labels/retentionLabels`); it is the policy-to-location binding
+  that has no Graph surface.
+- **Label encryption activation** (Azure RMS) — portal-only toggle, no PowerShell/API path.
+
+**Open, pending live-verify (not a settled gap):**
+
+- **`DLP.All` sensitive-data content** — not yet confirmed whether
+  `/security/auditLog/queries` fully mirrors what the O365 Management Activity API's
+  `ActivityFeed.ReadDlp` scope carries. Flagged as an open question, not assumed solved
+  or assumed impossible.
+
+**Deployment prerequisite (not a `graph2otel` limitation):**
+
+- **Turning on the unified audit log** — `Set-AdminAuditLogConfig`, an Exchange Online
+  cmdlet (not Graph, not even S&C PowerShell). A fresh tenant may have it off, which is a
+  hard prerequisite for any unified-audit-event collector. It is **already on** for the
+  m7kni reference tenant, so it is not a current blocker there — but a new deployment must
+  check it. `graph2otel` cannot remediate this itself.
 
 ## Auth setup
 
@@ -187,6 +236,16 @@ collector name's own underscore is preserved, e.g.
 `G2O_COLLECTORS__SIGN_INS__ENABLED=false`). See `config.example.yaml` for the
 authoritative, fully-commented schema, and [`docs/collectors.md`](docs/collectors.md) for
 what each `collectors:` key gates.
+
+## Operating notes
+
+**Expect a brief flat-line after a restart, not a gap.** `graph2otel` is OTLP push-only.
+When the process stops, its push simply stops — unlike a Prometheus scrape target going
+down, a stopped push carries **no staleness marker**, so the last-pushed value lingers in
+the backend for the query lookback window (~5 min in Grafana Cloud / Mimir) before it ages
+out. On a restart, panels therefore show a short **flat-line** across the gap, not a break
+in the series. This is expected OTLP-push behaviour, not a stuck collector — the new
+process picks the series back up on its first push.
 
 ## License
 
