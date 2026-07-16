@@ -1,0 +1,128 @@
+package main
+
+import (
+	"flag"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/rknightion/graph2otel/internal/collectordoc"
+	"github.com/rknightion/graph2otel/internal/collectors"
+)
+
+// updateCollectorDoc regenerates the committed docs/collectors.md golden file
+// instead of asserting it, mirroring internal/config's -update flag. Run:
+// go test ./cmd/graph2otel -run TestCollectorReferenceDocInSync -update
+var updateCollectorDoc = flag.Bool("update", false, "rewrite generated golden files (docs/collectors.md)")
+
+// These gates live in package main, and that placement is the point (#139).
+//
+// The registry is populated only by the blank imports in collectors_import.go,
+// which is package main's own file. Any other home for this test would need its
+// own copy of that import list — and a collector added to production but missed
+// off the copy would be invisible to the very gate meant to catch it, which is
+// precisely the drift being fixed. Here the gate sees exactly what the binary
+// sees, for free.
+//
+// Every collector is constructed with ZERO Deps: no Graph client, no storage
+// source, no credentials, no network. That is the same thing the compile-time
+// interface checks at the bottom of each collector file do, and it is why this
+// is a plain `go test` and not a tool that needs a tenant.
+
+// registrySnapshot constructs every registered collector exactly as the tenant
+// loop does, minus the dependencies.
+func registrySnapshot() (snapshot, window, blob []any) {
+	for _, f := range collectors.All() {
+		snapshot = append(snapshot, f(collectors.Deps{}))
+	}
+	for _, f := range collectors.WindowAll() {
+		rw := f(collectors.WindowDeps{})
+		if rw.Collector == nil {
+			continue
+		}
+		window = append(window, rw.Collector)
+	}
+	for _, f := range collectors.BlobAll() {
+		blob = append(blob, f(collectors.BlobDeps{}))
+	}
+	return snapshot, window, blob
+}
+
+func registeredNames(t *testing.T) []string {
+	t.Helper()
+	snapshot, window, blob := registrySnapshot()
+	var names []string
+	for _, group := range [][]any{snapshot, window, blob} {
+		for _, c := range group {
+			n, ok := c.(interface{ Name() string })
+			if !ok {
+				t.Fatalf("%T has no Name()", c)
+			}
+			names = append(names, n.Name())
+		}
+	}
+	return names
+}
+
+// TestCollectorAnnotationsCoverEveryCollector is THE drift gate: registering a
+// collector without writing its reference prose fails a plain `go test`, by
+// name. It is the analog of TestExampleConfigCoversEveryKey — a missing entry
+// means the doc is stale, an extra one means a stale rename (or a row for
+// something that was never a single collector, as `purview.labels` was).
+func TestCollectorAnnotationsCoverEveryCollector(t *testing.T) {
+	if err := collectordoc.CheckAnnotations(registeredNames(t)); err != nil {
+		t.Error(err)
+	}
+}
+
+// TestEveryCollectorNameIsUnique guards the assumption the annotation map makes:
+// annotations are keyed by name, so two collectors sharing one would silently
+// share a row — and one of them would document the other.
+func TestEveryCollectorNameIsUnique(t *testing.T) {
+	seen := map[string]bool{}
+	for _, n := range registeredNames(t) {
+		if seen[n] {
+			t.Errorf("collector name %q is registered twice — names are the annotation key, the config key, and the self-obs attribute, so they must be unique", n)
+		}
+		seen[n] = true
+	}
+}
+
+// TestCollectorReferenceDocInSync is the golden gate: docs/collectors.md's
+// generated block must equal what the registry renders right now. It catches
+// what the annotation gate cannot — a changed interval, a new scope, a
+// collector that became Experimental — since those need no new annotation.
+// Regenerate with `scripts/regen-generated.sh collectordoc`.
+func TestCollectorReferenceDocInSync(t *testing.T) {
+	docPath := filepath.Join("..", "..", "docs", "collectors.md")
+
+	snapshot, window, blob := registrySnapshot()
+	rows, err := collectordoc.Rows(snapshot, window, blob)
+	if err != nil {
+		t.Fatalf("rows: %v", err)
+	}
+	block, err := collectordoc.Render(rows)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	current, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("read docs/collectors.md: %v", err)
+	}
+	want, err := collectordoc.Splice(string(current), block)
+	if err != nil {
+		t.Fatalf("splice: %v", err)
+	}
+
+	if *updateCollectorDoc {
+		if err := os.WriteFile(docPath, []byte(want), 0o644); err != nil { //nolint:gosec // G306: generated docs file is intentionally world-readable
+			t.Fatalf("write docs/collectors.md: %v", err)
+		}
+		t.Logf("regenerated %s", docPath)
+		return
+	}
+	if want != string(current) {
+		t.Errorf("docs/collectors.md is out of date with the collector registry — regenerate with " +
+			"`scripts/regen-generated.sh collectordoc` (or `go test ./cmd/graph2otel -run TestCollectorReferenceDocInSync -update`) and commit the result")
+	}
+}
