@@ -30,6 +30,42 @@ func NewStore(dir string) *Store {
 	}
 }
 
+// Verify reports whether the checkpoint directory is usable, creating it (and
+// any missing parents) if it does not exist. It is meant to be called ONCE at
+// startup, before any collector runs, and to abort the process on failure.
+//
+// Why this exists rather than letting Save fail (#117): Save's failure is
+// caught by the scheduler, logged at Warn, and the tick continues — so an
+// unwritable checkpoint dir degrades SILENTLY. The watermark never persists,
+// every window collector re-polls its InitialLookback window on every cycle
+// forever, and the only symptom is duplicate log records in the backend and a
+// Warn line nobody reads. That is a bad failure mode for a security-posture
+// exporter, and the shipped docker-compose reference hit it from day one:
+// read_only:true plus a relative checkpoint_dir means there is no writable
+// path at all.
+//
+// The probe is a real write-then-remove rather than a mode-bit inspection,
+// because the failure modes that matter here (a root-owned bind mount under
+// `user: 65532`, a read-only rootfs, a full or read-only volume) are not all
+// visible in the mode bits alone.
+func (s *Store) Verify() error {
+	if err := os.MkdirAll(s.dir, 0o700); err != nil {
+		return fmt.Errorf("checkpoint dir %q is not creatable (window collectors cannot persist their watermark; "+
+			"mount a writable volume there and ensure it is owned by the container's user): %w", s.dir, err)
+	}
+
+	probe := filepath.Join(s.dir, ".writable-probe")
+	if err := os.WriteFile(probe, []byte("ok"), 0o600); err != nil {
+		return fmt.Errorf("checkpoint dir %q is not writable (window collectors cannot persist their watermark, so "+
+			"every restart would re-poll and re-emit duplicate logs; ensure the mounted path is owned by the "+
+			"container's user, e.g. chown 65532:65532): %w", s.dir, err)
+	}
+	if err := os.Remove(probe); err != nil {
+		return fmt.Errorf("checkpoint dir %q: probe file %q could not be removed: %w", s.dir, probe, err)
+	}
+	return nil
+}
+
 // keyLock returns the mutex guarding key's file, creating one on first use.
 // Per-key (rather than a single store-wide) locking lets collectors on
 // different endpoints Save/Load without blocking on each other.

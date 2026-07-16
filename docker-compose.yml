@@ -10,7 +10,29 @@
 #        AZURE_CLIENT_SECRET=...
 #        G2O_OTLP__GRAFANA_CLOUD__INSTANCE_ID=...
 #        G2O_OTLP__GRAFANA_CLOUD__TOKEN=...
-#   3. docker compose up --build
+#   3. Create the checkpoint dir and give it to the container's user (see below):
+#        mkdir -p checkpoints && sudo chown 65532:65532 checkpoints
+#   4. docker compose up --build
+#
+# ---------------------------------------------------------------------------
+# The checkpoint volume is NOT optional (#117)
+# ---------------------------------------------------------------------------
+# Window (log) collectors persist their watermark + seen-id dedupe set to
+# checkpoint_dir. Without a writable, PERSISTENT path there:
+#
+#   * every restart re-polls each collector's whole initial-lookback window, so
+#     the backend gets a burst of DUPLICATE log records on every deploy; and
+#   * an outage longer than that lookback silently loses the events in between.
+#
+# The container is distroless+nonroot and runs read-only, so there is no
+# writable path inside it at all — the bind mount below is the only place
+# checkpoints can live.
+#
+# The `chown 65532:65532` in step 3 matters: if you let Docker auto-create
+# ./checkpoints on first `up`, it is created ROOT-owned and the container
+# (uid 65532) cannot write to it. graph2otel now fails fast at startup with an
+# explicit error in that case rather than degrading quietly, so if it refuses
+# to start and names the checkpoint dir, this is why.
 #
 # graph2otel is OTLP push-only — there is no scrape port to expose, so this
 # compose file has no `ports:` block.
@@ -39,8 +61,14 @@ services:
       G2O_OTLP__GRAFANA_CLOUD__INSTANCE_ID: ${G2O_OTLP__GRAFANA_CLOUD__INSTANCE_ID:-}
       G2O_OTLP__GRAFANA_CLOUD__TOKEN: ${G2O_OTLP__GRAFANA_CLOUD__TOKEN:-}
       G2O_LOG_LEVEL: ${G2O_LOG_LEVEL:-info}
-    # Mount a real config for tenant list + per-domain collector overrides
-    # (auth material still comes from the env vars above, never from the file).
+      # Absolute path inside the container, matching the bind mount below. The
+      # built-in default is the RELATIVE "./checkpoints", which cannot work here:
+      # read_only:true leaves no writable working directory.
+      G2O_CHECKPOINT_DIR: /var/lib/graph2otel
     volumes:
+      # A real config for the tenant list + per-domain collector overrides (auth
+      # material still comes from the env vars above, never from the file).
       - ./config.yaml:/etc/graph2otel/config.yaml:ro
+      # Checkpoint persistence — see the header. Must be writable by uid 65532.
+      - ./checkpoints:/var/lib/graph2otel
     command: ["--config", "/etc/graph2otel/config.yaml"]

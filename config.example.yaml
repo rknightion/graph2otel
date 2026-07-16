@@ -117,4 +117,12 @@ cardinality:
 
 # checkpoint_dir is where window-log collectors persist their per-(tenant,
 # endpoint) watermarks so a restart resumes rather than re-fetching or dropping.
-checkpoint_dir: "./checkpoints" # root dir for the file-based CheckpointStore (mount a writable, persistent path in a container)
+# It MUST be writable and persistent: without it every restart re-polls each
+# collector's whole initial-lookback window (a burst of duplicate log records in
+# the backend), and an outage longer than that lookback silently drops the events
+# in between. graph2otel fails fast at startup if it is unwritable (#117).
+# In a container this relative default cannot work — the image is read-only —
+# so override it to an absolute path on a mounted volume (see docker-compose.yml,
+# which sets G2O_CHECKPOINT_DIR=/var/lib/graph2otel against a bind mount owned by
+# uid 65532; the Helm chart sets it to /var/lib/graph2otel/checkpoints).
+checkpoint_dir: "./checkpoints" # root dir for the file-based CheckpointStore

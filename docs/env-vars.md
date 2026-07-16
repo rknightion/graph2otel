@@ -53,7 +53,7 @@ never in committed YAML.
 | `G2O_PROFILING__MUTEX_PROFILE_FRACTION` | `5` | runtime.SetMutexProfileFraction; 0 = disabled |
 | `G2O_PROFILING__BLOCK_PROFILE_RATE` | `100000` | runtime.SetBlockProfileRate (ns, 100µs); 0 = disabled |
 | `G2O_CARDINALITY__METRIC_LIMIT` | `2000` | hard per-instrument active-series cap; beyond it the SDK collapses extras into otel.metric.overflow (0 = unlimited) |
-| `G2O_CHECKPOINT_DIR` | `./checkpoints` | root dir for the file-based CheckpointStore (mount a writable, persistent path in a container) |
+| `G2O_CHECKPOINT_DIR` | `./checkpoints` | root dir for the file-based CheckpointStore |
 
 **File-only** — these take structured values (a map or a list of objects) and must be set in the YAML config, not via an environment variable: `tenants`, `collectors`, `profiling.pyroscope.tags`.
 

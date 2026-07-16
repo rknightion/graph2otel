@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/admin"
+	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/config"
 	"github.com/rknightion/graph2otel/internal/profiling"
@@ -115,6 +116,22 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		defer func() { _ = prof.Stop() }()
 		logger.Info("pyroscope continuous profiling started",
 			"server", cfg.Profiling.Pyroscope.ServerAddress)
+	}
+
+	// Fail fast on an unusable checkpoint dir (#117). This is deliberately a
+	// hard error, not a warning: window collectors persist their watermark
+	// here, and if the directory is unwritable, Save's failure is caught by the
+	// scheduler and logged at Warn while the tick carries on — so the exporter
+	// runs "fine" forever while re-polling its whole lookback window every
+	// cycle and re-emitting duplicate log records into the backend. Silently
+	// duplicating a security-posture feed is worse than not starting.
+	//
+	// Checked once here rather than in startTenants because the directory is
+	// global (one path shared by every tenant), and because startTenants
+	// deliberately never fails the process for one tenant's sake.
+	if err := checkpoint.NewStore(cfg.CheckpointDir).Verify(); err != nil {
+		logger.Error("checkpoint directory unusable", "error", err)
+		return 1
 	}
 
 	// Per-tenant Graph clients + collector schedulers. Each configured tenant

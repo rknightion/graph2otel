@@ -3,6 +3,7 @@ package checkpoint
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -176,4 +177,51 @@ func TestStoreConcurrentSaveLoadAcrossKeysIsRaceClean(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+// TestVerifyCreatesDirAndSucceedsWhenWritable asserts Verify is a usable
+// startup gate: it creates a missing checkpoint dir and reports success,
+// leaving no probe file behind.
+func TestVerifyCreatesDirAndSucceedsWhenWritable(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "checkpoints")
+	s := NewStore(dir)
+
+	if err := s.Verify(); err != nil {
+		t.Fatalf("Verify on a writable parent: %v", err)
+	}
+	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+		t.Fatalf("Verify did not create %s: err=%v", dir, err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("Verify left %d file(s) behind, want none: %v", len(entries), entries)
+	}
+}
+
+// TestVerifyFailsActionablyWhenNotWritable is the whole point of #117: a
+// read-only or wrong-owner checkpoint dir must fail FAST at startup with a
+// message naming the dir, not degrade into a per-tick Warn that silently
+// re-emits duplicate logs forever.
+func TestVerifyFailsActionablyWhenNotWritable(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: mode bits do not restrict writes")
+	}
+	dir := filepath.Join(t.TempDir(), "ro")
+	if err := os.Mkdir(dir, 0o500); err != nil { // r-x: exists but not writable
+		t.Fatalf("Mkdir: %v", err)
+	}
+
+	err := NewStore(dir).Verify()
+	if err == nil {
+		t.Fatal("Verify must fail on a non-writable checkpoint dir")
+	}
+	if !strings.Contains(err.Error(), dir) {
+		t.Errorf("error must name the offending dir; got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "checkpoint") {
+		t.Errorf("error must say what is broken (checkpoints); got: %v", err)
+	}
 }

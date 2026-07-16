@@ -235,10 +235,16 @@ persistence:
   # -- Persist checkpoints (window-collector watermarks) across restarts. When
   # false, an emptyDir is used (survives container restarts within a pod, but
   # is LOST on pod rescheduling/deletion — every WindowCollector cold-starts
-  # from a zero watermark, which re-runs its initial lookback window rather
-  # than silently dropping data, but is wasteful and duplicative on frequent
-  # reschedules). When true, a PVC is created. Defaults to false to match a
-  # zero-config `helm install`; enable this for any real deployment.
+  # from a zero watermark and re-runs its initial lookback window, so the
+  # backend gets a burst of DUPLICATE log records on every reschedule). When
+  # true, a PVC is created. Defaults to false to match a zero-config
+  # `helm install`; enable this for any real deployment.
+  #
+  # Note the duplicates are not the worst case: if a pod stays down LONGER than
+  # a collector's initial lookback, the events between the lost watermark and
+  # (now - lookback) are never fetched by anyone — silently dropped. So on a
+  # cluster where reschedules are routine, treat enabled=true as required
+  # rather than advisory (#117).
   enabled: false
   # -- StorageClass for the PVC (empty = cluster default). Only used when enabled.
   storageClass: ""
