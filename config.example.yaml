@@ -53,6 +53,30 @@ collectors: {}
 #   sign_ins:
 #     enabled: true
 #     interval: "5m"  # duration string: "30s", "5m", "168h" (minimum 1s)
+#
+# Experimental (beta / new-surface) collectors are OFF unless explicitly enabled
+# here — a beta Graph change can never break a default deployment. To opt in
+# (quote keys that contain dots):
+#   "m365.unified_audit":       # Exchange/SharePoint/OneDrive/Teams activity as OTLP
+#     enabled: true             # logs via the async Purview Audit query API. Needs
+#                               # AuditLogsQuery.Read.All + Purview Audit (E3+). Coarse
+#                               # interval only — the query API 429s on rapid create.
+#
+# Large-tenant tuning (10k+ users/devices). The built-in intervals are sized for
+# a typical tenant; every collector's cadence is already overridable here (and
+# per-tenant under tenants[].collectors), so widening a few full-collection
+# pollers is a config change, not a code change. graph2otel already requests
+# Graph's largest page size (Prefer: odata.maxpagesize) on every full-collection
+# walk, so page counts stay ~10x lower than Graph's default — but on a very large
+# tenant these three collectors do the most per-cycle work and are the ones worth
+# stretching if you want to cut Graph call volume further. Keys are the full
+# collector names, so quote them (they contain dots):
+#   "intune.devices":          # full managedDevices fleet page-walk (default 1h)
+#     interval: "3h"
+#   "intune.malware":          # managedDevices walk + per-Windows-device Defender sweep (default 30m)
+#     interval: "2h"
+#   "entra.credential_expiry": # /applications + /servicePrincipals keyCredentials walk (default 15m)
+#     interval: "1h"           # Graph throttles $select=keyCredentials tighter (~150/min per tenant); widen on a large app estate
 
 # admin exposes an operator health/status HTTP endpoint (liveness + per-collector
 # status). Disabled by default; bind address defaults to :9090.

@@ -128,3 +128,59 @@ func TestGetAllValuesForwardsHeaders(t *testing.T) {
 		t.Errorf("ConsistencyLevel header not forwarded: %v", g.seenHeaders)
 	}
 }
+
+// TestGetAllValuesRequestsMaxPageSizeOnEveryPage proves GetAllValues asks Graph
+// for its largest page size (Prefer: odata.maxpagesize) on the first request AND
+// on every nextLink follow-up, so a large collection is walked in ~10x fewer
+// round-trips.
+func TestGetAllValuesRequestsMaxPageSizeOnEveryPage(t *testing.T) {
+	const page1 = "https://graph.microsoft.com/v1.0/applications?$select=keyCredentials"
+	const page2 = "https://graph.microsoft.com/v1.0/applications?$skiptoken=abc"
+	g := &fakeGraph{bodies: map[string]string{
+		page1: `{"value":[{"id":"a"}],"@odata.nextLink":"` + page2 + `"}`,
+		page2: `{"value":[{"id":"b"}]}`,
+	}}
+
+	if _, err := GetAllValues(context.Background(), g, page1, nil); err != nil {
+		t.Fatalf("GetAllValues: %v", err)
+	}
+	if len(g.seenHeaders) != 2 {
+		t.Fatalf("expected 2 page requests, got %d", len(g.seenHeaders))
+	}
+	for i, h := range g.seenHeaders {
+		if got := h["Prefer"]; got != maxPageSizePreference {
+			t.Errorf("page %d Prefer header = %q, want %q", i, got, maxPageSizePreference)
+		}
+	}
+}
+
+// TestGetAllValuesDoesNotClobberCallerHeaders proves the max-page-size Prefer is
+// merged non-destructively: caller headers ride alongside it, an explicit
+// caller-set Prefer wins, and the caller's own map is never mutated.
+func TestGetAllValuesDoesNotClobberCallerHeaders(t *testing.T) {
+	const url = "https://graph.microsoft.com/v1.0/groups?$filter=x"
+	g := &fakeGraph{bodies: map[string]string{url: `{"value":[]}`}}
+
+	caller := map[string]string{"ConsistencyLevel": "eventual"}
+	if _, err := GetAllValues(context.Background(), g, url, caller); err != nil {
+		t.Fatalf("GetAllValues: %v", err)
+	}
+	if g.seenHeaders[0]["ConsistencyLevel"] != "eventual" {
+		t.Errorf("ConsistencyLevel header not forwarded: %v", g.seenHeaders)
+	}
+	if g.seenHeaders[0]["Prefer"] != maxPageSizePreference {
+		t.Errorf("Prefer header not added alongside caller headers: %v", g.seenHeaders)
+	}
+	if _, mutated := caller["Prefer"]; mutated {
+		t.Errorf("caller header map was mutated: %v", caller)
+	}
+
+	// A caller that sets its own Prefer keeps it (set-if-absent).
+	g2 := &fakeGraph{bodies: map[string]string{url: `{"value":[]}`}}
+	if _, err := GetAllValues(context.Background(), g2, url, map[string]string{"Prefer": "odata.maxpagesize=42"}); err != nil {
+		t.Fatalf("GetAllValues: %v", err)
+	}
+	if g2.seenHeaders[0]["Prefer"] != "odata.maxpagesize=42" {
+		t.Errorf("caller-set Prefer overridden: %v", g2.seenHeaders)
+	}
+}

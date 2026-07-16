@@ -71,6 +71,32 @@ func CountViaCollection(ctx context.Context, g GraphClient, url string) (int64, 
 // against a runaway pagination loop, not a silent truncation of expected data.
 const maxPages = 1000
 
+// maxPageSizePreference is the Prefer header value GetAllValues sends to ask
+// Graph for its largest allowed page size. 999 is the documented directory
+// maximum ($top / odata.maxpagesize ceiling); Graph clamps to whatever each
+// resource actually permits, so it is always safe to send. On a large
+// collection (the credential-expiry applications/servicePrincipals walk, the
+// Intune managedDevices fleet sweep) it cuts the absolute page count ~10x
+// versus Graph's default page size, which both shortens each cycle and keeps
+// the credential-expiry walk well under Graph's tighter real ~150/min
+// keyCredentials sub-ceiling. On a small collection it is a no-op (still one
+// page).
+const maxPageSizePreference = "odata.maxpagesize=999"
+
+// withMaxPageSize returns headers plus the max-page-size Prefer request header,
+// merged non-destructively: the caller's map is never mutated, and a caller
+// that already set its own Prefer keeps it (set-if-absent).
+func withMaxPageSize(headers map[string]string) map[string]string {
+	merged := make(map[string]string, len(headers)+1)
+	for k, v := range headers {
+		merged[k] = v
+	}
+	if _, ok := merged["Prefer"]; !ok {
+		merged["Prefer"] = maxPageSizePreference
+	}
+	return merged
+}
+
 // odataPage is the envelope Graph wraps a collection response in.
 type odataPage struct {
 	Value    []json.RawMessage `json:"value"`
@@ -85,13 +111,17 @@ type odataPage struct {
 // exceeds maxPages, since that signals a wrong (full-collection) use of a
 // helper meant for small collections.
 func GetAllValues(ctx context.Context, g GraphClient, url string, headers map[string]string) ([]json.RawMessage, error) {
+	// Ask Graph for its largest page size on every request (the nextLink
+	// carries its own $skiptoken, but re-sending Prefer is harmless and keeps
+	// the header uniform across pages). Merged once, before the loop.
+	reqHeaders := withMaxPageSize(headers)
 	var out []json.RawMessage
 	next := url
 	for pages := 0; next != ""; pages++ {
 		if pages >= maxPages {
 			return nil, fmt.Errorf("collectors: pagination exceeded %d pages for %q (unbounded collection?)", maxPages, url)
 		}
-		body, err := g.RawGetWithHeaders(ctx, next, headers)
+		body, err := g.RawGetWithHeaders(ctx, next, reqHeaders)
 		if err != nil {
 			return nil, err
 		}
