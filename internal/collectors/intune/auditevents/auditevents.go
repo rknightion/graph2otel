@@ -11,6 +11,17 @@
 // Hub/Log Analytics pipeline configured — Graph retains it directly for
 // ~1 year.
 //
+// remoteActionAudits is intentionally NOT a separate collector (#95, live-
+// verified 2026-07-16). Device remote actions already land here: a live scan of
+// 6000 auditEvents rows found syncDevice (as activityType "syncDevice
+// ManagedDevice", op "Action"), wipe, retire, rebootNow, and shutDown all
+// present in the "Device" category. /deviceManagement/remoteActionAudits (beta)
+// is real and returns rows, but its only data auditEvents lacks is the action
+// lifecycle STATE (actionState pending→done) and hardware ids (deviceIMEI,
+// bulkDeviceActionId) — niche, and the action-occurred signal (the security-
+// relevant part) is fully covered here. A dedicated collector would duplicate
+// that coverage, so it was closed as redundant rather than built.
+//
 // $orderby support on this endpoint is unverified (the v1.0 List page
 // documents no OData options at all), so EndpointConfig.OrderByReliable is
 // false: the engine drains the whole window via nextLink, then sorts
