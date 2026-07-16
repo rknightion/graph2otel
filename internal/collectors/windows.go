@@ -6,6 +6,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collector"
+	"github.com/rknightion/graph2otel/internal/jobpipeline"
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
 )
@@ -36,8 +37,16 @@ type WindowDeps struct {
 	// every window collector shares the tenant's single instrumented,
 	// rate-limited transport.
 	Fetcher logpipeline.PageFetcher
+	// JobClient drives the async job-poll engine (internal/jobpipeline) for
+	// window collectors built on POST-a-query→poll→page endpoints (the M365 /
+	// Purview unified-audit collectors over /security/auditLog/queries). Built
+	// once per tenant via jobpipeline.NewGraphJobClient(gc) over the SAME
+	// instrumented, rate-limited transport as Fetcher. A logpipeline-based
+	// collector leaves this unused; a jobpipeline-based one ignores Fetcher.
+	JobClient jobpipeline.JobClient
 	// Store persists each window collector's checkpoint (watermark, overlap,
-	// SeenIDs) across restarts, namespaced per (tenant, endpoint).
+	// SeenIDs) across restarts, namespaced per (tenant, endpoint). Shared by
+	// both engines (logpipeline and jobpipeline use the same checkpoint.Store).
 	Store *checkpoint.Store
 }
 

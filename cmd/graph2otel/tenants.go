@@ -15,6 +15,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/config"
 	"github.com/rknightion/graph2otel/internal/exportjob"
 	"github.com/rknightion/graph2otel/internal/graphclient"
+	"github.com/rknightion/graph2otel/internal/jobpipeline"
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
 	"github.com/rknightion/graph2otel/internal/telemetry"
@@ -114,14 +115,16 @@ func setupTenant(
 	// engine). They share the tenant's single instrumented, rate-limited
 	// transport (one PageFetcher over gc) and the file-based checkpoint store.
 	fetcher := logpipeline.NewGraphPageFetcher(gc)
+	jobClient := jobpipeline.NewGraphJobClient(gc)
 	store := checkpoint.NewStore(cfg.CheckpointDir)
 	wdeps := collectors.WindowDeps{
-		Graph:    gc,
-		TenantID: ta.TenantID,
-		Logger:   tlog,
-		Caps:     caps,
-		Fetcher:  fetcher,
-		Store:    store,
+		Graph:     gc,
+		TenantID:  ta.TenantID,
+		Logger:    tlog,
+		Caps:      caps,
+		Fetcher:   fetcher,
+		JobClient: jobClient,
+		Store:     store,
 	}
 	for _, wf := range collectors.WindowAll() {
 		rw := wf(wdeps)
