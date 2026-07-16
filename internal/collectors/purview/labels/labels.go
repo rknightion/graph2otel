@@ -1,9 +1,28 @@
 // Package labels holds the Microsoft Purview label-inventory collectors:
 // bounded gauges over the tenant's sensitivity-label and retention-label
-// catalogs. Metrics only — label display names, tooltips, descriptions and
-// per-label identifiers are PII-shaped and never become metric label
-// dimensions (see CLAUDE.md's cardinality/PII rule); every series is bucketed
-// by a bounded, documented enum.
+// catalogs, PLUS a log twin of the same fetch — one OTEL log record per
+// catalog row carrying the per-label detail the metric never carries (name,
+// id, priority, descriptions).
+//
+// # Metric/log split, and why it is NOT a PII call
+//
+// A sensitivity or retention label's name is a tenant-wide POLICY name
+// ("Confidential", "Highly Confidential - Finance") chosen by a handful of
+// admins, not per-entity data — every document in the tenant that carries the
+// label shares that one name, so it carries none of the per-user/per-device
+// identifying weight CLAUDE.md's cardinality/PII rule is about. The reason
+// the name (and priority, and the free-text descriptions) stays OFF the
+// metric is cardinality, not privacy: a per-label series would be one series
+// per catalog label with every value == 1 (see the `priority` note below) —
+// series count growing with the catalog and carrying no aggregation value,
+// exactly what a bounded metric must not do. That argument says nothing about
+// LOGS: a log record's cost is bounded by catalog size × poll interval
+// (hourly, and catalogs drift slowly), which is exactly where per-row detail
+// belongs. So each collector decodes the bounded enum fields for the metric
+// AND the full per-row detail for the log twin from the SAME fetch, gated by
+// the same 403/404/DataInsights-Forbidden skip-and-log path — a tenant that
+// can't reach the endpoint gets zero logs, not empty ones, same as it gets
+// zero metric points.
 //
 // # Two collectors, not one
 //
@@ -41,7 +60,8 @@
 // cardinality that grows with the label count and carries no aggregation
 // value, exactly what CLAUDE.md forbids. So the sensitivity collector emits
 // purview.labels.count bucketed only by `applicableTo` (a bounded target
-// enum) and deliberately drops the priority dimension.
+// enum) and keeps priority off the metric — it lands in the
+// purview.sensitivity_label log twin instead (see above).
 package labels
 
 import (
@@ -50,6 +70,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -71,6 +92,14 @@ const (
 	retentionName             = "purview.retention_labels"
 	retentionLabelsMetric     = "purview.retention.labels.count"
 	retentionEventTypesMetric = "purview.retention.event_types.count"
+)
+
+// Log-twin OTLP LogRecord EventNames, one per catalog row emitted alongside
+// the metrics above (see the package doc's "Metric/log split" section).
+const (
+	sensitivityLabelEventName   = "purview.sensitivity_label"
+	retentionLabelEventName     = "purview.retention_label"
+	retentionEventTypeEventName = "purview.retention_event_type"
 )
 
 // isUnavailable reports whether err is a Purview security endpoint being
@@ -97,15 +126,24 @@ func isUnavailable(err error) bool {
 // Sensitivity labels
 // ---------------------------------------------------------------------------
 
-// sensitivityLabel mirrors only the bounded field this collector buckets on.
-// name, description, tooltip, color and every other display/identifier field
-// are deliberately never decoded — they are PII-shaped and must never become
-// metric labels (CLAUDE.md cardinality/PII rule).
+// sensitivityLabel mirrors the sensitivityLabel fields this package uses:
+// ApplicableTo buckets the metric; ID/Name/Priority/Description feed only the
+// purview.sensitivity_label log twin, never a metric label (CLAUDE.md
+// cardinality rule — see the package doc for why that's a cardinality
+// argument, not a PII one). Every other Graph field (tooltip, color,
+// isEnabled, actionSource, ...) is not needed by either output and stays
+// undecoded.
 type sensitivityLabel struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 	// ApplicableTo is the microsoft.graph.security.sensitivityLabelTarget flags
 	// value, serialized by Graph as a comma-separated string, e.g.
 	// "email,file,teamwork".
 	ApplicableTo string `json:"applicableTo"`
+	// Priority is a dense per-label sequential integer (lower = higher
+	// priority) — log-only, see the package doc's field-name-deviation note.
+	Priority    int    `json:"priority"`
+	Description string `json:"description"`
 }
 
 // SensitivityCollector polls the tenant's sensitivity-label catalog.
@@ -143,11 +181,14 @@ func (c *SensitivityCollector) RequiredCapability() license.Capability {
 	return license.CapPurviewInfoProtection
 }
 
-// Collect fetches the sensitivity-label catalog and emits purview.labels.count
-// bucketed by applicableTo target. A label applicable to several targets is
-// counted once per target, so the sum across the applicable_to dimension can
-// exceed the label count — expected for a by-target breakdown. A 403/404
-// (endpoint unavailable/unlicensed) is skipped-and-logged, not surfaced.
+// Collect fetches the sensitivity-label catalog, emits purview.labels.count
+// bucketed by applicableTo target, and emits one purview.sensitivity_label log
+// per label carrying the per-row detail the metric can't (id, name, priority,
+// applicable_to, description). A label applicable to several targets is
+// counted once per target in the metric, so the sum across the applicable_to
+// dimension can exceed the label count — expected for a by-target breakdown.
+// A 403/404 (endpoint unavailable/unlicensed) is skipped-and-logged before
+// either the metric or the log twin emits anything.
 func (c *SensitivityCollector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/security/dataSecurityAndGovernance/sensitivityLabels", nil)
 	if err != nil {
@@ -169,6 +210,22 @@ func (c *SensitivityCollector) Collect(ctx context.Context, e telemetry.Emitter)
 		for _, t := range applicableTargets(l.ApplicableTo) {
 			byTarget[t]++
 		}
+
+		// priority is emitted as a string, matching every other log attribute in
+		// this codebase: log attributes are Loki structured metadata (string-typed
+		// on the wire regardless of OTEL attribute kind — see CLAUDE.md), so a
+		// numeric OTEL kind buys nothing here and only this package's own log
+		// twins would differ from house convention if it did.
+		attrs := telemetry.Attrs{"priority": strconv.Itoa(l.Priority)}
+		setStr(attrs, "id", l.ID)
+		setStr(attrs, "name", l.Name)
+		setStr(attrs, "applicable_to", l.ApplicableTo)
+		setStr(attrs, "description", l.Description)
+		e.LogEvent(telemetry.Event{
+			Name:  sensitivityLabelEventName,
+			Body:  fmt.Sprintf("sensitivity label: %s", l.Name),
+			Attrs: attrs,
+		})
 	}
 
 	points := make([]telemetry.GaugePoint, 0, len(byTarget))
@@ -229,14 +286,29 @@ func applicableTargets(raw string) []string {
 // Retention labels + retention event types
 // ---------------------------------------------------------------------------
 
-// retentionLabel mirrors only the bounded enum fields this collector buckets
-// on. displayName, descriptionForUsers/Admins, createdBy and every other
-// display/identifier field are deliberately never decoded (CLAUDE.md
-// cardinality/PII rule).
+// retentionLabel mirrors the retentionLabel fields this package uses: the
+// three enums bucket the metric; ID/DisplayName/the two description fields
+// feed only the purview.retention_label log twin, never a metric label
+// (cardinality rule, see the package doc). createdBy/createdDateTime/
+// lastModified* and everything else are not needed by either output.
 type retentionLabel struct {
+	ID                            string `json:"id"`
+	DisplayName                   string `json:"displayName"`
 	BehaviorDuringRetentionPeriod string `json:"behaviorDuringRetentionPeriod"`
 	ActionAfterRetentionPeriod    string `json:"actionAfterRetentionPeriod"`
 	RetentionTrigger              string `json:"retentionTrigger"`
+	DescriptionForAdmins          string `json:"descriptionForAdmins"`
+	DescriptionForUsers           string `json:"descriptionForUsers"`
+}
+
+// retentionEventType mirrors the retentionEventType fields this package
+// uses. This catalog has no bounded categorical field to bucket a metric on
+// (see collectEventTypes), so every field here feeds only the
+// purview.retention_event_type log twin.
+type retentionEventType struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"displayName"`
+	Description string `json:"description"`
 }
 
 // RetentionCollector polls the retention-label catalog and the retention event
@@ -292,9 +364,13 @@ func (c *RetentionCollector) Collect(ctx context.Context, e telemetry.Emitter) e
 }
 
 // collectLabels emits purview.retention.labels.count bucketed by the three
-// bounded retention-policy dimensions. Each label is a single combination, so
-// the series set is bounded by the enum product (not tenant size) and its sum
-// equals the label count.
+// bounded retention-policy dimensions, and one purview.retention_label log per
+// label carrying the per-row detail (id, name, the three enums — normalized
+// to the SAME bucket values the metric uses — and both descriptions). Each
+// label is a single combination, so the metric's series set is bounded by the
+// enum product (not tenant size) and its sum equals the label count. A
+// 403/404/DataInsights-Forbidden (endpoint unavailable) is skipped-and-logged
+// before either the metric or the log twin emits anything.
 func (c *RetentionCollector) collectLabels(ctx context.Context, e telemetry.Emitter) error {
 	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/security/labels/retentionLabels", nil)
 	if err != nil {
@@ -314,11 +390,25 @@ func (c *RetentionCollector) collectLabels(ctx context.Context, e telemetry.Emit
 			c.logger.Warn("retention labels: skipping unparseable entry", "collector", retentionName, "error", err)
 			continue
 		}
-		counts[combo{
-			behavior: normalizeBehavior(l.BehaviorDuringRetentionPeriod),
-			action:   normalizeAction(l.ActionAfterRetentionPeriod),
-			trigger:  normalizeTrigger(l.RetentionTrigger),
-		}]++
+		behavior := normalizeBehavior(l.BehaviorDuringRetentionPeriod)
+		action := normalizeAction(l.ActionAfterRetentionPeriod)
+		trigger := normalizeTrigger(l.RetentionTrigger)
+		counts[combo{behavior: behavior, action: action, trigger: trigger}]++
+
+		attrs := telemetry.Attrs{
+			"behavior_during_retention": behavior,
+			"action_after_retention":    action,
+			"retention_trigger":         trigger,
+		}
+		setStr(attrs, "id", l.ID)
+		setStr(attrs, "name", l.DisplayName)
+		setStr(attrs, "description_for_admins", l.DescriptionForAdmins)
+		setStr(attrs, "description_for_users", l.DescriptionForUsers)
+		e.LogEvent(telemetry.Event{
+			Name:  retentionLabelEventName,
+			Body:  fmt.Sprintf("retention label: %s", l.DisplayName),
+			Attrs: attrs,
+		})
 	}
 
 	points := make([]telemetry.GaugePoint, 0, len(counts))
@@ -338,10 +428,12 @@ func (c *RetentionCollector) collectLabels(ctx context.Context, e telemetry.Emit
 	return nil
 }
 
-// collectEventTypes emits a single purview.retention.event_types.count total.
-// The retentionEventType resource carries no bounded categorical field (only
+// collectEventTypes emits a single purview.retention.event_types.count total,
+// plus one purview.retention_event_type log per event type. The
+// retentionEventType resource carries no bounded categorical field (only
 // id/displayName/description/timestamps), so a bounded metric can only be a
-// count — never a per-event-type series.
+// count — never a per-event-type series; the id/name/description detail goes
+// entirely into the log twin instead.
 func (c *RetentionCollector) collectEventTypes(ctx context.Context, e telemetry.Emitter) error {
 	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/security/triggerTypes/retentionEventTypes", nil)
 	if err != nil {
@@ -355,6 +447,23 @@ func (c *RetentionCollector) collectEventTypes(ctx context.Context, e telemetry.
 	e.Gauge(retentionEventTypesMetric, "{event_type}",
 		"Purview retention event types configured for the tenant.",
 		float64(len(raws)), nil)
+
+	for _, raw := range raws {
+		var et retentionEventType
+		if err := json.Unmarshal(raw, &et); err != nil {
+			c.logger.Warn("retention event types: skipping unparseable entry", "collector", retentionName, "error", err)
+			continue
+		}
+		attrs := telemetry.Attrs{}
+		setStr(attrs, "id", et.ID)
+		setStr(attrs, "name", et.DisplayName)
+		setStr(attrs, "description", et.Description)
+		e.LogEvent(telemetry.Event{
+			Name:  retentionEventTypeEventName,
+			Body:  fmt.Sprintf("retention event type: %s", et.DisplayName),
+			Attrs: attrs,
+		})
+	}
 	return nil
 }
 
@@ -404,6 +513,16 @@ func normalizeTrigger(raw string) string {
 		return "date_of_event"
 	default:
 		return "unknown"
+	}
+}
+
+// setStr adds key=val to attrs only when val is non-empty, so an absent or
+// empty decoded field is omitted from the log twin rather than emitted as ""
+// (the same idiom internal/collectors/intune/auditevents.go uses over raw
+// map[string]any — here adapted for this package's typed structs).
+func setStr(attrs telemetry.Attrs, key, val string) {
+	if val != "" {
+		attrs[key] = val
 	}
 }
 

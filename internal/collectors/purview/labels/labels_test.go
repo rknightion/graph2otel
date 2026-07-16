@@ -113,6 +113,67 @@ func TestSensitivityUnavailableIsSkipped(t *testing.T) {
 	if len(rec.MetricPoints(sensitivityMetric)) != 0 {
 		t.Error("expected no metric points when endpoint unavailable")
 	}
+	if len(rec.LogRecords()) != 0 {
+		t.Error("expected no log twin records when endpoint unavailable")
+	}
+}
+
+// TestSensitivityCollectEmitsLogTwin is the log-twin half of #111: every
+// catalog row emits one purview.sensitivity_label log carrying the per-row
+// detail (id, name, priority, applicable_to, description) the metric
+// deliberately never carries.
+func TestSensitivityCollectEmitsLogTwin(t *testing.T) {
+	body := `{"value":[
+	  {"id":"aaa","applicableTo":"email,file","name":"` + piiLabelName + `","priority":5,"description":"Finance payroll data"},
+	  {"id":"bbb","applicableTo":"file","name":"Secret","priority":6}
+	]}`
+	g := &fakeGraph{bodies: map[string]string{sensitivityURL: body}}
+	rec := telemetrytest.New()
+
+	if err := NewSensitivity(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	logs := rec.LogRecords()
+	var twins []telemetrytest.LogRecord
+	for _, l := range logs {
+		if l.EventName == sensitivityLabelEventName {
+			twins = append(twins, l)
+		}
+	}
+	if len(twins) != 2 {
+		t.Fatalf("got %d purview.sensitivity_label logs, want 2 (all: %+v)", len(twins), logs)
+	}
+
+	byID := map[string]telemetrytest.LogRecord{}
+	for _, l := range twins {
+		byID[l.Attrs["id"]] = l
+	}
+
+	first, ok := byID["aaa"]
+	if !ok {
+		t.Fatalf("no log record for id=aaa (all: %+v)", twins)
+	}
+	if first.Attrs["name"] != piiLabelName {
+		t.Errorf("name = %q, want %q", first.Attrs["name"], piiLabelName)
+	}
+	if first.Attrs["priority"] != "5" {
+		t.Errorf("priority = %q, want \"5\"", first.Attrs["priority"])
+	}
+	if first.Attrs["applicable_to"] != "email,file" {
+		t.Errorf("applicable_to = %q, want \"email,file\"", first.Attrs["applicable_to"])
+	}
+	if first.Attrs["description"] != "Finance payroll data" {
+		t.Errorf("description = %q, want %q", first.Attrs["description"], "Finance payroll data")
+	}
+
+	second, ok := byID["bbb"]
+	if !ok {
+		t.Fatalf("no log record for id=bbb (all: %+v)", twins)
+	}
+	if _, present := second.Attrs["description"]; present {
+		t.Errorf("absent description should be omitted from attrs, got %q", second.Attrs["description"])
+	}
 }
 
 func TestSensitivityGatingMetadata(t *testing.T) {
@@ -217,6 +278,14 @@ func TestRetentionEventTypesFailureDoesNotBlockLabels(t *testing.T) {
 	if len(rec.MetricPoints(retentionLabelsMetric)) == 0 {
 		t.Error("retention labels should still emit despite event-types failure")
 	}
+
+	labelLogs := logsNamed(rec, retentionLabelEventName)
+	if len(labelLogs) == 0 {
+		t.Error("retention label log twin should still emit despite event-types failure")
+	}
+	if eventTypeLogs := logsNamed(rec, retentionEventTypeEventName); len(eventTypeLogs) != 0 {
+		t.Errorf("expected no purview.retention_event_type logs when that fetch fails, got %+v", eventTypeLogs)
+	}
 }
 
 func TestRetentionUnavailableIsSkipped(t *testing.T) {
@@ -227,6 +296,9 @@ func TestRetentionUnavailableIsSkipped(t *testing.T) {
 	rec := telemetrytest.New()
 	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
 		t.Fatalf("Collect on 404 should skip gracefully, got: %v", err)
+	}
+	if len(rec.LogRecords()) != 0 {
+		t.Error("expected no log twin records when both endpoints are unavailable")
 	}
 }
 
@@ -245,6 +317,110 @@ func TestRetentionDataInsightsForbiddenIsSkipped(t *testing.T) {
 	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
 		t.Fatalf("Collect on DataInsights Forbidden 500 should skip gracefully, got: %v", err)
 	}
+	if len(rec.LogRecords()) != 0 {
+		t.Error("expected no log twin records when both endpoints are DataInsights-Forbidden")
+	}
+}
+
+// TestRetentionCollectEmitsLogTwins is the log-twin half of #111 for the
+// retention collector: one purview.retention_label log per label (using the
+// SAME normalized enum values the gauge buckets on) and one
+// purview.retention_event_type log per event type — a catalog this collector
+// previously decoded nothing for.
+func TestRetentionCollectEmitsLogTwins(t *testing.T) {
+	rl := `{"value":[
+	  {"id":"lbl-1","displayName":"` + piiLabelName + `","behaviorDuringRetentionPeriod":"retainAsRecord","actionAfterRetentionPeriod":"delete","retentionTrigger":"dateLabeled","descriptionForAdmins":"admin desc","descriptionForUsers":"user desc"},
+	  {"id":"lbl-2","displayName":"Weird","behaviorDuringRetentionPeriod":"martian","actionAfterRetentionPeriod":"","retentionTrigger":"whatever"}
+	]}`
+	et := `{"value":[
+	  {"id":"evt-1","displayName":"` + piiEventTypeName + `","description":"fires on termination"},
+	  {"id":"evt-2","displayName":"E2"}
+	]}`
+	g := &fakeGraph{bodies: map[string]string{retentionURL: rl, eventTypesURL: et}}
+	rec := telemetrytest.New()
+
+	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	labelLogs := logsNamed(rec, retentionLabelEventName)
+	if len(labelLogs) != 2 {
+		t.Fatalf("got %d purview.retention_label logs, want 2 (all: %+v)", len(labelLogs), labelLogs)
+	}
+	byLabelID := map[string]telemetrytest.LogRecord{}
+	for _, l := range labelLogs {
+		byLabelID[l.Attrs["id"]] = l
+	}
+	l1, ok := byLabelID["lbl-1"]
+	if !ok {
+		t.Fatalf("no log record for id=lbl-1 (all: %+v)", labelLogs)
+	}
+	if l1.Attrs["name"] != piiLabelName {
+		t.Errorf("name = %q, want %q", l1.Attrs["name"], piiLabelName)
+	}
+	if l1.Attrs["behavior_during_retention"] != "retain_as_record" {
+		t.Errorf("behavior_during_retention = %q, want normalized \"retain_as_record\"", l1.Attrs["behavior_during_retention"])
+	}
+	if l1.Attrs["action_after_retention"] != "delete" {
+		t.Errorf("action_after_retention = %q, want \"delete\"", l1.Attrs["action_after_retention"])
+	}
+	if l1.Attrs["retention_trigger"] != "date_labeled" {
+		t.Errorf("retention_trigger = %q, want \"date_labeled\"", l1.Attrs["retention_trigger"])
+	}
+	if l1.Attrs["description_for_admins"] != "admin desc" {
+		t.Errorf("description_for_admins = %q, want \"admin desc\"", l1.Attrs["description_for_admins"])
+	}
+	if l1.Attrs["description_for_users"] != "user desc" {
+		t.Errorf("description_for_users = %q, want \"user desc\"", l1.Attrs["description_for_users"])
+	}
+
+	l2, ok := byLabelID["lbl-2"]
+	if !ok {
+		t.Fatalf("no log record for id=lbl-2 (all: %+v)", labelLogs)
+	}
+	if l2.Attrs["behavior_during_retention"] != "unknown" || l2.Attrs["action_after_retention"] != "unknown" || l2.Attrs["retention_trigger"] != "unknown" {
+		t.Errorf("expected unrecognized enums to normalize to \"unknown\", got %+v", l2.Attrs)
+	}
+	if _, present := l2.Attrs["description_for_admins"]; present {
+		t.Errorf("absent description_for_admins should be omitted, got %q", l2.Attrs["description_for_admins"])
+	}
+
+	eventLogs := logsNamed(rec, retentionEventTypeEventName)
+	if len(eventLogs) != 2 {
+		t.Fatalf("got %d purview.retention_event_type logs, want 2 (all: %+v)", len(eventLogs), eventLogs)
+	}
+	byEventID := map[string]telemetrytest.LogRecord{}
+	for _, l := range eventLogs {
+		byEventID[l.Attrs["id"]] = l
+	}
+	e1, ok := byEventID["evt-1"]
+	if !ok {
+		t.Fatalf("no log record for id=evt-1 (all: %+v)", eventLogs)
+	}
+	if e1.Attrs["name"] != piiEventTypeName {
+		t.Errorf("name = %q, want %q", e1.Attrs["name"], piiEventTypeName)
+	}
+	if e1.Attrs["description"] != "fires on termination" {
+		t.Errorf("description = %q, want \"fires on termination\"", e1.Attrs["description"])
+	}
+	e2, ok := byEventID["evt-2"]
+	if !ok {
+		t.Fatalf("no log record for id=evt-2 (all: %+v)", eventLogs)
+	}
+	if _, present := e2.Attrs["description"]; present {
+		t.Errorf("absent description should be omitted, got %q", e2.Attrs["description"])
+	}
+}
+
+// logsNamed filters the recorder's log records to a single EventName.
+func logsNamed(rec *telemetrytest.Recorder, name string) []telemetrytest.LogRecord {
+	var out []telemetrytest.LogRecord
+	for _, l := range rec.LogRecords() {
+		if l.EventName == name {
+			out = append(out, l)
+		}
+	}
+	return out
 }
 
 func TestRetentionGatingMetadata(t *testing.T) {
