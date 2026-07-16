@@ -358,6 +358,32 @@ and queryability, never by confidentiality:
   mapper**. Sample variety is irrelevant when no new mapper is being written. (`mapDirectoryAudit`
   reads **no** `modifiedProperties` — only `targetResources[].displayName` — so the names-not-values
   exclusion does not even arise on this path.)
+- **`WindowCollector`s emit ZERO metrics — so "dual-ship" (Graph→metrics, blob→logs) is EMPTY for
+  every signal #131 lists** (#131 q3, verified against the registry 2026-07-16). Measured:
+  `entra/signins`, `entra/directoryaudits`, `entra/provisioning`, `entra/riskdetections`,
+  `intune/auditevents` and `internal/logpipeline` itself all emit **0** metrics (control:
+  `entra/risk` emits 3, so the check is not a false negative). For a logs-only collector, `dual`
+  leaves Graph emitting **nothing** — the poll does not get *cheaper*, it goes to **zero**. So
+  `dual` ≡ `blob` for them, and **#89/#128's "`source: graph|blob` must be mutually exclusive per
+  collector — both enabled = duplicate records" was RIGHT.** #131's central claim that this framing
+  is "wrong" is itself wrong; do not "correct" #89/#128.
+- **Exactly TWO collectors are genuinely dual-capable, and both have blob sources with zero rows**
+  (#131 q3). Dual needs a gauge **and** a log twin **and** a blob category. 15 collectors have the
+  shape (`entra/{consent,credentialexpiry,domains,mfaregistration,risk,roles,signinactivity}`,
+  `intune/{appinstallreport,appprotection,certificates,certinventoryreport,defenderreport,malware,
+  manageddevices}`, `purview/labels`); only **`entra.risk`** (↔ `RiskyUsers`/
+  `RiskyServicePrincipals`, 0 rows — #129) and **`intune.devices`** (↔ `Devices`/
+  `DeviceComplianceOrg`, 0 containers — #132) also have a blob source. So dual's entire value rests
+  on `intune.devices`, and it is unverifiable until #132's setting delivers.
+- **`intune.devices` is the ONE real dual win, and it partially reverses the "irreducible" verdict**
+  (#131 q3). The full-fleet walk is irreducible *against a bounded count* because the per-device log
+  twins are the deliverable — but **not against a blob category carrying per-device rows**. Under
+  dual, blob supplies the twins and Graph needs only the bounded gauges, which
+  `managedDeviceOverview` already returns in **one** call (and is already fetched as a cross-check).
+  That replaces graph2otel's most expensive poll with a single bounded request — genuinely cheaper,
+  not relocated. Caveat: `managedDeviceOverview` is not a perfect substitute (its OS summary sums to
+  **9 against a real fleet of 10** — no Linux bucket), so a dual `intune.devices` accepts a weaker OS
+  gauge or derives it from blob (#128). Gated entirely on #132.
 - **Why #131 genuinely blocks blob `AuditLogs` (unlike the sign-ins)** (#135 group D).
   `entra.directory_audits` carries **no `Experimental` marker**, so it is **default-on and v1.0**,
   emitting `entra.directory_audit` from Graph. A blob collector emits the *same event name* with the
