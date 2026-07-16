@@ -255,27 +255,59 @@ and queryability, never by confidentiality:
   and cannot receive Defender's streaming API at all; Event Hub costs **£8.34/mo standing**
   and buys only **~12 seconds** of latency, because the ~4-minute floor is Entra-side, not
   destination-side. Storage is £0.05–0.24/mo, shared by #89 and #106, and blobs delete for
-  real. See [`docs/event-hub-fallback.md`](docs/event-hub-fallback.md) (**name is stale — it
-  describes the rejected transport; rename when the consumer lands**) and the README
-  honest-scope section, not Graph.
+  real. **The consumer is BUILT** (`internal/blobpipeline` + `entra.graph_activity`, live-verified
+  2026-07-16): see [`docs/blob-ingest.md`](docs/blob-ingest.md) and the README honest-scope
+  section, not Graph. Opt-in via one per-tenant key, `blob_ingest.account_url` — unset (the
+  default) registers no blob collectors at all.
 - **Blob layout is NOT what Microsoft documents** (#89, verified live 2026-07-16). For a
   **tenant-level** (`microsoft.aadiam`) resource the prefix is **`tenantId=<guid>/`**, NOT the
   documented `resourceId=/tenants/<tid>/providers/...` — every published example is
   subscription-scoped. Full path:
   `insights-logs-<category-lowercased>/tenantId=<guid>/y=/m=/d=/h=/m=00/PT1H.json`, JSON Lines,
   **append blobs**. Coding to the docs yields a collector that finds nothing.
-- **A blob for a long-closed hour KEEPS GROWING** (#89, verified live). An `h=00` blob was still
-  being appended to **13 hours** after that hour closed — Azure backfills history into the
-  correct hour bucket, progressively. So **"the hour is closed, this blob is final" is FALSE**,
-  and a consumer must **re-check already-seen blobs for growth**, never walk forward and forget.
-  This is why the blob consumer is **read-only** and does not delete: deleting a "safely closed"
-  hour would have destroyed data still arriving. The 7-day lifecycle bounds the re-check set to
-  ~168 blobs/category, so re-listing everything each poll is tractable.
+- **A blob for a long-closed hour KEEPS GROWING, and nothing signals when it stops** (#89,
+  verified live; **model REFINED 2026-07-16 — the earlier "never settles" framing was wrong**).
+  Blobs are partitioned by **event time**, and on enablement Azure backfills history into those
+  hour buckets **progressively, oldest-first**. While backfill is working on hour N, that blob
+  grows regardless of how long ago N closed — an `h=00` blob was still being appended to **13
+  hours** later. **Once backfill passes an hour, that hour FREEZES** (measured: `h=00`/`h=01`/
+  `h=11`/`h=12`/`h=13` all stopped at a fixed size + append-block count while `h=02` was still
+  filling and `h=03` had only just appeared). So a "complete" state does exist — but **nothing
+  tells you when it is reached and it is not derivable from the clock**, which is why the
+  design is unchanged: cursor is a **byte offset per blob** (a watermark cannot express this;
+  an append blob never rewrites a byte), and the consumer **re-checks every seen blob**, never
+  walks forward and forgets. Cheap in steady state: only 1–2 blobs actually grow per tick
+  (live-measured — a restart re-read 2 of 8 blobs and emitted 9 records vs 7,993 on the cold
+  start). This is also why the consumer is **read-only**: deleting a "safely closed" hour
+  would have destroyed data still arriving. **STILL OPEN:** whether a frozen hour can EVER
+  grow again once enablement backfill is fully done — not answerable until m7kni finishes
+  backfilling. Re-measure before assuming either way; the design is safe under both.
 - **Data-plane RBAC fails SILENTLY on Azure** (#89, verified live — the most dangerous trap on
   this path, indistinguishable from "no data yet"). `Owner` grants blob **container** list/create
   (control-plane) but **NOT** blob *content* reads — that needs **`Storage Blob Data Reader`**.
   Worse for Event Hub: receiving needs **`Azure Event Hubs Data Receiver`**, and without it the
   SDK returns **0 events with NO error** while the hub reports hundreds.
+- **Blob record field TYPES are inconsistent within one record — never map a blob category by
+  reading the docs** (#89, verified against a 335-record live sample 2026-07-16). Three live
+  traps, each of which produces a silently-wrong collector rather than an error:
+  (a) **`durationMs` is a STRING (`"497815"`) at the top level and an INT (`497815`) inside
+  `properties` — on the SAME record.** Bind to `properties` for every number; the top-level
+  `resultSignature` is likewise a stringified status code.
+  (b) **`level` is `"Informational"` on EVERY `MicrosoftGraphActivityLogs` record, including
+  the 500s** (sample spanned 200/201/204/400/401/403/404/500). Deriving severity from it marks
+  every server error INFO forever. Use `properties.responseStatusCode`. And `level` is a
+  **numeric string (`"4"`)** on `SignInLogs` — so a severity mapper SHARED across blob
+  categories is wrong twice over. Map per category.
+  (c) **`resourceId` casing differs per category** (`/TENANTS/…/MICROSOFT.AADIAM` on MGAL vs
+  `/tenants/…/Microsoft.aadiam` on SignInLogs). Never match on it.
+  Records are JSON Lines with **CRLF** terminators. The `properties.__UDI_RequiredFields_*` keys
+  are Microsoft's internal ingestion plumbing — drop them.
+- **A blob-sourced collector is a `SnapshotCollector`, not a `WindowCollector`** — the interface
+  split is about the CURSOR, not the signal shape. A blob collector emits logs but cannot use a
+  scheduler-supplied `[from, to]` range (see the backfill entry above), so `Collect(ctx, e)` is
+  the fit and the scheduler needs no change. Blob collectors register via
+  `collectors.RegisterBlob` / `BlobDeps` — the third construction path alongside `Deps` and
+  `WindowDeps`, and the smallest: no Graph client, no page fetcher, no license caps.
 - **Purview/M365 policy config is S&C-PowerShell-only — no Graph list/count** (#99).
   Several Purview surfaces have no Graph enumerable equivalent, so there is no "count of
   policies per mode" metric to build: **DLP policy authoring/simulation state** (Block vs

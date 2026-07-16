@@ -116,20 +116,24 @@ the diagnostic-settings export (minutes vs. a 24-48h export lag).
 It is **not** a full replacement for Azure Monitor diagnostic settings. Some signals are
 never materialized behind a queryable Graph endpoint. These are **confirmed-permanent**
 gaps, not "not built yet" — but they are not a dead end: the diagnostic-settings pipeline
-already emits most of them, and `graph2otel` can optionally consume that data directly
-(Event Hub, or a Log Analytics query) instead of running a separate Function in the
-middle. See [`docs/event-hub-fallback.md`](docs/event-hub-fallback.md) for that
-fallback-ingest design (deferred — design only, nothing shipped yet).
+already emits most of them, and `graph2otel` **optionally reads that data straight out of
+an Azure Storage account**, so you still do not need an Azure Function or a Log Analytics
+workspace in the middle. It is opt-in (one config key), read-only, and costs pennies a
+month with no standing charge. See [`docs/blob-ingest.md`](docs/blob-ingest.md).
+
+`MicrosoftGraphActivityLogs` is **served this way today** (`entra.graph_activity`); the
+remaining categories below are the roadmap for the same path.
 
 **Log categories with no Graph endpoint (confirmed permanent):**
 
-- **`MicrosoftGraphActivityLogs`** — ironically, the log of Graph API calls themselves.
-  No query endpoint exists at all. The `graph2otel.graphclient.http_4xx` /
-  `graph2otel.graphclient.http_5xx` self-observability counters record only **graph2otel's
-  own** outbound Graph responses (by tenant, workload, and status code) — they are a narrow
-  substitute for "is our poller hitting Graph friction," not for the tenant-wide
-  `MicrosoftGraphActivityLogs` 403-burst signal, which reports every app's calls to Graph
-  and has no equivalent Graph endpoint to poll.
+- **`MicrosoftGraphActivityLogs`** ✅ **served via blob ingest** — ironically, the log of
+  Graph API calls themselves. No query endpoint exists at all, so `entra.graph_activity`
+  reads it from blob storage instead: one log record per Graph call against your tenant,
+  answering which app or user called which endpoint, with which permissions, from where,
+  and what came back. Without it, the `graph2otel.graphclient.http_4xx` /
+  `graph2otel.graphclient.http_5xx` self-observability counters cover only **graph2otel's
+  own** outbound Graph responses — a narrow substitute for "is our poller hitting Graph
+  friction," never the tenant-wide 403-burst signal across every app.
 - **`EnrichedOffice365AuditLogs`** — a Sentinel / Log-Analytics-side ML **enrichment**
   table (fields layered onto raw M365 activity by Sentinel itself). It has no source API
   in Graph *or* the O365 Management Activity API — it is synthesized downstream and does
