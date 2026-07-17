@@ -69,6 +69,40 @@ type Recorder struct {
 	emitter telemetry.Emitter
 }
 
+// live accumulates every Recorder built in this test binary, so a package's
+// TestMain can inspect the union of everything its tests emitted without any
+// test having to opt in (#140).
+//
+// This is deliberately a package-level global, which is normally a smell. The
+// justification: there are 364 telemetrytest.New() call sites across 57
+// collector packages, so a design that requires each CALL SITE to register
+// would be both a huge diff and — far worse — silently incomplete the moment
+// someone adds a test and forgets. Self-registration at construction makes
+// participation automatic and unforgettable, which is the only version of this
+// worth having: a cardinality gate a new test can silently escape is not a gate.
+//
+// Retention is OPT-IN, via StartCapture, and that is not a detail — a Recorder
+// holds every record it saw, so retaining one per test leaks by construction.
+// internal/logpipeline's TestScalePollMemoryBoundedByWindowNotBacklog polls two
+// large windows through a fresh Recorder each and asserts memory does not grow
+// with the backlog; unconditional retention made that test fail, correctly, on
+// the first run. Only packages that actually run the gate pay the cost, and
+// there it is bounded by the package's test count.
+var live struct {
+	mu      sync.Mutex
+	enabled bool
+	recs    []*Recorder
+}
+
+// StartCapture makes subsequent New calls retain their Recorders for Live.
+// signalcapture.Main calls this before running a package's tests; nothing else
+// should. Without it, New retains nothing and Live is empty.
+func StartCapture() {
+	live.mu.Lock()
+	live.enabled = true
+	live.mu.Unlock()
+}
+
 // New returns a Recorder backed by an in-memory metric reader and log exporter.
 func New() *Recorder {
 	reader := sdkmetric.NewManualReader()
@@ -79,12 +113,29 @@ func New() *Recorder {
 
 	e := telemetry.NewEmitter(mp.Meter("test"), lp.Logger("test"))
 
-	return &Recorder{
+	r := &Recorder{
 		reader:  reader,
 		exp:     exp,
 		lp:      lp,
 		emitter: e,
 	}
+
+	live.mu.Lock()
+	if live.enabled {
+		live.recs = append(live.recs, r)
+	}
+	live.mu.Unlock()
+
+	return r
+}
+
+// Live returns every Recorder constructed so far in this test binary. It is for
+// package-level gates that assert over the union of a package's emissions (see
+// internal/signalcapture); ordinary tests should use their own Recorder.
+func Live() []*Recorder {
+	live.mu.Lock()
+	defer live.mu.Unlock()
+	return append([]*Recorder(nil), live.recs...)
 }
 
 // Emitter returns the telemetry.Emitter under test.

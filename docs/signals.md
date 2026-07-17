@@ -84,6 +84,60 @@ why it is a cost/queryability rule rather than a privacy control — and
 [docs/pii-cardinality-audit.md](pii-cardinality-audit.md) for the audit that confirmed it
 holds against the actual collector source.
 
+The rule is also **mechanically gated**, not just documented: every collector package runs
+`internal/signalcapture` over the union of what its own tests emit, and a per-entity key on
+a metric label fails `go test`. A collector package that does not install the gate fails
+too, so a new one cannot ship unguarded. The gate reads metric labels only — per-entity
+data on a **log** attribute is the design, not a violation.
+
+## Attributes that mean the same thing on both M365 transports
+
+`m365.unified_audit` (query API) and `m365.activity` (Management API) are twins over the
+same underlying audit data, and both emit the event name `m365.audit`. The classic O365
+schema carries **two distinct user identifiers**, and both transports now name them
+identically:
+
+| attribute | meaning | `m365.unified_audit` wire field | `m365.activity` wire field |
+| --- | --- | --- | --- |
+| `user_key` | classic **UserKey** — an opaque identifier | `userId` | `UserKey` |
+| `user_principal_name` | classic **UserId** — the UPN, or a sentinel | `userPrincipalName` | `UserId` |
+
+**There is no `user_id` attribute on either signal, and one must not be added back.** The
+query API's top-level `userId` field is a Microsoft misnomer: its content is the classic
+UserKey, not the classic UserId (live-verified 500/500 over one tenant and window,
+2026-07-17). Both collectors map each field to what it *contains*, not to what it is
+called. Anyone previously correlating the two signals on `user_id` was silently comparing
+UserKeys against UserIds.
+
+`user_principal_name` is **not always UPN-shaped** — about 9% of live records carry a bare
+GUID, the literal `Not Available`, `ServicePrincipal_<guid>`, or a display name. Both
+transports emit it verbatim with no shape gate, so do not assume an email address.
+
+## Risk signals: the two transports are NOT interchangeable
+
+Sign-ins are the same record whichever way they arrive — one shared mapper, byte-identical
+output. **Risk is not**, and #141/#138 both reason from the sign-in case, so this is the
+counter-example worth knowing:
+
+- The Graph v1.0 `riskDetection` resource has **no `riskType` field** (live-verified
+  2026-07-17); only `riskEventType` exists. The `UserRiskEvents` blob category carries
+  both, with the same value. graph2otel emits `risk_event_type` and deliberately no
+  `risk_type`, so the attribute set does not silently depend on the transport.
+- **`riskLevel` disagrees across endpoints for the same event.** Live, `riskDetections`
+  reported `medium` while `riskyUsers` reported `low` for one detection ~7 minutes apart.
+  This is not a graph2otel bug: Microsoft aggregates *user* risk differently from
+  *detection* risk. But it means `entra.risk_detections` and `entra.risk` will show
+  different severities for the same incident, and a dashboard placing them side by side
+  will look broken when it is not.
+- **`mitre_techniques`** (e.g. `T1090.003,T1078`) is emitted on `entra.risk_detection`,
+  extracted from `additionalInfo`. It is usually the most precise thing on the record —
+  more specific than `riskEventType` — and is the field to pivot on for ATT&CK-aligned
+  rules.
+- **`isDeleted` is not emitted** on `entra.risk`. It returns `false` for users that are
+  definitively deleted, so a filter on it would quietly include the accounts it was meant
+  to exclude. The gauge therefore counts deleted-but-once-risky identities until Microsoft
+  drops the row.
+
 ## Multi-tenant labeling
 
 **Domain telemetry (`entra.*`, `intune.*`, `m365.*`, `purview.*`) does NOT carry a
