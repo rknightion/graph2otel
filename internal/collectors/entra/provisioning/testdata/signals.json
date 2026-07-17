@@ -4,9 +4,16 @@
     {
       "EventName": "entra.provisioning",
       "AttrKeys": [
+        "change_id",
+        "cycle_id",
         "id",
         "ingest_transport",
-        "provisioning_action"
+        "job_id",
+        "provisioning_action",
+        "source_identity_display_name",
+        "source_identity_id",
+        "status",
+        "target_identity_id"
       ]
     }
   ]
