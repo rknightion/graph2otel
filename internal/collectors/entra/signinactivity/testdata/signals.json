@@ -32,14 +32,9 @@
         "key_id",
         "key_type",
         "key_usage",
-        "last_non_interactive_sign_in_date_time",
-        "last_non_interactive_sign_in_request_id",
         "last_sign_in_date_time",
         "last_sign_in_request_id",
-        "last_successful_sign_in_date_time",
-        "last_successful_sign_in_request_id",
-        "resource_id",
-        "service_principal_object_id"
+        "resource_id"
       ]
     }
   ]
