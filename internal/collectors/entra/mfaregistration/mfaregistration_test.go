@@ -37,19 +37,40 @@ func (f *fakeGraph) RawGetWithHeaders(_ context.Context, url string, headers map
 
 var _ collectors.GraphClient = (*fakeGraph)(nil)
 
-// sampleUsers is five userRegistrationDetails records exercising every
-// feature flag combination and a handful of registered methods, PLUS the
-// per-entity identity fields (id/userPrincipalName/userDisplayName/
-// lastUpdatedDateTime) that only the log twin reads — see
-// TestCollectNoPerEntitySeries for the assertion that these never reach a
-// metric attribute despite being decoded here. u4 (dave-admin) is the
-// admin-without-MFA-capability case the log twin's severity mapping escalates.
-const sampleUsers = `
-{"id":"u1","userPrincipalName":"alice@example.com","userDisplayName":"Alice Example","lastUpdatedDateTime":"2026-07-15T10:00:00Z","isAdmin":true,"isMfaRegistered":true,"isMfaCapable":true,"isSsprRegistered":false,"isSsprEnabled":true,"isSsprCapable":false,"isPasswordlessCapable":false,"methodsRegistered":["microsoftAuthenticatorPush","sms"]},
-{"id":"u2","userPrincipalName":"bob@example.com","userDisplayName":"Bob Example","lastUpdatedDateTime":"2026-07-15T10:05:00Z","isAdmin":false,"isMfaRegistered":true,"isMfaCapable":true,"isSsprRegistered":true,"isSsprEnabled":true,"isSsprCapable":true,"isPasswordlessCapable":true,"methodsRegistered":["fido2SecurityKey"]},
-{"id":"u3","userPrincipalName":"carol@example.com","userDisplayName":"Carol Example","lastUpdatedDateTime":"2026-07-15T10:10:00Z","isAdmin":false,"isMfaRegistered":false,"isMfaCapable":false,"isSsprRegistered":false,"isSsprEnabled":false,"isSsprCapable":false,"isPasswordlessCapable":false,"methodsRegistered":[]},
-{"id":"u4","userPrincipalName":"dave-admin@example.com","userDisplayName":"Dave Admin","lastUpdatedDateTime":"2026-07-15T10:15:00Z","isAdmin":true,"isMfaRegistered":false,"isMfaCapable":false,"isSsprRegistered":true,"isSsprEnabled":true,"isSsprCapable":true,"isPasswordlessCapable":false,"methodsRegistered":["sms"]},
-{"id":"u5","userPrincipalName":"erin@example.com","userDisplayName":"Erin Example","lastUpdatedDateTime":"2026-07-15T10:20:00Z","isAdmin":false,"isMfaRegistered":true,"isMfaCapable":false,"isSsprRegistered":false,"isSsprEnabled":true,"isSsprCapable":false,"isPasswordlessCapable":false,"methodsRegistered":["microsoftAuthenticatorPush"]}
+// liveUsers is the four VERBATIM userRegistrationDetails records the m7kni
+// tenant returned from GET /reports/authenticationMethods/userRegistrationDetails,
+// read as graph2otel-poller on 2026-07-17 `[live-measured 2026-07-17, #165]`.
+// Each record is exactly the field set the collector's own request returns:
+// requestPath pins $select to the twelve fields below, so this fixture is what
+// THIS collector sees on the wire, not an unfiltered dump. Nothing is trimmed,
+// rounded, or scrubbed within that set — the real UPNs, display names and
+// timestamps are pinned as the wire sent them, because a hand-written fixture is
+// the bug #165 exists to remove: the previous version was Microsoft's own doc
+// placeholders (alice@example.com / Alice Example / dave-admin@example.com),
+// which can only confirm the author's belief and never fail — the same
+// `"platform":"windows"` / invented-`riskType` failure as #142/#153.
+//
+// Spread: one non-admin member (juraj), one admin GUEST (peter), and two
+// admin members with passwordless (rob, emergency). All four are MFA-capable
+// and MFA-registered on this real tenant, so NO live row exercises the
+// admin-without-MFA-capability warn path — that severity escalation is covered
+// synthetically by TestLogTwinSeverityAdminWithoutMfaCapableWarns, which drives
+// logTwin directly rather than through this fixture.
+//
+// FINDING (#173): the endpoint offers four fields the collector's $select does
+// NOT request — isSystemPreferredAuthenticationMethodEnabled,
+// systemPreferredAuthenticationMethods,
+// userPreferredMethodForSecondaryAuthentication, and userType. They are absent
+// here because a $select response never carries them; an unfiltered probe
+// confirmed they exist and populate (userType being member/guest is the
+// standout — it would let every MFA-posture question slice member vs guest).
+// Adding them is a $select + struct change, filed as #173, not #165's
+// fixture-provenance scope.
+const liveUsers = `
+{"id":"61851b42-fef7-4b43-ae43-4e335a60b306","isAdmin":false,"isMfaCapable":true,"isMfaRegistered":true,"isPasswordlessCapable":false,"isSsprCapable":true,"isSsprEnabled":true,"isSsprRegistered":true,"lastUpdatedDateTime":"2026-07-16T03:16:01.7292271Z","methodsRegistered":["email","microsoftAuthenticatorPush","softwareOneTimePasscode"],"userDisplayName":"Juraj Michalek (babe)","userPrincipalName":"juraj@m7kni.io"},
+{"id":"e755e472-f2eb-4ea6-829d-5a908600fdb1","isAdmin":true,"isMfaCapable":true,"isMfaRegistered":true,"isPasswordlessCapable":false,"isSsprCapable":true,"isSsprEnabled":true,"isSsprRegistered":true,"lastUpdatedDateTime":"2026-07-16T03:16:01.7570479Z","methodsRegistered":["microsoftAuthenticatorPush","softwareOneTimePasscode"],"userDisplayName":"Peter Hewitt","userPrincipalName":"peter.hewitt_grafana.com#EXT#@m7knio.onmicrosoft.com"},
+{"id":"bbcfc3c5-0b93-4135-9ef9-18477a9fb504","isAdmin":true,"isMfaCapable":true,"isMfaRegistered":true,"isPasswordlessCapable":true,"isSsprCapable":true,"isSsprEnabled":true,"isSsprRegistered":true,"lastUpdatedDateTime":"2026-07-17T12:33:37.9223339Z","methodsRegistered":["email","macOsSecureEnclaveKey","windowsHelloForBusiness","passKeySynced","microsoftAuthenticatorPasswordless","passKeyDeviceBoundAuthenticator","passKeyDeviceBound","microsoftAuthenticatorPush","softwareOneTimePasscode"],"userDisplayName":"Rob Knight","userPrincipalName":"rob@m7kni.io"},
+{"id":"c55ddc8b-52ee-44c6-a0bc-b388be43cd2f","isAdmin":true,"isMfaCapable":true,"isMfaRegistered":true,"isPasswordlessCapable":true,"isSsprCapable":true,"isSsprEnabled":true,"isSsprRegistered":true,"lastUpdatedDateTime":"2026-07-16T03:16:01.7301508Z","methodsRegistered":["passKeyDeviceBound","microsoftAuthenticatorPasswordless","passKeyDeviceBoundAuthenticator","mobilePhone","microsoftAuthenticatorPush","softwareOneTimePasscode"],"userDisplayName":"emergency","userPrincipalName":"emergency@m7knio.onmicrosoft.com"}
 `
 
 func page(usersJSON string) string {
@@ -58,7 +79,7 @@ func page(usersJSON string) string {
 
 func fullFixture() map[string]string {
 	return map[string]string{
-		requestURL: page(sampleUsers),
+		requestURL: page(liveUsers),
 	}
 }
 
@@ -75,13 +96,16 @@ func TestCollectEmitsStatusCountsByFeature(t *testing.T) {
 	for _, p := range pts {
 		got[p.Attrs["status"]] = p.Value
 	}
+	// Counts over the four live rows: every user is MFA-registered/capable
+	// and fully SSPR-enrolled on this real tenant; only rob + emergency are
+	// passwordless-capable.
 	want := map[string]float64{
-		"mfa_registered":       3,
-		"mfa_capable":          2,
-		"sspr_registered":      2,
+		"mfa_registered":       4,
+		"mfa_capable":          4,
+		"sspr_registered":      4,
 		"sspr_enabled":         4,
-		"sspr_capable":         2,
-		"passwordless_capable": 1,
+		"sspr_capable":         4,
+		"passwordless_capable": 2,
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d series, want %d: %v", len(got), len(want), got)
@@ -106,10 +130,20 @@ func TestCollectEmitsMethodCounts(t *testing.T) {
 	for _, p := range pts {
 		got[p.Attrs["method"]] = p.Value
 	}
+	// Method counts over the four live rows. A user counts toward each method
+	// it registered, so these overlap; the passwordless/passkey spread comes
+	// from rob + emergency.
 	want := map[string]float64{
-		"microsoftAuthenticatorPush": 2,
-		"sms":                        2,
-		"fido2SecurityKey":           1,
+		"email":                              2,
+		"microsoftAuthenticatorPush":         4,
+		"softwareOneTimePasscode":            4,
+		"macOsSecureEnclaveKey":              1,
+		"windowsHelloForBusiness":            1,
+		"passKeySynced":                      1,
+		"microsoftAuthenticatorPasswordless": 2,
+		"passKeyDeviceBoundAuthenticator":    2,
+		"passKeyDeviceBound":                 2,
+		"mobilePhone":                        1,
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d series, want %d: %v", len(got), len(want), got)
@@ -134,7 +168,9 @@ func TestCollectEmitsAdminMfaCapableSplit(t *testing.T) {
 	for _, p := range pts {
 		got[p.Attrs["is_admin"]] = p.Value
 	}
-	want := map[string]float64{"true": 1, "false": 1}
+	// Of the MFA-capable users, three are admins (peter, rob, emergency) and
+	// one is a non-admin member (juraj).
+	want := map[string]float64{"true": 3, "false": 1}
 	if len(got) != len(want) {
 		t.Fatalf("got %d series, want %d: %v", len(got), len(want), got)
 	}
@@ -258,14 +294,19 @@ func TestCollectEmitsUserRegistrationLogTwinForEveryUser(t *testing.T) {
 	}
 
 	got := logsNamed(rec.LogRecords(), eventUserRegistration)
-	if len(got) != 5 {
-		t.Fatalf("emitted %d %s logs, want 5 (one per user, including posture successes)", len(got), eventUserRegistration)
+	if len(got) != 4 {
+		t.Fatalf("emitted %d %s logs, want 4 (one per user, including posture successes)", len(got), eventUserRegistration)
 	}
 }
 
-// TestCollectEmitsUserRegistrationLogTwinAttrs checks the per-user detail
-// (u1/alice) that the bounded metrics can never carry: identity, timestamp,
-// and every posture flag as a string.
+// TestCollectEmitsUserRegistrationLogTwinAttrs drives the four LIVE
+// userRegistrationDetails rows all the way through the collector into a
+// Recorder — not just into the mapper — and pins the per-user detail the
+// bounded metrics can never carry (identity, timestamp, every posture flag as
+// a string) on the one non-admin member, juraj@m7kni.io. This is the
+// end-to-end path that keeps testdata/signals.json honest: the golden is the
+// union of what a package's tests EMIT, so the live record must reach the
+// emitter, not stop at mapRow.
 func TestCollectEmitsUserRegistrationLogTwinAttrs(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
@@ -275,33 +316,34 @@ func TestCollectEmitsUserRegistrationLogTwinAttrs(t *testing.T) {
 	}
 
 	got := logsNamed(rec.LogRecords(), eventUserRegistration)
-	var alice *telemetrytest.LogRecord
+	const jurajID = "61851b42-fef7-4b43-ae43-4e335a60b306"
+	var juraj *telemetrytest.LogRecord
 	for i := range got {
-		if got[i].Attrs["id"] == "u1" {
-			alice = &got[i]
+		if got[i].Attrs["id"] == jurajID {
+			juraj = &got[i]
 		}
 	}
-	if alice == nil {
-		t.Fatalf("no log for user u1; got %v", got)
+	if juraj == nil {
+		t.Fatalf("no log for user %s; got %v", jurajID, got)
 	}
 
 	want := map[string]string{
-		"id":                   "u1",
-		"user_principal_name":  "alice@example.com",
-		"user_display_name":    "Alice Example",
-		"last_updated":         "2026-07-15T10:00:00Z",
-		"is_admin":             "true",
+		"id":                   jurajID,
+		"user_principal_name":  "juraj@m7kni.io",
+		"user_display_name":    "Juraj Michalek (babe)",
+		"last_updated":         "2026-07-16T03:16:01.7292271Z",
+		"is_admin":             "false",
 		"mfa_registered":       "true",
 		"mfa_capable":          "true",
-		"sspr_registered":      "false",
+		"sspr_registered":      "true",
 		"sspr_enabled":         "true",
-		"sspr_capable":         "false",
+		"sspr_capable":         "true",
 		"passwordless_capable": "false",
-		"methods_registered":   "microsoftAuthenticatorPush,sms",
+		"methods_registered":   "email,microsoftAuthenticatorPush,softwareOneTimePasscode",
 	}
 	for k, v := range want {
-		if alice.Attrs[k] != v {
-			t.Errorf("user registration log attr %q = %q, want %q", k, alice.Attrs[k], v)
+		if juraj.Attrs[k] != v {
+			t.Errorf("user registration log attr %q = %q, want %q", k, juraj.Attrs[k], v)
 		}
 	}
 }
