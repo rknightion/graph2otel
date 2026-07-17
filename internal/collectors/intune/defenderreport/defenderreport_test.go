@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"testing"
 
+	"github.com/rknightion/graph2otel/internal/defender/productstatus"
 	"github.com/rknightion/graph2otel/internal/exportjob"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
@@ -319,6 +321,111 @@ func TestProductStatusesForDecodesLiveBitmask(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestVocabularyIsExactlyTheDocumentedFlagSet is the #156 gate on this
+// transport's half of the shared vocabulary. It is deliberately the SAME
+// assertion the entity transport makes (see malware's test of the same name):
+// each map's value set is checked against one canonical set, so the two agree by
+// construction. Neither package can see the other's map; both can see the
+// vocabulary.
+//
+// Before #156 nothing enforced this at all. The entity side had a test that
+// hard-coded bit 24's expected spelling - the one flag already known to have
+// drifted - and perturbing any of the other 24 left both suites green (verified
+// 2026-07-17). That is how one enum member came to have two label values.
+//
+// Together with the values being CONSTANTS from productstatus - this map spells
+// no productStatus value - a divergent spelling is not something this package
+// can express. This test is the backstop for bypassing the constants with a
+// literal, or dropping a bit entirely.
+func TestVocabularyIsExactlyTheDocumentedFlagSet(t *testing.T) {
+	// Exactly the flags, and nothing but the flags: unlike the entity transport,
+	// noStatus is NOT in this map. It is the enum's 0 member, which arrives here
+	// as the integer 0 and is special-cased in productStatusesFor, because a
+	// bit-walk over 0 visits no bit and would emit nothing at all.
+	want := productstatus.FlagSet()
+
+	got := map[string]bool{}
+	for mask, v := range productStatusFlags {
+		if got[v] {
+			t.Errorf("productStatusFlags maps two bits to %q; mask %d is the second - one value cannot mean two enum members", v, mask)
+		}
+		got[v] = true
+	}
+
+	for v := range got {
+		if !want[v] {
+			t.Errorf("productStatusFlags emits %q, which is NOT in the shared vocabulary (internal/defender/productstatus).\n"+
+				"Either it is a misspelling of a canonical value - the #156 bug, where this transport and the entity "+
+				"transport rendered one flag two ways - or it is a flag the entity transport does not know about. "+
+				"Add it to productstatus.Flags, or use the constant.", v)
+		}
+	}
+	for v := range want {
+		if !got[v] {
+			t.Errorf("the shared vocabulary defines %q but this transport can never emit it.\n"+
+				"A flag missing from productStatusFlags decodes to unknown_bit_<n> instead, so the two transports "+
+				"would report the same device differently. Map the bit that carries it.", v)
+		}
+	}
+}
+
+// TestVocabularyValuesComeFromTheSharedPackage is the structural half of #156,
+// and the half that makes the gate above a backstop rather than the mechanism.
+//
+// It asserts identity, not equality: each bit's value must be the SAME constant
+// the entity transport uses, reached through productstatus. Both maps
+// referencing one constant is what makes two spellings of one flag unwritable -
+// there is exactly one place in the tree where a productStatus value is spelled.
+//
+// Bit 24 is the explicit case, carrying its history: this map read
+// "windows_s_mode_signatures_in_use_on_non_win10_s_install" while malware's
+// name-keyed map read "..._non_win10s_install". One enum member, two label
+// values, shipped - found by hand, not by a test. THIS file's own comment
+// claiming the bit values were "carried over verbatim" from that map was FALSE
+// (verified against git history, 2026-07-17): #142 introduced the slip here, and
+// #156 is the root-cause fix. Neither spelling was ever live-observed - bit 24
+// has never been seen on the wire (docs-only) - so the convergence retired a
+// value nothing is known to have queried.
+func TestVocabularyValuesComeFromTheSharedPackage(t *testing.T) {
+	cases := []struct {
+		bit  int
+		mask int64
+		want string
+	}{{
+		// THE #156 CASE. If someone "tidies" either transport's spelling of this
+		// flag, both move together or this fails.
+		bit: 24, mask: 1 << 24, want: productstatus.WindowsSModeSignaturesInUseOnNonWin10SInstall,
+	}, {
+		// live-measured (2026-07-17, #156): 2^19, the 524288/524416 term. The
+		// same three devices report "noStatusFlagsSet" through the entity
+		// endpoint, so this bit's identity is corroborated across both wires.
+		bit: 19, mask: 1 << 19, want: productstatus.NoStatusFlagsSet,
+	}, {
+		// live-measured (2026-07-17, #156): 2^7, DESKTOP-CB3D9AB's 524416 term,
+		// corroborated by the same device's entity-side
+		// "noQuickScanHappenedForSpecifiedPeriod".
+		bit: 7, mask: 1 << 7, want: productstatus.NoQuickScanHappenedForSpecifiedPeriod,
+	}}
+	for _, tc := range cases {
+		t.Run(strconv.Itoa(tc.bit), func(t *testing.T) {
+			if got := productStatusFlags[tc.mask]; got != tc.want {
+				t.Errorf("productStatusFlags[1<<%d] = %q, want %q (the shared constant the entity transport also emits)",
+					tc.bit, got, tc.want)
+			}
+		})
+	}
+
+	// The two non-flag values this transport derives itself must also be the
+	// shared ones: 0 and an unparseable column are states BOTH transports reach,
+	// by different routes, and must label identically.
+	if productStatusNoStatus != productstatus.NoStatus {
+		t.Errorf("productStatusNoStatus = %q, want %q", productStatusNoStatus, productstatus.NoStatus)
+	}
+	if productStatusUnknown != productstatus.Unknown {
+		t.Errorf("productStatusUnknown = %q, want %q", productStatusUnknown, productstatus.Unknown)
 	}
 }
 

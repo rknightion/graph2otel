@@ -49,6 +49,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/defender/productstatus"
 	"github.com/rknightion/graph2otel/internal/exportjob"
 	"github.com/rknightion/graph2otel/internal/preflight"
 	"github.com/rknightion/graph2otel/internal/telemetry"
@@ -188,18 +189,21 @@ func evaluateSignals(row exportjob.Row) rowSignals {
 // size. See productStatusFlags (#142).
 const productStatusMetricName = "intune.defender_agents.product_status"
 
-// ProductStatus label values for the two shapes that are not a flag bit.
+// ProductStatus label values for the two shapes that are not a flag bit. Both
+// are shared with the entity transport (#156): they are states BOTH transports
+// reach, by different routes, so they must carry one label each.
 const (
 	// productStatusNoStatus is windowsDefenderProductStatus's `noStatus`
 	// member, whose value is 0 — the absence of every flag. It is NOT the same
 	// thing as noStatusFlagsSet (2^19), which is an actual set bit meaning
 	// "Defender reported, and reported nothing wrong". A bit-walk over 0 emits
 	// nothing at all, so 0 is special-cased here rather than letting those
-	// devices silently vanish from the gauge.
-	productStatusNoStatus = "no_status"
+	// devices silently vanish from the gauge. (The entity transport reaches the
+	// same value from the literal name "noStatus" — hence one shared constant.)
+	productStatusNoStatus = productstatus.NoStatus
 	// productStatusUnknown is the label for an absent or unparseable
 	// ProductStatus column. Distinct from no_status (a real reported value).
-	productStatusUnknown = "unknown"
+	productStatusUnknown = productstatus.Unknown
 )
 
 // productStatusFlags decodes the DefenderAgents ProductStatus column, which is
@@ -237,35 +241,53 @@ const (
 //     absent from this table rather than discarding it, so a wrong or missing
 //     entry surfaces as unknown_bit_<n> instead of silently vanishing.
 //
-// The snake_case values are carried over verbatim from the name-keyed map this
-// replaced, so the label vocabulary operators may already have queried is
-// unchanged — only the (previously unreachable) mapping to it is fixed.
+// This map is THIS TRANSPORT'S WIRE KNOWLEDGE ONLY - the bit positions. It
+// spells no value itself: every value is a constant from
+// internal/defender/productstatus, the one canonical vocabulary, which the entity
+// transport's name-keyed table (malware.productStatusValues) reads the same
+// constants from (#156). Each transport keeps its own decoder because the wire
+// formats genuinely differ; neither keeps its own vocabulary, because a device's
+// state must not produce a different label value depending on which transport
+// observed it.
+//
+// CORRECTION (#156, verified against git history 2026-07-17): this comment
+// previously claimed "the snake_case values are carried over verbatim from the
+// name-keyed map this replaced, so the label vocabulary ... is unchanged". That
+// was FALSE. #142 introduced a transcription slip at bit 24 - it wrote
+// "..._non_win10_s_install" where the name-keyed map read
+// "..._non_win10s_install" - so one enum member had two label values across the
+// two transports until #150 converged them by hand and #156 removed the second
+// source of truth entirely. The claim is the reason the drift went unexamined:
+// "carried over verbatim" reads as a reason not to check. Verbatim-carry is now
+// enforced by the compiler rather than asserted in a comment.
 var productStatusFlags = map[int64]string{
-	1 << 0:  "service_not_running",
-	1 << 1:  "service_started_without_malware_protection",
-	1 << 2:  "pending_full_scan_due_to_threat_action",
-	1 << 3:  "pending_reboot_due_to_threat_action",
-	1 << 4:  "pending_manual_steps_due_to_threat_action",
-	1 << 5:  "av_signatures_out_of_date",
-	1 << 6:  "as_signatures_out_of_date",
-	1 << 7:  "no_quick_scan_happened_for_specified_period", // live-observed (524416)
-	1 << 8:  "no_full_scan_happened_for_specified_period",
-	1 << 9:  "system_initiated_scan_in_progress",
-	1 << 10: "system_initiated_clean_in_progress",
-	1 << 11: "samples_pending_submission",
-	1 << 12: "product_running_in_evaluation_mode",
-	1 << 13: "product_running_in_non_genuine_mode",
-	1 << 14: "product_expired",
-	1 << 15: "offline_scan_required",
-	1 << 16: "service_shutdown_as_part_of_system_shutdown",
-	1 << 17: "threat_remediation_failed_critically",
-	1 << 18: "threat_remediation_failed_non_critically",
-	1 << 19: "no_status_flags_set", // live-observed (524288, 524416)
-	1 << 20: "platform_out_of_date",
-	1 << 21: "platform_update_in_progress",
-	1 << 22: "platform_about_to_be_outdated",
-	1 << 23: "signature_or_platform_end_of_life_is_past_or_is_impending",
-	1 << 24: "windows_s_mode_signatures_in_use_on_non_win10_s_install",
+	1 << 0:  productstatus.ServiceNotRunning,
+	1 << 1:  productstatus.ServiceStartedWithoutMalwareProtection,
+	1 << 2:  productstatus.PendingFullScanDueToThreatAction,
+	1 << 3:  productstatus.PendingRebootDueToThreatAction,
+	1 << 4:  productstatus.PendingManualStepsDueToThreatAction,
+	1 << 5:  productstatus.AVSignaturesOutOfDate,
+	1 << 6:  productstatus.ASSignaturesOutOfDate,
+	1 << 7:  productstatus.NoQuickScanHappenedForSpecifiedPeriod, // live-observed (524416)
+	1 << 8:  productstatus.NoFullScanHappenedForSpecifiedPeriod,
+	1 << 9:  productstatus.SystemInitiatedScanInProgress,
+	1 << 10: productstatus.SystemInitiatedCleanInProgress,
+	1 << 11: productstatus.SamplesPendingSubmission,
+	1 << 12: productstatus.ProductRunningInEvaluationMode,
+	1 << 13: productstatus.ProductRunningInNonGenuineMode,
+	1 << 14: productstatus.ProductExpired,
+	1 << 15: productstatus.OfflineScanRequired,
+	1 << 16: productstatus.ServiceShutdownAsPartOfSystemShutdown,
+	1 << 17: productstatus.ThreatRemediationFailedCritically,
+	1 << 18: productstatus.ThreatRemediationFailedNonCritically,
+	1 << 19: productstatus.NoStatusFlagsSet, // live-observed (524288, 524416)
+	1 << 20: productstatus.PlatformOutOfDate,
+	1 << 21: productstatus.PlatformUpdateInProgress,
+	1 << 22: productstatus.PlatformAboutToBeOutdated,
+	1 << 23: productstatus.SignatureOrPlatformEndOfLifeIsPastOrIsImpending,
+	// The #156 flag: the bit whose value this transport and the entity transport
+	// rendered two different ways. Both now read the same constant.
+	1 << 24: productstatus.WindowsSModeSignaturesInUseOnNonWin10SInstall,
 }
 
 // productStatusesFor decodes a raw ProductStatus bitmask into every flag it
