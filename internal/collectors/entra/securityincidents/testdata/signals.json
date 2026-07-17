@@ -15,7 +15,7 @@
         "priority_score",
         "severity",
         "status",
-        "tags"
+        "system_tags"
       ]
     }
   ]

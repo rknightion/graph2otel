@@ -49,11 +49,12 @@ func depsWith(t *testing.T, f *recordingFetcher) collectors.WindowDeps {
 //
 // Pinning it immediately paid, and the finding is why the fixture reads oddly:
 // the wire has NO `tags` key. All five records carry `customTags` and
-// `systemTags` instead, so mapIncident's strSlice(rec, "tags") line is DEAD on
-// this endpoint and no live poll can produce the `tags` attribute — the same
-// defect as #142's `"platform": "windows"` and #153's invented `riskType`. The
-// mapper is deliberately NOT corrected here; TestLiveRecordCarriesNoWireTagsKey
-// pins the measurement so the fix lands with its own issue and its own evidence.
+// `systemTags` instead, so mapIncident's old strSlice(rec, "tags") line was
+// DEAD on this endpoint — the same defect as #142's `"platform": "windows"`
+// and #153's invented `riskType`. #169 fixed the mapper to read the real
+// fields (customTags -> custom_tags, systemTags -> system_tags);
+// TestLiveRecordCarriesNoWireTagsKey pins both the wire-shape measurement and
+// the fixed behavior.
 //
 // Trimmed of nothing, so it stays a faithful record of what the endpoint really
 // returns. assignedTo, redirectIncidentId, resolvingComment and summary are null
@@ -188,6 +189,16 @@ func TestMapIncidentLiveRecord(t *testing.T) {
 	if got := ev.Attrs["priority_score"]; got != 3 {
 		t.Errorf("attr priority_score = %v (%T), want int 3", got, got)
 	}
+	// This is the one live record with a non-empty systemTags (#169: Defender-set
+	// tags map to system_tags). customTags is empty on it, so custom_tags must be
+	// absent.
+	systemTags, ok := ev.Attrs["system_tags"].([]string)
+	if !ok || len(systemTags) != 1 || systemTags[0] != "Security Testing" {
+		t.Errorf("attr system_tags = %v, want [Security Testing]", ev.Attrs["system_tags"])
+	}
+	if got, present := ev.Attrs["custom_tags"]; present {
+		t.Errorf("attr custom_tags = %v, want ABSENT — customTags is empty on this live record", got)
+	}
 	// assignedTo is null on the wire (nothing is assigned on this tenant), so the
 	// attribute must be omitted rather than emitted empty.
 	if got, present := ev.Attrs["assigned_to"]; present {
@@ -216,6 +227,13 @@ func TestMapIncidentHighSeverityIsError(t *testing.T) {
 	if got := ev.Attrs["priority_score"]; got != 25 {
 		t.Errorf("attr priority_score = %v (%T), want int 25", got, got)
 	}
+	// Both customTags and systemTags are empty on this live record, so #169's new
+	// custom_tags/system_tags attributes must both be absent.
+	for _, k := range []string{"custom_tags", "system_tags"} {
+		if got, present := ev.Attrs[k]; present {
+			t.Errorf("attr %q = %v, want ABSENT — both tag arrays are empty on this live record", k, got)
+		}
+	}
 }
 
 // TestLiveRecordCarriesNoWireTagsKey pins the #165 measurement that the fixture
@@ -235,17 +253,21 @@ func TestMapIncidentHighSeverityIsError(t *testing.T) {
 // fixture written from documentation buys: it confirms the belief that wrote it.
 // Same class as #142 and #153.
 func TestLiveRecordCarriesNoWireTagsKey(t *testing.T) {
-	for name, raw := range map[string]string{
-		"richest": liveIncidentRecord,
-		"high":    liveHighSeverityIncident,
-	} {
+	cases := map[string]struct {
+		raw            string
+		wantSystemTags []string // nil means "must be absent"
+	}{
+		"richest": {liveIncidentRecord, []string{"Security Testing"}},
+		"high":    {liveHighSeverityIncident, nil},
+	}
+	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			rec := decodeLive(t, raw)
+			rec := decodeLive(t, tc.raw)
 
 			if _, present := rec["tags"]; present {
 				t.Errorf("live record carries a `tags` key: %v.\n"+
 					"The 2026-07-17 capture had none on any of 5 records. If the endpoint now "+
-					"sends it, mapIncident's strSlice(rec, \"tags\") is live after all — retire this test.", rec["tags"])
+					"sends it, mapIncident's dead strSlice(rec, \"tags\") read would need reviving — retire this test.", rec["tags"])
 			}
 			for _, k := range []string{"customTags", "systemTags"} {
 				if _, present := rec[k]; !present {
@@ -253,17 +275,74 @@ func TestLiveRecordCarriesNoWireTagsKey(t *testing.T) {
 				}
 			}
 
-			// The consequence, pinned at the mapper: no tags attribute is
-			// reachable. Do NOT "fix" this by pointing strSlice at customTags /
-			// systemTags without an issue and a live re-measure — they are two
-			// distinct fields with different semantics (operator-set vs
-			// Defender-set), and collapsing them into one `tags` attribute is a
-			// data-model decision, not a typo fix.
+			// `tags` stays unreachable — #169 mapped the REAL wire fields instead
+			// (customTags -> custom_tags, systemTags -> system_tags) rather than
+			// reviving the dead key.
 			_, ev := mapIncident(rec)
 			if got, present := ev.Attrs["tags"]; present {
 				t.Errorf("mapIncident emitted tags = %v from a record with no wire `tags` key", got)
 			}
+			// customTags is empty on both live records, so custom_tags must stay
+			// absent regardless of which fixture this is.
+			if got, present := ev.Attrs["custom_tags"]; present {
+				t.Errorf("attr custom_tags = %v, want ABSENT — customTags is empty on this live record", got)
+			}
+			if tc.wantSystemTags == nil {
+				if got, present := ev.Attrs["system_tags"]; present {
+					t.Errorf("attr system_tags = %v, want ABSENT — systemTags is empty on this live record", got)
+				}
+				return
+			}
+			gotSystemTags, ok := ev.Attrs["system_tags"].([]string)
+			if !ok || len(gotSystemTags) != len(tc.wantSystemTags) {
+				t.Fatalf("system_tags = %v, want %v", ev.Attrs["system_tags"], tc.wantSystemTags)
+			}
+			for i, want := range tc.wantSystemTags {
+				if gotSystemTags[i] != want {
+					t.Errorf("system_tags[%d] = %q, want %q", i, gotSystemTags[i], want)
+				}
+			}
 		})
+	}
+}
+
+// TestMapIncidentCustomAndSystemTags asserts mapIncident reads the wire's real
+// tag fields — customTags (operator-set) and systemTags (Defender-set) — into
+// custom_tags and system_tags respectively, each following the
+// emit-when-non-empty convention (#169). Neither live record captured for this
+// package carries a non-empty customTags, so this synthetic case is what
+// exercises that branch at all; TestLiveRecordCarriesNoWireTagsKey covers the
+// live systemTags branch.
+func TestMapIncidentCustomAndSystemTags(t *testing.T) {
+	rec := map[string]any{
+		"id":                 "inc-tags",
+		"lastUpdateDateTime": "2026-07-01T10:00:00Z",
+		"severity":           "low",
+		"status":             "active",
+		"customTags":         []any{"VIP"},
+		"systemTags":         []any{"Ransomware"},
+	}
+	_, ev := mapIncident(rec)
+
+	custom, ok := ev.Attrs["custom_tags"].([]string)
+	if !ok || len(custom) != 1 || custom[0] != "VIP" {
+		t.Errorf("custom_tags = %v, want [VIP]", ev.Attrs["custom_tags"])
+	}
+	system, ok := ev.Attrs["system_tags"].([]string)
+	if !ok || len(system) != 1 || system[0] != "Ransomware" {
+		t.Errorf("system_tags = %v, want [Ransomware]", ev.Attrs["system_tags"])
+	}
+
+	// Empty wire arrays must omit the attribute, not emit an empty slice (#112).
+	_, evEmpty := mapIncident(map[string]any{
+		"id": "inc-empty-tags", "lastUpdateDateTime": "2026-07-01T10:00:00Z",
+		"severity": "low", "status": "active",
+		"customTags": []any{}, "systemTags": []any{},
+	})
+	for _, k := range []string{"custom_tags", "system_tags"} {
+		if _, present := evEmpty.Attrs[k]; present {
+			t.Errorf("attr %q present for empty wire array, want absent", k)
+		}
 	}
 }
 
@@ -284,7 +363,7 @@ func TestMapIncidentMediumAndLowSeverityAreWarn(t *testing.T) {
 			if ev.Severity != telemetry.SeverityWarn {
 				t.Errorf("severity for incident severity=%s = %v, want SeverityWarn", sev, ev.Severity)
 			}
-			for _, k := range []string{"assigned_to", "tags", "priority_score", "alert_ids", "alert_count"} {
+			for _, k := range []string{"assigned_to", "tags", "custom_tags", "system_tags", "priority_score", "alert_ids", "alert_count"} {
 				if _, present := ev.Attrs[k]; present {
 					t.Errorf("incident missing %s must not carry attr %q, attrs=%v", k, k, ev.Attrs)
 				}
@@ -456,7 +535,7 @@ func TestCollectorReEmitsAcrossPolls(t *testing.T) {
 // attributes, never as metric labels/series.
 func TestEmitsNoMetrics(t *testing.T) {
 	f := &recordingFetcher{records: []map[string]any{
-		{"id": "inc-a", "lastUpdateDateTime": "2026-07-01T09:00:00Z", "severity": "high", "status": "active", "assignedTo": "a@b.com", "tags": []any{"t1"}},
+		{"id": "inc-a", "lastUpdateDateTime": "2026-07-01T09:00:00Z", "severity": "high", "status": "active", "assignedTo": "a@b.com"},
 		{"id": "inc-b", "lastUpdateDateTime": "2026-07-01T09:30:00Z", "severity": "low", "status": "resolved"},
 	}}
 	rec := telemetrytest.New()
@@ -493,10 +572,13 @@ func TestEmitsNoMetrics(t *testing.T) {
 //
 // #165 then replaced the rich record itself with a live capture, which is what
 // makes this golden a measurement rather than a restatement of the fixture
-// author's beliefs. Note what the live record does NOT emit: no `tags` (the wire
-// has no such key — see TestLiveRecordCarriesNoWireTagsKey) and no `assigned_to`
-// (null on the wire). Both keys survive in testdata/signals.json ONLY because
-// hand-written records in TestEmitsNoMetrics still emit them; no live poll can.
+// author's beliefs. Note what the live record does NOT emit: no `tags` (the
+// wire has no such key — see TestLiveRecordCarriesNoWireTagsKey), no
+// `custom_tags` (customTags is empty on this record — #169), and no
+// `assigned_to` (null on the wire). `assigned_to` survives in
+// testdata/signals.json ONLY because a hand-written record in TestEmitsNoMetrics
+// still emits it; no live poll can. `tags` and `custom_tags` do NOT appear in
+// the golden at all — no test, live or synthetic, emits either.
 //
 // tenant_id is deliberately NOT expected below, and its absence here is correct
 // twice over. The mapper ignores the wire field (#143), and this Recorder's
@@ -550,25 +632,29 @@ func TestCollectorEmitsFullRecordEndToEnd(t *testing.T) {
 		}
 	}
 
-	// priority_score (int) is checked for PRESENCE only, and its value is pinned
-	// at the mapper instead (TestMapIncidentLiveRecord).
+	// priority_score (int) and system_tags ([]string) are checked for PRESENCE
+	// only, and their values are pinned at the mapper instead
+	// (TestMapIncidentLiveRecord).
 	//
 	// Not an oversight, and do not "fix" it by asserting the value: telemetrytest
 	// .Recorder flattens every log attribute through log.Value.AsString(), which
 	// yields "" for any non-string Kind. The recorder cannot represent an int or
 	// a slice attribute's value — a limit of the test harness, not of the
 	// emission.
-	if _, present := got.Attrs["priority_score"]; !present {
-		t.Errorf("emitted attrs missing %q", "priority_score")
+	for _, k := range []string{"priority_score", "system_tags"} {
+		if _, present := got.Attrs[k]; !present {
+			t.Errorf("emitted attrs missing %q", k)
+		}
 	}
 
-	// The two attributes the live record proves are NOT reachable from the wire.
-	// `tags` is unreachable for every record (/security/incidents sends
+	// The attributes the live record proves are NOT reachable. `tags` is
+	// unreachable for every record (/security/incidents sends
 	// customTags/systemTags, never tags — TestLiveRecordCarriesNoWireTagsKey);
-	// assigned_to is unreachable for THIS record only (assignedTo is null — an
-	// assigned incident would emit it). Asserting their absence is what stops the
-	// old hand-written expectations creeping back in.
-	for _, k := range []string{"tags", "assigned_to"} {
+	// custom_tags is unreachable for THIS record only (customTags is empty on it
+	// — #169); assigned_to is unreachable for THIS record only (assignedTo is
+	// null — an assigned incident would emit it). Asserting their absence is
+	// what stops the old hand-written expectations creeping back in.
+	for _, k := range []string{"tags", "custom_tags", "assigned_to"} {
 		if v, present := got.Attrs[k]; present {
 			t.Errorf("emitted attr %q = %q, want it ABSENT — the live record carries no value for it", k, v)
 		}

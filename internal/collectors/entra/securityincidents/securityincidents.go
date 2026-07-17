@@ -41,9 +41,9 @@
 // `alerts` array if one is ever present, so the wiring is forward-compatible.
 //
 // Cardinality note (INVERTED from the metric collectors): these are LOGS, so
-// per-entity detail — the incident id, assignedTo (a UPN), tags, grouped alert
-// ids — belongs here as structured log attributes. That same data must NEVER
-// become a metric label; this package emits no metrics.
+// per-entity detail — the incident id, assignedTo (a UPN), custom/system tags,
+// grouped alert ids — belongs here as structured log attributes. That same
+// data must NEVER become a metric label; this package emits no metrics.
 //
 // See GitHub issue #92 (part of #86).
 package securityincidents
@@ -127,8 +127,8 @@ func newCollector(d collectors.WindowDeps) *collectorImpl {
 // is still emitted verbatim in attrs["id"] for downstream correlation.
 //
 // It sets only attributes actually present, so an incident with no assignedTo,
-// tags, or priorityScore simply omits those attributes rather than emitting
-// empty/zero ones.
+// customTags/systemTags, or priorityScore simply omits those attributes rather
+// than emitting empty/zero ones.
 func mapIncident(rec map[string]any) (string, telemetry.Event) {
 	id := str(rec, "id")
 	lastUpdate := str(rec, "lastUpdateDateTime")
@@ -155,8 +155,16 @@ func mapIncident(rec map[string]any) (string, telemetry.Event) {
 	if score, ok := intField(rec, "priorityScore"); ok {
 		attrs["priority_score"] = score
 	}
-	if tags := strSlice(rec, "tags"); len(tags) > 0 {
-		attrs["tags"] = tags
+	// `tags` is not a real field on this endpoint (#169, live-measured
+	// 2026-07-17: 0/5 rows carried it — see TestLiveRecordCarriesNoWireTagsKey).
+	// The wire's real tag fields are customTags (operator-set) and systemTags
+	// (Defender-set); they are distinct fields with different semantics, so each
+	// gets its own attribute rather than being collapsed into one.
+	if tags := strSlice(rec, "customTags"); len(tags) > 0 {
+		attrs["custom_tags"] = tags
+	}
+	if tags := strSlice(rec, "systemTags"); len(tags) > 0 {
+		attrs["system_tags"] = tags
 	}
 	// Grouped alert ids, only present when $expand=alerts was applied. Not sent
 	// by default (see the package doc), so this is normally a no-op; kept so the
