@@ -163,6 +163,25 @@ func TestLiveDirectoryAuditAppInitiatorHasNoAppID(t *testing.T) {
 	}
 }
 
+// TestMapDirectoryAuditMapsServicePrincipalID is the #168 fix: the mapper must
+// surface initiatedBy.app.servicePrincipalId as a distinct attribute,
+// initiator_service_principal_id, since appId is structurally null on every
+// app-initiated record this project has captured (see the test above) and
+// servicePrincipalId is the only identifier left. This is a NEW attribute,
+// not a repurposing of initiator_app_id — that one keeps mapping appId, for
+// the rare case a future record populates it.
+func TestMapDirectoryAuditMapsServicePrincipalID(t *testing.T) {
+	_, ev := mapDirectoryAudit(decodeLive(t, liveDirectoryAudit))
+
+	want := "8ab73e2f-f11f-4bf3-a693-7a9d37bd5b49"
+	if got := ev.Attrs["initiator_service_principal_id"]; got != want {
+		t.Errorf("initiator_service_principal_id = %v, want %v", got, want)
+	}
+	if _, present := ev.Attrs["initiator_app_id"]; present {
+		t.Errorf("initiator_app_id must stay absent when appId is null, attrs=%v", ev.Attrs)
+	}
+}
+
 // TestMapDirectoryAuditAgainstLiveRecord pins the EXACT attribute set the mapper
 // produces from a real record. Exact-set equality is the point: it fails on a
 // missing attribute (a dropped field) AND on an unexpected one (a fabricated
@@ -172,7 +191,8 @@ func TestLiveDirectoryAuditAppInitiatorHasNoAppID(t *testing.T) {
 // here, and why:
 //   - result_reason — the record's resultReason is "" (setStr omits it)
 //   - initiator_user_* — the record is app-initiated; initiatedBy.user is null
-//   - initiator_app_id — appId is null on the wire (see the test above)
+//   - initiator_app_id — appId is null on the wire (see the test above);
+//     initiator_service_principal_id is what this record carries instead (#168)
 //
 // Do not "fix" this list by driving the docs-derived fixtures into the emitter
 // to pad it out. #165: driving a docs-derived fixture end-to-end just goldens
@@ -196,6 +216,7 @@ func TestMapDirectoryAuditAgainstLiveRecord(t *testing.T) {
 		"correlation_id",
 		"id",
 		"initiator_app_display_name",
+		"initiator_service_principal_id",
 		"logged_by_service",
 		"result",
 		"target_display_names",
@@ -211,14 +232,15 @@ func TestMapDirectoryAuditAgainstLiveRecord(t *testing.T) {
 	}
 
 	wantScalars := map[string]any{
-		"id":                         "Directory_3b267148-9777-40a3-8f35-4adf76967557_6LPVG_73478882",
-		"category":                   "Device",
-		"activity_display_name":      "Update device",
-		"result":                     "success",
-		"logged_by_service":          "Core Directory",
-		"correlation_id":             "3b267148-9777-40a3-8f35-4adf76967557",
-		"initiator_app_display_name": "Intune Compliance Client Prod",
-		"target_resource_count":      1,
+		"id":                             "Directory_3b267148-9777-40a3-8f35-4adf76967557_6LPVG_73478882",
+		"category":                       "Device",
+		"activity_display_name":          "Update device",
+		"result":                         "success",
+		"logged_by_service":              "Core Directory",
+		"correlation_id":                 "3b267148-9777-40a3-8f35-4adf76967557",
+		"initiator_app_display_name":     "Intune Compliance Client Prod",
+		"initiator_service_principal_id": "8ab73e2f-f11f-4bf3-a693-7a9d37bd5b49",
+		"target_resource_count":          1,
 	}
 	for k, want := range wantScalars {
 		if got := ev.Attrs[k]; got != want {
@@ -418,13 +440,14 @@ func TestCollectorEmitsLiveRecordEndToEnd(t *testing.T) {
 	// Checked at the emitter rather than the mapper: these are the attributes
 	// that only a real record produces, and they must survive the whole path.
 	wantAttrs := map[string]string{
-		"id":                         "Directory_3b267148-9777-40a3-8f35-4adf76967557_6LPVG_73478882",
-		"category":                   "Device",
-		"activity_display_name":      "Update device",
-		"result":                     "success",
-		"logged_by_service":          "Core Directory",
-		"correlation_id":             "3b267148-9777-40a3-8f35-4adf76967557",
-		"initiator_app_display_name": "Intune Compliance Client Prod",
+		"id":                             "Directory_3b267148-9777-40a3-8f35-4adf76967557_6LPVG_73478882",
+		"category":                       "Device",
+		"activity_display_name":          "Update device",
+		"result":                         "success",
+		"logged_by_service":              "Core Directory",
+		"correlation_id":                 "3b267148-9777-40a3-8f35-4adf76967557",
+		"initiator_app_display_name":     "Intune Compliance Client Prod",
+		"initiator_service_principal_id": "8ab73e2f-f11f-4bf3-a693-7a9d37bd5b49",
 	}
 	for k, want := range wantAttrs {
 		if v := got.Attrs[k]; v != want {

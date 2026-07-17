@@ -97,6 +97,11 @@ func mapDirectoryAudit(rec map[string]any) (string, telemetry.Event) {
 		if app := nested(initiatedBy, "app"); app != nil {
 			setStr(attrs, "initiator_app_display_name", str(app, "displayName"))
 			setStr(attrs, "initiator_app_id", str(app, "appId"))
+			// appId is null on every app-initiated record this project has
+			// captured live; servicePrincipalId is the only identifier left
+			// on those records, so it is mapped as its own distinct
+			// attribute rather than folded into initiator_app_id (#168).
+			setStr(attrs, "initiator_service_principal_id", str(app, "servicePrincipalId"))
 		}
 	}
 
