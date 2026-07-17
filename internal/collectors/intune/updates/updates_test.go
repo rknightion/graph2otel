@@ -102,36 +102,114 @@ func statusOverview(pending, notApplicable, success, errCount, failed int) strin
 	return string(b)
 }
 
+// Verbatim GET captures read as graph2otel-poller against the m7kni tenant on
+// 2026-07-17 `[live-measured 2026-07-17, #165]`, from the exact beta endpoints
+// this collector polls. Trimmed of nothing.
+//
+//   - liveQualityPoliciesBody: GET
+//     /beta/deviceManagement/windowsQualityUpdatePolicies (1 policy; beta —
+//     v1.0 404s). Counted only, so only displayName is read.
+//   - liveDriverProfilesBody: GET
+//     /beta/deviceManagement/windowsDriverUpdateProfiles (2 profiles; beta).
+//     Both ship inventorySyncStatus:null and newUpdates:0 on the wire, so the
+//     collector emits two pending-approval points valued 0 and NO staleness
+//     points — the null-sync path. Staleness coverage therefore uses a
+//     dedicated synthetic profile (TestCollectEmitsDriverStalenessFromSync).
+const (
+	liveQualityPoliciesBody = `{
+  "@odata.context": "https://graph.microsoft.com/beta/$metadata#deviceManagement/windowsQualityUpdatePolicies",
+  "@odata.count": 1,
+  "value": [
+    {
+      "approvalSettings": [],
+      "createdDateTime": "2025-10-09T12:35:41.3025828Z",
+      "description": "",
+      "displayName": "quality",
+      "hotpatchEnabled": true,
+      "id": "5c594ceb-f747-4564-9fb7-cabd1497dbe4",
+      "lastModifiedDateTime": "2026-07-17T14:38:45Z",
+      "roleScopeTagIds": [
+        "0"
+      ]
+    }
+  ]
+}`
+
+	liveDriverProfilesBody = `{
+  "@odata.context": "https://graph.microsoft.com/beta/$metadata#deviceManagement/windowsDriverUpdateProfiles",
+  "@odata.count": 2,
+  "value": [
+    {
+      "approvalType": "automatic",
+      "createdDateTime": "2025-11-28T13:51:20.1257459Z",
+      "deploymentDeferralInDays": 0,
+      "description": "Driver update policy, created by Windows Autopatch",
+      "deviceReporting": 0,
+      "displayName": "Windows Autopatch Driver Update Policy - group - Test",
+      "id": "ba79e66e-a36d-4b29-8495-7ebcc8b72e5f",
+      "inventorySyncStatus": null,
+      "lastModifiedDateTime": "2025-11-28T13:51:20.1257459Z",
+      "newUpdates": 0,
+      "roleScopeTagIds": [
+        "0"
+      ]
+    },
+    {
+      "approvalType": "automatic",
+      "createdDateTime": "2025-11-28T13:51:20.1095439Z",
+      "deploymentDeferralInDays": 1,
+      "description": "Driver update policy, created by Windows Autopatch",
+      "deviceReporting": 0,
+      "displayName": "Windows Autopatch Driver Update Policy - group - Last",
+      "id": "d9168684-1785-4598-ad97-cbb78353e4f0",
+      "inventorySyncStatus": null,
+      "lastModifiedDateTime": "2025-11-28T13:51:20.1095439Z",
+      "newUpdates": 0,
+      "roleScopeTagIds": [
+        "0"
+      ]
+    }
+  ]
+}`
+)
+
+// fullFixtureBodies wires each endpoint this collector polls. Two are the
+// verbatim live captures above (windowsQualityUpdatePolicies,
+// windowsDriverUpdateProfiles). The rest stay synthetic and are so noted:
+//
+//   - The Windows Update ring path
+//     (/v1.0/deviceManagement/deviceConfigurations filtered to
+//     windowsUpdateForBusinessConfiguration) is synthetic: the live
+//     deviceConfigurations collection on this tenant contains NO
+//     windowsUpdateForBusinessConfiguration @odata.type (only iOS config
+//     subtypes), so there is no live ring to capture — the synthetic ring is
+//     the only way to exercise the pause/expiry/rollback/status gauges.
+//   - windowsFeatureUpdateProfiles and windowsQualityUpdateProfiles are
+//     docs-derived, endpoint empty on tenant 2026-07-17 (#165): both return
+//     @odata.count 0 live, so a single synthetic element is kept to exercise
+//     the feature-EOL gauge and the quality-profile count.
 func fullFixtureBodies() map[string]string {
 	return map[string]string{
+		// Synthetic ring (no live windowsUpdateForBusinessConfiguration exists).
 		configsURL(): page(
 			ring("ring-1", "Broad Ring", false, true, false, true),
 			otherConfig("other-1", "Some Restriction Policy"),
 		),
 		statusOverviewURL("ring-1"): statusOverview(1, 2, 3, 4, 5),
+		// docs-derived, endpoint empty on tenant 2026-07-17 (#165).
 		featureProfilesURL(): page(map[string]any{
 			"id":                   "feat-1",
 			"displayName":          "21H2 Feature Profile",
 			"featureUpdateVersion": "21H2",
 			"endOfSupportDate":     "2026-10-14",
 		}),
+		// docs-derived, endpoint empty on tenant 2026-07-17 (#165).
 		qualityProfilesURL(): page(map[string]any{
 			"id":          "qp-1",
 			"displayName": "Quality Profile 1",
 		}),
-		qualityPoliciesURL(): page(map[string]any{
-			"id":          "qpol-1",
-			"displayName": "Quality Policy 1",
-		}),
-		driverProfilesURL(): page(map[string]any{
-			"id":              "drv-1",
-			"displayName":     "Driver Profile 1",
-			"newUpdates":      7,
-			"deviceReporting": 100,
-			"inventorySyncStatus": map[string]any{
-				"lastSuccessfulSyncDateTime": "2026-07-14T12:00:00Z",
-			},
-		}),
+		qualityPoliciesURL(): liveQualityPoliciesBody,
+		driverProfilesURL():  liveDriverProfilesBody,
 	}
 }
 
@@ -264,6 +342,9 @@ func TestCollectEmitsFeatureUpdateProfileEOLTarget(t *testing.T) {
 	}
 }
 
+// TestCollectEmitsDriverUpdateGauges drives the two verbatim live driver
+// profiles through Collect. Both have newUpdates:0 → two pending-approval
+// points valued 0; both have inventorySyncStatus:null → no staleness points.
 func TestCollectEmitsDriverUpdateGauges(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixtureBodies()}
 	rec := telemetrytest.New()
@@ -273,8 +354,54 @@ func TestCollectEmitsDriverUpdateGauges(t *testing.T) {
 	}
 
 	pending := rec.MetricPoints(driverPendingMetric)
-	if len(pending) != 1 || pending[0].Value != 7 || pending[0].Attrs["profile_name"] != "Driver Profile 1" {
-		t.Fatalf("pending_approval points = %+v, want one point value=7 profile_name=Driver Profile 1", pending)
+	got := map[string]float64{}
+	for _, p := range pending {
+		got[p.Attrs["profile_name"]] = p.Value
+	}
+	want := map[string]float64{
+		"Windows Autopatch Driver Update Policy - group - Test": 0,
+		"Windows Autopatch Driver Update Policy - group - Last": 0,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("pending_approval series = %+v, want %+v", got, want)
+	}
+	for k, v := range want {
+		if gv, ok := got[k]; !ok || gv != v {
+			t.Errorf("pending_approval[%q] = %v (present=%v), want %v", k, gv, ok, v)
+		}
+	}
+
+	// Both live profiles ship inventorySyncStatus:null, so no staleness point.
+	if staleness := rec.MetricPoints(driverStalenessMetric); len(staleness) != 0 {
+		t.Errorf("got %d staleness points, want 0 (both live profiles have null inventorySyncStatus): %+v", len(staleness), staleness)
+	}
+}
+
+// TestCollectEmitsDriverStalenessFromSync preserves staleness coverage the live
+// tenant cannot give (its two driver profiles have never synced, so
+// inventorySyncStatus is null on both): a synthetic driver profile carrying a
+// lastSuccessfulSyncDateTime yields exactly one staleness point.
+func TestCollectEmitsDriverStalenessFromSync(t *testing.T) {
+	bodies := fullFixtureBodies()
+	bodies[driverProfilesURL()] = page(map[string]any{
+		"id":              "drv-synth-1",
+		"displayName":     "Synthetic Driver Profile (synced)",
+		"newUpdates":      7,
+		"deviceReporting": 100,
+		"inventorySyncStatus": map[string]any{
+			"lastSuccessfulSyncDateTime": "2026-07-14T12:00:00Z",
+		},
+	})
+	g := &fakeGraph{bodies: bodies}
+	rec := telemetrytest.New()
+
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	pending := rec.MetricPoints(driverPendingMetric)
+	if len(pending) != 1 || pending[0].Value != 7 || pending[0].Attrs["profile_name"] != "Synthetic Driver Profile (synced)" {
+		t.Fatalf("pending_approval points = %+v, want one point value=7", pending)
 	}
 
 	staleness := rec.MetricPoints(driverStalenessMetric)
