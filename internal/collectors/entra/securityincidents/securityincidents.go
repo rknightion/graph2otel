@@ -144,9 +144,13 @@ func mapIncident(rec map[string]any) (string, telemetry.Event) {
 	setStr(attrs, "classification", str(rec, "classification"))
 	setStr(attrs, "determination", str(rec, "determination"))
 	setStr(attrs, "assigned_to", str(rec, "assignedTo"))
-	setStr(attrs, "tenant_id", str(rec, "tenantId"))
 	setStr(attrs, "created_time", str(rec, "createdDateTime"))
 	setStr(attrs, "last_update_time", lastUpdate)
+
+	// The record's own `tenantId` is deliberately NOT emitted — it is OURS, not
+	// Microsoft's, and telemetry.WithTenant already stamps it on every record from
+	// this Scheduler (#143). See entra/securityalerts's mapAlert for the live
+	// measurement and the full reasoning. Do not re-add it.
 
 	if score, ok := intField(rec, "priorityScore"); ok {
 		attrs["priority_score"] = score

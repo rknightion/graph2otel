@@ -77,7 +77,6 @@ func TestMapIncidentHighSeverity(t *testing.T) {
 		"classification":   "truePositive",
 		"determination":    "compromisedAccount",
 		"assigned_to":      "analyst@contoso.com",
-		"tenant_id":        "tenant-guid-1",
 		"created_time":     "2026-07-01T10:00:00Z",
 		"last_update_time": "2026-07-01T12:30:00Z",
 	}
@@ -305,5 +304,24 @@ func TestEmitsNoMetrics(t *testing.T) {
 	}
 	if names := rec.MetricNames(); len(names) != 0 {
 		t.Errorf("security-incidents emitted metrics %v, want none — per-incident detail must be log attributes, not metrics", names)
+	}
+}
+
+// TestWireTenantIDIsNotEmitted pins the #143 delete. See the identically named
+// test in entra/securityalerts for the live measurement and full reasoning: the
+// record's `tenantId` is OUR tenant, telemetry.WithTenant already stamps it, and
+// a second per-collector writer for a key the emitter owns is how the two would
+// eventually disagree. The fixture still supplies tenantId on purpose.
+func TestWireTenantIDIsNotEmitted(t *testing.T) {
+	_, ev := mapIncident(map[string]any{
+		"id":          "1",
+		"displayName": "d",
+		"severity":    "high",
+		"status":      "active",
+		"tenantId":    "tenant-guid-1",
+	})
+	if got, present := ev.Attrs["tenant_id"]; present {
+		t.Errorf("mapIncident emitted tenant_id = %v from the wire record.\n"+
+			"telemetry.WithTenant owns that key (#143). Do not re-add it.", got)
 	}
 }

@@ -19,10 +19,28 @@ const (
 	// AttrCollector names the collector a scrape.* metric point describes
 	// (e.g. "devices", "auditlogs").
 	AttrCollector = "collector"
-	// AttrTenantID identifies which tenant's Scheduler produced a scrape.*
-	// metric point, added alongside AttrCollector when the Scheduler is
-	// configured with WithTenant. Bounded cardinality: one value per
-	// configured tenant, never a per-entity identifier.
+	// AttrTenantID identifies which tenant produced a record. It is on EVERY
+	// signal — self-obs and domain, metrics and logs (#143).
+	//
+	// Two writers set it, deliberately:
+	//   - collector/selfobs.go stamps it on scrape.*/checkpoint.* via selfObsAttrs.
+	//   - telemetry.WithTenant stamps everything else at the emitter boundary,
+	//     which is the seam that reaches all 58 collectors. First stamp wins, so
+	//     the self-obs value above passes through untouched.
+	//
+	// Bounded cardinality: one value per operator-configured tenant. It grows with
+	// tenant COUNT, never with tenant SIZE, which is what the #112 rule forbids —
+	// so it is metric-label-safe, and internal/signalcapture correctly does not
+	// flag it.
+	//
+	// It is a METRIC label, unlike AttrIngestTransport below. That asymmetry is
+	// deliberate and is the whole point: there is one MeterProvider and one OTLP
+	// resource per process, so without this label two tenants' domain metrics are
+	// not merely unsliceable — they are the same series, interleaving samples into
+	// a meaningless number.
+	//
+	// Empty means "no tenant configured" and stamps nothing, keeping single-tenant
+	// deploys byte-identical.
 	AttrTenantID = "tenant_id"
 )
 

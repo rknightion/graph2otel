@@ -34,7 +34,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "### Intune fleet overview \u2014 graph2otel\n\ngraph2otel exports **OTLP** metrics. Grafana Cloud (Mimir/Prometheus) normalizes OTLP\nmetric names on ingest: dots become underscores, and unit/type suffixes may be appended\n(`_total`, `_seconds`, `_ratio`, ...) depending on the OTLP-to-Prometheus pipeline\nconfiguration. Every PromQL query below uses the underscored convention, e.g.\n`intune.devices.count` &rarr; `intune_devices_count`. **Exact names depend on your\ningest pipeline config** \u2014 some setups preserve original names or omit `_total`. If a\npanel reads empty, check your metric names first with `{__name__=~\"intune_.*\"}`.\n\nPanels marked **(beta)** read from Intune collectors that are opt-in/experimental\n(`settingsCatalog`, Autopilot profiles, update rings, driver updates, certificates).\nThey show no data until the corresponding beta collector is enabled \u2014 see\n`docs/collectors.md` \u2014 and are not evidence of a broken dashboard.\n\nDomain metrics (`intune.*`) carry **no** `tenant_id` label — only graph2otel's own\nself-observability signals do. Panels here are therefore not tenant-scoped; a\n`tenant_id` filter would match zero series. See the self-observability dashboard for\nper-tenant collector health.\n\nEvery series here is a bounded aggregate (count by state/OS/policy/category) \u2014 never a\nper-device or per-user series, per the cardinality boundary in `SECURITY.md`."
+        "content": "### Intune fleet overview \u2014 graph2otel\n\ngraph2otel exports **OTLP** metrics. Grafana Cloud (Mimir/Prometheus) normalizes OTLP\nmetric names on ingest: dots become underscores, and unit/type suffixes may be appended\n(`_total`, `_seconds`, `_ratio`, ...) depending on the OTLP-to-Prometheus pipeline\nconfiguration. Every PromQL query below uses the underscored convention, e.g.\n`intune.devices.count` &rarr; `intune_devices_count`. **Exact names depend on your\ningest pipeline config** \u2014 some setups preserve original names or omit `_total`. If a\npanel reads empty, check your metric names first with `{__name__=~\"intune_.*\"}`.\n\nPanels marked **(beta)** read from Intune collectors that are opt-in/experimental\n(`settingsCatalog`, Autopilot profiles, update rings, driver updates, certificates).\nThey show no data until the corresponding beta collector is enabled \u2014 see\n`docs/collectors.md` \u2014 and are not evidence of a broken dashboard.\n\nAll panels are scoped by the `$tenant` template variable and filter on `tenant_id`.\nEvery series here is a bounded aggregate (count by state/OS/policy/category) \u2014 never a\nper-device or per-user series, per the cardinality boundary in `SECURITY.md`."
       }
     },
     {
@@ -70,7 +70,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (compliance_state) (intune_devices_count)",
+          "expr": "sum by (compliance_state) (intune_devices_count{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{compliance_state}}"
         }
       ],
@@ -119,7 +119,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (operating_system) (intune_devices_count)",
+          "expr": "sum by (operating_system) (intune_devices_count{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{operating_system}}"
         }
       ],
@@ -167,7 +167,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (os) (intune_devices_overview_total)",
+          "expr": "sum by (os) (intune_devices_overview_total{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{os}}"
         }
       ],
@@ -216,7 +216,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (operating_system) (intune_devices_encrypted_count)",
+          "expr": "sum by (operating_system) (intune_devices_encrypted_count{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{operating_system}}"
         }
       ],
@@ -265,7 +265,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(intune_devices_overview_enrolled_device_count)",
+          "expr": "sum(intune_devices_overview_enrolled_device_count{tenant_id=~\"$tenant\"})",
           "legendFormat": "enrolled"
         },
         {
@@ -273,7 +273,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(intune_devices_overview_mdm_enrolled_device_count)",
+          "expr": "sum(intune_devices_overview_mdm_enrolled_device_count{tenant_id=~\"$tenant\"})",
           "legendFormat": "mdm enrolled"
         },
         {
@@ -281,7 +281,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(intune_devices_overview_dual_enrolled_device_count)",
+          "expr": "sum(intune_devices_overview_dual_enrolled_device_count{tenant_id=~\"$tenant\"})",
           "legendFormat": "dual enrolled"
         }
       ],
@@ -323,7 +323,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (staleness_bucket) (intune_devices_sync_staleness_seconds)",
+          "expr": "sum by (staleness_bucket) (intune_devices_sync_staleness_seconds{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{staleness_bucket}}"
         }
       ],
@@ -386,7 +386,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (state) (intune_compliance_devices)",
+          "expr": "sum by (state) (intune_compliance_devices{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{state}}"
         }
       ],
@@ -434,7 +434,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (policy_name, state) (intune_compliance_policy_devices)",
+          "expr": "sum by (policy_name, state) (intune_compliance_policy_devices{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{policy_name}} / {{state}}"
         }
       ],
@@ -482,7 +482,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (policy_name, state) (intune_compliance_policy_users)",
+          "expr": "sum by (policy_name, state) (intune_compliance_policy_users{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{policy_name}} / {{state}}"
         }
       ],
@@ -530,7 +530,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "intune_compliance_policy_version_ratio",
+          "expr": "intune_compliance_policy_version_ratio{tenant_id=~\"$tenant\"}",
           "legendFormat": "{{policy_name}}"
         }
       ],
@@ -562,7 +562,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (setting_name, platform, state) (intune_compliance_setting_devices)",
+          "expr": "sum by (setting_name, platform, state) (intune_compliance_setting_devices{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{setting_name}} / {{platform}} / {{state}}"
         }
       ],
@@ -623,7 +623,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (odata_type) (intune_config_profile_count)",
+          "expr": "sum by (odata_type) (intune_config_profile_count{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{odata_type}}"
         }
       ],
@@ -671,7 +671,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (profile_name, state) (intune_config_profile_status)",
+          "expr": "sum by (profile_name, state) (intune_config_profile_status{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{profile_name}} / {{state}}"
         }
       ],
@@ -719,7 +719,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "intune_config_profile_version_ratio",
+          "expr": "intune_config_profile_version_ratio{tenant_id=~\"$tenant\"}",
           "legendFormat": "{{profile_name}}"
         }
       ],
@@ -764,7 +764,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (app_type, publishing_state) (intune_mobile_apps_count)",
+          "expr": "sum by (app_type, publishing_state) (intune_mobile_apps_count{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{app_type}} / {{publishing_state}}"
         }
       ],
@@ -812,7 +812,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (policy_name, status) (intune_mobile_app_config_status)",
+          "expr": "sum by (policy_name, status) (intune_mobile_app_config_status{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{policy_name}} / {{status}}"
         }
       ],
@@ -860,7 +860,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (platform, assigned) (intune_app_protection_policy_count)",
+          "expr": "sum by (platform, assigned) (intune_app_protection_policy_count{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{platform}} / assigned={{assigned}}"
         }
       ],
@@ -908,7 +908,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (flagged_reason, platform) (intune_app_protection_flagged_registrations)",
+          "expr": "sum by (flagged_reason, platform) (intune_app_protection_flagged_registrations{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{flagged_reason}} / {{platform}}"
         }
       ],
@@ -956,7 +956,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (assigned) (intune_wip_policy_count)",
+          "expr": "sum by (assigned) (intune_wip_policy_count{tenant_id=~\"$tenant\"})",
           "legendFormat": "assigned={{assigned}}"
         }
       ],
@@ -1017,7 +1017,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (enrollment_state, group_tag) (intune_autopilot_devices)",
+          "expr": "sum by (enrollment_state, group_tag) (intune_autopilot_devices{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{enrollment_state}} / {{group_tag}}"
         }
       ],
@@ -1066,7 +1066,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (group_tag) (intune_autopilot_stale_contact_count)",
+          "expr": "sum by (group_tag) (intune_autopilot_stale_contact_count{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{group_tag}}"
         }
       ],
@@ -1115,7 +1115,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (device_type, preprovisioning_allowed) (intune_autopilot_profile_count)",
+          "expr": "sum by (device_type, preprovisioning_allowed) (intune_autopilot_profile_count{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{device_type}} / preprovisioning={{preprovisioning_allowed}}"
         }
       ],
@@ -1177,7 +1177,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (ring_name, state) (intune_update_ring_status)",
+          "expr": "sum by (ring_name, state) (intune_update_ring_status{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{ring_name}} / {{state}}"
         }
       ],
@@ -1226,7 +1226,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (ring_name, update_type) (intune_update_ring_pause_state_ratio)",
+          "expr": "sum by (ring_name, update_type) (intune_update_ring_pause_state_ratio{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{ring_name}} / {{update_type}}"
         }
       ],
@@ -1275,7 +1275,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "intune_update_ring_pause_expiry_seconds",
+          "expr": "intune_update_ring_pause_expiry_seconds{tenant_id=~\"$tenant\"}",
           "legendFormat": "{{ring_name}} / {{update_type}}"
         }
       ],
@@ -1319,7 +1319,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (ring_name, update_type) (intune_update_ring_rollback_active_ratio)",
+          "expr": "sum by (ring_name, update_type) (intune_update_ring_rollback_active_ratio{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{ring_name}} / {{update_type}}"
         }
       ],
@@ -1368,7 +1368,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (profile_name) (intune_driver_update_pending_approval)",
+          "expr": "sum by (profile_name) (intune_driver_update_pending_approval{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{profile_name}}"
         }
       ],
@@ -1430,7 +1430,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "avg by (category, health_state) (intune_uxa_score)",
+          "expr": "avg by (category, health_state) (intune_uxa_score{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{category}} / {{health_state}}"
         }
       ],
@@ -1472,7 +1472,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (app_name) (intune_uxa_app_crash_count)",
+          "expr": "sum by (app_name) (intune_uxa_app_crash_count{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{app_name}}"
         }
       ],
@@ -1520,7 +1520,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, restart_category) (rate(intune_uxa_boot_time_ms_bucket[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le, restart_category) (rate(intune_uxa_boot_time_ms_bucket{tenant_id=~\"$tenant\"}[5m])))",
           "legendFormat": "p95 {{restart_category}}"
         }
       ],
@@ -1564,7 +1564,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, restart_category) (rate(intune_uxa_login_time_ms_bucket[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le, restart_category) (rate(intune_uxa_login_time_ms_bucket{tenant_id=~\"$tenant\"}[5m])))",
           "legendFormat": "p95 {{restart_category}}"
         }
       ],
@@ -1621,7 +1621,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(intune_malware_overview_detected_devices)",
+          "expr": "sum(intune_malware_overview_detected_devices{tenant_id=~\"$tenant\"})",
           "legendFormat": "detected devices"
         },
         {
@@ -1629,7 +1629,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(intune_malware_overview_total)",
+          "expr": "sum(intune_malware_overview_total{tenant_id=~\"$tenant\"})",
           "legendFormat": "total"
         }
       ],
@@ -1671,7 +1671,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (severity) (intune_malware_overview_by_severity)",
+          "expr": "sum by (severity) (intune_malware_overview_by_severity{tenant_id=~\"$tenant\"})",
           "legendFormat": "severity={{severity}}"
         },
         {
@@ -1679,7 +1679,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (category) (intune_malware_overview_by_category)",
+          "expr": "sum by (category) (intune_malware_overview_by_category{tenant_id=~\"$tenant\"})",
           "legendFormat": "category={{category}}"
         }
       ],
@@ -1727,7 +1727,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (signal) (intune_defender_protection_state)",
+          "expr": "sum by (signal) (intune_defender_protection_state{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{signal}}"
         }
       ],
@@ -1775,7 +1775,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (status) (intune_defender_product_status)",
+          "expr": "sum by (status) (intune_defender_product_status{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{status}}"
         }
       ],
@@ -1836,7 +1836,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "intune_apple_token_days_until_expiry",
+          "expr": "intune_apple_token_days_until_expiry{tenant_id=~\"$tenant\"}",
           "legendFormat": "{{token_name}} ({{type}}, {{state}})"
         }
       ],
@@ -1898,7 +1898,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (token_name) (intune_apple_token_synced_device_count)",
+          "expr": "sum by (token_name) (intune_apple_token_synced_device_count{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{token_name}}"
         }
       ],
@@ -1959,7 +1959,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (connector_type, state) (intune_connector_state)",
+          "expr": "sum by (connector_type, state) (intune_connector_state{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{connector_type}} / {{state}}"
         }
       ],
@@ -2007,7 +2007,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "intune_connector_heartbeat_age_seconds",
+          "expr": "intune_connector_heartbeat_age_seconds{tenant_id=~\"$tenant\"}",
           "legendFormat": "{{connector_type}}"
         }
       ],
@@ -2050,7 +2050,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (platform, enabled) (intune_connector_mtd_platform_total)",
+          "expr": "sum by (platform, enabled) (intune_connector_mtd_platform_total{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{platform}} / enabled={{enabled}}"
         }
       ],
@@ -2111,7 +2111,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "intune_certificate_days_until_expiry",
+          "expr": "intune_certificate_days_until_expiry{tenant_id=~\"$tenant\"}",
           "legendFormat": "{{cert_profile_name}} ({{expiry_bucket}}, {{state}})"
         }
       ],
@@ -2173,7 +2173,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (state) (intune_certificate_state_count)",
+          "expr": "sum by (state) (intune_certificate_state_count{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{state}}"
         }
       ],
@@ -2235,7 +2235,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (config_type) (intune_enrollment_config_count)",
+          "expr": "sum by (config_type) (intune_enrollment_config_count{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{config_type}}"
         }
       ],
@@ -2283,7 +2283,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "intune_enrollment_config_priority_ratio",
+          "expr": "intune_enrollment_config_priority_ratio{tenant_id=~\"$tenant\"}",
           "legendFormat": "{{config_type}} / {{config_name}}"
         }
       ],
@@ -2315,7 +2315,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "intune_enrollment_config_version_ratio",
+          "expr": "intune_enrollment_config_version_ratio{tenant_id=~\"$tenant\"}",
           "legendFormat": "{{config_name}}"
         }
       ],
@@ -2351,6 +2351,31 @@
         "refresh": 1,
         "regex": "",
         "type": "datasource"
+      },
+      {
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(intune_devices_count, tenant_id)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Tenant",
+        "multi": true,
+        "name": "tenant",
+        "options": [],
+        "query": {
+          "query": "label_values(intune_devices_count, tenant_id)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
       }
     ]
   },

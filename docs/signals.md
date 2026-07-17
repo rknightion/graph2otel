@@ -140,15 +140,29 @@ counter-example worth knowing:
 
 ## Multi-tenant labeling
 
-**Domain telemetry (`entra.*`, `intune.*`, `m365.*`, `purview.*`) does NOT carry a
-`tenant_id` attribute today — neither metrics nor logs.** Only the self-observability
-signals do (`graph2otel.scrape.*`, `graph2otel.license.*`, the graphclient HTTP counters).
-There is one MeterProvider per process, `tenant_id` is not a resource attribute, and
-neither the emitter nor the scheduler injects anything into domain records — their
-labels/attributes are exactly what the collector passed. Do **not** filter domain-metric
-dashboard panels by `tenant_id`; the query returns no data, always (this exact mistake
-shipped in `entra-compliance-overview.json` — #143). How multi-tenant separation should
-work on domain signals is #143's open decision.
+**Every signal carries a `tenant_id` attribute** — domain and self-observability, metrics
+and logs alike (#143). Filtering or grouping any panel by `tenant_id` works.
+
+graph2otel runs one Scheduler per configured tenant, and `telemetry.WithTenant` stamps the
+tenant at the emitter boundary, so it reaches all 58 collectors without any of them knowing
+about it. Two exceptions worth knowing:
+
+- **A single-tenant deploy that configures no tenant id stamps nothing.** Empty means "no
+  tenant configured", so the attribute is simply absent rather than blank — series are
+  byte-identical to a pre-#143 build.
+- **`tenant_id` is always the tenant graph2otel polled**, never a tenant named inside a
+  record. `/security/alerts_v2` and `/security/incidents` carry their own `tenantId` field;
+  it holds the same value (live-measured 2026-07-17, #143), and graph2otel deliberately
+  does not map it — the emitter owns the key.
+
+This is a metric label, so it changes series identity: `intune_compliance_devices{state="compliant"}`
+is now per-tenant. That is the point. Before #143 there was one MeterProvider, one resource,
+and no tenant anywhere on a domain metric, so two tenants' identical series collided and
+interleaved — a multi-tenant deploy got a meaningless number rather than a coarse one.
+
+Why this does not violate the cardinality rule: `tenant_id` grows with the number of tenants
+an operator **deliberately configured**, not with tenant size. The [cardinality
+rule](#cardinality-shape) forbids the latter.
 
 ## License/beta gating
 

@@ -26,6 +26,26 @@
         "hide": 0,
         "label": "Data source",
         "refresh": 1
+      },
+      {
+        "name": "tenant",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(tenant_id)",
+          "refId": "tenant"
+        },
+        "definition": "label_values(tenant_id)",
+        "current": {},
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "label": "Tenant",
+        "refresh": 2,
+        "sort": 1
       }
     ]
   },
@@ -101,7 +121,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (type) (entra_directory_objects_total)",
+          "expr": "sum by (type) (entra_directory_objects_total{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{type}}",
           "refId": "A"
         }
@@ -147,7 +167,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (account_enabled, user_type) (entra_users_total)",
+          "expr": "sum by (account_enabled, user_type) (entra_users_total{tenant_id=~\"$tenant\"})",
           "legendFormat": "enabled={{account_enabled}} type={{user_type}}",
           "refId": "A"
         }
@@ -193,7 +213,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (group_type, membership_type, security_enabled, mail_enabled) (entra_groups_total)",
+          "expr": "sum by (group_type, membership_type, security_enabled, mail_enabled) (entra_groups_total{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{group_type}}/{{membership_type}} sec={{security_enabled}} mail={{mail_enabled}}",
           "refId": "A"
         }
@@ -239,7 +259,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (trust_type) (entra_devices_total)",
+          "expr": "sum by (trust_type) (entra_devices_total{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{trust_type}}",
           "refId": "A"
         }
@@ -298,7 +318,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (threshold_days) (entra_users_stale_total)",
+          "expr": "sum by (threshold_days) (entra_users_stale_total{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{threshold_days}}d",
           "refId": "A"
         }
@@ -344,7 +364,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (threshold_days) (entra_devices_stale_total)",
+          "expr": "sum by (threshold_days) (entra_devices_stale_total{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{threshold_days}}d",
           "refId": "A"
         }
@@ -403,7 +423,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (sku) (entra_license_consumed)",
+          "expr": "sum by (sku) (entra_license_consumed{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{sku}}",
           "refId": "A"
         }
@@ -449,7 +469,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (sku) (entra_license_enabled)",
+          "expr": "sum by (sku) (entra_license_enabled{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{sku}}",
           "refId": "A"
         }
@@ -513,7 +533,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (expiry_bucket) (entra_credentials_expiring_total)",
+          "expr": "sum by (expiry_bucket) (entra_credentials_expiring_total{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{expiry_bucket}}",
           "refId": "A"
         }
@@ -559,7 +579,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (owner_type, credential_type) (entra_credentials_expiring_total)",
+          "expr": "sum by (owner_type, credential_type) (entra_credentials_expiring_total{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{owner_type}}/{{credential_type}}",
           "refId": "A"
         }
@@ -618,7 +638,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (state) (entra_ca_policies_total)",
+          "expr": "sum by (state) (entra_ca_policies_total{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{state}}",
           "refId": "A"
         }
@@ -664,7 +684,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (type, is_trusted) (entra_named_locations_total)",
+          "expr": "sum by (type, is_trusted) (entra_named_locations_total{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{type}} trusted={{is_trusted}}",
           "refId": "A"
         }
@@ -723,7 +743,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (role_name) (entra_roles_members_total)",
+          "expr": "sum by (role_name) (entra_roles_members_total{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{role_name}}",
           "refId": "A"
         }
@@ -769,7 +789,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (role_name, assignment_type) (entra_pim_assignments_total)",
+          "expr": "sum by (role_name, assignment_type) (entra_pim_assignments_total{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{role_name}}/{{assignment_type}}",
           "refId": "A"
         }
@@ -815,7 +835,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (role_name) (entra_pim_permanent_assignments_total)",
+          "expr": "sum by (role_name) (entra_pim_permanent_assignments_total{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{role_name}}",
           "refId": "A"
         }
@@ -873,7 +893,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "avg(entra_secure_score_percentage_percent)",
+          "expr": "avg(entra_secure_score_percentage_percent{tenant_id=~\"$tenant\"})",
           "refId": "A"
         }
       ]
@@ -918,7 +938,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "avg(entra_secure_score_current) or avg(entra_secure_score_max)",
+          "expr": "avg(entra_secure_score_current{tenant_id=~\"$tenant\"}) or avg(entra_secure_score_max{tenant_id=~\"$tenant\"})",
           "legendFormat": "current/max",
           "refId": "A"
         }
@@ -964,7 +984,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (category) (entra_secure_score_control_profiles_by_category)",
+          "expr": "sum by (category) (entra_secure_score_control_profiles_by_category{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{category}}",
           "refId": "A"
         }
@@ -1010,7 +1030,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (status) (entra_secure_score_control_profiles_by_status)",
+          "expr": "sum by (status) (entra_secure_score_control_profiles_by_status{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{status}}",
           "refId": "A"
         }
@@ -1069,7 +1089,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (status) (entra_mfa_registration_users_total)",
+          "expr": "sum by (status) (entra_mfa_registration_users_total{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{status}}",
           "refId": "A"
         }
@@ -1115,7 +1135,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (method) (entra_mfa_registration_methods_total)",
+          "expr": "sum by (method) (entra_mfa_registration_methods_total{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{method}}",
           "refId": "A"
         }
@@ -1161,7 +1181,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (is_admin) (entra_mfa_registration_admin_mfa_capable_total)",
+          "expr": "sum by (is_admin) (entra_mfa_registration_admin_mfa_capable_total{tenant_id=~\"$tenant\"})",
           "legendFormat": "admin={{is_admin}}",
           "refId": "A"
         }
@@ -1220,7 +1240,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (risk_level, risk_state) (entra_risky_users_total)",
+          "expr": "sum by (risk_level, risk_state) (entra_risky_users_total{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{risk_level}}/{{risk_state}}",
           "refId": "A"
         }
@@ -1266,7 +1286,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (risk_level, risk_state) (entra_risky_service_principals_total)",
+          "expr": "sum by (risk_level, risk_state) (entra_risky_service_principals_total{tenant_id=~\"$tenant\"})",
           "legendFormat": "{{risk_level}}/{{risk_state}}",
           "refId": "A"
         }

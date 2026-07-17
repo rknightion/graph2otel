@@ -101,8 +101,22 @@ func mapAlert(rec map[string]any) (string, telemetry.Event) {
 	setStr(attrs, "determination", str(rec, "determination"))
 	setStr(attrs, "classification", str(rec, "classification"))
 	setStr(attrs, "provider_alert_id", str(rec, "providerAlertId"))
-	setStr(attrs, "tenant_id", str(rec, "tenantId"))
 	setStr(attrs, "incident_id", str(rec, "incidentId"))
+
+	// The record's own `tenantId` is deliberately NOT emitted (#143).
+	//
+	// It is not Microsoft's tenant or a third party's — it is OURS. Live-measured
+	// 2026-07-17 (#143): every row from /security/alerts_v2 on m7kni carried
+	// tenantId byte-equal to the poller's own AZURE_TENANT_ID (10/10 rows across
+	// alerts_v2 and incidents; n is small and the tenant is single, so treat
+	// "always equals ours" as strong rather than proven). That is exactly what
+	// telemetry.WithTenant now stamps on every record from this Scheduler, so
+	// mapping the wire field would emit the same key with the same value from a
+	// second, hand-rolled writer.
+	//
+	// Dropping it therefore loses no information — this is not a #114 "bucketed
+	// the count and discarded the entity" drop. Do not re-add it: a per-collector
+	// writer for a key the emitter owns is how the two would eventually disagree.
 
 	if evidence, ok := rec["evidence"].([]any); ok {
 		attrs["evidence_count"] = len(evidence)

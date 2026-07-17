@@ -34,11 +34,25 @@ original names or omit suffixes — adjust the query if yours differs.
 
 ## Multi-tenant
 
-Every metric carries a `tenant_id` label. Every rule groups `by (tenant_id,
-…)` (or aggregates `by (tenant_id)` alone), so a rule fires **per tenant** —
-one alert instance per tenant crossing the threshold, not one alert for the
-whole fleet. The `{{ $labels.tenant_id }}` annotation template surfaces which
-tenant is affected.
+Every metric carries a `tenant_id` label — domain and self-observability alike
+(#143). Every rule groups `by (tenant_id, …)` (or aggregates `by (tenant_id)`
+alone), so a rule fires **per tenant** — one alert instance per tenant crossing
+the threshold, not one alert for the whole fleet. The `{{ $labels.tenant_id }}`
+annotation template surfaces which tenant is affected.
+
+The one exception: a deployment that configures **no tenant id** stamps no
+label, and every `by (tenant_id)` rule collapses to a single unnamed group. That
+is correct for a single-tenant deploy — the group is the whole deployment — but
+it means `{{ $labels.tenant_id }}` renders empty. Configure a tenant id to get it
+back.
+
+This was not always true. Before #143 the label existed on `graph2otel.*` only,
+so the six domain rules below grouped by a label their metrics did not have.
+`sum by (tenant_id)` on a label-less metric does not return nothing — it collapses
+to one unlabeled group and keeps firing — so the rules worked on one tenant and
+would have silently blended a second one into the same number. The ratio rules
+(`intune-compliance-ratio`, `intune-noncompliant-spike`) are where that mattered:
+a blended compliance percentage is a wrong number, not a missing one.
 
 ## `datasourceUid`
 

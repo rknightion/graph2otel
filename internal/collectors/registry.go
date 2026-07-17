@@ -37,11 +37,15 @@ type GraphClient interface {
 type Deps struct {
 	// Graph is the per-tenant Graph client the collector polls through.
 	Graph GraphClient
-	// TenantID is the tenant this collector instance serves. NOTHING downstream
-	// injects it into emitted telemetry: the scheduler adds tenant_id to its own
-	// self-obs metrics only, so a domain metric's labels and a domain log's
-	// attributes are exactly what the collector passes (#143). Do not assume
-	// tenant labeling happens for you.
+	// TenantID is the tenant this collector instance serves. It is for the
+	// collector's OWN use — building per-tenant URLs, blob prefixes, checkpoint
+	// keys — not for labeling telemetry.
+	//
+	// Do NOT put it on an emitted metric or log yourself: telemetry.WithTenant
+	// stamps semconv.AttrTenantID on every record leaving the Scheduler's emitter
+	// (#143), so a collector that also sets it is a second writer for a key the
+	// emitter owns. entra/securityalerts and entra/securityincidents used to do
+	// exactly that, from Microsoft's wire field, and both were removed.
 	TenantID string
 	// Logger is the process logger, for collector-side diagnostics.
 	Logger *slog.Logger

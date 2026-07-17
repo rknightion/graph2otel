@@ -77,7 +77,6 @@ func TestMapAlertHighSeverity(t *testing.T) {
 		"determination":     "unknownFutureValue",
 		"classification":    "unknown",
 		"provider_alert_id": "provider-guid-1",
-		"tenant_id":         "tenant-guid-1",
 		"incident_id":       "incident-1",
 		"evidence_count":    2,
 	}
@@ -204,3 +203,30 @@ func TestCollectorDrainsEmitsAndPersistsWatermark(t *testing.T) {
 // margin the engine trails the watermark by when EndpointConfig.SafetyLag is
 // left at its default.
 const logpipelineDefaultSafetyLag = 15 * time.Minute
+
+// TestWireTenantIDIsNotEmitted pins the #143 delete.
+//
+// The Graph record carries its own `tenantId`, and this mapper used to pass it
+// through as the `tenant_id` attribute. That field is not Microsoft's tenant or
+// a third party's — it is OURS: live-measured 2026-07-17 (#143), every row from
+// /security/alerts_v2 on m7kni carried tenantId byte-equal to the poller's own
+// AZURE_TENANT_ID. telemetry.WithTenant now stamps exactly that key with exactly
+// that value on every record leaving this Scheduler, so the wire field is a
+// second, hand-rolled writer for a key the emitter owns.
+//
+// The fixture below still SUPPLIES tenantId, which is the point: it proves the
+// mapper ignores it rather than that the test forgot to set it.
+func TestWireTenantIDIsNotEmitted(t *testing.T) {
+	_, ev := mapAlert(map[string]any{
+		"id":       "alert-1",
+		"title":    "t",
+		"severity": "high",
+		"status":   "newAlert",
+		"tenantId": "tenant-guid-1",
+	})
+	if got, present := ev.Attrs["tenant_id"]; present {
+		t.Errorf("mapAlert emitted tenant_id = %v from the wire record.\n"+
+			"telemetry.WithTenant owns that key (#143); a per-collector writer for it is how the\n"+
+			"two eventually disagree. Do not re-add it.", got)
+	}
+}

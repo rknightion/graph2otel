@@ -213,10 +213,22 @@ func setupTenant(
 	// the three exportjob collectors stamp themselves (exportjob emits no logs, so
 	// report_export has no engine seam — see appinstallreport.Collect).
 	//
-	// Self-obs is unaffected: emitScrapeMetrics and emitCheckpointPersistError
-	// emit metrics only, and the decorator is log-only by design (#82).
+	// Self-obs is unaffected by the transport stamp: emitScrapeMetrics and
+	// emitCheckpointPersistError emit metrics only, and that decorator is
+	// log-only by design (#82).
+	//
+	// WithTenant (#143) wraps outermost and is the mirror image: it stamps
+	// METRICS as well as logs, because without it two tenants' domain metrics are
+	// the same series rather than merely unsliceable. It is the same seam for the
+	// same reason — the Scheduler is the one place that reaches all 58 collectors
+	// — and collector.WithTenant below already gave the Scheduler this tenant for
+	// self-obs labels and checkpoint namespacing. Self-obs metrics reach the
+	// decorator already stamped by selfObsAttrs with the identical value, and the
+	// first stamp wins, so they are unchanged.
 	sched := collector.NewScheduler(
-		telemetry.WithTransport(emitter, telemetry.TransportGraph), collector.NewMemoryStore(),
+		telemetry.WithTenant(
+			telemetry.WithTransport(emitter, telemetry.TransportGraph), ta.TenantID),
+		collector.NewMemoryStore(),
 		collector.WithTenant(ta.TenantID),
 		collector.WithStatusTracker(status),
 		collector.WithLogger(tlog),

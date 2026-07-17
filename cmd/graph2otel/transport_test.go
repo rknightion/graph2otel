@@ -34,3 +34,31 @@ func TestSchedulerGetsTheGraphTransportBaseline(t *testing.T) {
 			"and an operator filtering by transport silently misses them (#141).", want)
 	}
 }
+
+// TestSchedulerGetsTheTenantBaseline guards the composition-root line that makes
+// every domain signal tenant-attributable (#143).
+//
+// Same weakness and same justification as the transport test above: setupTenant
+// needs a live credential to reach a Scheduler, so this proves the line is
+// present, not that it works — internal/telemetry's tenant tests prove the
+// behavior, including the parse-the-interface gate that stops a new Emitter
+// method shipping unstamped.
+//
+// What makes it worth having anyway: this is the ONLY place a tenant reaches
+// domain telemetry. Drop this wrap and nothing else in the tree fails — every
+// collector still emits, every test still passes, and two tenants' metrics
+// quietly become one series again. That is the failure this line exists to
+// prevent, so it is exactly the line worth pinning.
+func TestSchedulerGetsTheTenantBaseline(t *testing.T) {
+	src, err := os.ReadFile("tenants.go")
+	if err != nil {
+		t.Fatalf("reading tenants.go: %v", err)
+	}
+	const want = "telemetry.WithTenant("
+	if !strings.Contains(string(src), want) {
+		t.Errorf("the Scheduler is not handed a tenant-stamped emitter: expected %s.\n"+
+			"Without it, domain metrics carry no tenant_id — and because there is one MeterProvider\n"+
+			"and one resource for the process, two tenants' identical series collide and interleave.\n"+
+			"A multi-tenant deploy then reports a meaningless number, not a coarse one (#143).", want)
+	}
+}
