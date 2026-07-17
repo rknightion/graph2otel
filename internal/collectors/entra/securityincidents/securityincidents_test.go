@@ -2,6 +2,7 @@ package securityincidents
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -35,93 +36,234 @@ func depsWith(t *testing.T, f *recordingFetcher) collectors.WindowDeps {
 	}
 }
 
-// fullIncidentRecord returns the richest incident record this package has:
-// every field mapIncident reads that the live collector can actually receive,
-// plus the wire `tenantId` the mapper deliberately ignores (#143).
+// liveIncidentRecord is a VERBATIM GET /security/incidents record from the m7kni
+// tenant, read as graph2otel-poller on 2026-07-17 `[live-measured 2026-07-17,
+// #165]`. It is the richest of the five incidents the tenant returned: the only
+// one carrying a non-empty tag array, and one of only two whose createdDateTime
+// and lastUpdateDateTime differ — so it pins both timestamp attributes apart
+// from each other and keeps the composite dedupe id honest.
 //
-// Provenance, stated rather than assumed: this fixture is HAND-WRITTEN, NOT a
-// live capture. "inc-1", "tenant-guid-1" and analyst@contoso.com are
-// placeholders (contoso.com is Microsoft's example domain), the priorityScore of
-// 87 is invented, and no captured /security/incidents record exists in this
-// package's testdata. It is evidence about mapper wiring and about nothing else.
+// It replaces a HAND-WRITTEN fixture ("inc-1", "tenant-guid-1",
+// analyst@contoso.com, an invented priorityScore of 87) derived from Microsoft's
+// resource doc, which could only ever confirm its author's beliefs (#165).
 //
-// `alerts` is deliberately ABSENT, which is why this is the richest record the
-// collector can RECEIVE rather than the richest mapIncident can parse. The
-// grouped-alert ids only exist under $expand=alerts, which this collector never
-// sends (see the package doc), so a fixture carrying them would golden two
-// attributes — alert_ids, alert_count — that no live poll can produce. That is
-// the golden overstating instead of understating; TestMapIncidentExpandedAlerts
-// keeps covering that forward-compatible path at the mapper, where it belongs.
+// Pinning it immediately paid, and the finding is why the fixture reads oddly:
+// the wire has NO `tags` key. All five records carry `customTags` and
+// `systemTags` instead, so mapIncident's strSlice(rec, "tags") line is DEAD on
+// this endpoint and no live poll can produce the `tags` attribute — the same
+// defect as #142's `"platform": "windows"` and #153's invented `riskType`. The
+// mapper is deliberately NOT corrected here; TestLiveRecordCarriesNoWireTagsKey
+// pins the measurement so the fix lands with its own issue and its own evidence.
 //
-// tenantId stays on the record ON PURPOSE — see TestWireTenantIDIsNotEmitted.
-// Its presence is what proves the mapper IGNORES it rather than that a test
-// forgot to set it. Do not remove it to "clean up" the fixture.
+// Trimmed of nothing, so it stays a faithful record of what the endpoint really
+// returns. assignedTo, redirectIncidentId, resolvingComment and summary are null
+// on the wire (nothing is assigned on this tenant), which is why the live record
+// emits no assigned_to attribute. comments, description, incidentWebUrl and
+// lastModifiedBy are real keys mapIncident reads nothing from.
 //
-// Returned from a function rather than shared as a package-level var so no test
-// can mutate the record another test reads.
-func fullIncidentRecord() map[string]any {
-	return map[string]any{
-		"id":                 "inc-1",
-		"createdDateTime":    "2026-07-01T10:00:00Z",
-		"lastUpdateDateTime": "2026-07-01T12:30:00Z",
-		"displayName":        "Impossible travel activity involving one user",
-		"severity":           "high",
-		"status":             "active",
-		"classification":     "truePositive",
-		"determination":      "compromisedAccount",
-		"assignedTo":         "analyst@contoso.com",
-		"tenantId":           "tenant-guid-1",
-		"priorityScore":      float64(87),
-		"tags":               []any{"Priority", "Ransomware"},
+// `alerts` is ABSENT and always will be: the grouped alert ids only exist under
+// $expand=alerts, which this collector never sends (see the package doc), so a
+// fixture carrying them would golden two attributes — alert_ids, alert_count —
+// that no live poll can produce. That is the golden OVERSTATING rather than
+// understating; TestMapIncidentExpandedAlerts keeps covering that
+// forward-compatible path at the mapper, where it belongs.
+//
+// tenantId stays on the record ON PURPOSE and holds OUR tenant, not Microsoft's
+// (#143) — see TestWireTenantIDIsNotEmitted. Its presence is what proves the
+// mapper IGNORES it rather than that a test forgot to set it.
+const liveIncidentRecord = `{
+  "assignedTo": null,
+  "classification": "unknown",
+  "comments": [],
+  "createdDateTime": "2026-07-13T19:41:59.3Z",
+  "customTags": [],
+  "description": "Malware and unwanted software are undesirable applications that perform annoying, disruptive, or harmful actions on affected machines. Some of these undesirable applications can replicate and spread from one machine to another. Others are able to receive commands from remote attackers and perform activities associated with cyber attacks.\n\nThis detection might indicate that the malware was stopped from delivering its payload. However, it is prudent to check the machine for signs of infection.",
+  "determination": "unknown",
+  "displayName": "'EICAR_Test_File' malware was prevented",
+  "id": "14",
+  "incidentWebUrl": "https://security.microsoft.com/incident2/14/overview?tid=4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+  "lastModifiedBy": "Microsoft 365 Defender-IncidentCreation",
+  "lastUpdateDateTime": "2026-07-13T19:42:19.98Z",
+  "priorityScore": 3,
+  "redirectIncidentId": null,
+  "resolvingComment": null,
+  "severity": "informational",
+  "status": "active",
+  "summary": null,
+  "systemTags": [
+    "Security Testing"
+  ],
+  "tenantId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32"
+}`
+
+// liveHighSeverityIncident is a second VERBATIM record from the same 2026-07-17
+// m7kni read `[live-measured 2026-07-17, #165]` — the only one of the five with
+// severity "high". It is pinned so the high -> SeverityError mapping is asserted
+// against a severity string the endpoint really emits: the richest record above
+// is "informational", and dropping this case rather than re-homing it would have
+// quietly deleted the only coverage of the Error branch.
+const liveHighSeverityIncident = `{
+  "assignedTo": null,
+  "classification": "unknown",
+  "comments": [],
+  "createdDateTime": "2026-07-16T23:08:53.59Z",
+  "customTags": [],
+  "description": "More than 28 logs from data source GENERIC_CEF have failed parsing in the last 25 hours.\nVerify that no changes were made to the export configuration of your GENERIC_CEF appliance and that the log format matches the expected format. Go to the governance log page for more details. For more information see https://docs.microsoft.com/en-us/cloud-app-security/troubleshooting-cloud-discovery.",
+  "determination": "unknown",
+  "displayName": "System alert: Cloud Discovery log-processing error",
+  "id": "15",
+  "incidentWebUrl": "https://security.microsoft.com/incident2/15/overview?tid=4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+  "lastModifiedBy": "Microsoft 365 Defender-IncidentCreation",
+  "lastUpdateDateTime": "2026-07-16T23:08:53.59Z",
+  "priorityScore": 25,
+  "redirectIncidentId": null,
+  "resolvingComment": null,
+  "severity": "high",
+  "status": "active",
+  "summary": null,
+  "systemTags": [],
+  "tenantId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32"
+}`
+
+// decodeLive unmarshals a pinned live record into the untyped shape the
+// logpipeline engine hands to the mapper. Decoding rather than hand-building a
+// map[string]any is the point: it reproduces the engine's own JSON decode, so
+// priorityScore arrives as float64 and a null assignedTo as nil, exactly as they
+// do in production.
+//
+// Returns a fresh map per call so no test can mutate the record another reads.
+func decodeLive(t *testing.T, raw string) map[string]any {
+	t.Helper()
+	var rec map[string]any
+	if err := json.Unmarshal([]byte(raw), &rec); err != nil {
+		t.Fatalf("decode live record: %v", err)
 	}
+	return rec
 }
 
-// TestMapIncidentHighSeverity asserts a representative incident record maps to
-// the expected composite dedupe id, event name, key attributes, priority score,
-// tags slice, and that a "high" severity maps the log record's own Severity to
-// Error.
-func TestMapIncidentHighSeverity(t *testing.T) {
-	rec := fullIncidentRecord()
+// TestMapIncidentLiveRecord asserts the live incident record maps to the
+// expected composite dedupe id, event name, key attributes and priority score.
+//
+// Every value below is the wire's, not an author's. The composite dedupe id uses
+// lastUpdateDateTime (19:42:19.98Z), NOT createdDateTime (19:41:59.3Z) — this
+// record is one of the two in the capture where the two timestamps actually
+// differ, so confusing them here fails rather than passing by coincidence.
+func TestMapIncidentLiveRecord(t *testing.T) {
+	rec := decodeLive(t, liveIncidentRecord)
 
 	id, ev := mapIncident(rec)
-	if id != "inc-1#2026-07-01T12:30:00Z" {
+	if id != "14#2026-07-13T19:42:19.98Z" {
 		t.Fatalf("dedupe id = %q, want composite id#lastUpdateDateTime", id)
 	}
 	if ev.Name != eventName {
 		t.Fatalf("event name = %q, want %q", ev.Name, eventName)
 	}
-	if ev.Severity != telemetry.SeverityError {
-		t.Errorf("severity for incident severity=high = %v, want SeverityError", ev.Severity)
+	// "informational" is the live severity, and it is the default branch: not
+	// high (Error), not medium/low (Warn). TestMapIncidentHighSeverityIsError
+	// covers the Error branch on the live "high" record.
+	if ev.Severity != telemetry.SeverityInfo {
+		t.Errorf("severity for incident severity=informational = %v, want SeverityInfo", ev.Severity)
 	}
 
 	// The clean incident id (not the composite) is what lands in attrs.
-	if got := ev.Attrs["id"]; got != "inc-1" {
-		t.Errorf("attr id = %v, want inc-1 (the clean incident id, not the composite dedupe id)", got)
+	if got := ev.Attrs["id"]; got != "14" {
+		t.Errorf("attr id = %v, want 14 (the clean incident id, not the composite dedupe id)", got)
 	}
 	wantStr := map[string]any{
-		"display_name":     "Impossible travel activity involving one user",
-		"severity":         "high",
+		"display_name":     "'EICAR_Test_File' malware was prevented",
+		"severity":         "informational",
 		"status":           "active",
-		"classification":   "truePositive",
-		"determination":    "compromisedAccount",
-		"assigned_to":      "analyst@contoso.com",
-		"created_time":     "2026-07-01T10:00:00Z",
-		"last_update_time": "2026-07-01T12:30:00Z",
+		"classification":   "unknown",
+		"determination":    "unknown",
+		"created_time":     "2026-07-13T19:41:59.3Z",
+		"last_update_time": "2026-07-13T19:42:19.98Z",
 	}
 	for k, want := range wantStr {
 		if got := ev.Attrs[k]; got != want {
 			t.Errorf("attr %q = %v, want %v", k, got, want)
 		}
 	}
-	if got := ev.Attrs["priority_score"]; got != 87 {
-		t.Errorf("attr priority_score = %v (%T), want int 87", got, got)
+	// 3, not the old hand-written 87. priorityScore decodes as float64 and must
+	// still land as an int attribute.
+	if got := ev.Attrs["priority_score"]; got != 3 {
+		t.Errorf("attr priority_score = %v (%T), want int 3", got, got)
 	}
-	tags, ok := ev.Attrs["tags"].([]string)
-	if !ok || len(tags) != 2 || tags[0] != "Priority" || tags[1] != "Ransomware" {
-		t.Errorf("attr tags = %v, want []string{Priority, Ransomware}", ev.Attrs["tags"])
+	// assignedTo is null on the wire (nothing is assigned on this tenant), so the
+	// attribute must be omitted rather than emitted empty.
+	if got, present := ev.Attrs["assigned_to"]; present {
+		t.Errorf("attr assigned_to = %v, want it ABSENT — assignedTo is null on the wire", got)
 	}
-	if !strings.Contains(ev.Body, "Impossible travel") || !strings.Contains(ev.Body, "high") || !strings.Contains(ev.Body, "active") {
+	if !strings.Contains(ev.Body, "EICAR_Test_File") || !strings.Contains(ev.Body, "informational") || !strings.Contains(ev.Body, "active") {
 		t.Errorf("body = %q, want it to summarize displayName/severity/status", ev.Body)
+	}
+}
+
+// TestMapIncidentHighSeverityIsError asserts a "high" severity maps the log
+// record's own Severity to Error, driven by the live "high" record rather than a
+// hand-written severity string.
+func TestMapIncidentHighSeverityIsError(t *testing.T) {
+	_, ev := mapIncident(decodeLive(t, liveHighSeverityIncident))
+
+	if ev.Severity != telemetry.SeverityError {
+		t.Errorf("severity for incident severity=high = %v, want SeverityError", ev.Severity)
+	}
+	if got := ev.Attrs["severity"]; got != "high" {
+		t.Errorf("attr severity = %v, want high (kept verbatim from the wire)", got)
+	}
+	if got := ev.Attrs["id"]; got != "15" {
+		t.Errorf("attr id = %v, want 15", got)
+	}
+	if got := ev.Attrs["priority_score"]; got != 25 {
+		t.Errorf("attr priority_score = %v (%T), want int 25", got, got)
+	}
+}
+
+// TestLiveRecordCarriesNoWireTagsKey pins the #165 measurement that the fixture
+// swap found: /security/incidents does NOT send a `tags` key. All five records
+// read from m7kni on 2026-07-17 carry `customTags` and `systemTags` instead, so
+// mapIncident's strSlice(rec, "tags") is dead on this endpoint and the `tags`
+// attribute is unreachable from any live poll.
+//
+// This test asserts the WIRE SHAPE, deliberately not a corrected mapper. It
+// fails the day either the endpoint starts sending `tags` or the mapper is fixed
+// to read the real keys — both of which are exactly when someone should be
+// looking at this. Until then it stops the next reader concluding from the
+// mapper source that `tags` is a thing this collector ships.
+//
+// The hand-written fixture it replaced asserted `tags: ["Priority","Ransomware"]`
+// mapped through and was green for the life of the package. That is what a
+// fixture written from documentation buys: it confirms the belief that wrote it.
+// Same class as #142 and #153.
+func TestLiveRecordCarriesNoWireTagsKey(t *testing.T) {
+	for name, raw := range map[string]string{
+		"richest": liveIncidentRecord,
+		"high":    liveHighSeverityIncident,
+	} {
+		t.Run(name, func(t *testing.T) {
+			rec := decodeLive(t, raw)
+
+			if _, present := rec["tags"]; present {
+				t.Errorf("live record carries a `tags` key: %v.\n"+
+					"The 2026-07-17 capture had none on any of 5 records. If the endpoint now "+
+					"sends it, mapIncident's strSlice(rec, \"tags\") is live after all — retire this test.", rec["tags"])
+			}
+			for _, k := range []string{"customTags", "systemTags"} {
+				if _, present := rec[k]; !present {
+					t.Errorf("live record is missing the real wire key %q — re-capture before trusting this fixture", k)
+				}
+			}
+
+			// The consequence, pinned at the mapper: no tags attribute is
+			// reachable. Do NOT "fix" this by pointing strSlice at customTags /
+			// systemTags without an issue and a live re-measure — they are two
+			// distinct fields with different semantics (operator-set vs
+			// Defender-set), and collapsing them into one `tags` attribute is a
+			// data-model decision, not a typo fix.
+			_, ev := mapIncident(rec)
+			if got, present := ev.Attrs["tags"]; present {
+				t.Errorf("mapIncident emitted tags = %v from a record with no wire `tags` key", got)
+			}
+		})
 	}
 }
 
@@ -335,10 +477,10 @@ func TestEmitsNoMetrics(t *testing.T) {
 	}
 }
 
-// TestCollectorEmitsFullRecordEndToEnd drives the richest record this package
-// has (fullIncidentRecord) through the real logpipeline engine into an emitter,
-// rather than calling mapIncident directly the way TestMapIncidentHighSeverity
-// does.
+// TestCollectorEmitsFullRecordEndToEnd drives the richest LIVE record this
+// package has (liveIncidentRecord) through the real logpipeline engine into an
+// emitter, rather than calling mapIncident directly the way
+// TestMapIncidentLiveRecord does.
 //
 // It exists for #164, and the golden is the point. The signal gate
 // (internal/signalcapture) records the union of what a package's tests EMIT.
@@ -349,20 +491,29 @@ func TestEmitsNoMetrics(t *testing.T) {
 // created_time, priority_score — and an attribute absent from the golden cannot
 // drift: those four could be renamed or dropped without the gate noticing.
 //
+// #165 then replaced the rich record itself with a live capture, which is what
+// makes this golden a measurement rather than a restatement of the fixture
+// author's beliefs. Note what the live record does NOT emit: no `tags` (the wire
+// has no such key — see TestLiveRecordCarriesNoWireTagsKey) and no `assigned_to`
+// (null on the wire). Both keys survive in testdata/signals.json ONLY because
+// hand-written records in TestEmitsNoMetrics still emit them; no live poll can.
+//
 // tenant_id is deliberately NOT expected below, and its absence here is correct
 // twice over. The mapper ignores the wire field (#143), and this Recorder's
 // emitter is bare — telemetry.WithTenant wraps it in the real Scheduler, not
 // here. The golden documents what the COLLECTOR emits; tenant_id is stamped
 // above it. Do not wrap the emitter to force it into this golden.
 func TestCollectorEmitsFullRecordEndToEnd(t *testing.T) {
-	f := &recordingFetcher{records: []map[string]any{fullIncidentRecord()}}
+	f := &recordingFetcher{records: []map[string]any{decodeLive(t, liveIncidentRecord)}}
 	rec := telemetrytest.New()
 	c := newCollector(depsWith(t, f))
 
-	// The window must straddle lastUpdateDateTime, not createdDateTime: this
-	// collector watermarks on the former (see the package doc's update-aware
-	// watermark section) and the engine's gt/lt bounds are strict.
-	from := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	// The window must straddle lastUpdateDateTime (19:42:19.98Z), not
+	// createdDateTime (19:41:59.3Z): this collector watermarks on the former (see
+	// the package doc's update-aware watermark section) and the engine's gt/lt
+	// bounds are strict. The live record is one of the two in the capture where
+	// those two timestamps differ, so the distinction is load-bearing here.
+	from := time.Date(2026, 7, 13, 19, 30, 0, 0, time.UTC)
 	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter()); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
@@ -384,15 +535,14 @@ func TestCollectorEmitsFullRecordEndToEnd(t *testing.T) {
 	// composite "<id>#<lastUpdateDateTime>" — the composite is an engine-internal
 	// key and must never reach the wire.
 	wantAttrs := map[string]string{
-		"id":               "inc-1",
-		"display_name":     "Impossible travel activity involving one user",
-		"severity":         "high",
+		"id":               "14",
+		"display_name":     "'EICAR_Test_File' malware was prevented",
+		"severity":         "informational",
 		"status":           "active",
-		"classification":   "truePositive",
-		"determination":    "compromisedAccount",
-		"assigned_to":      "analyst@contoso.com",
-		"created_time":     "2026-07-01T10:00:00Z",
-		"last_update_time": "2026-07-01T12:30:00Z",
+		"classification":   "unknown",
+		"determination":    "unknown",
+		"created_time":     "2026-07-13T19:41:59.3Z",
+		"last_update_time": "2026-07-13T19:42:19.98Z",
 	}
 	for k, want := range wantAttrs {
 		if v := got.Attrs[k]; v != want {
@@ -400,18 +550,27 @@ func TestCollectorEmitsFullRecordEndToEnd(t *testing.T) {
 		}
 	}
 
-	// priority_score (int) and tags ([]string) are checked for PRESENCE only,
-	// and their values are pinned at the mapper instead
-	// (TestMapIncidentHighSeverity).
+	// priority_score (int) is checked for PRESENCE only, and its value is pinned
+	// at the mapper instead (TestMapIncidentLiveRecord).
 	//
-	// Not an oversight, and do not "fix" it by asserting values: telemetrytest
+	// Not an oversight, and do not "fix" it by asserting the value: telemetrytest
 	// .Recorder flattens every log attribute through log.Value.AsString(), which
 	// yields "" for any non-string Kind. The recorder cannot represent an int or
 	// a slice attribute's value — a limit of the test harness, not of the
 	// emission.
-	for _, k := range []string{"priority_score", "tags"} {
-		if _, present := got.Attrs[k]; !present {
-			t.Errorf("emitted attrs missing %q", k)
+	if _, present := got.Attrs["priority_score"]; !present {
+		t.Errorf("emitted attrs missing %q", "priority_score")
+	}
+
+	// The two attributes the live record proves are NOT reachable from the wire.
+	// `tags` is unreachable for every record (/security/incidents sends
+	// customTags/systemTags, never tags — TestLiveRecordCarriesNoWireTagsKey);
+	// assigned_to is unreachable for THIS record only (assignedTo is null — an
+	// assigned incident would emit it). Asserting their absence is what stops the
+	// old hand-written expectations creeping back in.
+	for _, k := range []string{"tags", "assigned_to"} {
+		if v, present := got.Attrs[k]; present {
+			t.Errorf("emitted attr %q = %q, want it ABSENT — the live record carries no value for it", k, v)
 		}
 	}
 
