@@ -130,19 +130,16 @@ type scriptListItem struct {
 
 // scriptRunSummary is the deviceManagementScriptRunSummary resource -
 // shared by both deviceManagementScripts (Windows PowerShell) and
-// deviceShellScripts (macOS shell), per Microsoft's own schema.
+// deviceShellScripts (macOS shell), per Microsoft's own schema. The runSummary
+// GET returns these fields at the TOP LEVEL of the body (an OData $entity) -
+// no "value" envelope, contra the docs' worked example
+// (live-measured 2026-07-17, #165/#174) - so this decodes directly against
+// the response, the same as settingscatalog's singletons.
 type scriptRunSummary struct {
 	SuccessDeviceCount int64 `json:"successDeviceCount"`
 	ErrorDeviceCount   int64 `json:"errorDeviceCount"`
 	SuccessUserCount   int64 `json:"successUserCount"`
 	ErrorUserCount     int64 `json:"errorUserCount"`
-}
-
-// scriptRunSummaryEnvelope is how Graph wraps the runSummary singleton GET -
-// a bare "value" object, not the "value": [...] array envelope a collection
-// page uses (verified against the documented example response).
-type scriptRunSummaryEnvelope struct {
-	Value scriptRunSummary `json:"value"`
 }
 
 // healthScriptRunSummary is the deviceHealthScriptRunSummary resource: a
@@ -163,22 +160,15 @@ type healthScriptRunSummary struct {
 	IssueRemediatedCumulativeDeviceCount    int64 `json:"issueRemediatedCumulativeDeviceCount"`
 }
 
-type healthScriptRunSummaryEnvelope struct {
-	Value healthScriptRunSummary `json:"value"`
-}
-
 // remediationOverview is the tenant-wide deviceHealthScriptRemediationSummary
 // singleton returned by getRemediationSummary() on the deviceHealthScripts
 // collection itself (not per-script) - a cheap, Microsoft-aggregated
 // cross-check, the same role managedDeviceOverview plays in
-// internal/collectors/intune/manageddevices.
+// internal/collectors/intune/manageddevices. Also a top-level, envelope-free
+// body - same wire shape as scriptRunSummary above.
 type remediationOverview struct {
 	ScriptCount           int64 `json:"scriptCount"`
 	RemediatedDeviceCount int64 `json:"remediatedDeviceCount"`
-}
-
-type remediationOverviewEnvelope struct {
-	Value remediationOverview `json:"value"`
 }
 
 // Collector polls the beta Intune scripts and proactive-remediation
@@ -311,14 +301,13 @@ func (c *Collector) collectScriptRunSummaries(ctx context.Context, listPath, os 
 			c.logger.Warn("scripts: runSummary fetch failed for script", "collector", collectorName, "os", os, "error", err)
 			continue
 		}
-		var env scriptRunSummaryEnvelope
-		if err := json.Unmarshal(body, &env); err != nil {
+		var rs scriptRunSummary
+		if err := json.Unmarshal(body, &rs); err != nil {
 			c.logger.Warn("scripts: skipping unparseable runSummary", "collector", collectorName, "os", os, "error", err)
 			continue
 		}
 
 		name := orUnknown(item.DisplayName)
-		rs := env.Value
 		pts = append(pts,
 			telemetry.GaugePoint{Value: float64(rs.SuccessDeviceCount), Attrs: telemetry.Attrs{"script_name": name, "os": os, "target": targetDevice, "run_state": runStateSuccess}},
 			telemetry.GaugePoint{Value: float64(rs.ErrorDeviceCount), Attrs: telemetry.Attrs{"script_name": name, "os": os, "target": targetDevice, "run_state": runStateError}},
@@ -358,14 +347,13 @@ func (c *Collector) collectHealthScriptRunSummaries(ctx context.Context) ([]tele
 			c.logger.Warn("scripts: health script runSummary fetch failed", "collector", collectorName, "error", err)
 			continue
 		}
-		var env healthScriptRunSummaryEnvelope
-		if err := json.Unmarshal(body, &env); err != nil {
+		var rs healthScriptRunSummary
+		if err := json.Unmarshal(body, &rs); err != nil {
 			c.logger.Warn("scripts: skipping unparseable health script runSummary", "collector", collectorName, "error", err)
 			continue
 		}
 
 		name := orUnknown(item.DisplayName)
-		rs := env.Value
 		pts = append(pts,
 			telemetry.GaugePoint{Value: float64(rs.NoIssueDetectedDeviceCount), Attrs: telemetry.Attrs{"script_name": name, "phase": phaseDetection, "state": detectionStateNoIssue}},
 			telemetry.GaugePoint{Value: float64(rs.IssueDetectedDeviceCount), Attrs: telemetry.Attrs{"script_name": name, "phase": phaseDetection, "state": detectionStateIssueDetected}},
@@ -392,16 +380,16 @@ func (c *Collector) collectRemediationOverview(ctx context.Context, e telemetry.
 	if err != nil {
 		return err
 	}
-	var env remediationOverviewEnvelope
-	if err := json.Unmarshal(body, &env); err != nil {
+	var ov remediationOverview
+	if err := json.Unmarshal(body, &ov); err != nil {
 		return fmt.Errorf("decode getRemediationSummary: %w", err)
 	}
 	e.Gauge(remediationOverviewScriptCountName, "{script}",
 		"Tenant-wide count of health scripts deployed (getRemediationSummary() cross-check).",
-		float64(env.Value.ScriptCount), nil)
+		float64(ov.ScriptCount), nil)
 	e.Gauge(remediationOverviewRemediatedName, "{device}",
 		"Tenant-wide count of devices remediated by health scripts (getRemediationSummary() cross-check).",
-		float64(env.Value.RemediatedDeviceCount), nil)
+		float64(ov.RemediatedDeviceCount), nil)
 	return nil
 }
 

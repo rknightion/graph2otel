@@ -47,36 +47,33 @@ const (
 // fullFixture wires a fake Graph client with one script on each of the three
 // surfaces plus the tenant-wide remediation overview singleton.
 //
-// WARNING: the runSummary / getRemediationSummary bodies here are wrapped in a
-// bare {"value":{…}} object to match the collector's scriptRunSummaryEnvelope /
-// healthScriptRunSummaryEnvelope / remediationOverviewEnvelope decode structs.
-// That wrapper is DOCS-DERIVED, not the live wire shape. The real endpoints
-// return the runSummary/remediationSummary fields at the TOP LEVEL of the body
-// (an OData $entity), with no "value" wrapper — see the verbatim captures in
-// TestCollectAgainstLiveCapturesExposesRunSummaryEnvelopeDefect. These
-// synthetic fixtures still earn their keep: with distinct non-zero counts they
-// pin the field→attribute wiring (which count lands on which os/target/phase/
-// state), which the all-zero live tenant cannot exercise. But they do NOT prove
-// the envelope decode is correct — and it is not (#165 finding).
+// The runSummary / getRemediationSummary bodies here carry their fields at
+// the TOP LEVEL of the body (an OData $entity, no "value" wrapper) - the
+// confirmed live wire shape (live-measured 2026-07-17, #165/#174; see the
+// verbatim captures in TestCollectAgainstLiveCapturesDecodesTopLevelCounts).
+// These synthetic fixtures earn their keep with distinct non-zero counts:
+// they pin the field→attribute wiring (which count lands on which
+// os/target/phase/state), which the mostly-zero live captures can't exercise
+// on their own.
 func fullFixture() *fakeGraph {
 	return &fakeGraph{bodies: map[string]string{
 		windowsListURL: `{"value":[{"id":"win-1","displayName":"Rename Local Admin"}]}`,
-		winRunSummaryURL: `{"value":{"@odata.type":"#microsoft.graph.deviceManagementScriptRunSummary",
-			"id":"rs1","successDeviceCount":10,"errorDeviceCount":2,"successUserCount":0,"errorUserCount":1}}`,
+		winRunSummaryURL: `{"@odata.type":"#microsoft.graph.deviceManagementScriptRunSummary",
+			"id":"rs1","successDeviceCount":10,"errorDeviceCount":2,"successUserCount":0,"errorUserCount":1}`,
 		macListURL: `{"value":[{"id":"mac-1","displayName":"Install Rosetta"}]}`,
-		macRunSummaryURL: `{"value":{"@odata.type":"#microsoft.graph.deviceManagementScriptRunSummary",
-			"id":"rs2","successDeviceCount":5,"errorDeviceCount":0,"successUserCount":0,"errorUserCount":0}}`,
+		macRunSummaryURL: `{"@odata.type":"#microsoft.graph.deviceManagementScriptRunSummary",
+			"id":"rs2","successDeviceCount":5,"errorDeviceCount":0,"successUserCount":0,"errorUserCount":0}`,
 		healthListURL: `{"value":[{"id":"health-1","displayName":"Fix Disk Space"}]}`,
-		healthRunSummary1: `{"value":{"@odata.type":"#microsoft.graph.deviceHealthScriptRunSummary",
+		healthRunSummary1: `{"@odata.type":"#microsoft.graph.deviceHealthScriptRunSummary",
 			"id":"hrs1",
 			"noIssueDetectedDeviceCount":100,"issueDetectedDeviceCount":8,
 			"detectionScriptErrorDeviceCount":1,"detectionScriptPendingDeviceCount":2,
 			"detectionScriptNotApplicableDeviceCount":3,
 			"issueRemediatedDeviceCount":6,"remediationSkippedDeviceCount":1,
 			"issueReoccurredDeviceCount":1,"remediationScriptErrorDeviceCount":0,
-			"issueRemediatedCumulativeDeviceCount":42}}`,
-		remediationSumURL: `{"value":{"@odata.type":"microsoft.graph.deviceHealthScriptRemediationSummary",
-			"scriptCount":11,"remediatedDeviceCount":5}}`,
+			"issueRemediatedCumulativeDeviceCount":42}`,
+		remediationSumURL: `{"@odata.type":"microsoft.graph.deviceHealthScriptRemediationSummary",
+			"scriptCount":11,"remediatedDeviceCount":5}`,
 	}}
 }
 
@@ -281,28 +278,22 @@ var (
 // captured (its displayName is "Restart stopped Office C2R svc").
 const firstHealthScriptID = "02a4e7e8-195a-4824-8044-08b3a7f2d555"
 
-// TestCollectAgainstLiveCapturesExposesRunSummaryEnvelopeDefect drives the
-// VERBATIM live captures through the real Collect path and pins what the
-// collector ACTUALLY emits from them.
+// TestCollectAgainstLiveCapturesDecodesTopLevelCounts drives the VERBATIM live
+// captures through the real Collect path and pins what the collector emits
+// from them.
 //
-// It documents a live-measured defect (#165): every runSummary /
-// getRemediationSummary count decodes to ZERO, because the collector wraps the
-// decode in a {"value":{…}} envelope (scripts.go scriptRunSummaryEnvelope /
-// healthScriptRunSummaryEnvelope / remediationOverviewEnvelope) but the live
-// singletons return their fields at the TOP LEVEL of the body — there is no
-// "value" key to descend into, so json leaves the inner struct zero-valued.
+// This is the regression pin for #165/#174: the live singletons return their
+// fields at the TOP LEVEL of the body (an OData $entity), with no "value" key
+// to descend into. Before the fix, the collector unwrapped a nonexistent
+// {"value":{…}} envelope, so every count silently decoded to zero:
 //
-//   - live-healthScript-runSummary.json carries noIssueDetectedDeviceCount=3 on
-//     the wire; the emitted detection/no_issue point is 0.
-//   - live-remediationSummary.json carries scriptCount=12 on the wire; the
-//     emitted overview script_count is 0.
+//   - live-healthScript-runSummary.json carries noIssueDetectedDeviceCount=3
+//     on the wire.
+//   - live-remediationSummary.json carries scriptCount=12 on the wire.
 //
-// This test asserts those ZEROS on purpose: it is the regression pin for the
-// defect, not an endorsement of it. When the envelope decode is corrected, this
-// test SHOULD fail and be updated to the real wire counts. The attribute-KEY
-// set is still asserted in full (independent of the broken values), so the
-// field→attribute wiring stays covered here too.
-func TestCollectAgainstLiveCapturesExposesRunSummaryEnvelopeDefect(t *testing.T) {
+// This test asserts those TRUE wire values, so a regression back to the
+// envelope-unwrap shape fails it again.
+func TestCollectAgainstLiveCapturesDecodesTopLevelCounts(t *testing.T) {
 	healthRunSummaryURL := "https://graph.microsoft.com/beta/deviceManagement/deviceHealthScripts/" + firstHealthScriptID + "/runSummary"
 	g := &fakeGraph{bodies: map[string]string{
 		windowsListURL:      liveWindowsScriptsEmpty,
@@ -342,43 +333,42 @@ func TestCollectAgainstLiveCapturesExposesRunSummaryEnvelopeDefect(t *testing.T)
 	}
 
 	// The one captured health-script runSummary emits its full 9 (phase,state)
-	// point set — correct KEYS — but every VALUE is 0 due to the envelope defect.
+	// point set, with the true wire values: only noIssueDetectedDeviceCount is
+	// non-zero (3), everything else on this capture is 0.
 	rem := pointsByKey(rec.MetricPoints(remediationSummaryMetric), "script_name", "phase", "state")
-	wantKeys := []string{
-		"Restart stopped Office C2R svc/detection/no_issue/",
-		"Restart stopped Office C2R svc/detection/issue_detected/",
-		"Restart stopped Office C2R svc/detection/error/",
-		"Restart stopped Office C2R svc/detection/pending/",
-		"Restart stopped Office C2R svc/detection/not_applicable/",
-		"Restart stopped Office C2R svc/remediation/remediated/",
-		"Restart stopped Office C2R svc/remediation/skipped/",
-		"Restart stopped Office C2R svc/remediation/reoccurred/",
-		"Restart stopped Office C2R svc/remediation/error/",
+	wantPoints := map[string]float64{
+		"Restart stopped Office C2R svc/detection/no_issue/":       3,
+		"Restart stopped Office C2R svc/detection/issue_detected/": 0,
+		"Restart stopped Office C2R svc/detection/error/":          0,
+		"Restart stopped Office C2R svc/detection/pending/":        0,
+		"Restart stopped Office C2R svc/detection/not_applicable/": 0,
+		"Restart stopped Office C2R svc/remediation/remediated/":   0,
+		"Restart stopped Office C2R svc/remediation/skipped/":      0,
+		"Restart stopped Office C2R svc/remediation/reoccurred/":   0,
+		"Restart stopped Office C2R svc/remediation/error/":        0,
 	}
-	for _, k := range wantKeys {
+	for k, want := range wantPoints {
 		v, ok := rem[k]
 		if !ok {
 			t.Errorf("remediation.summary missing point %q", k)
 			continue
 		}
-		// DEFECT (#165): the wire body carries noIssueDetectedDeviceCount=3, but
-		// the {"value":{…}} envelope decode never reaches it, so this is 0.
-		if v != 0 {
-			t.Errorf("remediation.summary %q = %v; live captures currently decode to 0 via the envelope defect — if this is now non-zero the decode was fixed, update this pin", k, v)
+		if v != want {
+			t.Errorf("remediation.summary %q = %v, want %v (true wire value)", k, v, want)
 		}
 	}
 
-	// The 30-day cumulative point for the captured script — also 0 via the defect.
+	// The 30-day cumulative point for the captured script — 0 on this capture
+	// (issueRemediatedCumulativeDeviceCount is genuinely 0 on the wire).
 	cum := rec.MetricPoints(remediationCumulativeMetric)
 	if len(cum) != 1 || cum[0].Attrs["script_name"] != "Restart stopped Office C2R svc" || cum[0].Value != 0 {
-		t.Errorf("cumulative = %+v, want one point for the captured script, value 0 (envelope defect)", cum)
+		t.Errorf("cumulative = %+v, want one point for the captured script, value 0", cum)
 	}
 
-	// getRemediationSummary cross-check: wire scriptCount=12, remediatedDeviceCount=0;
-	// both emit 0 through the same envelope defect.
+	// getRemediationSummary cross-check: wire scriptCount=12, remediatedDeviceCount=0.
 	sc := rec.MetricPoints(remediationOverviewScriptCountName)
-	if len(sc) != 1 || sc[0].Value != 0 {
-		t.Errorf("overview script_count = %+v; wire carried scriptCount=12 but the envelope defect emits 0 — a non-zero here means the decode was fixed, update this pin", sc)
+	if len(sc) != 1 || sc[0].Value != 12 {
+		t.Errorf("overview script_count = %+v, want one point value 12 (true wire value)", sc)
 	}
 	rd := rec.MetricPoints(remediationOverviewRemediatedName)
 	if len(rd) != 1 || rd[0].Value != 0 {
