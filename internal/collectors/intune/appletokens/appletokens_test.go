@@ -41,29 +41,112 @@ const (
 )
 
 // fixedNow is the deterministic clock every test computes expiry offsets
-// against, mirroring the devices reference collector's fixedClock.
+// against, mirroring the devices reference collector's fixedClock. It predates
+// the live captures below so their days-until-expiry come out positive.
 var fixedNow = time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 
 func fixedClock() time.Time { return fixedNow }
 
-func rfc3339(offsetDays int) string {
-	return fixedNow.Add(time.Duration(offsetDays) * 24 * time.Hour).Format(time.RFC3339)
+// Verbatim GET captures read as graph2otel-poller against the m7kni tenant on
+// 2026-07-17 `[live-measured 2026-07-17, #165]`, each from the exact endpoint
+// this collector polls. Trimmed of nothing (each is a single-element source on
+// this tenant), so they stay a faithful record of what the endpoints return.
+//
+//   - liveAPNSBody: GET /v1.0/deviceManagement/applePushNotificationCertificate,
+//     the tenant-wide singleton. Note `certificateUploadStatus` is null on the
+//     wire even though the certificate is configured (expirationDateTime,
+//     certificateSerialNumber and topicIdentifier are all present) — so the
+//     emitted state bucket resolves to "unknown", not the docs-implied "Valid".
+//   - liveVPPBody: GET /v1.0/deviceAppManagement/vppTokens (1 token). The
+//     appleId is a corporate email, kept verbatim per the #165 PII rule.
+//   - liveDEPBody: GET /beta/deviceManagement/depOnboardingSettings (1 setting;
+//     beta — no v1.0 equivalent exists). The appleIdentifier corporate email is
+//     kept verbatim.
+const (
+	liveAPNSBody = `{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#deviceManagement/applePushNotificationCertificate/$entity",
+  "appleIdentifier": "rob@rob-knight.com",
+  "certificate": null,
+  "certificateSerialNumber": "6DBBD018B25C7F76",
+  "certificateUploadFailureReason": null,
+  "certificateUploadStatus": null,
+  "expirationDateTime": "2026-09-11T14:39:25Z",
+  "id": "daa5f155-cc30-43d2-80d7-a38731207a3b",
+  "lastModifiedDateTime": "2026-07-17T15:30:26Z",
+  "topicIdentifier": "com.apple.mgmt.External.4d2db6f6-bec4-48d8-8f23-8e902e1276fb"
+}`
+
+	liveVPPBody = `{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#deviceAppManagement/vppTokens",
+  "value": [
+    {
+      "appleId": "rob@m7kni.io",
+      "automaticallyUpdateApps": true,
+      "countryOrRegion": "gb",
+      "expirationDateTime": "2026-09-25T17:09:22Z",
+      "id": "bfc6fbf0-788f-47ba-86c2-0f784b986ef1",
+      "lastModifiedDateTime": "2026-07-17T14:50:53.5002993Z",
+      "lastSyncDateTime": "2026-07-17T14:50:53.4972449Z",
+      "lastSyncStatus": "completed",
+      "organizationName": "FLICKTO LTD",
+      "state": "valid",
+      "token": null,
+      "vppTokenAccountType": "business"
+    }
+  ]
+}`
+
+	liveDEPBody = `{
+  "@odata.context": "https://graph.microsoft.com/beta/$metadata#deviceManagement/depOnboardingSettings",
+  "@odata.count": 1,
+  "value": [
+    {
+      "appleIdentifier": "rob@rob-knight.co.uk",
+      "dataSharingConsentGranted": true,
+      "id": "e19cd98d-79c5-4be7-8bfa-93bd298ea801",
+      "lastModifiedDateTime": "2025-09-19T16:50:51.5063355Z",
+      "lastSuccessfulSyncDateTime": "2026-07-17T11:44:03.2967172Z",
+      "lastSyncErrorCode": 0,
+      "lastSyncTriggeredDateTime": "2026-07-17T11:44:00.3449091Z",
+      "roleScopeTagIds": [
+        "0"
+      ],
+      "shareTokenWithSchoolDataSyncService": false,
+      "syncedDeviceCount": 7,
+      "tokenExpirationDateTime": "2026-09-19T16:49:50Z",
+      "tokenName": "intune",
+      "tokenType": "dep"
+    }
+  ]
+}`
+)
+
+// Absolute expiry timestamps on the live captures above, used to compute the
+// expected days-until-expiry against fixedNow exactly as the mapper does.
+const (
+	liveAPNSExpiry = "2026-09-11T14:39:25Z"
+	liveVPPExpiry  = "2026-09-25T17:09:22Z"
+	liveDEPExpiry  = "2026-09-19T16:49:50Z"
+)
+
+// liveDays computes days-until-expiry the same way daysUntil does, so the
+// assertions track the live timestamps rather than hard-coded offsets.
+func liveDays(t *testing.T, expiry string) float64 {
+	t.Helper()
+	end, err := time.Parse(time.RFC3339, expiry)
+	if err != nil {
+		t.Fatalf("parse live expiry %q: %v", expiry, err)
+	}
+	return end.Sub(fixedNow).Hours() / 24
 }
 
-// fullFixture is a self-consistent set of canned bodies: one APNS
-// certificate 45 days out, two VPP tokens (one healthy at 200 days, one
-// assignedToExternalMDM at 10 days — non-functional even though not
-// expired), and one DEP onboarding setting at 300 days with a clean sync.
+// fullFixture wires the three verbatim live captures to the URLs this collector
+// polls: one APNS certificate, one VPP token, and one DEP onboarding setting.
 func fullFixture() map[string]string {
 	return map[string]string{
-		apnsURL: `{"expirationDateTime":"` + rfc3339(45) + `","certificateUploadStatus":"Valid"}`,
-		vppURL: `{"value":[
-			{"organizationName":"Acme Corp","expirationDateTime":"` + rfc3339(200) + `","state":"valid"},
-			{"organizationName":"Acme EDU","expirationDateTime":"` + rfc3339(10) + `","state":"assignedToExternalMDM"}
-		]}`,
-		depURL: `{"value":[
-			{"tokenName":"Corp DEP","tokenExpirationDateTime":"` + rfc3339(300) + `","lastSyncErrorCode":0,"syncedDeviceCount":42}
-		]}`,
+		apnsURL: liveAPNSBody,
+		vppURL:  liveVPPBody,
+		depURL:  liveDEPBody,
 	}
 }
 
@@ -94,15 +177,17 @@ func TestCollectEmitsDaysUntilExpiryForAllThreeTypes(t *testing.T) {
 		}{p.Value, p.Attrs["state"]}
 	}
 
+	// The live APNS certificate ships certificateUploadStatus:null, so its
+	// state bucket is "unknown" — a configured, non-expired cert whose upload
+	// status the tenant simply does not report, not a "Valid" one.
 	cases := []struct {
 		k         key
 		wantDays  float64
 		wantState string
 	}{
-		{key{"apns", ""}, 45, "Valid"},
-		{key{"vpp", "Acme Corp"}, 200, "valid"},
-		{key{"vpp", "Acme EDU"}, 10, "assignedToExternalMDM"},
-		{key{"dep", "Corp DEP"}, 300, "ok"},
+		{key{"apns", ""}, liveDays(t, liveAPNSExpiry), "unknown"},
+		{key{"vpp", "FLICKTO LTD"}, liveDays(t, liveVPPExpiry), "valid"},
+		{key{"dep", "intune"}, liveDays(t, liveDEPExpiry), "ok"},
 	}
 	for _, c := range cases {
 		v, ok := got[c.k]
@@ -131,11 +216,11 @@ func TestCollectEmitsDEPSyncedDeviceCount(t *testing.T) {
 	if len(points) != 1 {
 		t.Fatalf("synced_device_count points = %d, want 1: %+v", len(points), points)
 	}
-	if points[0].Value != 42 {
-		t.Errorf("synced_device_count = %v, want 42", points[0].Value)
+	if points[0].Value != 7 {
+		t.Errorf("synced_device_count = %v, want 7", points[0].Value)
 	}
-	if points[0].Attrs["token_name"] != "Corp DEP" {
-		t.Errorf("token_name = %q, want %q", points[0].Attrs["token_name"], "Corp DEP")
+	if points[0].Attrs["token_name"] != "intune" {
+		t.Errorf("token_name = %q, want %q", points[0].Attrs["token_name"], "intune")
 	}
 }
 
