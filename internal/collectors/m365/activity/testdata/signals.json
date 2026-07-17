@@ -1,0 +1,31 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "m365.audit",
+      "AttrKeys": [
+        "actor_ids",
+        "azure_ad_event_type",
+        "client_ip",
+        "extended_property_names",
+        "extended_property_values",
+        "id",
+        "ingest_transport",
+        "modified_property_names",
+        "object_id",
+        "operation",
+        "organization_id",
+        "record_type",
+        "record_type_id",
+        "result_status",
+        "service",
+        "user_key",
+        "user_principal_name",
+        "user_type",
+        "user_type_id",
+        "version",
+        "workload"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "entra.signin",
+      "AttrKeys": [
+        "app_display_name",
+        "app_id",
+        "client_app_used",
+        "conditional_access_status",
+        "correlation_id",
+        "id",
+        "ingest_transport",
+        "ip_address",
+        "location_country_or_region",
+        "resource_display_name",
+        "resource_id",
+        "risk_level_during_sign_in",
+        "risk_state",
+        "service_principal_id",
+        "service_principal_name",
+        "sign_in_event_types",
+        "status_error_code",
+        "status_failure_reason",
+        "user_principal_name"
+      ]
+    }
+  ]
+}

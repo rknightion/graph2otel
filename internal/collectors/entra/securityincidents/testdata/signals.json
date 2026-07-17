@@ -1,0 +1,18 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "entra.security_incident",
+      "AttrKeys": [
+        "assigned_to",
+        "display_name",
+        "id",
+        "ingest_transport",
+        "last_update_time",
+        "severity",
+        "status",
+        "tags"
+      ]
+    }
+  ]
+}

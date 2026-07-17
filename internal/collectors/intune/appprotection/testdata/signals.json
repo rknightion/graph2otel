@@ -1,0 +1,36 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.app_protection.flagged_registrations",
+      "AttrKeys": [
+        "flagged_reason",
+        "platform"
+      ]
+    },
+    {
+      "Name": "intune.app_protection.policy.count",
+      "AttrKeys": [
+        "assigned",
+        "platform"
+      ]
+    },
+    {
+      "Name": "intune.wip.policy.count",
+      "AttrKeys": [
+        "assigned"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.app_registration",
+      "AttrKeys": [
+        "app_identifier",
+        "device_tag",
+        "flagged_reasons",
+        "platform",
+        "user_id"
+      ]
+    }
+  ]
+}

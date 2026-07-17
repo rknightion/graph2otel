@@ -1,0 +1,13 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "intune.autopilot_event",
+      "AttrKeys": [
+        "deployment_state",
+        "id",
+        "ingest_transport"
+      ]
+    }
+  ]
+}

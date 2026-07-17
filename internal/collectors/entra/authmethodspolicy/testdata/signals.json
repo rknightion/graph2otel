@@ -1,0 +1,15 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.auth_methods_policy.legacy_enabled.total",
+      "AttrKeys": []
+    },
+    {
+      "Name": "entra.auth_methods_policy.method.enabled",
+      "AttrKeys": [
+        "method"
+      ]
+    }
+  ],
+  "Logs": null
+}

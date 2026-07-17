@@ -1,0 +1,33 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.intent.count",
+      "AttrKeys": [
+        "migrating"
+      ]
+    },
+    {
+      "Name": "intune.intent.devices",
+      "AttrKeys": [
+        "compliance_status",
+        "intent_name"
+      ]
+    },
+    {
+      "Name": "intune.security_baseline.devices",
+      "AttrKeys": [
+        "baseline_name",
+        "state"
+      ]
+    },
+    {
+      "Name": "intune.settings_catalog.policy.count",
+      "AttrKeys": [
+        "platform",
+        "technology",
+        "template_family"
+      ]
+    }
+  ],
+  "Logs": null
+}

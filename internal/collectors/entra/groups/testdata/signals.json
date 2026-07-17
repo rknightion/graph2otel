@@ -1,0 +1,18 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.groups.role_assignable.total",
+      "AttrKeys": []
+    },
+    {
+      "Name": "entra.groups.total",
+      "AttrKeys": [
+        "group_type",
+        "mail_enabled",
+        "membership_type",
+        "security_enabled"
+      ]
+    }
+  ],
+  "Logs": null
+}

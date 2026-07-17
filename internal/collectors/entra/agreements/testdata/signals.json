@@ -1,0 +1,16 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.agreements.acceptances.total",
+      "AttrKeys": [
+        "agreement",
+        "state"
+      ]
+    },
+    {
+      "Name": "entra.agreements.total",
+      "AttrKeys": []
+    }
+  ],
+  "Logs": null
+}

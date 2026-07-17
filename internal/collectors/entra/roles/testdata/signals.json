@@ -1,0 +1,40 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.pim.assignments.total",
+      "AttrKeys": [
+        "assignment_type",
+        "role_name"
+      ]
+    },
+    {
+      "Name": "entra.pim.permanent_assignments.total",
+      "AttrKeys": [
+        "role_name"
+      ]
+    },
+    {
+      "Name": "entra.roles.members.total",
+      "AttrKeys": [
+        "role_name"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "entra.role_member",
+      "AttrKeys": [
+        "assignment_type",
+        "end_date_time",
+        "permanent",
+        "principal_app_id",
+        "principal_display_name",
+        "principal_id",
+        "principal_type",
+        "principal_user_principal_name",
+        "role_id",
+        "role_name"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.risky_service_principals.total",
+      "AttrKeys": [
+        "risk_level",
+        "risk_state"
+      ]
+    },
+    {
+      "Name": "entra.risky_users.total",
+      "AttrKeys": [
+        "risk_level",
+        "risk_state"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "entra.risky_service_principal",
+      "AttrKeys": [
+        "app_id",
+        "display_name",
+        "id",
+        "risk_detail",
+        "risk_last_updated",
+        "risk_level",
+        "risk_state",
+        "service_principal_type"
+      ]
+    },
+    {
+      "EventName": "entra.risky_user",
+      "AttrKeys": [
+        "id",
+        "is_processing",
+        "risk_detail",
+        "risk_last_updated",
+        "risk_level",
+        "risk_state",
+        "user_display_name",
+        "user_principal_name"
+      ]
+    }
+  ]
+}

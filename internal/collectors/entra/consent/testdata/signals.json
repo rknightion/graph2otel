@@ -1,0 +1,31 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.consent.grants.total",
+      "AttrKeys": [
+        "consent_type",
+        "privilege"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "entra.consent_grant",
+      "AttrKeys": [
+        "app_role",
+        "app_role_id",
+        "client_id",
+        "consent_type",
+        "id",
+        "principal_display_name",
+        "principal_id",
+        "principal_type",
+        "privilege",
+        "resource_display_name",
+        "resource_id",
+        "resource_label",
+        "scope"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.defender_agents.count",
+      "AttrKeys": [
+        "signal"
+      ]
+    },
+    {
+      "Name": "intune.defender_agents.product_status",
+      "AttrKeys": [
+        "status"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.defender_agent",
+      "AttrKeys": [
+        "device_id",
+        "device_name",
+        "device_state",
+        "device_state_code",
+        "ingest_transport",
+        "malware_protection_enabled",
+        "network_inspection_system_enabled",
+        "product_status",
+        "product_status_code",
+        "real_time_protection_enabled",
+        "signature_update_overdue",
+        "tamper_protection_enabled",
+        "upn"
+      ]
+    }
+  ]
+}

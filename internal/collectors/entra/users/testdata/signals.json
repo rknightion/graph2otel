@@ -1,0 +1,19 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.users.stale.total",
+      "AttrKeys": [
+        "threshold_days"
+      ]
+    },
+    {
+      "Name": "entra.users.total",
+      "AttrKeys": [
+        "account_enabled",
+        "on_premises_sync_enabled",
+        "user_type"
+      ]
+    }
+  ],
+  "Logs": null
+}

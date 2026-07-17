@@ -1,0 +1,18 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.recommendations.impacted_resources.total",
+      "AttrKeys": [
+        "recommendation"
+      ]
+    },
+    {
+      "Name": "entra.recommendations.total",
+      "AttrKeys": [
+        "priority",
+        "status"
+      ]
+    }
+  ],
+  "Logs": null
+}

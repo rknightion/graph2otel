@@ -1,0 +1,29 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.app_install_status.installations",
+      "AttrKeys": [
+        "install_state",
+        "platform"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.app_install_status",
+      "AttrKeys": [
+        "app_id",
+        "app_name",
+        "failed_device_count",
+        "ingest_transport",
+        "installed_device_count",
+        "not_applicable_device_count",
+        "not_installed_device_count",
+        "pending_install_device_count",
+        "platform",
+        "platform_code",
+        "publisher"
+      ]
+    }
+  ]
+}

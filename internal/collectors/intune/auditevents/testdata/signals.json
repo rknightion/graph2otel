@@ -1,0 +1,14 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "intune.audit_event",
+      "AttrKeys": [
+        "activity_result",
+        "category",
+        "id",
+        "ingest_transport"
+      ]
+    }
+  ]
+}

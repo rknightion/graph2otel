@@ -1,0 +1,13 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "entra.provisioning",
+      "AttrKeys": [
+        "id",
+        "ingest_transport",
+        "provisioning_action"
+      ]
+    }
+  ]
+}

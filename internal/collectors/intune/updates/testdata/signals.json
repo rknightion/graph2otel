@@ -1,0 +1,58 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.driver_update.pending_approval",
+      "AttrKeys": [
+        "profile_name"
+      ]
+    },
+    {
+      "Name": "intune.driver_update.sync_staleness_seconds",
+      "AttrKeys": [
+        "profile_name"
+      ]
+    },
+    {
+      "Name": "intune.feature_update_profile.eol_target",
+      "AttrKeys": [
+        "feature_update_version",
+        "profile_name"
+      ]
+    },
+    {
+      "Name": "intune.quality_update_config.count",
+      "AttrKeys": [
+        "resource_type"
+      ]
+    },
+    {
+      "Name": "intune.update_ring.pause_expiry_seconds",
+      "AttrKeys": [
+        "ring_name",
+        "update_type"
+      ]
+    },
+    {
+      "Name": "intune.update_ring.pause_state",
+      "AttrKeys": [
+        "ring_name",
+        "update_type"
+      ]
+    },
+    {
+      "Name": "intune.update_ring.rollback_active",
+      "AttrKeys": [
+        "ring_name",
+        "update_type"
+      ]
+    },
+    {
+      "Name": "intune.update_ring.status",
+      "AttrKeys": [
+        "ring_name",
+        "state"
+      ]
+    }
+  ],
+  "Logs": null
+}

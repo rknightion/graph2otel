@@ -1,0 +1,30 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.domains.federated.total",
+      "AttrKeys": []
+    },
+    {
+      "Name": "entra.domains.total",
+      "AttrKeys": [
+        "authentication_type",
+        "is_verified"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "entra.domain",
+      "AttrKeys": [
+        "authentication_type",
+        "id",
+        "is_admin_managed",
+        "is_default",
+        "is_initial",
+        "is_root",
+        "is_verified",
+        "supported_services"
+      ]
+    }
+  ]
+}

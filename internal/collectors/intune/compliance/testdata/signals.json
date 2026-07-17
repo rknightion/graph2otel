@@ -1,0 +1,39 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.compliance.devices",
+      "AttrKeys": [
+        "state"
+      ]
+    },
+    {
+      "Name": "intune.compliance.policy.devices",
+      "AttrKeys": [
+        "policy_name",
+        "state"
+      ]
+    },
+    {
+      "Name": "intune.compliance.policy.users",
+      "AttrKeys": [
+        "policy_name",
+        "state"
+      ]
+    },
+    {
+      "Name": "intune.compliance.policy.version",
+      "AttrKeys": [
+        "policy_name"
+      ]
+    },
+    {
+      "Name": "intune.compliance.setting.devices",
+      "AttrKeys": [
+        "platform",
+        "setting_name",
+        "state"
+      ]
+    }
+  ],
+  "Logs": null
+}

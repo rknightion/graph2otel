@@ -1,0 +1,24 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.enrollment_config.count",
+      "AttrKeys": [
+        "config_type"
+      ]
+    },
+    {
+      "Name": "intune.enrollment_config.priority",
+      "AttrKeys": [
+        "config_name",
+        "config_type"
+      ]
+    },
+    {
+      "Name": "intune.enrollment_config.version",
+      "AttrKeys": [
+        "config_name"
+      ]
+    }
+  ],
+  "Logs": null
+}

@@ -1,0 +1,32 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.credentials.expiring.total",
+      "AttrKeys": [
+        "credential_type",
+        "expiry_bucket",
+        "owner_type"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "entra.app_credential",
+      "AttrKeys": [
+        "app_id",
+        "app_object_id",
+        "credential_display_name",
+        "credential_type",
+        "custom_key_identifier",
+        "display_name",
+        "end_date_time",
+        "expiry_bucket",
+        "key_id",
+        "key_type",
+        "key_usage",
+        "owner_type",
+        "start_date_time"
+      ]
+    }
+  ]
+}

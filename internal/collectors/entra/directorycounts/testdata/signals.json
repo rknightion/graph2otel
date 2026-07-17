@@ -1,0 +1,11 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.directory.objects.total",
+      "AttrKeys": [
+        "type"
+      ]
+    }
+  ],
+  "Logs": null
+}

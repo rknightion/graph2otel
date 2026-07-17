@@ -1,0 +1,57 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.devices.count",
+      "AttrKeys": [
+        "compliance_state",
+        "operating_system"
+      ]
+    },
+    {
+      "Name": "intune.devices.encrypted.count",
+      "AttrKeys": [
+        "operating_system"
+      ]
+    },
+    {
+      "Name": "intune.devices.overview.dual_enrolled_device_count",
+      "AttrKeys": []
+    },
+    {
+      "Name": "intune.devices.overview.enrolled_device_count",
+      "AttrKeys": []
+    },
+    {
+      "Name": "intune.devices.overview.mdm_enrolled_device_count",
+      "AttrKeys": []
+    },
+    {
+      "Name": "intune.devices.overview.total",
+      "AttrKeys": [
+        "os"
+      ]
+    },
+    {
+      "Name": "intune.devices.sync_staleness_seconds",
+      "AttrKeys": [
+        "staleness_bucket"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.managed_device",
+      "AttrKeys": [
+        "compliance_state",
+        "device_name",
+        "id",
+        "is_encrypted",
+        "last_sync_date_time",
+        "operating_system",
+        "serial_number",
+        "staleness_bucket",
+        "user_principal_name"
+      ]
+    }
+  ]
+}

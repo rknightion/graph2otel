@@ -1,0 +1,44 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.autopilot.devices",
+      "AttrKeys": [
+        "enrollment_state",
+        "group_tag"
+      ]
+    },
+    {
+      "Name": "intune.autopilot.profile.assignments",
+      "AttrKeys": [
+        "profile_name"
+      ]
+    },
+    {
+      "Name": "intune.autopilot.profile.count",
+      "AttrKeys": [
+        "device_type",
+        "preprovisioning_allowed"
+      ]
+    },
+    {
+      "Name": "intune.autopilot.profile.esp_timeout_minutes",
+      "AttrKeys": [
+        "profile_name"
+      ]
+    },
+    {
+      "Name": "intune.autopilot.profile.setting",
+      "AttrKeys": [
+        "profile_name",
+        "setting"
+      ]
+    },
+    {
+      "Name": "intune.autopilot.stale_contact.count",
+      "AttrKeys": [
+        "group_tag"
+      ]
+    }
+  ],
+  "Logs": null
+}

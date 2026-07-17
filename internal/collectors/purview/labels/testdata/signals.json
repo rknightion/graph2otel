@@ -1,0 +1,54 @@
+{
+  "Metrics": [
+    {
+      "Name": "purview.labels.count",
+      "AttrKeys": [
+        "applicable_to"
+      ]
+    },
+    {
+      "Name": "purview.retention.event_types.count",
+      "AttrKeys": []
+    },
+    {
+      "Name": "purview.retention.labels.count",
+      "AttrKeys": [
+        "action_after_retention",
+        "behavior_during_retention",
+        "retention_trigger"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "purview.retention_event_type",
+      "AttrKeys": [
+        "description",
+        "id",
+        "name"
+      ]
+    },
+    {
+      "EventName": "purview.retention_label",
+      "AttrKeys": [
+        "action_after_retention",
+        "behavior_during_retention",
+        "description_for_admins",
+        "description_for_users",
+        "id",
+        "name",
+        "retention_trigger"
+      ]
+    },
+    {
+      "EventName": "purview.sensitivity_label",
+      "AttrKeys": [
+        "applicable_to",
+        "description",
+        "id",
+        "name",
+        "priority"
+      ]
+    }
+  ]
+}

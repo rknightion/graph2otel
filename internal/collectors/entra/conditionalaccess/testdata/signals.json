@@ -1,0 +1,18 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.ca.policies.total",
+      "AttrKeys": [
+        "state"
+      ]
+    },
+    {
+      "Name": "entra.named_locations.total",
+      "AttrKeys": [
+        "is_trusted",
+        "type"
+      ]
+    }
+  ],
+  "Logs": null
+}

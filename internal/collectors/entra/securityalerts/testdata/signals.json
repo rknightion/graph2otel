@@ -1,0 +1,16 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "entra.security_alert",
+      "AttrKeys": [
+        "id",
+        "ingest_transport",
+        "service_source",
+        "severity",
+        "status",
+        "title"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.license.consumed",
+      "AttrKeys": [
+        "sku"
+      ]
+    },
+    {
+      "Name": "entra.license.enabled",
+      "AttrKeys": [
+        "sku"
+      ]
+    }
+  ],
+  "Logs": null
+}

@@ -1,0 +1,24 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.config_profile.count",
+      "AttrKeys": [
+        "odata_type"
+      ]
+    },
+    {
+      "Name": "intune.config_profile.status",
+      "AttrKeys": [
+        "profile_name",
+        "state"
+      ]
+    },
+    {
+      "Name": "intune.config_profile.version",
+      "AttrKeys": [
+        "profile_name"
+      ]
+    }
+  ],
+  "Logs": null
+}

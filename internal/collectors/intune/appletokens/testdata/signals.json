@@ -1,0 +1,19 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.apple_token.days_until_expiry",
+      "AttrKeys": [
+        "state",
+        "token_name",
+        "type"
+      ]
+    },
+    {
+      "Name": "intune.apple_token.synced_device_count",
+      "AttrKeys": [
+        "token_name"
+      ]
+    }
+  ],
+  "Logs": null
+}

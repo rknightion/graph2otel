@@ -1,0 +1,16 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.detected_apps.catalog_size",
+      "AttrKeys": []
+    },
+    {
+      "Name": "intune.detected_apps.device_count",
+      "AttrKeys": [
+        "app_name",
+        "platform"
+      ]
+    }
+  ],
+  "Logs": null
+}

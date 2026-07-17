@@ -1,0 +1,27 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.directory.sync.last_sync_age_seconds",
+      "AttrKeys": []
+    },
+    {
+      "Name": "entra.organization.age_days",
+      "AttrKeys": []
+    },
+    {
+      "Name": "entra.organization.info",
+      "AttrKeys": [
+        "tenant_type"
+      ]
+    },
+    {
+      "Name": "entra.organization.on_premises_sync_enabled",
+      "AttrKeys": []
+    },
+    {
+      "Name": "entra.organization.verified_domains.total",
+      "AttrKeys": []
+    }
+  ],
+  "Logs": null
+}

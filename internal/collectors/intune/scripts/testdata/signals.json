@@ -1,0 +1,36 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.remediation.overview.remediated_device_count",
+      "AttrKeys": []
+    },
+    {
+      "Name": "intune.remediation.overview.script_count",
+      "AttrKeys": []
+    },
+    {
+      "Name": "intune.remediation.remediated_cumulative_devices",
+      "AttrKeys": [
+        "script_name"
+      ]
+    },
+    {
+      "Name": "intune.remediation.summary",
+      "AttrKeys": [
+        "phase",
+        "script_name",
+        "state"
+      ]
+    },
+    {
+      "Name": "intune.script.run_summary",
+      "AttrKeys": [
+        "os",
+        "run_state",
+        "script_name",
+        "target"
+      ]
+    }
+  ],
+  "Logs": null
+}

@@ -1,0 +1,40 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.cert_inventory.days_until_expiry",
+      "AttrKeys": [
+        "bucket",
+        "issuer"
+      ]
+    },
+    {
+      "Name": "intune.cert_inventory.state",
+      "AttrKeys": [
+        "state"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.device_certificate",
+      "AttrKeys": [
+        "certificate_status",
+        "device_id",
+        "device_name",
+        "enhanced_key_usage",
+        "ingest_transport",
+        "issuer_name",
+        "key_usage",
+        "policy_id",
+        "serial_number",
+        "state_bucket",
+        "subject_name",
+        "thumbprint",
+        "upn",
+        "user_id",
+        "valid_from",
+        "valid_to"
+      ]
+    }
+  ]
+}

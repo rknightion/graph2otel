@@ -1,0 +1,15 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "m365.audit",
+      "AttrKeys": [
+        "id",
+        "ingest_transport",
+        "operation",
+        "record_type",
+        "service"
+      ]
+    }
+  ]
+}

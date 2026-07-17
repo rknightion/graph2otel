@@ -1,0 +1,35 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.devices.compliance.total",
+      "AttrKeys": [
+        "is_compliant"
+      ]
+    },
+    {
+      "Name": "entra.devices.managed.total",
+      "AttrKeys": [
+        "is_managed"
+      ]
+    },
+    {
+      "Name": "entra.devices.os.total",
+      "AttrKeys": [
+        "operating_system"
+      ]
+    },
+    {
+      "Name": "entra.devices.stale.total",
+      "AttrKeys": [
+        "threshold_days"
+      ]
+    },
+    {
+      "Name": "entra.devices.total",
+      "AttrKeys": [
+        "trust_type"
+      ]
+    }
+  ],
+  "Logs": null
+}

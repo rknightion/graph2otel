@@ -1,0 +1,41 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.mfa.registration.admin_mfa_capable.total",
+      "AttrKeys": [
+        "is_admin"
+      ]
+    },
+    {
+      "Name": "entra.mfa.registration.methods.total",
+      "AttrKeys": [
+        "method"
+      ]
+    },
+    {
+      "Name": "entra.mfa.registration.users.total",
+      "AttrKeys": [
+        "status"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "entra.user_registration",
+      "AttrKeys": [
+        "id",
+        "is_admin",
+        "last_updated",
+        "methods_registered",
+        "mfa_capable",
+        "mfa_registered",
+        "passwordless_capable",
+        "sspr_capable",
+        "sspr_enabled",
+        "sspr_registered",
+        "user_display_name",
+        "user_principal_name"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "entra.directory_audit",
+      "AttrKeys": [
+        "activity_display_name",
+        "category",
+        "id",
+        "ingest_transport",
+        "result"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "intune.enrollment_event",
+      "AttrKeys": [
+        "failure_category",
+        "ingest_transport"
+      ]
+    }
+  ]
+}

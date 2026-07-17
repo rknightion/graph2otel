@@ -1,0 +1,24 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.gpo.config.count",
+      "AttrKeys": [
+        "ingestion_type"
+      ]
+    },
+    {
+      "Name": "intune.gpo.migration_readiness",
+      "AttrKeys": [
+        "readiness",
+        "report_name"
+      ]
+    },
+    {
+      "Name": "intune.gpo.supported_settings_percent",
+      "AttrKeys": [
+        "report_name"
+      ]
+    }
+  ],
+  "Logs": null
+}

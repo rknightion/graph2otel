@@ -1,0 +1,14 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "entra.risk_detection",
+      "AttrKeys": [
+        "id",
+        "ingest_transport",
+        "risk_level",
+        "user_principal_name"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.secure_score.control_profiles.by_category",
+      "AttrKeys": [
+        "category"
+      ]
+    },
+    {
+      "Name": "entra.secure_score.control_profiles.by_status",
+      "AttrKeys": [
+        "status"
+      ]
+    },
+    {
+      "Name": "entra.secure_score.current",
+      "AttrKeys": []
+    },
+    {
+      "Name": "entra.secure_score.max",
+      "AttrKeys": []
+    },
+    {
+      "Name": "entra.secure_score.percentage",
+      "AttrKeys": []
+    }
+  ],
+  "Logs": null
+}

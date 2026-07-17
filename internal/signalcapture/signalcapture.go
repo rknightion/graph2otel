@@ -31,6 +31,8 @@
 package signalcapture
 
 import (
+	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"sort"
@@ -207,6 +209,59 @@ func PerEntityViolations(s Signals) []Violation {
 	return out
 }
 
+// update is the shared -update flag every collector package's TestMain exposes,
+// matching the house pattern (docs/env-vars.md, docs/collectors.md).
+var update = flag.Bool("update", false, "rewrite this package's testdata/signals.json golden")
+
+// Golden writes or verifies a package's captured signals against
+// testdata/signals.json, and is the drift gate #140 asks for: it fails a plain
+// `go test` when a package's real emissions change.
+//
+// Why a golden file per package rather than a check against the doc's prose:
+// docs/collectors.md's signal column is hand-written English with a contextual
+// shorthand — `entra.organization.directory.sync.last_sync_age_seconds`,
+// `.age_days`, `.verified_domains.total` — where the base a `.suffix` hangs off
+// is inferred by the READER, and inferred differently for different entries.
+// It is not machine-parseable without guessing, and a gate that guesses is worse
+// than none (#140). The golden is truth by construction instead: it is produced
+// FROM the emissions, so it cannot describe a signal that does not exist.
+//
+// What a diff here means: you changed what a collector emits. That is often
+// correct — accept it with `-update`. It is a REVIEW prompt, not an error; the
+// point is that it can never happen silently, which is how the doc drifted from
+// reality in the first place.
+func Golden(update bool) error {
+	got := Union(telemetrytest.Live())
+	body, err := json.MarshalIndent(got, "", "  ")
+	if err != nil {
+		return err
+	}
+	body = append(body, '\n')
+
+	const path = "testdata/signals.json"
+	if update {
+		if err := os.MkdirAll("testdata", 0o750); err != nil {
+			return err
+		}
+		return os.WriteFile(path, body, 0o600)
+	}
+
+	want, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("no %s: this package's emitted signals are ungated.\n"+
+				"Create it with: go test ./<this package> -update", path)
+		}
+		return err
+	}
+	if string(want) != string(body) {
+		return fmt.Errorf("emitted signals changed — %s is stale.\n"+
+			"If the change is intended, accept it with: go test ./<this package> -update\n"+
+			"want:\n%s\ngot:\n%s", path, want, body)
+	}
+	return nil
+}
+
 // Main is the one-line TestMain a collector package installs to enforce #112
 // over everything its tests emit:
 //
@@ -219,7 +274,16 @@ func PerEntityViolations(s Signals) []Violation {
 // of #112.
 func Main(m *testing.M) {
 	telemetrytest.StartCapture()
+	if !flag.Parsed() {
+		flag.Parse()
+	}
 	code := m.Run()
+	if code == 0 {
+		if err := Golden(*update); err != nil {
+			fmt.Fprintf(os.Stderr, "\nsignal drift (#140): %v\n\n", err)
+			code = 1
+		}
+	}
 	if code == 0 {
 		if v := PerEntityViolations(Union(telemetrytest.Live())); len(v) > 0 {
 			fmt.Fprintf(os.Stderr, "\n#112 cardinality violation — per-entity data on a metric label.\n"+

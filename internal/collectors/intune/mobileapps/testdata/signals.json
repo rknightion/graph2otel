@@ -1,0 +1,19 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.mobile_app_config.status",
+      "AttrKeys": [
+        "policy_name",
+        "status"
+      ]
+    },
+    {
+      "Name": "intune.mobile_apps.count",
+      "AttrKeys": [
+        "app_type",
+        "publishing_state"
+      ]
+    }
+  ],
+  "Logs": null
+}

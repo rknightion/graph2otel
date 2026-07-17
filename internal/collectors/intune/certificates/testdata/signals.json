@@ -1,0 +1,36 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.certificate.days_until_expiry",
+      "AttrKeys": [
+        "cert_profile_name",
+        "expiry_bucket",
+        "state"
+      ]
+    },
+    {
+      "Name": "intune.certificate.state.count",
+      "AttrKeys": [
+        "state"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.device_certificate",
+      "AttrKeys": [
+        "certificate_profile_name",
+        "device_display_name",
+        "expiration_date_time",
+        "id",
+        "intended_purpose",
+        "issuance_state",
+        "serial_number",
+        "source",
+        "thumbprint",
+        "user_display_name",
+        "user_principal_name"
+      ]
+    }
+  ]
+}
