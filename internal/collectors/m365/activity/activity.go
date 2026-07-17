@@ -33,6 +33,25 @@
 // comments per field. Any attribute added here must be checked against
 // unifiedaudit.mapRecord, and vice versa.
 //
+// # User identity: two identifiers, two names, same meaning on both transports
+//
+// The classic schema carries TWO distinct user identifiers, and this collector
+// and its twin now name them identically (#151):
+//
+//	user_key            <- classic UserKey  (an opaque key)
+//	user_principal_name <- classic UserId   (the UPN, or a live sentinel)
+//
+// The trap is that the query API's top-level `userId` field is NOT the classic
+// UserId — it is the classic UserKey, and its `userPrincipalName` is the classic
+// UserId (live-verified 500/500, 2026-07-17). Taking that field name at face
+// value produced #151: an attribute called `user_id` meaning UserKey on one
+// transport and UserId on the other, with nothing on the record saying which.
+// Both transports map to what the field CONTAINS, not what Microsoft calls it.
+//
+// There is deliberately no `user_id` on either transport. Do not add one back:
+// the name is now ambiguous by history, and both identifiers already ship under
+// names that say what they are.
+//
 // Running both at once therefore DUPLICATES every overlapping record. That is
 // degraded, not broken (same id, so downstream dedupe works), and it resolves
 // when m365.unified_audit is retired — which is deliberately not part of this
@@ -345,8 +364,8 @@ func mapRecord(rec map[string]any) (string, telemetry.Event, bool) {
 	workload := str(rec, "Workload")
 	// UserId on the classic schema IS the query API's userPrincipalName —
 	// live-verified byte-identical on 500/500 records over the same tenant and
-	// window (2026-07-17, #100), sentinels and all. So it feeds BOTH `user_id`
-	// and `user_principal_name`, and the copy is UNCONDITIONAL.
+	// window (2026-07-17, #100), sentinels and all. So it feeds
+	// `user_principal_name`, and the copy is UNCONDITIONAL.
 	//
 	// The unconditional part is the whole finding and it is counter-intuitive.
 	// UserId is NOT always UPN-shaped: live it is a bare GUID, the literal
@@ -359,13 +378,15 @@ func mapRecord(rec map[string]any) (string, telemetry.Event, bool) {
 	// value" reasoning; the wire settled it. See
 	// TestUserPrincipalNameIsTheClassicUserIDVerbatim.
 	//
-	// KNOWN DIVERGENCE, deliberately NOT fixed here: `user_id` means different
-	// things on the two transports. The query API's top-level userId is the
-	// classic UserKey (live-verified 500/500), NOT the classic UserId — so
-	// m365.unified_audit's `user_id` carries UserKey while this collector's
-	// carries UserId. Both attributes are already shipped, so converging them is
-	// a breaking change to one transport or the other and needs its own issue and
-	// decision. It is recorded rather than silently re-pointed.
+	// There is deliberately NO `user_id` attribute (#151). It used to exist and
+	// was set from this same variable, unconditionally — a byte-for-byte
+	// duplicate of `user_principal_name` on every record, carrying nothing the
+	// latter did not. Worse, `user_id` on the m365.unified_audit twin carried the
+	// classic UserKey, so one attribute meant two different things depending on
+	// which transport produced the row. Dropping it here and renaming the twin's
+	// to `user_key` leaves both transports emitting exactly `user_key` (classic
+	// UserKey) + `user_principal_name` (classic UserId). No data is lost — this
+	// value is right there as `user_principal_name`. Do not re-add it.
 	userID := str(rec, "UserId")
 	result := str(rec, "ResultStatus")
 
@@ -375,10 +396,13 @@ func mapRecord(rec map[string]any) (string, telemetry.Event, bool) {
 	setStr(attrs, "workload", workload)
 	setStr(attrs, "service", workload)
 	setStr(attrs, "result_status", result)
-	setStr(attrs, "user_id", userID)
 	// The query API's direct twin of the classic UserId. See the comment above
-	// for why this is an unconditional copy rather than a UPN-shape-gated one.
+	// for why this is an unconditional copy rather than a UPN-shape-gated one,
+	// and why there is no `user_id` alongside it.
 	setStr(attrs, "user_principal_name", userID)
+	// The classic UserKey. The query API carries the same value in its
+	// (misnamed) top-level `userId` field and emits it under this same name, so
+	// `user_key` means the classic UserKey on both transports (#151).
 	setStr(attrs, "user_key", str(rec, "UserKey"))
 	// ClientIP here, clientIp on the query API — same attribute either way.
 	setStr(attrs, "client_ip", str(rec, "ClientIP"))

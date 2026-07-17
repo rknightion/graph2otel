@@ -163,7 +163,21 @@ func mapRecord(rec map[string]any) (string, telemetry.Event) {
 	setStr(attrs, "record_type", recordType)
 	setStr(attrs, "service", service)
 	setStr(attrs, "user_type", str(rec, "userType"))
-	setStr(attrs, "user_id", str(rec, "userId"))
+	// `userId` on the wire, `user_key` as the attribute — NOT a typo. This
+	// field's CONTENT is the classic O365 schema's UserKey, not the classic
+	// UserId; the wire name is a Microsoft misnomer. Live-verified 500/500 over
+	// the same tenant and window as the m365.activity twin (2026-07-17,
+	// #100/#151):
+	//
+	//	userId            == classic UserKey : 500/500
+	//	userPrincipalName == classic UserId  : 500/500 (byte-identical)
+	//
+	// Taking the wire name at face value IS #151: it made `user_id` mean UserKey
+	// here and UserId on m365.activity — one attribute, two meanings, with
+	// nothing on the record saying which. Both transports now emit `user_key`
+	// (classic UserKey) and `user_principal_name` (classic UserId), so no
+	// attribute carries two meanings. See TestTopLevelUserIDIsTheClassicUserKey.
+	setStr(attrs, "user_key", str(rec, "userId"))
 	setStr(attrs, "user_principal_name", str(rec, "userPrincipalName"))
 	setStr(attrs, "client_ip", str(rec, "clientIp"))
 	setStr(attrs, "object_id", str(rec, "objectId"))

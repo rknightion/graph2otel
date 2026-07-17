@@ -128,9 +128,13 @@ func TestMapRecordConvergesWithUnifiedAudit(t *testing.T) {
 		"service":       "AzureActiveDirectory",
 		"operation":     "Add app role assignment to service principal.",
 		"result_status": "Success",
-		"user_id":       "alice@contoso.com",
 		"object_id":     "obj-42",
 		"id":            "rec-abc-123",
+		// The classic UserKey. The query API emits the SAME value in its
+		// top-level `userId` field, which it likewise emits as `user_key`
+		// (live 500/500, #151) — so this attribute means the same thing on
+		// both transports.
+		"user_key": "user-key-1",
 		// The classic UserId IS the query API's userPrincipalName — live-verified
 		// byte-identical on 500/500 records (2026-07-17, m7kni; see
 		// TestUserPrincipalNameIsTheClassicUserIDVerbatim). This attribute was the
@@ -198,6 +202,48 @@ func TestUserPrincipalNameIsTheClassicUserIDVerbatim(t *testing.T) {
 					got, tc.userID, tc.src)
 			}
 		})
+	}
+}
+
+// TestNoUserIDAttr is the #151 guard on this transport: `user_id` must NOT be
+// emitted, because it was a 100% redundant duplicate of `user_principal_name`.
+//
+// Both were set from the SAME variable — the classic UserId — unconditionally,
+// so `user_id` never carried a value `user_principal_name` did not already
+// carry, on any record, ever. It was not a second identifier; it was the same
+// string under a second key.
+//
+// Dropping it loses nothing and buys the cross-transport contract: `user_id` was
+// the ONE attribute whose meaning depended on which collector produced the row
+// (classic UserId here, classic UserKey on m365.unified_audit — #151). Removing
+// it here and renaming the twin's to `user_key` leaves both transports emitting
+// exactly `user_key` (classic UserKey) + `user_principal_name` (classic UserId).
+// Symmetric, and no attribute means two things.
+//
+// The classic UserId is NOT lost — it remains, verbatim, as
+// `user_principal_name`. See TestUserPrincipalNameIsTheClassicUserIDVerbatim.
+func TestNoUserIDAttr(t *testing.T) {
+	_, ev, ok := mapRecord(liveRecord())
+	if !ok {
+		t.Fatal("mapRecord returned ok=false for a well-formed record")
+	}
+	if got, present := ev.Attrs["user_id"]; present {
+		t.Errorf("user_id = %v, want the attribute ABSENT (#151).\nIt duplicated user_principal_name exactly (both were set from the classic UserId, unconditionally), and `user_id` meant the classic UserKey on the m365.unified_audit twin — one attribute, two meanings. The value survives as user_principal_name = %v.",
+			got, ev.Attrs["user_principal_name"])
+	}
+}
+
+// TestUserKeyIsTheClassicUserKey pins the other half of #151's convergence:
+// `user_key` carries the classic UserKey on this transport, and the query API
+// emits the same value under the same name from its (misnamed) top-level
+// `userId` field. One name, one meaning, both transports.
+func TestUserKeyIsTheClassicUserKey(t *testing.T) {
+	_, ev, ok := mapRecord(liveRecord())
+	if !ok {
+		t.Fatal("mapRecord returned ok=false for a well-formed record")
+	}
+	if got := ev.Attrs["user_key"]; got != "user-key-1" {
+		t.Errorf("user_key = %v, want %q — the classic UserKey, which is also what m365.unified_audit's user_key carries (live 500/500, #151)", got, "user-key-1")
 	}
 }
 
@@ -587,7 +633,6 @@ func TestLogAttrKeySetIsExact(t *testing.T) {
 		"record_type_id",
 		"result_status",
 		"service",
-		"user_id",
 		"user_key",
 		"user_principal_name",
 		"user_type",
@@ -762,7 +807,7 @@ func TestMapOmitsAbsentAttrs(t *testing.T) {
 		t.Fatal("a record with an id and a time must map, however sparse")
 	}
 	for _, k := range []string{
-		"operation", "workload", "service", "result_status", "user_id", "user_key",
+		"operation", "workload", "service", "result_status", "user_key",
 		"client_ip", "object_id", "organization_id", "record_type", "record_type_id",
 		"user_type", "user_type_id", "actor_ids", "modified_property_names",
 		"extended_property_names", "azure_ad_event_type", "version",
