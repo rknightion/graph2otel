@@ -98,7 +98,6 @@
 package activity
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -182,46 +181,22 @@ const (
 	checkpointKey = "/activity/feed/subscriptions/content#m365"
 )
 
-// collectorImpl adapts the o365pipeline engine to the interfaces the
-// composition root type-asserts on.
+// collectorImpl is the M365 activity WindowCollector: the generic
+// o365pipeline.ActivityCollector plus the policy declarations that are this
+// SIGNAL's rather than the transport's — which conflicts it duplicates, and
+// which app role it needs. Mirrors unifiedaudit.collectorImpl over
+// jobpipeline.JobCollector.
 //
-// The adapter exists because o365pipeline.Collector exposes Collect(ctx, from,
-// to, e) error while collector.WindowCollector wants CollectWindow returning a
-// high-water mark, plus Name/DefaultInterval/Lag. logpipeline and jobpipeline
-// each ship their own wrapper (LogCollector, JobCollector) for this; o365pipeline
-// does not, so it lives here. If a second o365pipeline collector ever lands,
-// this belongs in the engine instead.
+// The Name/DefaultInterval/Lag/CollectWindow adapter used to live here, because
+// this was the engine's only collector. It now lives in o365pipeline alongside
+// the engine, next to logpipeline.LogCollector and jobpipeline.JobCollector:
+// the bridge from Collect(ctx, from, to, e) error to collector.WindowCollector
+// is a property of the engine's shape, so every collector on it needs the same
+// one. This package keeps only the tuning constants it passes in.
 //
 // It is deliberately NOT Experimental — see the package doc.
 type collectorImpl struct {
-	*o365pipeline.Collector
-}
-
-// Name implements collector.Collector.
-func (c *collectorImpl) Name() string { return collectorName }
-
-// DefaultInterval implements collector.Collector.
-func (c *collectorImpl) DefaultInterval() time.Duration { return interval }
-
-// Lag implements collector.WindowCollector.
-func (c *collectorImpl) Lag() time.Duration { return lag }
-
-// CollectWindow implements collector.WindowCollector by delegating to the
-// engine.
-//
-// It returns `to` as the high-water mark, which is cosmetic rather than load-
-// bearing: the engine keeps its OWN durable watermark (plus seen contentIds and
-// record Ids) in the checkpoint store and resumes from watermark-overlap,
-// ignoring the scheduler's `from` once that watermark exists. The scheduler's
-// separate checkpoint is therefore not this feed's real cursor, and a zero
-// return would be equivalent — the scheduler substitutes `to` for a zero hwm.
-// Returning it explicitly says so out loud.
-func (c *collectorImpl) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter) (time.Time, error) {
-	// Collect is the embedded o365pipeline.Collector's method, not this type's.
-	if err := c.Collect(ctx, from, to, e); err != nil {
-		return time.Time{}, err
-	}
-	return to, nil
+	*o365pipeline.ActivityCollector
 }
 
 // ConflictsWith declares m365.unified_audit: the two are one signal over two
@@ -293,7 +268,10 @@ func newCollector(d collectors.O365Deps) *collectorImpl {
 		EventName:     eventName,
 		Map:           mapRecord,
 	}
-	return &collectorImpl{Collector: o365pipeline.New(d.Client, d.Store, cfg)}
+	return &collectorImpl{
+		ActivityCollector: o365pipeline.NewActivityCollector(
+			collectorName, interval, lag, d.Client, d.Store, cfg),
+	}
 }
 
 func init() {
@@ -365,12 +343,29 @@ func mapRecord(rec map[string]any) (string, telemetry.Event, bool) {
 	// feeds both attributes, keeping `service` present on both transports
 	// rather than leaving a hole on one.
 	workload := str(rec, "Workload")
-	// UserId on the classic schema is the actor's UPN (Microsoft's own example:
-	// "admin@contoso.onmicrosoft.com"). It maps to `user_id`, the query API's
-	// direct twin. `user_principal_name` is deliberately NOT synthesized from
-	// it: the classic schema has no separate UPN field, and copying UserId into
-	// a second attribute would be inventing a value rather than converging on
-	// one. See the issue — this is flagged for live confirmation.
+	// UserId on the classic schema IS the query API's userPrincipalName —
+	// live-verified byte-identical on 500/500 records over the same tenant and
+	// window (2026-07-17, #100), sentinels and all. So it feeds BOTH `user_id`
+	// and `user_principal_name`, and the copy is UNCONDITIONAL.
+	//
+	// The unconditional part is the whole finding and it is counter-intuitive.
+	// UserId is NOT always UPN-shaped: live it is a bare GUID, the literal
+	// "Not Available", "ServicePrincipal_<guid>", or a display name on ~9% of
+	// records. Gating the copy on UPN shape therefore looks careful — and is
+	// wrong, because the query API applies no such gate and emits
+	// userPrincipalName="Not Available" verbatim. A gate here would omit the
+	// attribute on exactly the records where the twin emits it. This attribute
+	// was withheld entirely on a first pass for the same "would be inventing a
+	// value" reasoning; the wire settled it. See
+	// TestUserPrincipalNameIsTheClassicUserIDVerbatim.
+	//
+	// KNOWN DIVERGENCE, deliberately NOT fixed here: `user_id` means different
+	// things on the two transports. The query API's top-level userId is the
+	// classic UserKey (live-verified 500/500), NOT the classic UserId — so
+	// m365.unified_audit's `user_id` carries UserKey while this collector's
+	// carries UserId. Both attributes are already shipped, so converging them is
+	// a breaking change to one transport or the other and needs its own issue and
+	// decision. It is recorded rather than silently re-pointed.
 	userID := str(rec, "UserId")
 	result := str(rec, "ResultStatus")
 
@@ -381,6 +376,9 @@ func mapRecord(rec map[string]any) (string, telemetry.Event, bool) {
 	setStr(attrs, "service", workload)
 	setStr(attrs, "result_status", result)
 	setStr(attrs, "user_id", userID)
+	// The query API's direct twin of the classic UserId. See the comment above
+	// for why this is an unconditional copy rather than a UPN-shape-gated one.
+	setStr(attrs, "user_principal_name", userID)
 	setStr(attrs, "user_key", str(rec, "UserKey"))
 	// ClientIP here, clientIp on the query API — same attribute either way.
 	setStr(attrs, "client_ip", str(rec, "ClientIP"))

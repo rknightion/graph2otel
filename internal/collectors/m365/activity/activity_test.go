@@ -131,11 +131,91 @@ func TestMapRecordConvergesWithUnifiedAudit(t *testing.T) {
 		"user_id":       "alice@contoso.com",
 		"object_id":     "obj-42",
 		"id":            "rec-abc-123",
+		// The classic UserId IS the query API's userPrincipalName — live-verified
+		// byte-identical on 500/500 records (2026-07-17, m7kni; see
+		// TestUserPrincipalNameIsTheClassicUserIDVerbatim). This attribute was the
+		// last convergence gap against m365.unified_audit, which has always emitted
+		// it.
+		"user_principal_name": "alice@contoso.com",
 	}
 	for k, v := range want {
 		if ev.Attrs[k] != v {
 			t.Errorf("attr %q = %v (%T), want %v (%T) — diverges from m365.unified_audit for the same event", k, ev.Attrs[k], ev.Attrs[k], v, v)
 		}
+	}
+}
+
+// TestUserPrincipalNameIsTheClassicUserIDVerbatim is the mutation-resistant
+// half of the UPN convergence, and it exists to stop a specific "improvement".
+//
+// The obvious instinct — and the one this collector's first pass acted on — is
+// that copying UserId into a second attribute "invents a value", because the
+// classic schema has no field literally named UserPrincipalName and UserId is
+// NOT always UPN-shaped. Live on m7kni, 918 Management API records: UserId is
+// UPN-shaped on only 837 (91.2%). The other 81 are bare GUIDs, the literal
+// sentinel "Not Available", "ServicePrincipal_<guid>", and one display name
+// ("Microsoft Security"). So a shape gate looks not just defensible but careful.
+//
+// It is WRONG, and only the wire says so. Measured 2026-07-17 against the SAME
+// tenant and window through the query API (500 records):
+//
+//	userPrincipalName == auditData.UserId : 500/500   (byte-identical)
+//	userPrincipalName != auditData.UserId :   0/500
+//
+// The query API passes UserId straight through into userPrincipalName WITHOUT a
+// shape gate — it emits userPrincipalName="Not Available" and a bare GUID
+// happily. So gating here would DIVERGE from the twin on exactly the ~9% of
+// records where the value is not UPN-shaped: unifiedaudit would emit the
+// attribute and this collector would omit it, for the same event. That is the
+// silent-fork failure the package doc exists to prevent.
+//
+// UserType is not a usable gate either, for the record: 22 live records carry a
+// UPN-shaped UserId with UserType=5, and 5 carry a bare GUID with UserType=0.
+//
+// Each case below is a real value observed on the live wire.
+func TestUserPrincipalNameIsTheClassicUserIDVerbatim(t *testing.T) {
+	for _, tc := range []struct {
+		userID string
+		src    string
+	}{
+		{"rob@m7kni.io", "LIVE x833: the ordinary UPN-shaped case"},
+		{"rob.knight@grafana.com", "LIVE x4: a guest's UPN on another tenant's domain"},
+		{"Not Available", "LIVE x20: a literal sentinel — the query API emits userPrincipalName='Not Available' for these, so a shape gate here would fork the signal"},
+		{"2c92ce28-126c-47c1-82b0-410b64502989", "LIVE x46: a bare appId GUID — the query API still calls this userPrincipalName"},
+		{"ServicePrincipal_8f35f4e9-5c91-42db-a1f7-d77ada4cc0a2", "LIVE x8: a prefixed service-principal identifier"},
+		{"Microsoft Security", "LIVE x1: a display name with a SPACE — cannot be a UPN, and is emitted anyway"},
+	} {
+		t.Run(tc.userID, func(t *testing.T) {
+			r := liveRecord()
+			r["UserId"] = tc.userID
+
+			_, ev, ok := mapRecord(r)
+			if !ok {
+				t.Fatal("mapRecord returned ok=false for a well-formed record")
+			}
+			if got := ev.Attrs["user_principal_name"]; got != tc.userID {
+				t.Errorf("user_principal_name = %v, want %q verbatim.\nprovenance: %s\nThe query API emits userPrincipalName == auditData.UserId on 500/500 live records with NO shape gate; adding one here diverges from m365.unified_audit for the same event.",
+					got, tc.userID, tc.src)
+			}
+		})
+	}
+}
+
+// TestUserPrincipalNameOmittedWhenUserIDAbsent keeps the new attribute inside
+// the package's existing rule: set only what is present, never an empty
+// attribute. Live, UserId was present on 918/918 records, so this is a
+// should-never-happen path — pinned because a contract silent on its edges gets
+// read two ways.
+func TestUserPrincipalNameOmittedWhenUserIDAbsent(t *testing.T) {
+	r := liveRecord()
+	delete(r, "UserId")
+
+	_, ev, ok := mapRecord(r)
+	if !ok {
+		t.Fatal("mapRecord returned ok=false for a well-formed record")
+	}
+	if _, present := ev.Attrs["user_principal_name"]; present {
+		t.Errorf("user_principal_name = %v on a record with no UserId, want the attribute omitted", ev.Attrs["user_principal_name"])
 	}
 }
 
@@ -509,6 +589,7 @@ func TestLogAttrKeySetIsExact(t *testing.T) {
 		"service",
 		"user_id",
 		"user_key",
+		"user_principal_name",
 		"user_type",
 		"user_type_id",
 		"version",
@@ -764,11 +845,20 @@ func TestFactoryWiresCollector(t *testing.T) {
 	if len(perms) != 1 || perms[0] != "ActivityFeed.Read" {
 		t.Errorf("RequiredPermissions() = %v, want [ActivityFeed.Read]", perms)
 	}
-	if c.DefaultInterval() <= 0 {
-		t.Errorf("DefaultInterval() = %v, want positive", c.DefaultInterval())
+	// Pinned EXACTLY, not merely as "positive". The schedule is passed positionally
+	// into o365pipeline.NewActivityCollector(name, interval, lag, …) — two
+	// same-typed time.Durations, adjacent — so transposing them is a live
+	// possibility that a >0 assertion cannot see. Swapped, this collector would
+	// poll every 5 minutes for a window ending 10 minutes ago: still "positive",
+	// still green, and wrong.
+	if got := c.DefaultInterval(); got != interval {
+		t.Errorf("DefaultInterval() = %v, want %v", got, interval)
 	}
-	if c.Lag() <= 0 {
-		t.Errorf("Lag() = %v, want positive — the feed must never be queried up to 'now'", c.Lag())
+	if got := c.Lag(); got != lag {
+		t.Errorf("Lag() = %v, want %v — the feed must never be queried up to 'now'", got, lag)
+	}
+	if interval <= lag {
+		t.Errorf("interval (%v) <= lag (%v) — this pair looks transposed; the collector polls more often than the safety margin it trails by", interval, lag)
 	}
 }
 

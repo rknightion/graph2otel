@@ -115,12 +115,31 @@ cardinality rule.
 - Enable only the collectors you need per tenant (`collectors:` in `config.example.yaml`)
   — a collector that isn't enabled makes zero Graph API calls and exports zero data for
   that domain.
-- Use least-privilege, read-only Graph API application permissions (see `README.md`) —
-  never grant write scopes beyond what the Intune reports export API unavoidably requires
-  for that one feature.
+- Use least-privilege, read-only Graph API application permissions (see `docs/collectors.md`,
+  which is generated per collector from the code) — never grant write scopes beyond what the
+  two documented breaks below unavoidably require.
 - Where a domain has both a snapshot/aggregate signal and a raw per-entity export, prefer
   the aggregate; per-entity detail should be pulled on demand, not mirrored wholesale into
   metric label sets.
+
+### The two breaks in the read-only property
+
+graph2otel is read-only with exactly two exceptions. Both are documented here rather than
+left as folklore, because "graph2otel only reads" is otherwise a claim an operator would
+reasonably audit against and find false.
+
+1. **Intune reports-export job creation** — `intune.app_install_status`,
+   `intune.defender_agents`, `intune.cert_inventory`. The export API has no read-only form:
+   a report is produced by POSTing a job, polling it, and downloading the result. The write
+   creates a job owned by the caller; it mutates no tenant data.
+2. **`POST /subscriptions/start` (O365 Management Activity API)** — `m365.activity`.
+   `internal/o365pipeline` performs this lazily on the first collection per content type.
+   Listing content for a never-subscribed type returns `AF20022` indefinitely, and there is
+   no read-only way out of that state. It is narrower than the export break in two ways: it
+   creates a subscription rather than mutating tenant data, and `ActivityFeed.Read` — a
+   read-named role — authorizes it, so no `ReadWrite` scope is requested. Re-starting an
+   already-enabled subscription returns `400 AF20024`, which the engine treats as success
+   (the desired state already holds), so the write is idempotent across restarts.
 
 ## Secrets handling
 
