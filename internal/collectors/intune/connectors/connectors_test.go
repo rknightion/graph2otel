@@ -46,6 +46,61 @@ var fixedNow = time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 
 func fixedClock() time.Time { return fixedNow }
 
+// liveMTDConnectors is a VERBATIM GET /deviceManagement/mobileThreatDefenseConnectors
+// response read as graph2otel-poller against the m7kni tenant
+// `[live-measured 2026-07-17, #165]`. Two real connector instances: one
+// notSetUp with every platform disabled and a zero-value heartbeat (never
+// connected), and one fully enabled with a real lastHeartbeatDateTime. Pinned
+// with the full field set Graph returns — including the many *Enabled/*Blocked
+// flags the collector ignores — so partnerState, lastHeartbeatDateTime, and the
+// three androidEnabled/iosEnabled/windowsEnabled fields the mapper reads are
+// proven present exactly as spelled on the wire.
+const liveMTDConnectors = `{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#deviceManagement/mobileThreatDefenseConnectors",
+  "value": [
+    {
+      "allowPartnerToCollectIOSApplicationMetadata": false,
+      "allowPartnerToCollectIOSPersonalApplicationMetadata": false,
+      "androidDeviceBlockedOnMissingPartnerData": false,
+      "androidEnabled": false,
+      "androidMobileApplicationManagementEnabled": false,
+      "id": "c2b688fe-48c0-464b-a89c-67041aa8fcb2",
+      "iosDeviceBlockedOnMissingPartnerData": false,
+      "iosEnabled": false,
+      "iosMobileApplicationManagementEnabled": false,
+      "lastHeartbeatDateTime": "0001-01-01T00:00:00Z",
+      "microsoftDefenderForEndpointAttachEnabled": false,
+      "partnerState": "notSetUp",
+      "partnerUnresponsivenessThresholdInDays": 7,
+      "partnerUnsupportedOsVersionBlocked": false,
+      "windowsDeviceBlockedOnMissingPartnerData": false,
+      "windowsEnabled": false
+    },
+    {
+      "allowPartnerToCollectIOSApplicationMetadata": true,
+      "allowPartnerToCollectIOSPersonalApplicationMetadata": true,
+      "androidDeviceBlockedOnMissingPartnerData": true,
+      "androidEnabled": true,
+      "androidMobileApplicationManagementEnabled": true,
+      "id": "fc780465-2017-40d4-a0c5-307022471b92",
+      "iosDeviceBlockedOnMissingPartnerData": true,
+      "iosEnabled": true,
+      "iosMobileApplicationManagementEnabled": true,
+      "lastHeartbeatDateTime": "2026-07-17T10:45:28.2000756Z",
+      "microsoftDefenderForEndpointAttachEnabled": true,
+      "partnerState": "enabled",
+      "partnerUnresponsivenessThresholdInDays": 7,
+      "partnerUnsupportedOsVersionBlocked": false,
+      "windowsDeviceBlockedOnMissingPartnerData": true,
+      "windowsEnabled": true
+    }
+  ]
+}`
+
+// liveMTDNow is exactly one hour after the enabled connector's heartbeat, so
+// the emitted heartbeat_age is a clean 3600s.
+var liveMTDNow = time.Date(2026, 7, 17, 11, 45, 28, 200075600, time.UTC)
+
 func newTestCollector(g collectors.GraphClient) *Collector {
 	c := New(g, nil)
 	c.now = fixedClock
@@ -85,6 +140,13 @@ func findPoint(pts []telemetrytest.MetricPoint, attrs map[string]string) (teleme
 }
 
 func TestCollectEmitsStateAndHeartbeatAcrossAllThreeConnectorTypes(t *testing.T) {
+	// Exchange and NDES bodies are docs-derived: on the live tenant
+	// exchangeConnectors returns 501 NotSupported and ndesConnectors an empty
+	// list (docs-derived, endpoint empty/501 on tenant 2026-07-17 (#165)), so
+	// there is no capturable success body for either. They are synthesized here
+	// only to exercise the multi-type aggregation the live single-type MTD
+	// capture cannot. MTD's real success body is pinned in
+	// TestCollectEmitsLiveMTDConnectorsEndToEnd.
 	g := &fakeGraph{bodies: map[string]string{
 		exchangeURL: `{"value":[
 			{"status":"connected","lastSyncDateTime":"2026-07-15T11:59:00Z"},
@@ -146,6 +208,67 @@ func TestCollectEmitsStateAndHeartbeatAcrossAllThreeConnectorTypes(t *testing.T)
 	}
 	if p, ok := findPoint(platforms, map[string]string{"platform": "windows", "enabled": "true"}); !ok || p.Value != 1 {
 		t.Errorf("windows enabled = %+v, ok=%v", p, ok)
+	}
+}
+
+// TestCollectEmitsLiveMTDConnectorsEndToEnd drives the verbatim live MTD
+// capture through the full Collect path into a Recorder. The tenant's other two
+// connector endpoints return exactly what was captured on 2026-07-17 — Exchange
+// 501 NotSupported (no connector configured) and NDES an empty beta list — so
+// only the MTD metrics are emitted, which is the real steady state.
+func TestCollectEmitsLiveMTDConnectorsEndToEnd(t *testing.T) {
+	g := &fakeGraph{
+		bodies: map[string]string{
+			mtdURL:  liveMTDConnectors,
+			ndesURL: `{"value":[]}`, // live: beta ndesConnectors returned an empty list
+		},
+		errs: map[string]error{
+			// live: exchangeConnectors returned 501 NotSupported, not an empty list.
+			exchangeURL: errors.New(`graphclient: GET https://graph.microsoft.com/v1.0/deviceManagement/exchangeConnectors: status 501: {"error":{"code":"NotSupported"}}`),
+		},
+	}
+	c := New(g, nil)
+	c.now = func() time.Time { return liveMTDNow }
+	rec := telemetrytest.New()
+
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v, want nil (exchange 501 + empty ndes are graceful)", err)
+	}
+
+	states := rec.MetricPoints(stateMetric)
+	if p, ok := findPoint(states, map[string]string{"connector_type": "mtd", "state": "notSetUp"}); !ok || p.Value != 1 {
+		t.Errorf("mtd notSetUp state point = %+v, ok=%v", p, ok)
+	}
+	if p, ok := findPoint(states, map[string]string{"connector_type": "mtd", "state": "enabled"}); !ok || p.Value != 1 {
+		t.Errorf("mtd enabled state point = %+v, ok=%v", p, ok)
+	}
+	if _, ok := findPoint(states, map[string]string{"connector_type": "exchange"}); ok {
+		t.Errorf("exchange state present despite live 501: %+v", states)
+	}
+	if _, ok := findPoint(states, map[string]string{"connector_type": "ndes"}); ok {
+		t.Errorf("ndes state present despite live empty list: %+v", states)
+	}
+
+	// Only the enabled connector has a non-zero heartbeat; the notSetUp one's
+	// 0001-01-01 timestamp is ignored, so the age is a clean 3600s.
+	mtdAge := pointByAttr(t, rec.MetricPoints(heartbeatAgeMetric), "connector_type", "mtd")
+	if mtdAge.Value != (1 * time.Hour).Seconds() {
+		t.Errorf("mtd heartbeat age = %v, want %v", mtdAge.Value, (1 * time.Hour).Seconds())
+	}
+
+	// Two instances: one all-disabled, one all-enabled -> each platform is 1
+	// enabled and 1 disabled.
+	platforms := rec.MetricPoints(mtdPlatformMetric)
+	if len(platforms) != 6 {
+		t.Fatalf("mtd platform points = %d, want 6", len(platforms))
+	}
+	for _, platform := range []string{"android", "ios", "windows"} {
+		if p, ok := findPoint(platforms, map[string]string{"platform": platform, "enabled": "true"}); !ok || p.Value != 1 {
+			t.Errorf("%s enabled = %+v, ok=%v", platform, p, ok)
+		}
+		if p, ok := findPoint(platforms, map[string]string{"platform": platform, "enabled": "false"}); !ok || p.Value != 1 {
+			t.Errorf("%s disabled = %+v, ok=%v", platform, p, ok)
+		}
 	}
 }
 
