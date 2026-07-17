@@ -264,9 +264,16 @@ func TestRun_DiscardsStaleInFlight(t *testing.T) {
 	}
 }
 
-// TestRun_DiscardsInFlightWhenWindowMovedOn: a job whose `from` no longer matches
-// belongs to a window already dealt with. Adopting it would waste the call and
-// re-query a range the watermark has passed.
+// TestRun_DiscardsInFlightWhenWindowMovedOn: on a WARM checkpoint a job whose
+// `from` no longer matches belongs to a window already dealt with. Adopting it
+// would waste the call and re-query a range the watermark has passed.
+//
+// The watermark is what makes that inference sound, so this test sets one: with a
+// watermark, CollectWindow derives `from` from it (collector.go), so `from` is a
+// pure function of persisted state and a differing `from` can ONLY mean the
+// watermark moved. On a COLD checkpoint `from` is wall-clock-derived and the same
+// inference is invalid — that is #147, covered separately below. This test is the
+// guard that #147's cold-start relaxation does not leak into the warm path.
 func TestRun_DiscardsInFlightWhenWindowMovedOn(t *testing.T) {
 	rec := telemetrytest.New()
 	from := time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)
@@ -285,6 +292,8 @@ func TestRun_DiscardsInFlightWhenWindowMovedOn(t *testing.T) {
 	}
 
 	cp := newCheckpoint("t1", cfg.CreatePath)
+	// Warm: a window has been drained before, so `from` is watermark-derived.
+	cp.Watermark = from.Add(cfg.Overlap)
 	cp.InFlight = &checkpoint.InFlightJob{
 		ID:         "query-stale-window",
 		CreatedAt:  to.Add(-5 * time.Minute),
@@ -297,6 +306,149 @@ func TestRun_DiscardsInFlightWhenWindowMovedOn(t *testing.T) {
 	}
 	if client.createCalls != 1 {
 		t.Errorf("CreateQuery called %d times, want 1 — a job for a superseded window must be discarded", client.createCalls)
+	}
+}
+
+// TestRun_ColdCheckpointAdoptsJobStartingBeforeThisTicksFrom is #147 at engine
+// level. On a cold checkpoint (no watermark) `from` is now-lag-lookback — pure
+// wall-clock — so it advances on every tick exactly like `to` does. A job created
+// by the previous process therefore has a WindowFrom strictly BEFORE this tick's
+// `from`, and the warm rule's `from` equality can never hold.
+//
+// Adopting it is lossless: the job covers [WindowFrom, WindowTo], a superset at
+// the low end of what this tick asked for, and emitAndAdvance advances the
+// watermark only to the job's own WindowTo.
+func TestRun_ColdCheckpointAdoptsJobStartingBeforeThisTicksFrom(t *testing.T) {
+	rec := telemetrytest.New()
+	// The previous process's cold window, 20 minutes of wall-clock ago.
+	jobFrom := time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)
+	jobTo := jobFrom.Add(time.Hour)
+	// This tick's cold window: both bounds have slid forward by the same 20 min.
+	from := jobFrom.Add(20 * time.Minute)
+	to := jobTo.Add(20 * time.Minute)
+
+	sleeps := 0
+	cfg := baseConfig()
+	cfg.Sleep = noSleep(&sleeps)
+	cfg.Now = fixedNow(to)
+
+	client := &fakeJobClient{
+		statuses: []string{StatusSucceeded},
+		pages: map[string]fakePage{
+			recordsURL("query-cold", DefaultPageSize): {records: []map[string]any{
+				{"id": "a", "createdDateTime": jobFrom.Add(time.Minute).Format(time.RFC3339)},
+			}},
+		},
+	}
+
+	cp := newCheckpoint("t1", cfg.CreatePath) // cold: no watermark
+	cp.InFlight = &checkpoint.InFlightJob{
+		ID:         "query-cold",
+		CreatedAt:  jobTo,
+		WindowFrom: jobFrom,
+		WindowTo:   jobTo,
+	}
+
+	hw, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if client.createCalls != 0 {
+		t.Errorf("CreateQuery called %d times, want 0 — a cold checkpoint must still adopt the in-flight query, not orphan it", client.createCalls)
+	}
+	if len(client.statusURLs) == 0 || !strings.HasSuffix(client.statusURLs[0], "/query-cold") {
+		t.Errorf("polled %v, want the adopted query-cold", client.statusURLs)
+	}
+	if logs := rec.LogRecords(); len(logs) != 1 {
+		t.Errorf("emitted %d records, want 1 from the adopted query", len(logs))
+	}
+	// The watermark tracks the ADOPTED job's window, never this tick's `to`.
+	if wantHW := jobTo.Add(-DefaultSafetyLag); !hw.Equal(wantHW) {
+		t.Errorf("high-water = %v, want %v (the adopted job's to - SafetyLag)", hw, wantHW)
+	}
+}
+
+// TestRun_ColdCheckpointDiscardsJobThatWouldLeaveAGap pins the limit of the
+// cold-start relaxation: a job whose window starts AFTER this tick's `from` must
+// NOT be adopted. There is no watermark, so nothing has covered [from,
+// WindowFrom) — adopting would drain [WindowFrom, WindowTo], advance the
+// watermark past it, and lose that range for good.
+//
+// Reachable in practice by widening initial_lookback across a restart, which
+// moves `from` backwards while a job for the older, narrower window is still on
+// disk.
+func TestRun_ColdCheckpointDiscardsJobThatWouldLeaveAGap(t *testing.T) {
+	rec := telemetrytest.New()
+	from := time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+
+	sleeps := 0
+	cfg := baseConfig()
+	cfg.Sleep = noSleep(&sleeps)
+	cfg.Now = fixedNow(to)
+
+	client := &fakeJobClient{
+		statuses: []string{StatusSucceeded},
+		pages: map[string]fakePage{
+			recordsURL("query-1", DefaultPageSize): {records: []map[string]any{}},
+		},
+	}
+
+	cp := newCheckpoint("t1", cfg.CreatePath) // cold
+	cp.InFlight = &checkpoint.InFlightJob{
+		ID:         "query-leaves-a-gap",
+		CreatedAt:  to.Add(-5 * time.Minute),
+		WindowFrom: from.Add(30 * time.Minute), // starts INSIDE the requested window
+		WindowTo:   to,
+	}
+
+	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if client.createCalls != 1 {
+		t.Errorf("CreateQuery called %d times, want 1 — adopting a job that starts after `from` would silently drop [from, WindowFrom)", client.createCalls)
+	}
+	for _, u := range client.statusURLs {
+		if strings.HasSuffix(u, "/query-leaves-a-gap") {
+			t.Errorf("polled %s; a job that would leave a gap must be discarded", u)
+		}
+	}
+}
+
+// TestRun_ColdCheckpointDiscardsJobEndingAfterThisTicksTo: the prefix rule holds
+// on a cold checkpoint too. A job reaching BEYOND this tick's `to` would advance
+// the watermark past what this tick believes is safe to consume (the clock went
+// backwards, or lag/max_window changed), so it is discarded rather than adopted.
+func TestRun_ColdCheckpointDiscardsJobEndingAfterThisTicksTo(t *testing.T) {
+	rec := telemetrytest.New()
+	from := time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+
+	sleeps := 0
+	cfg := baseConfig()
+	cfg.Sleep = noSleep(&sleeps)
+	cfg.Now = fixedNow(to)
+
+	client := &fakeJobClient{
+		statuses: []string{StatusSucceeded},
+		pages: map[string]fakePage{
+			recordsURL("query-1", DefaultPageSize): {records: []map[string]any{}},
+		},
+	}
+
+	cp := newCheckpoint("t1", cfg.CreatePath) // cold
+	cp.InFlight = &checkpoint.InFlightJob{
+		ID:         "query-overshoots",
+		CreatedAt:  to.Add(-5 * time.Minute),
+		WindowFrom: from.Add(-time.Minute),
+		WindowTo:   to.Add(time.Minute), // beyond the requested `to`
+	}
+
+	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if client.createCalls != 1 {
+		t.Errorf("CreateQuery called %d times, want 1 — a job overshooting `to` must be discarded on a cold checkpoint too", client.createCalls)
 	}
 }
 
@@ -434,6 +586,118 @@ func TestJobCollector_RestartAdoptsInFlightQuery(t *testing.T) {
 	}
 
 	after, err := store.Load("t1", cfg.CreatePath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if after.InFlight != nil {
+		t.Errorf("persisted InFlight = %+v after the adopted query drained, want nil", after.InFlight)
+	}
+}
+
+// coldWindow mirrors collector/window.go's cold-start arithmetic: with no
+// checkpoint the scheduler asks for [now-lag-lookback, now-lag]. BOTH bounds are
+// pure wall-clock, so every tick taken before the first watermark exists asks for
+// a DIFFERENT `from` — which is exactly what #147 is about. Once a watermark
+// exists, `from` is the watermark and stops moving; that is why the warm path
+// adopts and the cold path did not.
+func coldWindow(now time.Time, lag, lookback time.Duration) (from, to time.Time) {
+	to = now.Add(-lag)
+	return to.Add(-lookback), to
+}
+
+// TestJobCollector_ColdCheckpointRestartAdoptsInFlightQuery is #147, end to end
+// through the real file store: the #118 restart case with the ONE difference that
+// makes it real — the checkpoint is cold, as it is on a first deploy or after a
+// wiped checkpoint dir, so process B recomputes `from` off the wall clock instead
+// of off a watermark.
+//
+// #118's own restart test held `from` fixed across the restart, which only models
+// a checkpoint that already has a watermark. That is what let this ship green: the
+// live run on camden (#118 verification, 2026-07-16) still orphaned and re-created
+// on first deploy.
+func TestJobCollector_ColdCheckpointRestartAdoptsInFlightQuery(t *testing.T) {
+	store := checkpoint.NewStore(t.TempDir())
+
+	const (
+		lag      = 15 * time.Minute
+		lookback = 24 * time.Hour
+	)
+
+	// --- process A: first deploy. Creates the query, then dies while polling it.
+	nowA := time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)
+	fromA, toA := coldWindow(nowA, lag, lookback)
+
+	sleeps := 0
+	cfgA := baseConfig()
+	cfgA.Sleep = noSleep(&sleeps)
+	cfgA.Now = fixedNow(nowA)
+
+	clientA := &fakeJobClient{statusErr: errors.New("process is going away")}
+	collA := NewJobCollector("m365.unified_audit", 30*time.Minute, lag, "t1", cfgA, clientA, store)
+	if _, err := collA.CollectWindow(context.Background(), fromA, toA, telemetrytest.New().Emitter()); err == nil {
+		t.Fatal("CollectWindow: want an error when the poll never completes")
+	}
+	if clientA.createCalls != 1 {
+		t.Fatalf("process A created %d queries, want 1", clientA.createCalls)
+	}
+
+	saved, err := store.Load("t1", cfgA.CreatePath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if saved.InFlight == nil || saved.InFlight.ID != "query-1" {
+		t.Fatalf("persisted InFlight = %+v, want query-1 recorded before the poll loop", saved.InFlight)
+	}
+	// The premise of this test: process A drained nothing, so the checkpoint is
+	// STILL cold. Without this the case under test is just #118's.
+	if !saved.Watermark.IsZero() {
+		t.Fatalf("persisted Watermark = %v, want zero — process A never drained a window, so the checkpoint must still be cold", saved.Watermark)
+	}
+
+	// --- process B: restarted 20 minutes later, still with no watermark, so its
+	// window slides forward by the full 20 minutes — `from` included.
+	nowB := nowA.Add(20 * time.Minute)
+	fromB, toB := coldWindow(nowB, lag, lookback)
+	if fromB.Equal(fromA) {
+		t.Fatal("test bug: a cold restart must recompute `from`; if it matched, this would be the #118 case, not #147")
+	}
+
+	cfgB := baseConfig()
+	cfgB.Sleep = noSleep(&sleeps)
+	cfgB.Now = fixedNow(nowB)
+
+	rec := telemetrytest.New()
+	clientB := &fakeJobClient{
+		statuses: []string{StatusSucceeded},
+		pages: map[string]fakePage{
+			recordsURL("query-1", DefaultPageSize): {records: []map[string]any{
+				{"id": "a", "createdDateTime": toA.Add(-2 * time.Minute).Format(time.RFC3339)},
+				{"id": "b", "createdDateTime": toA.Add(-time.Minute).Format(time.RFC3339)},
+			}},
+		},
+	}
+	collB := NewJobCollector("m365.unified_audit", 30*time.Minute, lag, "t1", cfgB, clientB, store)
+	hw, err := collB.CollectWindow(context.Background(), fromB, toB, rec.Emitter())
+	if err != nil {
+		t.Fatalf("process B CollectWindow: %v", err)
+	}
+
+	if clientB.createCalls != 0 {
+		t.Errorf("process B created %d queries, want 0 — it must adopt process A's in-flight query rather than orphan it and re-create against an API that 429s on rapid create (#98)", clientB.createCalls)
+	}
+	if len(clientB.statusURLs) == 0 || !strings.HasSuffix(clientB.statusURLs[0], "/query-1") {
+		t.Errorf("process B polled %v, want the adopted query-1", clientB.statusURLs)
+	}
+	if logs := rec.LogRecords(); len(logs) != 2 {
+		t.Errorf("process B emitted %d records, want 2 from the adopted query", len(logs))
+	}
+	// The watermark follows the ADOPTED job's window (toA), not process B's `to`:
+	// [toA, toB] was never queried and belongs to the next tick.
+	if wantHW := toA.Add(-DefaultSafetyLag); !hw.Equal(wantHW) {
+		t.Errorf("high-water = %v, want %v (the adopted job's to - SafetyLag, NOT process B's to)", hw, wantHW)
+	}
+
+	after, err := store.Load("t1", cfgA.CreatePath)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}

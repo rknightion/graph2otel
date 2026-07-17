@@ -320,14 +320,59 @@ func Run(ctx context.Context, cfg QueryConfig, cp *checkpoint.Checkpoint, from, 
 	return emitAndAdvance(cfg, cp, records, windowTo, e), nil
 }
 
-// adoptable reports whether j should be resumed for a tick requesting [from, to]:
-// it must not be presumed dead (Expired) and must still cover the right window
-// (CoversWindow). A negative JobMaxAge switches adoption off outright.
-func (cfg QueryConfig) adoptable(j *checkpoint.InFlightJob, from, to time.Time) bool {
+// adoptable reports whether cp's in-flight job should be resumed for a tick
+// requesting [from, to]: it must not be presumed dead (Expired) and its window
+// must still be the right one. A negative JobMaxAge switches adoption off
+// outright.
+//
+// The window rule depends on whether cp is WARM or COLD, because that is what
+// decides where `from` comes from (collector.go):
+//
+//   - WARM (cp has a watermark): `from` is watermark-overlap — a pure function of
+//     persisted state, so it is identical across restarts. checkpoint.CoversWindow
+//     applies: `from` must match exactly, because a differing `from` can only mean
+//     the watermark moved and the job is for a window already dealt with.
+//   - COLD (no watermark yet — first deploy, or a wiped checkpoint dir): `from` is
+//     now-lag-lookback, pure wall-clock. It slides forward on EVERY tick exactly
+//     like `to` does, so `from` equality can never hold and adoption would never
+//     fire — the job is orphaned and re-created against APIs that punish exactly
+//     that (#147; live on camden during #118's verification, 2026-07-16).
+//
+// So on a cold checkpoint the rule is containment rather than equality: the job's
+// window must sit inside the requested one. That is not a weakening, because the
+// inference equality exists to make ("the watermark moved on") is meaningless when
+// there is no watermark: nothing has been consumed, so no job can be for a window
+// already dealt with. What must still hold is the pair of properties that make
+// adoption correct, and both are checked here:
+//
+//   - no gap: WindowFrom must not be AFTER `from`. Nothing has covered [from,
+//     WindowFrom), so adopting a job that starts later would advance the watermark
+//     straight past that range and lose it.
+//   - no over-advance: WindowTo must not be AFTER `to` — the same prefix rule the
+//     warm path applies. emitAndAdvance moves the watermark to the job's own
+//     WindowTo, so a prefix is drained losslessly and the remainder is the next
+//     tick's, exactly as the MaxWindow clamp already behaves.
+//
+// How far WindowFrom may trail `from` is bounded by Expired, not left open: on a
+// cold checkpoint `from` slides at wall-clock rate, so (from - WindowFrom) is the
+// job's own age, and a job older than JobMaxAge is dropped before this rule runs.
+//
+// A cold cp with an in-flight job cannot have been warm when that job was created:
+// the watermark only ever advances in a Run that clears InFlight (see Run), so
+// InFlight non-nil implies the watermark is untouched since the create. The branch
+// taken here is therefore the same one the creating tick took.
+func (cfg QueryConfig) adoptable(cp *checkpoint.Checkpoint, from, to time.Time) bool {
+	j := cp.InFlight
 	if j == nil || cfg.JobMaxAge < 0 {
 		return false
 	}
-	return !j.Expired(cfg.Now(), cfg.JobMaxAge) && j.CoversWindow(from, to)
+	if j.Expired(cfg.Now(), cfg.JobMaxAge) {
+		return false
+	}
+	if cp.Watermark.IsZero() {
+		return !j.WindowFrom.After(from) && !j.WindowTo.After(to)
+	}
+	return j.CoversWindow(from, to)
 }
 
 // resumeOrCreate returns the query id to poll and the window it actually covers:
@@ -336,7 +381,7 @@ func (cfg QueryConfig) adoptable(j *checkpoint.InFlightJob, from, to time.Time) 
 // poll loop leaves an adoptable record behind.
 func resumeOrCreate(ctx context.Context, cfg QueryConfig, cp *checkpoint.Checkpoint, from, to time.Time, client JobClient) (queryID string, windowTo time.Time, err error) {
 	if j := cp.InFlight; j != nil {
-		if cfg.adoptable(j, from, to) {
+		if cfg.adoptable(cp, from, to) {
 			return j.ID, j.WindowTo, nil
 		}
 		cp.InFlight = nil
