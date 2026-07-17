@@ -2,6 +2,7 @@ package consent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	neturl "net/url"
 	"strconv"
@@ -14,7 +15,8 @@ import (
 )
 
 // fakeGraph maps request URLs to canned JSON bodies (or errors). Pagination is
-// modeled by chaining bodies through "@odata.nextLink".
+// modeled by chaining bodies through "@odata.nextLink"; an unmapped URL returns
+// an empty collection, which is how a followed nextLink terminates.
 type fakeGraph struct {
 	bodies map[string]string
 	errs   map[string]error
@@ -74,14 +76,369 @@ func merge(maps ...map[string]string) map[string]string {
 	return out
 }
 
+// ----------------------------------------------------------------------------
+// Verbatim live captures  [live-measured 2026-07-17, #165]
+//
+// All three bodies below are the EXACT wire responses this collector's Graph
+// calls returned from the m7kni tenant, read as graph2otel-poller on
+// 2026-07-17, preserving field names, nesting, and values. They replace the
+// docs-derived placeholders this test used to carry (c1/c2 clients, "Contoso
+// Sync", graph-sp-id, role-directory-rw) — the same class of unverified fixture
+// that let #142's `"platform": "windows"` and #153's invented `riskType` key
+// survive green.
+//
+// The collector drives a three-endpoint, two-level fetch, and each capture is
+// one of those endpoints:
+//
+//  1. liveGrantsBody           GET /oauth2PermissionGrants
+//  2. liveGraphSPBody          GET /servicePrincipals?$filter=appId eq
+//                              '00000003-0000-0000-c000-000000000000'&$select=id,appRoles
+//                              (the $filter value is neturl.QueryEscape-encoded
+//                              on the wire — see resolveResourceServicePrincipal)
+//  3. liveGraphAssignedToBody  GET /servicePrincipals/{sp.id}/appRoleAssignedTo
+//
+// # The finding this capture pins: m7kni's consent surface holds NO high-privilege grant or assignment
+//
+// Every one of the 5 delegated grants classifies "standard" (none carries a
+// scope in highPrivilegeDelegatedScopes — the closest, grant #5, holds
+// DeviceManagement*.ReadWrite.All, which is deliberately NOT on the delegated
+// allowlist), and every one of the 5 app-role assignments resolves to a
+// standard role (User.Read.All, Application.Read.All,
+// TeamsAppInstallation.ReadWriteSelfForTeam.All, TeamSettings.Read.All). This
+// is the healthy steady state, and it is exactly the empty-collection trap the
+// risk collectors hit (#129): the high-privilege classification and twin path
+// cannot be exercised by this tenant's real data. So the high-privilege tests
+// below use CONSTRUCTED grant/assignment records — built on REAL wire
+// components (the real Microsoft Graph SP object id, and the real, verbatim
+// Directory.ReadWrite.All app-role definition off this same capture) — clearly
+// labeled as constructed. The pattern mirrors entra/roles, whose live capture
+// held only user members, so its service-principal / sparse-member branches
+// stayed on constructed fixtures.
+//
+// Note the wire fields the collector deliberately does NOT map (#112 — identity
+// is the log twin's job, not a full record): principalId is `null` on every
+// AllPrincipals grant (JSON null decodes to Go "", which setStr omits); each
+// appRoleAssignment carries createdDateTime and deletedDateTime, and each
+// appRole carries allowedMemberTypes/description/displayName/isEnabled/origin,
+// none of which reach a metric or a twin.
+
+// liveGrantsBody is the verbatim GET /oauth2PermissionGrants response. principalId
+// is null on the three AllPrincipals grants and a real user GUID on the two
+// Principal grants.
+const liveGrantsBody = `{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#oauth2PermissionGrants",
+  "value": [
+    {
+      "clientId": "a551c556-8de2-49cc-b289-ce3ab7938167",
+      "consentType": "AllPrincipals",
+      "id": "VsVRpeKNzEmyic46t5OBZ-cXy2Je0lZDrVGoYVhfhjQ",
+      "principalId": null,
+      "resourceId": "62cb17e7-d25e-4356-ad51-a861585f8634",
+      "scope": "User.Read"
+    },
+    {
+      "clientId": "dd54d741-8c33-43ff-b6ca-bb7c03d84361",
+      "consentType": "AllPrincipals",
+      "id": "QddU3TOM_0O2yrt8A9hDYecXy2Je0lZDrVGoYVhfhjQ",
+      "principalId": null,
+      "resourceId": "62cb17e7-d25e-4356-ad51-a861585f8634",
+      "scope": " openid profile email Domain.Read.All AuditLog.Read.All Directory.Read.All offline_access"
+    },
+    {
+      "clientId": "dd54d741-8c33-43ff-b6ca-bb7c03d84361",
+      "consentType": "Principal",
+      "id": "QddU3TOM_0O2yrt8A9hDYecXy2Je0lZDrVGoYVhfhjTFw8-7kws1QZ75GEd6n7UE",
+      "principalId": "bbcfc3c5-0b93-4135-9ef9-18477a9fb504",
+      "resourceId": "62cb17e7-d25e-4356-ad51-a861585f8634",
+      "scope": " openid profile email Domain.Read.All AuditLog.Read.All Directory.Read.All offline_access"
+    },
+    {
+      "clientId": "f2706b1d-b062-467c-85dd-ceb3f7fb48be",
+      "consentType": "AllPrincipals",
+      "id": "HWtw8mKwfEaF3c6z9_tIvucXy2Je0lZDrVGoYVhfhjQ",
+      "principalId": null,
+      "resourceId": "62cb17e7-d25e-4356-ad51-a861585f8634",
+      "scope": " openid profile User.Read offline_access"
+    },
+    {
+      "clientId": "f2706b1d-b062-467c-85dd-ceb3f7fb48be",
+      "consentType": "Principal",
+      "id": "HWtw8mKwfEaF3c6z9_tIvucXy2Je0lZDrVGoYVhfhjTFw8-7kws1QZ75GEd6n7UE",
+      "principalId": "bbcfc3c5-0b93-4135-9ef9-18477a9fb504",
+      "resourceId": "62cb17e7-d25e-4356-ad51-a861585f8634",
+      "scope": " DeviceManagementServiceConfig.Read.All openid profile offline_access DeviceManagementConfiguration.Read.All DeviceManagementConfiguration.ReadWrite.All DeviceManagementServiceConfig.ReadWrite.All Directory.Read.All Device.Read.All"
+    }
+  ]
+}`
+
+// liveGraphSPID is the real object id of the Microsoft Graph service principal
+// in the m7kni tenant, as returned by the $filter lookup below. The
+// appRoleAssignedTo listing is keyed on this id.
+const liveGraphSPID = "62cb17e7-d25e-4356-ad51-a861585f8634"
+
+// liveGraphSPBody is the verbatim GET /servicePrincipals?$filter=...&$select=id,appRoles
+// response for Microsoft Graph, trimmed from 707 app-role definitions to the 5
+// this test resolves against — verbatim, full objects (the collector reads only
+// id+value, but keeping allowedMemberTypes/description/displayName/isEnabled/
+// origin documents the fields it drops). The first four are the roles the real
+// assignments below reference; the fifth, Directory.ReadWrite.All, is the real
+// high-privilege role the constructed high-privilege assignment resolves to —
+// present on the wire, held by no assignment in this tenant.
+const liveGraphSPBody = `{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#servicePrincipals(id,appRoles)",
+  "value": [
+    {
+      "id": "62cb17e7-d25e-4356-ad51-a861585f8634",
+      "appRoles": [
+        {
+          "allowedMemberTypes": [
+            "Application"
+          ],
+          "description": "Allows the app to read user profiles without a signed in user.",
+          "displayName": "Read all users' full profiles",
+          "id": "df021288-bdef-4463-88db-98f22de89214",
+          "isEnabled": true,
+          "origin": "Application",
+          "value": "User.Read.All"
+        },
+        {
+          "allowedMemberTypes": [
+            "Application"
+          ],
+          "description": "Allows the app to read all applications and service principals without a signed-in user.",
+          "displayName": "Read all applications",
+          "id": "9a5d68dd-52b0-4cc2-bd40-abcf44ac3a30",
+          "isEnabled": true,
+          "origin": "Application",
+          "value": "Application.Read.All"
+        },
+        {
+          "allowedMemberTypes": [
+            "Application"
+          ],
+          "description": "Allows a Teams app to read, install, upgrade, and uninstall itself in any team, without a signed-in user.",
+          "displayName": "Allow the Teams app to manage itself for all teams",
+          "id": "9f67436c-5415-4e7f-8ac1-3014a7132630",
+          "isEnabled": true,
+          "origin": "Application",
+          "value": "TeamsAppInstallation.ReadWriteSelfForTeam.All"
+        },
+        {
+          "allowedMemberTypes": [
+            "Application"
+          ],
+          "description": "Read all team's settings, without a signed-in user.",
+          "displayName": "Read all teams' settings",
+          "id": "242607bd-1d2c-432c-82eb-bdb27baa23ab",
+          "isEnabled": true,
+          "origin": "Application",
+          "value": "TeamSettings.Read.All"
+        },
+        {
+          "allowedMemberTypes": [
+            "Application"
+          ],
+          "description": "Allows the app to read and write data in your organization's directory, such as users, and groups, without a signed-in user.  Does not allow user or group deletion.",
+          "displayName": "Read and write directory data",
+          "id": "19dbc75e-c2e2-444c-a770-ec69d8559fc7",
+          "isEnabled": true,
+          "origin": "Application",
+          "value": "Directory.ReadWrite.All"
+        }
+      ]
+    }
+  ]
+}`
+
+// liveGraphAssignedToBody is the verbatim first page of
+// GET /servicePrincipals/62cb17e7.../appRoleAssignedTo (the live listing held 104
+// assignments across pages; trimmed to the first 5 representative records). Its
+// @odata.nextLink is preserved verbatim: the collector follows it, and the
+// fake's default empty response terminates the walk — exercising the real
+// pagination path on a real skiptoken. Every appRoleId resolves to a STANDARD
+// role via liveGraphSPBody; principalDisplayName / resourceDisplayName are the
+// real inline names Graph returns on this resource.
+const liveGraphAssignedToBody = `{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#appRoleAssignments",
+  "@odata.nextLink": "https://graph.microsoft.com/v1.0/servicePrincipals/62cb17e7-d25e-4356-ad51-a861585f8634/appRoleAssignedTo?$skiptoken=RFNwdAoAAQAAAAAAAAAAFAAAANQTZ7_TB4lJsbAbpF2f_tsBAAAAAAAAAAAAAAAAAAAXMS4yLjg0MC4xMTM1NTYuMS40LjIzMzEGAAAAAAABhvTRb3j5mkOMcwOFM1w0iAE6AQAAAQAAAAA",
+  "value": [
+    {
+      "appRoleId": "df021288-bdef-4463-88db-98f22de89214",
+      "createdDateTime": "2025-09-11T14:25:30.0756405Z",
+      "deletedDateTime": null,
+      "id": "VsVRpeKNzEmyic46t5OBZz4qn4i5cj5LsLp-K69dN1s",
+      "principalDisplayName": "Meraki-IdP-Sync",
+      "principalId": "a551c556-8de2-49cc-b289-ce3ab7938167",
+      "principalType": "ServicePrincipal",
+      "resourceDisplayName": "Microsoft Graph",
+      "resourceId": "62cb17e7-d25e-4356-ad51-a861585f8634"
+    },
+    {
+      "appRoleId": "9a5d68dd-52b0-4cc2-bd40-abcf44ac3a30",
+      "createdDateTime": "2025-09-11T14:25:30.0076418Z",
+      "deletedDateTime": null,
+      "id": "VsVRpeKNzEmyic46t5OBZzjSHQA0pyJGvixof14O_4o",
+      "principalDisplayName": "Meraki-IdP-Sync",
+      "principalId": "a551c556-8de2-49cc-b289-ce3ab7938167",
+      "principalType": "ServicePrincipal",
+      "resourceDisplayName": "Microsoft Graph",
+      "resourceId": "62cb17e7-d25e-4356-ad51-a861585f8634"
+    },
+    {
+      "appRoleId": "9f67436c-5415-4e7f-8ac1-3014a7132630",
+      "createdDateTime": "2025-10-20T12:55:05.4193042Z",
+      "deletedDateTime": null,
+      "id": "GC00Epn5uEOkVMo3ftLGpHGb1cJ_jk1FmPoIJoiH0Qw",
+      "principalDisplayName": "Grafana IRM",
+      "principalId": "12342d18-f999-43b8-a454-ca377ed2c6a4",
+      "principalType": "ServicePrincipal",
+      "resourceDisplayName": "Microsoft Graph",
+      "resourceId": "62cb17e7-d25e-4356-ad51-a861585f8634"
+    },
+    {
+      "appRoleId": "df021288-bdef-4463-88db-98f22de89214",
+      "createdDateTime": "2025-10-20T12:55:05.221292Z",
+      "deletedDateTime": null,
+      "id": "GC00Epn5uEOkVMo3ftLGpA5KXaMJA-BBn-nNa_BFtrY",
+      "principalDisplayName": "Grafana IRM",
+      "principalId": "12342d18-f999-43b8-a454-ca377ed2c6a4",
+      "principalType": "ServicePrincipal",
+      "resourceDisplayName": "Microsoft Graph",
+      "resourceId": "62cb17e7-d25e-4356-ad51-a861585f8634"
+    },
+    {
+      "appRoleId": "242607bd-1d2c-432c-82eb-bdb27baa23ab",
+      "createdDateTime": "2025-10-20T12:55:05.3583005Z",
+      "deletedDateTime": null,
+      "id": "GC00Epn5uEOkVMo3ftLGpMbrqqBC8hFOpcHaOnmcOtk",
+      "principalDisplayName": "Grafana IRM",
+      "principalId": "12342d18-f999-43b8-a454-ca377ed2c6a4",
+      "principalType": "ServicePrincipal",
+      "resourceDisplayName": "Microsoft Graph",
+      "resourceId": "62cb17e7-d25e-4356-ad51-a861585f8634"
+    }
+  ]
+}`
+
+// liveGraph wires the three verbatim captures into the two-level fetch the
+// collector drives: the delegated grants list, the Microsoft Graph SP $filter
+// lookup, and that SP's appRoleAssignedTo listing. Exchange Online (the second
+// well-known resourceApp) resolves to an empty collection — no capture was
+// taken for it, and this tenant's Exchange app-role assignments are out of this
+// fixture's scope, so it models the "not provisioned / nothing to scan" path.
+func liveGraph() *fakeGraph {
+	return &fakeGraph{bodies: map[string]string{
+		grantsURL:                          liveGrantsBody,
+		spFilterURL(resourceApps[0].appID): liveGraphSPBody, // microsoft_graph, 00000003-...
+		assignedToURL(liveGraphSPID):       liveGraphAssignedToBody,
+		spFilterURL(resourceApps[1].appID): `{"value":[]}`, // office365_exchange_online, 00000002-...
+	}}
+}
+
+// TestCollectorEmitsLiveConsentSurfaceEndToEnd drives all three verbatim #165
+// captures through Collect into a Recorder — the whole two-level fetch (grants,
+// SP $filter resolution, appRoleAssignedTo paging over a real skiptoken
+// nextLink), classifying real records rather than calling a classifier
+// directly.
+//
+// It pins the real finding: m7kni's consent surface holds ZERO high-privilege
+// grants and ZERO high-privilege assignments, so the bounded gauge reads all
+// 10 grants+assignments as "standard" and NO log twin is emitted. The
+// application "standard" count being 5 (not 0) is the proof the SP resolved and
+// its appRoleAssignedTo page was fetched and classified — the exact path the
+// old graph-sp-id/role-directory-rw placeholders faked.
+func TestCollectorEmitsLiveConsentSurfaceEndToEnd(t *testing.T) {
+	rec := telemetrytest.New()
+	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	got := seriesMap(t, rec, metricName)
+	want := map[[2]string]float64{
+		{"delegated", "privileged"}:   0,
+		{"delegated", "standard"}:     5, // all 5 real grants classify standard
+		{"application", "privileged"}: 0,
+		{"application", "standard"}:   5, // all 5 real Microsoft Graph assignments classify standard
+	}
+	assertSeries(t, got, want)
+
+	// No high-privilege record on the wire ⇒ no twin. If this ever fails, the
+	// tenant grew a high-privilege consent grant — a real signal, not a test bug.
+	if twins := logsNamed(rec.LogRecords(), eventConsentGrant); len(twins) != 0 {
+		t.Fatalf("emitted %d %s twins from the live capture, want 0 (no high-privilege consent exists on this tenant): %+v", len(twins), eventConsentGrant, twins)
+	}
+}
+
+// ----------------------------------------------------------------------------
+// High-privilege classification and twin coverage.
+//
+// CONSTRUCTED, not measured. The live m7kni consent surface holds no
+// high-privilege grant or assignment (see the capture provenance above), so
+// these fixtures build the high-privilege branch by hand — but on REAL wire
+// components: the delegated grant carries the real Directory.ReadWrite.All scope
+// token, and the assignment carries the real Directory.ReadWrite.All appRoleId
+// (19dbc75e-...) resolved against the verbatim liveGraphSPBody. Their client /
+// principal ids are placeholders, not tenant identities; do not read them as
+// measured (mirrors entra/roles' constructed service-principal and sparse-member
+// fixtures).
+
+// constructedHighPrivGrant is a delegated grant whose scope includes a real
+// high-privilege token (Directory.ReadWrite.All); its ids are placeholders.
+const constructedHighPrivGrant = `{"id":"hp-grant-1","clientId":"11111111-1111-1111-1111-111111111111","consentType":"AllPrincipals","resourceId":"62cb17e7-d25e-4356-ad51-a861585f8634","scope":"User.Read Directory.ReadWrite.All"}`
+
+// constructedHighPrivAssignment references the real Directory.ReadWrite.All
+// appRoleId from liveGraphSPBody, on the real Microsoft Graph resource; its
+// principal is a placeholder over-privileged app.
+const constructedHighPrivAssignment = `{"id":"hp-assign-1","appRoleId":"19dbc75e-c2e2-444c-a770-ec69d8559fc7","principalId":"22222222-2222-2222-2222-222222222222","principalDisplayName":"Legacy Sync App","principalType":"ServicePrincipal","resourceId":"62cb17e7-d25e-4356-ad51-a861585f8634","resourceDisplayName":"Microsoft Graph"}`
+
+// grantsBodyWith wraps grant JSON objects into an oauth2PermissionGrants page.
+func grantsBodyWith(grants ...string) string {
+	return `{"value":[` + strings.Join(grants, ",") + `]}`
+}
+
+// assignedToBodyWith wraps appRoleAssignment JSON objects into a single
+// appRoleAssignedTo page (no nextLink).
+func assignedToBodyWith(assignments ...string) string {
+	return `{"value":[` + strings.Join(assignments, ",") + `]}`
+}
+
+// liveGrantValues returns the 5 verbatim grant objects as separate JSON strings,
+// so a test can splice a constructed high-privilege grant alongside the real
+// standard ones.
+func liveGrantValues(t *testing.T) []string {
+	t.Helper()
+	return rawValues(t, liveGrantsBody)
+}
+
+// liveAssignmentValues returns the 5 verbatim appRoleAssignment objects as
+// separate JSON strings.
+func liveAssignmentValues(t *testing.T) []string {
+	t.Helper()
+	return rawValues(t, liveGraphAssignedToBody)
+}
+
+// rawValues extracts the elements of an OData "value" array as verbatim JSON
+// strings (json.RawMessage re-emitted unmodified — no field is normalized).
+func rawValues(t *testing.T, body string) []string {
+	t.Helper()
+	var env struct {
+		Value []json.RawMessage `json:"value"`
+	}
+	if err := json.Unmarshal([]byte(body), &env); err != nil {
+		t.Fatalf("decode value array: %v", err)
+	}
+	out := make([]string, 0, len(env.Value))
+	for _, v := range env.Value {
+		out = append(out, string(v))
+	}
+	return out
+}
+
 func TestCollectClassifiesDelegatedGrantsByPrivilege(t *testing.T) {
+	// The 5 real standard grants + 1 constructed high-privilege grant.
+	grants := append(liveGrantValues(t), constructedHighPrivGrant)
 	bodies := merge(emptyResourceLookups(), map[string]string{
-		grantsURL: `{"value":[
-			{"clientId":"c1","consentType":"Principal","scope":"User.Read"},
-			{"clientId":"c2","consentType":"AllPrincipals","scope":"User.Read Directory.ReadWrite.All"},
-			{"clientId":"c3","consentType":"Principal","scope":"Mail.Read Calendars.Read"},
-			{"clientId":"c4","consentType":"AllPrincipals","scope":"profile openid"}
-		]}`,
+		grantsURL: grantsBodyWith(grants...),
 	})
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
@@ -91,10 +448,9 @@ func TestCollectClassifiesDelegatedGrantsByPrivilege(t *testing.T) {
 	}
 
 	got := seriesMap(t, rec, metricName)
-	// c2 (Directory.ReadWrite.All) and c3 (Mail.Read) are privileged; c1 and c4 are standard.
 	want := map[[2]string]float64{
-		{"delegated", "privileged"}:   2,
-		{"delegated", "standard"}:     2,
+		{"delegated", "privileged"}:   1, // the constructed Directory.ReadWrite.All grant
+		{"delegated", "standard"}:     5, // all 5 real grants
 		{"application", "privileged"}: 0,
 		{"application", "standard"}:   0,
 	}
@@ -105,20 +461,14 @@ func TestCollectClassifiesAppRoleAssignmentsByPrivilege(t *testing.T) {
 	graphSP := resourceApps[0]
 	otherSP := resourceApps[1]
 
-	spBody := `{"value":[{"id":"graph-sp-id","appRoles":[
-		{"id":"role-directory-rw","value":"Directory.ReadWrite.All"},
-		{"id":"role-user-read","value":"User.Read.All"}
-	]}]}`
-	assignments := `{"value":[
-		{"appRoleId":"role-directory-rw","principalId":"p1"},
-		{"appRoleId":"role-user-read","principalId":"p2"},
-		{"appRoleId":"role-user-read","principalId":"p3"}
-	]}`
+	// The 5 real standard assignments + 1 constructed high-privilege assignment,
+	// resolved against the verbatim Microsoft Graph SP app-role map.
+	assignments := append(liveAssignmentValues(t), constructedHighPrivAssignment)
 
 	bodies := map[string]string{
 		grantsURL:                    `{"value":[]}`,
-		spFilterURL(graphSP.appID):   spBody,
-		assignedToURL("graph-sp-id"): assignments,
+		spFilterURL(graphSP.appID):   liveGraphSPBody,
+		assignedToURL(liveGraphSPID): assignedToBodyWith(assignments...),
 		spFilterURL(otherSP.appID):   `{"value":[]}`,
 	}
 	g := &fakeGraph{bodies: bodies}
@@ -132,8 +482,8 @@ func TestCollectClassifiesAppRoleAssignmentsByPrivilege(t *testing.T) {
 	want := map[[2]string]float64{
 		{"delegated", "privileged"}:   0,
 		{"delegated", "standard"}:     0,
-		{"application", "privileged"}: 1, // role-directory-rw
-		{"application", "standard"}:   2, // role-user-read x2
+		{"application", "privileged"}: 1, // Directory.ReadWrite.All (19dbc75e-...)
+		{"application", "standard"}:   5, // User.Read.All x2, Application.Read.All, TeamsAppInstallation..., TeamSettings.Read.All
 	}
 	assertSeries(t, got, want)
 }
@@ -223,15 +573,14 @@ func logsNamed(recs []telemetrytest.LogRecord, name string) []telemetrytest.LogR
 }
 
 // TestCollectTwinsOnlyHighPrivilegeDelegatedGrants is the scoping guard for the
-// delegated side: g1 (standard scope) must NOT produce a log; g2 (a
-// Directory.ReadWrite.All grant) must produce exactly one, carrying the raw
-// identifying fields the metric can never hold.
+// delegated side: the 5 real standard grants must NOT produce a log; the one
+// constructed Directory.ReadWrite.All grant must produce exactly one, carrying
+// the raw identifying fields the metric can never hold. The scope token is real;
+// the client/resource ids are the constructed record's.
 func TestCollectTwinsOnlyHighPrivilegeDelegatedGrants(t *testing.T) {
+	grants := append(liveGrantValues(t), constructedHighPrivGrant)
 	bodies := merge(emptyResourceLookups(), map[string]string{
-		grantsURL: `{"value":[
-			{"id":"g1","clientId":"c1","consentType":"Principal","principalId":"p1","resourceId":"r1","scope":"User.Read"},
-			{"id":"g2","clientId":"c2","consentType":"AllPrincipals","resourceId":"r2","scope":"User.Read Directory.ReadWrite.All"}
-		]}`,
+		grantsURL: grantsBodyWith(grants...),
 	})
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
@@ -248,16 +597,16 @@ func TestCollectTwinsOnlyHighPrivilegeDelegatedGrants(t *testing.T) {
 		}
 	}
 	if len(delegated) != 1 {
-		t.Fatalf("emitted %d delegated %s logs, want 1 (standard-scope grant g1 must not be twinned)", len(delegated), eventConsentGrant)
+		t.Fatalf("emitted %d delegated %s logs, want 1 (the 5 standard-scope grants must not be twinned)", len(delegated), eventConsentGrant)
 	}
 
 	r := delegated[0]
 	want := map[string]string{
-		"id":           "g2",
+		"id":           "hp-grant-1",
 		"consent_type": "delegated",
 		"privilege":    "privileged",
-		"client_id":    "c2",
-		"resource_id":  "r2",
+		"client_id":    "11111111-1111-1111-1111-111111111111",
+		"resource_id":  "62cb17e7-d25e-4356-ad51-a861585f8634",
 		"scope":        "User.Read Directory.ReadWrite.All",
 	}
 	for k, v := range want {
@@ -271,28 +620,20 @@ func TestCollectTwinsOnlyHighPrivilegeDelegatedGrants(t *testing.T) {
 }
 
 // TestCollectTwinsOnlyHighPrivilegeAppRoleAssignments is the scoping guard for
-// the application side: the two role-user-read (standard) assignments must
-// NOT produce logs; the one role-directory-rw (privileged) assignment must,
-// carrying the display names Graph already returns inline plus the resolved
-// app role value.
+// the application side: the 5 real standard assignments must NOT produce logs;
+// the one constructed Directory.ReadWrite.All assignment must, carrying the
+// resolved app role value plus the display names Graph returns inline. The app
+// role id and value are real, off liveGraphSPBody; the principal is constructed.
 func TestCollectTwinsOnlyHighPrivilegeAppRoleAssignments(t *testing.T) {
 	graphSP := resourceApps[0]
 	otherSP := resourceApps[1]
 
-	spBody := `{"value":[{"id":"graph-sp-id","appRoles":[
-		{"id":"role-directory-rw","value":"Directory.ReadWrite.All"},
-		{"id":"role-user-read","value":"User.Read.All"}
-	]}]}`
-	assignments := `{"value":[
-		{"id":"a1","appRoleId":"role-directory-rw","principalId":"p1","principalDisplayName":"Contoso Sync","principalType":"ServicePrincipal","resourceId":"graph-sp-id","resourceDisplayName":"Microsoft Graph"},
-		{"id":"a2","appRoleId":"role-user-read","principalId":"p2","principalDisplayName":"Some App","principalType":"ServicePrincipal","resourceId":"graph-sp-id","resourceDisplayName":"Microsoft Graph"},
-		{"id":"a3","appRoleId":"role-user-read","principalId":"p3","principalDisplayName":"Other App","principalType":"ServicePrincipal","resourceId":"graph-sp-id","resourceDisplayName":"Microsoft Graph"}
-	]}`
+	assignments := append(liveAssignmentValues(t), constructedHighPrivAssignment)
 
 	bodies := map[string]string{
 		grantsURL:                    `{"value":[]}`,
-		spFilterURL(graphSP.appID):   spBody,
-		assignedToURL("graph-sp-id"): assignments,
+		spFilterURL(graphSP.appID):   liveGraphSPBody,
+		assignedToURL(liveGraphSPID): assignedToBodyWith(assignments...),
 		spFilterURL(otherSP.appID):   `{"value":[]}`,
 	}
 	g := &fakeGraph{bodies: bodies}
@@ -310,21 +651,21 @@ func TestCollectTwinsOnlyHighPrivilegeAppRoleAssignments(t *testing.T) {
 		}
 	}
 	if len(application) != 1 {
-		t.Fatalf("emitted %d application %s logs, want 1 (the two standard role-user-read assignments must not be twinned)", len(application), eventConsentGrant)
+		t.Fatalf("emitted %d application %s logs, want 1 (the 5 standard assignments must not be twinned)", len(application), eventConsentGrant)
 	}
 
 	r := application[0]
 	want := map[string]string{
-		"id":                     "a1",
+		"id":                     "hp-assign-1",
 		"consent_type":           "application",
 		"privilege":              "privileged",
 		"resource_label":         "microsoft_graph",
-		"resource_id":            "graph-sp-id",
+		"resource_id":            "62cb17e7-d25e-4356-ad51-a861585f8634",
 		"resource_display_name":  "Microsoft Graph",
-		"app_role_id":            "role-directory-rw",
+		"app_role_id":            "19dbc75e-c2e2-444c-a770-ec69d8559fc7",
 		"app_role":               "Directory.ReadWrite.All",
-		"principal_id":           "p1",
-		"principal_display_name": "Contoso Sync",
+		"principal_id":           "22222222-2222-2222-2222-222222222222",
+		"principal_display_name": "Legacy Sync App",
 		"principal_type":         "ServicePrincipal",
 	}
 	for k, v := range want {
@@ -340,12 +681,18 @@ func TestCollectTwinsOnlyHighPrivilegeAppRoleAssignments(t *testing.T) {
 // ever leak onto a metric point's attributes -- the metric stays bounded to
 // (consent_type, privilege) regardless of what the log twin now carries.
 func TestLogTwinNeverReachesMetricAttrs(t *testing.T) {
-	bodies := merge(emptyResourceLookups(), map[string]string{
-		grantsURL: `{"value":[
-			{"id":"g1","clientId":"c1","consentType":"Principal","principalId":"p1","resourceId":"r1","scope":"User.Read"},
-			{"id":"g2","clientId":"c2","consentType":"AllPrincipals","resourceId":"r2","scope":"Directory.ReadWrite.All"}
-		]}`,
-	})
+	graphSP := resourceApps[0]
+	otherSP := resourceApps[1]
+
+	grants := append(liveGrantValues(t), constructedHighPrivGrant)
+	assignments := append(liveAssignmentValues(t), constructedHighPrivAssignment)
+
+	bodies := map[string]string{
+		grantsURL:                    grantsBodyWith(grants...),
+		spFilterURL(graphSP.appID):   liveGraphSPBody,
+		assignedToURL(liveGraphSPID): assignedToBodyWith(assignments...),
+		spFilterURL(otherSP.appID):   `{"value":[]}`,
+	}
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
