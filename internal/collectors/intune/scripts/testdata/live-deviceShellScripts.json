@@ -1,0 +1,25 @@
+{
+  "@odata.context": "https://graph.microsoft.com/beta/$metadata#deviceManagement/deviceShellScripts(id,displayName)",
+  "value": [
+    {
+      "displayName": "Bumblebee installer",
+      "id": "2c30f225-b8d1-4112-b689-6c41bc5affcf"
+    },
+    {
+      "displayName": "MacOS Screenshots Location",
+      "id": "3f122b76-2f51-4f94-924b-713c333964a8"
+    },
+    {
+      "displayName": "DDM OS Reminder installer",
+      "id": "dcb85fa9-7a47-4ef6-8329-eb700f3aed08"
+    },
+    {
+      "displayName": "MacOS App Auto-Patch installer",
+      "id": "e249f907-d017-4995-aa5c-0752c4d20e54"
+    },
+    {
+      "displayName": "Disable SMB1, NetBIOS and netbiosd",
+      "id": "ed9db809-3b03-4ebc-937f-1282f739aff7"
+    }
+  ]
+}

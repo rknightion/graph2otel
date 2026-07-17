@@ -1,0 +1,26 @@
+{
+  "@odata.context": "https://graph.microsoft.com/beta/$metadata#deviceManagement/deviceHealthScripts(id,displayName)",
+  "@odata.count": 11,
+  "value": [
+    {
+      "displayName": "Restart stopped Office C2R svc",
+      "id": "02a4e7e8-195a-4824-8044-08b3a7f2d555"
+    },
+    {
+      "displayName": "Health: Pending Reboot Age (Win)",
+      "id": "3fff8e1f-05fb-416c-b628-655bec769596"
+    },
+    {
+      "displayName": "Update stale Group Policies",
+      "id": "61dcf0ae-580d-4620-8b9a-8ce678ecc5ee"
+    },
+    {
+      "displayName": "Promote all system tray icons",
+      "id": "91dbfd6f-074a-4674-98cc-8d2969abee03"
+    },
+    {
+      "displayName": "Health: Low Disk Space (Win)",
+      "id": "bc7b82cf-65b5-4813-941c-98c3b44a43b4"
+    }
+  ]
+}
