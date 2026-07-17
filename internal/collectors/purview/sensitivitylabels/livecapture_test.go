@@ -18,13 +18,11 @@ import (
 // untrimmed, with their nested sublabels intact. GetAllValues walks only the
 // top-level `value` array, so this collector sees exactly those five.
 //
-// Two WIRE facts this record pins, both of which a docs-derived fixture got
-// wrong and neither of which this collector's mapper reads:
+// Two WIRE facts this record pins:
 //   - The human-readable text lives in `toolTip`, and `description` is "" on
-//     every label — so the purview.sensitivity_label log twin emits NO
-//     description attribute from real data (setStr omits the empty value). The
-//     synthetic TestSensitivityCollectEmitsLogTwin is the only thing that keeps
-//     `description` in the signal golden.
+//     every label (#175) — so the mapper reads `toolTip` for the twin's
+//     description attribute, falling back to `description` only if a future
+//     tenant populates that field instead.
 //   - The label name is in `name` ("Personal"); `displayName` is null on every
 //     row. The mapper reads `name`, which is correct.
 const liveSensitivityLabels = `{
@@ -454,9 +452,9 @@ const liveSensitivityLabels = `{
 // Every live label is applicableTo "email,teamwork,file", so the by-target
 // metric is email=5, teamwork=5, file=5 (a multi-target label counts in each),
 // and there are five purview.sensitivity_label log twins. The `description`
-// attribute is asserted ABSENT: it is "" on the wire (the text is in toolTip),
-// so the log twin never carries it from live data. Capture is truth — if the
-// mapper is ever changed to read toolTip, this expectation changes with it.
+// attribute carries the label's human text from the wire's `toolTip` field
+// (#175): `description` itself is "" on every live label, so without the
+// toolTip fallback the twin would ship no description from real data.
 func TestSensitivityCollectFromLiveCapture(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{sensitivityURL: liveSensitivityLabels}}
 	rec := telemetrytest.New()
@@ -506,9 +504,12 @@ func TestSensitivityCollectFromLiveCapture(t *testing.T) {
 	if personal.Attrs["applicable_to"] != "email,teamwork,file" {
 		t.Errorf("applicable_to = %q, want email,teamwork,file", personal.Attrs["applicable_to"])
 	}
+	if personal.Attrs["description"] != "Non-business data, for personal use only." {
+		t.Errorf("description = %q, want the Personal label's toolTip text", personal.Attrs["description"])
+	}
 	for _, l := range twins {
-		if v, present := l.Attrs["description"]; present {
-			t.Errorf("label id=%s carried description=%q; it is \"\" on the wire (text is in toolTip) and must be omitted", l.Attrs["id"], v)
+		if l.Attrs["description"] == "" {
+			t.Errorf("label id=%s carried no description; every live label has a non-empty toolTip", l.Attrs["id"])
 		}
 	}
 }

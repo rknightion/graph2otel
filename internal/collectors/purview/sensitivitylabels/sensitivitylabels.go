@@ -136,8 +136,13 @@ type sensitivityLabel struct {
 	ApplicableTo string `json:"applicableTo"`
 	// Priority is a dense per-label sequential integer (lower = higher
 	// priority) — log-only, see the package doc's field-name-deviation note.
-	Priority    int    `json:"priority"`
+	Priority int `json:"priority"`
+	// Description is the resource's nominal free-text field, but it is ""
+	// on every live label (#175) — the human-readable text actually lives in
+	// ToolTip. Kept only as the fallback source, in case a future tenant
+	// populates it instead.
 	Description string `json:"description"`
+	ToolTip     string `json:"toolTip"`
 }
 
 // SensitivityCollector polls the tenant's sensitivity-label catalog.
@@ -232,7 +237,10 @@ func (c *SensitivityCollector) Collect(ctx context.Context, e telemetry.Emitter)
 		setStr(attrs, "id", l.ID)
 		setStr(attrs, "name", l.Name)
 		setStr(attrs, "applicable_to", l.ApplicableTo)
-		setStr(attrs, "description", l.Description)
+		// The human-readable text lives in toolTip on the live wire; description
+		// is "" on every label there (#175). Fall back to description only for a
+		// tenant that populates it instead.
+		setStr(attrs, "description", firstNonEmpty(l.ToolTip, l.Description))
 		e.LogEvent(telemetry.Event{
 			Name:  sensitivityLabelEventName,
 			Body:  fmt.Sprintf("sensitivity label: %s", l.Name),
@@ -302,6 +310,17 @@ func setStr(attrs telemetry.Attrs, key, val string) {
 	if val != "" {
 		attrs[key] = val
 	}
+}
+
+// firstNonEmpty returns the first non-empty string among vals, or "" if all
+// are empty.
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func init() {
