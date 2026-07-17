@@ -39,16 +39,117 @@ func page(itemsJSON string) string {
 	return `{"value":[` + itemsJSON + `]}`
 }
 
-// sampleConfigs mixes every known deviceEnrollmentConfiguration subtype plus
-// one unrecognized future subtype, so tests can assert both the known
-// buckets and the "other" leftover bucket in one fixture.
+// sampleConfigs is the VERBATIM value array of
+// GET /deviceManagement/deviceEnrollmentConfigurations read as graph2otel-poller
+// against the m7kni tenant `[live-measured 2026-07-17, #165]`. The full subtype
+// objects are pinned as Graph returned them — including the per-subtype nested
+// fields the collector deliberately ignores (androidRestriction, pin* settings,
+// limit, ...) — so the wire shape stays honest rather than docs-derived.
+//
+// It preserves the heterogeneous @odata.type variety Collect buckets on: four
+// distinct subtypes (limit, platform_restrictions, windows_hello_for_business,
+// esp) plus, load-bearingly, a fifth entry (the default WindowsRestore config)
+// that carries NO @odata.type at all — the live proof that configType must
+// bucket a MISSING type to "other", not only an unknown non-empty one. The
+// tenant exposes only the default configurations, so every entry shares the
+// displayName "All users and all devices" and priority/version 0; that is the
+// real tenant state, not a fixture simplification. The unknown-non-empty-type
+// path someFutureConfigurationType used to cover is retained directly in
+// TestConfigTypeBucketsMissingAndUnknownToOther.
 const sampleConfigs = `
-{"@odata.type":"#microsoft.graph.deviceEnrollmentLimitConfiguration","id":"e1","displayName":"All users","priority":0,"version":1},
-{"@odata.type":"#microsoft.graph.deviceEnrollmentPlatformRestrictionsConfiguration","id":"e2","displayName":"Platform restrictions","priority":1,"version":2},
-{"@odata.type":"#microsoft.graph.windows10EnrollmentCompletionPageConfiguration","id":"e3","displayName":"ESP - Corp devices","priority":2,"version":5},
-{"@odata.type":"#microsoft.graph.deviceEnrollmentWindowsHelloForBusinessConfiguration","id":"e4","displayName":"WHfB default","priority":3,"version":1},
-{"@odata.type":"#microsoft.graph.deviceComanagementAuthorityConfiguration","id":"e5","displayName":"Co-management","priority":4,"version":1},
-{"@odata.type":"#microsoft.graph.someFutureConfigurationType","id":"e6","displayName":"Unknown future type","priority":5,"version":1}
+{
+  "@odata.type": "#microsoft.graph.deviceEnrollmentLimitConfiguration",
+  "createdDateTime": "0001-01-01T00:00:00Z",
+  "description": "This is the default Device Limit Restriction applied with the lowest priority to all users regardless of group membership.",
+  "displayName": "All users and all devices",
+  "id": "e933bb26-3dff-49f0-a41a-bd722a92f1fb_DefaultLimit",
+  "lastModifiedDateTime": "2026-01-17T10:42:02Z",
+  "limit": 15,
+  "priority": 0,
+  "version": 0
+},
+{
+  "@odata.type": "#microsoft.graph.deviceEnrollmentPlatformRestrictionsConfiguration",
+  "androidRestriction": {
+    "osMaximumVersion": "",
+    "osMinimumVersion": "",
+    "personalDeviceEnrollmentBlocked": false,
+    "platformBlocked": false
+  },
+  "createdDateTime": "0001-01-01T00:00:00Z",
+  "description": "This is the default Device Type Restriction applied with the lowest priority to all users regardless of group membership.",
+  "displayName": "All users and all devices",
+  "id": "e933bb26-3dff-49f0-a41a-bd722a92f1fb_DefaultPlatformRestrictions",
+  "iosRestriction": {
+    "osMaximumVersion": "",
+    "osMinimumVersion": "",
+    "personalDeviceEnrollmentBlocked": false,
+    "platformBlocked": false
+  },
+  "lastModifiedDateTime": "2026-01-17T10:42:02Z",
+  "macOSRestriction": {
+    "osMaximumVersion": null,
+    "osMinimumVersion": null,
+    "personalDeviceEnrollmentBlocked": false,
+    "platformBlocked": false
+  },
+  "priority": 0,
+  "version": 0,
+  "windowsMobileRestriction": {
+    "osMaximumVersion": "",
+    "osMinimumVersion": "",
+    "personalDeviceEnrollmentBlocked": false,
+    "platformBlocked": true
+  },
+  "windowsRestriction": {
+    "osMaximumVersion": "",
+    "osMinimumVersion": "",
+    "personalDeviceEnrollmentBlocked": false,
+    "platformBlocked": false
+  }
+},
+{
+  "@odata.type": "#microsoft.graph.deviceEnrollmentWindowsHelloForBusinessConfiguration",
+  "createdDateTime": "0001-01-01T00:00:00Z",
+  "description": "This is the default Windows Hello for Business configuration applied with the lowest priority to all users regardless of group membership.",
+  "displayName": "All users and all devices",
+  "enhancedBiometricsState": "enabled",
+  "id": "e933bb26-3dff-49f0-a41a-bd722a92f1fb_DefaultWindowsHelloForBusiness",
+  "lastModifiedDateTime": "2026-01-17T10:42:02Z",
+  "pinExpirationInDays": 0,
+  "pinLowercaseCharactersUsage": "allowed",
+  "pinMaximumLength": 127,
+  "pinMinimumLength": 6,
+  "pinPreviousBlockCount": 0,
+  "pinSpecialCharactersUsage": "allowed",
+  "pinUppercaseCharactersUsage": "allowed",
+  "priority": 0,
+  "remotePassportEnabled": true,
+  "securityDeviceRequired": false,
+  "state": "enabled",
+  "unlockWithBiometricsEnabled": true,
+  "version": 0
+},
+{
+  "@odata.type": "#microsoft.graph.windows10EnrollmentCompletionPageConfiguration",
+  "allowNonBlockingAppInstallation": false,
+  "createdDateTime": "0001-01-01T00:00:00Z",
+  "description": "This is the default enrollment status screen configuration applied with the lowest priority to all users and all devices regardless of group membership.",
+  "displayName": "All users and all devices",
+  "id": "e933bb26-3dff-49f0-a41a-bd722a92f1fb_DefaultWindows10EnrollmentCompletionPageConfiguration",
+  "lastModifiedDateTime": "2026-01-17T10:42:02Z",
+  "priority": 0,
+  "version": 0
+},
+{
+  "createdDateTime": "0001-01-01T00:00:00Z",
+  "description": "This is the default Windows Restore configuration applied with the lowest priority to all users and all devices regardless of group membership.",
+  "displayName": "All users and all devices",
+  "id": "e933bb26-3dff-49f0-a41a-bd722a92f1fb_WindowsRestore",
+  "lastModifiedDateTime": "2026-01-17T10:42:02Z",
+  "priority": 0,
+  "version": 0
+}
 `
 
 func fixture() map[string]string {
@@ -67,12 +168,13 @@ func TestCollectEmitsCountByConfigType(t *testing.T) {
 	for _, p := range rec.MetricPoints(countMetricName) {
 		got[p.Attrs["config_type"]] = p.Value
 	}
+	// Live tenant exposes one instance of each default subtype; the fifth
+	// (WindowsRestore) carries no @odata.type and buckets to "other".
 	want := map[string]float64{
 		"limit":                      1,
 		"platform_restrictions":      1,
 		"esp":                        1,
 		"windows_hello_for_business": 1,
-		"comanagement_authority":     1,
 		"other":                      1,
 	}
 	if len(got) != len(want) {
@@ -98,13 +200,15 @@ func TestCollectEmitsPriorityByTypeAndName(t *testing.T) {
 	for _, p := range rec.MetricPoints(priorityMetricName) {
 		got[key{p.Attrs["config_type"], p.Attrs["config_name"]}] = p.Value
 	}
+	// Every live default config shares the displayName "All users and all
+	// devices" and priority 0, so the series are distinguished only by
+	// config_type; five distinct config_type values yield five series.
 	want := map[key]float64{
-		{"limit", "All users"}:                             0,
-		{"platform_restrictions", "Platform restrictions"}: 1,
-		{"esp", "ESP - Corp devices"}:                      2,
-		{"windows_hello_for_business", "WHfB default"}:     3,
-		{"comanagement_authority", "Co-management"}:        4,
-		{"other", "Unknown future type"}:                   5,
+		{"limit", "All users and all devices"}:                      0,
+		{"platform_restrictions", "All users and all devices"}:      0,
+		{"esp", "All users and all devices"}:                        0,
+		{"windows_hello_for_business", "All users and all devices"}: 0,
+		{"other", "All users and all devices"}:                      0,
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d priority series, want %d: %v", len(got), len(want), got)
@@ -128,13 +232,12 @@ func TestCollectEmitsVersionByConfigName(t *testing.T) {
 	for _, p := range rec.MetricPoints(versionMetricName) {
 		got[p.Attrs["config_name"]] = p.Value
 	}
+	// The version metric is keyed by config_name ALONE, and every live default
+	// config is named "All users and all devices", so all five collapse into a
+	// single series (a genuine live aliasing limitation on this tenant, not a
+	// fixture artifact). Every default's version is 0.
 	want := map[string]float64{
-		"All users":             1,
-		"Platform restrictions": 2,
-		"ESP - Corp devices":    5,
-		"WHfB default":          1,
-		"Co-management":         1,
-		"Unknown future type":   1,
+		"All users and all devices": 0,
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d version series, want %d: %v", len(got), len(want), got)
@@ -194,6 +297,34 @@ func TestNameAndPermissions(t *testing.T) {
 	perms := c.RequiredPermissions()
 	if len(perms) != 1 || perms[0] != "DeviceManagementServiceConfig.Read.All" {
 		t.Errorf("RequiredPermissions = %v, want [DeviceManagementServiceConfig.Read.All]", perms)
+	}
+}
+
+// TestConfigTypeBucketsMissingAndUnknownToOther pins both routes into the
+// "other" bucket. The live fixture only exercises the missing-@odata.type route
+// (its WindowsRestore entry has no @odata.type); this retains the
+// unknown-non-empty-type route that the removed someFutureConfigurationType row
+// used to cover, so a future Graph subtype degrades to "other" rather than
+// failing or being dropped.
+func TestConfigTypeBucketsMissingAndUnknownToOther(t *testing.T) {
+	cases := map[string]string{
+		"missing @odata.type":             "",
+		"unknown future @odata.type":      "#microsoft.graph.someFutureConfigurationType",
+		"known limit subtype":             "#microsoft.graph.deviceEnrollmentLimitConfiguration",
+		"known comanagement subtype":      "#microsoft.graph.deviceComanagementAuthorityConfiguration",
+		"known singular platform subtype": "#microsoft.graph.deviceEnrollmentPlatformRestrictionConfiguration",
+	}
+	want := map[string]string{
+		"missing @odata.type":             "other",
+		"unknown future @odata.type":      "other",
+		"known limit subtype":             "limit",
+		"known comanagement subtype":      "comanagement_authority",
+		"known singular platform subtype": "platform_restriction",
+	}
+	for name, odataType := range cases {
+		if got := configType(odataType); got != want[name] {
+			t.Errorf("configType(%q) = %q, want %q", odataType, got, want[name])
+		}
 	}
 }
 
