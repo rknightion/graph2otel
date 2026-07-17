@@ -62,6 +62,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -380,14 +381,14 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for k, v := range days {
 		dayPoints = append(dayPoints, telemetry.GaugePoint{
 			Value: float64(v),
-			Attrs: telemetry.Attrs{"expiry_bucket": k.expiryBucket, "state": k.state, "cert_profile_name": k.profileName},
+			Attrs: telemetry.Attrs{semconv.AttrExpiryBucket: k.expiryBucket, semconv.AttrState: k.state, semconv.AttrCertProfileName: k.profileName},
 		})
 	}
 	e.GaugeSnapshot(daysUntilExpiryMetricName, "{certificate}", "Intune certificates by time-until-expiry window, issuance state, and certificate profile.", dayPoints)
 
 	statePoints := make([]telemetry.GaugePoint, 0, len(states))
 	for state, v := range states {
-		statePoints = append(statePoints, telemetry.GaugePoint{Value: float64(v), Attrs: telemetry.Attrs{"state": state}})
+		statePoints = append(statePoints, telemetry.GaugePoint{Value: float64(v), Attrs: telemetry.Attrs{semconv.AttrState: state}})
 	}
 	e.GaugeSnapshot(stateCountMetricName, "{certificate}", "Intune certificates by collapsed issuance state.", statePoints)
 
@@ -504,28 +505,28 @@ func (c *Collector) collectUserPfxCertificates(ctx context.Context, e telemetry.
 // happen for whatever VPN/Wi-Fi/email flow depends on it); every other state
 // (issued, pending, revoked, deleted, unknown) stays Info.
 func managedDeviceCertLogTwin(st certificateState, stateBucket, expiryBucket string) telemetry.Event {
-	attrs := telemetry.Attrs{"source": "managed_device"}
-	setStr(attrs, "id", st.ID)
-	setStr(attrs, "device_platform", st.DevicePlatform)
-	setStr(attrs, "device_display_name", st.DeviceDisplayName)
-	setStr(attrs, "user_display_name", st.UserDisplayName)
-	setStr(attrs, "certificate_profile_name", st.CertificateProfileDisplayName)
-	setStr(attrs, "thumbprint", st.CertificateThumbprint)
-	setStr(attrs, "serial_number", st.CertificateSerialNumber)
-	setStr(attrs, "issuer", st.CertificateIssuer)
-	setStr(attrs, "issuance_state", st.CertificateIssuanceState)
-	setStr(attrs, "revoke_status", st.CertificateRevokeStatus)
-	setStr(attrs, "subject_name_format", st.CertificateSubjectNameFormat)
-	setStr(attrs, "subject_alternative_name_format", st.CertificateSubjectAlternativeNameFormat)
+	attrs := telemetry.Attrs{semconv.AttrSource: "managed_device"}
+	telemetry.SetStr(attrs, semconv.AttrId, st.ID)
+	telemetry.SetStr(attrs, semconv.AttrDevicePlatform, st.DevicePlatform)
+	telemetry.SetStr(attrs, semconv.AttrDeviceDisplayName, st.DeviceDisplayName)
+	telemetry.SetStr(attrs, semconv.AttrUserDisplayName, st.UserDisplayName)
+	telemetry.SetStr(attrs, semconv.AttrCertificateProfileName, st.CertificateProfileDisplayName)
+	telemetry.SetStr(attrs, semconv.AttrThumbprint, st.CertificateThumbprint)
+	telemetry.SetStr(attrs, semconv.AttrSerialNumber, st.CertificateSerialNumber)
+	telemetry.SetStr(attrs, semconv.AttrIssuer, st.CertificateIssuer)
+	telemetry.SetStr(attrs, semconv.AttrIssuanceState, st.CertificateIssuanceState)
+	telemetry.SetStr(attrs, semconv.AttrRevokeStatus, st.CertificateRevokeStatus)
+	telemetry.SetStr(attrs, semconv.AttrSubjectNameFormat, st.CertificateSubjectNameFormat)
+	telemetry.SetStr(attrs, semconv.AttrSubjectAlternativeNameFormat, st.CertificateSubjectAlternativeNameFormat)
 	if st.CertificateKeyLength != 0 {
-		attrs["key_length"] = strconv.Itoa(st.CertificateKeyLength)
+		attrs[semconv.AttrKeyLength] = strconv.Itoa(st.CertificateKeyLength)
 	}
 	if st.CertificateErrorCode != 0 {
-		attrs["error_code"] = strconv.Itoa(st.CertificateErrorCode)
+		attrs[semconv.AttrErrorCode] = strconv.Itoa(st.CertificateErrorCode)
 	}
-	setStr(attrs, "expiration_date_time", formatTimePtr(st.CertificateExpirationDateTime))
-	setStr(attrs, "issuance_date_time", formatTimePtr(st.CertificateIssuanceDateTime))
-	setStr(attrs, "last_issuance_state_changed_date_time", formatTimePtr(st.CertificateLastIssuanceStateChangedDateTime))
+	telemetry.SetStr(attrs, semconv.AttrExpirationDateTime, formatTimePtr(st.CertificateExpirationDateTime))
+	telemetry.SetStr(attrs, semconv.AttrIssuanceDateTime, formatTimePtr(st.CertificateIssuanceDateTime))
+	telemetry.SetStr(attrs, semconv.AttrLastIssuanceStateChangedDateTime, formatTimePtr(st.CertificateLastIssuanceStateChangedDateTime))
 
 	sev := telemetry.SeverityInfo
 	if stateBucket == "failed" || expiryBucket == expiryExpired {
@@ -563,15 +564,15 @@ func managedCertDisplayOf(st certificateState) string {
 // resource has no issuance-state field (see pfxImportedState), so expiry is
 // the only Warn trigger.
 func userPfxCertLogTwin(pfx userPfxCertificate, expiryBucket string) telemetry.Event {
-	attrs := telemetry.Attrs{"source": "user_pfx"}
-	setStr(attrs, "id", pfx.ID)
-	setStr(attrs, "user_principal_name", pfx.UserPrincipalName)
-	setStr(attrs, "thumbprint", pfx.Thumbprint)
-	setStr(attrs, "intended_purpose", pfx.IntendedPurpose)
-	setStr(attrs, "provider_name", pfx.ProviderName)
-	setStr(attrs, "key_name", pfx.KeyName)
-	setStr(attrs, "start_date_time", formatTimePtr(pfx.StartDateTime))
-	setStr(attrs, "expiration_date_time", formatTimePtr(pfx.ExpirationDateTime))
+	attrs := telemetry.Attrs{semconv.AttrSource: "user_pfx"}
+	telemetry.SetStr(attrs, semconv.AttrId, pfx.ID)
+	telemetry.SetStr(attrs, semconv.AttrUserPrincipalName, pfx.UserPrincipalName)
+	telemetry.SetStr(attrs, semconv.AttrThumbprint, pfx.Thumbprint)
+	telemetry.SetStr(attrs, semconv.AttrIntendedPurpose, pfx.IntendedPurpose)
+	telemetry.SetStr(attrs, semconv.AttrProviderName, pfx.ProviderName)
+	telemetry.SetStr(attrs, semconv.AttrKeyName, pfx.KeyName)
+	telemetry.SetStr(attrs, semconv.AttrStartDateTime, formatTimePtr(pfx.StartDateTime))
+	telemetry.SetStr(attrs, semconv.AttrExpirationDateTime, formatTimePtr(pfx.ExpirationDateTime))
 
 	sev := telemetry.SeverityInfo
 	if expiryBucket == expiryExpired {
@@ -605,15 +606,6 @@ func formatTimePtr(t *time.Time) string {
 		return ""
 	}
 	return t.Format(time.RFC3339)
-}
-
-// setStr adds key=val to attrs only when val is non-empty, so an absent
-// string field emits no attribute rather than an empty one - matches the
-// entra/risk and purview/labels reference collectors.
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
-	}
 }
 
 // isUnavailable reports whether err is a 4xx from a beta endpoint being

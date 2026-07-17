@@ -43,6 +43,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -241,9 +242,9 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(v),
 			Attrs: telemetry.Attrs{
-				"owner_type":      k.ownerType,
-				"credential_type": k.credentialType,
-				"expiry_bucket":   k.expiryBucket,
+				semconv.AttrOwnerType:      k.ownerType,
+				semconv.AttrCredentialType: k.credentialType,
+				semconv.AttrExpiryBucket:   k.expiryBucket,
 			},
 		})
 	}
@@ -313,24 +314,25 @@ func expiryBucketFor(now, end time.Time) string {
 // attached only when credType is "certificate": they come from keyCredential,
 // which passwordCredential does not carry, so attaching them for a secret
 // would either be a stale zero value or (worse) accidentally wired to the
-// wrong field in a future edit. setStr's omit-if-empty behavior would mask
-// that mistake, so the certificate-only fields are gated explicitly instead.
+// wrong field in a future edit. telemetry.SetStr's omit-if-empty behavior
+// would mask that mistake, so the certificate-only fields are gated
+// explicitly instead.
 func credentialLogTwin(owner ownerType, credType string, ent ownerEntity, cred credential, bucket string) telemetry.Event {
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "owner_type", owner.attr)
-	setStr(attrs, "app_id", ent.AppID)
-	setStr(attrs, "app_object_id", ent.ID)
-	setStr(attrs, "display_name", ent.DisplayName)
-	setStr(attrs, "credential_type", credType)
-	setStr(attrs, "key_id", cred.KeyID)
-	setStr(attrs, "credential_display_name", cred.DisplayName)
-	setStr(attrs, "start_date_time", cred.StartDateTime)
-	setStr(attrs, "end_date_time", cred.EndDateTime)
-	setStr(attrs, "expiry_bucket", bucket)
+	telemetry.SetStr(attrs, semconv.AttrOwnerType, owner.attr)
+	telemetry.SetStr(attrs, semconv.AttrAppId, ent.AppID)
+	telemetry.SetStr(attrs, semconv.AttrAppObjectId, ent.ID)
+	telemetry.SetStr(attrs, semconv.AttrDisplayName, ent.DisplayName)
+	telemetry.SetStr(attrs, semconv.AttrCredentialType, credType)
+	telemetry.SetStr(attrs, semconv.AttrKeyId, cred.KeyID)
+	telemetry.SetStr(attrs, semconv.AttrCredentialDisplayName, cred.DisplayName)
+	telemetry.SetStr(attrs, semconv.AttrStartDateTime, cred.StartDateTime)
+	telemetry.SetStr(attrs, semconv.AttrEndDateTime, cred.EndDateTime)
+	telemetry.SetStr(attrs, semconv.AttrExpiryBucket, bucket)
 	if credType == "certificate" {
-		setStr(attrs, "custom_key_identifier", cred.CustomKeyIdentifier)
-		setStr(attrs, "key_type", cred.Type)
-		setStr(attrs, "key_usage", cred.Usage)
+		telemetry.SetStr(attrs, semconv.AttrCustomKeyIdentifier, cred.CustomKeyIdentifier)
+		telemetry.SetStr(attrs, semconv.AttrKeyType, cred.Type)
+		telemetry.SetStr(attrs, semconv.AttrKeyUsage, cred.Usage)
 	}
 
 	// Only "expired" and "lt_7d" escalate to WARN: those are the two buckets
@@ -375,14 +377,6 @@ func displayOfCredential(cred credential) string {
 		}
 	}
 	return "unknown"
-}
-
-// setStr adds key=val only when val is non-empty, so an absent field emits no
-// attribute rather than an empty one.
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
-	}
 }
 
 func init() {

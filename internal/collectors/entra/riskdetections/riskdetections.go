@@ -44,6 +44,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -140,30 +141,30 @@ func mapRiskDetection(rec map[string]any) (string, telemetry.Event) {
 	// Graph resource field-for-field, which is not true here. #141 and #138 both
 	// reason from the sign-in case; this is the counter-example.
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "id", id)
-	setStr(attrs, "risk_event_type", riskEventType)
-	setStr(attrs, "risk_level", riskLevel)
-	setStr(attrs, "risk_state", str(rec, "riskState"))
-	setStr(attrs, "risk_detail", str(rec, "riskDetail"))
-	setStr(attrs, "detection_timing_type", str(rec, "detectionTimingType"))
-	setStr(attrs, "source", str(rec, "source"))
-	setStr(attrs, "ip_address", str(rec, "ipAddress"))
-	setStr(attrs, "user_principal_name", userPrincipalName)
-	setStr(attrs, "user_id", str(rec, "userId"))
-	setStr(attrs, "user_display_name", str(rec, "userDisplayName"))
-	setStr(attrs, "correlation_id", str(rec, "correlationId"))
-	setStr(attrs, "request_id", str(rec, "requestId"))
-	setStr(attrs, "activity", str(rec, "activity"))
+	telemetry.SetStr(attrs, semconv.AttrId, id)
+	telemetry.SetStr(attrs, semconv.AttrRiskEventType, riskEventType)
+	telemetry.SetStr(attrs, semconv.AttrRiskLevel, riskLevel)
+	telemetry.SetStr(attrs, semconv.AttrRiskState, str(rec, "riskState"))
+	telemetry.SetStr(attrs, semconv.AttrRiskDetail, str(rec, "riskDetail"))
+	telemetry.SetStr(attrs, semconv.AttrDetectionTimingType, str(rec, "detectionTimingType"))
+	telemetry.SetStr(attrs, semconv.AttrSource, str(rec, "source"))
+	telemetry.SetStr(attrs, semconv.AttrIpAddress, str(rec, "ipAddress"))
+	telemetry.SetStr(attrs, semconv.AttrUserPrincipalName, userPrincipalName)
+	telemetry.SetStr(attrs, semconv.AttrUserId, str(rec, "userId"))
+	telemetry.SetStr(attrs, semconv.AttrUserDisplayName, str(rec, "userDisplayName"))
+	telemetry.SetStr(attrs, semconv.AttrCorrelationId, str(rec, "correlationId"))
+	telemetry.SetStr(attrs, semconv.AttrRequestId, str(rec, "requestId"))
+	telemetry.SetStr(attrs, semconv.AttrActivity, str(rec, "activity"))
 	// tokenIssuerType ("AzureAD" live) separates cloud-issued from federated
 	// tokens on a risk event — the pivot for "is our federated IdP the one
 	// producing these" (#159). Bounded vocabulary, but log-only like everything
 	// else here: this package emits no metrics.
-	setStr(attrs, "token_issuer_type", str(rec, "tokenIssuerType"))
+	telemetry.SetStr(attrs, semconv.AttrTokenIssuerType, str(rec, "tokenIssuerType"))
 
 	if loc := nested(rec, "location"); loc != nil {
-		setStr(attrs, "location_city", str(loc, "city"))
-		setStr(attrs, "location_state", str(loc, "state"))
-		setStr(attrs, "location_country_or_region", str(loc, "countryOrRegion"))
+		telemetry.SetStr(attrs, semconv.AttrLocationCity, str(loc, "city"))
+		telemetry.SetStr(attrs, semconv.AttrLocationState, str(loc, "state"))
+		telemetry.SetStr(attrs, semconv.AttrLocationCountryOrRegion, str(loc, "countryOrRegion"))
 
 		// geoCoordinates feed impossible-travel and geofencing rules, which
 		// cannot work off city/country strings (#159).
@@ -178,8 +179,8 @@ func mapRiskDetection(rec map[string]any) (string, telemetry.Event) {
 		// altitude on geoCoordinates; it is NOT on the live record, so it is
 		// unverified and stays unmapped rather than invented (#142).
 		if geo := nested(loc, "geoCoordinates"); geo != nil {
-			setNum(attrs, "location_latitude", geo, "latitude")
-			setNum(attrs, "location_longitude", geo, "longitude")
+			telemetry.SetNum(attrs, semconv.AttrLocationLatitude, geo, "latitude")
+			telemetry.SetNum(attrs, semconv.AttrLocationLongitude, geo, "longitude")
 		}
 	}
 
@@ -197,11 +198,11 @@ func mapRiskDetection(rec map[string]any) (string, telemetry.Event) {
 		// "T1090.003,T1078" — Multi-hop Proxy + Valid Accounts — which named
 		// the Tor sign-in #129 synthesized more precisely than riskEventType did.
 		if techniques := mitreTechniques(pairs); len(techniques) > 0 {
-			attrs["mitre_techniques"] = techniques
+			attrs[semconv.AttrMitreTechniques] = techniques
 		}
 		// The client string behind the detection (#159): a first-order pivot
 		// for "what was this", and the join key onto the sign-in logs.
-		setStr(attrs, "user_agent", pairs["userAgent"])
+		telemetry.SetStr(attrs, semconv.AttrUserAgent, pairs["userAgent"])
 	}
 
 	return id, telemetry.Event{
@@ -295,23 +296,6 @@ func str(m map[string]any, key string) string {
 func nested(m map[string]any, key string) map[string]any {
 	n, _ := m[key].(map[string]any)
 	return n
-}
-
-// setNum adds key=<number> only when the source field is actually a JSON
-// number, gating on PRESENCE rather than value — 0 is a meaningful coordinate,
-// so the setStr "skip the empty value" pattern must not be reused here.
-func setNum(attrs telemetry.Attrs, key string, m map[string]any, srcKey string) {
-	if f, ok := m[srcKey].(float64); ok {
-		attrs[key] = f
-	}
-}
-
-// setStr adds key=val only when val is non-empty, so absent fields don't
-// emit empty attributes.
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
-	}
 }
 
 func init() {

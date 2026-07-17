@@ -26,6 +26,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -115,7 +116,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			c.logger.Warn("licensing: skipping subscribedSku with empty skuPartNumber", "collector", collectorName)
 			continue
 		}
-		attrs := telemetry.Attrs{"sku": sku.SkuPartNumber}
+		attrs := telemetry.Attrs{semconv.AttrSku: sku.SkuPartNumber}
 		consumed = append(consumed, telemetry.GaugePoint{Value: float64(sku.ConsumedUnits), Attrs: attrs})
 		enabled = append(enabled, telemetry.GaugePoint{Value: float64(sku.PrepaidUnits.Enabled), Attrs: attrs})
 	}

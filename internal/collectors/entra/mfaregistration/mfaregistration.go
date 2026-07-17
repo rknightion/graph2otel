@@ -111,6 +111,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -296,7 +297,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for _, rs := range registrationStatuses {
 		statusPoints = append(statusPoints, telemetry.GaugePoint{
 			Value: float64(statusCounts[rs.attr]),
-			Attrs: telemetry.Attrs{"status": rs.attr},
+			Attrs: telemetry.Attrs{semconv.AttrStatus: rs.attr},
 		})
 	}
 	e.GaugeSnapshot(statusMetricName, "{user}",
@@ -306,7 +307,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for method, n := range methodCounts {
 		methodPoints = append(methodPoints, telemetry.GaugePoint{
 			Value: float64(n),
-			Attrs: telemetry.Attrs{"method": method},
+			Attrs: telemetry.Attrs{semconv.AttrMethod: method},
 		})
 	}
 	e.GaugeSnapshot(methodMetricName, "{user}",
@@ -314,8 +315,8 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 
 	e.GaugeSnapshot(adminMfaCapableMetricName, "{user}",
 		"Entra users capable of MFA, split by admin role membership.", []telemetry.GaugePoint{
-			{Value: float64(adminMfaCapable), Attrs: telemetry.Attrs{"is_admin": true}},
-			{Value: float64(nonAdminMfaCapable), Attrs: telemetry.Attrs{"is_admin": false}},
+			{Value: float64(adminMfaCapable), Attrs: telemetry.Attrs{semconv.AttrIsAdmin: true}},
+			{Value: float64(nonAdminMfaCapable), Attrs: telemetry.Attrs{semconv.AttrIsAdmin: false}},
 		})
 
 	return nil
@@ -331,24 +332,24 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // attribute instead.
 func logTwin(u userRegistrationDetail) telemetry.Event {
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "id", u.ID)
-	setStr(attrs, "user_principal_name", u.UserPrincipalName)
-	setStr(attrs, "user_display_name", u.UserDisplayName)
-	setStr(attrs, "last_updated", u.LastUpdatedDateTime)
-	setStr(attrs, "methods_registered", strings.Join(u.MethodsRegistered, ","))
+	telemetry.SetStr(attrs, semconv.AttrId, u.ID)
+	telemetry.SetStr(attrs, semconv.AttrUserPrincipalName, u.UserPrincipalName)
+	telemetry.SetStr(attrs, semconv.AttrUserDisplayName, u.UserDisplayName)
+	telemetry.SetStr(attrs, semconv.AttrLastUpdated, u.LastUpdatedDateTime)
+	telemetry.SetStr(attrs, semconv.AttrMethodsRegistered, strings.Join(u.MethodsRegistered, ","))
 
 	// The seven posture booleans are always decoded (never legitimately
 	// absent), so they're direct string assignments rather than
 	// setStr-omitted — house convention is string-typed log attributes
 	// (Loki structured metadata is string on the wire), not omission of a
 	// real false value.
-	attrs["is_admin"] = strconv.FormatBool(u.IsAdmin)
-	attrs["mfa_registered"] = strconv.FormatBool(u.IsMfaRegistered)
-	attrs["mfa_capable"] = strconv.FormatBool(u.IsMfaCapable)
-	attrs["sspr_registered"] = strconv.FormatBool(u.IsSsprRegistered)
-	attrs["sspr_enabled"] = strconv.FormatBool(u.IsSsprEnabled)
-	attrs["sspr_capable"] = strconv.FormatBool(u.IsSsprCapable)
-	attrs["passwordless_capable"] = strconv.FormatBool(u.IsPasswordlessCapable)
+	attrs[semconv.AttrIsAdmin] = strconv.FormatBool(u.IsAdmin)
+	attrs[semconv.AttrMfaRegistered] = strconv.FormatBool(u.IsMfaRegistered)
+	attrs[semconv.AttrMfaCapable] = strconv.FormatBool(u.IsMfaCapable)
+	attrs[semconv.AttrSsprRegistered] = strconv.FormatBool(u.IsSsprRegistered)
+	attrs[semconv.AttrSsprEnabled] = strconv.FormatBool(u.IsSsprEnabled)
+	attrs[semconv.AttrSsprCapable] = strconv.FormatBool(u.IsSsprCapable)
+	attrs[semconv.AttrPasswordlessCapable] = strconv.FormatBool(u.IsPasswordlessCapable)
 
 	// Only an admin who cannot currently complete a policy-compliant MFA
 	// challenge escalates: IsMfaCapable (not IsMfaRegistered) is the
@@ -382,15 +383,6 @@ func displayOf(u userRegistrationDetail) string {
 		}
 	}
 	return "unknown"
-}
-
-// setStr adds key=val to attrs only when val is non-empty, so an absent
-// field (e.g. an identity field on a sparse row) emits no attribute rather
-// than an empty one.
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
-	}
 }
 
 func init() {

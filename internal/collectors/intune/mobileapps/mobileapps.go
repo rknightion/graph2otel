@@ -24,6 +24,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -208,7 +209,7 @@ func (c *Collector) appsSnapshot(ctx context.Context) ([]telemetry.GaugePoint, e
 	for b, n := range counts {
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(n),
-			Attrs: telemetry.Attrs{"app_type": b.appType, "publishing_state": b.state},
+			Attrs: telemetry.Attrs{semconv.AttrAppType: b.appType, semconv.AttrPublishingState: b.state},
 		})
 	}
 	return points, nil
@@ -285,7 +286,7 @@ func (c *Collector) deviceStatusSummaryPoints(ctx context.Context, id, policyNam
 	for _, b := range statusBuckets {
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(b.get(fields)),
-			Attrs: telemetry.Attrs{"policy_name": policyName, "status": b.attr},
+			Attrs: telemetry.Attrs{semconv.AttrPolicyName: policyName, semconv.AttrStatus: b.attr},
 		})
 	}
 	return points, nil

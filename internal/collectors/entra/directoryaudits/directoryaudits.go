@@ -23,6 +23,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -81,32 +82,32 @@ func mapDirectoryAudit(rec map[string]any) (string, telemetry.Event) {
 	result := str(rec, "result")
 
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "id", id)
-	setStr(attrs, "category", category)
-	setStr(attrs, "activity_display_name", activityDisplayName)
-	setStr(attrs, "result", result)
-	setStr(attrs, "result_reason", str(rec, "resultReason"))
-	setStr(attrs, "logged_by_service", str(rec, "loggedByService"))
-	setStr(attrs, "correlation_id", str(rec, "correlationId"))
+	telemetry.SetStr(attrs, semconv.AttrId, id)
+	telemetry.SetStr(attrs, semconv.AttrCategory, category)
+	telemetry.SetStr(attrs, semconv.AttrActivityDisplayName, activityDisplayName)
+	telemetry.SetStr(attrs, semconv.AttrResult, result)
+	telemetry.SetStr(attrs, semconv.AttrResultReason, str(rec, "resultReason"))
+	telemetry.SetStr(attrs, semconv.AttrLoggedByService, str(rec, "loggedByService"))
+	telemetry.SetStr(attrs, semconv.AttrCorrelationId, str(rec, "correlationId"))
 
 	if initiatedBy := nested(rec, "initiatedBy"); initiatedBy != nil {
 		if user := nested(initiatedBy, "user"); user != nil {
-			setStr(attrs, "initiator_user_principal_name", str(user, "userPrincipalName"))
-			setStr(attrs, "initiator_user_id", str(user, "id"))
+			telemetry.SetStr(attrs, semconv.AttrInitiatorUserPrincipalName, str(user, "userPrincipalName"))
+			telemetry.SetStr(attrs, semconv.AttrInitiatorUserId, str(user, "id"))
 		}
 		if app := nested(initiatedBy, "app"); app != nil {
-			setStr(attrs, "initiator_app_display_name", str(app, "displayName"))
-			setStr(attrs, "initiator_app_id", str(app, "appId"))
+			telemetry.SetStr(attrs, semconv.AttrInitiatorAppDisplayName, str(app, "displayName"))
+			telemetry.SetStr(attrs, semconv.AttrInitiatorAppId, str(app, "appId"))
 			// appId is null on every app-initiated record this project has
 			// captured live; servicePrincipalId is the only identifier left
 			// on those records, so it is mapped as its own distinct
 			// attribute rather than folded into initiator_app_id (#168).
-			setStr(attrs, "initiator_service_principal_id", str(app, "servicePrincipalId"))
+			telemetry.SetStr(attrs, semconv.AttrInitiatorServicePrincipalId, str(app, "servicePrincipalId"))
 		}
 	}
 
 	if targets, ok := rec["targetResources"].([]any); ok {
-		attrs["target_resource_count"] = len(targets)
+		attrs[semconv.AttrTargetResourceCount] = len(targets)
 		var displayNames []string
 		for _, tr := range targets {
 			t, ok := tr.(map[string]any)
@@ -118,7 +119,7 @@ func mapDirectoryAudit(rec map[string]any) (string, telemetry.Event) {
 			}
 		}
 		if len(displayNames) > 0 {
-			attrs["target_display_names"] = displayNames
+			attrs[semconv.AttrTargetDisplayNames] = displayNames
 		}
 	}
 
@@ -145,14 +146,6 @@ func str(m map[string]any, key string) string {
 func nested(m map[string]any, key string) map[string]any {
 	n, _ := m[key].(map[string]any)
 	return n
-}
-
-// setStr adds key=val only when val is non-empty, so absent fields don't
-// emit empty attributes.
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
-	}
 }
 
 func init() {

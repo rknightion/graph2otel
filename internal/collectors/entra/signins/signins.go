@@ -36,6 +36,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -125,27 +126,27 @@ func mapSignIn(rec map[string]any) (string, telemetry.Event) {
 	id := str(rec, "id")
 
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "id", id)
-	setStr(attrs, "correlation_id", str(rec, "correlationId"))
-	setStr(attrs, "user_principal_name", str(rec, "userPrincipalName"))
-	setStr(attrs, "user_id", str(rec, "userId"))
-	setStr(attrs, "app_id", str(rec, "appId"))
-	setStr(attrs, "app_display_name", str(rec, "appDisplayName"))
-	setStr(attrs, "resource_display_name", str(rec, "resourceDisplayName"))
-	setStr(attrs, "resource_id", str(rec, "resourceId"))
-	setStr(attrs, "service_principal_id", str(rec, "servicePrincipalId"))
-	setStr(attrs, "service_principal_name", str(rec, "servicePrincipalName"))
-	setStr(attrs, "ip_address", str(rec, "ipAddress"))
-	setStr(attrs, "client_app_used", str(rec, "clientAppUsed"))
-	setStr(attrs, "conditional_access_status", str(rec, "conditionalAccessStatus"))
-	setStr(attrs, "risk_level_during_sign_in", str(rec, "riskLevelDuringSignIn"))
-	setStr(attrs, "risk_state", str(rec, "riskState"))
+	telemetry.SetStr(attrs, semconv.AttrId, id)
+	telemetry.SetStr(attrs, semconv.AttrCorrelationId, str(rec, "correlationId"))
+	telemetry.SetStr(attrs, semconv.AttrUserPrincipalName, str(rec, "userPrincipalName"))
+	telemetry.SetStr(attrs, semconv.AttrUserId, str(rec, "userId"))
+	telemetry.SetStr(attrs, semconv.AttrAppId, str(rec, "appId"))
+	telemetry.SetStr(attrs, semconv.AttrAppDisplayName, str(rec, "appDisplayName"))
+	telemetry.SetStr(attrs, semconv.AttrResourceDisplayName, str(rec, "resourceDisplayName"))
+	telemetry.SetStr(attrs, semconv.AttrResourceId, str(rec, "resourceId"))
+	telemetry.SetStr(attrs, semconv.AttrServicePrincipalId, str(rec, "servicePrincipalId"))
+	telemetry.SetStr(attrs, semconv.AttrServicePrincipalName, str(rec, "servicePrincipalName"))
+	telemetry.SetStr(attrs, semconv.AttrIpAddress, str(rec, "ipAddress"))
+	telemetry.SetStr(attrs, semconv.AttrClientAppUsed, str(rec, "clientAppUsed"))
+	telemetry.SetStr(attrs, semconv.AttrConditionalAccessStatus, str(rec, "conditionalAccessStatus"))
+	telemetry.SetStr(attrs, semconv.AttrRiskLevelDuringSignIn, str(rec, "riskLevelDuringSignIn"))
+	telemetry.SetStr(attrs, semconv.AttrRiskState, str(rec, "riskState"))
 
 	if loc := nested(rec, "location"); loc != nil {
-		setStr(attrs, "location_country_or_region", str(loc, "countryOrRegion"))
+		telemetry.SetStr(attrs, semconv.AttrLocationCountryOrRegion, str(loc, "countryOrRegion"))
 	}
 	if types := strSlice(rec, "signInEventTypes"); len(types) > 0 {
-		attrs["sign_in_event_types"] = types
+		attrs[semconv.AttrSignInEventTypes] = types
 	}
 
 	// status is a nested object with a numeric errorCode; 0 means success.
@@ -154,9 +155,9 @@ func mapSignIn(rec map[string]any) (string, telemetry.Event) {
 	if st := nested(rec, "status"); st != nil {
 		if f, ok := st["errorCode"].(float64); ok {
 			errorCode = int(f)
-			attrs["status_error_code"] = errorCode
+			attrs[semconv.AttrStatusErrorCode] = errorCode
 		}
-		setStr(attrs, "status_failure_reason", str(st, "failureReason"))
+		telemetry.SetStr(attrs, semconv.AttrStatusFailureReason, str(st, "failureReason"))
 		if errorCode != 0 {
 			sev = telemetry.SeverityWarn
 		}
@@ -214,14 +215,6 @@ func strSlice(m map[string]any, key string) []string {
 		}
 	}
 	return out
-}
-
-// setStr adds key=val only when val is non-empty, so absent fields don't
-// emit empty attributes.
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
-	}
 }
 
 func init() {

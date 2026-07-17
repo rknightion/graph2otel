@@ -37,6 +37,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/jobpipeline"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -160,11 +161,11 @@ func mapRecord(rec map[string]any) (string, telemetry.Event) {
 	service := str(rec, "service")
 
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "id", id)
-	setStr(attrs, "operation", operation)
-	setStr(attrs, "record_type", recordType)
-	setStr(attrs, "service", service)
-	setStr(attrs, "user_type", str(rec, "userType"))
+	telemetry.SetStr(attrs, semconv.AttrId, id)
+	telemetry.SetStr(attrs, semconv.AttrOperation, operation)
+	telemetry.SetStr(attrs, semconv.AttrRecordType, recordType)
+	telemetry.SetStr(attrs, semconv.AttrService, service)
+	telemetry.SetStr(attrs, semconv.AttrUserType, str(rec, "userType"))
 	// The two user fields are CROSSED between wire and attribute — NOT a typo,
 	// and the single most counter-intuitive pair of lines in this package:
 	//
@@ -191,15 +192,15 @@ func mapRecord(rec map[string]any) (string, telemetry.Event) {
 	// Available", "ServicePrincipal_<guid>", display names make up the rest), so
 	// that name was false on the rest. Do not re-add it alongside `user_id`:
 	// two attributes from one field, identical by construction, is #151 exactly.
-	setStr(attrs, "user_key", str(rec, "userId"))
-	setStr(attrs, "user_id", str(rec, "userPrincipalName"))
-	setStr(attrs, "object_id", str(rec, "objectId"))
+	telemetry.SetStr(attrs, semconv.AttrUserKey, str(rec, "userId"))
+	telemetry.SetStr(attrs, semconv.AttrUserId, str(rec, "userPrincipalName"))
+	telemetry.SetStr(attrs, semconv.AttrObjectId, str(rec, "objectId"))
 
 	sev := telemetry.SeverityInfo
 	if data := nested(rec, "auditData"); data != nil {
-		setStr(attrs, "workload", str(data, "Workload"))
+		telemetry.SetStr(attrs, semconv.AttrWorkload, str(data, "Workload"))
 		result := str(data, "ResultStatus")
-		setStr(attrs, "result_status", result)
+		telemetry.SetStr(attrs, semconv.AttrResultStatus, result)
 		if result == "Failed" || result == "Failure" {
 			sev = telemetry.SeverityWarn
 		}
@@ -210,7 +211,7 @@ func mapRecord(rec map[string]any) (string, telemetry.Event) {
 		// is NOT a doubly-JSON-encoded string on this transport — it arrives
 		// as a plain nested object, same as Workload/ResultStatus above), so
 		// no second json.Unmarshal is needed to reach it.
-		setStr(attrs, "client_ip", str(data, "ClientIP"))
+		telemetry.SetStr(attrs, semconv.AttrClientIp, str(data, "ClientIP"))
 	}
 
 	return id, telemetry.Event{
@@ -269,14 +270,6 @@ func str(m map[string]any, key string) string {
 func nested(m map[string]any, key string) map[string]any {
 	n, _ := m[key].(map[string]any)
 	return n
-}
-
-// setStr adds key=val only when val is non-empty, so absent fields don't emit
-// empty attributes.
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
-	}
 }
 
 func init() {

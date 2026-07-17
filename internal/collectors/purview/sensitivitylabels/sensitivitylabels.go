@@ -102,6 +102,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -233,14 +234,14 @@ func (c *SensitivityCollector) Collect(ctx context.Context, e telemetry.Emitter)
 		// on the wire regardless of OTEL attribute kind — see CLAUDE.md), so a
 		// numeric OTEL kind buys nothing here and only this package's own log
 		// twins would differ from house convention if it did.
-		attrs := telemetry.Attrs{"priority": strconv.Itoa(l.Priority)}
-		setStr(attrs, "id", l.ID)
-		setStr(attrs, "name", l.Name)
-		setStr(attrs, "applicable_to", l.ApplicableTo)
+		attrs := telemetry.Attrs{semconv.AttrPriority: strconv.Itoa(l.Priority)}
+		telemetry.SetStr(attrs, semconv.AttrId, l.ID)
+		telemetry.SetStr(attrs, semconv.AttrName, l.Name)
+		telemetry.SetStr(attrs, semconv.AttrApplicableTo, l.ApplicableTo)
 		// The human-readable text lives in toolTip on the live wire; description
 		// is "" on every label there (#175). Fall back to description only for a
 		// tenant that populates it instead.
-		setStr(attrs, "description", firstNonEmpty(l.ToolTip, l.Description))
+		telemetry.SetStr(attrs, semconv.AttrDescription, firstNonEmpty(l.ToolTip, l.Description))
 		e.LogEvent(telemetry.Event{
 			Name:  sensitivityLabelEventName,
 			Body:  fmt.Sprintf("sensitivity label: %s", l.Name),
@@ -252,7 +253,7 @@ func (c *SensitivityCollector) Collect(ctx context.Context, e telemetry.Emitter)
 	for t, n := range byTarget {
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(n),
-			Attrs: telemetry.Attrs{"applicable_to": t},
+			Attrs: telemetry.Attrs{semconv.AttrApplicableTo: t},
 		})
 	}
 	e.GaugeSnapshot(sensitivityMetric, "{label}",
@@ -300,16 +301,6 @@ func applicableTargets(raw string) []string {
 		return []string{"none"}
 	}
 	return out
-}
-
-// setStr adds key=val to attrs only when val is non-empty, so an absent or
-// empty decoded field is omitted from the log twin rather than emitted as ""
-// (the same idiom internal/collectors/intune/auditevents.go uses over raw
-// map[string]any — here adapted for this package's typed structs).
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
-	}
 }
 
 // firstNonEmpty returns the first non-empty string among vals, or "" if all

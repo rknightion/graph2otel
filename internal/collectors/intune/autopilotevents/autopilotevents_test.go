@@ -8,6 +8,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
@@ -219,12 +220,14 @@ func TestParseISO8601DurationSeconds(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, ok := parseISO8601DurationSeconds(tc.in)
+			attrs := telemetry.Attrs{}
+			telemetry.SetDurationSeconds(attrs, semconv.AttrDeploymentDurationSeconds, tc.in)
+			got, ok := attrs[semconv.AttrDeploymentDurationSeconds]
 			if ok != tc.ok {
-				t.Fatalf("parseISO8601DurationSeconds(%q) ok = %v, want %v", tc.in, ok, tc.ok)
+				t.Fatalf("SetDurationSeconds(%q) set = %v, want %v", tc.in, ok, tc.ok)
 			}
 			if ok && got != tc.want {
-				t.Errorf("parseISO8601DurationSeconds(%q) = %v, want %v", tc.in, got, tc.want)
+				t.Errorf("SetDurationSeconds(%q) = %v, want %v", tc.in, got, tc.want)
 			}
 		})
 	}

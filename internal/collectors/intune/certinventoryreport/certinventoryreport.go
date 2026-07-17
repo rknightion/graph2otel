@@ -78,6 +78,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/exportjob"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -385,14 +386,14 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for k, v := range days {
 		dayPoints = append(dayPoints, telemetry.GaugePoint{
 			Value: float64(v),
-			Attrs: telemetry.Attrs{"issuer": k.issuer, "bucket": k.bucket},
+			Attrs: telemetry.Attrs{semconv.AttrIssuer: k.issuer, semconv.AttrBucket: k.bucket},
 		})
 	}
 	e.GaugeSnapshot(daysUntilExpiryMetricName, "{certificate}", "Intune fleet device certificates (AllDeviceCertificates export report) by time-until-expiry window and issuing CA.", dayPoints)
 
 	statePoints := make([]telemetry.GaugePoint, 0, len(states))
 	for state, v := range states {
-		statePoints = append(statePoints, telemetry.GaugePoint{Value: float64(v), Attrs: telemetry.Attrs{"state": state}})
+		statePoints = append(statePoints, telemetry.GaugePoint{Value: float64(v), Attrs: telemetry.Attrs{semconv.AttrState: state}})
 	}
 	e.GaugeSnapshot(stateMetricName, "{certificate}", "Intune fleet device certificates (AllDeviceCertificates export report) by collapsed certificate status.", statePoints)
 
@@ -406,21 +407,21 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // attributes instead of a metric label; see the package doc's cardinality
 // note. Severity escalates to WARN for a failed or revoked certificate.
 func certLogEvent(row exportjob.Row, stateBucket string) telemetry.Event {
-	attrs := telemetry.Attrs{"state_bucket": stateBucket}
-	setStr(attrs, "device_id", row["DeviceId"])
-	setStr(attrs, "device_name", row["DeviceName"])
-	setStr(attrs, "user_id", row["UserId"])
-	setStr(attrs, "upn", row["UPN"])
-	setStr(attrs, "subject_name", row["SubjectName"])
-	setStr(attrs, "issuer_name", row["IssuerName"])
-	setStr(attrs, "policy_id", row["PolicyId"])
-	setStr(attrs, "serial_number", row["SerialNumber"])
-	setStr(attrs, "thumbprint", row["Thumbprint"])
-	setStr(attrs, "valid_from", row["ValidFrom"])
-	setStr(attrs, "valid_to", row["ValidTo"])
-	setStr(attrs, "certificate_status", row["CertificateStatus"])
-	setStr(attrs, "enhanced_key_usage", row["EnhancedKeyUsage"])
-	setStr(attrs, "key_usage", row["KeyUsage"])
+	attrs := telemetry.Attrs{semconv.AttrStateBucket: stateBucket}
+	telemetry.SetStr(attrs, semconv.AttrDeviceId, row["DeviceId"])
+	telemetry.SetStr(attrs, semconv.AttrDeviceName, row["DeviceName"])
+	telemetry.SetStr(attrs, semconv.AttrUserId, row["UserId"])
+	telemetry.SetStr(attrs, semconv.AttrUpn, row["UPN"])
+	telemetry.SetStr(attrs, semconv.AttrSubjectName, row["SubjectName"])
+	telemetry.SetStr(attrs, semconv.AttrIssuerName, row["IssuerName"])
+	telemetry.SetStr(attrs, semconv.AttrPolicyId, row["PolicyId"])
+	telemetry.SetStr(attrs, semconv.AttrSerialNumber, row["SerialNumber"])
+	telemetry.SetStr(attrs, semconv.AttrThumbprint, row["Thumbprint"])
+	telemetry.SetStr(attrs, semconv.AttrValidFrom, row["ValidFrom"])
+	telemetry.SetStr(attrs, semconv.AttrValidTo, row["ValidTo"])
+	telemetry.SetStr(attrs, semconv.AttrCertificateStatus, row["CertificateStatus"])
+	telemetry.SetStr(attrs, semconv.AttrEnhancedKeyUsage, row["EnhancedKeyUsage"])
+	telemetry.SetStr(attrs, semconv.AttrKeyUsage, row["KeyUsage"])
 
 	severity := telemetry.SeverityInfo
 	if stateBucket == "failed" || stateBucket == "revoked" {
@@ -432,14 +433,6 @@ func certLogEvent(row exportjob.Row, stateBucket string) telemetry.Event {
 		Body:     "Intune device certificate " + stateBucket,
 		Severity: severity,
 		Attrs:    attrs,
-	}
-}
-
-// setStr sets attrs[key] to val, unless val is empty — an absent export
-// column stays absent from the log record rather than appearing as "".
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
 	}
 }
 

@@ -135,6 +135,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/o365activityclient"
 	"github.com/rknightion/graph2otel/internal/o365pipeline"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -400,44 +401,44 @@ func mapRecord(rec map[string]any) (string, telemetry.Event, bool) {
 	result := str(rec, "ResultStatus")
 
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "id", id)
-	setStr(attrs, "operation", operation)
-	setStr(attrs, "workload", workload)
-	setStr(attrs, "service", workload)
-	setStr(attrs, "result_status", result)
+	telemetry.SetStr(attrs, semconv.AttrId, id)
+	telemetry.SetStr(attrs, semconv.AttrOperation, operation)
+	telemetry.SetStr(attrs, semconv.AttrWorkload, workload)
+	telemetry.SetStr(attrs, semconv.AttrService, workload)
+	telemetry.SetStr(attrs, semconv.AttrResultStatus, result)
 	// The classic UserId. The query API carries the same value in its
 	// `userPrincipalName` field and emits it under this same name, so `user_id`
 	// means the classic UserId on both transports. See the comment above for why
 	// this is an unconditional copy rather than a UPN-shape-gated one, and why
 	// no `user_principal_name` sits alongside it.
-	setStr(attrs, "user_id", userID)
+	telemetry.SetStr(attrs, semconv.AttrUserId, userID)
 	// The classic UserKey. The query API carries the same value in its
 	// (misnamed) top-level `userId` field and emits it under this same name, so
 	// `user_key` means the classic UserKey on both transports (#151).
-	setStr(attrs, "user_key", str(rec, "UserKey"))
+	telemetry.SetStr(attrs, semconv.AttrUserKey, str(rec, "UserKey"))
 	// ClientIP here, clientIp on the query API — same attribute either way.
-	setStr(attrs, "client_ip", str(rec, "ClientIP"))
-	setStr(attrs, "object_id", str(rec, "ObjectId"))
-	setStr(attrs, "organization_id", str(rec, "OrganizationId"))
+	telemetry.SetStr(attrs, semconv.AttrClientIp, str(rec, "ClientIP"))
+	telemetry.SetStr(attrs, semconv.AttrObjectId, str(rec, "ObjectId"))
+	telemetry.SetStr(attrs, semconv.AttrOrganizationId, str(rec, "OrganizationId"))
 
 	// RecordType / UserType are INTs here and STRINGs on the query API. Emit
 	// the int unconditionally (it is the only lossless form, and Microsoft's
 	// published table does not cover every value this tenant emits) and the
 	// converged name only when it resolves — never a guess. See recordtypes.go.
 	if n, present := num(rec, "RecordType"); present {
-		attrs["record_type_id"] = itoa(n)
+		attrs[semconv.AttrRecordTypeId] = itoa(n)
 		if name, known := recordTypeName(n); known {
-			attrs["record_type"] = name
+			attrs[semconv.AttrRecordType] = name
 		}
 	}
 	if n, present := num(rec, "UserType"); present {
-		attrs["user_type_id"] = itoa(n)
+		attrs[semconv.AttrUserTypeId] = itoa(n)
 		if name, known := userTypeName(n); known {
-			attrs["user_type"] = name
+			attrs[semconv.AttrUserType] = name
 		}
 	}
 	if n, present := num(rec, "Version"); present {
-		attrs["version"] = itoa(n)
+		attrs[semconv.AttrVersion] = itoa(n)
 	}
 	// AzureActiveDirectoryEventType is an int enum with no query-API twin
 	// (unifiedaudit does not read auditData for it), so it is additive-only and
@@ -445,13 +446,13 @@ func mapRecord(rec map[string]any) (string, telemetry.Event, bool) {
 	// its int-to-name mapping, and recordtypes.go's rule is that a guessed name
 	// is worse than none.
 	if n, present := num(rec, "AzureActiveDirectoryEventType"); present {
-		attrs["azure_ad_event_type"] = itoa(n)
+		attrs[semconv.AttrAzureAdEventType] = itoa(n)
 	}
 
 	// SECURITY: names only, never OldValue/NewValue — those can carry
 	// credentials and certificates. The names must still be emitted: excluding
 	// the values must not decay into dropping the field (#112).
-	setStrs(attrs, "modified_property_names", namesOf(rec, "ModifiedProperties", "Name"))
+	telemetry.SetStrs(attrs, semconv.AttrModifiedPropertyNames, namesOf(rec, "ModifiedProperties", "Name"))
 	// ExtendedProperties values ARE emitted, unlike ModifiedProperties'. They are
 	// event metadata, not changed-property values, and cannot BE a credential:
 	// live they carry additionalDetails ({"User-Agent":…,"AppId":…}),
@@ -465,12 +466,12 @@ func mapRecord(rec map[string]any) (string, telemetry.Event, bool) {
 	// Names and values are parallel slices, index-aligned, rather than one
 	// attribute per property name: the names are workload-defined and unbounded,
 	// so attribute-per-name would mint unbounded attribute KEYS.
-	setStrs(attrs, "extended_property_names", namesOf(rec, "ExtendedProperties", "Name"))
-	setStrs(attrs, "extended_property_values", namesOf(rec, "ExtendedProperties", "Value"))
+	telemetry.SetStrs(attrs, semconv.AttrExtendedPropertyNames, namesOf(rec, "ExtendedProperties", "Name"))
+	telemetry.SetStrs(attrs, semconv.AttrExtendedPropertyValues, namesOf(rec, "ExtendedProperties", "Value"))
 	// Actor[] is per-entity identity data with no query-API twin. #112: it must
 	// reach a pipeline rather than the floor, and a log attribute is where
 	// per-entity data belongs.
-	setStrs(attrs, "actor_ids", namesOf(rec, "Actor", "ID"))
+	telemetry.SetStrs(attrs, semconv.AttrActorIds, namesOf(rec, "Actor", "ID"))
 
 	// Severity uses the same predicate as unifiedaudit.mapRecord, so the same
 	// event cannot arrive INFO from one transport and WARN from the other. The
@@ -587,18 +588,3 @@ func namesOf(m map[string]any, key, field string) []string {
 // attribute reads as empty in any recorder-based assertion — a silent trap for
 // the next test written here.
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
-
-// setStr adds key=val only when val is non-empty, so absent fields don't emit
-// empty attributes.
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
-	}
-}
-
-// setStrs adds key=vals only when vals is non-empty.
-func setStrs(attrs telemetry.Attrs, key string, vals []string) {
-	if len(vals) > 0 {
-		attrs[key] = vals
-	}
-}

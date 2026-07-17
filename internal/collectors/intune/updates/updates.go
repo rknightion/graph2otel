@@ -33,6 +33,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -121,11 +122,11 @@ type deviceStatusOverview struct {
 // already applied by the caller.
 func (o deviceStatusOverview) points(ringName string) []telemetry.GaugePoint {
 	return []telemetry.GaugePoint{
-		{Value: float64(o.PendingCount), Attrs: telemetry.Attrs{"ring_name": ringName, "state": "pending"}},
-		{Value: float64(o.NotApplicableCount), Attrs: telemetry.Attrs{"ring_name": ringName, "state": "not_applicable"}},
-		{Value: float64(o.SuccessCount), Attrs: telemetry.Attrs{"ring_name": ringName, "state": "success"}},
-		{Value: float64(o.ErrorCount), Attrs: telemetry.Attrs{"ring_name": ringName, "state": "error"}},
-		{Value: float64(o.FailedCount), Attrs: telemetry.Attrs{"ring_name": ringName, "state": "failed"}},
+		{Value: float64(o.PendingCount), Attrs: telemetry.Attrs{semconv.AttrRingName: ringName, semconv.AttrState: "pending"}},
+		{Value: float64(o.NotApplicableCount), Attrs: telemetry.Attrs{semconv.AttrRingName: ringName, semconv.AttrState: "not_applicable"}},
+		{Value: float64(o.SuccessCount), Attrs: telemetry.Attrs{semconv.AttrRingName: ringName, semconv.AttrState: "success"}},
+		{Value: float64(o.ErrorCount), Attrs: telemetry.Attrs{semconv.AttrRingName: ringName, semconv.AttrState: "error"}},
+		{Value: float64(o.FailedCount), Attrs: telemetry.Attrs{semconv.AttrRingName: ringName, semconv.AttrState: "failed"}},
 	}
 }
 
@@ -278,23 +279,23 @@ func (c *Collector) collectRings(ctx context.Context, e telemetry.Emitter) error
 		name := ring.DisplayName
 
 		pauseState = append(pauseState,
-			telemetry.GaugePoint{Value: bool2float(ring.QualityUpdatesPaused), Attrs: telemetry.Attrs{"ring_name": name, "update_type": "quality"}},
-			telemetry.GaugePoint{Value: bool2float(ring.FeatureUpdatesPaused), Attrs: telemetry.Attrs{"ring_name": name, "update_type": "feature"}},
+			telemetry.GaugePoint{Value: bool2float(ring.QualityUpdatesPaused), Attrs: telemetry.Attrs{semconv.AttrRingName: name, semconv.AttrUpdateType: "quality"}},
+			telemetry.GaugePoint{Value: bool2float(ring.FeatureUpdatesPaused), Attrs: telemetry.Attrs{semconv.AttrRingName: name, semconv.AttrUpdateType: "feature"}},
 		)
 		rollback = append(rollback,
-			telemetry.GaugePoint{Value: bool2float(ring.QualityUpdatesWillBeRolledBack), Attrs: telemetry.Attrs{"ring_name": name, "update_type": "quality"}},
-			telemetry.GaugePoint{Value: bool2float(ring.FeatureUpdatesWillBeRolledBack), Attrs: telemetry.Attrs{"ring_name": name, "update_type": "feature"}},
+			telemetry.GaugePoint{Value: bool2float(ring.QualityUpdatesWillBeRolledBack), Attrs: telemetry.Attrs{semconv.AttrRingName: name, semconv.AttrUpdateType: "quality"}},
+			telemetry.GaugePoint{Value: bool2float(ring.FeatureUpdatesWillBeRolledBack), Attrs: telemetry.Attrs{semconv.AttrRingName: name, semconv.AttrUpdateType: "feature"}},
 		)
 		if ring.QualityUpdatesPauseExpiryDateTime != nil {
 			pauseExpiry = append(pauseExpiry, telemetry.GaugePoint{
 				Value: ring.QualityUpdatesPauseExpiryDateTime.Sub(now).Seconds(),
-				Attrs: telemetry.Attrs{"ring_name": name, "update_type": "quality"},
+				Attrs: telemetry.Attrs{semconv.AttrRingName: name, semconv.AttrUpdateType: "quality"},
 			})
 		}
 		if ring.FeatureUpdatesPauseExpiryDateTime != nil {
 			pauseExpiry = append(pauseExpiry, telemetry.GaugePoint{
 				Value: ring.FeatureUpdatesPauseExpiryDateTime.Sub(now).Seconds(),
-				Attrs: telemetry.Attrs{"ring_name": name, "update_type": "feature"},
+				Attrs: telemetry.Attrs{semconv.AttrRingName: name, semconv.AttrUpdateType: "feature"},
 			})
 		}
 
@@ -345,7 +346,7 @@ func (c *Collector) collectFeatureProfiles(ctx context.Context, e telemetry.Emit
 		}
 		points = append(points, telemetry.GaugePoint{
 			Value: p.EndOfSupportDate.Sub(now).Seconds(),
-			Attrs: telemetry.Attrs{"profile_name": p.DisplayName, "feature_update_version": p.FeatureUpdateVersion},
+			Attrs: telemetry.Attrs{semconv.AttrProfileName: p.DisplayName, semconv.AttrFeatureUpdateVersion: p.FeatureUpdateVersion},
 		})
 	}
 	e.GaugeSnapshot(featureEOLMetric, "s", "Seconds until a Windows feature update profile's target version reaches end of support.", points)
@@ -364,13 +365,13 @@ func (c *Collector) collectQualityConfigs(ctx context.Context, e telemetry.Emitt
 	if n, err := c.countNamedResources(ctx, c.betaURL+"/deviceManagement/windowsQualityUpdateProfiles"); err != nil {
 		errs = append(errs, fmt.Errorf("quality update profiles: %w", err))
 	} else if n >= 0 {
-		points = append(points, telemetry.GaugePoint{Value: float64(n), Attrs: telemetry.Attrs{"resource_type": "profile"}})
+		points = append(points, telemetry.GaugePoint{Value: float64(n), Attrs: telemetry.Attrs{semconv.AttrResourceType: "profile"}})
 	}
 
 	if n, err := c.countNamedResources(ctx, c.betaURL+"/deviceManagement/windowsQualityUpdatePolicies"); err != nil {
 		errs = append(errs, fmt.Errorf("quality update policies: %w", err))
 	} else if n >= 0 {
-		points = append(points, telemetry.GaugePoint{Value: float64(n), Attrs: telemetry.Attrs{"resource_type": "policy"}})
+		points = append(points, telemetry.GaugePoint{Value: float64(n), Attrs: telemetry.Attrs{semconv.AttrResourceType: "policy"}})
 	}
 
 	e.GaugeSnapshot(qualityConfigCountMetric, "{resource}", "Count of Windows quality update config resources, by resource type (profile vs policy).", points)
@@ -428,12 +429,12 @@ func (c *Collector) collectDriverProfiles(ctx context.Context, e telemetry.Emitt
 		}
 		pending = append(pending, telemetry.GaugePoint{
 			Value: float64(p.NewUpdates),
-			Attrs: telemetry.Attrs{"profile_name": p.DisplayName},
+			Attrs: telemetry.Attrs{semconv.AttrProfileName: p.DisplayName},
 		})
 		if sync := p.InventorySync.LastSuccessfulSyncDateTime; sync != nil {
 			staleness = append(staleness, telemetry.GaugePoint{
 				Value: now.Sub(*sync).Seconds(),
-				Attrs: telemetry.Attrs{"profile_name": p.DisplayName},
+				Attrs: telemetry.Attrs{semconv.AttrProfileName: p.DisplayName},
 			})
 		}
 	}

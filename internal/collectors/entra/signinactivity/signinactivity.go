@@ -52,6 +52,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -235,7 +236,7 @@ func staleGaugePoints(counts map[int]int) []telemetry.GaugePoint {
 	for _, th := range staleThresholdsDays {
 		pts = append(pts, telemetry.GaugePoint{
 			Value: float64(counts[th]),
-			Attrs: telemetry.Attrs{"threshold_days": th},
+			Attrs: telemetry.Attrs{semconv.AttrThresholdDays: th},
 		})
 	}
 	return pts
@@ -271,23 +272,15 @@ func tsOrNever(ts string) string {
 	return ts
 }
 
-// setStr adds key=val only when val is non-empty, so an absent field emits no
-// attribute rather than an empty one.
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
-	}
-}
-
 // setSignInActivity adds the six signInActivity sub-fields shared by both
 // per-entity halves.
 func setSignInActivity(attrs telemetry.Attrs, a signInActivity) {
-	setStr(attrs, "last_sign_in_date_time", a.LastSignInDateTime)
-	setStr(attrs, "last_sign_in_request_id", a.LastSignInRequestID)
-	setStr(attrs, "last_non_interactive_sign_in_date_time", a.LastNonInteractiveSignInDateTime)
-	setStr(attrs, "last_non_interactive_sign_in_request_id", a.LastNonInteractiveSignInRequestID)
-	setStr(attrs, "last_successful_sign_in_date_time", a.LastSuccessfulSignInDateTime)
-	setStr(attrs, "last_successful_sign_in_request_id", a.LastSuccessfulSignInRequestID)
+	telemetry.SetStr(attrs, semconv.AttrLastSignInDateTime, a.LastSignInDateTime)
+	telemetry.SetStr(attrs, semconv.AttrLastSignInRequestId, a.LastSignInRequestID)
+	telemetry.SetStr(attrs, semconv.AttrLastNonInteractiveSignInDateTime, a.LastNonInteractiveSignInDateTime)
+	telemetry.SetStr(attrs, semconv.AttrLastNonInteractiveSignInRequestId, a.LastNonInteractiveSignInRequestID)
+	telemetry.SetStr(attrs, semconv.AttrLastSuccessfulSignInDateTime, a.LastSuccessfulSignInDateTime)
+	telemetry.SetStr(attrs, semconv.AttrLastSuccessfulSignInRequestId, a.LastSuccessfulSignInRequestID)
 }
 
 // spStaleCounts pages servicePrincipalSignInActivities ONCE and emits BOTH
@@ -345,8 +338,8 @@ func (c *Collector) credStaleCounts(ctx context.Context, e telemetry.Emitter) ([
 // entra/risk's logTwin).
 func spLogTwin(item spActivity, age float64) telemetry.Event {
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "id", item.ID)
-	setStr(attrs, "app_id", item.AppID)
+	telemetry.SetStr(attrs, semconv.AttrId, item.ID)
+	telemetry.SetStr(attrs, semconv.AttrAppId, item.AppID)
 	setSignInActivity(attrs, item.LastSignInActivity)
 
 	return telemetry.Event{
@@ -362,17 +355,17 @@ func spLogTwin(item spActivity, age float64) telemetry.Event {
 // record. Timestamp is left zero for the same STATE-feed reason as spLogTwin.
 func credLogTwin(item credActivity, age float64) telemetry.Event {
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "id", item.ID)
-	setStr(attrs, "app_id", item.AppID)
-	setStr(attrs, "app_object_id", item.AppObjectID)
-	setStr(attrs, "service_principal_object_id", item.ServicePrincipalObjectID)
-	setStr(attrs, "resource_id", item.ResourceID)
-	setStr(attrs, "key_id", item.KeyID)
-	setStr(attrs, "key_type", item.KeyType)
-	setStr(attrs, "key_usage", item.KeyUsage)
-	setStr(attrs, "credential_origin", item.CredentialOrigin)
-	setStr(attrs, "created_date_time", item.CreatedDateTime)
-	setStr(attrs, "expiration_date_time", item.ExpirationDateTime)
+	telemetry.SetStr(attrs, semconv.AttrId, item.ID)
+	telemetry.SetStr(attrs, semconv.AttrAppId, item.AppID)
+	telemetry.SetStr(attrs, semconv.AttrAppObjectId, item.AppObjectID)
+	telemetry.SetStr(attrs, semconv.AttrServicePrincipalObjectId, item.ServicePrincipalObjectID)
+	telemetry.SetStr(attrs, semconv.AttrResourceId, item.ResourceID)
+	telemetry.SetStr(attrs, semconv.AttrKeyId, item.KeyID)
+	telemetry.SetStr(attrs, semconv.AttrKeyType, item.KeyType)
+	telemetry.SetStr(attrs, semconv.AttrKeyUsage, item.KeyUsage)
+	telemetry.SetStr(attrs, semconv.AttrCredentialOrigin, item.CredentialOrigin)
+	telemetry.SetStr(attrs, semconv.AttrCreatedDateTime, item.CreatedDateTime)
+	telemetry.SetStr(attrs, semconv.AttrExpirationDateTime, item.ExpirationDateTime)
 	setSignInActivity(attrs, item.SignInActivity)
 
 	return telemetry.Event{
@@ -402,8 +395,8 @@ func (c *Collector) appSummary(ctx context.Context) ([]telemetry.GaugePoint, err
 		failure += s.FailedSignInCount
 	}
 	return []telemetry.GaugePoint{
-		{Value: float64(success), Attrs: telemetry.Attrs{"result": "success"}},
-		{Value: float64(failure), Attrs: telemetry.Attrs{"result": "failure"}},
+		{Value: float64(success), Attrs: telemetry.Attrs{semconv.AttrResult: "success"}},
+		{Value: float64(failure), Attrs: telemetry.Attrs{semconv.AttrResult: "failure"}},
 	}, nil
 }
 

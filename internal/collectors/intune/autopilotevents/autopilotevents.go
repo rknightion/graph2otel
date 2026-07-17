@@ -35,7 +35,7 @@
 // accountSetupDuration) arrive as ISO-8601 duration strings and can be
 // negative under client clock skew between phase timestamps; a negative
 // duration is CLAMPED to zero before being emitted as an attribute (a phase
-// cannot take less than no time) — see parseISO8601DurationSeconds. The
+// cannot take less than no time) — see telemetry.SetDurationSeconds. The
 // three phase statuses (deploymentState, deviceSetupStatus,
 // accountSetupStatus) are kept as three DISTINCT attributes rather than
 // collapsed into one enum, since a device can e.g. succeed device setup but
@@ -45,14 +45,13 @@
 package autopilotevents
 
 import (
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -125,18 +124,18 @@ func mapAutopilotEvent(rec map[string]any) (string, telemetry.Event) {
 	failureDetails := str(rec, "enrollmentFailureDetails")
 
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "id", id)
-	setStr(attrs, "device_id", deviceID)
-	setStr(attrs, "device_serial_number", serial)
-	setStr(attrs, "enrollment_type", str(rec, "enrollmentType"))
-	setStr(attrs, "deployment_state", deploymentState)
-	setStr(attrs, "device_setup_status", deviceSetupStatus)
-	setStr(attrs, "account_setup_status", accountSetupStatus)
-	setStr(attrs, "enrollment_failure_details", failureDetails)
+	telemetry.SetStr(attrs, semconv.AttrId, id)
+	telemetry.SetStr(attrs, semconv.AttrDeviceId, deviceID)
+	telemetry.SetStr(attrs, semconv.AttrDeviceSerialNumber, serial)
+	telemetry.SetStr(attrs, semconv.AttrEnrollmentType, str(rec, "enrollmentType"))
+	telemetry.SetStr(attrs, semconv.AttrDeploymentState, deploymentState)
+	telemetry.SetStr(attrs, semconv.AttrDeviceSetupStatus, deviceSetupStatus)
+	telemetry.SetStr(attrs, semconv.AttrAccountSetupStatus, accountSetupStatus)
+	telemetry.SetStr(attrs, semconv.AttrEnrollmentFailureDetails, failureDetails)
 
-	setDurationSeconds(attrs, "deployment_duration_seconds", str(rec, "deploymentDuration"))
-	setDurationSeconds(attrs, "device_setup_duration_seconds", str(rec, "deviceSetupDuration"))
-	setDurationSeconds(attrs, "account_setup_duration_seconds", str(rec, "accountSetupDuration"))
+	telemetry.SetDurationSeconds(attrs, semconv.AttrDeploymentDurationSeconds, str(rec, "deploymentDuration"))
+	telemetry.SetDurationSeconds(attrs, semconv.AttrDeviceSetupDurationSeconds, str(rec, "deviceSetupDuration"))
+	telemetry.SetDurationSeconds(attrs, semconv.AttrAccountSetupDurationSeconds, str(rec, "accountSetupDuration"))
 
 	return id, telemetry.Event{
 		Name:     eventName,
@@ -189,81 +188,11 @@ func isFailure(status string) bool {
 	return strings.Contains(strings.ToLower(status), "fail")
 }
 
-// isoDurationPattern matches an ISO-8601 duration string as returned by
-// Graph for the autopilot phase-duration fields (deploymentDuration,
-// deviceSetupDuration, accountSetupDuration), e.g. "PT4M32S" or "PT1H2M3.5S".
-// Graph does not document years/months/days appearing in these fields (they
-// are short elapsed-time spans within one enrollment attempt), but the
-// pattern tolerates the full ISO-8601 duration grammar, including a leading
-// "-" for a negative duration, for robustness.
-var isoDurationPattern = regexp.MustCompile(`^(-)?P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:([\d.]+)S)?)?$`)
-
-// parseISO8601DurationSeconds parses an ISO-8601 duration string into total
-// seconds. A negative result (client clock skew between the phase's start
-// and end timestamps) is CLAMPED to zero rather than returned negative — a
-// phase cannot take less than no time. Returns ok=false for an empty or
-// unparseable string, or one with no duration component at all (e.g. bare
-// "P"), so the caller can omit the attribute rather than emit a bogus zero.
-func parseISO8601DurationSeconds(s string) (float64, bool) {
-	if s == "" {
-		return 0, false
-	}
-	m := isoDurationPattern.FindStringSubmatch(s)
-	if m == nil {
-		return 0, false
-	}
-	years, months, days, hours, minutes, seconds := m[2], m[3], m[4], m[5], m[6], m[7]
-	if years == "" && months == "" && days == "" && hours == "" && minutes == "" && seconds == "" {
-		return 0, false
-	}
-	total := parseFloat(years)*365*24*3600 +
-		parseFloat(months)*30*24*3600 +
-		parseFloat(days)*24*3600 +
-		parseFloat(hours)*3600 +
-		parseFloat(minutes)*60 +
-		parseFloat(seconds)
-	if m[1] == "-" {
-		total = -total
-	}
-	if total < 0 {
-		total = 0
-	}
-	return total, true
-}
-
-// parseFloat parses s as a float64, returning 0 for an empty or
-// unparseable string (regex capture groups are validated by
-// isoDurationPattern before this is called, so a parse failure here cannot
-// happen in practice).
-func parseFloat(s string) float64 {
-	if s == "" {
-		return 0
-	}
-	f, _ := strconv.ParseFloat(s, 64)
-	return f
-}
-
-// setDurationSeconds sets attrs[key] to the parsed duration in seconds when
-// val is a valid ISO-8601 duration, and omits the attribute otherwise.
-func setDurationSeconds(attrs telemetry.Attrs, key, val string) {
-	if seconds, ok := parseISO8601DurationSeconds(val); ok {
-		attrs[key] = seconds
-	}
-}
-
 // --- small defensive accessors for untyped Graph JSON ---
 
 func str(m map[string]any, key string) string {
 	s, _ := m[key].(string)
 	return s
-}
-
-// setStr adds key=val only when val is non-empty, so absent fields don't
-// emit empty attributes.
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
-	}
 }
 
 func init() {

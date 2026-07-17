@@ -66,6 +66,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -132,7 +133,7 @@ func mapAuditEvent(rec map[string]any) (string, telemetry.Event) {
 	activityResult := str(rec, "activityResult")
 	category := str(rec, "category")
 	// activity is null on every live-captured row (#172, live-measured
-	// 2026-07-17) — setStr already omits it here when empty, so this is a
+	// 2026-07-17) — telemetry.SetStr already omits it here when empty, so this is a
 	// no-op on real data today. Kept (not removed) because a non-empty
 	// activity is plausible on some activityType this project hasn't
 	// captured yet; do not "fix" the gap by inventing a fixture value for
@@ -140,23 +141,23 @@ func mapAuditEvent(rec map[string]any) (string, telemetry.Event) {
 	activity := str(rec, "activity")
 
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "id", id)
-	setStr(attrs, "activity", activity)
-	setStr(attrs, "activity_type", activityType)
-	setStr(attrs, "activity_operation_type", activityOperationType)
-	setStr(attrs, "activity_result", activityResult)
-	setStr(attrs, "category", category)
-	setStr(attrs, "component_name", str(rec, "componentName"))
-	setStr(attrs, "display_name", str(rec, "displayName"))
-	setStr(attrs, "correlation_id", str(rec, "correlationId"))
+	telemetry.SetStr(attrs, semconv.AttrId, id)
+	telemetry.SetStr(attrs, semconv.AttrActivity, activity)
+	telemetry.SetStr(attrs, semconv.AttrActivityType, activityType)
+	telemetry.SetStr(attrs, semconv.AttrActivityOperationType, activityOperationType)
+	telemetry.SetStr(attrs, semconv.AttrActivityResult, activityResult)
+	telemetry.SetStr(attrs, semconv.AttrCategory, category)
+	telemetry.SetStr(attrs, semconv.AttrComponentName, str(rec, "componentName"))
+	telemetry.SetStr(attrs, semconv.AttrDisplayName, str(rec, "displayName"))
+	telemetry.SetStr(attrs, semconv.AttrCorrelationId, str(rec, "correlationId"))
 
 	if actor := nested(rec, "actor"); actor != nil {
-		setStr(attrs, "actor_type", str(actor, "auditActorType"))
-		setStr(attrs, "actor_user_principal_name", str(actor, "userPrincipalName"))
-		setStr(attrs, "actor_user_id", str(actor, "userId"))
-		setStr(attrs, "actor_application_display_name", str(actor, "applicationDisplayName"))
-		setStr(attrs, "actor_application_id", str(actor, "applicationId"))
-		setStr(attrs, "actor_ip_address", str(actor, "ipAddress"))
+		telemetry.SetStr(attrs, semconv.AttrActorType, str(actor, "auditActorType"))
+		telemetry.SetStr(attrs, semconv.AttrActorUserPrincipalName, str(actor, "userPrincipalName"))
+		telemetry.SetStr(attrs, semconv.AttrActorUserId, str(actor, "userId"))
+		telemetry.SetStr(attrs, semconv.AttrActorApplicationDisplayName, str(actor, "applicationDisplayName"))
+		telemetry.SetStr(attrs, semconv.AttrActorApplicationId, str(actor, "applicationId"))
+		telemetry.SetStr(attrs, semconv.AttrActorIpAddress, str(actor, "ipAddress"))
 	}
 
 	if resources, ok := rec["resources"].([]any); ok {
@@ -187,13 +188,13 @@ func mapAuditEvent(rec map[string]any) (string, telemetry.Event) {
 			}
 		}
 		if len(resourceTypes) > 0 {
-			attrs["resource_types"] = resourceTypes
+			attrs[semconv.AttrResourceTypes] = resourceTypes
 		}
 		if len(resourceDisplayNames) > 0 {
-			attrs["resource_display_names"] = resourceDisplayNames
+			attrs[semconv.AttrResourceDisplayNames] = resourceDisplayNames
 		}
 		if len(modifiedPropertyNames) > 0 {
-			attrs["modified_property_names"] = modifiedPropertyNames
+			attrs[semconv.AttrModifiedPropertyNames] = modifiedPropertyNames
 		}
 	}
 
@@ -207,7 +208,7 @@ func mapAuditEvent(rec map[string]any) (string, telemetry.Event) {
 	// an empty middle ("DeviceConfiguration:  (Success)"). displayName is the
 	// populated, human-readable one-line summary ("Create device
 	// configuration assignment 2.0 (beta)"). The activity ATTRIBUTE mapping
-	// above is unchanged — setStr already omits it when empty — this only
+	// above is unchanged — telemetry.SetStr already omits it when empty — this only
 	// changes what the log Body renders from.
 	return id, telemetry.Event{
 		Name:     eventName,
@@ -227,14 +228,6 @@ func str(m map[string]any, key string) string {
 func nested(m map[string]any, key string) map[string]any {
 	n, _ := m[key].(map[string]any)
 	return n
-}
-
-// setStr adds key=val only when val is non-empty, so absent fields don't
-// emit empty attributes.
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
-	}
 }
 
 func init() {

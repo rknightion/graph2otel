@@ -28,6 +28,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -309,10 +310,10 @@ func (c *Collector) collectScriptRunSummaries(ctx context.Context, listPath, os 
 
 		name := orUnknown(item.DisplayName)
 		pts = append(pts,
-			telemetry.GaugePoint{Value: float64(rs.SuccessDeviceCount), Attrs: telemetry.Attrs{"script_name": name, "os": os, "target": targetDevice, "run_state": runStateSuccess}},
-			telemetry.GaugePoint{Value: float64(rs.ErrorDeviceCount), Attrs: telemetry.Attrs{"script_name": name, "os": os, "target": targetDevice, "run_state": runStateError}},
-			telemetry.GaugePoint{Value: float64(rs.SuccessUserCount), Attrs: telemetry.Attrs{"script_name": name, "os": os, "target": targetUser, "run_state": runStateSuccess}},
-			telemetry.GaugePoint{Value: float64(rs.ErrorUserCount), Attrs: telemetry.Attrs{"script_name": name, "os": os, "target": targetUser, "run_state": runStateError}},
+			telemetry.GaugePoint{Value: float64(rs.SuccessDeviceCount), Attrs: telemetry.Attrs{semconv.AttrScriptName: name, semconv.AttrOs: os, semconv.AttrTarget: targetDevice, semconv.AttrRunState: runStateSuccess}},
+			telemetry.GaugePoint{Value: float64(rs.ErrorDeviceCount), Attrs: telemetry.Attrs{semconv.AttrScriptName: name, semconv.AttrOs: os, semconv.AttrTarget: targetDevice, semconv.AttrRunState: runStateError}},
+			telemetry.GaugePoint{Value: float64(rs.SuccessUserCount), Attrs: telemetry.Attrs{semconv.AttrScriptName: name, semconv.AttrOs: os, semconv.AttrTarget: targetUser, semconv.AttrRunState: runStateSuccess}},
+			telemetry.GaugePoint{Value: float64(rs.ErrorUserCount), Attrs: telemetry.Attrs{semconv.AttrScriptName: name, semconv.AttrOs: os, semconv.AttrTarget: targetUser, semconv.AttrRunState: runStateError}},
 		)
 	}
 	return pts, nil
@@ -355,19 +356,19 @@ func (c *Collector) collectHealthScriptRunSummaries(ctx context.Context) ([]tele
 
 		name := orUnknown(item.DisplayName)
 		pts = append(pts,
-			telemetry.GaugePoint{Value: float64(rs.NoIssueDetectedDeviceCount), Attrs: telemetry.Attrs{"script_name": name, "phase": phaseDetection, "state": detectionStateNoIssue}},
-			telemetry.GaugePoint{Value: float64(rs.IssueDetectedDeviceCount), Attrs: telemetry.Attrs{"script_name": name, "phase": phaseDetection, "state": detectionStateIssueDetected}},
-			telemetry.GaugePoint{Value: float64(rs.DetectionScriptErrorDeviceCount), Attrs: telemetry.Attrs{"script_name": name, "phase": phaseDetection, "state": detectionStateError}},
-			telemetry.GaugePoint{Value: float64(rs.DetectionScriptPendingDeviceCount), Attrs: telemetry.Attrs{"script_name": name, "phase": phaseDetection, "state": detectionStatePending}},
-			telemetry.GaugePoint{Value: float64(rs.DetectionScriptNotApplicableDeviceCount), Attrs: telemetry.Attrs{"script_name": name, "phase": phaseDetection, "state": detectionStateNotApplicable}},
-			telemetry.GaugePoint{Value: float64(rs.IssueRemediatedDeviceCount), Attrs: telemetry.Attrs{"script_name": name, "phase": phaseRemediation, "state": remediationStateRemediated}},
-			telemetry.GaugePoint{Value: float64(rs.RemediationSkippedDeviceCount), Attrs: telemetry.Attrs{"script_name": name, "phase": phaseRemediation, "state": remediationStateSkipped}},
-			telemetry.GaugePoint{Value: float64(rs.IssueReoccurredDeviceCount), Attrs: telemetry.Attrs{"script_name": name, "phase": phaseRemediation, "state": remediationStateReoccurred}},
-			telemetry.GaugePoint{Value: float64(rs.RemediationScriptErrorDeviceCount), Attrs: telemetry.Attrs{"script_name": name, "phase": phaseRemediation, "state": remediationStateError}},
+			telemetry.GaugePoint{Value: float64(rs.NoIssueDetectedDeviceCount), Attrs: telemetry.Attrs{semconv.AttrScriptName: name, semconv.AttrPhase: phaseDetection, semconv.AttrState: detectionStateNoIssue}},
+			telemetry.GaugePoint{Value: float64(rs.IssueDetectedDeviceCount), Attrs: telemetry.Attrs{semconv.AttrScriptName: name, semconv.AttrPhase: phaseDetection, semconv.AttrState: detectionStateIssueDetected}},
+			telemetry.GaugePoint{Value: float64(rs.DetectionScriptErrorDeviceCount), Attrs: telemetry.Attrs{semconv.AttrScriptName: name, semconv.AttrPhase: phaseDetection, semconv.AttrState: detectionStateError}},
+			telemetry.GaugePoint{Value: float64(rs.DetectionScriptPendingDeviceCount), Attrs: telemetry.Attrs{semconv.AttrScriptName: name, semconv.AttrPhase: phaseDetection, semconv.AttrState: detectionStatePending}},
+			telemetry.GaugePoint{Value: float64(rs.DetectionScriptNotApplicableDeviceCount), Attrs: telemetry.Attrs{semconv.AttrScriptName: name, semconv.AttrPhase: phaseDetection, semconv.AttrState: detectionStateNotApplicable}},
+			telemetry.GaugePoint{Value: float64(rs.IssueRemediatedDeviceCount), Attrs: telemetry.Attrs{semconv.AttrScriptName: name, semconv.AttrPhase: phaseRemediation, semconv.AttrState: remediationStateRemediated}},
+			telemetry.GaugePoint{Value: float64(rs.RemediationSkippedDeviceCount), Attrs: telemetry.Attrs{semconv.AttrScriptName: name, semconv.AttrPhase: phaseRemediation, semconv.AttrState: remediationStateSkipped}},
+			telemetry.GaugePoint{Value: float64(rs.IssueReoccurredDeviceCount), Attrs: telemetry.Attrs{semconv.AttrScriptName: name, semconv.AttrPhase: phaseRemediation, semconv.AttrState: remediationStateReoccurred}},
+			telemetry.GaugePoint{Value: float64(rs.RemediationScriptErrorDeviceCount), Attrs: telemetry.Attrs{semconv.AttrScriptName: name, semconv.AttrPhase: phaseRemediation, semconv.AttrState: remediationStateError}},
 		)
 		cumPts = append(cumPts, telemetry.GaugePoint{
 			Value: float64(rs.IssueRemediatedCumulativeDeviceCount),
-			Attrs: telemetry.Attrs{"script_name": name},
+			Attrs: telemetry.Attrs{semconv.AttrScriptName: name},
 		})
 	}
 	return pts, cumPts, nil

@@ -24,6 +24,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -154,11 +155,11 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	errs = append(errs, trustErrs...)
 	e.GaugeSnapshot(totalMetricName, "{device}", "Total Entra directory devices, by trust type.", trustPoints)
 
-	compliancePoints, complianceErrs := c.boolSnapshot(ctx, "isCompliant", "is_compliant")
+	compliancePoints, complianceErrs := c.boolSnapshot(ctx, "isCompliant", semconv.AttrIsCompliant)
 	errs = append(errs, complianceErrs...)
 	e.GaugeSnapshot(complianceMetricName, "{device}", "Total Entra directory devices, by MDM compliance state.", compliancePoints)
 
-	managedPoints, managedErrs := c.boolSnapshot(ctx, "isManaged", "is_managed")
+	managedPoints, managedErrs := c.boolSnapshot(ctx, "isManaged", semconv.AttrIsManaged)
 	errs = append(errs, managedErrs...)
 	e.GaugeSnapshot(managedMetricName, "{device}", "Total Entra directory devices, by MDM-managed state.", managedPoints)
 
@@ -193,10 +194,10 @@ func (c *Collector) trustTypeSnapshot(ctx context.Context, total int64, haveTota
 			continue
 		}
 		knownSum += n
-		points = append(points, telemetry.GaugePoint{Value: float64(n), Attrs: telemetry.Attrs{"trust_type": b.attr}})
+		points = append(points, telemetry.GaugePoint{Value: float64(n), Attrs: telemetry.Attrs{semconv.AttrTrustType: b.attr}})
 	}
 	if haveTotal && ok {
-		points = append(points, telemetry.GaugePoint{Value: float64(clampNonNegative(total - knownSum)), Attrs: telemetry.Attrs{"trust_type": "unknown"}})
+		points = append(points, telemetry.GaugePoint{Value: float64(clampNonNegative(total - knownSum)), Attrs: telemetry.Attrs{semconv.AttrTrustType: "unknown"}})
 	}
 	return points, errs
 }
@@ -244,10 +245,10 @@ func (c *Collector) osSnapshot(ctx context.Context, total int64, haveTotal bool)
 			continue
 		}
 		knownSum += n
-		points = append(points, telemetry.GaugePoint{Value: float64(n), Attrs: telemetry.Attrs{"operating_system": b.attr}})
+		points = append(points, telemetry.GaugePoint{Value: float64(n), Attrs: telemetry.Attrs{semconv.AttrOperatingSystem: b.attr}})
 	}
 	if haveTotal && ok {
-		points = append(points, telemetry.GaugePoint{Value: float64(clampNonNegative(total - knownSum)), Attrs: telemetry.Attrs{"operating_system": "other"}})
+		points = append(points, telemetry.GaugePoint{Value: float64(clampNonNegative(total - knownSum)), Attrs: telemetry.Attrs{semconv.AttrOperatingSystem: "other"}})
 	}
 	return points, errs
 }
@@ -268,7 +269,7 @@ func (c *Collector) staleSnapshot(ctx context.Context) ([]telemetry.GaugePoint, 
 	}
 	return []telemetry.GaugePoint{{
 		Value: float64(n),
-		Attrs: telemetry.Attrs{"threshold_days": staleThresholdDays},
+		Attrs: telemetry.Attrs{semconv.AttrThresholdDays: staleThresholdDays},
 	}}, nil
 }
 

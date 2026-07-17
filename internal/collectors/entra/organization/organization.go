@@ -154,7 +154,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	}
 	e.Gauge(infoMetricName, semconv.UnitDimensionless,
 		"Constant 1 gauge carrying bounded tenant posture (tenant type) as an attribute.",
-		1, telemetry.Attrs{"tenant_type": tenantType})
+		1, telemetry.Attrs{semconv.AttrTenantType: tenantType})
 
 	return nil
 }

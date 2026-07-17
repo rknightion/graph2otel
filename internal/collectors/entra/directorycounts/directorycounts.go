@@ -14,6 +14,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -88,7 +89,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		}
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(n),
-			Attrs: telemetry.Attrs{"type": ot.attr},
+			Attrs: telemetry.Attrs{semconv.AttrType: ot.attr},
 		})
 	}
 	e.GaugeSnapshot(metricName, "{object}", "Total Entra directory objects, by object type.", points)

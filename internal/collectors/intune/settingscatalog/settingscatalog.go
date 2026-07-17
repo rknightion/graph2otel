@@ -41,6 +41,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -230,7 +231,7 @@ func (c *Collector) collectConfigurationPolicies(ctx context.Context, e telemetr
 	for k, v := range counts {
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(v),
-			Attrs: telemetry.Attrs{"platform": k.platform, "technology": k.technology, "template_family": k.family},
+			Attrs: telemetry.Attrs{semconv.AttrPlatform: k.platform, semconv.AttrTechnology: k.technology, semconv.AttrTemplateFamily: k.family},
 		})
 	}
 	e.GaugeSnapshot(policyCountMetricName, "{policy}",
@@ -288,13 +289,13 @@ type intentDeviceStateSummary struct {
 // (intent_name, compliance_status) gauge points.
 func (s intentDeviceStateSummary) points(intentName string) []telemetry.GaugePoint {
 	return []telemetry.GaugePoint{
-		{Value: float64(s.CompliantDeviceCount), Attrs: telemetry.Attrs{"intent_name": intentName, "compliance_status": "compliant"}},
-		{Value: float64(s.NonCompliantDeviceCount), Attrs: telemetry.Attrs{"intent_name": intentName, "compliance_status": "non_compliant"}},
-		{Value: float64(s.RemediatedDeviceCount), Attrs: telemetry.Attrs{"intent_name": intentName, "compliance_status": "remediated"}},
-		{Value: float64(s.ErrorDeviceCount), Attrs: telemetry.Attrs{"intent_name": intentName, "compliance_status": "error"}},
-		{Value: float64(s.ConflictDeviceCount), Attrs: telemetry.Attrs{"intent_name": intentName, "compliance_status": "conflict"}},
-		{Value: float64(s.NotApplicableDeviceCount), Attrs: telemetry.Attrs{"intent_name": intentName, "compliance_status": "not_applicable"}},
-		{Value: float64(s.UnknownDeviceCount), Attrs: telemetry.Attrs{"intent_name": intentName, "compliance_status": "unknown"}},
+		{Value: float64(s.CompliantDeviceCount), Attrs: telemetry.Attrs{semconv.AttrIntentName: intentName, semconv.AttrComplianceStatus: "compliant"}},
+		{Value: float64(s.NonCompliantDeviceCount), Attrs: telemetry.Attrs{semconv.AttrIntentName: intentName, semconv.AttrComplianceStatus: "non_compliant"}},
+		{Value: float64(s.RemediatedDeviceCount), Attrs: telemetry.Attrs{semconv.AttrIntentName: intentName, semconv.AttrComplianceStatus: "remediated"}},
+		{Value: float64(s.ErrorDeviceCount), Attrs: telemetry.Attrs{semconv.AttrIntentName: intentName, semconv.AttrComplianceStatus: "error"}},
+		{Value: float64(s.ConflictDeviceCount), Attrs: telemetry.Attrs{semconv.AttrIntentName: intentName, semconv.AttrComplianceStatus: "conflict"}},
+		{Value: float64(s.NotApplicableDeviceCount), Attrs: telemetry.Attrs{semconv.AttrIntentName: intentName, semconv.AttrComplianceStatus: "not_applicable"}},
+		{Value: float64(s.UnknownDeviceCount), Attrs: telemetry.Attrs{semconv.AttrIntentName: intentName, semconv.AttrComplianceStatus: "unknown"}},
 	}
 }
 
@@ -348,7 +349,7 @@ func (c *Collector) emitIntentCountsAndDeviceStates(ctx context.Context, e telem
 	for migrating, n := range counts {
 		countPoints = append(countPoints, telemetry.GaugePoint{
 			Value: float64(n),
-			Attrs: telemetry.Attrs{"migrating": migrating},
+			Attrs: telemetry.Attrs{semconv.AttrMigrating: migrating},
 		})
 	}
 	e.GaugeSnapshot(intentCountMetricName, "{intent}",
@@ -423,12 +424,12 @@ type baselineDeviceStateSummary struct {
 // (baseline_name, state) gauge points.
 func (s baselineDeviceStateSummary) points(baselineName string) []telemetry.GaugePoint {
 	return []telemetry.GaugePoint{
-		{Value: float64(s.SecureDeviceCount), Attrs: telemetry.Attrs{"baseline_name": baselineName, "state": "secure"}},
-		{Value: float64(s.NotSecureDeviceCount), Attrs: telemetry.Attrs{"baseline_name": baselineName, "state": "not_secure"}},
-		{Value: float64(s.ErrorDeviceCount), Attrs: telemetry.Attrs{"baseline_name": baselineName, "state": "error"}},
-		{Value: float64(s.ConflictDeviceCount), Attrs: telemetry.Attrs{"baseline_name": baselineName, "state": "conflict"}},
-		{Value: float64(s.NotApplicableDeviceCount), Attrs: telemetry.Attrs{"baseline_name": baselineName, "state": "not_applicable"}},
-		{Value: float64(s.UnknownDeviceCount), Attrs: telemetry.Attrs{"baseline_name": baselineName, "state": "unknown"}},
+		{Value: float64(s.SecureDeviceCount), Attrs: telemetry.Attrs{semconv.AttrBaselineName: baselineName, semconv.AttrState: "secure"}},
+		{Value: float64(s.NotSecureDeviceCount), Attrs: telemetry.Attrs{semconv.AttrBaselineName: baselineName, semconv.AttrState: "not_secure"}},
+		{Value: float64(s.ErrorDeviceCount), Attrs: telemetry.Attrs{semconv.AttrBaselineName: baselineName, semconv.AttrState: "error"}},
+		{Value: float64(s.ConflictDeviceCount), Attrs: telemetry.Attrs{semconv.AttrBaselineName: baselineName, semconv.AttrState: "conflict"}},
+		{Value: float64(s.NotApplicableDeviceCount), Attrs: telemetry.Attrs{semconv.AttrBaselineName: baselineName, semconv.AttrState: "not_applicable"}},
+		{Value: float64(s.UnknownDeviceCount), Attrs: telemetry.Attrs{semconv.AttrBaselineName: baselineName, semconv.AttrState: "unknown"}},
 	}
 }
 

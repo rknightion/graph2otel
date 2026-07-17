@@ -42,6 +42,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -175,7 +176,7 @@ func (o overview) points() []telemetry.GaugePoint {
 	cat := func(score int, category, state string) telemetry.GaugePoint {
 		return telemetry.GaugePoint{
 			Value: float64(score),
-			Attrs: telemetry.Attrs{"category": category, "health_state": healthStateBucketFor(state)},
+			Attrs: telemetry.Attrs{semconv.AttrCategory: category, semconv.AttrHealthState: healthStateBucketFor(state)},
 		}
 	}
 	return []telemetry.GaugePoint{
@@ -338,7 +339,7 @@ func (c *Collector) collectStartupHistories(ctx context.Context, e telemetry.Emi
 			continue
 		}
 		bucket := restartCategoryBucketFor(h.RestartCategory)
-		attrs := telemetry.Attrs{"restart_category": bucket}
+		attrs := telemetry.Attrs{semconv.AttrRestartCategory: bucket}
 		e.Histogram(bootTimeMetric, "ms", "Intune Endpoint Analytics device boot time, by restart category.", h.TotalBootTimeInMs, bootTimeBounds, attrs)
 		e.Histogram(loginTimeMetric, "ms", "Intune Endpoint Analytics device login time, by restart category.", h.TotalLoginTimeInMs, bootTimeBounds, attrs)
 	}
@@ -365,7 +366,7 @@ func (c *Collector) collectAppHealth(ctx context.Context, e telemetry.Emitter) e
 	}
 	points := make([]telemetry.GaugePoint, 0, len(crashes))
 	for app, count := range crashes {
-		points = append(points, telemetry.GaugePoint{Value: float64(count), Attrs: telemetry.Attrs{"app_name": app}})
+		points = append(points, telemetry.GaugePoint{Value: float64(count), Attrs: telemetry.Attrs{semconv.AttrAppName: app}})
 	}
 	e.GaugeSnapshot(appCrashCountMetric, "{crash}", "Intune Endpoint Analytics app crash count, for an allow-listed set of common executables.", points)
 	return nil
@@ -386,11 +387,11 @@ func (c *Collector) collectBatteryHealth(ctx context.Context, e telemetry.Emitte
 		state := healthStateBucketFor(b.HealthStatus)
 		counts[state]++
 		e.Histogram(batteryScoreMetric, "{score}", "Intune Endpoint Analytics device battery health score (0-100), by health state.",
-			b.DeviceBatteryHealthScore, scoreBounds, telemetry.Attrs{"health_state": state})
+			b.DeviceBatteryHealthScore, scoreBounds, telemetry.Attrs{semconv.AttrHealthState: state})
 	}
 	points := make([]telemetry.GaugePoint, 0, len(counts))
 	for state, n := range counts {
-		points = append(points, telemetry.GaugePoint{Value: float64(n), Attrs: telemetry.Attrs{"health_state": state}})
+		points = append(points, telemetry.GaugePoint{Value: float64(n), Attrs: telemetry.Attrs{semconv.AttrHealthState: state}})
 	}
 	e.GaugeSnapshot(batteryDeviceCountMetric, "{device}", "Intune Endpoint Analytics device count, by battery health state.", points)
 	return nil
@@ -411,11 +412,11 @@ func (c *Collector) collectResourcePerformance(ctx context.Context, e telemetry.
 		state := healthStateBucketFor(rp.HealthStatus)
 		counts[state]++
 		e.Histogram(resourceScoreMetric, "{score}", "Intune Endpoint Analytics device resource performance score (0-100), by health state.",
-			rp.DeviceResourcePerformanceScore, scoreBounds, telemetry.Attrs{"health_state": state})
+			rp.DeviceResourcePerformanceScore, scoreBounds, telemetry.Attrs{semconv.AttrHealthState: state})
 	}
 	points := make([]telemetry.GaugePoint, 0, len(counts))
 	for state, n := range counts {
-		points = append(points, telemetry.GaugePoint{Value: float64(n), Attrs: telemetry.Attrs{"health_state": state}})
+		points = append(points, telemetry.GaugePoint{Value: float64(n), Attrs: telemetry.Attrs{semconv.AttrHealthState: state}})
 	}
 	e.GaugeSnapshot(resourceDeviceCountMetric, "{device}", "Intune Endpoint Analytics device count, by resource performance health state.", points)
 	return nil
@@ -435,7 +436,7 @@ func (c *Collector) collectBaselines(ctx context.Context, e telemetry.Emitter) e
 		}
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(b.OverallScore),
-			Attrs: telemetry.Attrs{"baseline_name": orUnknown(b.DisplayName), "is_built_in": fmt.Sprintf("%t", b.IsBuiltIn)},
+			Attrs: telemetry.Attrs{semconv.AttrBaselineName: orUnknown(b.DisplayName), semconv.AttrIsBuiltIn: fmt.Sprintf("%t", b.IsBuiltIn)},
 		})
 	}
 	e.GaugeSnapshot(baselineScoreMetric, "{score}", "Intune Endpoint Analytics baseline overall score, by baseline.", points)

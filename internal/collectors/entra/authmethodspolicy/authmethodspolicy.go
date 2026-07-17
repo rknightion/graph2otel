@@ -176,7 +176,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		}
 		points = append(points, telemetry.GaugePoint{
 			Value: val,
-			Attrs: telemetry.Attrs{"method": m.attr},
+			Attrs: telemetry.Attrs{semconv.AttrMethod: m.attr},
 		})
 	}
 

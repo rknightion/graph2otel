@@ -28,6 +28,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -364,7 +365,7 @@ func (c *Collector) collectDevices(ctx context.Context, e telemetry.Emitter) err
 	for k, v := range counts {
 		devicePoints = append(devicePoints, telemetry.GaugePoint{
 			Value: float64(v),
-			Attrs: telemetry.Attrs{"enrollment_state": k[0], "group_tag": k[1]},
+			Attrs: telemetry.Attrs{semconv.AttrEnrollmentState: k[0], semconv.AttrGroupTag: k[1]},
 		})
 	}
 	e.GaugeSnapshot(devicesMetricName, "{device}", "Windows Autopilot device identities, by enrollment state and group tag (capped to top tags by device count, see maxGroupTags).", devicePoints)
@@ -373,7 +374,7 @@ func (c *Collector) collectDevices(ctx context.Context, e telemetry.Emitter) err
 	for tag, v := range stale {
 		stalePoints = append(stalePoints, telemetry.GaugePoint{
 			Value: float64(v),
-			Attrs: telemetry.Attrs{"group_tag": tag},
+			Attrs: telemetry.Attrs{semconv.AttrGroupTag: tag},
 		})
 	}
 	e.GaugeSnapshot(staleContactMetricName, "{device}", "Windows Autopilot device identities whose lastContactedDateTime is older than the stale-contact threshold, by group tag.", stalePoints)
@@ -417,13 +418,13 @@ func (c *Collector) collectProfiles(ctx context.Context, e telemetry.Emitter) er
 		for _, sb := range settingBuckets {
 			settingPoints = append(settingPoints, telemetry.GaugePoint{
 				Value: boolValue(sb.get(p)),
-				Attrs: telemetry.Attrs{"profile_name": name, "setting": sb.attr},
+				Attrs: telemetry.Attrs{semconv.AttrProfileName: name, semconv.AttrSetting: sb.attr},
 			})
 		}
 		if p.EnrollmentStatusScreenSettings != nil {
 			espTimeoutPoints = append(espTimeoutPoints, telemetry.GaugePoint{
 				Value: float64(p.EnrollmentStatusScreenSettings.InstallProgressTimeoutInMinutes),
-				Attrs: telemetry.Attrs{"profile_name": name},
+				Attrs: telemetry.Attrs{semconv.AttrProfileName: name},
 			})
 		}
 
@@ -439,7 +440,7 @@ func (c *Collector) collectProfiles(ctx context.Context, e telemetry.Emitter) er
 		}
 		assignmentPoints = append(assignmentPoints, telemetry.GaugePoint{
 			Value: float64(n),
-			Attrs: telemetry.Attrs{"profile_name": name},
+			Attrs: telemetry.Attrs{semconv.AttrProfileName: name},
 		})
 	}
 
@@ -447,7 +448,7 @@ func (c *Collector) collectProfiles(ctx context.Context, e telemetry.Emitter) er
 	for k, v := range countBuckets {
 		countPoints = append(countPoints, telemetry.GaugePoint{
 			Value: float64(v),
-			Attrs: telemetry.Attrs{"device_type": k[0], "preprovisioning_allowed": k[1]},
+			Attrs: telemetry.Attrs{semconv.AttrDeviceType: k[0], semconv.AttrPreprovisioningAllowed: k[1]},
 		})
 	}
 	e.GaugeSnapshot(profileCountMetricName, "{profile}", "Windows Autopilot deployment profiles, by device type and whether pre-provisioning (white glove) is allowed.", countPoints)

@@ -19,6 +19,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -163,7 +164,7 @@ func (c *Collector) collectControlProfiles(ctx context.Context, e telemetry.Emit
 	for cat, n := range byCategory {
 		catPoints = append(catPoints, telemetry.GaugePoint{
 			Value: float64(n),
-			Attrs: telemetry.Attrs{"category": cat},
+			Attrs: telemetry.Attrs{semconv.AttrCategory: cat},
 		})
 	}
 	e.GaugeSnapshot(metricByCategory, "{control}", "Secure Score control profiles, by control category.", catPoints)
@@ -172,7 +173,7 @@ func (c *Collector) collectControlProfiles(ctx context.Context, e telemetry.Emit
 	for st, n := range byStatus {
 		statusPoints = append(statusPoints, telemetry.GaugePoint{
 			Value: float64(n),
-			Attrs: telemetry.Attrs{"status": st},
+			Attrs: telemetry.Attrs{semconv.AttrStatus: st},
 		})
 	}
 	e.GaugeSnapshot(metricByStatus, "{control}", "Secure Score control profiles, by tenant implementation status.", statusPoints)

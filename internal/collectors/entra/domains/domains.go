@@ -27,6 +27,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -143,8 +144,8 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(n),
 			Attrs: telemetry.Attrs{
-				"authentication_type": k.authType,
-				"is_verified":         k.verified,
+				semconv.AttrAuthenticationType: k.authType,
+				semconv.AttrIsVerified:         k.verified,
 			},
 		})
 	}
@@ -176,17 +177,17 @@ func normalizeAuthType(s string) string {
 // third party"). A routine managed, verified domain stays Info.
 func domainLogTwin(d domain, authType string) telemetry.Event {
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "id", d.ID)
-	setStr(attrs, "authentication_type", authType)
+	telemetry.SetStr(attrs, semconv.AttrId, d.ID)
+	telemetry.SetStr(attrs, semconv.AttrAuthenticationType, authType)
 	// Booleans have no "absent" state (false is meaningful data, not a missing
 	// field, unlike an empty string) - see the frozen seam in #114 - so these
-	// are always set, never gated by setStr.
-	attrs["is_verified"] = strconv.FormatBool(d.IsVerified)
-	attrs["is_default"] = strconv.FormatBool(d.IsDefault)
-	attrs["is_initial"] = strconv.FormatBool(d.IsInitial)
-	attrs["is_root"] = strconv.FormatBool(d.IsRoot)
-	attrs["is_admin_managed"] = strconv.FormatBool(d.IsAdminManaged)
-	setStr(attrs, "supported_services", strings.Join(d.SupportedServices, ","))
+	// are always set, never gated by SetStr.
+	attrs[semconv.AttrIsVerified] = strconv.FormatBool(d.IsVerified)
+	attrs[semconv.AttrIsDefault] = strconv.FormatBool(d.IsDefault)
+	attrs[semconv.AttrIsInitial] = strconv.FormatBool(d.IsInitial)
+	attrs[semconv.AttrIsRoot] = strconv.FormatBool(d.IsRoot)
+	attrs[semconv.AttrIsAdminManaged] = strconv.FormatBool(d.IsAdminManaged)
+	telemetry.SetStr(attrs, semconv.AttrSupportedServices, strings.Join(d.SupportedServices, ","))
 
 	sev := telemetry.SeverityInfo
 	if !d.IsVerified || authType == "federated" {
@@ -198,15 +199,6 @@ func domainLogTwin(d domain, authType string) telemetry.Event {
 		Body:     fmt.Sprintf("domain %s: authentication_type=%s is_verified=%t", d.ID, authType, d.IsVerified),
 		Severity: sev,
 		Attrs:    attrs,
-	}
-}
-
-// setStr adds key=val to attrs only when val is non-empty, so an absent
-// string field emits no attribute rather than an empty one - matches the
-// entra/risk and purview/labels reference collectors.
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
 	}
 }
 

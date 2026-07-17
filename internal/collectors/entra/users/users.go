@@ -19,6 +19,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -62,21 +63,21 @@ type axis struct {
 // full collection" requirement.
 var populationAxes = []axis{
 	{
-		attr: "account_enabled",
+		attr: semconv.AttrAccountEnabled,
 		values: []sliceValue{
 			{"true", "accountEnabled eq true"},
 			{"false", "accountEnabled eq false"},
 		},
 	},
 	{
-		attr: "user_type",
+		attr: semconv.AttrUserType,
 		values: []sliceValue{
 			{"member", "userType eq 'Member'"},
 			{"guest", "userType eq 'Guest'"},
 		},
 	},
 	{
-		attr: "on_premises_sync_enabled",
+		attr: semconv.AttrOnPremisesSyncEnabled,
 		values: []sliceValue{
 			{"true", "onPremisesSyncEnabled eq true"},
 			// onPremisesSyncEnabled is a nullable Boolean: false means "no
@@ -176,7 +177,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		}
 		stalePoints = append(stalePoints, telemetry.GaugePoint{
 			Value: float64(n),
-			Attrs: telemetry.Attrs{"threshold_days": days},
+			Attrs: telemetry.Attrs{semconv.AttrThresholdDays: days},
 		})
 	}
 	e.GaugeSnapshot(metricStale, "{user}",

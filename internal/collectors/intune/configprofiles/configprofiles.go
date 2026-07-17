@@ -234,7 +234,7 @@ func (c *Collector) collectProfiles(ctx context.Context, e telemetry.Emitter) ([
 		refs = append(refs, profileRef{id: p.ID, name: name})
 		versionPoints = append(versionPoints, telemetry.GaugePoint{
 			Value: float64(p.Version),
-			Attrs: telemetry.Attrs{"profile_name": name},
+			Attrs: telemetry.Attrs{semconv.AttrProfileName: name},
 		})
 	}
 
@@ -242,7 +242,7 @@ func (c *Collector) collectProfiles(ctx context.Context, e telemetry.Emitter) ([
 	for bucket, n := range counts {
 		countPoints = append(countPoints, telemetry.GaugePoint{
 			Value: float64(n),
-			Attrs: telemetry.Attrs{"odata_type": bucket},
+			Attrs: telemetry.Attrs{semconv.AttrOdataType: bucket},
 		})
 	}
 	e.GaugeSnapshot(countMetricName, "{profile}",
@@ -267,11 +267,11 @@ type statusOverview struct {
 // gauge points.
 func (o statusOverview) points(profileName string) []telemetry.GaugePoint {
 	return []telemetry.GaugePoint{
-		{Value: float64(o.SuccessCount), Attrs: telemetry.Attrs{"profile_name": profileName, "state": "success"}},
-		{Value: float64(o.PendingCount), Attrs: telemetry.Attrs{"profile_name": profileName, "state": "pending"}},
-		{Value: float64(o.FailedCount), Attrs: telemetry.Attrs{"profile_name": profileName, "state": "failed"}},
-		{Value: float64(o.ErrorCount), Attrs: telemetry.Attrs{"profile_name": profileName, "state": "error"}},
-		{Value: float64(o.NotApplicableCount), Attrs: telemetry.Attrs{"profile_name": profileName, "state": "not_applicable"}},
+		{Value: float64(o.SuccessCount), Attrs: telemetry.Attrs{semconv.AttrProfileName: profileName, semconv.AttrState: "success"}},
+		{Value: float64(o.PendingCount), Attrs: telemetry.Attrs{semconv.AttrProfileName: profileName, semconv.AttrState: "pending"}},
+		{Value: float64(o.FailedCount), Attrs: telemetry.Attrs{semconv.AttrProfileName: profileName, semconv.AttrState: "failed"}},
+		{Value: float64(o.ErrorCount), Attrs: telemetry.Attrs{semconv.AttrProfileName: profileName, semconv.AttrState: "error"}},
+		{Value: float64(o.NotApplicableCount), Attrs: telemetry.Attrs{semconv.AttrProfileName: profileName, semconv.AttrState: "not_applicable"}},
 	}
 }
 

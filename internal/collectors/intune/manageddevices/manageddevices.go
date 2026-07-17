@@ -51,6 +51,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -202,15 +203,6 @@ func deviceLogSeverity(complianceBucket string, encrypted bool, stalenessBucket 
 	return telemetry.SeverityInfo
 }
 
-// setStr adds key=val to attrs only when val is non-empty, so an absent field
-// emits no attribute rather than an empty one (matches entra/risk and
-// purview/labels - the frozen #114 seam).
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
-	}
-}
-
 // deviceLogTwin renders one managedDevice as the intune.managed_device OTLP
 // log record - the per-device identity and raw state the fleet gauges above
 // cannot carry (see the package doc). complianceBucket/stalenessBucket are
@@ -223,16 +215,16 @@ func setStr(attrs telemetry.Attrs, key, val string) {
 // date Y" answerable (see the package doc).
 func deviceLogTwin(d managedDevice, complianceBucket, stalenessBucket string) telemetry.Event {
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "id", d.ID)
-	setStr(attrs, "device_name", d.DeviceName)
-	setStr(attrs, "serial_number", d.SerialNumber)
-	setStr(attrs, "user_principal_name", d.UserPrincipalName)
-	setStr(attrs, "compliance_state", d.ComplianceState)
-	setStr(attrs, "operating_system", d.OperatingSystem)
-	attrs["is_encrypted"] = strconv.FormatBool(d.IsEncrypted)
-	attrs["staleness_bucket"] = stalenessBucket
+	telemetry.SetStr(attrs, semconv.AttrId, d.ID)
+	telemetry.SetStr(attrs, semconv.AttrDeviceName, d.DeviceName)
+	telemetry.SetStr(attrs, semconv.AttrSerialNumber, d.SerialNumber)
+	telemetry.SetStr(attrs, semconv.AttrUserPrincipalName, d.UserPrincipalName)
+	telemetry.SetStr(attrs, semconv.AttrComplianceState, d.ComplianceState)
+	telemetry.SetStr(attrs, semconv.AttrOperatingSystem, d.OperatingSystem)
+	attrs[semconv.AttrIsEncrypted] = strconv.FormatBool(d.IsEncrypted)
+	attrs[semconv.AttrStalenessBucket] = stalenessBucket
 	if d.LastSyncDateTime != nil && !d.LastSyncDateTime.IsZero() {
-		attrs["last_sync_date_time"] = d.LastSyncDateTime.Format(time.RFC3339)
+		attrs[semconv.AttrLastSyncDateTime] = d.LastSyncDateTime.Format(time.RFC3339)
 	}
 
 	name := d.DeviceName
@@ -311,18 +303,18 @@ type deviceOSSummary struct {
 // points, one per fixed schema field.
 func (s deviceOSSummary) points() []telemetry.GaugePoint {
 	return []telemetry.GaugePoint{
-		{Value: float64(s.AndroidCount), Attrs: telemetry.Attrs{"os": "android"}},
-		{Value: float64(s.IosCount), Attrs: telemetry.Attrs{"os": "ios"}},
-		{Value: float64(s.MacOSCount), Attrs: telemetry.Attrs{"os": "macos"}},
-		{Value: float64(s.WindowsMobileCount), Attrs: telemetry.Attrs{"os": "windows_mobile"}},
-		{Value: float64(s.WindowsCount), Attrs: telemetry.Attrs{"os": "windows"}},
-		{Value: float64(s.UnknownCount), Attrs: telemetry.Attrs{"os": "unknown"}},
-		{Value: float64(s.AndroidDedicatedCount), Attrs: telemetry.Attrs{"os": "android_dedicated"}},
-		{Value: float64(s.AndroidDeviceAdminCount), Attrs: telemetry.Attrs{"os": "android_device_admin"}},
-		{Value: float64(s.AndroidFullyManagedCount), Attrs: telemetry.Attrs{"os": "android_fully_managed"}},
-		{Value: float64(s.AndroidWorkProfileCount), Attrs: telemetry.Attrs{"os": "android_work_profile"}},
-		{Value: float64(s.AndroidCorporateWorkProfileCount), Attrs: telemetry.Attrs{"os": "android_corporate_work_profile"}},
-		{Value: float64(s.ConfigMgrDeviceCount), Attrs: telemetry.Attrs{"os": "config_mgr"}},
+		{Value: float64(s.AndroidCount), Attrs: telemetry.Attrs{semconv.AttrOs: "android"}},
+		{Value: float64(s.IosCount), Attrs: telemetry.Attrs{semconv.AttrOs: "ios"}},
+		{Value: float64(s.MacOSCount), Attrs: telemetry.Attrs{semconv.AttrOs: "macos"}},
+		{Value: float64(s.WindowsMobileCount), Attrs: telemetry.Attrs{semconv.AttrOs: "windows_mobile"}},
+		{Value: float64(s.WindowsCount), Attrs: telemetry.Attrs{semconv.AttrOs: "windows"}},
+		{Value: float64(s.UnknownCount), Attrs: telemetry.Attrs{semconv.AttrOs: "unknown"}},
+		{Value: float64(s.AndroidDedicatedCount), Attrs: telemetry.Attrs{semconv.AttrOs: "android_dedicated"}},
+		{Value: float64(s.AndroidDeviceAdminCount), Attrs: telemetry.Attrs{semconv.AttrOs: "android_device_admin"}},
+		{Value: float64(s.AndroidFullyManagedCount), Attrs: telemetry.Attrs{semconv.AttrOs: "android_fully_managed"}},
+		{Value: float64(s.AndroidWorkProfileCount), Attrs: telemetry.Attrs{semconv.AttrOs: "android_work_profile"}},
+		{Value: float64(s.AndroidCorporateWorkProfileCount), Attrs: telemetry.Attrs{semconv.AttrOs: "android_corporate_work_profile"}},
+		{Value: float64(s.ConfigMgrDeviceCount), Attrs: telemetry.Attrs{semconv.AttrOs: "config_mgr"}},
 	}
 }
 
@@ -470,20 +462,20 @@ func (c *Collector) collectFleet(ctx context.Context, e telemetry.Emitter) error
 	for k, v := range counts {
 		countPoints = append(countPoints, telemetry.GaugePoint{
 			Value: float64(v),
-			Attrs: telemetry.Attrs{"compliance_state": k[0], "operating_system": k[1]},
+			Attrs: telemetry.Attrs{semconv.AttrComplianceState: k[0], semconv.AttrOperatingSystem: k[1]},
 		})
 	}
 	e.GaugeSnapshot(countMetricName, "{device}", "Intune managed device fleet count, by compliance state and operating system.", countPoints)
 
 	encPoints := make([]telemetry.GaugePoint, 0, len(encrypted))
 	for os, v := range encrypted {
-		encPoints = append(encPoints, telemetry.GaugePoint{Value: float64(v), Attrs: telemetry.Attrs{"operating_system": os}})
+		encPoints = append(encPoints, telemetry.GaugePoint{Value: float64(v), Attrs: telemetry.Attrs{semconv.AttrOperatingSystem: os}})
 	}
 	e.GaugeSnapshot(encryptedMetricName, "{device}", "Intune managed devices reporting isEncrypted=true, by operating system.", encPoints)
 
 	stalePoints := make([]telemetry.GaugePoint, 0, len(staleness))
 	for bucket, v := range staleness {
-		stalePoints = append(stalePoints, telemetry.GaugePoint{Value: float64(v), Attrs: telemetry.Attrs{"staleness_bucket": bucket}})
+		stalePoints = append(stalePoints, telemetry.GaugePoint{Value: float64(v), Attrs: telemetry.Attrs{semconv.AttrStalenessBucket: bucket}})
 	}
 	e.GaugeSnapshot(stalenessMetricName, "{device}", "Intune managed devices bucketed by time since lastSyncDateTime.", stalePoints)
 

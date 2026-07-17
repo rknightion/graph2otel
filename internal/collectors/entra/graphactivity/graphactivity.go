@@ -24,12 +24,12 @@ package graphactivity
 import (
 	"fmt"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/blobpipeline"
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -86,16 +86,16 @@ func mapActivity(rec map[string]any) (telemetry.Event, bool) {
 	}
 
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "request_id", str(props, "requestId"))
-	setStr(attrs, "operation_id", str(props, "operationId"))
-	setStr(attrs, "client_request_id", str(props, "clientRequestId"))
-	setStr(attrs, "correlation_id", str(rec, "correlationId"))
-	setStr(attrs, "sign_in_activity_id", str(props, "signInActivityId"))
+	telemetry.SetStr(attrs, semconv.AttrRequestId, str(props, "requestId"))
+	telemetry.SetStr(attrs, semconv.AttrOperationId, str(props, "operationId"))
+	telemetry.SetStr(attrs, semconv.AttrClientRequestId, str(props, "clientRequestId"))
+	telemetry.SetStr(attrs, semconv.AttrCorrelationId, str(rec, "correlationId"))
+	telemetry.SetStr(attrs, semconv.AttrSignInActivityId, str(props, "signInActivityId"))
 
-	setStr(attrs, "request_method", str(props, "requestMethod"))
-	setStr(attrs, "request_uri", str(props, "requestUri"))
-	setStr(attrs, "api_version", str(props, "apiVersion"))
-	setStr(attrs, "user_agent", str(props, "userAgent"))
+	telemetry.SetStr(attrs, semconv.AttrRequestMethod, str(props, "requestMethod"))
+	telemetry.SetStr(attrs, semconv.AttrRequestUri, str(props, "requestUri"))
+	telemetry.SetStr(attrs, semconv.AttrApiVersion, str(props, "apiVersion"))
+	telemetry.SetStr(attrs, semconv.AttrUserAgent, str(props, "userAgent"))
 
 	// Numbers come from properties, never from the top level: the SAME record
 	// carries durationMs as a string ("497815") at the top and as an int
@@ -103,40 +103,40 @@ func mapActivity(rec map[string]any) (telemetry.Event, bool) {
 	// status code.
 	status, hasStatus := intOf(props, "responseStatusCode")
 	if hasStatus {
-		attrs["response_status_code"] = status
+		attrs[semconv.AttrResponseStatusCode] = status
 	}
 	if v, ok := intOf(props, "durationMs"); ok {
-		attrs["duration_ms"] = v
+		attrs[semconv.AttrDurationMs] = v
 	}
 	if v, ok := intOf(props, "responseSizeBytes"); ok {
-		attrs["response_size_bytes"] = v
+		attrs[semconv.AttrResponseSizeBytes] = v
 	}
 
 	// Caller identity. A call is either app-only (servicePrincipalId) or
 	// delegated (userId) — never both — and C_Idtyp says which.
-	setStr(attrs, "app_id", str(props, "appId"))
-	setStr(attrs, "service_principal_id", str(props, "servicePrincipalId"))
-	setStr(attrs, "user_id", str(props, "userId"))
-	setStr(attrs, "user_principal_object_id", str(props, "UserPrincipalObjectID"))
-	setStr(attrs, "identity_type", str(props, "C_Idtyp"))
-	setStr(attrs, "identity_provider", str(props, "identityProvider"))
-	setStr(attrs, "token_issued_at", str(props, "tokenIssuedAt"))
+	telemetry.SetStr(attrs, semconv.AttrAppId, str(props, "appId"))
+	telemetry.SetStr(attrs, semconv.AttrServicePrincipalId, str(props, "servicePrincipalId"))
+	telemetry.SetStr(attrs, semconv.AttrUserId, str(props, "userId"))
+	telemetry.SetStr(attrs, semconv.AttrUserPrincipalObjectId, str(props, "UserPrincipalObjectID"))
+	telemetry.SetStr(attrs, semconv.AttrIdentityType, str(props, "C_Idtyp"))
+	telemetry.SetStr(attrs, semconv.AttrIdentityProvider, str(props, "identityProvider"))
+	telemetry.SetStr(attrs, semconv.AttrTokenIssuedAt, str(props, "tokenIssuedAt"))
 
 	// roles/scopes/wids arrive space-separated in one string. Splitting them
 	// makes "which app used which permission" a filter rather than a substring
 	// search.
-	setList(attrs, "roles", str(props, "roles"))
-	setList(attrs, "scopes", str(props, "scopes"))
-	setList(attrs, "wids", str(props, "wids"))
+	telemetry.SetList(attrs, semconv.AttrRoles, str(props, "roles"))
+	telemetry.SetList(attrs, semconv.AttrScopes, str(props, "scopes"))
+	telemetry.SetList(attrs, semconv.AttrWids, str(props, "wids"))
 
 	ip := str(props, "ipAddress")
 	if ip == "" {
 		ip = str(rec, "callerIpAddress")
 	}
-	setStr(attrs, "caller_ip_address", ip)
-	setStr(attrs, "location", str(rec, "location"))
+	telemetry.SetStr(attrs, semconv.AttrCallerIpAddress, ip)
+	telemetry.SetStr(attrs, semconv.AttrLocation, str(rec, "location"))
 	if v, ok := props["isReplay"].(bool); ok {
-		attrs["is_replay"] = v
+		attrs[semconv.AttrIsReplay] = v
 	}
 
 	return telemetry.Event{
@@ -219,22 +219,6 @@ func intOf(m map[string]any, key string) (int, bool) {
 		return 0, false
 	}
 	return int(f), true
-}
-
-// setStr adds key=val only when val is non-empty, so absent fields don't emit
-// empty attributes.
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
-	}
-}
-
-// setList splits a space-separated field into a list attribute, omitting it
-// entirely when empty (scopes is empty on every app-only call).
-func setList(attrs telemetry.Attrs, key, val string) {
-	if parts := strings.Fields(val); len(parts) > 0 {
-		attrs[key] = parts
-	}
 }
 
 func init() {

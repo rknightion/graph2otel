@@ -29,6 +29,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -195,11 +196,11 @@ func (c *Collector) collectMigrationReports(ctx context.Context, e telemetry.Emi
 		name := orUnknown(rep.DisplayName)
 		readiness = append(readiness, telemetry.GaugePoint{
 			Value: 1,
-			Attrs: telemetry.Attrs{"report_name": name, "readiness": readinessBucketFor(rep.MigrationReadiness)},
+			Attrs: telemetry.Attrs{semconv.AttrReportName: name, semconv.AttrReadiness: readinessBucketFor(rep.MigrationReadiness)},
 		})
 		percent = append(percent, telemetry.GaugePoint{
 			Value: percentOf(rep.SupportedSettingsCount, rep.TotalSettingsCount),
-			Attrs: telemetry.Attrs{"report_name": name},
+			Attrs: telemetry.Attrs{semconv.AttrReportName: name},
 		})
 	}
 
@@ -229,7 +230,7 @@ func (c *Collector) collectConfigurations(ctx context.Context, e telemetry.Emitt
 
 	points := make([]telemetry.GaugePoint, 0, len(counts))
 	for typ, n := range counts {
-		points = append(points, telemetry.GaugePoint{Value: float64(n), Attrs: telemetry.Attrs{"ingestion_type": typ}})
+		points = append(points, telemetry.GaugePoint{Value: float64(n), Attrs: telemetry.Attrs{semconv.AttrIngestionType: typ}})
 	}
 	e.GaugeSnapshot(configCountMetric, "{config}", "Intune Group Policy configurations by policy configuration ingestion type.", points)
 	return nil

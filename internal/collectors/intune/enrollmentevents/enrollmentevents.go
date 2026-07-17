@@ -37,6 +37,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -113,15 +114,15 @@ func mapEnrollmentEvent(rec map[string]any) (string, telemetry.Event) {
 	operatingSystem := str(rec, "operatingSystem")
 
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "id", id)
-	setStr(attrs, "failure_category", failureCategory)
-	setStr(attrs, "enrollment_type", enrollmentType)
-	setStr(attrs, "operating_system", operatingSystem)
-	setStr(attrs, "os_version", str(rec, "osVersion"))
-	setStr(attrs, "failure_reason", str(rec, "failureReason"))
-	setStr(attrs, "device_id", str(rec, "deviceId"))
-	setStr(attrs, "user_id", str(rec, "userId"))
-	setStr(attrs, "correlation_id", str(rec, "correlationId"))
+	telemetry.SetStr(attrs, semconv.AttrId, id)
+	telemetry.SetStr(attrs, semconv.AttrFailureCategory, failureCategory)
+	telemetry.SetStr(attrs, semconv.AttrEnrollmentType, enrollmentType)
+	telemetry.SetStr(attrs, semconv.AttrOperatingSystem, operatingSystem)
+	telemetry.SetStr(attrs, semconv.AttrOsVersion, str(rec, "osVersion"))
+	telemetry.SetStr(attrs, semconv.AttrFailureReason, str(rec, "failureReason"))
+	telemetry.SetStr(attrs, semconv.AttrDeviceId, str(rec, "deviceId"))
+	telemetry.SetStr(attrs, semconv.AttrUserId, str(rec, "userId"))
+	telemetry.SetStr(attrs, semconv.AttrCorrelationId, str(rec, "correlationId"))
 
 	return id, telemetry.Event{
 		Name:     eventName,
@@ -136,14 +137,6 @@ func mapEnrollmentEvent(rec map[string]any) (string, telemetry.Event) {
 func str(m map[string]any, key string) string {
 	s, _ := m[key].(string)
 	return s
-}
-
-// setStr adds key=val only when val is non-empty, so absent fields don't
-// emit empty attributes.
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
-	}
 }
 
 func init() {

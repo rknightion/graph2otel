@@ -174,15 +174,15 @@ func (c *Collector) collectDeviceStateSummary(ctx context.Context, e telemetry.E
 	}
 
 	points := []telemetry.GaugePoint{
-		{Value: float64(s.CompliantDeviceCount), Attrs: telemetry.Attrs{"state": "compliant"}},
-		{Value: float64(s.NonCompliantDeviceCount), Attrs: telemetry.Attrs{"state": "non_compliant"}},
-		{Value: float64(s.InGracePeriodCount), Attrs: telemetry.Attrs{"state": "in_grace_period"}},
-		{Value: float64(s.ConfigManagerCount), Attrs: telemetry.Attrs{"state": "config_manager"}},
-		{Value: float64(s.UnknownDeviceCount), Attrs: telemetry.Attrs{"state": "unknown"}},
-		{Value: float64(s.NotApplicableDeviceCount), Attrs: telemetry.Attrs{"state": "not_applicable"}},
-		{Value: float64(s.RemediatedDeviceCount), Attrs: telemetry.Attrs{"state": "remediated"}},
-		{Value: float64(s.ErrorDeviceCount), Attrs: telemetry.Attrs{"state": "error"}},
-		{Value: float64(s.ConflictDeviceCount), Attrs: telemetry.Attrs{"state": "conflict"}},
+		{Value: float64(s.CompliantDeviceCount), Attrs: telemetry.Attrs{semconv.AttrState: "compliant"}},
+		{Value: float64(s.NonCompliantDeviceCount), Attrs: telemetry.Attrs{semconv.AttrState: "non_compliant"}},
+		{Value: float64(s.InGracePeriodCount), Attrs: telemetry.Attrs{semconv.AttrState: "in_grace_period"}},
+		{Value: float64(s.ConfigManagerCount), Attrs: telemetry.Attrs{semconv.AttrState: "config_manager"}},
+		{Value: float64(s.UnknownDeviceCount), Attrs: telemetry.Attrs{semconv.AttrState: "unknown"}},
+		{Value: float64(s.NotApplicableDeviceCount), Attrs: telemetry.Attrs{semconv.AttrState: "not_applicable"}},
+		{Value: float64(s.RemediatedDeviceCount), Attrs: telemetry.Attrs{semconv.AttrState: "remediated"}},
+		{Value: float64(s.ErrorDeviceCount), Attrs: telemetry.Attrs{semconv.AttrState: "error"}},
+		{Value: float64(s.ConflictDeviceCount), Attrs: telemetry.Attrs{semconv.AttrState: "conflict"}},
 	}
 	e.GaugeSnapshot(devicesMetricName, "{device}", "Tenant-wide Intune device compliance state summary.", points)
 	return nil
@@ -233,7 +233,7 @@ func (c *Collector) collectPolicies(ctx context.Context, e telemetry.Emitter) ([
 		refs = append(refs, policyRef{id: p.ID, name: name})
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(p.Version),
-			Attrs: telemetry.Attrs{"policy_name": name},
+			Attrs: telemetry.Attrs{semconv.AttrPolicyName: name},
 		})
 	}
 	e.GaugeSnapshot(policyVersionMetricName, semconv.UnitDimensionless,
@@ -257,11 +257,11 @@ type statusOverview struct {
 // gauge points.
 func (o statusOverview) points(policyName string) []telemetry.GaugePoint {
 	return []telemetry.GaugePoint{
-		{Value: float64(o.SuccessCount), Attrs: telemetry.Attrs{"policy_name": policyName, "state": "success"}},
-		{Value: float64(o.PendingCount), Attrs: telemetry.Attrs{"policy_name": policyName, "state": "pending"}},
-		{Value: float64(o.FailedCount), Attrs: telemetry.Attrs{"policy_name": policyName, "state": "failed"}},
-		{Value: float64(o.ErrorCount), Attrs: telemetry.Attrs{"policy_name": policyName, "state": "error"}},
-		{Value: float64(o.NotApplicableCount), Attrs: telemetry.Attrs{"policy_name": policyName, "state": "not_applicable"}},
+		{Value: float64(o.SuccessCount), Attrs: telemetry.Attrs{semconv.AttrPolicyName: policyName, semconv.AttrState: "success"}},
+		{Value: float64(o.PendingCount), Attrs: telemetry.Attrs{semconv.AttrPolicyName: policyName, semconv.AttrState: "pending"}},
+		{Value: float64(o.FailedCount), Attrs: telemetry.Attrs{semconv.AttrPolicyName: policyName, semconv.AttrState: "failed"}},
+		{Value: float64(o.ErrorCount), Attrs: telemetry.Attrs{semconv.AttrPolicyName: policyName, semconv.AttrState: "error"}},
+		{Value: float64(o.NotApplicableCount), Attrs: telemetry.Attrs{semconv.AttrPolicyName: policyName, semconv.AttrState: "not_applicable"}},
 	}
 }
 
@@ -388,7 +388,7 @@ func (c *Collector) collectSettingStateSummaries(ctx context.Context, e telemetr
 	for k, v := range agg {
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(v),
-			Attrs: telemetry.Attrs{"setting_name": k.settingName, "platform": k.platform, "state": k.state},
+			Attrs: telemetry.Attrs{semconv.AttrSettingName: k.settingName, semconv.AttrPlatform: k.platform, semconv.AttrState: k.state},
 		})
 	}
 	e.GaugeSnapshot(settingDevicesMetricName, "{device}",

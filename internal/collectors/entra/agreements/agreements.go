@@ -57,6 +57,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -231,7 +232,7 @@ func (c *Collector) collectAcceptances(ctx context.Context, agreementID string) 
 	for _, s := range acceptanceStates {
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(counts[s]),
-			Attrs: telemetry.Attrs{"agreement": agreementID, "state": s},
+			Attrs: telemetry.Attrs{semconv.AttrAgreement: agreementID, semconv.AttrState: s},
 		})
 	}
 	return points, nil

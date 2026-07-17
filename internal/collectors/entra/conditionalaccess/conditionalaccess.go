@@ -24,6 +24,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -201,7 +202,7 @@ func policyPoints(raw []json.RawMessage, logger *slog.Logger) []telemetry.GaugeP
 	for _, ps := range policyStates {
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(counts[ps.attr]),
-			Attrs: telemetry.Attrs{"state": ps.attr},
+			Attrs: telemetry.Attrs{semconv.AttrState: ps.attr},
 		})
 	}
 	return points
@@ -254,7 +255,7 @@ func namedLocationPoints(raw []json.RawMessage, logger *slog.Logger) []telemetry
 	for k, n := range counts {
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(n),
-			Attrs: telemetry.Attrs{"type": k.typ, "is_trusted": k.trusted},
+			Attrs: telemetry.Attrs{semconv.AttrType: k.typ, semconv.AttrIsTrusted: k.trusted},
 		})
 	}
 	return points

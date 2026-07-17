@@ -18,6 +18,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -105,7 +106,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for k, v := range byStatusPriority {
 		total = append(total, telemetry.GaugePoint{
 			Value: float64(v),
-			Attrs: telemetry.Attrs{"status": k[0], "priority": k[1]},
+			Attrs: telemetry.Attrs{semconv.AttrStatus: k[0], semconv.AttrPriority: k[1]},
 		})
 	}
 	e.GaugeSnapshot(totalMetric, "{recommendation}", "Entra recommendations by status and priority.", total)
@@ -114,7 +115,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for typ, n := range impactedByType {
 		impacted = append(impacted, telemetry.GaugePoint{
 			Value: float64(n),
-			Attrs: telemetry.Attrs{"recommendation": typ},
+			Attrs: telemetry.Attrs{semconv.AttrRecommendation: typ},
 		})
 	}
 	e.GaugeSnapshot(impactedMetric, "{resource}", "Impacted resources per Entra recommendation type.", impacted)

@@ -31,6 +31,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -91,17 +92,17 @@ func mapAlert(rec map[string]any) (string, telemetry.Event) {
 	serviceSource := str(rec, "serviceSource")
 
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "id", id)
-	setStr(attrs, "title", title)
-	setStr(attrs, "category", str(rec, "category"))
-	setStr(attrs, "severity", severity)
-	setStr(attrs, "status", status)
-	setStr(attrs, "service_source", serviceSource)
-	setStr(attrs, "detection_source", str(rec, "detectionSource"))
-	setStr(attrs, "determination", str(rec, "determination"))
-	setStr(attrs, "classification", str(rec, "classification"))
-	setStr(attrs, "provider_alert_id", str(rec, "providerAlertId"))
-	setStr(attrs, "incident_id", str(rec, "incidentId"))
+	telemetry.SetStr(attrs, semconv.AttrId, id)
+	telemetry.SetStr(attrs, semconv.AttrTitle, title)
+	telemetry.SetStr(attrs, semconv.AttrCategory, str(rec, "category"))
+	telemetry.SetStr(attrs, semconv.AttrSeverity, severity)
+	telemetry.SetStr(attrs, semconv.AttrStatus, status)
+	telemetry.SetStr(attrs, semconv.AttrServiceSource, serviceSource)
+	telemetry.SetStr(attrs, semconv.AttrDetectionSource, str(rec, "detectionSource"))
+	telemetry.SetStr(attrs, semconv.AttrDetermination, str(rec, "determination"))
+	telemetry.SetStr(attrs, semconv.AttrClassification, str(rec, "classification"))
+	telemetry.SetStr(attrs, semconv.AttrProviderAlertId, str(rec, "providerAlertId"))
+	telemetry.SetStr(attrs, semconv.AttrIncidentId, str(rec, "incidentId"))
 
 	// The record's own `tenantId` is deliberately NOT emitted (#143).
 	//
@@ -119,7 +120,7 @@ func mapAlert(rec map[string]any) (string, telemetry.Event) {
 	// writer for a key the emitter owns is how the two would eventually disagree.
 
 	if evidence, ok := rec["evidence"].([]any); ok {
-		attrs["evidence_count"] = len(evidence)
+		attrs[semconv.AttrEvidenceCount] = len(evidence)
 	}
 
 	return id, telemetry.Event{
@@ -150,14 +151,6 @@ func severityFor(alertSeverity string) telemetry.Severity {
 func str(m map[string]any, key string) string {
 	s, _ := m[key].(string)
 	return s
-}
-
-// setStr adds key=val only when val is non-empty, so absent fields don't
-// emit empty attributes.
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
-	}
 }
 
 func init() {

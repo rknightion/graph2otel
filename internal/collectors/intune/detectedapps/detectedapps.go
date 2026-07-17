@@ -32,6 +32,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -157,7 +158,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for key, count := range buckets {
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(count),
-			Attrs: telemetry.Attrs{"app_name": key.appName, "platform": key.platform},
+			Attrs: telemetry.Attrs{semconv.AttrAppName: key.appName, semconv.AttrPlatform: key.platform},
 		})
 	}
 	e.GaugeSnapshot(deviceCountMetric, "{device}",

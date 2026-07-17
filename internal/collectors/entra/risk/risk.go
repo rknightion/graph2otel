@@ -46,6 +46,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -251,7 +252,7 @@ func (c *Collector) collectHalf(ctx context.Context, e telemetry.Emitter, h half
 	for k, v := range counts {
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(v),
-			Attrs: telemetry.Attrs{"risk_level": k[0], "risk_state": k[1]},
+			Attrs: telemetry.Attrs{semconv.AttrRiskLevel: k[0], semconv.AttrRiskState: k[1]},
 		})
 	}
 	e.GaugeSnapshot(h.metricName, h.unit, h.metricDesc, points)
@@ -269,23 +270,23 @@ func (c *Collector) collectHalf(ctx context.Context, e telemetry.Emitter, h half
 // attribute instead.
 func logTwin(item riskyEntity, h half) telemetry.Event {
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "id", item.ID)
-	setStr(attrs, "risk_level", item.RiskLevel)
-	setStr(attrs, "risk_state", item.RiskState)
-	setStr(attrs, "risk_detail", item.RiskDetail)
-	setStr(attrs, "risk_last_updated", item.RiskLastUpdatedDateTime)
-	setStr(attrs, "user_principal_name", item.UserPrincipalName)
-	setStr(attrs, "user_display_name", item.UserDisplayName)
-	setStr(attrs, "app_id", item.AppID)
-	setStr(attrs, "display_name", item.DisplayName)
-	setStr(attrs, "service_principal_type", item.ServicePrincipalType)
+	telemetry.SetStr(attrs, semconv.AttrId, item.ID)
+	telemetry.SetStr(attrs, semconv.AttrRiskLevel, item.RiskLevel)
+	telemetry.SetStr(attrs, semconv.AttrRiskState, item.RiskState)
+	telemetry.SetStr(attrs, semconv.AttrRiskDetail, item.RiskDetail)
+	telemetry.SetStr(attrs, semconv.AttrRiskLastUpdated, item.RiskLastUpdatedDateTime)
+	telemetry.SetStr(attrs, semconv.AttrUserPrincipalName, item.UserPrincipalName)
+	telemetry.SetStr(attrs, semconv.AttrUserDisplayName, item.UserDisplayName)
+	telemetry.SetStr(attrs, semconv.AttrAppId, item.AppID)
+	telemetry.SetStr(attrs, semconv.AttrDisplayName, item.DisplayName)
+	telemetry.SetStr(attrs, semconv.AttrServicePrincipalType, item.ServicePrincipalType)
 
 	// Emitted whenever the wire carried it, including false — unlike the string
 	// attributes above, false is an answer ("this risk state is settled"), not an
 	// absence. Omitting it would break the useful filter (is_processing=false)
 	// rather than the useless one. nil = the field was absent; see riskyEntity.
 	if item.IsProcessing != nil {
-		attrs["is_processing"] = *item.IsProcessing
+		attrs[semconv.AttrIsProcessing] = *item.IsProcessing
 	}
 
 	// Only "high" escalates: riskLevel's other values (low/medium/hidden/none)
@@ -313,15 +314,6 @@ func displayOf(item riskyEntity) string {
 		}
 	}
 	return "unknown"
-}
-
-// setStr adds key=val only when val is non-empty, so an absent field (including
-// every field belonging to the OTHER half's resource shape) emits no attribute
-// rather than an empty one.
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
-	}
 }
 
 func init() {

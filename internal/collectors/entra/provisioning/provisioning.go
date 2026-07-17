@@ -28,6 +28,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -84,33 +85,33 @@ func mapProvisioning(rec map[string]any) (string, telemetry.Event) {
 	action := str(rec, "provisioningAction")
 
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "id", id)
-	setStr(attrs, "job_id", str(rec, "jobId"))
-	setStr(attrs, "cycle_id", str(rec, "cycleId"))
-	setStr(attrs, "change_id", str(rec, "changeId"))
-	setStr(attrs, "provisioning_action", action)
+	telemetry.SetStr(attrs, semconv.AttrId, id)
+	telemetry.SetStr(attrs, semconv.AttrJobId, str(rec, "jobId"))
+	telemetry.SetStr(attrs, semconv.AttrCycleId, str(rec, "cycleId"))
+	telemetry.SetStr(attrs, semconv.AttrChangeId, str(rec, "changeId"))
+	telemetry.SetStr(attrs, semconv.AttrProvisioningAction, action)
 
 	status := ""
 	sev := telemetry.SeverityInfo
 	if statusInfo := nested(rec, "provisioningStatusInfo"); statusInfo != nil {
 		status = str(statusInfo, "status")
-		setStr(attrs, "status", status)
+		telemetry.SetStr(attrs, semconv.AttrStatus, status)
 		if status == "failure" {
 			sev = telemetry.SeverityWarn
 		}
 		if errInfo := nested(statusInfo, "errorInformation"); errInfo != nil {
-			setStr(attrs, "status_info", str(errInfo, "reason"))
-			setStr(attrs, "status_error_code", str(errInfo, "errorCode"))
+			telemetry.SetStr(attrs, semconv.AttrStatusInfo, str(errInfo, "reason"))
+			telemetry.SetStr(attrs, semconv.AttrStatusErrorCode, str(errInfo, "errorCode"))
 		}
 	}
 
 	if src := nested(rec, "sourceIdentity"); src != nil {
-		setStr(attrs, "source_identity_id", str(src, "id"))
-		setStr(attrs, "source_identity_display_name", str(src, "displayName"))
+		telemetry.SetStr(attrs, semconv.AttrSourceIdentityId, str(src, "id"))
+		telemetry.SetStr(attrs, semconv.AttrSourceIdentityDisplayName, str(src, "displayName"))
 	}
 	if tgt := nested(rec, "targetIdentity"); tgt != nil {
-		setStr(attrs, "target_identity_id", str(tgt, "id"))
-		setStr(attrs, "target_identity_display_name", str(tgt, "displayName"))
+		telemetry.SetStr(attrs, semconv.AttrTargetIdentityId, str(tgt, "id"))
+		telemetry.SetStr(attrs, semconv.AttrTargetIdentityDisplayName, str(tgt, "displayName"))
 	}
 	// servicePrincipal is a SINGLE OBJECT on provisioningObjectSummary
 	// `[live-measured 2026-07-17, #165, #167]`, not the collection the Graph
@@ -119,8 +120,8 @@ func mapProvisioning(rec map[string]any) (string, telemetry.Event) {
 	// so service_principal_id/service_principal_name were silently dropped
 	// from every real record.
 	if sp := nested(rec, "servicePrincipal"); sp != nil {
-		setStr(attrs, "service_principal_id", str(sp, "id"))
-		setStr(attrs, "service_principal_name", str(sp, "displayName"))
+		telemetry.SetStr(attrs, semconv.AttrServicePrincipalId, str(sp, "id"))
+		telemetry.SetStr(attrs, semconv.AttrServicePrincipalName, str(sp, "displayName"))
 	}
 
 	return id, telemetry.Event{
@@ -141,14 +142,6 @@ func str(m map[string]any, key string) string {
 func nested(m map[string]any, key string) map[string]any {
 	n, _ := m[key].(map[string]any)
 	return n
-}
-
-// setStr adds key=val only when val is non-empty, so absent fields don't
-// emit empty attributes.
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
-	}
 }
 
 func init() {

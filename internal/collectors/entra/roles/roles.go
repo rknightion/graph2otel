@@ -47,6 +47,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -139,14 +140,14 @@ func principalType(odataType string) string {
 // that set change"), not alerting.
 func memberLogTwin(m roleMember, role directoryRole) telemetry.Event {
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "assignment_type", "standing")
-	setStr(attrs, "role_name", role.DisplayName)
-	setStr(attrs, "role_id", role.ID)
-	setStr(attrs, "principal_id", m.ID)
-	setStr(attrs, "principal_type", principalType(m.ODataType))
-	setStr(attrs, "principal_display_name", m.DisplayName)
-	setStr(attrs, "principal_user_principal_name", m.UserPrincipalName)
-	setStr(attrs, "principal_app_id", m.AppID)
+	telemetry.SetStr(attrs, semconv.AttrAssignmentType, "standing")
+	telemetry.SetStr(attrs, semconv.AttrRoleName, role.DisplayName)
+	telemetry.SetStr(attrs, semconv.AttrRoleId, role.ID)
+	telemetry.SetStr(attrs, semconv.AttrPrincipalId, m.ID)
+	telemetry.SetStr(attrs, semconv.AttrPrincipalType, principalType(m.ODataType))
+	telemetry.SetStr(attrs, semconv.AttrPrincipalDisplayName, m.DisplayName)
+	telemetry.SetStr(attrs, semconv.AttrPrincipalUserPrincipalName, m.UserPrincipalName)
+	telemetry.SetStr(attrs, semconv.AttrPrincipalAppId, m.AppID)
 
 	who := m.UserPrincipalName
 	if who == "" {
@@ -176,14 +177,14 @@ func memberLogTwin(m roleMember, role directoryRole) telemetry.Event {
 // sign-in logs, so it is not a dead end.
 func pimLogTwin(inst scheduleInstance, assignmentType string) telemetry.Event {
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "assignment_type", assignmentType)
-	setStr(attrs, "role_name", inst.roleName())
-	setStr(attrs, "principal_id", inst.PrincipalID)
+	telemetry.SetStr(attrs, semconv.AttrAssignmentType, assignmentType)
+	telemetry.SetStr(attrs, semconv.AttrRoleName, inst.roleName())
+	telemetry.SetStr(attrs, semconv.AttrPrincipalId, inst.PrincipalID)
 
 	permanent := inst.EndDateTime == nil
-	setStr(attrs, "permanent", strconv.FormatBool(permanent))
+	telemetry.SetStr(attrs, semconv.AttrPermanent, strconv.FormatBool(permanent))
 	if !permanent {
-		setStr(attrs, "end_date_time", *inst.EndDateTime)
+		telemetry.SetStr(attrs, semconv.AttrEndDateTime, *inst.EndDateTime)
 	}
 
 	kind := "time-bound"
@@ -195,15 +196,6 @@ func pimLogTwin(inst scheduleInstance, assignmentType string) telemetry.Event {
 		Body:     fmt.Sprintf("%s: %s PIM assignment for %s (%s)", inst.roleName(), assignmentType, inst.PrincipalID, kind),
 		Severity: telemetry.SeverityInfo,
 		Attrs:    attrs,
-	}
-}
-
-// setStr adds key=val only when val is non-empty, so an absent field (a group
-// member has no UPN, a user member has no appId) emits no attribute rather than
-// an empty one.
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
 	}
 }
 
@@ -352,7 +344,7 @@ func (c *Collector) collectStandingMembers(ctx context.Context, e telemetry.Emit
 
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(len(members)),
-			Attrs: telemetry.Attrs{"role_name": role.DisplayName},
+			Attrs: telemetry.Attrs{semconv.AttrRoleName: role.DisplayName},
 		})
 	}
 
@@ -410,13 +402,13 @@ func (c *Collector) collectPIMAssignments(ctx context.Context, e telemetry.Emitt
 	for role, n := range activeByRole {
 		assignmentPoints = append(assignmentPoints, telemetry.GaugePoint{
 			Value: float64(n),
-			Attrs: telemetry.Attrs{"role_name": role, "assignment_type": "active"},
+			Attrs: telemetry.Attrs{semconv.AttrRoleName: role, semconv.AttrAssignmentType: "active"},
 		})
 	}
 	for role, n := range eligibleByRole {
 		assignmentPoints = append(assignmentPoints, telemetry.GaugePoint{
 			Value: float64(n),
-			Attrs: telemetry.Attrs{"role_name": role, "assignment_type": "eligible"},
+			Attrs: telemetry.Attrs{semconv.AttrRoleName: role, semconv.AttrAssignmentType: "eligible"},
 		})
 	}
 	e.GaugeSnapshot(pimAssignmentsMetricName, "{assignment}", "PIM active/eligible directory-role assignment count, per role and assignment_type.", assignmentPoints)
@@ -425,7 +417,7 @@ func (c *Collector) collectPIMAssignments(ctx context.Context, e telemetry.Emitt
 	for role, n := range permanentByRole {
 		permanentPoints = append(permanentPoints, telemetry.GaugePoint{
 			Value: float64(n),
-			Attrs: telemetry.Attrs{"role_name": role},
+			Attrs: telemetry.Attrs{semconv.AttrRoleName: role},
 		})
 	}
 	e.GaugeSnapshot(pimPermanentMetricName, "{assignment}", "Active PIM directory-role assignments with no end time (not time-bound), per role.", permanentPoints)

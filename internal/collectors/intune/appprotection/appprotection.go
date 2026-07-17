@@ -59,6 +59,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -296,7 +297,7 @@ func (c *Collector) collectPolicyCounts(ctx context.Context, e telemetry.Emitter
 	for k, v := range counts {
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(v),
-			Attrs: telemetry.Attrs{"platform": k.platform, "assigned": k.assigned},
+			Attrs: telemetry.Attrs{semconv.AttrPlatform: k.platform, semconv.AttrAssigned: k.assigned},
 		})
 	}
 	e.GaugeSnapshot(policyCountMetricName, "{policy}", "Intune app protection / app configuration policy count, by platform and assignment state.", points)
@@ -364,21 +365,12 @@ func (c *Collector) collectFlaggedRegistrations(ctx context.Context, e telemetry
 	for k, v := range counts {
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(v),
-			Attrs: telemetry.Attrs{"flagged_reason": k.reason, "platform": k.platform},
+			Attrs: telemetry.Attrs{semconv.AttrFlaggedReason: k.reason, semconv.AttrPlatform: k.platform},
 		})
 	}
 	e.GaugeSnapshot(flaggedRegistrationsMetricName, "{registration}", "Intune managed app registrations, by aggregated flagged reason and platform (never a per-user or per-app series).", points)
 
 	return nil
-}
-
-// setStr adds key=val to attrs only when val is non-empty, so an absent field
-// emits no attribute rather than an empty one (matches entra/risk and
-// purview/labels - the frozen #114 seam).
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
-	}
 }
 
 // registrationLogTwin renders one FLAGGED managedAppRegistration as the
@@ -403,14 +395,14 @@ func setStr(attrs telemetry.Attrs, key, val string) {
 // meaning isn't known yet.
 func registrationLogTwin(reg managedAppRegistration, platform string, reasonBuckets []string) telemetry.Event {
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "user_id", reg.UserID)
-	setStr(attrs, "device_tag", reg.DeviceTag)
-	setStr(attrs, "platform", platform)
+	telemetry.SetStr(attrs, semconv.AttrUserId, reg.UserID)
+	telemetry.SetStr(attrs, semconv.AttrDeviceTag, reg.DeviceTag)
+	telemetry.SetStr(attrs, semconv.AttrPlatform, platform)
 	if reg.AppIdentifier != nil {
-		setStr(attrs, "app_identifier", reg.AppIdentifier.concreteAppID())
+		telemetry.SetStr(attrs, semconv.AttrAppIdentifier, reg.AppIdentifier.concreteAppID())
 	}
 	reasonsJoined := strings.Join(reasonBuckets, ",")
-	setStr(attrs, "flagged_reasons", reasonsJoined)
+	telemetry.SetStr(attrs, semconv.AttrFlaggedReasons, reasonsJoined)
 
 	sev := telemetry.SeverityInfo
 	for _, b := range reasonBuckets {
@@ -498,7 +490,7 @@ func (c *Collector) collectWIPPolicyCounts(ctx context.Context, e telemetry.Emit
 	for assigned, v := range counts {
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(v),
-			Attrs: telemetry.Attrs{"assigned": assigned},
+			Attrs: telemetry.Attrs{semconv.AttrAssigned: assigned},
 		})
 	}
 	e.GaugeSnapshot(wipPolicyCountMetricName, "{policy}", "Legacy Windows Information Protection (WIP) policy count (windowsInformationProtectionPolicies + mdmWindowsInformationProtectionPolicies), by assignment state.", points)

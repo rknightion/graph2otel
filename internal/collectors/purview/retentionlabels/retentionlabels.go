@@ -88,6 +88,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -256,14 +257,14 @@ func (c *RetentionCollector) collectLabels(ctx context.Context, e telemetry.Emit
 		counts[combo{behavior: behavior, action: action, trigger: trigger}]++
 
 		attrs := telemetry.Attrs{
-			"behavior_during_retention": behavior,
-			"action_after_retention":    action,
-			"retention_trigger":         trigger,
+			semconv.AttrBehaviorDuringRetention: behavior,
+			semconv.AttrActionAfterRetention:    action,
+			semconv.AttrRetentionTrigger:        trigger,
 		}
-		setStr(attrs, "id", l.ID)
-		setStr(attrs, "name", l.DisplayName)
-		setStr(attrs, "description_for_admins", l.DescriptionForAdmins)
-		setStr(attrs, "description_for_users", l.DescriptionForUsers)
+		telemetry.SetStr(attrs, semconv.AttrId, l.ID)
+		telemetry.SetStr(attrs, semconv.AttrName, l.DisplayName)
+		telemetry.SetStr(attrs, semconv.AttrDescriptionForAdmins, l.DescriptionForAdmins)
+		telemetry.SetStr(attrs, semconv.AttrDescriptionForUsers, l.DescriptionForUsers)
 		e.LogEvent(telemetry.Event{
 			Name:  retentionLabelEventName,
 			Body:  fmt.Sprintf("retention label: %s", l.DisplayName),
@@ -276,9 +277,9 @@ func (c *RetentionCollector) collectLabels(ctx context.Context, e telemetry.Emit
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(n),
 			Attrs: telemetry.Attrs{
-				"behavior_during_retention": k.behavior,
-				"action_after_retention":    k.action,
-				"retention_trigger":         k.trigger,
+				semconv.AttrBehaviorDuringRetention: k.behavior,
+				semconv.AttrActionAfterRetention:    k.action,
+				semconv.AttrRetentionTrigger:        k.trigger,
 			},
 		})
 	}
@@ -315,9 +316,9 @@ func (c *RetentionCollector) collectEventTypes(ctx context.Context, e telemetry.
 			continue
 		}
 		attrs := telemetry.Attrs{}
-		setStr(attrs, "id", et.ID)
-		setStr(attrs, "name", et.DisplayName)
-		setStr(attrs, "description", et.Description)
+		telemetry.SetStr(attrs, semconv.AttrId, et.ID)
+		telemetry.SetStr(attrs, semconv.AttrName, et.DisplayName)
+		telemetry.SetStr(attrs, semconv.AttrDescription, et.Description)
 		e.LogEvent(telemetry.Event{
 			Name:  retentionEventTypeEventName,
 			Body:  fmt.Sprintf("retention event type: %s", et.DisplayName),
@@ -373,16 +374,6 @@ func normalizeTrigger(raw string) string {
 		return "date_of_event"
 	default:
 		return "unknown"
-	}
-}
-
-// setStr adds key=val to attrs only when val is non-empty, so an absent or
-// empty decoded field is omitted from the log twin rather than emitted as ""
-// (the same idiom internal/collectors/intune/auditevents.go uses over raw
-// map[string]any — here adapted for this package's typed structs).
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
 	}
 }
 

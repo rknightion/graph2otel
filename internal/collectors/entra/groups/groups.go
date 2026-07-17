@@ -15,6 +15,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -57,21 +58,21 @@ type groupSlice struct {
 var groupSlices = []groupSlice{
 	// group_type: mutually exclusive, exhaustive 4-way split straight from the
 	// Graph docs' own "Filter by group types" table.
-	{"group_type=m365", telemetry.Attrs{"group_type": "m365"}, "groupTypes/any(c:c eq 'Unified')"},
-	{"group_type=security", telemetry.Attrs{"group_type": "security"}, "mailEnabled eq false and securityEnabled eq true"},
-	{"group_type=mail_enabled_security", telemetry.Attrs{"group_type": "mail_enabled_security"}, "NOT groupTypes/any(c:c eq 'Unified') and mailEnabled eq true and securityEnabled eq true"},
-	{"group_type=distribution", telemetry.Attrs{"group_type": "distribution"}, "NOT groupTypes/any(c:c eq 'Unified') and mailEnabled eq true and securityEnabled eq false"},
+	{"group_type=m365", telemetry.Attrs{semconv.AttrGroupType: "m365"}, "groupTypes/any(c:c eq 'Unified')"},
+	{"group_type=security", telemetry.Attrs{semconv.AttrGroupType: "security"}, "mailEnabled eq false and securityEnabled eq true"},
+	{"group_type=mail_enabled_security", telemetry.Attrs{semconv.AttrGroupType: "mail_enabled_security"}, "NOT groupTypes/any(c:c eq 'Unified') and mailEnabled eq true and securityEnabled eq true"},
+	{"group_type=distribution", telemetry.Attrs{semconv.AttrGroupType: "distribution"}, "NOT groupTypes/any(c:c eq 'Unified') and mailEnabled eq true and securityEnabled eq false"},
 
 	// membership_type: dynamic membership rule vs statically assigned.
-	{"membership_type=dynamic", telemetry.Attrs{"membership_type": "dynamic"}, "groupTypes/any(c:c eq 'DynamicMembership')"},
-	{"membership_type=assigned", telemetry.Attrs{"membership_type": "assigned"}, "NOT groupTypes/any(c:c eq 'DynamicMembership')"},
+	{"membership_type=dynamic", telemetry.Attrs{semconv.AttrMembershipType: "dynamic"}, "groupTypes/any(c:c eq 'DynamicMembership')"},
+	{"membership_type=assigned", telemetry.Attrs{semconv.AttrMembershipType: "assigned"}, "NOT groupTypes/any(c:c eq 'DynamicMembership')"},
 
 	// security_enabled / mail_enabled: the two raw booleans the issue asks for
 	// as their own slices, independent of the group_type classification above.
-	{"security_enabled=true", telemetry.Attrs{"security_enabled": true}, "securityEnabled eq true"},
-	{"security_enabled=false", telemetry.Attrs{"security_enabled": false}, "securityEnabled eq false"},
-	{"mail_enabled=true", telemetry.Attrs{"mail_enabled": true}, "mailEnabled eq true"},
-	{"mail_enabled=false", telemetry.Attrs{"mail_enabled": false}, "mailEnabled eq false"},
+	{"security_enabled=true", telemetry.Attrs{semconv.AttrSecurityEnabled: true}, "securityEnabled eq true"},
+	{"security_enabled=false", telemetry.Attrs{semconv.AttrSecurityEnabled: false}, "securityEnabled eq false"},
+	{"mail_enabled=true", telemetry.Attrs{semconv.AttrMailEnabled: true}, "mailEnabled eq true"},
+	{"mail_enabled=false", telemetry.Attrs{semconv.AttrMailEnabled: false}, "mailEnabled eq false"},
 }
 
 // filterCountURL builds a /groups/$count URL with the given $filter, letting

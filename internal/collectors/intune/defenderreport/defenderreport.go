@@ -52,6 +52,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/defender/productstatus"
 	"github.com/rknightion/graph2otel/internal/exportjob"
 	"github.com/rknightion/graph2otel/internal/preflight"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -444,9 +445,9 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			Body:     "Intune Defender agent health row",
 			Severity: telemetry.SeverityWarn,
 			Attrs: telemetry.Attrs{
-				"device_id":   row[colDeviceID],
-				"device_name": row[colDeviceName],
-				"upn":         row[colUPN],
+				semconv.AttrDeviceId:   row[colDeviceID],
+				semconv.AttrDeviceName: row[colDeviceName],
+				semconv.AttrUpn:        row[colUPN],
 				// device_state carries Microsoft's own localized rendering of
 				// the DeviceState code, taken from the _loc sibling that
 				// arrives unrequested. Read from the wire rather than decoded
@@ -456,23 +457,23 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 				// attribute creates no series, so its locale-dependence (live
 				// 2026-07-17: casing shifts under Accept-Language) costs
 				// nothing, and device_state_code below is the stable value.
-				"device_state":      row[colDeviceStateLoc],
-				"device_state_code": row[colDeviceState],
+				semconv.AttrDeviceState:     row[colDeviceStateLoc],
+				semconv.AttrDeviceStateCode: row[colDeviceState],
 				// product_status is the decoded flag set, comma-joined; a
 				// bitmask can hold several flags at once (live: 524416 = two),
 				// so this is deliberately not a single value.
-				"product_status": strings.Join(productStatusesFor(row[colProductStatus]), ","),
+				semconv.AttrProductStatus: strings.Join(productStatusesFor(row[colProductStatus]), ","),
 				// The raw bitmask is emitted unconditionally alongside it, per
 				// the house pattern (m365/activity's record_type_id): the
 				// lossless value must survive a decode miss, since most bits
 				// in productStatusFlags are docs-only and Microsoft's tables
 				// have been wrong before on this project.
-				"product_status_code":               row[colProductStatus],
-				"real_time_protection_enabled":      row[colRealTimeProtectionEnabled],
-				"network_inspection_system_enabled": row[colNetworkInspectionSystemOn],
-				"signature_update_overdue":          row[colSignatureUpdateOverdue],
-				"tamper_protection_enabled":         row[colTamperProtectionEnabled],
-				"malware_protection_enabled":        row[colMalwareProtectionEnabled],
+				semconv.AttrProductStatusCode:              row[colProductStatus],
+				semconv.AttrRealTimeProtectionEnabled:      row[colRealTimeProtectionEnabled],
+				semconv.AttrNetworkInspectionSystemEnabled: row[colNetworkInspectionSystemOn],
+				semconv.AttrSignatureUpdateOverdue:         row[colSignatureUpdateOverdue],
+				semconv.AttrTamperProtectionEnabled:        row[colTamperProtectionEnabled],
+				semconv.AttrMalwareProtectionEnabled:       row[colMalwareProtectionEnabled],
 			},
 		})
 	}
@@ -481,7 +482,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for signal, v := range counts {
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(v),
-			Attrs: telemetry.Attrs{"signal": signal},
+			Attrs: telemetry.Attrs{semconv.AttrSignal: signal},
 		})
 	}
 	e.GaugeSnapshot(signalCountMetricName, "{device}", "Intune managed devices by Defender agent health signal, from the DefenderAgents export report.", points)
@@ -490,7 +491,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for status, v := range statusCounts {
 		statusPoints = append(statusPoints, telemetry.GaugePoint{
 			Value: float64(v),
-			Attrs: telemetry.Attrs{"status": status},
+			Attrs: telemetry.Attrs{semconv.AttrStatus: status},
 		})
 	}
 	e.GaugeSnapshot(productStatusMetricName, "{device}", "Intune managed devices by Windows Defender ProductStatus flag, from the DefenderAgents export report. ProductStatus is a bitmask: a device setting several flags is counted under each, so these points are independent counts and can sum to more than the fleet size.", statusPoints)

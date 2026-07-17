@@ -52,6 +52,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -258,7 +259,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		for _, privilege := range []string{privilegeHigh, privilegeStandard} {
 			points = append(points, telemetry.GaugePoint{
 				Value: float64(counts[consentType][privilege]),
-				Attrs: telemetry.Attrs{"consent_type": consentType, "privilege": privilege},
+				Attrs: telemetry.Attrs{semconv.AttrConsentType: consentType, semconv.AttrPrivilege: privilege},
 			})
 		}
 	}
@@ -395,13 +396,13 @@ func grantHasHighPrivilegeScope(scope string) bool {
 // instead -- see risk.logTwin for the fuller rationale behind this choice.
 func delegatedGrantLogTwin(g oauth2Grant) telemetry.Event {
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "id", g.ID)
-	setStr(attrs, "consent_type", consentTypeDelegated)
-	setStr(attrs, "privilege", privilegeHigh)
-	setStr(attrs, "client_id", g.ClientID)
-	setStr(attrs, "principal_id", g.PrincipalID)
-	setStr(attrs, "resource_id", g.ResourceID)
-	setStr(attrs, "scope", g.Scope)
+	telemetry.SetStr(attrs, semconv.AttrId, g.ID)
+	telemetry.SetStr(attrs, semconv.AttrConsentType, consentTypeDelegated)
+	telemetry.SetStr(attrs, semconv.AttrPrivilege, privilegeHigh)
+	telemetry.SetStr(attrs, semconv.AttrClientId, g.ClientID)
+	telemetry.SetStr(attrs, semconv.AttrPrincipalId, g.PrincipalID)
+	telemetry.SetStr(attrs, semconv.AttrResourceId, g.ResourceID)
+	telemetry.SetStr(attrs, semconv.AttrScope, g.Scope)
 
 	return telemetry.Event{
 		Name:     eventConsentGrant,
@@ -420,17 +421,17 @@ func delegatedGrantLogTwin(g oauth2Grant) telemetry.Event {
 // classification -- reused here, not looked up again.
 func appRoleAssignmentLogTwin(a appRoleAssignment, ra resourceApp, roleValue string) telemetry.Event {
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "id", a.ID)
-	setStr(attrs, "consent_type", consentTypeApplication)
-	setStr(attrs, "privilege", privilegeHigh)
-	setStr(attrs, "resource_label", ra.label)
-	setStr(attrs, "resource_id", a.ResourceID)
-	setStr(attrs, "resource_display_name", a.ResourceDisplayName)
-	setStr(attrs, "app_role_id", a.AppRoleID)
-	setStr(attrs, "app_role", roleValue)
-	setStr(attrs, "principal_id", a.PrincipalID)
-	setStr(attrs, "principal_display_name", a.PrincipalDisplayName)
-	setStr(attrs, "principal_type", a.PrincipalType)
+	telemetry.SetStr(attrs, semconv.AttrId, a.ID)
+	telemetry.SetStr(attrs, semconv.AttrConsentType, consentTypeApplication)
+	telemetry.SetStr(attrs, semconv.AttrPrivilege, privilegeHigh)
+	telemetry.SetStr(attrs, semconv.AttrResourceLabel, ra.label)
+	telemetry.SetStr(attrs, semconv.AttrResourceId, a.ResourceID)
+	telemetry.SetStr(attrs, semconv.AttrResourceDisplayName, a.ResourceDisplayName)
+	telemetry.SetStr(attrs, semconv.AttrAppRoleId, a.AppRoleID)
+	telemetry.SetStr(attrs, semconv.AttrAppRole, roleValue)
+	telemetry.SetStr(attrs, semconv.AttrPrincipalId, a.PrincipalID)
+	telemetry.SetStr(attrs, semconv.AttrPrincipalDisplayName, a.PrincipalDisplayName)
+	telemetry.SetStr(attrs, semconv.AttrPrincipalType, a.PrincipalType)
 
 	return telemetry.Event{
 		Name:     eventConsentGrant,
@@ -447,14 +448,6 @@ func principalDisplayOrID(a appRoleAssignment) string {
 		return a.PrincipalDisplayName
 	}
 	return a.PrincipalID
-}
-
-// setStr adds key=val only when val is non-empty, so an absent field emits no
-// attribute rather than an empty one.
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
-	}
 }
 
 func init() {

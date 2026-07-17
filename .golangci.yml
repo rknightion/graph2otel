@@ -48,6 +48,15 @@ linters:
         linters:
           - staticcheck
         text: "SA5011"
+      # internal/semconv/attrs_*.go hold nothing but attribute-NAME string
+      # constants (e.g. AttrCredentialType = "credential_type"); gosec G101
+      # reads the "credential"/"token" substring in a constant NAME as a
+      # hardcoded credential, which is a false positive by construction — these
+      # files carry no secrets. Scoped to G101 in these files only.
+      - path: internal/semconv/attrs_.*\.go
+        linters:
+          - gosec
+        text: "G101"
 
 formatters:
   enable:

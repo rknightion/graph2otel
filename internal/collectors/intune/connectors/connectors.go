@@ -27,6 +27,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -252,7 +253,7 @@ func (c *Collector) exchangeSnapshot(ctx context.Context, now time.Time) ([]tele
 	for state, n := range byState {
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(n),
-			Attrs: telemetry.Attrs{"connector_type": connectorTypeExchange, "state": state},
+			Attrs: telemetry.Attrs{semconv.AttrConnectorType: connectorTypeExchange, semconv.AttrState: state},
 		})
 	}
 	return points, agePointOrNil(connectorTypeExchange, maxAge, haveAge), nil
@@ -298,7 +299,7 @@ func (c *Collector) mtdSnapshot(ctx context.Context, now time.Time) ([]telemetry
 	for state, n := range byState {
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(n),
-			Attrs: telemetry.Attrs{"connector_type": connectorTypeMTD, "state": state},
+			Attrs: telemetry.Attrs{semconv.AttrConnectorType: connectorTypeMTD, semconv.AttrState: state},
 		})
 	}
 
@@ -307,8 +308,8 @@ func (c *Collector) mtdSnapshot(ctx context.Context, now time.Time) ([]telemetry
 		platformPoints = make([]telemetry.GaugePoint, 0, 2*len(mtdPlatforms))
 		for _, platform := range mtdPlatforms {
 			platformPoints = append(platformPoints,
-				telemetry.GaugePoint{Value: float64(enabledCount[platform]), Attrs: telemetry.Attrs{"platform": platform, "enabled": true}},
-				telemetry.GaugePoint{Value: float64(disabledCount[platform]), Attrs: telemetry.Attrs{"platform": platform, "enabled": false}},
+				telemetry.GaugePoint{Value: float64(enabledCount[platform]), Attrs: telemetry.Attrs{semconv.AttrPlatform: platform, semconv.AttrEnabled: true}},
+				telemetry.GaugePoint{Value: float64(disabledCount[platform]), Attrs: telemetry.Attrs{semconv.AttrPlatform: platform, semconv.AttrEnabled: false}},
 			)
 		}
 	}
@@ -347,7 +348,7 @@ func (c *Collector) ndesSnapshot(ctx context.Context, now time.Time) ([]telemetr
 	for state, n := range byState {
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(n),
-			Attrs: telemetry.Attrs{"connector_type": connectorTypeNDES, "state": state},
+			Attrs: telemetry.Attrs{semconv.AttrConnectorType: connectorTypeNDES, semconv.AttrState: state},
 		})
 	}
 	return points, agePointOrNil(connectorTypeNDES, maxAge, haveAge), nil
@@ -370,7 +371,7 @@ func agePointOrNil(connectorType string, age float64, have bool) *telemetry.Gaug
 	if !have {
 		return nil
 	}
-	return &telemetry.GaugePoint{Value: age, Attrs: telemetry.Attrs{"connector_type": connectorType}}
+	return &telemetry.GaugePoint{Value: age, Attrs: telemetry.Attrs{semconv.AttrConnectorType: connectorType}}
 }
 
 // isUnavailable reports whether err reflects the connector type simply not

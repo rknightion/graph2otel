@@ -24,6 +24,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -178,7 +179,7 @@ func (c *Collector) apnsPoint(ctx context.Context, now time.Time) (telemetry.Gau
 	}
 	return telemetry.GaugePoint{
 		Value: days,
-		Attrs: telemetry.Attrs{"type": "apns", "state": orUnknown(cert.CertificateUploadStatus), "token_name": ""},
+		Attrs: telemetry.Attrs{semconv.AttrType: "apns", semconv.AttrState: orUnknown(cert.CertificateUploadStatus), semconv.AttrTokenName: ""},
 	}, true, nil
 }
 
@@ -205,7 +206,7 @@ func (c *Collector) vppPoints(ctx context.Context, now time.Time) ([]telemetry.G
 		}
 		points = append(points, telemetry.GaugePoint{
 			Value: days,
-			Attrs: telemetry.Attrs{"type": "vpp", "state": orUnknown(tok.State), "token_name": tok.OrganizationName},
+			Attrs: telemetry.Attrs{semconv.AttrType: "vpp", semconv.AttrState: orUnknown(tok.State), semconv.AttrTokenName: tok.OrganizationName},
 		})
 	}
 	return points, nil
@@ -234,7 +235,7 @@ func (c *Collector) depPoints(ctx context.Context, now time.Time) ([]telemetry.G
 		if days, ok := daysUntil(setting.TokenExpirationDateTime, now); ok {
 			expiry = append(expiry, telemetry.GaugePoint{
 				Value: days,
-				Attrs: telemetry.Attrs{"type": "dep", "state": state, "token_name": setting.TokenName},
+				Attrs: telemetry.Attrs{semconv.AttrType: "dep", semconv.AttrState: state, semconv.AttrTokenName: setting.TokenName},
 			})
 		} else {
 			c.logger.Info("apple_tokens: dep onboarding setting has no tokenExpirationDateTime, skipping",
@@ -242,7 +243,7 @@ func (c *Collector) depPoints(ctx context.Context, now time.Time) ([]telemetry.G
 		}
 		deviceCounts = append(deviceCounts, telemetry.GaugePoint{
 			Value: float64(setting.SyncedDeviceCount),
-			Attrs: telemetry.Attrs{"token_name": setting.TokenName},
+			Attrs: telemetry.Attrs{semconv.AttrTokenName: setting.TokenName},
 		})
 	}
 	return expiry, deviceCounts, nil

@@ -55,6 +55,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -137,15 +138,15 @@ func mapIncident(rec map[string]any) (string, telemetry.Event) {
 	status := str(rec, "status")
 
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "id", id)
-	setStr(attrs, "display_name", displayName)
-	setStr(attrs, "severity", severity)
-	setStr(attrs, "status", status)
-	setStr(attrs, "classification", str(rec, "classification"))
-	setStr(attrs, "determination", str(rec, "determination"))
-	setStr(attrs, "assigned_to", str(rec, "assignedTo"))
-	setStr(attrs, "created_time", str(rec, "createdDateTime"))
-	setStr(attrs, "last_update_time", lastUpdate)
+	telemetry.SetStr(attrs, semconv.AttrId, id)
+	telemetry.SetStr(attrs, semconv.AttrDisplayName, displayName)
+	telemetry.SetStr(attrs, semconv.AttrSeverity, severity)
+	telemetry.SetStr(attrs, semconv.AttrStatus, status)
+	telemetry.SetStr(attrs, semconv.AttrClassification, str(rec, "classification"))
+	telemetry.SetStr(attrs, semconv.AttrDetermination, str(rec, "determination"))
+	telemetry.SetStr(attrs, semconv.AttrAssignedTo, str(rec, "assignedTo"))
+	telemetry.SetStr(attrs, semconv.AttrCreatedTime, str(rec, "createdDateTime"))
+	telemetry.SetStr(attrs, semconv.AttrLastUpdateTime, lastUpdate)
 
 	// The record's own `tenantId` is deliberately NOT emitted — it is OURS, not
 	// Microsoft's, and telemetry.WithTenant already stamps it on every record from
@@ -153,7 +154,7 @@ func mapIncident(rec map[string]any) (string, telemetry.Event) {
 	// measurement and the full reasoning. Do not re-add it.
 
 	if score, ok := intField(rec, "priorityScore"); ok {
-		attrs["priority_score"] = score
+		attrs[semconv.AttrPriorityScore] = score
 	}
 	// `tags` is not a real field on this endpoint (#169, live-measured
 	// 2026-07-17: 0/5 rows carried it — see TestLiveRecordCarriesNoWireTagsKey).
@@ -161,17 +162,17 @@ func mapIncident(rec map[string]any) (string, telemetry.Event) {
 	// (Defender-set); they are distinct fields with different semantics, so each
 	// gets its own attribute rather than being collapsed into one.
 	if tags := strSlice(rec, "customTags"); len(tags) > 0 {
-		attrs["custom_tags"] = tags
+		attrs[semconv.AttrCustomTags] = tags
 	}
 	if tags := strSlice(rec, "systemTags"); len(tags) > 0 {
-		attrs["system_tags"] = tags
+		attrs[semconv.AttrSystemTags] = tags
 	}
 	// Grouped alert ids, only present when $expand=alerts was applied. Not sent
 	// by default (see the package doc), so this is normally a no-op; kept so the
 	// Map is forward-compatible if $expand support is ever wired.
 	if ids := alertIDs(rec); len(ids) > 0 {
-		attrs["alert_ids"] = ids
-		attrs["alert_count"] = len(ids)
+		attrs[semconv.AttrAlertIds] = ids
+		attrs[semconv.AttrAlertCount] = len(ids)
 	}
 
 	dedupeID := id + "#" + lastUpdate
@@ -203,14 +204,6 @@ func severityFor(incidentSeverity string) telemetry.Severity {
 func str(m map[string]any, key string) string {
 	s, _ := m[key].(string)
 	return s
-}
-
-// setStr adds key=val only when val is non-empty, so absent fields don't emit
-// empty attributes.
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
-	}
 }
 
 // intField reads a whole-number field. JSON numbers decode as float64, so it

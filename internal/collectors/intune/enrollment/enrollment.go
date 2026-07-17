@@ -157,17 +157,17 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		countByType[typ]++
 		priorityPoints = append(priorityPoints, telemetry.GaugePoint{
 			Value: float64(cfg.Priority),
-			Attrs: telemetry.Attrs{"config_type": typ, "config_name": name},
+			Attrs: telemetry.Attrs{semconv.AttrConfigType: typ, semconv.AttrConfigName: name},
 		})
 		versionPoints = append(versionPoints, telemetry.GaugePoint{
 			Value: float64(cfg.Version),
-			Attrs: telemetry.Attrs{"config_name": name},
+			Attrs: telemetry.Attrs{semconv.AttrConfigName: name},
 		})
 	}
 
 	countPoints := make([]telemetry.GaugePoint, 0, len(countByType))
 	for typ, n := range countByType {
-		countPoints = append(countPoints, telemetry.GaugePoint{Value: float64(n), Attrs: telemetry.Attrs{"config_type": typ}})
+		countPoints = append(countPoints, telemetry.GaugePoint{Value: float64(n), Attrs: telemetry.Attrs{semconv.AttrConfigType: typ}})
 	}
 
 	e.GaugeSnapshot(countMetricName, "{config}",

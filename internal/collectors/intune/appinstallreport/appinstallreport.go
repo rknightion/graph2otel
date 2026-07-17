@@ -66,6 +66,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/exportjob"
 	"github.com/rknightion/graph2otel/internal/preflight"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -275,7 +276,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for k, v := range counts {
 		points = append(points, telemetry.GaugePoint{
 			Value: v,
-			Attrs: telemetry.Attrs{"install_state": k.state, "platform": k.platform},
+			Attrs: telemetry.Attrs{semconv.AttrInstallState: k.state, semconv.AttrPlatform: k.platform},
 		})
 	}
 	e.GaugeSnapshot(installationsMetricName, "{installation}", "Intune app installations by install state and platform, summed across every app in the AppInstallStatusAggregate export report. A device counts once per app it has, so this counts installations, not distinct devices; see the intune.app_install_status log event for per-app detail.", points)
@@ -297,22 +298,22 @@ func appLogEvent(row exportjob.Row) telemetry.Event {
 	platform, _ := platformFor(row["Platform"])
 
 	attrs := telemetry.Attrs{}
-	setStr(attrs, "app_name", row["DisplayName"])
-	setStr(attrs, "app_id", row["ApplicationId"])
-	setStr(attrs, "platform", platform)
+	telemetry.SetStr(attrs, semconv.AttrAppName, row["DisplayName"])
+	telemetry.SetStr(attrs, semconv.AttrAppId, row["ApplicationId"])
+	telemetry.SetStr(attrs, semconv.AttrPlatform, platform)
 	// The raw code is emitted unconditionally alongside the decoded name, per
 	// the house pattern (m365/activity's record_type_id, recordtypes.go): on
 	// this project Microsoft's published tables have repeatedly failed to
 	// cover every value the wire actually sends, so the lossless code must
 	// survive a decode miss. platform above is then free to be a clean bounded
 	// label without that costing the reader the ability to see what arrived.
-	setStr(attrs, "platform_code", row["Platform"])
-	setStr(attrs, "publisher", row["Publisher"])
-	setStr(attrs, "installed_device_count", row["InstalledDeviceCount"])
-	setStr(attrs, "failed_device_count", row["FailedDeviceCount"])
-	setStr(attrs, "not_applicable_device_count", row["NotApplicableDeviceCount"])
-	setStr(attrs, "not_installed_device_count", row["NotInstalledDeviceCount"])
-	setStr(attrs, "pending_install_device_count", row["PendingInstallDeviceCount"])
+	telemetry.SetStr(attrs, semconv.AttrPlatformCode, row["Platform"])
+	telemetry.SetStr(attrs, semconv.AttrPublisher, row["Publisher"])
+	telemetry.SetStr(attrs, semconv.AttrInstalledDeviceCount, row["InstalledDeviceCount"])
+	telemetry.SetStr(attrs, semconv.AttrFailedDeviceCount, row["FailedDeviceCount"])
+	telemetry.SetStr(attrs, semconv.AttrNotApplicableDeviceCount, row["NotApplicableDeviceCount"])
+	telemetry.SetStr(attrs, semconv.AttrNotInstalledDeviceCount, row["NotInstalledDeviceCount"])
+	telemetry.SetStr(attrs, semconv.AttrPendingInstallDeviceCount, row["PendingInstallDeviceCount"])
 
 	severity := telemetry.SeverityInfo
 	if v, err := strconv.ParseFloat(row["FailedDeviceCount"], 64); err == nil && v > 0 {
@@ -324,14 +325,6 @@ func appLogEvent(row exportjob.Row) telemetry.Event {
 		Body:     "Intune app install status",
 		Severity: severity,
 		Attrs:    attrs,
-	}
-}
-
-// setStr sets attrs[key] to val, unless val is empty — an absent export column
-// stays absent from the log record rather than appearing as "".
-func setStr(attrs telemetry.Attrs, key, val string) {
-	if val != "" {
-		attrs[key] = val
 	}
 }
 
