@@ -57,11 +57,23 @@ func TestBuildRequest(t *testing.T) {
 	}
 }
 
-// TestMap maps a representative auditLogRecord (the #98 live shape) to its
-// dedupe id and per-record log attributes, and confirms per-entity detail
-// (UPN, IP, object id) lands as LOG attributes.
-func TestMap(t *testing.T) {
-	rec := map[string]any{
+// fullAuditRecord returns the richest auditLogRecord this package has: every
+// field mapRecord reads, in the #98 live shape.
+//
+// Provenance, stated rather than assumed: this is HAND-WRITTEN in the live
+// shape — it is NOT a live capture. The field NAMES and the crossed user-field
+// semantics behind them are live-verified (500/500 on m7kni, 2026-07-17,
+// #100/#151); the VALUES are placeholders — contoso.com is Microsoft's example
+// domain, 203.0.113.7 is TEST-NET-3, "rec-abc-123" and "obj-42" are invented.
+// No captured auditLogRecord exists in this package's testdata. So this fixture
+// is evidence about field names and mapper wiring, and evidence about nothing
+// else: #142's `"platform": "windows"` was also a plausible value that was never
+// on the wire.
+//
+// Returned from a function rather than shared as a package-level var so no test
+// can mutate the record another test reads.
+func fullAuditRecord() map[string]any {
+	return map[string]any{
 		"id":                 "rec-abc-123",
 		"createdDateTime":    "2026-07-16T09:15:00Z",
 		"auditLogRecordType": "ExchangeItemAggregated",
@@ -80,6 +92,13 @@ func TestMap(t *testing.T) {
 			"Operation":    "MailItemsAccessed",
 		},
 	}
+}
+
+// TestMap maps a representative auditLogRecord (the #98 live shape) to its
+// dedupe id and per-record log attributes, and confirms per-entity detail
+// (UPN, IP, object id) lands as LOG attributes.
+func TestMap(t *testing.T) {
+	rec := fullAuditRecord()
 
 	id, ev := mapRecord(rec)
 	if id != "rec-abc-123" {
@@ -266,6 +285,84 @@ func TestCollectWindowEndToEnd(t *testing.T) {
 	// POST /beta/... -> 201). The create URL must target the beta service root.
 	if got := fake.createURLs[0]; !strings.HasPrefix(got, "https://graph.microsoft.com/beta/security/auditLog/queries") {
 		t.Errorf("create URL = %q, want the /beta service root (audit query API is beta-only)", got)
+	}
+}
+
+// TestCollectorEmitsFullRecordEndToEnd drives the richest record this package
+// has (fullAuditRecord) through the real jobpipeline engine into an emitter,
+// rather than calling mapRecord directly the way TestMap does.
+//
+// It exists for #164, and the golden is the point. The signal gate
+// (internal/signalcapture) records the union of what a package's tests EMIT, so
+// the only records it ever saw here were TestCollectWindowEndToEnd's two
+// four-field synthetic ones. testdata/signals.json therefore claimed
+// [id, ingest_transport, operation, record_type, service] — and NO user
+// attribute at all — for a collector that ships eleven.
+//
+// That understatement had a live cost, not a theoretical one: the
+// user_principal_name -> user_id rename (#163, fa3395f) could not have tripped
+// this package's drift gate, because no user attribute was in its golden to
+// drift. m365/activity — same m365.audit event name, same signal, opposite
+// coverage — caught it. A golden that has never seen an attribute cannot notice
+// that attribute changing.
+//
+// So the assertions below are deliberately weighted to user_key/user_id: they
+// are what #164 requires the golden to cover, and they are the pair the rename
+// moved.
+func TestCollectorEmitsFullRecordEndToEnd(t *testing.T) {
+	rec := telemetrytest.New()
+	fake := &fakeJobClient{
+		statuses: []string{jobpipeline.StatusSucceeded},
+		records:  []map[string]any{fullAuditRecord()},
+	}
+	c := newCollector(deps(t, fake))
+
+	from := time.Date(2026, 7, 16, 8, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 7, 16, 9, 30, 0, 0, time.UTC)
+	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter()); err != nil {
+		t.Fatalf("CollectWindow: %v", err)
+	}
+
+	logs := rec.LogRecords()
+	if len(logs) != 1 {
+		t.Fatalf("emitted %d records, want 1", len(logs))
+	}
+	got := logs[0]
+	if got.EventName != eventName {
+		t.Errorf("event name = %q, want %q", got.EventName, eventName)
+	}
+
+	// Checked at the EMITTER, not the mapper: every attribute must survive the
+	// whole create -> poll -> page -> emit path, which is the other half of what
+	// this test buys over TestMap.
+	//
+	// The user pair stays crossed here exactly as it is in mapRecord — wire
+	// userId -> user_key, wire userPrincipalName -> user_id. See
+	// TestTopLevelUserIDIsTheClassicUserKey for why that is the fix and not a bug.
+	wantAttrs := map[string]string{
+		"id":            "rec-abc-123",
+		"operation":     "MailItemsAccessed",
+		"record_type":   "ExchangeItemAggregated",
+		"service":       "Exchange",
+		"user_type":     "Regular",
+		"user_key":      "user-guid-1",
+		"user_id":       "alice@contoso.com",
+		"client_ip":     "203.0.113.7",
+		"object_id":     "obj-42",
+		"workload":      "Exchange",
+		"result_status": "Succeeded",
+	}
+	for k, want := range wantAttrs {
+		if v := got.Attrs[k]; v != want {
+			t.Errorf("emitted attr %q = %q, want %q", k, v, want)
+		}
+	}
+
+	// The renamed attribute must not come back at the emitter either — the
+	// mapper-level guard in TestTopLevelUserIDIsTheClassicUserKey cannot see a
+	// re-add that happens further down the path.
+	if v, present := got.Attrs["user_principal_name"]; present {
+		t.Errorf("emitted attr user_principal_name = %q, want it ABSENT — it was renamed to user_id (#163)", v)
 	}
 }
 

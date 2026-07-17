@@ -34,11 +34,27 @@ func depsWith(t *testing.T, f *recordingFetcher) collectors.WindowDeps {
 	}
 }
 
-// TestMapAlertHighSeverity asserts a representative alerts_v2 record maps to
-// the expected dedupe id, event name, key attributes, and that a "high"
-// alert severity string maps the log record's own Severity to Error.
-func TestMapAlertHighSeverity(t *testing.T) {
-	rec := map[string]any{
+// fullAlertRecord returns the richest alerts_v2 record this package has: every
+// field mapAlert reads, plus the wire `tenantId` the mapper deliberately
+// ignores (#143).
+//
+// Provenance, stated rather than assumed: this fixture is HAND-WRITTEN, NOT a
+// live capture. "alert-1", "provider-guid-1", "tenant-guid-1" and "incident-1"
+// are placeholders, and no captured alerts_v2 record exists in this package's
+// testdata. The field names and enum values are plausible-and-conventional
+// rather than measured. That is worth knowing before reasoning from it: this
+// package has nothing like the #129 Tor record entra/riskdetections was rebuilt
+// against, so it can prove the mapper's wiring and can prove nothing about what
+// alerts_v2 actually returns.
+//
+// tenantId stays on the record ON PURPOSE — see TestWireTenantIDIsNotEmitted.
+// Its presence is what proves the mapper IGNORES it rather than that a test
+// forgot to set it. Do not remove it to "clean up" the fixture.
+//
+// Returned from a function rather than shared as a package-level var so no test
+// can mutate the record another test reads.
+func fullAlertRecord() map[string]any {
+	return map[string]any{
 		"id":              "alert-1",
 		"createdDateTime": "2026-07-01T10:00:00Z",
 		"title":           "Impossible travel activity",
@@ -54,6 +70,13 @@ func TestMapAlertHighSeverity(t *testing.T) {
 		"incidentId":      "incident-1",
 		"evidence":        []any{map[string]any{"@odata.type": "#microsoft.graph.security.userEvidence"}, map[string]any{"@odata.type": "#microsoft.graph.security.ipEvidence"}},
 	}
+}
+
+// TestMapAlertHighSeverity asserts a representative alerts_v2 record maps to
+// the expected dedupe id, event name, key attributes, and that a "high"
+// alert severity string maps the log record's own Severity to Error.
+func TestMapAlertHighSeverity(t *testing.T) {
+	rec := fullAlertRecord()
 
 	id, ev := mapAlert(rec)
 	if id != "alert-1" {
@@ -203,6 +226,87 @@ func TestCollectorDrainsEmitsAndPersistsWatermark(t *testing.T) {
 // margin the engine trails the watermark by when EndpointConfig.SafetyLag is
 // left at its default.
 const logpipelineDefaultSafetyLag = 15 * time.Minute
+
+// TestCollectorEmitsFullRecordEndToEnd drives the richest record this package
+// has (fullAlertRecord) through the real logpipeline engine into an emitter,
+// rather than calling mapAlert directly the way TestMapAlertHighSeverity does.
+//
+// It exists for #164, and the golden is the point. The signal gate
+// (internal/signalcapture) records the union of what a package's tests EMIT.
+// Every record that reached the emitter here was a minimal synthetic one — the
+// six-field pair in TestCollectorDrainsEmitsAndPersistsWatermark — while the
+// rich record only ever reached mapAlert. So testdata/signals.json claimed a
+// 6-attribute surface for a collector that ships 12, and the six it missed are
+// the SecOps-relevant half: category, classification, determination,
+// detection_source, provider_alert_id, incident_id, evidence_count. An attribute
+// absent from the golden cannot drift, so half this collector's surface could be
+// renamed or dropped without the gate noticing.
+//
+// tenant_id is deliberately NOT expected below, and its absence here is correct
+// twice over. The mapper ignores the wire field (#143), and this Recorder's
+// emitter is bare — telemetry.WithTenant wraps it in the real Scheduler, not
+// here. The golden documents what the COLLECTOR emits; tenant_id is stamped
+// above it. Do not wrap the emitter to force it into this golden.
+func TestCollectorEmitsFullRecordEndToEnd(t *testing.T) {
+	f := &recordingFetcher{records: []map[string]any{fullAlertRecord()}}
+	rec := telemetrytest.New()
+	c := newCollector(depsWith(t, f))
+
+	from := time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC)
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(3*time.Hour), rec.Emitter()); err != nil {
+		t.Fatalf("CollectWindow: %v", err)
+	}
+
+	logs := rec.LogRecords()
+	if len(logs) != 1 {
+		t.Fatalf("emitted %d records, want 1", len(logs))
+	}
+	got := logs[0]
+	if got.EventName != eventName {
+		t.Errorf("event name = %q, want %q", got.EventName, eventName)
+	}
+
+	// Checked at the EMITTER, not the mapper: every attribute must survive the
+	// whole fetch -> map -> dedupe -> emit path, which is the other half of what
+	// this test buys over TestMapAlertHighSeverity.
+	wantAttrs := map[string]string{
+		"id":                "alert-1",
+		"title":             "Impossible travel activity",
+		"category":          "InitialAccess",
+		"severity":          "high",
+		"status":            "newAlert",
+		"service_source":    "identityProtection",
+		"detection_source":  "identityProtection",
+		"determination":     "unknownFutureValue",
+		"classification":    "unknown",
+		"provider_alert_id": "provider-guid-1",
+		"incident_id":       "incident-1",
+	}
+	for k, want := range wantAttrs {
+		if v := got.Attrs[k]; v != want {
+			t.Errorf("emitted attr %q = %q, want %q", k, v, want)
+		}
+	}
+
+	// evidence_count is checked for PRESENCE only, and its value is pinned at
+	// the mapper instead (TestMapAlertHighSeverity).
+	//
+	// Not an oversight, and do not "fix" it by asserting a value: it is an int
+	// attribute, and telemetrytest.Recorder flattens every log attribute through
+	// log.Value.AsString(), which yields "" for any non-string Kind. The recorder
+	// cannot represent a non-string attribute's value — a limit of the test
+	// harness, not of the emission.
+	if _, present := got.Attrs["evidence_count"]; !present {
+		t.Error("emitted attrs missing evidence_count")
+	}
+
+	// The #143 guard, at the emitter this time: mapAlert ignoring the wire
+	// tenantId is asserted in TestWireTenantIDIsNotEmitted, but only this test
+	// can show that nothing further down the path re-adds it.
+	if v, present := got.Attrs["tenant_id"]; present {
+		t.Errorf("emitted attr tenant_id = %q, want it ABSENT — telemetry.WithTenant owns that key (#143), and this bare emitter is not wrapped by it", v)
+	}
+}
 
 // TestWireTenantIDIsNotEmitted pins the #143 delete.
 //

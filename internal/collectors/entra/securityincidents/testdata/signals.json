@@ -5,10 +5,14 @@
       "EventName": "entra.security_incident",
       "AttrKeys": [
         "assigned_to",
+        "classification",
+        "created_time",
+        "determination",
         "display_name",
         "id",
         "ingest_transport",
         "last_update_time",
+        "priority_score",
         "severity",
         "status",
         "tags"

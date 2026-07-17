@@ -35,12 +35,32 @@ func depsWith(t *testing.T, f *recordingFetcher) collectors.WindowDeps {
 	}
 }
 
-// TestMapIncidentHighSeverity asserts a representative incident record maps to
-// the expected composite dedupe id, event name, key attributes, priority score,
-// tags slice, and that a "high" severity maps the log record's own Severity to
-// Error.
-func TestMapIncidentHighSeverity(t *testing.T) {
-	rec := map[string]any{
+// fullIncidentRecord returns the richest incident record this package has:
+// every field mapIncident reads that the live collector can actually receive,
+// plus the wire `tenantId` the mapper deliberately ignores (#143).
+//
+// Provenance, stated rather than assumed: this fixture is HAND-WRITTEN, NOT a
+// live capture. "inc-1", "tenant-guid-1" and analyst@contoso.com are
+// placeholders (contoso.com is Microsoft's example domain), the priorityScore of
+// 87 is invented, and no captured /security/incidents record exists in this
+// package's testdata. It is evidence about mapper wiring and about nothing else.
+//
+// `alerts` is deliberately ABSENT, which is why this is the richest record the
+// collector can RECEIVE rather than the richest mapIncident can parse. The
+// grouped-alert ids only exist under $expand=alerts, which this collector never
+// sends (see the package doc), so a fixture carrying them would golden two
+// attributes — alert_ids, alert_count — that no live poll can produce. That is
+// the golden overstating instead of understating; TestMapIncidentExpandedAlerts
+// keeps covering that forward-compatible path at the mapper, where it belongs.
+//
+// tenantId stays on the record ON PURPOSE — see TestWireTenantIDIsNotEmitted.
+// Its presence is what proves the mapper IGNORES it rather than that a test
+// forgot to set it. Do not remove it to "clean up" the fixture.
+//
+// Returned from a function rather than shared as a package-level var so no test
+// can mutate the record another test reads.
+func fullIncidentRecord() map[string]any {
+	return map[string]any{
 		"id":                 "inc-1",
 		"createdDateTime":    "2026-07-01T10:00:00Z",
 		"lastUpdateDateTime": "2026-07-01T12:30:00Z",
@@ -54,6 +74,14 @@ func TestMapIncidentHighSeverity(t *testing.T) {
 		"priorityScore":      float64(87),
 		"tags":               []any{"Priority", "Ransomware"},
 	}
+}
+
+// TestMapIncidentHighSeverity asserts a representative incident record maps to
+// the expected composite dedupe id, event name, key attributes, priority score,
+// tags slice, and that a "high" severity maps the log record's own Severity to
+// Error.
+func TestMapIncidentHighSeverity(t *testing.T) {
+	rec := fullIncidentRecord()
 
 	id, ev := mapIncident(rec)
 	if id != "inc-1#2026-07-01T12:30:00Z" {
@@ -304,6 +332,94 @@ func TestEmitsNoMetrics(t *testing.T) {
 	}
 	if names := rec.MetricNames(); len(names) != 0 {
 		t.Errorf("security-incidents emitted metrics %v, want none — per-incident detail must be log attributes, not metrics", names)
+	}
+}
+
+// TestCollectorEmitsFullRecordEndToEnd drives the richest record this package
+// has (fullIncidentRecord) through the real logpipeline engine into an emitter,
+// rather than calling mapIncident directly the way TestMapIncidentHighSeverity
+// does.
+//
+// It exists for #164, and the golden is the point. The signal gate
+// (internal/signalcapture) records the union of what a package's tests EMIT.
+// Every record that reached the emitter here was a minimal synthetic one
+// (TestCollectorReEmitsAcrossPolls, TestEmitsNoMetrics), while the rich record
+// only ever reached mapIncident. So testdata/signals.json missed four
+// attributes the collector really ships — classification, determination,
+// created_time, priority_score — and an attribute absent from the golden cannot
+// drift: those four could be renamed or dropped without the gate noticing.
+//
+// tenant_id is deliberately NOT expected below, and its absence here is correct
+// twice over. The mapper ignores the wire field (#143), and this Recorder's
+// emitter is bare — telemetry.WithTenant wraps it in the real Scheduler, not
+// here. The golden documents what the COLLECTOR emits; tenant_id is stamped
+// above it. Do not wrap the emitter to force it into this golden.
+func TestCollectorEmitsFullRecordEndToEnd(t *testing.T) {
+	f := &recordingFetcher{records: []map[string]any{fullIncidentRecord()}}
+	rec := telemetrytest.New()
+	c := newCollector(depsWith(t, f))
+
+	// The window must straddle lastUpdateDateTime, not createdDateTime: this
+	// collector watermarks on the former (see the package doc's update-aware
+	// watermark section) and the engine's gt/lt bounds are strict.
+	from := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter()); err != nil {
+		t.Fatalf("CollectWindow: %v", err)
+	}
+
+	logs := rec.LogRecords()
+	if len(logs) != 1 {
+		t.Fatalf("emitted %d records, want 1", len(logs))
+	}
+	got := logs[0]
+	if got.EventName != eventName {
+		t.Errorf("event name = %q, want %q", got.EventName, eventName)
+	}
+
+	// Checked at the EMITTER, not the mapper: every attribute must survive the
+	// whole fetch -> map -> dedupe -> emit path, which is the other half of what
+	// this test buys over TestMapIncidentHighSeverity.
+	//
+	// `id` is the CLEAN incident id even though the engine dedupes on the
+	// composite "<id>#<lastUpdateDateTime>" — the composite is an engine-internal
+	// key and must never reach the wire.
+	wantAttrs := map[string]string{
+		"id":               "inc-1",
+		"display_name":     "Impossible travel activity involving one user",
+		"severity":         "high",
+		"status":           "active",
+		"classification":   "truePositive",
+		"determination":    "compromisedAccount",
+		"assigned_to":      "analyst@contoso.com",
+		"created_time":     "2026-07-01T10:00:00Z",
+		"last_update_time": "2026-07-01T12:30:00Z",
+	}
+	for k, want := range wantAttrs {
+		if v := got.Attrs[k]; v != want {
+			t.Errorf("emitted attr %q = %q, want %q", k, v, want)
+		}
+	}
+
+	// priority_score (int) and tags ([]string) are checked for PRESENCE only,
+	// and their values are pinned at the mapper instead
+	// (TestMapIncidentHighSeverity).
+	//
+	// Not an oversight, and do not "fix" it by asserting values: telemetrytest
+	// .Recorder flattens every log attribute through log.Value.AsString(), which
+	// yields "" for any non-string Kind. The recorder cannot represent an int or
+	// a slice attribute's value — a limit of the test harness, not of the
+	// emission.
+	for _, k := range []string{"priority_score", "tags"} {
+		if _, present := got.Attrs[k]; !present {
+			t.Errorf("emitted attrs missing %q", k)
+		}
+	}
+
+	// The #143 guard, at the emitter this time: mapIncident ignoring the wire
+	// tenantId is asserted in TestWireTenantIDIsNotEmitted, but only this test
+	// can show that nothing further down the path re-adds it.
+	if v, present := got.Attrs["tenant_id"]; present {
+		t.Errorf("emitted attr tenant_id = %q, want it ABSENT — telemetry.WithTenant owns that key (#143), and this bare emitter is not wrapped by it", v)
 	}
 }
 

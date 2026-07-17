@@ -4,11 +4,18 @@
     {
       "EventName": "m365.audit",
       "AttrKeys": [
+        "client_ip",
         "id",
         "ingest_transport",
+        "object_id",
         "operation",
         "record_type",
-        "service"
+        "result_status",
+        "service",
+        "user_id",
+        "user_key",
+        "user_type",
+        "workload"
       ]
     }
   ]

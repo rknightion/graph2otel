@@ -4,8 +4,15 @@
     {
       "EventName": "entra.security_alert",
       "AttrKeys": [
+        "category",
+        "classification",
+        "detection_source",
+        "determination",
+        "evidence_count",
         "id",
+        "incident_id",
         "ingest_transport",
+        "provider_alert_id",
         "service_source",
         "severity",
         "status",

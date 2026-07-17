@@ -1,4 +1,34 @@
 {
   "Metrics": null,
-  "Logs": null
+  "Logs": [
+    {
+      "EventName": "entra.graph_activity",
+      "AttrKeys": [
+        "api_version",
+        "app_id",
+        "caller_ip_address",
+        "client_request_id",
+        "correlation_id",
+        "duration_ms",
+        "identity_provider",
+        "identity_type",
+        "ingest_transport",
+        "is_replay",
+        "location",
+        "operation_id",
+        "request_id",
+        "request_method",
+        "request_uri",
+        "response_size_bytes",
+        "response_status_code",
+        "roles",
+        "service_principal_id",
+        "sign_in_activity_id",
+        "token_issued_at",
+        "user_agent",
+        "user_principal_object_id",
+        "wids"
+      ]
+    }
+  ]
 }

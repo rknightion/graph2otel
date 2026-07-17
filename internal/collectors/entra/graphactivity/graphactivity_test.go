@@ -1,10 +1,19 @@
 package graphactivity
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"log/slog"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/rknightion/graph2otel/internal/blobpipeline"
+	"github.com/rknightion/graph2otel/internal/checkpoint"
+	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
 // realRecord is a verbatim MicrosoftGraphActivityLogs record pulled from the
@@ -253,5 +262,129 @@ func TestMapActivityFallsBackToTimeGeneratedWhenTimeIsUnparseable(t *testing.T) 
 	}
 	if got := ev.Timestamp.UTC().Format("2006-01-02T15:04:05"); got != "2026-07-16T02:00:45" {
 		t.Errorf("Timestamp = %s, want the timeGenerated fallback", got)
+	}
+}
+
+// staticSource is a blobpipeline.Source serving one in-memory blob, so the
+// collector can be driven end-to-end without Azure.
+type staticSource struct {
+	name string
+	data []byte
+}
+
+func (s *staticSource) List(_ context.Context, _, prefix string) ([]blobpipeline.BlobInfo, error) {
+	if !strings.HasPrefix(s.name, prefix) {
+		return nil, nil
+	}
+	return []blobpipeline.BlobInfo{{Name: s.name, Size: int64(len(s.data))}}, nil
+}
+
+func (s *staticSource) ReadRange(_ context.Context, _, _ string, offset, count int64) ([]byte, error) {
+	end := min(offset+count, int64(len(s.data)))
+	if offset >= end {
+		return nil, nil
+	}
+	return s.data[offset:end], nil
+}
+
+// compactJSON strips the pinned record's formatting, since a JSON Lines record
+// is one line by definition.
+func compactJSON(t *testing.T, raw string) string {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := json.Compact(&buf, []byte(raw)); err != nil {
+		t.Fatalf("compacting the pinned record: %v", err)
+	}
+	return buf.String()
+}
+
+// TestCollectorEmitsLiveRecordEndToEnd drives the pinned live record through the
+// real blob engine into an emitter, rather than calling mapActivity directly
+// like the tests above.
+//
+// Two things depend on it. First, it proves the mapped fields survive the whole
+// path — it would catch a collector wired to the wrong container prefix, which no
+// unit test of mapActivity can see. Second, it is what makes testdata/signals.json
+// honest: the signal gate goldens the union of what a package's tests EMIT, and
+// before this test NOTHING in this package reached an emitter at all, so the
+// golden recorded `"Logs": null` — a zero-attribute surface — for a collector
+// that really ships 22 attributes. It understated the exact thing the golden
+// exists to make reviewable (#164).
+func TestCollectorEmitsLiveRecordEndToEnd(t *testing.T) {
+	// The tenant the pinned record was captured from: it must match, because the
+	// listing prefix is built from it (blobPrefix) and a mismatch lists zero blobs.
+	const tenant = "4b8c18bd-2f9f-4227-af55-9f1061cf9c32"
+	src := &staticSource{
+		// The real layout: tenantId=<guid>/ … /PT1H.json, CRLF-terminated.
+		name: "tenantId=" + tenant + "/y=2026/m=07/d=16/h=02/m=00/PT1H.json",
+		data: []byte(compactJSON(t, realRecord) + "\r\n"),
+	}
+	rec := telemetrytest.New()
+	c := newCollector(collectors.BlobDeps{
+		TenantID: tenant,
+		Source:   src,
+		Store:    checkpoint.NewStore(t.TempDir()),
+		Logger:   slog.New(slog.DiscardHandler),
+	})
+
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	logs := rec.LogRecords()
+	if len(logs) != 1 {
+		t.Fatalf("emitted %d records, want 1 — check the tenantId= listing prefix", len(logs))
+	}
+	got := logs[0]
+	if got.EventName != eventName {
+		t.Errorf("event name = %q, want %q", got.EventName, eventName)
+	}
+
+	// The record's own event time must survive the engine: these records are
+	// routinely backfilled hours late, so a lost timestamp silently lands every
+	// record at ingest time.
+	want := time.Date(2026, 7, 16, 2, 0, 45, 15970300, time.UTC)
+	if !got.Timestamp.Equal(want) {
+		t.Errorf("emitted timestamp = %s, want %s (the record's own time field)",
+			got.Timestamp.Format(time.RFC3339Nano), want.Format(time.RFC3339Nano))
+	}
+
+	// A representative spread checked at the EMITTER rather than the mapper: the
+	// caller identity, the permission list, and the two fields the record carries
+	// in two conflicting types (duration_ms is a string at the top level and an
+	// int in properties on this very record).
+	wantAttrs := map[string]string{
+		"request_id":        "8a566ebb-77a1-4f60-9855-d4eb4019e562",
+		"request_method":    "POST",
+		"app_id":            "c98e5057-edde-4666-b301-186a01b4dc58",
+		"identity_type":     "app",
+		"user_agent":        "DelphiAC-Mac",
+		"caller_ip_address": "172.165.241.127",
+		"location":          "UK South",
+	}
+	for k, want := range wantAttrs {
+		if v := got.Attrs[k]; v != want {
+			t.Errorf("emitted attr %q = %q, want %q", k, v, want)
+		}
+	}
+
+	// blobpipeline stamps the transport at the emitter boundary (#141). A blob
+	// record claiming `graph` would misattribute every duplicate this path's
+	// at-least-once delivery produces.
+	if v := got.Attrs["ingest_transport"]; v != "blob" {
+		t.Errorf("ingest_transport = %q, want %q", v, "blob")
+	}
+
+	// Non-string attributes are checked for PRESENCE only, and their values are
+	// pinned at the mapper instead (TestMapActivityCarriesTheRequestDetail).
+	//
+	// Not an oversight: telemetrytest.Recorder flattens every log attribute
+	// through log.Value.AsString(), which yields "" for any non-string Kind, so
+	// the recorder cannot represent an int or a slice attribute's value. That is
+	// a limitation of the test harness, not of the emission.
+	for _, k := range []string{"response_status_code", "duration_ms", "response_size_bytes", "roles", "wids", "is_replay"} {
+		if _, present := got.Attrs[k]; !present {
+			t.Errorf("emitted attrs missing %q", k)
+		}
 	}
 }
