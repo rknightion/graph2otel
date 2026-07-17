@@ -86,10 +86,15 @@ holds against the actual collector source.
 
 ## Multi-tenant labeling
 
-Every metric carries a `tenant_id` label so one process's telemetry for several tenants
-stays distinguishable in a shared backend. Dashboards built against these signals should
-add a `$tenant` template variable and filter every panel query by it — see the shipped
-dashboards under `dashboards/` for the pattern.
+**Domain telemetry (`entra.*`, `intune.*`, `m365.*`, `purview.*`) does NOT carry a
+`tenant_id` attribute today — neither metrics nor logs.** Only the self-observability
+signals do (`graph2otel.scrape.*`, `graph2otel.license.*`, the graphclient HTTP counters).
+There is one MeterProvider per process, `tenant_id` is not a resource attribute, and
+neither the emitter nor the scheduler injects anything into domain records — their
+labels/attributes are exactly what the collector passed. Do **not** filter domain-metric
+dashboard panels by `tenant_id`; the query returns no data, always (this exact mistake
+shipped in `entra-compliance-overview.json` — #143). How multi-tenant separation should
+work on domain signals is #143's open decision.
 
 ## License/beta gating
 

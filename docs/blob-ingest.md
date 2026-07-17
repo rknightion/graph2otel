@@ -21,7 +21,7 @@ The Azure SDK lives behind one interface (`blobpipeline.Source`, implemented in
 | `NonInteractiveUserSignInLogs` | `entra.signins.non_interactive.blob` | Retires a `/beta` dependency (see below). |
 | `ManagedIdentitySignInLogs` | — | Same case as the two above, but **not built**: the container does not exist on the verification tenant, so there is no live sample to map against and this project does not map from documentation (#135). |
 | Intune `OperationalLogs` | — | **No Graph endpoint** (#94). The compliance-alert *fired-event* stream; Graph exposes only the notification templates. |
-| `AuditLogs`, `ProvisioningLogs` | — | Covered by Graph for **metrics**; blob supplies the **log** side under the dual-ship model (#131). |
+| `AuditLogs`, `ProvisioningLogs` | — | Polled today (`entra.directory_audits` / `entra.provisioning`, default-on). A blob twin needs the `source: graph\|blob` toggle first — both enabled would ship every record twice (#135 group D; #131 closed confirming source mutual exclusion, enforced by #144). `AuditLogs` is verified mappable via the existing `mapDirectoryAudit`. |
 
 ### The sign-in collectors
 
@@ -48,8 +48,12 @@ Running a `.blob` collector **and** its polled twin ships each sign-in twice. Th
 downstream on the `id` attribute, which is identical across the two sources.
 
 Blob is **not** a general replacement for polling. Metrics want freshness and blob is
-floored at ~4 minutes; logs want completeness and blob has no throttle ceiling. The two
-routes are complementary, split by signal type rather than competing for one slot (#131).
+floored at ~4 minutes; logs want completeness and blob has no throttle ceiling. But a
+collector's source is **graph XOR blob, never both** — #131 examined a "dual-ship" mode
+(Graph for metrics, blob for logs) and closed rejecting it: the log-shaped collectors emit
+zero metrics, so dual-ship is empty for every signal it would list, and mutual exclusion
+is enforced in config (#144's `ConflictsWith`). The one genuinely dual-capable signal
+(`intune.devices`) is tracked in #132.
 
 ## What it costs
 
@@ -152,6 +156,11 @@ and it is not derivable from the clock. Hence:
 Backfill on enablement is **good news**, incidentally: turning the destination on recovers
 history rather than starting from zero.
 
+**Still open** (#137): whether a frozen hour can EVER grow again once enablement backfill
+is fully done — unanswerable until the verification tenant finishes backfilling.
+Re-measure before assuming either way; the byte-offset design is safe under both. The
+~2.3% duplicate rate below was also measured DURING backfill and needs the same re-measure.
+
 ### Azure delivers at-least-once: ~2.3% of records arrive more than once
 
 Measured live 2026-07-16 across every category with data — a consistent **2.3%–2.8%**, with one
@@ -195,6 +204,41 @@ in the engine is **#138**.
 - `resourceId` casing differs per category (`/TENANTS/…/MICROSOFT.AADIAM` vs
   `/tenants/…/Microsoft.aadiam`). Never match on it.
 
+### Timestamp binding differs per category family — and only parsed instants tell the truth
+
+The envelope `time` is the **ingestion** time. Whether it equals the event time depends
+on the category, and there are at least three patterns (live-verified 2026-07-16, #135):
+
+| field | MGAL | SignInLogs family | AuditLogs |
+| --- | --- | --- | --- |
+| `time` vs event time | identical | **28s–1077s late, variable** | identical (as instant) |
+| `level` | `"Informational"` (always) | numeric string (`"4"`) | `"Informational"` |
+| `durationMs` (top level) | string | int `0` | int `0` |
+| `resourceId` casing | `/TENANTS/…` | `/tenants/…` | `/tenants/…` |
+
+Rules that fall out:
+
+- **Sign-in categories bind to `properties.createdDateTime`, with NO fallback to `time`**
+  — the gap is variable (0 of ~700 records matched), so a fallback silently backdates
+  records by a random couple of minutes. MGAL and AuditLogs bind to `time` and are
+  correct to. Copying a neighboring collector's timestamp rule onto a new category is
+  the trap — verify per category.
+- **Compare timestamps as PARSED INSTANTS, never as strings.** AuditLogs' `time` and
+  `properties.activityDateTime` differ in serialization (7-digit fraction + `Z` vs
+  6-digit + `+00:00`) — a string comparison reports "never equal" and points at the
+  wrong binding; as instants the delta is 0.000s on every record.
+- **The envelope is consistent within a category family, not across families.** The
+  three sign-in categories share one schema (zero type conflicts, additive optional
+  fields only) and correctly share one mapper; MGAL vs sign-ins agree on nothing.
+  Verify agreement against live samples before sharing a mapper.
+- **The blob `properties` object IS the Graph resource** — verified field-for-field for
+  all four sign-in categories (`properties` = the `signIn` resource; same `id` as the
+  polled record) and for AuditLogs (`properties.id` byte-identical to the polled
+  checkpoint's seen ids). **Reuse the polled mapper; never write a second one.** Two
+  categories is not a universal rule though — check per category before assuming.
+- Records are JSON Lines with **CRLF** terminators; drop the
+  `properties.__UDI_RequiredFields_*` keys (Microsoft-internal plumbing).
+
 ### An empty container is not evidence of a fault
 
 Microsoft documents up to **24 hours** before data appears on a newly configured
@@ -220,7 +264,8 @@ The only deleter is the lifecycle rule, on a clock you set.
 
 - **#89** — the transport evaluation (Log Analytics vs Event Hub vs Storage), the live
   measurements, and every decision above with its reasoning.
-- **#131** — the dual-ship model: Graph for real-time metrics, blob for comprehensive logs.
+- **#131** — the dual-ship proposal (Graph for metrics, blob for logs), **closed as rejected**:
+  source is graph XOR blob per collector, enforced by #144. The one real dual candidate is #132.
 - **#128** — deriving metrics from blob-sourced events, recency-gated so backfilled events
   cannot corrupt a cumulative counter.
 - **#106** — raw Defender hunting-table ingest. Storage is a supported destination for the

@@ -37,8 +37,11 @@ type GraphClient interface {
 type Deps struct {
 	// Graph is the per-tenant Graph client the collector polls through.
 	Graph GraphClient
-	// TenantID is the tenant this collector instance serves (for logging; the
-	// scheduler already labels emitted telemetry with the tenant).
+	// TenantID is the tenant this collector instance serves. NOTHING downstream
+	// injects it into emitted telemetry: the scheduler adds tenant_id to its own
+	// self-obs metrics only, so a domain metric's labels and a domain log's
+	// attributes are exactly what the collector passes (#143). Do not assume
+	// tenant labeling happens for you.
 	TenantID string
 	// Logger is the process logger, for collector-side diagnostics.
 	Logger *slog.Logger
