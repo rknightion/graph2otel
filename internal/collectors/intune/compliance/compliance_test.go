@@ -61,6 +61,273 @@ func forbidden403(url string) error {
 	return fmt.Errorf("graphclient: GET %s: status 403: Forbidden", url)
 }
 
+// The live* consts below are VERBATIM GET responses from the m7kni tenant, read
+// as graph2otel-poller on 2026-07-17 `[live-measured 2026-07-17, #165]`. They
+// replace the hand-written docs-derived fixtures that previously stood in for
+// what these endpoints return, so the collector's field names/nesting are now
+// pinned against the wire rather than against Microsoft's docs (which have been
+// wrong on this project's path). Endpoints, all Graph v1.0:
+//
+//	liveDeviceStateSummary     GET /deviceManagement/deviceCompliancePolicyDeviceStateSummary
+//	livePolicies               GET /deviceManagement/deviceCompliancePolicies
+//	liveDeviceStatusOverview   GET /deviceManagement/deviceCompliancePolicies/{id}/deviceStatusOverview
+//	liveUserStatusOverview     GET /deviceManagement/deviceCompliancePolicies/{id}/userStatusOverview
+//	liveSettingStateSummaries  GET /deviceManagement/deviceCompliancePolicySettingStateSummaries
+//
+// Trimmed of nothing: the tenant returns exactly these 5 policies and 5
+// setting-state summaries. The two per-policy overview singletons were captured
+// against the FIRST policy (Android Compliance, firstPolicyID below) — every
+// field the statusOverview struct reads (pending/notApplicable/success/error/
+// failedCount) is present on the wire, alongside id/configurationVersion/
+// lastUpdateDateTime the collector deliberately ignores.
+//
+// Note the heterogeneity the collector reads straight past: livePolicies[0]
+// carries NO "@odata.type" and none of the platform-subtype rule fields (the
+// base deviceCompliancePolicy shape), while the other four carry a concrete
+// "#microsoft.graph.<platform>CompliancePolicy" type and that subtype's fields.
+// The collector reads only id/displayName/version off all of them, so the
+// variety is invisible to it but faithfully preserved here. Likewise
+// liveSettingStateSummaries carries both a "setting" and a "settingName" key
+// (identical values on this tenant) plus platformType values "all" and "iOS" —
+// the collector keys on settingName + platformType.
+const liveDeviceStateSummary = `{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#deviceManagement/deviceCompliancePolicyDeviceStateSummary/$entity",
+  "compliantDeviceCount": 7,
+  "configManagerCount": 0,
+  "conflictDeviceCount": 0,
+  "errorDeviceCount": 0,
+  "id": "e933bb26-3dff-49f0-a41a-bd722a92f1fb",
+  "inGracePeriodCount": 0,
+  "nonCompliantDeviceCount": 2,
+  "notApplicableDeviceCount": 0,
+  "remediatedDeviceCount": 0,
+  "unknownDeviceCount": 2
+}`
+
+const livePolicies = `{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#deviceManagement/deviceCompliancePolicies",
+  "value": [
+    {
+      "createdDateTime": "2025-10-04T19:57:36.8479259Z",
+      "description": null,
+      "displayName": "Android Compliance",
+      "id": "0100930b-518a-42dc-b670-bff867d2bf35",
+      "lastModifiedDateTime": "2025-10-06T14:23:27.5956591Z",
+      "version": 2
+    },
+    {
+      "@odata.type": "#microsoft.graph.iosCompliancePolicy",
+      "createdDateTime": "2025-10-20T11:36:49.0677733Z",
+      "description": null,
+      "deviceThreatProtectionEnabled": false,
+      "deviceThreatProtectionRequiredSecurityLevel": "unavailable",
+      "displayName": "iPad Wallboard Compliance",
+      "id": "43e7022f-bafb-467b-8cd3-f53953d69316",
+      "lastModifiedDateTime": "2025-10-20T11:36:49.0677733Z",
+      "managedEmailProfileRequired": false,
+      "osMaximumVersion": null,
+      "osMinimumVersion": null,
+      "passcodeBlockSimple": false,
+      "passcodeExpirationDays": null,
+      "passcodeMinimumCharacterSetCount": null,
+      "passcodeMinimumLength": null,
+      "passcodeMinutesOfInactivityBeforeLock": null,
+      "passcodePreviousPasscodeBlockCount": null,
+      "passcodeRequired": false,
+      "passcodeRequiredType": "deviceDefault",
+      "securityBlockJailbrokenDevices": true,
+      "version": 1
+    },
+    {
+      "@odata.type": "#microsoft.graph.iosCompliancePolicy",
+      "createdDateTime": "2025-09-11T16:19:36.356115Z",
+      "description": null,
+      "deviceThreatProtectionEnabled": true,
+      "deviceThreatProtectionRequiredSecurityLevel": "unavailable",
+      "displayName": "iOS Compliance",
+      "id": "6290fe56-bc5e-4492-9dd8-7288f5d00221",
+      "lastModifiedDateTime": "2026-07-15T15:52:05.8158209Z",
+      "managedEmailProfileRequired": false,
+      "osMaximumVersion": null,
+      "osMinimumVersion": null,
+      "passcodeBlockSimple": false,
+      "passcodeExpirationDays": null,
+      "passcodeMinimumCharacterSetCount": null,
+      "passcodeMinimumLength": null,
+      "passcodeMinutesOfInactivityBeforeLock": null,
+      "passcodePreviousPasscodeBlockCount": null,
+      "passcodeRequired": true,
+      "passcodeRequiredType": "deviceDefault",
+      "securityBlockJailbrokenDevices": true,
+      "version": 2
+    },
+    {
+      "@odata.type": "#microsoft.graph.macOSCompliancePolicy",
+      "createdDateTime": "2025-09-15T13:17:31.607627Z",
+      "description": null,
+      "deviceThreatProtectionEnabled": true,
+      "deviceThreatProtectionRequiredSecurityLevel": "low",
+      "displayName": "MacOS Compliance",
+      "firewallBlockAllIncoming": false,
+      "firewallEnableStealthMode": false,
+      "firewallEnabled": true,
+      "id": "6f007afa-3126-4ad7-a5a3-3bdaab8b45d3",
+      "lastModifiedDateTime": "2026-07-13T20:26:49.1529526Z",
+      "osMaximumVersion": null,
+      "osMinimumVersion": null,
+      "passwordBlockSimple": false,
+      "passwordExpirationDays": 65535,
+      "passwordMinimumCharacterSetCount": null,
+      "passwordMinimumLength": null,
+      "passwordMinutesOfInactivityBeforeLock": null,
+      "passwordPreviousPasswordBlockCount": null,
+      "passwordRequired": true,
+      "passwordRequiredType": "alphanumeric",
+      "storageRequireEncryption": true,
+      "systemIntegrityProtectionEnabled": true,
+      "version": 2
+    },
+    {
+      "@odata.type": "#microsoft.graph.windows10CompliancePolicy",
+      "bitLockerEnabled": true,
+      "codeIntegrityEnabled": true,
+      "createdDateTime": "2025-09-11T16:18:51.2668885Z",
+      "description": null,
+      "displayName": "WinCompliance",
+      "earlyLaunchAntiMalwareDriverEnabled": false,
+      "id": "f4eb5cca-8c67-4bd1-9162-6434e34da468",
+      "lastModifiedDateTime": "2026-07-14T14:02:05.5922366Z",
+      "mobileOsMaximumVersion": null,
+      "mobileOsMinimumVersion": null,
+      "osMaximumVersion": null,
+      "osMinimumVersion": null,
+      "passwordBlockSimple": false,
+      "passwordExpirationDays": null,
+      "passwordMinimumCharacterSetCount": null,
+      "passwordMinimumLength": null,
+      "passwordMinutesOfInactivityBeforeLock": null,
+      "passwordPreviousPasswordBlockCount": null,
+      "passwordRequired": false,
+      "passwordRequiredToUnlockFromIdle": false,
+      "passwordRequiredType": "deviceDefault",
+      "requireHealthyDeviceReport": false,
+      "secureBootEnabled": true,
+      "storageRequireEncryption": true,
+      "version": 4
+    }
+  ]
+}`
+
+const liveDeviceStatusOverview = `{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#deviceManagement/deviceCompliancePolicies('0100930b-518a-42dc-b670-bff867d2bf35')/deviceStatusOverview/$entity",
+  "configurationVersion": 2,
+  "errorCount": 0,
+  "failedCount": 0,
+  "id": "0100930b-518a-42dc-b670-bff867d2bf35",
+  "lastUpdateDateTime": "2026-07-17T16:08:48Z",
+  "notApplicableCount": 0,
+  "pendingCount": 0,
+  "successCount": 0
+}`
+
+const liveUserStatusOverview = `{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#deviceManagement/deviceCompliancePolicies('0100930b-518a-42dc-b670-bff867d2bf35')/userStatusOverview/$entity",
+  "configurationVersion": 0,
+  "errorCount": 0,
+  "failedCount": 0,
+  "id": "0100930b-518a-42dc-b670-bff867d2bf35",
+  "lastUpdateDateTime": "2026-07-17T16:08:49.1614326Z",
+  "notApplicableCount": 0,
+  "pendingCount": 0,
+  "successCount": 0
+}`
+
+const liveSettingStateSummaries = `{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#deviceManagement/deviceCompliancePolicySettingStateSummaries",
+  "value": [
+    {
+      "compliantDeviceCount": 12,
+      "conflictDeviceCount": 0,
+      "errorDeviceCount": 1,
+      "id": "DefaultDeviceCompliancePolicy.RequireDeviceCompliancePolicyAssigned",
+      "nonCompliantDeviceCount": 1,
+      "notApplicableDeviceCount": 0,
+      "platformType": "all",
+      "remediatedDeviceCount": 0,
+      "setting": "DefaultDeviceCompliancePolicy.RequireDeviceCompliancePolicyAssigned",
+      "settingName": "DefaultDeviceCompliancePolicy.RequireDeviceCompliancePolicyAssigned",
+      "unknownDeviceCount": 0
+    },
+    {
+      "compliantDeviceCount": 11,
+      "conflictDeviceCount": 0,
+      "errorDeviceCount": 0,
+      "id": "DefaultDeviceCompliancePolicy.RequireRemainContact",
+      "nonCompliantDeviceCount": 3,
+      "notApplicableDeviceCount": 0,
+      "platformType": "all",
+      "remediatedDeviceCount": 0,
+      "setting": "DefaultDeviceCompliancePolicy.RequireRemainContact",
+      "settingName": "DefaultDeviceCompliancePolicy.RequireRemainContact",
+      "unknownDeviceCount": 0
+    },
+    {
+      "compliantDeviceCount": 14,
+      "conflictDeviceCount": 0,
+      "errorDeviceCount": 0,
+      "id": "DefaultDeviceCompliancePolicy.RequireUserExistence",
+      "nonCompliantDeviceCount": 0,
+      "notApplicableDeviceCount": 0,
+      "platformType": "all",
+      "remediatedDeviceCount": 0,
+      "setting": "DefaultDeviceCompliancePolicy.RequireUserExistence",
+      "settingName": "DefaultDeviceCompliancePolicy.RequireUserExistence",
+      "unknownDeviceCount": 0
+    },
+    {
+      "compliantDeviceCount": 2,
+      "conflictDeviceCount": 0,
+      "errorDeviceCount": 0,
+      "id": "IOSCompliancePolicy.AdvancedThreatProtectionRequiredSecurityLevel",
+      "nonCompliantDeviceCount": 0,
+      "notApplicableDeviceCount": 1,
+      "platformType": "iOS",
+      "remediatedDeviceCount": 0,
+      "setting": "IOSCompliancePolicy.AdvancedThreatProtectionRequiredSecurityLevel",
+      "settingName": "IOSCompliancePolicy.AdvancedThreatProtectionRequiredSecurityLevel",
+      "unknownDeviceCount": 0
+    },
+    {
+      "compliantDeviceCount": 2,
+      "conflictDeviceCount": 0,
+      "errorDeviceCount": 1,
+      "id": "IOSCompliancePolicy.PasscodeRequired",
+      "nonCompliantDeviceCount": 0,
+      "notApplicableDeviceCount": 0,
+      "platformType": "iOS",
+      "remediatedDeviceCount": 0,
+      "setting": "IOSCompliancePolicy.PasscodeRequired",
+      "settingName": "IOSCompliancePolicy.PasscodeRequired",
+      "unknownDeviceCount": 0
+    }
+  ]
+}`
+
+// firstPolicyID is the id of livePolicies[0] (Android Compliance) — the policy
+// the two overview singletons above were captured against.
+const firstPolicyID = "0100930b-518a-42dc-b670-bff867d2bf35"
+
+// otherPolicyIDs are livePolicies[1:] — no overview singleton was captured for
+// them, so the live end-to-end test answers their overview URLs with an empty
+// (all-zero) singleton, which is what the tenant returns for a policy with no
+// assigned devices.
+var otherPolicyIDs = []string{
+	"43e7022f-bafb-467b-8cd3-f53953d69316",
+	"6290fe56-bc5e-4492-9dd8-7288f5d00221",
+	"6f007afa-3126-4ad7-a5a3-3bdaab8b45d3",
+	"f4eb5cca-8c67-4bd1-9162-6434e34da468",
+}
+
 // emptyEndpoints returns a fixture with every endpoint answering with an
 // empty/zero result, so a test can override just the endpoint(s) it cares
 // about without hand-filling the rest.
@@ -82,20 +349,26 @@ func merge(maps ...map[string]string) map[string]string {
 	return out
 }
 
-func TestCollectEmitsDeviceStateSummary(t *testing.T) {
-	bodies := merge(emptyEndpoints(), map[string]string{
-		stateSummaryURL: `{
-			"compliantDeviceCount": 100,
-			"nonCompliantDeviceCount": 20,
-			"inGracePeriodCount": 5,
-			"configManagerCount": 3,
-			"unknownDeviceCount": 2,
-			"notApplicableDeviceCount": 8,
-			"remediatedDeviceCount": 4,
-			"errorDeviceCount": 1,
-			"conflictDeviceCount": 1
-		}`,
-	})
+// TestCollectEmitsLiveSnapshotEndToEnd drives the verbatim live captures
+// through the whole Collect path into a telemetrytest Recorder, pinning the
+// metric surface this collector produces from what the endpoints actually
+// return rather than from hand-written docs-derived JSON. It is the
+// intune/compliance analog of the riskdetections reference's end-to-end live
+// test, and it replaces the three separate docs-fixture happy-path tests that
+// previously covered the state summary, the policy/overview fan-out, and the
+// setting-state summaries.
+func TestCollectEmitsLiveSnapshotEndToEnd(t *testing.T) {
+	bodies := map[string]string{
+		stateSummaryURL:                  liveDeviceStateSummary,
+		policiesURL:                      livePolicies,
+		settingSummariesURL:              liveSettingStateSummaries,
+		deviceOverviewURL(firstPolicyID): liveDeviceStatusOverview,
+		userOverviewURL(firstPolicyID):   liveUserStatusOverview,
+	}
+	for _, id := range otherPolicyIDs {
+		bodies[deviceOverviewURL(id)] = `{}`
+		bodies[userOverviewURL(id)] = `{}`
+	}
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
@@ -103,83 +376,80 @@ func TestCollectEmitsDeviceStateSummary(t *testing.T) {
 		t.Fatalf("Collect: %v", err)
 	}
 
-	pts := rec.MetricPoints(devicesMetricName)
-	got := map[string]float64{}
-	for _, p := range pts {
-		got[p.Attrs["state"]] = p.Value
+	// Tenant-wide device state summary — the real rollup, all 9 states present.
+	devState := map[string]float64{}
+	for _, p := range rec.MetricPoints(devicesMetricName) {
+		devState[p.Attrs["state"]] = p.Value
 	}
-	want := map[string]float64{
-		"compliant": 100, "non_compliant": 20, "in_grace_period": 5, "config_manager": 3,
-		"unknown": 2, "not_applicable": 8, "remediated": 4, "error": 1, "conflict": 1,
+	wantState := map[string]float64{
+		"compliant": 7, "non_compliant": 2, "unknown": 2,
+		"in_grace_period": 0, "config_manager": 0, "not_applicable": 0,
+		"remediated": 0, "error": 0, "conflict": 0,
 	}
-	if len(got) != len(want) {
-		t.Fatalf("got %d state series, want %d: %v", len(got), len(want), got)
+	if len(devState) != len(wantState) {
+		t.Fatalf("got %d device state series, want %d: %v", len(devState), len(wantState), devState)
 	}
-	for k, v := range want {
-		if got[k] != v {
-			t.Errorf("state=%s value = %v, want %v", k, got[k], v)
+	for k, v := range wantState {
+		if devState[k] != v {
+			t.Errorf("device state %q = %v, want %v", k, devState[k], v)
 		}
 	}
-}
 
-func TestCollectEmitsPolicyVersionAndOverviews(t *testing.T) {
-	bodies := merge(emptyEndpoints(), map[string]string{
-		policiesURL: `{"value":[
-			{"id":"p1","displayName":"Windows Baseline","version":3},
-			{"id":"p2","displayName":"iOS Baseline","version":7}
-		]}`,
-		deviceOverviewURL("p1"): `{"pendingCount":1,"notApplicableCount":2,"successCount":10,"errorCount":0,"failedCount":3}`,
-		userOverviewURL("p1"):   `{"pendingCount":0,"notApplicableCount":1,"successCount":5,"errorCount":1,"failedCount":0}`,
-		deviceOverviewURL("p2"): `{"pendingCount":2,"notApplicableCount":0,"successCount":8,"errorCount":1,"failedCount":1}`,
-		userOverviewURL("p2"):   `{"pendingCount":1,"notApplicableCount":0,"successCount":6,"errorCount":0,"failedCount":0}`,
-	})
-	g := &fakeGraph{bodies: bodies}
-	rec := telemetrytest.New()
-
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
-		t.Fatalf("Collect: %v", err)
+	// Policy-version gauge: one point per policy (5), keyed by policy_name.
+	versions := map[string]float64{}
+	for _, p := range rec.MetricPoints(policyVersionMetricName) {
+		versions[p.Attrs["policy_name"]] = p.Value
 	}
-
-	versionPts := rec.MetricPoints(policyVersionMetricName)
-	gotVersions := map[string]float64{}
-	for _, p := range versionPts {
-		gotVersions[p.Attrs["policy_name"]] = p.Value
+	wantVersions := map[string]float64{
+		"Android Compliance": 2, "iPad Wallboard Compliance": 1, "iOS Compliance": 2,
+		"MacOS Compliance": 2, "WinCompliance": 4,
 	}
-	wantVersions := map[string]float64{"Windows Baseline": 3, "iOS Baseline": 7}
-	if len(gotVersions) != len(wantVersions) {
-		t.Fatalf("got %d policy_name version series, want %d: %v", len(gotVersions), len(wantVersions), gotVersions)
+	if len(versions) != len(wantVersions) {
+		t.Fatalf("got %d policy.version series, want %d: %v", len(versions), len(wantVersions), versions)
 	}
 	for k, v := range wantVersions {
-		if gotVersions[k] != v {
-			t.Errorf("policy_name=%s version = %v, want %v", k, gotVersions[k], v)
+		if versions[k] != v {
+			t.Errorf("policy %q version = %v, want %v", k, versions[k], v)
 		}
 	}
 
-	devicePts := rec.MetricPoints(policyDevicesMetricName)
-	if len(devicePts) != 10 { // 2 policies * 5 states
-		t.Fatalf("got %d policy.devices series, want 10: %+v", len(devicePts), devicePts)
+	// Per-policy device overview: 5 policies * 5 states = 25 series. Android
+	// Compliance (the captured overview) contributes all-zero points; assert it
+	// emitted the 5 states rather than nothing.
+	if pts := rec.MetricPoints(policyDevicesMetricName); len(pts) != 25 {
+		t.Errorf("got %d policy.devices series, want 25 (5 policies * 5 states)", len(pts))
 	}
-	got := map[[2]string]float64{}
-	for _, p := range devicePts {
-		got[[2]string{p.Attrs["policy_name"], p.Attrs["state"]}] = p.Value
+	androidStates := map[string]struct{}{}
+	for _, p := range rec.MetricPoints(policyDevicesMetricName) {
+		if p.Attrs["policy_name"] == "Android Compliance" {
+			androidStates[p.Attrs["state"]] = struct{}{}
+		}
 	}
-	if got[[2]string{"Windows Baseline", "success"}] != 10 {
-		t.Errorf("Windows Baseline success = %v, want 10", got[[2]string{"Windows Baseline", "success"}])
+	if len(androidStates) != 5 {
+		t.Errorf("Android Compliance device-overview states = %v, want all 5", androidStates)
 	}
-	if got[[2]string{"iOS Baseline", "failed"}] != 1 {
-		t.Errorf("iOS Baseline failed = %v, want 1", got[[2]string{"iOS Baseline", "failed"}])
+	if pts := rec.MetricPoints(policyUsersMetricName); len(pts) != 25 {
+		t.Errorf("got %d policy.users series, want 25 (5 policies * 5 states)", len(pts))
 	}
 
-	userPts := rec.MetricPoints(policyUsersMetricName)
-	if len(userPts) != 10 {
-		t.Fatalf("got %d policy.users series, want 10: %+v", len(userPts), userPts)
+	// Setting-state summaries: 5 unique (setting, platform) pairs * 7 states,
+	// with platformType "all" and "iOS" both flowing straight through.
+	settingPts := rec.MetricPoints(settingDevicesMetricName)
+	if len(settingPts) != 35 {
+		t.Fatalf("got %d setting.devices series, want 35 (5 settings * 7 states)", len(settingPts))
 	}
-	gotUsers := map[[2]string]float64{}
-	for _, p := range userPts {
-		gotUsers[[2]string{p.Attrs["policy_name"], p.Attrs["state"]}] = p.Value
+	gotSetting := map[[3]string]float64{}
+	for _, p := range settingPts {
+		gotSetting[[3]string{p.Attrs["setting_name"], p.Attrs["platform"], p.Attrs["state"]}] = p.Value
 	}
-	if gotUsers[[2]string{"Windows Baseline", "success"}] != 5 {
-		t.Errorf("Windows Baseline user success = %v, want 5", gotUsers[[2]string{"Windows Baseline", "success"}])
+	if v := gotSetting[[3]string{"DefaultDeviceCompliancePolicy.RequireRemainContact", "all", "non_compliant"}]; v != 3 {
+		t.Errorf("RequireRemainContact/all/non_compliant = %v, want 3", v)
+	}
+	if v := gotSetting[[3]string{"IOSCompliancePolicy.PasscodeRequired", "iOS", "error"}]; v != 1 {
+		t.Errorf("PasscodeRequired/iOS/error = %v, want 1", v)
+	}
+	if v := gotSetting[[3]string{"DefaultDeviceCompliancePolicy.RequireUserExistence", "all", "compliant"}]; v != 14 {
+		t.Errorf("RequireUserExistence/all/compliant = %v, want 14", v)
 	}
 }
 
@@ -210,36 +480,6 @@ func TestCollectSurfacesPolicyVersionBumpBetweenPolls(t *testing.T) {
 	second := rec.MetricPoints(policyVersionMetricName)
 	if len(second) != 1 || second[0].Value != 4 {
 		t.Fatalf("second poll version = %+v, want a single point at 4 (the bump)", second)
-	}
-}
-
-func TestCollectEmitsBoundedSettingStateSummaries(t *testing.T) {
-	bodies := merge(emptyEndpoints(), map[string]string{
-		settingSummariesURL: `{"value":[
-			{"settingName":"Require BitLocker","platformType":"windows10","compliantDeviceCount":40,"nonCompliantDeviceCount":10,"unknownDeviceCount":1,"notApplicableDeviceCount":2,"remediatedDeviceCount":3,"errorDeviceCount":0,"conflictDeviceCount":0},
-			{"settingName":"Require Passcode","platformType":"ios","compliantDeviceCount":20,"nonCompliantDeviceCount":5,"unknownDeviceCount":0,"notApplicableDeviceCount":1,"remediatedDeviceCount":0,"errorDeviceCount":1,"conflictDeviceCount":0}
-		]}`,
-	})
-	g := &fakeGraph{bodies: bodies}
-	rec := telemetrytest.New()
-
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
-		t.Fatalf("Collect: %v", err)
-	}
-
-	pts := rec.MetricPoints(settingDevicesMetricName)
-	if len(pts) != 14 { // 2 unique (setting, platform) pairs * 7 states
-		t.Fatalf("got %d setting.devices series, want 14 (bounded by unique setting x platform x state): %+v", len(pts), pts)
-	}
-	got := map[[3]string]float64{}
-	for _, p := range pts {
-		got[[3]string{p.Attrs["setting_name"], p.Attrs["platform"], p.Attrs["state"]}] = p.Value
-	}
-	if got[[3]string{"Require BitLocker", "windows10", "compliant"}] != 40 {
-		t.Errorf("Require BitLocker/windows10/compliant = %v, want 40", got[[3]string{"Require BitLocker", "windows10", "compliant"}])
-	}
-	if got[[3]string{"Require Passcode", "ios", "non_compliant"}] != 5 {
-		t.Errorf("Require Passcode/ios/non_compliant = %v, want 5", got[[3]string{"Require Passcode", "ios", "non_compliant"}])
 	}
 }
 
