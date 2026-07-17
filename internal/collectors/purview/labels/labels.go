@@ -19,10 +19,10 @@
 // LOGS: a log record's cost is bounded by catalog size × poll interval
 // (hourly, and catalogs drift slowly), which is exactly where per-row detail
 // belongs. So each collector decodes the bounded enum fields for the metric
-// AND the full per-row detail for the log twin from the SAME fetch, gated by
-// the same 403/404/DataInsights-Forbidden skip-and-log path — a tenant that
-// can't reach the endpoint gets zero logs, not empty ones, same as it gets
-// zero metric points.
+// AND the full per-row detail for the log twin from the SAME fetch, behind the
+// same error gate — a tenant that can't reach an endpoint gets zero logs, not
+// empty ones, same as it gets zero metric points. What that gate DOES with an
+// error differs per collector; see "Error handling is asymmetric" below.
 //
 // # Two collectors, not one
 //
@@ -45,11 +45,24 @@
 //   - GET /security/labels/retentionLabels                       (microsoft.graph.security.retentionLabel)
 //   - GET /security/triggerTypes/retentionEventTypes             (microsoft.graph.security.retentionEventType)
 //
-// Because these Purview security endpoints are relatively new and their
-// application-permission support under app-only auth is not universally
-// documented, both collectors treat a 403/404 (endpoint unavailable /
-// unlicensed / app-only-unsupported on the tenant) as skip-and-log, not a
-// failure — the same defensive posture as entra.recommendations.
+// # Error handling is asymmetric, and deliberately so (#126)
+//
+// The two collectors do NOT share an error posture, because the two data planes
+// do not share a reality (both live-verified 2026-07-16 under the poller's own
+// identity):
+//
+//   - Sensitivity labels: the endpoint returns 200 app-only with the
+//     SensitivityLabel.Read application role. So EVERY fetch error fails the
+//     collector — there is no skip path. A 403 means missing admin consent,
+//     which an operator can fix, so it must be loud.
+//   - Retention labels / event types: the Exchange compliance data plane refuses
+//     app-only outright (Microsoft: "Application: Not supported") and no grant
+//     changes that, so the specific refusal signature skips-and-logs — the
+//     defensive posture entra.recommendations uses.
+//
+// This asymmetry is the correction #126 made to #109, which had read a
+// swallowed sensitivity 403 as proof of a permanent app-only gap. It is pinned
+// by TestForbiddenSkipIsRetentionOnly; do not "restore symmetry" here.
 //
 // # Field-name deviation from issue #101's premise
 //
@@ -102,19 +115,35 @@ const (
 	retentionEventTypeEventName = "purview.retention_event_type"
 )
 
-// isUnavailable reports whether err is a Purview security endpoint being
+// isRetentionUnavailable reports whether err is the RETENTION data plane being
 // unavailable/unlicensed/app-only-unsupported on the tenant — an expected "no
 // data here" condition, not a failure. Matches the graphclient error format
 // ("...: status 403: ...").
 //
-// Three signatures, all confirmed live (2026-07-16):
-//   - status 403 / 404: endpoint unavailable / unlicensed (sensitivity labels).
+// # Retention-only on purpose (#126)
+//
+// This predicate was once shared with the sensitivity-label collector, which
+// meant a sensitivity 403 — the signature of missing admin consent for
+// SensitivityLabel.Read — was swallowed as "endpoint unavailable" and the
+// collector reported success over zero data. #109 then read that silence as
+// proof of a permanent app-only gap and closed the investigation on it. The
+// endpoint is in fact GA and returns 200 app-only with SensitivityLabel.Read
+// (live-verified 2026-07-16 under the poller's own cert, 5 labels). So the
+// sensitivity collector now has NO skip path at all: see
+// SensitivityCollector.Collect. Do not re-widen this predicate back over it —
+// the asymmetry is deliberate and TestForbiddenSkipIsRetentionOnly pins it.
+//
+// The retention half is a REAL permanent gap and keeps skipping. Signatures,
+// all confirmed live (2026-07-16):
 //   - status 500 wrapping DataInsightsRequestError "...FAILED - Forbidden": the
 //     Exchange compliance data-plane blocks the app-only identity for retention
-//     labels/event types, on both v1.0 and beta. This is matched by the SPECIFIC
-//     DataInsights+Forbidden pair, NOT by "status 500" alone — a generic 500
-//     must still surface as a real failure.
-func isUnavailable(err error) bool {
+//     labels/event types, on both v1.0 and beta, even with
+//     RecordsManagement.Read.All granted and in the token — Microsoft documents
+//     these endpoints as "Application: Not supported", so no grant fixes it.
+//     This is matched by the SPECIFIC DataInsights+Forbidden pair, NOT by
+//     "status 500" alone — a generic 500 must still surface as a real failure.
+//   - status 403 / 404: endpoint unavailable / unlicensed.
+func isRetentionUnavailable(err error) bool {
 	s := err.Error()
 	if strings.Contains(s, "status 403") || strings.Contains(s, "status 404") {
 		return true
@@ -170,8 +199,17 @@ func (c *SensitivityCollector) Name() string { return sensitivityName }
 func (c *SensitivityCollector) DefaultInterval() time.Duration { return time.Hour }
 
 // RequiredPermissions declares the least-privilege Graph application scope.
+// RequiredPermissions declares the least-privilege Graph application scope.
+//
+// SensitivityLabel.Read, NOT InformationProtectionPolicy.Read.All: they are
+// different permissions for different endpoints, and mistaking the two is what
+// produced #109's wrong "app-only-blocked" verdict. Live-verified 2026-07-16
+// (#126): SensitivityLabel.Read alone serves the full tenant catalog app-only,
+// and SensitivityLabels.Read.All is not needed. Declaring the wrong scope here
+// is not cosmetic — this feeds docs/collectors.md, so it told operators to grant
+// a permission that does not unblock the endpoint.
 func (c *SensitivityCollector) RequiredPermissions() []string {
-	return []string{"InformationProtectionPolicy.Read.All"}
+	return []string{"SensitivityLabel.Read"}
 }
 
 // RequiredCapability implements license.CapabilityRequirer: sensitivity labels
@@ -187,15 +225,24 @@ func (c *SensitivityCollector) RequiredCapability() license.Capability {
 // applicable_to, description). A label applicable to several targets is
 // counted once per target in the metric, so the sum across the applicable_to
 // dimension can exceed the label count — expected for a by-target breakdown.
-// A 403/404 (endpoint unavailable/unlicensed) is skipped-and-logged before
-// either the metric or the log twin emits anything.
+//
+// # Every fetch error fails this collector (#126)
+//
+// There is deliberately NO skip path here, unlike the retention collector (see
+// isRetentionUnavailable). This endpoint is GA and live-verified 200 under
+// app-only auth with SensitivityLabel.Read, and the unlicensed tenant is
+// already handled upstream by RequiredCapability — so nothing reaching this
+// error branch is an expected steady state. A 403 in particular means missing
+// admin consent, which is operator-fixable and must be loud: swallowing it is
+// how #109 mistook a missing scope for a permanent product gap.
 func (c *SensitivityCollector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/security/dataSecurityAndGovernance/sensitivityLabels", nil)
 	if err != nil {
-		if isUnavailable(err) {
-			c.logger.Info("sensitivity labels endpoint unavailable on this tenant; skipping",
-				"collector", sensitivityName, "error", err)
-			return nil
+		if strings.Contains(err.Error(), "status 403") {
+			// Name the fix in the error itself, so the next reader does not
+			// re-run #109's investigation from a bare "status 403".
+			return fmt.Errorf("%s: list: grant and admin-consent the SensitivityLabel.Read application permission (this endpoint is GA and app-only-capable; a 403 here is missing consent, not a product limitation): %w",
+				sensitivityName, err)
 		}
 		return fmt.Errorf("%s: list: %w", sensitivityName, err)
 	}
@@ -374,7 +421,7 @@ func (c *RetentionCollector) Collect(ctx context.Context, e telemetry.Emitter) e
 func (c *RetentionCollector) collectLabels(ctx context.Context, e telemetry.Emitter) error {
 	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/security/labels/retentionLabels", nil)
 	if err != nil {
-		if isUnavailable(err) {
+		if isRetentionUnavailable(err) {
 			c.logger.Info("retention labels endpoint unavailable on this tenant; skipping",
 				"collector", retentionName, "error", err)
 			return nil
@@ -437,7 +484,7 @@ func (c *RetentionCollector) collectLabels(ctx context.Context, e telemetry.Emit
 func (c *RetentionCollector) collectEventTypes(ctx context.Context, e telemetry.Emitter) error {
 	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/security/triggerTypes/retentionEventTypes", nil)
 	if err != nil {
-		if isUnavailable(err) {
+		if isRetentionUnavailable(err) {
 			c.logger.Info("retention event types endpoint unavailable on this tenant; skipping",
 				"collector", retentionName, "error", err)
 			return nil

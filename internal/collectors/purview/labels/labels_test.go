@@ -3,6 +3,7 @@ package labels
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
@@ -102,19 +103,162 @@ func TestSensitivityNoPIIInLabels(t *testing.T) {
 	}
 }
 
-func TestSensitivityUnavailableIsSkipped(t *testing.T) {
+// --- #126 guard: the sensitivity/retention skip asymmetry ---
+//
+// The two collectors in this package must treat a refusal in OPPOSITE ways, and
+// the difference is the whole of #126:
+//
+//   - Retention labels are app-only-blocked for real. Microsoft documents
+//     /security/labels/retentionLabels as "Application: Not supported", and the
+//     Exchange compliance data-plane refuses the app-only identity with a 500
+//     wrapping DataInsightsRequestError "...FAILED - Forbidden" even with
+//     RecordsManagement.Read.All in the token (live 2026-07-16). No grant a
+//     maintainer can make fixes it, so it skips.
+//   - Sensitivity labels are NOT blocked. The endpoint is GA and returns 200
+//     app-only with SensitivityLabel.Read (live 2026-07-16, #126). A 403 there
+//     means missing admin consent — an operator-fixable misconfiguration that
+//     must fail LOUDLY. Swallowing it is precisely how #109 mistook a missing
+//     scope for a permanent product gap: the collector reported success over
+//     zero data and nothing ever contradicted it.
+//
+// A change that re-broadens the skip back across both collectors — e.g. wiring
+// the retention predicate into the sensitivity path "for symmetry" — must break
+// these tests rather than silently restore the bug.
+
+// dataInsightsForbidden is the live retention-label refusal signature, in
+// graphclient's error format (live 2026-07-16, #109/#126). Shared by the
+// retention skip test and the sensitivity failure test on purpose: the guard is
+// that the SAME string means "skip" for one collector and "fail" for the other.
+const dataInsightsForbidden = `status 500: {"error":{"code":"UnknownError","message":"{\"ErrorCode\":\"DataInsightsRequestError\",\"Message\":\"DataInsights command(GET) FAILED - Forbidden. TargetServer = X.PROD.OUTLOOK.COM\"}"}}`
+
+// TestSensitivityErrorsAlwaysFail pins that the sensitivity collector has NO
+// skip path: every error class fails, emitting neither metrics nor logs.
+func TestSensitivityErrorsAlwaysFail(t *testing.T) {
+	cases := []struct {
+		name string
+		err  string
+	}{
+		{
+			// #126: the live signature of missing admin consent for
+			// SensitivityLabel.Read. THE case this issue exists for.
+			name: "forbidden_403",
+			err:  `status 403: {"error":{"code":"InsufficientGraphPermissions","message":"Insufficient privileges to complete the operation."}}`,
+		},
+		{
+			// The endpoint is GA and live-verified 200 — a 404 means it moved or
+			// was withdrawn, which is real news, not a tenant condition.
+			name: "not_found_404",
+			err:  "status 404: not found",
+		},
+		{
+			// #102's shape: a non-Graph data plane refusing the principal with the
+			// scope in-token. A different diagnosis, still a failure.
+			name: "unauthorized_401",
+			err:  "status 401: unauthorized",
+		},
+		{
+			// Retention's real, permanent gap — NOT sensitivity's. The retention
+			// collector skips this exact string; this one must not.
+			name: "data_insights_forbidden",
+			err:  dataInsightsForbidden,
+		},
+		{
+			name: "generic_500",
+			err:  "status 500: boom",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := &fakeGraph{errs: map[string]error{
+				sensitivityURL: errors.New("graphclient: GET " + sensitivityURL + ": " + tc.err),
+			}}
+			rec := telemetrytest.New()
+			err := NewSensitivity(g, nil).Collect(context.Background(), rec.Emitter())
+			if err == nil {
+				t.Fatalf("Collect returned nil: a sensitivity-label fetch failure must never be swallowed (#126); error was %q", tc.err)
+			}
+			if len(rec.MetricPoints(sensitivityMetric)) != 0 {
+				t.Error("expected no metric points on a failed fetch")
+			}
+			if len(rec.LogRecords()) != 0 {
+				t.Error("expected no log twin records on a failed fetch")
+			}
+		})
+	}
+}
+
+// TestSensitivityForbiddenErrorNamesTheMissingScope pins that the 403 failure is
+// self-diagnosing. #109 spent days concluding "permanent app-only gap" from a
+// bare 403; the error must name the grant that fixes it so the next reader does
+// not re-run that investigation.
+func TestSensitivityForbiddenErrorNamesTheMissingScope(t *testing.T) {
 	g := &fakeGraph{errs: map[string]error{
-		sensitivityURL: errors.New("graphclient: GET " + sensitivityURL + ": status 403: forbidden"),
+		sensitivityURL: errors.New("graphclient: GET " + sensitivityURL +
+			`: status 403: {"error":{"code":"InsufficientGraphPermissions"}}`),
 	}}
-	rec := telemetrytest.New()
-	if err := NewSensitivity(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
-		t.Fatalf("Collect on 403 should skip gracefully, got: %v", err)
+	err := NewSensitivity(g, nil).Collect(context.Background(), telemetrytest.New().Emitter())
+	if err == nil {
+		t.Fatal("expected a 403 to fail the collector")
 	}
-	if len(rec.MetricPoints(sensitivityMetric)) != 0 {
-		t.Error("expected no metric points when endpoint unavailable")
+	if !strings.Contains(err.Error(), "SensitivityLabel.Read") {
+		t.Errorf("a 403 error must name the missing scope, got: %v", err)
 	}
-	if len(rec.LogRecords()) != 0 {
-		t.Error("expected no log twin records when endpoint unavailable")
+	if !strings.Contains(err.Error(), "status 403") {
+		t.Errorf("a 403 error must preserve the underlying graphclient error, got: %v", err)
+	}
+}
+
+// TestIsRetentionUnavailable pins the retention skip predicate's EXACT
+// signature set. It is deliberately a whitelist, not a "4xx-ish" heuristic:
+// widening it is how a real failure becomes a silent green tick, and this
+// package has already paid for that once (#126).
+func TestIsRetentionUnavailable(t *testing.T) {
+	cases := []struct {
+		name string
+		err  string
+		want bool
+	}{
+		{"forbidden_403", "graphclient: GET x: status 403: forbidden", true},
+		{"not_found_404", "graphclient: GET x: status 404: not found", true},
+		{"data_insights_forbidden_500", dataInsightsForbidden, true},
+		// A generic 500 is a real failure and must still surface — the skip is
+		// keyed on the DataInsights+Forbidden PAIR, never on the status alone.
+		{"generic_500", "graphclient: GET x: status 500: boom", false},
+		// DataInsights failing for some other reason is not the app-only refusal.
+		{"data_insights_non_forbidden", `status 500: {"ErrorCode":"DataInsightsRequestError","Message":"DataInsights command(GET) FAILED - Timeout"}`, false},
+		// "Forbidden" from somewhere other than the DataInsights data plane.
+		{"forbidden_without_data_insights", "graphclient: GET x: status 500: Forbidden", false},
+		// #102's shape: a data-plane 401 with the scope in-token. Real failure.
+		{"unauthorized_401", "graphclient: GET x: status 401: unauthorized", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isRetentionUnavailable(errors.New(tc.err)); got != tc.want {
+				t.Errorf("isRetentionUnavailable(%q) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestForbiddenSkipIsRetentionOnly pins the asymmetry head-on: the SAME
+// DataInsights-Forbidden string skips for retention and fails for sensitivity.
+// Any change that re-unifies the two error predicates breaks this.
+func TestForbiddenSkipIsRetentionOnly(t *testing.T) {
+	wrap := func(url string) error {
+		return errors.New("graphclient: GET " + url + ": " + dataInsightsForbidden)
+	}
+
+	retG := &fakeGraph{errs: map[string]error{
+		retentionURL:  wrap(retentionURL),
+		eventTypesURL: wrap(eventTypesURL),
+	}}
+	if err := NewRetention(retG, nil).Collect(context.Background(), telemetrytest.New().Emitter()); err != nil {
+		t.Errorf("retention: DataInsights-Forbidden is a documented permanent app-only gap (Application: Not supported) and must still skip, got: %v", err)
+	}
+
+	senG := &fakeGraph{errs: map[string]error{sensitivityURL: wrap(sensitivityURL)}}
+	if err := NewSensitivity(senG, nil).Collect(context.Background(), telemetrytest.New().Emitter()); err == nil {
+		t.Error("sensitivity: the retention data-plane's skip signature must NOT be honored here — this endpoint is GA and app-only-capable with SensitivityLabel.Read (#126)")
 	}
 }
 
@@ -181,8 +325,13 @@ func TestSensitivityGatingMetadata(t *testing.T) {
 	if got := c.RequiredCapability(); got != license.CapPurviewInfoProtection {
 		t.Errorf("RequiredCapability = %v, want %v", got, license.CapPurviewInfoProtection)
 	}
-	if got := c.RequiredPermissions(); len(got) != 1 || got[0] != "InformationProtectionPolicy.Read.All" {
-		t.Errorf("RequiredPermissions = %v, want [InformationProtectionPolicy.Read.All]", got)
+	// SensitivityLabel.Read is the scope that live-verified 200 on this endpoint
+	// (#126). InformationProtectionPolicy.Read.All is a DIFFERENT permission for
+	// a different endpoint; asserting it here is what kept the wrong scope in
+	// docs/collectors.md, where it told operators to grant something that does
+	// not unblock the collector.
+	if got := c.RequiredPermissions(); len(got) != 1 || got[0] != "SensitivityLabel.Read" {
+		t.Errorf("RequiredPermissions = %v, want [SensitivityLabel.Read]", got)
 	}
 	if c.Name() != sensitivityName {
 		t.Errorf("Name = %q, want %q", c.Name(), sensitivityName)
@@ -308,10 +457,11 @@ func TestRetentionDataInsightsForbiddenIsSkipped(t *testing.T) {
 	// DataInsightsRequestError "...FAILED - Forbidden". That specific signature is
 	// an app-only-unavailable condition, NOT a collector failure — it must skip
 	// gracefully (unlike the generic 500 in the test above, which still surfaces).
-	forbidden := `status 500: {"error":{"code":"UnknownError","message":"{\"ErrorCode\":\"DataInsightsRequestError\",\"Message\":\"DataInsights command(GET) FAILED - Forbidden. TargetServer = X.PROD.OUTLOOK.COM\"}"}}`
+	// The same signature FAILS the sensitivity collector — see
+	// TestForbiddenSkipIsRetentionOnly.
 	g := &fakeGraph{errs: map[string]error{
-		retentionURL:  errors.New("graphclient: GET " + retentionURL + ": " + forbidden),
-		eventTypesURL: errors.New("graphclient: GET " + eventTypesURL + ": " + forbidden),
+		retentionURL:  errors.New("graphclient: GET " + retentionURL + ": " + dataInsightsForbidden),
+		eventTypesURL: errors.New("graphclient: GET " + eventTypesURL + ": " + dataInsightsForbidden),
 	}}
 	rec := telemetrytest.New()
 	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
