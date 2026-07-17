@@ -26,6 +26,28 @@ const (
 	AttrTenantID = "tenant_id"
 )
 
+// Data-record attribute keys, stamped by the telemetry emitter facade rather
+// than by collectors.
+const (
+	// AttrIngestTransport names the transport that produced a log record:
+	// "graph", "blob", "o365_activity", "audit_query" or "report_export". See
+	// telemetry.Transport for the values and telemetry.WithTransport for the
+	// stamping seam.
+	//
+	// Deliberately NOT named "source" (#141): that key already carries three
+	// unrelated live meanings — which Graph endpoint a certificate came from
+	// (intune/certificates: "managed_device" / "user_pfx") and Microsoft's own
+	// `source` field passed through verbatim (entra/riskdetections). It is also
+	// distinct from the `source: graph|blob` CONFIG key (#144), which selects a
+	// transport rather than reporting one.
+	//
+	// Bounded (five values), so it is metric-label-safe under the cardinality
+	// rule (#112) — but it is stamped on LOGS ONLY, because adding a label to an
+	// existing metric changes that metric's series identity and would break
+	// dashboards and alerts built on the current names (#82).
+	AttrIngestTransport = "ingest_transport"
+)
+
 // UCUM units used by the telemetry package's self-observability metrics.
 const (
 	UnitSeries        = "{series}"
