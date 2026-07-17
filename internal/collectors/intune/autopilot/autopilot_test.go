@@ -40,9 +40,122 @@ const (
 	betaBase = "https://graph.microsoft.com/beta"
 )
 
-var fixedNow = time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
+// fixedNow is the deterministic clock; it sits just after the live captures
+// below so their lastContactedDateTime lands in the past.
+var fixedNow = time.Date(2026, 7, 17, 18, 0, 0, 0, time.UTC)
 
 func fixedClock() time.Time { return fixedNow }
+
+// Verbatim GET captures read as graph2otel-poller against the m7kni tenant on
+// 2026-07-17 `[live-measured 2026-07-17, #165]`, each from the exact endpoint
+// this collector polls. Trimmed of nothing — the tenant has exactly one
+// Autopilot device identity, one deployment profile, and one assignment on it.
+//
+//   - liveDevicesBody: GET
+//     /v1.0/deviceManagement/windowsAutopilotDeviceIdentities (1 identity).
+//     The per-device identifiers it carries (serialNumber, managedDeviceId,
+//     userPrincipalName, ...) are exactly the fields this collector must never
+//     read onto a metric label — kept verbatim so the cardinality guard is
+//     tested against the real shape. groupTag is "" on the wire → "unassigned".
+//   - liveProfilesBody: GET
+//     /beta/deviceManagement/windowsAutopilotDeploymentProfiles (1 profile;
+//     beta — v1.0 404s). enrollmentStatusScreenSettings is null on the live
+//     profile, so no ESP settings/timeout are derivable from it — the ESP
+//     coverage below uses a dedicated synthetic profile. The profile also
+//     carries BOTH the modern field names this collector reads
+//     (preprovisioningAllowed, hardwareHashExtractionEnabled) and their
+//     deprecated predecessors (enableWhiteGlove, extractHardwareHash); kept
+//     verbatim to prove the mapper binds the modern names.
+//   - liveAssignmentsBody: GET .../windowsAutopilotDeploymentProfiles('<id>')/
+//     assignments (1 allDevicesAssignmentTarget assignment; beta).
+const (
+	liveProfileID = "39778baa-907f-4f7d-9bb8-a4f76a4ce69f"
+
+	liveDevicesBody = `{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#deviceManagement/windowsAutopilotDeviceIdentities",
+  "@odata.count": 1,
+  "value": [
+    {
+      "addressableUserName": "Rob Knight",
+      "azureActiveDirectoryDeviceId": "8a114385-b11b-4dda-bc33-a8725775e27e",
+      "displayName": "LAPHAM",
+      "enrollmentState": "enrolled",
+      "groupTag": "",
+      "id": "f50c7b4b-87ed-4d24-b8b2-31d007e6c115",
+      "lastContactedDateTime": "2026-07-16T15:13:29Z",
+      "managedDeviceId": "d5900d67-e50c-44ef-9d5c-6a2f891099c6",
+      "manufacturer": "PCSpecialist",
+      "model": "Standard",
+      "productKey": "",
+      "purchaseOrderIdentifier": "",
+      "resourceName": "",
+      "serialNumber": "PH4TRX1S2146S0097",
+      "skuNumber": "0001",
+      "systemFamily": "TGL",
+      "userPrincipalName": "rob@m7kni.io"
+    }
+  ]
+}`
+
+	liveProfilesBody = `{
+  "@odata.context": "https://graph.microsoft.com/beta/$metadata#deviceManagement/windowsAutopilotDeploymentProfiles",
+  "value": [
+    {
+      "@odata.type": "#microsoft.graph.azureADWindowsAutopilotDeploymentProfile",
+      "createdDateTime": "2026-01-17T10:43:18.496716Z",
+      "description": "",
+      "deviceNameTemplate": "",
+      "deviceType": "windowsPc",
+      "displayName": "deployment profile",
+      "enableWhiteGlove": true,
+      "enrollmentStatusScreenSettings": null,
+      "extractHardwareHash": true,
+      "hardwareHashExtractionEnabled": true,
+      "id": "39778baa-907f-4f7d-9bb8-a4f76a4ce69f",
+      "language": "en-GB",
+      "lastModifiedDateTime": "2026-01-17T10:43:18.496716Z",
+      "locale": "en-GB",
+      "managementServiceAppId": null,
+      "outOfBoxExperienceSetting": {
+        "deviceUsageType": "singleUser",
+        "escapeLinkHidden": true,
+        "eulaHidden": true,
+        "keyboardSelectionPageSkipped": true,
+        "privacySettingsHidden": true,
+        "userType": "administrator"
+      },
+      "outOfBoxExperienceSettings": {
+        "deviceUsageType": "singleUser",
+        "hideEULA": true,
+        "hideEscapeLink": true,
+        "hidePrivacySettings": true,
+        "skipKeyboardSelectionPage": true,
+        "userType": "administrator"
+      },
+      "preprovisioningAllowed": true,
+      "roleScopeTagIds": [
+        "0"
+      ]
+    }
+  ]
+}`
+
+	liveAssignmentsBody = `{
+  "@odata.context": "https://graph.microsoft.com/beta/$metadata#deviceManagement/windowsAutopilotDeploymentProfiles('39778baa-907f-4f7d-9bb8-a4f76a4ce69f')/assignments",
+  "value": [
+    {
+      "id": "39778baa-907f-4f7d-9bb8-a4f76a4ce69f_adadadad-808e-44e2-905a-0b7873a8a531_0",
+      "source": "direct",
+      "sourceId": "39778baa-907f-4f7d-9bb8-a4f76a4ce69f",
+      "target": {
+        "@odata.type": "#microsoft.graph.allDevicesAssignmentTarget",
+        "deviceAndAppManagementAssignmentFilterId": null,
+        "deviceAndAppManagementAssignmentFilterType": "none"
+      }
+    }
+  ]
+}`
+)
 
 func newTestCollector(g collectors.GraphClient) *Collector {
 	c := New(g, nil)
@@ -100,26 +213,92 @@ func profile(id, displayName, deviceType string, preprovisioningAllowed, hashExt
 	}
 }
 
+// baseFixtures wires the three verbatim live captures to the URLs this
+// collector polls: the single Autopilot device identity, the single deployment
+// profile, and its single assignment.
 func baseFixtures() map[string]string {
 	return map[string]string{
-		devicesURL(): page(
-			identity("enrolled", "site-a", daysAgo(1)),
-			identity("enrolled", "site-a", daysAgo(2)),
-			identity("notContacted", "site-b", nil),
-			identity("failed", "", daysAgo(45)),
-		),
-		profilesURL(): page(
-			profile("p1", "Corp Profile", "windowsPc", true, true),
-		),
-		assignmentsURL("p1"): page(
-			map[string]any{"target": map[string]any{"@odata.type": "#microsoft.graph.groupAssignmentTarget"}},
-			map[string]any{"target": map[string]any{"@odata.type": "#microsoft.graph.groupAssignmentTarget"}},
-		),
+		devicesURL():                  liveDevicesBody,
+		profilesURL():                 liveProfilesBody,
+		assignmentsURL(liveProfileID): liveAssignmentsBody,
 	}
 }
 
-func TestCollectEmitsDeviceGaugesByStateAndGroupTag(t *testing.T) {
+// TestCollectEmitsLiveCaptureEndToEnd drives the verbatim live captures through
+// Collect into a Recorder — the real device identity, deployment profile, and
+// assignment this tenant has — proving the collector's headline series come out
+// of the exact bytes the endpoints returned, not a docs-shaped fixture.
+func TestCollectEmitsLiveCaptureEndToEnd(t *testing.T) {
 	g := &fakeGraph{bodies: baseFixtures()}
+	rec := telemetrytest.New()
+
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	// One enrolled device, empty groupTag → "unassigned".
+	devices := rec.MetricPoints(devicesMetricName)
+	if len(devices) != 1 {
+		t.Fatalf("device series = %d, want 1: %+v", len(devices), devices)
+	}
+	if devices[0].Value != 1 || devices[0].Attrs["enrollment_state"] != "enrolled" || devices[0].Attrs["group_tag"] != "unassigned" {
+		t.Errorf("device point = %+v, want value=1 enrolled/unassigned", devices[0])
+	}
+
+	// The live device was contacted the day before fixedNow → not stale.
+	if pts := rec.MetricPoints(staleContactMetricName); len(pts) != 0 {
+		t.Errorf("stale_contact points = %+v, want none (live device contacted <30d ago)", pts)
+	}
+
+	// One windowsPc profile with preprovisioning allowed.
+	profiles := rec.MetricPoints(profileCountMetricName)
+	if len(profiles) != 1 || profiles[0].Value != 1 ||
+		profiles[0].Attrs["device_type"] != "windows_pc" || profiles[0].Attrs["preprovisioning_allowed"] != "true" {
+		t.Errorf("profile count = %+v, want one windows_pc/true point", profiles)
+	}
+
+	// enrollmentStatusScreenSettings is null on the live profile, so every ESP
+	// setting reads false and no esp_timeout point is emitted.
+	espSettings := map[string]float64{}
+	for _, p := range rec.MetricPoints(profileSettingMetricName) {
+		espSettings[p.Attrs["setting"]] = p.Value
+	}
+	if espSettings["preprovisioning_allowed"] != 1 || espSettings["hardware_hash_extraction_enabled"] != 1 {
+		t.Errorf("profile settings = %+v, want preprovisioning_allowed=1 hardware_hash_extraction_enabled=1", espSettings)
+	}
+	if espSettings["esp_hide_installation_progress"] != 0 {
+		t.Errorf("esp_hide_installation_progress = %v, want 0 (ESP settings null on live profile)", espSettings["esp_hide_installation_progress"])
+	}
+	if pts := rec.MetricPoints(profileEspTimeoutMetricName); len(pts) != 0 {
+		t.Errorf("esp_timeout points = %+v, want none (ESP settings null on live profile)", pts)
+	}
+
+	// One assignment on the profile.
+	assignments := rec.MetricPoints(profileAssignmentsMetricName)
+	if len(assignments) != 1 || assignments[0].Value != 1 {
+		t.Errorf("assignment points = %+v, want one point value=1", assignments)
+	}
+}
+
+// syntheticDevicesFixture returns a base fixture whose device list is replaced
+// with a hand-built multi-state, multi-tag set. The live tenant has only one
+// (enrolled, not-stale, untagged) device, so the enrollment-state spread, the
+// stale-contact threshold, and the group_tag cardinality cap can only be
+// exercised against synthetic identities — the deployment profile and
+// assignment stay the verbatim live captures.
+func syntheticDevicesFixture(identities ...map[string]any) map[string]string {
+	bodies := baseFixtures()
+	bodies[devicesURL()] = page(identities...)
+	return bodies
+}
+
+func TestCollectEmitsDeviceGaugesByStateAndGroupTag(t *testing.T) {
+	g := &fakeGraph{bodies: syntheticDevicesFixture(
+		identity("enrolled", "site-a", daysAgo(1)),
+		identity("enrolled", "site-a", daysAgo(2)),
+		identity("notContacted", "site-b", nil),
+		identity("failed", "", daysAgo(45)),
+	)}
 	rec := telemetrytest.New()
 
 	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
@@ -147,7 +326,12 @@ func TestCollectEmitsDeviceGaugesByStateAndGroupTag(t *testing.T) {
 }
 
 func TestCollectCountsStaleContacts(t *testing.T) {
-	g := &fakeGraph{bodies: baseFixtures()}
+	g := &fakeGraph{bodies: syntheticDevicesFixture(
+		identity("enrolled", "site-a", daysAgo(1)),
+		identity("enrolled", "site-a", daysAgo(2)),
+		identity("notContacted", "site-b", nil),
+		identity("failed", "", daysAgo(45)),
+	)}
 	rec := telemetrytest.New()
 
 	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
@@ -242,8 +426,23 @@ func TestCollectEmitsProfileCountByDeviceTypeAndPreprovisioning(t *testing.T) {
 	}
 }
 
+// syntheticProfileFixture replaces the single live deployment profile (whose
+// enrollmentStatusScreenSettings are null on the wire) with a hand-built
+// ESP-configured profile, so the ESP config-drift settings and the ESP
+// install-progress timeout have coverage. The device identity stays the
+// verbatim live capture.
+func syntheticProfileFixture() map[string]string {
+	bodies := baseFixtures()
+	delete(bodies, assignmentsURL(liveProfileID))
+	bodies[profilesURL()] = page(profile("esp-1", "Corp Profile", "windowsPc", true, true))
+	bodies[assignmentsURL("esp-1")] = page(
+		map[string]any{"target": map[string]any{"@odata.type": "#microsoft.graph.groupAssignmentTarget"}},
+	)
+	return bodies
+}
+
 func TestCollectEmitsProfileSettingGauges(t *testing.T) {
-	g := &fakeGraph{bodies: baseFixtures()}
+	g := &fakeGraph{bodies: syntheticProfileFixture()}
 	rec := telemetrytest.New()
 
 	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
@@ -279,7 +478,7 @@ func TestCollectEmitsProfileSettingGauges(t *testing.T) {
 }
 
 func TestCollectEmitsProfileEspTimeout(t *testing.T) {
-	g := &fakeGraph{bodies: baseFixtures()}
+	g := &fakeGraph{bodies: syntheticProfileFixture()}
 	rec := telemetrytest.New()
 
 	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
@@ -310,8 +509,9 @@ func TestCollectEmitsProfileAssignmentCounts(t *testing.T) {
 	if len(pts) != 1 {
 		t.Fatalf("got %d assignment points, want 1: %+v", len(pts), pts)
 	}
-	if pts[0].Value != 2 {
-		t.Errorf("assignment count = %v, want 2", pts[0].Value)
+	// The live profile has exactly one assignment (an allDevicesAssignmentTarget).
+	if pts[0].Value != 1 {
+		t.Errorf("assignment count = %v, want 1", pts[0].Value)
 	}
 }
 
