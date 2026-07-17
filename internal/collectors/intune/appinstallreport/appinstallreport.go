@@ -84,6 +84,46 @@ const installationsMetricName = "intune.app_install_status.installations"
 // cardinality note (#83).
 const eventName = "intune.app_install_status"
 
+// platformUnknown is the bounded label value a Platform code outside
+// platformNames buckets to.
+const platformUnknown = "unknown"
+
+// platformNames decodes the AppInstallStatusAggregate Platform column's raw
+// numeric code to this project's stable label value.
+//
+// LIVE-MEASURED 2026-07-17 (#142, probed as graph2otel-poller): across 371
+// rows the column returned exactly '1','2','3','5', paired by Microsoft's own
+// Platform_loc sibling with Android, iOS, MacOS, Windows respectively. Note 2
+// is iOS and 5 is Windows — the codes are not in any order worth guessing, and
+// 4 is not emitted by this tenant at all.
+//
+// Keyed on the CODE rather than the Platform_loc string on purpose, and this
+// is the load-bearing decision on #142: _loc is LOCALIZED. Replaying the same
+// export job under four Accept-Language values (live 2026-07-17) returned
+// "MacOS" for code 3 under en/fr-FR but "macOS" under de-DE/ja-JP. A label fed
+// from _loc would therefore split one platform into two series as a function
+// of a request header. The numeric code is stable across every locale probed,
+// so it is the only safe key for a metric label. Do not "simplify" this map
+// away by reading the _loc sibling — there is a guard test.
+var platformNames = map[string]string{
+	"1": "android",
+	"2": "ios",
+	"3": "macos",
+	"5": "windows",
+}
+
+// platformFor decodes a raw Platform code to its bounded label value,
+// reporting whether the code was known. An unknown code buckets to
+// platformUnknown rather than passing the raw code through to a label: the
+// raw value stays on the log twin (see appLogEvent's platform_code), which is
+// where a value the decode could not resolve belongs.
+func platformFor(raw string) (string, bool) {
+	if name, ok := platformNames[raw]; ok {
+		return name, true
+	}
+	return platformUnknown, false
+}
+
 // reportName is the export report catalog name this collector requests.
 // LIVE-VERIFIED 2026-07-15: DeviceInstallStatusByApp 400s fleet-wide (needs a
 // per-app ApplicationId filter); AppInstallStatusAggregate has no required
@@ -201,9 +241,18 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 
 	counts := map[seriesKey]float64{}
 	for _, row := range rows {
-		platform := row["Platform"]
-		if platform == "" {
-			platform = "unknown"
+		platform, known := platformFor(row["Platform"])
+		// An unmapped code is a Microsoft-side enum addition, and it is
+		// invisible on the metric (it buckets to "unknown" like an empty
+		// column). Log it once per row so a new platform is discoverable
+		// without a live probe — the _loc sibling names it on the wire, which
+		// is the cheapest way to learn what the new code means. This is the
+		// lesson of #142's Defender half: an "other"/"unknown" bucket that
+		// nothing ever complains about hides a total decode failure.
+		if !known && row["Platform"] != "" {
+			c.logger.Warn("appinstallreport: unmapped Platform code; bucketing as unknown",
+				"collector", collectorName, "platform_code", row["Platform"],
+				"platform_loc", row["Platform_loc"], "app_name", row["DisplayName"])
 		}
 
 		for _, isc := range installStateColumns {
@@ -236,10 +285,19 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // Severity escalates to WARN when any install failed: a failing app deployment
 // is worth an operator's attention, a clean row is not.
 func appLogEvent(row exportjob.Row) telemetry.Event {
+	platform, _ := platformFor(row["Platform"])
+
 	attrs := telemetry.Attrs{}
 	setStr(attrs, "app_name", row["DisplayName"])
 	setStr(attrs, "app_id", row["ApplicationId"])
-	setStr(attrs, "platform", row["Platform"])
+	setStr(attrs, "platform", platform)
+	// The raw code is emitted unconditionally alongside the decoded name, per
+	// the house pattern (m365/activity's record_type_id, recordtypes.go): on
+	// this project Microsoft's published tables have repeatedly failed to
+	// cover every value the wire actually sends, so the lossless code must
+	// survive a decode miss. platform above is then free to be a clean bounded
+	// label without that costing the reader the ability to see what arrived.
+	setStr(attrs, "platform_code", row["Platform"])
 	setStr(attrs, "publisher", row["Publisher"])
 	setStr(attrs, "installed_device_count", row["InstalledDeviceCount"])
 	setStr(attrs, "failed_device_count", row["FailedDeviceCount"])

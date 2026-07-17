@@ -34,15 +34,37 @@ func (f *fakeRunner) Export(_ context.Context, req exportjob.Request, _ telemetr
 
 var _ exportjob.Runner = (*fakeRunner)(nil)
 
-// row builds a DefenderAgents export row using the live-smoke-tested column
-// set. Every flag column takes the export API's literal "true"/"false"
-// string form.
-func row(deviceID, deviceName, upn, deviceState, productStatus string, rtpEnabled, networkInspectionEnabled, signatureOverdue, tamperEnabled, malwareEnabled bool) exportjob.Row {
+// liveDeviceStateLoc is the DeviceState -> DeviceState_loc pairing observed on
+// the live DefenderAgents export (probed as graph2otel-poller 2026-07-17,
+// #142). It has exactly ONE entry because the live tenant's three devices are
+// all healthy, so only code 0 has ever been seen on the wire.
+//
+// That is deliberate: adding a second entry here would mean inventing a
+// code/name pair from Microsoft's documentation, and this file's whole reason
+// for existing (#142) is that a fixture asserting a value the API has never
+// sent is worse than no fixture. The collector decodes DeviceState from the
+// _loc sibling precisely so it needs no such table.
+var liveDeviceStateLoc = map[string]string{
+	"0": "Clean",
+}
+
+// row builds a DefenderAgents export row exactly as the live export returns
+// it (#142, live 2026-07-17):
+//   - deviceStateCode is a NUMERIC CODE, with a DeviceState_loc sibling
+//     Microsoft returns whether or not it was selected;
+//   - productStatus is a raw BITMASK integer, with NO _loc sibling at any
+//     localizationType;
+//   - the flag columns are "True"/"False" (capitalised - see boolStr).
+//
+// The predecessor of this helper took enum NAMES ("clean", "noStatus",
+// "avSignaturesOutOfDate") for both columns. The export has never sent those.
+func row(deviceID, deviceName, upn, deviceStateCode, productStatus string, rtpEnabled, networkInspectionEnabled, signatureOverdue, tamperEnabled, malwareEnabled bool) exportjob.Row {
 	return exportjob.Row{
 		colDeviceID:                  deviceID,
 		colDeviceName:                deviceName,
 		colUPN:                       upn,
-		colDeviceState:               deviceState,
+		colDeviceState:               deviceStateCode,
+		colDeviceStateLoc:            liveDeviceStateLoc[deviceStateCode],
 		colProductStatus:             productStatus,
 		colRealTimeProtectionEnabled: boolStr(rtpEnabled),
 		colNetworkInspectionSystemOn: boolStr(networkInspectionEnabled),
@@ -52,11 +74,15 @@ func row(deviceID, deviceName, upn, deviceState, productStatus string, rtpEnable
 	}
 }
 
+// boolStr renders the export API's literal flag encoding. LIVE-MEASURED
+// 2026-07-17 (#142): the wire sends "True"/"False", capitalised - not the
+// "true"/"false" this helper produced before. strconv.ParseBool accepts both
+// spellings, so the collector was never wrong here; the fixture was.
 func boolStr(b bool) string {
 	if b {
-		return "true"
+		return "True"
 	}
-	return "false"
+	return "False"
 }
 
 func TestSelectColumnsMatchLiveVerifiedSet(t *testing.T) {
@@ -85,15 +111,15 @@ func TestSelectColumnsMatchLiveVerifiedSet(t *testing.T) {
 func TestCollectEmitsBoundedSignalGaugesAndUnhealthyLogsOnly(t *testing.T) {
 	runner := &fakeRunner{rows: []exportjob.Row{
 		// Fully healthy: no signal should trip, no log emitted.
-		row("dev-1", "LAPTOP-1", "alice@contoso.com", "clean", "noStatus", true, true, false, true, true),
+		row("dev-1", "LAPTOP-1", "alice@contoso.com", "0", "524288", true, true, false, true, true),
 		// RTP off + signature overdue.
-		row("dev-2", "LAPTOP-2", "bob@contoso.com", "clean", "avSignaturesOutOfDate", false, true, true, true, true),
+		row("dev-2", "LAPTOP-2", "bob@contoso.com", "0", "32", false, true, true, true, true),
 		// Tamper protection off.
-		row("dev-3", "LAPTOP-3", "carol@contoso.com", "clean", "noStatus", true, true, false, false, true),
+		row("dev-3", "LAPTOP-3", "carol@contoso.com", "0", "524288", true, true, false, false, true),
 		// Malware protection off.
-		row("dev-4", "LAPTOP-4", "dave@contoso.com", "critical", "serviceStartedWithoutMalwareProtection", true, true, false, true, false),
+		row("dev-4", "LAPTOP-4", "dave@contoso.com", "0", "2", true, true, false, true, false),
 		// Network inspection off.
-		row("dev-5", "LAPTOP-5", "erin@contoso.com", "clean", "noStatus", true, false, false, true, true),
+		row("dev-5", "LAPTOP-5", "erin@contoso.com", "0", "524288", true, false, false, true, true),
 	}}
 	c := New(runner, nil)
 	rec := telemetrytest.New()
@@ -164,9 +190,9 @@ func TestCollectEmitsBoundedSignalGaugesAndUnhealthyLogsOnly(t *testing.T) {
 	// unhealthy ones the signal gauge and logs cover.
 	psPoints := rec.MetricPoints(productStatusMetricName)
 	psWant := map[string]float64{
-		"no_status":                 3, // dev-1, dev-3, dev-5
-		"av_signatures_out_of_date": 1, // dev-2
-		"service_started_without_malware_protection": 1, // dev-4
+		"no_status_flags_set":                        3, // dev-1, dev-3, dev-5 (2^19)
+		"av_signatures_out_of_date":                  1, // dev-2 (2^5)
+		"service_started_without_malware_protection": 1, // dev-4 (2^1)
 	}
 	if len(psPoints) != len(psWant) {
 		t.Fatalf("got %d product_status points, want %d: %+v", len(psPoints), len(psWant), psPoints)
@@ -223,17 +249,123 @@ func TestCollectSkipsWhenExportRunnerIsNil(t *testing.T) {
 	}
 }
 
-func TestProductStatusBucketForCollapsesUnknownValues(t *testing.T) {
-	cases := map[string]string{
-		"noStatus":              "no_status",
-		"AVSignaturesOutOfDate": "av_signatures_out_of_date",
-		"productExpired":        "product_expired",
-		"someFutureBetaStatus":  "other",
-		"":                      "other",
+// TestProductStatusesForDecodesLiveBitmask is the #142 regression guard for
+// the Defender half.
+//
+// ProductStatus is a BITMASK of windowsDefenderProductStatus flags, and the
+// wire sends the integer — never a name. Probed as graph2otel-poller against
+// DefenderAgents on 2026-07-17: the column returned '524288' and '524416', and
+// gets NO ProductStatus_loc sibling even when localizationType is explicitly
+// set to LocalizedValuesAsAdditionalColumn (unlike DeviceState, which does get
+// one). So there is no server-side decode to lean on here at all.
+//
+// The predecessor of this test asserted productStatusBucketFor("noStatus") and
+// ("AVSignaturesOutOfDate") — enum NAMES. The old lookup was name-keyed, so
+// those passed, while every live row fell to "other". The fixture agreed with
+// the code and both disagreed with the wire.
+func TestProductStatusesForDecodesLiveBitmask(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+		want []string
+	}{
+		// Both values below were observed live on m7kni 2026-07-17.
+		{
+			name: "live 524288 is the single noStatusFlagsSet bit (2^19)",
+			raw:  "524288",
+			want: []string{"no_status_flags_set"},
+		},
+		{
+			// The whole reason a scalar lookup cannot work: this is TWO flags.
+			name: "live 524416 is two flags: 2^19 | 2^7",
+			raw:  "524416",
+			want: []string{"no_status_flags_set", "no_quick_scan_happened_for_specified_period"},
+		},
+		{
+			// noStatus (0) has no bits set, so a naive bit-walk emits nothing
+			// at all for it and the device silently vanishes from the metric.
+			// It is also NOT the same thing as noStatusFlagsSet (524288).
+			name: "0 is noStatus, a distinct value from noStatusFlagsSet",
+			raw:  "0",
+			want: []string{"no_status"},
+		},
+		{
+			name: "an unmapped bit is named, never silently dropped",
+			raw:  "536870912", // 2^29, undocumented
+			want: []string{"unknown_bit_29"},
+		},
+		{
+			name: "a known flag alongside an unmapped bit keeps both",
+			raw:  "536870916", // 2^29 | 2^2
+			want: []string{"pending_full_scan_due_to_threat_action", "unknown_bit_29"},
+		},
+		{name: "empty column", raw: "", want: []string{productStatusUnknown}},
+		{name: "unparseable", raw: "not-an-int", want: []string{productStatusUnknown}},
 	}
-	for raw, want := range cases {
-		if got := productStatusBucketFor(raw); got != want {
-			t.Errorf("productStatusBucketFor(%q) = %q, want %q", raw, got, want)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := productStatusesFor(tc.raw)
+			if len(got) != len(tc.want) {
+				t.Fatalf("productStatusesFor(%q) = %v, want %v", tc.raw, got, tc.want)
+			}
+			gotSet := map[string]bool{}
+			for _, g := range got {
+				gotSet[g] = true
+			}
+			for _, w := range tc.want {
+				if !gotSet[w] {
+					t.Errorf("productStatusesFor(%q) = %v, want it to contain %q", tc.raw, got, w)
+				}
+			}
+		})
+	}
+}
+
+// TestProductStatusNeverBucketsWholeFleetToOther is the direct regression test
+// for the shipped symptom: intune_defender_agents_product_status{status="other"}
+// was 100% of the fleet, every cycle, and looked healthy because "other" is a
+// designed-in bucket rather than an error.
+func TestProductStatusNeverBucketsWholeFleetToOther(t *testing.T) {
+	// The exact three rows the live tenant returns, device-for-device
+	// (probed 2026-07-17; the export was re-run selecting only
+	// DeviceName+ProductStatus to pin which device carries which value,
+	// rather than assuming an order).
+	runner := &fakeRunner{rows: []exportjob.Row{
+		row("dev-1", "HAMRIG", "rob@m7kni.io", "0", "524288", true, true, false, true, true),
+		row("dev-2", "LAPHAM", "rob@m7kni.io", "0", "524288", true, true, false, true, true),
+		row("dev-3", "DESKTOP-CB3D9AB", "rob@m7kni.io", "0", "524416", true, true, false, true, true),
+	}}
+	c := New(runner, nil)
+	rec := telemetrytest.New()
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect returned error: %v", err)
+	}
+
+	points := rec.MetricPoints(productStatusMetricName)
+	if len(points) == 0 {
+		t.Fatal("no product_status points emitted")
+	}
+	// One point per SET FLAG, mirroring this collector's sibling
+	// count{signal} gauge: flags are independent, so this is a set of counts,
+	// not a partition. 524416 contributes to both of its flags.
+	want := map[string]float64{
+		"no_status_flags_set":                         3, // all three rows carry 2^19
+		"no_quick_scan_happened_for_specified_period": 1, // only DESKTOP-CB3D9AB's 524416
+	}
+	if len(points) != len(want) {
+		t.Fatalf("got %d product_status points, want %d: %+v", len(points), len(want), points)
+	}
+	for _, p := range points {
+		if p.Attrs["status"] == "other" {
+			t.Errorf("live wire values bucketed to \"other\" - the #142 bug is back: %+v", p)
+		}
+		wv, ok := want[p.Attrs["status"]]
+		if !ok {
+			t.Errorf("unexpected product_status point %+v", p)
+			continue
+		}
+		if p.Value != wv {
+			t.Errorf("status %q: value = %v, want %v", p.Attrs["status"], p.Value, wv)
 		}
 	}
 }

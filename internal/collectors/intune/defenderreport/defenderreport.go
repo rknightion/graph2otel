@@ -79,11 +79,17 @@ const reportName = "DefenderAgents"
 // correction touches one place instead of every reference to it in this
 // file.
 const (
-	colDeviceID                  = "DeviceId"
-	colDeviceName                = "DeviceName"
-	colUPN                       = "UPN"
-	colDeviceState               = "DeviceState"
-	colProductStatus             = "ProductStatus"
+	colDeviceID      = "DeviceId"
+	colDeviceName    = "DeviceName"
+	colUPN           = "UPN"
+	colDeviceState   = "DeviceState"
+	colProductStatus = "ProductStatus"
+	// colDeviceStateLoc is the localized sibling Microsoft returns alongside
+	// DeviceState. LIVE-MEASURED 2026-07-17 (#142): it arrives whether or not
+	// it is selected (selecting only DeviceState still yields DeviceState_loc),
+	// so it is NOT added to selectColumns - sending it would be requesting a
+	// column the report does not accept in a select list.
+	colDeviceStateLoc            = "DeviceState_loc"
 	colRealTimeProtectionEnabled = "RealTimeProtectionEnabled"
 	colNetworkInspectionSystemOn = "NetworkInspectionSystemEnabled"
 	colSignatureUpdateOverdue    = "SignatureUpdateOverdue"
@@ -172,52 +178,135 @@ func evaluateSignals(row exportjob.Row) rowSignals {
 	}
 }
 
-// productStatusMetricName is the bounded device-count-by-ProductStatus
-// gauge, a top-line breakdown over every returned row (not just the
-// unhealthy ones the signal gauge and per-device logs cover).
+// productStatusMetricName is the bounded device-count-by-ProductStatus-flag
+// gauge, a top-line breakdown over every returned row (not just the unhealthy
+// ones the signal gauge and per-device logs cover).
+//
+// Like the sibling count{signal} gauge this is a set of INDEPENDENT counts,
+// not a partition: ProductStatus is a bitmask, so a device setting several
+// flags is counted under each, and the points can sum to more than the fleet
+// size. See productStatusFlags (#142).
 const productStatusMetricName = "intune.defender_agents.product_status"
 
-// productStatusBuckets maps every documented windowsDefenderProductStatus
-// enum value (https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-windowsdefenderproductstatus)
-// to its snake_case bounded attribute value, case-insensitively. Anything
-// not in this map (a future enum addition, or an unexpected/empty value)
-// falls into "other" rather than growing the label's cardinality.
-var productStatusBuckets = map[string]string{
-	"nostatus":                                        "no_status",
-	"servicenotrunning":                               "service_not_running",
-	"servicestartedwithoutmalwareprotection":          "service_started_without_malware_protection",
-	"pendingfullscanduetothreataction":                "pending_full_scan_due_to_threat_action",
-	"pendingrebootduetothreataction":                  "pending_reboot_due_to_threat_action",
-	"pendingmanualstepsduetothreataction":             "pending_manual_steps_due_to_threat_action",
-	"avsignaturesoutofdate":                           "av_signatures_out_of_date",
-	"assignaturesoutofdate":                           "as_signatures_out_of_date",
-	"noquickscanhappenedforspecifiedperiod":           "no_quick_scan_happened_for_specified_period",
-	"nofullscanhappenedforspecifiedperiod":            "no_full_scan_happened_for_specified_period",
-	"systeminitiatedscaninprogress":                   "system_initiated_scan_in_progress",
-	"systeminitiatedcleaninprogress":                  "system_initiated_clean_in_progress",
-	"samplespendingsubmission":                        "samples_pending_submission",
-	"productrunninginevaluationmode":                  "product_running_in_evaluation_mode",
-	"productrunninginnongenuinemode":                  "product_running_in_non_genuine_mode",
-	"productexpired":                                  "product_expired",
-	"offlinescanrequired":                             "offline_scan_required",
-	"serviceshutdownaspartofsystemshutdown":           "service_shutdown_as_part_of_system_shutdown",
-	"threatremediationfailedcritically":               "threat_remediation_failed_critically",
-	"threatremediationfailednoncritically":            "threat_remediation_failed_non_critically",
-	"nostatusflagsset":                                "no_status_flags_set",
-	"platformoutofdate":                               "platform_out_of_date",
-	"platformupdateinprogress":                        "platform_update_in_progress",
-	"platformabouttobeoutdated":                       "platform_about_to_be_outdated",
-	"signatureorplatformendoflifeispastorisimpending": "signature_or_platform_end_of_life_is_past_or_is_impending",
-	"windowssmodesignaturesinuseonnonwin10sinstall":   "windows_s_mode_signatures_in_use_on_non_win10_s_install",
+// ProductStatus label values for the two shapes that are not a flag bit.
+const (
+	// productStatusNoStatus is windowsDefenderProductStatus's `noStatus`
+	// member, whose value is 0 — the absence of every flag. It is NOT the same
+	// thing as noStatusFlagsSet (2^19), which is an actual set bit meaning
+	// "Defender reported, and reported nothing wrong". A bit-walk over 0 emits
+	// nothing at all, so 0 is special-cased here rather than letting those
+	// devices silently vanish from the gauge.
+	productStatusNoStatus = "no_status"
+	// productStatusUnknown is the label for an absent or unparseable
+	// ProductStatus column. Distinct from no_status (a real reported value).
+	productStatusUnknown = "unknown"
+)
+
+// productStatusFlags decodes the DefenderAgents ProductStatus column, which is
+// a BITMASK of windowsDefenderProductStatus flags, keyed by bit VALUE.
+//
+// LIVE-MEASURED 2026-07-17 (#142, probed as graph2otel-poller): the column
+// returns a raw integer — '524288' and '524416' on the live fleet — and gets
+// NO ProductStatus_loc sibling at ANY localizationType, including an explicit
+// LocalizedValuesAsAdditionalColumn. DeviceState on the same report DOES get
+// one. So Microsoft itself does not treat this column as a localizable enum,
+// and there is no server-side decode to lean on: the decode has to happen
+// here.
+//
+// Evidence classes differ within this table, and that matters:
+//   - That the column is a bitmask, and the decomposition of the two live
+//     values, is arithmetic over LIVE-MEASURED data: 524288 = 2^19, and
+//     524416 = 2^19 + 2^7. A single value carrying two flags is why the
+//     predecessor of this table — a scalar, name-keyed lookup — could not have
+//     worked even if it had been keyed correctly.
+//   - Bits 19 and 7 are LIVE-CONFIRMED, and by two independent transports
+//     rather than one. The same three devices were read back through the
+//     entity form (GET managedDevices/{id}/windowsProtectionState), which
+//     serializes this enum as NAMES instead of an integer, and the two agree
+//     device-for-device: HAMRIG and LAPHAM export 524288 and report
+//     "noStatusFlagsSet"; DESKTOP-CB3D9AB exports 524416 and reports
+//     "noQuickScanHappenedForSpecifiedPeriod,noStatusFlagsSet". So 2^19 is
+//     noStatusFlagsSet and 2^7 is noQuickScanHappenedForSpecifiedPeriod on the
+//     wire, not merely in the docs.
+//   - Every OTHER bit position below is DOCS-ONLY, from Microsoft's
+//     windowsDefenderProductStatus reference
+//     (https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-windowsdefenderproductstatus),
+//     and Microsoft's published tables have been wrong or incomplete on
+//     essentially every load-bearing detail on this project (#100, #142). Treat
+//     an unobserved bit as a hypothesis; productStatusesFor names any bit
+//     absent from this table rather than discarding it, so a wrong or missing
+//     entry surfaces as unknown_bit_<n> instead of silently vanishing.
+//
+// The snake_case values are carried over verbatim from the name-keyed map this
+// replaced, so the label vocabulary operators may already have queried is
+// unchanged — only the (previously unreachable) mapping to it is fixed.
+var productStatusFlags = map[int64]string{
+	1 << 0:  "service_not_running",
+	1 << 1:  "service_started_without_malware_protection",
+	1 << 2:  "pending_full_scan_due_to_threat_action",
+	1 << 3:  "pending_reboot_due_to_threat_action",
+	1 << 4:  "pending_manual_steps_due_to_threat_action",
+	1 << 5:  "av_signatures_out_of_date",
+	1 << 6:  "as_signatures_out_of_date",
+	1 << 7:  "no_quick_scan_happened_for_specified_period", // live-observed (524416)
+	1 << 8:  "no_full_scan_happened_for_specified_period",
+	1 << 9:  "system_initiated_scan_in_progress",
+	1 << 10: "system_initiated_clean_in_progress",
+	1 << 11: "samples_pending_submission",
+	1 << 12: "product_running_in_evaluation_mode",
+	1 << 13: "product_running_in_non_genuine_mode",
+	1 << 14: "product_expired",
+	1 << 15: "offline_scan_required",
+	1 << 16: "service_shutdown_as_part_of_system_shutdown",
+	1 << 17: "threat_remediation_failed_critically",
+	1 << 18: "threat_remediation_failed_non_critically",
+	1 << 19: "no_status_flags_set", // live-observed (524288, 524416)
+	1 << 20: "platform_out_of_date",
+	1 << 21: "platform_update_in_progress",
+	1 << 22: "platform_about_to_be_outdated",
+	1 << 23: "signature_or_platform_end_of_life_is_past_or_is_impending",
+	1 << 24: "windows_s_mode_signatures_in_use_on_non_win10_s_install",
 }
 
-// productStatusBucketFor buckets a row's raw ProductStatus value, case
-// insensitively. See productStatusBuckets.
-func productStatusBucketFor(raw string) string {
-	if b, ok := productStatusBuckets[strings.ToLower(raw)]; ok {
-		return b
+// productStatusesFor decodes a raw ProductStatus bitmask into every flag it
+// sets. It returns a SLICE, not a single value, because the field is a flags
+// field: the live value 524416 carries two flags at once, so no single-valued
+// `status` label could ever represent it faithfully.
+//
+// The returned set is bounded — at most 64 entries, one per bit — so it is
+// safe as a metric label despite being per-row derived.
+//
+// An unrecognized bit becomes unknown_bit_<n> rather than "other" or nothing:
+// #142 shipped precisely because a catch-all bucket made a total decode
+// failure look like a healthy steady state, so an unmapped bit here names
+// itself and stays diagnosable.
+func productStatusesFor(raw string) []string {
+	v, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
+	if err != nil {
+		return []string{productStatusUnknown}
 	}
-	return "other"
+	if v == 0 {
+		return []string{productStatusNoStatus}
+	}
+
+	var out []string
+	for bit := 0; bit < 63; bit++ {
+		mask := int64(1) << bit
+		if v&mask == 0 {
+			continue
+		}
+		if name, ok := productStatusFlags[mask]; ok {
+			out = append(out, name)
+			continue
+		}
+		out = append(out, "unknown_bit_"+strconv.Itoa(bit))
+	}
+	if len(out) == 0 {
+		// Only reachable for a negative value (sign bit only), which the API
+		// has never sent; kept so the function is total.
+		return []string{productStatusUnknown}
+	}
+	return out
 }
 
 // rowBoolDefault parses row[key] as a bool ("true"/"false" per the export
@@ -306,7 +395,14 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	counts := map[string]int64{}
 	statusCounts := map[string]int64{}
 	for _, row := range rows {
-		statusCounts[productStatusBucketFor(row[colProductStatus])]++
+		// One increment per SET FLAG, not per row: ProductStatus is a bitmask,
+		// so a device reporting 524416 legitimately counts under both of its
+		// flags. This mirrors the sibling count{signal} gauge, which is already
+		// documented as a set of independent counts rather than a partition of
+		// the fleet - the same thing is true here for the same reason.
+		for _, status := range productStatusesFor(row[colProductStatus]) {
+			statusCounts[status]++
+		}
 
 		signals := evaluateSignals(row)
 		if !signals.any() {
@@ -321,11 +417,30 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			Body:     "Intune Defender agent health row",
 			Severity: telemetry.SeverityWarn,
 			Attrs: telemetry.Attrs{
-				"device_id":                         row[colDeviceID],
-				"device_name":                       row[colDeviceName],
-				"upn":                               row[colUPN],
-				"device_state":                      row[colDeviceState],
-				"product_status":                    row[colProductStatus],
+				"device_id":   row[colDeviceID],
+				"device_name": row[colDeviceName],
+				"upn":         row[colUPN],
+				// device_state carries Microsoft's own localized rendering of
+				// the DeviceState code, taken from the _loc sibling that
+				// arrives unrequested. Read from the wire rather than decoded
+				// against a table because only code 0 ("Clean") has ever been
+				// observed live (#142) - a table for the rest would be a
+				// guess. _loc is safe HERE, unlike on a metric label: a log
+				// attribute creates no series, so its locale-dependence (live
+				// 2026-07-17: casing shifts under Accept-Language) costs
+				// nothing, and device_state_code below is the stable value.
+				"device_state":      row[colDeviceStateLoc],
+				"device_state_code": row[colDeviceState],
+				// product_status is the decoded flag set, comma-joined; a
+				// bitmask can hold several flags at once (live: 524416 = two),
+				// so this is deliberately not a single value.
+				"product_status": strings.Join(productStatusesFor(row[colProductStatus]), ","),
+				// The raw bitmask is emitted unconditionally alongside it, per
+				// the house pattern (m365/activity's record_type_id): the
+				// lossless value must survive a decode miss, since most bits
+				// in productStatusFlags are docs-only and Microsoft's tables
+				// have been wrong before on this project.
+				"product_status_code":               row[colProductStatus],
 				"real_time_protection_enabled":      row[colRealTimeProtectionEnabled],
 				"network_inspection_system_enabled": row[colNetworkInspectionSystemOn],
 				"signature_update_overdue":          row[colSignatureUpdateOverdue],
@@ -351,7 +466,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			Attrs: telemetry.Attrs{"status": status},
 		})
 	}
-	e.GaugeSnapshot(productStatusMetricName, "{device}", "Intune managed devices by Windows Defender ProductStatus, from the DefenderAgents export report.", statusPoints)
+	e.GaugeSnapshot(productStatusMetricName, "{device}", "Intune managed devices by Windows Defender ProductStatus flag, from the DefenderAgents export report. ProductStatus is a bitmask: a device setting several flags is counted under each, so these points are independent counts and can sum to more than the fleet size.", statusPoints)
 
 	return nil
 }

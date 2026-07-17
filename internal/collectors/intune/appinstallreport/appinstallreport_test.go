@@ -33,14 +33,36 @@ func (f *fakeRunner) Export(_ context.Context, req exportjob.Request, _ telemetr
 
 var _ exportjob.Runner = (*fakeRunner)(nil)
 
-// row builds one AppInstallStatusAggregate row: one row per app, with the
-// five install-state device counts as they come back from the export
-// (always strings - Row is map[string]string).
-func row(displayName, applicationID, platform string, installed, failed, notApplicable, notInstalled, pending int) exportjob.Row {
+// livePlatformLoc is the EXACT Platform -> Platform_loc pairing the live
+// AppInstallStatusAggregate export returns, probed as graph2otel-poller on
+// 2026-07-17 (#142). Every fixture below builds its Platform_loc from this
+// map rather than a hand-written string, so no test in this file can assert a
+// value the API has never sent.
+//
+// Note 2 is iOS and 5 is Windows: the codes are NOT in an order anyone would
+// have guessed, which is precisely why they must come from the wire.
+var livePlatformLoc = map[string]string{
+	"1": "Android",
+	"2": "iOS",
+	"3": "MacOS",
+	"5": "Windows",
+}
+
+// row builds one AppInstallStatusAggregate row exactly as the live export
+// returns it (#142, live 2026-07-17): platformCode is a NUMERIC CODE, and
+// Microsoft returns a localized Platform_loc sibling alongside it whether or
+// not it was selected.
+//
+// An earlier version of this helper took a display string ("windows", "ios")
+// and emitted no _loc sibling at all. That fixture was fiction - the export
+// has never sent it - and it is the reason platform="2" shipped to production
+// green (#142). Pass codes here, never names.
+func row(displayName, applicationID, platformCode string, installed, failed, notApplicable, notInstalled, pending int) exportjob.Row {
 	return exportjob.Row{
 		"DisplayName":               displayName,
 		"ApplicationId":             applicationID,
-		"Platform":                  platform,
+		"Platform":                  platformCode,
+		"Platform_loc":              livePlatformLoc[platformCode],
 		"Publisher":                 "Contoso",
 		"InstalledDeviceCount":      fmt.Sprint(installed),
 		"FailedDeviceCount":         fmt.Sprint(failed),
@@ -58,9 +80,9 @@ func row(displayName, applicationID, platform string, installed, failed, notAppl
 // collector that failed to aggregate (one point per app) would not match.
 func TestCollectAggregatesCountsAcrossAppsIntoBoundedDimensions(t *testing.T) {
 	runner := &fakeRunner{rows: []exportjob.Row{
-		row("Contoso Agent", "app-1", "windows", 10, 2, 1, 3, 0),
-		row("Widget Tool", "app-2", "ios", 5, 0, 0, 0, 4),
-		row("Fabrikam Helper", "app-3", "windows", 1, 1, 0, 0, 0),
+		row("Contoso Agent", "app-1", "5", 10, 2, 1, 3, 0),
+		row("Widget Tool", "app-2", "2", 5, 0, 0, 0, 4),
+		row("Fabrikam Helper", "app-3", "5", 1, 1, 0, 0, 0),
 	}}
 	c := New(runner, nil)
 	rec := telemetrytest.New()
@@ -119,7 +141,7 @@ func TestCollectAggregatesCountsAcrossAppsIntoBoundedDimensions(t *testing.T) {
 // apps contributes ten times. It cannot report distinct devices — the
 // AppInstallStatusAggregate report has no device rows to deduplicate.
 func TestMetricNameAndUnitPinned(t *testing.T) {
-	c := New(&fakeRunner{rows: []exportjob.Row{row("Contoso Agent", "app-1", "windows", 1, 0, 0, 0, 0)}}, nil)
+	c := New(&fakeRunner{rows: []exportjob.Row{row("Contoso Agent", "app-1", "5", 1, 0, 0, 0, 0)}}, nil)
 	rec := telemetrytest.New()
 
 	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
@@ -147,7 +169,7 @@ func TestMetricNameAndUnitPinned(t *testing.T) {
 func TestMetricCarriesOnlyBoundedDimensions(t *testing.T) {
 	rows := make([]exportjob.Row, 0, 40)
 	for i := range 40 {
-		rows = append(rows, row(fmt.Sprintf("Store App %d", i), fmt.Sprintf("app-%d", i), "windows", i, 0, 0, 0, 0))
+		rows = append(rows, row(fmt.Sprintf("Store App %d", i), fmt.Sprintf("app-%d", i), "5", i, 0, 0, 0, 0))
 	}
 	c := New(&fakeRunner{rows: rows}, nil)
 	rec := telemetrytest.New()
@@ -180,9 +202,9 @@ func TestMetricCarriesOnlyBoundedDimensions(t *testing.T) {
 // and every per-state device count.
 func TestCollectEmitsOneLogTwinPerAppRow(t *testing.T) {
 	runner := &fakeRunner{rows: []exportjob.Row{
-		row("Contoso Agent", "app-1", "windows", 10, 2, 1, 3, 0),
-		row("Widget Tool", "app-2", "ios", 5, 0, 0, 0, 4),
-		row("Fabrikam Helper", "app-3", "windows", 1, 1, 0, 0, 0),
+		row("Contoso Agent", "app-1", "5", 10, 2, 1, 3, 0),
+		row("Widget Tool", "app-2", "2", 5, 0, 0, 0, 4),
+		row("Fabrikam Helper", "app-3", "5", 1, 1, 0, 0, 0),
 	}}
 	c := New(runner, nil)
 	rec := telemetrytest.New()
@@ -209,9 +231,13 @@ func TestCollectEmitsOneLogTwinPerAppRow(t *testing.T) {
 		t.Fatalf("no log twin for %q; got %v", "Contoso Agent", byApp)
 	}
 	want := map[string]string{
-		"app_name":                     "Contoso Agent",
-		"app_id":                       "app-1",
+		"app_name": "Contoso Agent",
+		"app_id":   "app-1",
+		// platform is the DECODED name and platform_code the raw wire value.
+		// Before #142 this asserted "windows" against a fixture that fed
+		// "windows" in - so it passed while production shipped platform="2".
 		"platform":                     "windows",
+		"platform_code":                "5",
 		"publisher":                    "Contoso",
 		"installed_device_count":       "10",
 		"failed_device_count":          "2",
@@ -238,7 +264,7 @@ func TestCollectEmitsOneLogTwinPerAppRow(t *testing.T) {
 // TestLogTwinOmitsAbsentColumns pins the frozen seam's setStr rule (#114): an
 // absent export column emits no attribute at all, never an empty string.
 func TestLogTwinOmitsAbsentColumns(t *testing.T) {
-	r := row("Contoso Agent", "app-1", "windows", 1, 0, 0, 0, 0)
+	r := row("Contoso Agent", "app-1", "5", 1, 0, 0, 0, 0)
 	delete(r, "Publisher")
 	delete(r, "ApplicationId")
 	c := New(&fakeRunner{rows: []exportjob.Row{r}}, nil)
@@ -260,7 +286,7 @@ func TestLogTwinOmitsAbsentColumns(t *testing.T) {
 }
 
 func TestCollectTreatsUnparsableCountAsZero(t *testing.T) {
-	r := row("Contoso Agent", "app-1", "windows", 10, 2, 1, 3, 0)
+	r := row("Contoso Agent", "app-1", "5", 10, 2, 1, 3, 0)
 	r["FailedDeviceCount"] = "not-a-number"
 	runner := &fakeRunner{rows: []exportjob.Row{r}}
 	c := New(runner, nil)
@@ -328,5 +354,115 @@ func TestExperimentalAndPermissions(t *testing.T) {
 	}
 	if c.Name() != collectorName {
 		t.Errorf("Name() = %q, want %q", c.Name(), collectorName)
+	}
+}
+
+// TestPlatformDecodesEveryLiveWireCode is the #142 regression guard, and the
+// only test here whose expectations come from the wire rather than from this
+// package's own source.
+//
+// Probed as graph2otel-poller against AppInstallStatusAggregate on 2026-07-17:
+// Platform returned exactly ['1','2','3','5'] across 371 rows, paired with
+// Platform_loc ['Android','iOS','MacOS','Windows'] respectively. If Microsoft
+// ever adds a code, this test still passes (it asserts the known set decodes,
+// not that the set is closed) - the unknown-code path below covers that.
+func TestPlatformDecodesEveryLiveWireCode(t *testing.T) {
+	// The live Platform -> canonical label mapping. Keys and the _loc column
+	// they were derived from are wire-measured; the canonical values are this
+	// project's stable snake_case rendering of them.
+	cases := []struct{ code, wantName, liveLoc string }{
+		{"1", "android", "Android"},
+		{"2", "ios", "iOS"},
+		{"3", "macos", "MacOS"},
+		{"5", "windows", "Windows"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.code, func(t *testing.T) {
+			if got := livePlatformLoc[tc.code]; got != tc.liveLoc {
+				t.Fatalf("fixture drift: livePlatformLoc[%q] = %q, want the wire value %q", tc.code, got, tc.liveLoc)
+			}
+			c := New(&fakeRunner{rows: []exportjob.Row{row("App", "app-1", tc.code, 1, 0, 0, 0, 0)}}, nil)
+			rec := telemetrytest.New()
+			if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+				t.Fatalf("Collect returned error: %v", err)
+			}
+
+			for _, p := range rec.MetricPoints(installationsMetricName) {
+				if got := p.Attrs["platform"]; got != tc.wantName {
+					t.Errorf("metric label platform = %q, want %q - a raw code must never reach a metric label (#142)", got, tc.wantName)
+				}
+			}
+
+			logs := rec.LogRecords()
+			if len(logs) != 1 {
+				t.Fatalf("got %d logs, want 1", len(logs))
+			}
+			if got := logs[0].Attrs["platform"]; got != tc.wantName {
+				t.Errorf("log attr platform = %q, want %q", got, tc.wantName)
+			}
+			// The raw code is emitted unconditionally and losslessly, per the
+			// house pattern (m365/activity's record_type_id): Microsoft's
+			// published tables have not covered every live value on this
+			// project, so the code must survive a decode miss.
+			if got := logs[0].Attrs["platform_code"]; got != tc.code {
+				t.Errorf("log attr platform_code = %q, want the raw wire code %q", got, tc.code)
+			}
+		})
+	}
+}
+
+// TestPlatformUnknownCodeKeepsRawCodeAndStaysBounded pins the decode-miss path:
+// a code absent from the table must not invent a name, must not grow the label
+// set, and must not lose the raw value - the log twin stays the record of what
+// the wire actually said.
+func TestPlatformUnknownCodeKeepsRawCodeAndStaysBounded(t *testing.T) {
+	c := New(&fakeRunner{rows: []exportjob.Row{row("Future App", "app-9", "99", 1, 0, 0, 0, 0)}}, nil)
+	rec := telemetrytest.New()
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect returned error: %v", err)
+	}
+
+	for _, p := range rec.MetricPoints(installationsMetricName) {
+		if got := p.Attrs["platform"]; got != platformUnknown {
+			t.Errorf("metric label platform = %q for unknown code 99, want %q - an unmapped code must bucket, never pass through", got, platformUnknown)
+		}
+	}
+
+	logs := rec.LogRecords()
+	if len(logs) != 1 {
+		t.Fatalf("got %d logs, want 1", len(logs))
+	}
+	if got := logs[0].Attrs["platform_code"]; got != "99" {
+		t.Errorf("log attr platform_code = %q, want %q - the raw code must survive a decode miss (#142)", got, "99")
+	}
+	if got := logs[0].Attrs["platform"]; got != platformUnknown {
+		t.Errorf("log attr platform = %q, want %q - never invent a name for an unmapped code", got, platformUnknown)
+	}
+}
+
+// TestPlatformLocSiblingIsNeverUsedAsALabel pins the #142 design decision that
+// cost a live probe to establish, so a later reader cannot "simplify" it away.
+//
+// Platform_loc is LOCALIZED. Probed 2026-07-17 by replaying the same export job
+// under four Accept-Language values: code 3 came back "MacOS" under en/fr-FR
+// but "macOS" under de-DE/ja-JP. Reading _loc into a metric label therefore
+// makes the series set a function of a request header - two series for one
+// platform. The decode is keyed off the stable numeric code for that reason.
+//
+// This fixture feeds a _loc casing the en-US wire never sends; the label must
+// be unmoved by it.
+func TestPlatformLocSiblingIsNeverUsedAsALabel(t *testing.T) {
+	r := row("App", "app-1", "3", 1, 0, 0, 0, 0)
+	r["Platform_loc"] = "macOS" // the de-DE/ja-JP casing, live 2026-07-17
+	c := New(&fakeRunner{rows: []exportjob.Row{r}}, nil)
+	rec := telemetrytest.New()
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect returned error: %v", err)
+	}
+
+	for _, p := range rec.MetricPoints(installationsMetricName) {
+		if got := p.Attrs["platform"]; got != "macos" {
+			t.Errorf("metric label platform = %q, want %q - the label must derive from the stable Platform code, never the locale-dependent Platform_loc (#142)", got, "macos")
+		}
 	}
 }

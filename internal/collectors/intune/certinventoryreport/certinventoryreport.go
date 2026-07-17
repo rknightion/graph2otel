@@ -39,15 +39,35 @@
 // a fixed expiry/status bucket.
 //
 // CertificateStatus collapse caveat: the report's actual CertificateStatus
-// enum values have not been independently live-verified (the smoke test
-// confirmed the COLUMN NAME, not its full value set). certificateStatusBuckets
-// below reuses the same ~20-value vocabulary as the per-device beta
-// resource's certificateIssuanceState field, since both describe the same
-// underlying Intune certificate-profile issuance status — a reasonable
-// starting assumption, not a confirmed mapping. Any value outside that
-// assumed vocabulary (including a genuinely different real enum) safely
-// falls into "other" via certificateStatusBucketFor rather than growing the
-// "state" dimension or panicking.
+// values have STILL not been observed (#142). certificateStatusBuckets below
+// reuses the same ~20-value vocabulary as the per-device beta resource's
+// certificateIssuanceState field, since both describe the same underlying
+// Intune certificate-profile issuance status — a reasonable starting
+// assumption, not a confirmed mapping. Any value outside that assumed
+// vocabulary (including a genuinely different real enum) safely falls into
+// "other" via certificateStatusBucketFor rather than growing the "state"
+// dimension or panicking, and is announced (see Collect).
+//
+// What #142 measured live (2026-07-17, probed as graph2otel-poller), so the
+// next reader does not re-run it:
+//   - AllDeviceCertificates returns a header row and ZERO data rows on m7kni,
+//     which holds no device certificates. The value set remains unobserved;
+//     confirming it needs a tenant that actually has certificates.
+//   - The column gets NO CertificateStatus_loc sibling at ANY localizationType
+//     — including an explicit LocalizedValuesAsAdditionalColumn. The sibling
+//     export reports' Platform and DeviceState columns DO get one under the
+//     same probe. So the decode that fixed those two (read the localized
+//     sibling Microsoft already sends) is unavailable here, whatever the
+//     values turn out to be.
+//
+// What that does NOT establish, and what must not be asserted without
+// evidence: whether this column returns numeric codes (as Platform and
+// ProductStatus do) or the camelCase names assumed below. "No _loc sibling" is
+// equally consistent with "numeric enum, unlocalizable" and "already a plain
+// string, nothing to localize", so it settles nothing on its own. #142
+// deliberately left this collector's mapping untouched for that reason. If the
+// unmapped-value warning in Collect ever fires, THAT log is the evidence —
+// read it, then fix this map against it.
 package certinventoryreport
 
 import (
@@ -328,6 +348,29 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		days[bucketKey{issuer: issuer, bucket: expiryBucket}]++
 
 		stateBucket := certificateStatusBucketFor(row["CertificateStatus"])
+		// Announce a value the vocabulary does not cover, naming the raw
+		// string. This collector's CertificateStatus mapping is still an
+		// ASSUMPTION (see the package doc): m7kni has zero device
+		// certificates, so no real value has ever been observed, and #142
+		// established that - unlike Platform and DeviceState on the sibling
+		// export reports - this column gets no _loc sibling to decode against
+		// at any localizationType.
+		//
+		// So rather than guess, make the gap self-closing: the first tenant
+		// with certificates that runs this collector logs the real values, and
+		// the assumption is confirmed or corrected from that alone. Without
+		// this, a wrong vocabulary is invisible - every row lands in "other",
+		// which is a designed-in bucket that looks like a steady state. That
+		// is exactly how #142's Defender bug survived in production, and here
+		// it would additionally mean failed/revoked certificates never
+		// escalate to WARN (see certLogEvent), which is an alerting hole
+		// rather than a cosmetic one.
+		if stateBucket == otherStateBucket && row["CertificateStatus"] != "" {
+			c.logger.Warn("cert_inventory: unmapped CertificateStatus; bucketing as other - please report this value (#142)",
+				"collector", collectorName,
+				"certificate_status", row["CertificateStatus"],
+				"issuer_name", row["IssuerName"])
+		}
 		states[stateBucket]++
 
 		e.LogEvent(certLogEvent(row, stateBucket))
