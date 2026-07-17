@@ -81,15 +81,107 @@ func daysAgo(d int) *time.Time {
 	return &t
 }
 
-// deviceWithIdentity is device() plus the log-twin-only identity fields
-// (id, deviceName, serialNumber, userPrincipalName) - #114.
-func deviceWithIdentity(compliance, os string, encrypted bool, lastSync *time.Time, id, name, serial, upn string) map[string]any {
-	d := device(compliance, os, encrypted, lastSync)
-	d["id"] = id
-	d["deviceName"] = name
-	d["serialNumber"] = serial
-	d["userPrincipalName"] = upn
-	return d
+// liveManagedDevices is the VERBATIM value array of a
+// GET /deviceManagement/managedDevices?$select=id,complianceState,operatingSystem,isEncrypted,lastSyncDateTime,deviceName,serialNumber,userPrincipalName
+// response from the m7kni tenant, read as graph2otel-poller on 2026-07-17
+// `[live-measured 2026-07-17, #165]`. It carries exactly the collector's
+// $select projection and nothing more.
+//
+// It replaces a hand-written docs-derived fixture (alice@example.com / dev-1 /
+// SN123 / LAPTOP-A) that never existed on the wire - the same class of
+// fabrication #142 ("platform": "windows", never sent) and #153 (an invented
+// riskType key) are made of, where a plausible-looking fixture quietly makes a
+// mapping claim untestable. Pinned real, it keeps the bounded gauges honest
+// against a fleet that actually spans noncompliant/unknown/compliant and
+// Windows/Linux/iOS/macOS, and - the thing a docs fixture would never invent -
+// two rows with an empty serialNumber AND empty userPrincipalName (oli,
+// WINSRV), which is what exercises setStr's omit-empty behavior against reality
+// rather than against a fixture where every device conveniently has both.
+const liveManagedDevices = `[
+  {
+    "complianceState": "noncompliant",
+    "deviceName": "LAPHAM",
+    "id": "d5900d67-e50c-44ef-9d5c-6a2f891099c6",
+    "isEncrypted": true,
+    "lastSyncDateTime": "2026-07-16T15:13:29Z",
+    "operatingSystem": "Windows",
+    "serialNumber": "PH4TRX1S2146S0097",
+    "userPrincipalName": "rob@m7kni.io"
+  },
+  {
+    "complianceState": "unknown",
+    "deviceName": "oli",
+    "id": "e4639a7f-4d77-d901-1e78-57646ca78cb8",
+    "isEncrypted": false,
+    "lastSyncDateTime": "2026-05-23T08:55:35Z",
+    "operatingSystem": "Linux",
+    "serialNumber": "",
+    "userPrincipalName": ""
+  },
+  {
+    "complianceState": "unknown",
+    "deviceName": "WINSRV",
+    "id": "f780403a-4ccd-e3ef-ac17-9f1c61c00244",
+    "isEncrypted": false,
+    "lastSyncDateTime": "2026-07-17T14:14:19Z",
+    "operatingSystem": "Windows",
+    "serialNumber": "",
+    "userPrincipalName": ""
+  },
+  {
+    "complianceState": "compliant",
+    "deviceName": "TampooniPad",
+    "id": "2af9ec65-db9b-455c-8b3a-7a2691958b88",
+    "isEncrypted": true,
+    "lastSyncDateTime": "2026-07-17T14:49:20Z",
+    "operatingSystem": "iOS",
+    "serialNumber": "NP412Q6YQ0",
+    "userPrincipalName": "rob@m7kni.io"
+  },
+  {
+    "complianceState": "compliant",
+    "deviceName": "MBP16",
+    "id": "57d346d7-ddf1-489b-b70d-a30dce1e2458",
+    "isEncrypted": true,
+    "lastSyncDateTime": "2026-07-17T15:06:48Z",
+    "operatingSystem": "macOS",
+    "serialNumber": "YJY0H9JDGP",
+    "userPrincipalName": "rob@m7kni.io"
+  }
+]`
+
+// liveNow is a clock just after the newest lastSyncDateTime in
+// liveManagedDevices (MBP16, 15:06:48Z), chosen so the real fleet's sync
+// recency buckets deterministically: MBP16/TampooniPad/WINSRV under_1d, LAPHAM
+// 1d_7d (~24.8h), oli over_30d (~55d). Do not "round" it - the buckets depend
+// on it.
+var liveNow = time.Date(2026, 7, 17, 16, 0, 0, 0, time.UTC)
+
+// liveFleetBody wraps the pinned live array in the {"value": ...} envelope the
+// managedDevices list endpoint returns (single/last page - no @odata.nextLink).
+func liveFleetBody() string { return `{"value":` + liveManagedDevices + `}` }
+
+// decodeLiveDevices unmarshals the pinned live array into the per-record maps a
+// test can index by id.
+func decodeLiveDevices(t *testing.T) []map[string]any {
+	t.Helper()
+	var devices []map[string]any
+	if err := json.Unmarshal([]byte(liveManagedDevices), &devices); err != nil {
+		t.Fatalf("decode live managedDevices: %v", err)
+	}
+	return devices
+}
+
+// liveDevice returns the single pinned live record with the given deviceName.
+func liveDevice(t *testing.T, name string) map[string]any {
+	t.Helper()
+	for _, d := range decodeLiveDevices(t) {
+		if d["deviceName"] == name {
+			return d
+		}
+	}
+	t.Fatalf("no live device named %q", name)
+	return nil
 }
 
 const overviewFixture = `{
@@ -408,14 +500,22 @@ func TestCollectEmitsOneLogTwinPerDevice(t *testing.T) {
 // TestLogTwinCarriesDeviceIdentityAndState asserts the per-device log record
 // carries the identity fields the fleet-wide $select deliberately withheld
 // from every metric, alongside the raw (unbucketed) state fields.
+//
+// It drives ONE real device (MBP16) from the pinned live capture, not an
+// invented dev-1/LAPTOP-A/SN123/alice@example.com record - the real values are
+// the point (#165): a compliant, encrypted, freshly-synced macOS device is a
+// shape that actually exists on this fleet, and its identity fields are the
+// real ones the SIEM twin must carry.
 func TestLogTwinCarriesDeviceIdentityAndState(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{
 		overviewURL(): overviewFixture,
-		fleetURL():    devicesPage(deviceWithIdentity("compliant", "Windows 10", true, daysAgo(0), "dev-1", "LAPTOP-A", "SN123", "alice@example.com")),
+		fleetURL():    devicesPage(liveDevice(t, "MBP16")),
 	}}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	c := New(g, nil)
+	c.now = func() time.Time { return liveNow }
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -425,14 +525,15 @@ func TestLogTwinCarriesDeviceIdentityAndState(t *testing.T) {
 	}
 	l := logs[0]
 	want := map[string]string{
-		"id":                  "dev-1",
-		"device_name":         "LAPTOP-A",
-		"serial_number":       "SN123",
-		"user_principal_name": "alice@example.com",
+		"id":                  "57d346d7-ddf1-489b-b70d-a30dce1e2458",
+		"device_name":         "MBP16",
+		"serial_number":       "YJY0H9JDGP",
+		"user_principal_name": "rob@m7kni.io",
 		"compliance_state":    "compliant",
-		"operating_system":    "Windows 10",
+		"operating_system":    "macOS",
 		"is_encrypted":        "true",
 		"staleness_bucket":    "under_1d",
+		"last_sync_date_time": "2026-07-17T15:06:48Z",
 	}
 	for k, v := range want {
 		if l.Attrs[k] != v {
@@ -441,6 +542,151 @@ func TestLogTwinCarriesDeviceIdentityAndState(t *testing.T) {
 	}
 	if l.SeverityText != telemetry.SeverityInfo.String() {
 		t.Errorf("severity = %s, want %s for a compliant, encrypted, freshly-synced device", l.SeverityText, telemetry.SeverityInfo)
+	}
+}
+
+// TestCollectEmitsLiveFleetEndToEnd drives the whole pinned live capture (5 real
+// m7kni devices, #165) through Collect into a Recorder, rather than asserting on
+// a single record. It is the reference "richest live fixture end-to-end" shape
+// #164/#165 ask for: both the bounded gauges (counts by compliance/OS,
+// encryption, sync-staleness) AND the per-device log twins are checked against
+// the real fleet's values.
+//
+// The real fleet is what makes this worth pinning: it spans three compliance
+// states and four operating systems (including a Linux device the
+// managedDeviceOverview OS summary has no bucket for - that summary undercounts
+// the fleet by exactly this device, which is docs/graph-api-gotchas.md's "sums
+// to 9 on a fleet of 10" note), and two devices carry neither serial nor UPN.
+func TestCollectEmitsLiveFleetEndToEnd(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		overviewURL(): overviewFixture,
+		fleetURL():    liveFleetBody(),
+	}}
+	rec := telemetrytest.New()
+
+	c := New(g, nil)
+	c.now = func() time.Time { return liveNow }
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	// Bounded count gauge: one series per (compliance_state, operating_system)
+	// pair the real fleet actually contains - Linux included.
+	gotCount := map[string]float64{}
+	for _, p := range rec.MetricPoints(countMetricName) {
+		gotCount[p.Attrs["compliance_state"]+"/"+p.Attrs["operating_system"]] = p.Value
+	}
+	wantCount := map[string]float64{
+		"noncompliant/windows": 1, // LAPHAM
+		"unknown/linux":        1, // oli
+		"unknown/windows":      1, // WINSRV
+		"compliant/ios":        1, // TampooniPad
+		"compliant/macos":      1, // MBP16
+	}
+	if len(gotCount) != len(wantCount) {
+		t.Fatalf("count series = %v, want %v", gotCount, wantCount)
+	}
+	for k, v := range wantCount {
+		if gotCount[k] != v {
+			t.Errorf("count[%s] = %v, want %v", k, gotCount[k], v)
+		}
+	}
+
+	// Encrypted-by-OS: only the three encrypted devices contribute; the
+	// unencrypted Linux (oli) and Windows (WINSRV) devices contribute nothing.
+	gotEnc := map[string]float64{}
+	for _, p := range rec.MetricPoints(encryptedMetricName) {
+		gotEnc[p.Attrs["operating_system"]] = p.Value
+	}
+	wantEnc := map[string]float64{"windows": 1, "ios": 1, "macos": 1}
+	if len(gotEnc) != len(wantEnc) {
+		t.Fatalf("encrypted series = %v, want %v", gotEnc, wantEnc)
+	}
+	for k, v := range wantEnc {
+		if gotEnc[k] != v {
+			t.Errorf("encrypted[%s] = %v, want %v", k, gotEnc[k], v)
+		}
+	}
+
+	// Sync-staleness buckets against liveNow: 3 fresh, LAPHAM ~24.8h old, oli
+	// ~55d old.
+	gotStale := map[string]float64{}
+	for _, p := range rec.MetricPoints(stalenessMetricName) {
+		gotStale[p.Attrs["staleness_bucket"]] = p.Value
+	}
+	wantStale := map[string]float64{"under_1d": 3, "1d_7d": 1, "over_30d": 1}
+	if len(gotStale) != len(wantStale) {
+		t.Fatalf("staleness buckets = %v, want %v", gotStale, wantStale)
+	}
+	for k, v := range wantStale {
+		if gotStale[k] != v {
+			t.Errorf("staleness[%s] = %v, want %v", k, gotStale[k], v)
+		}
+	}
+
+	// One log twin per real device, keyed by the real id.
+	logs := rec.LogRecords()
+	if len(logs) != 5 {
+		t.Fatalf("got %d log records, want 5 (one per live device)", len(logs))
+	}
+	byID := map[string]telemetrytest.LogRecord{}
+	for _, l := range logs {
+		if l.EventName != eventManagedDevice {
+			t.Errorf("EventName = %q, want %q", l.EventName, eventManagedDevice)
+		}
+		byID[l.Attrs["id"]] = l
+	}
+
+	type want struct {
+		name, serial, upn, compliance, os, encrypted, stale, severity string
+	}
+	wants := map[string]want{
+		"d5900d67-e50c-44ef-9d5c-6a2f891099c6": {"LAPHAM", "PH4TRX1S2146S0097", "rob@m7kni.io", "noncompliant", "Windows", "true", "1d_7d", telemetry.SeverityWarn.String()},
+		"e4639a7f-4d77-d901-1e78-57646ca78cb8": {"oli", "", "", "unknown", "Linux", "false", "over_30d", telemetry.SeverityWarn.String()},
+		"f780403a-4ccd-e3ef-ac17-9f1c61c00244": {"WINSRV", "", "", "unknown", "Windows", "false", "under_1d", telemetry.SeverityWarn.String()},
+		"2af9ec65-db9b-455c-8b3a-7a2691958b88": {"TampooniPad", "NP412Q6YQ0", "rob@m7kni.io", "compliant", "iOS", "true", "under_1d", telemetry.SeverityInfo.String()},
+		"57d346d7-ddf1-489b-b70d-a30dce1e2458": {"MBP16", "YJY0H9JDGP", "rob@m7kni.io", "compliant", "macOS", "true", "under_1d", telemetry.SeverityInfo.String()},
+	}
+	for id, w := range wants {
+		l, ok := byID[id]
+		if !ok {
+			t.Errorf("no log twin for device id %s (%s)", id, w.name)
+			continue
+		}
+		if l.Attrs["device_name"] != w.name {
+			t.Errorf("%s device_name = %q, want %q", id, l.Attrs["device_name"], w.name)
+		}
+		if l.Attrs["compliance_state"] != w.compliance {
+			t.Errorf("%s compliance_state = %q, want %q", id, l.Attrs["compliance_state"], w.compliance)
+		}
+		if l.Attrs["operating_system"] != w.os {
+			t.Errorf("%s operating_system = %q, want %q", id, l.Attrs["operating_system"], w.os)
+		}
+		if l.Attrs["is_encrypted"] != w.encrypted {
+			t.Errorf("%s is_encrypted = %q, want %q", id, l.Attrs["is_encrypted"], w.encrypted)
+		}
+		if l.Attrs["staleness_bucket"] != w.stale {
+			t.Errorf("%s staleness_bucket = %q, want %q", id, l.Attrs["staleness_bucket"], w.stale)
+		}
+		if l.SeverityText != w.severity {
+			t.Errorf("%s severity = %q, want %q", id, l.SeverityText, w.severity)
+		}
+		// setStr must OMIT an empty serial/UPN entirely, never emit "" - the
+		// real property of oli/WINSRV a docs fixture would never surface.
+		if w.serial == "" {
+			if _, present := l.Attrs["serial_number"]; present {
+				t.Errorf("%s (%s) emitted serial_number %q, want the attribute omitted (empty on the wire)", id, w.name, l.Attrs["serial_number"])
+			}
+		} else if l.Attrs["serial_number"] != w.serial {
+			t.Errorf("%s serial_number = %q, want %q", id, l.Attrs["serial_number"], w.serial)
+		}
+		if w.upn == "" {
+			if _, present := l.Attrs["user_principal_name"]; present {
+				t.Errorf("%s (%s) emitted user_principal_name %q, want the attribute omitted (empty on the wire)", id, w.name, l.Attrs["user_principal_name"])
+			}
+		} else if l.Attrs["user_principal_name"] != w.upn {
+			t.Errorf("%s user_principal_name = %q, want %q", id, l.Attrs["user_principal_name"], w.upn)
+		}
 	}
 }
 
