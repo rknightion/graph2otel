@@ -37,25 +37,172 @@ var _ collectors.GraphClient = (*fakeGraph)(nil)
 const base = "https://graph.microsoft.com/v1.0"
 const skusURL = base + "/subscribedSkus"
 
-const twoSkusBody = `{
-	"value": [
-		{
-			"skuId": "sku-1",
-			"skuPartNumber": "ENTERPRISEPACK",
-			"consumedUnits": 42,
-			"prepaidUnits": {"enabled": 50, "suspended": 0, "warning": 0}
-		},
-		{
-			"skuId": "sku-2",
-			"skuPartNumber": "POWER_BI_STANDARD",
-			"consumedUnits": 7,
-			"prepaidUnits": {"enabled": 100, "suspended": 0, "warning": 0}
-		}
-	]
+// liveSubscribedSkus is a VERBATIM GET /subscribedSkus capture from the m7kni
+// tenant, read as graph2otel-poller on 2026-07-17 `[live-measured 2026-07-17,
+// #165]`. It is pinned, not hand-written: the previous `twoSkusBody` fixture
+// invented ENTERPRISEPACK/POWER_BI_STANDARD SKUs the tenant does not hold and
+// round consumed/enabled counts (42/50, 7/100) that no live SKU returns, which
+// let a docs-shaped fixture masquerade as a real response.
+//
+// Five real SKUs are kept to preserve distinct shapes — FLOW_FREE alone has a
+// large enabled pool (10000) and consumedUnits=2, where the rest are 1/1. Each
+// SKU's servicePlans array is trimmed to a single representative element
+// (dropping whole elements only, never editing any value); the collector reads
+// only skuPartNumber, consumedUnits, and prepaidUnits.enabled, so servicePlans
+// is carried purely to keep the record faithful.
+const liveSubscribedSkus = `{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#subscribedSkus",
+  "value": [
+    {
+      "accountId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+      "accountName": "m7knio",
+      "appliesTo": "User",
+      "capabilityStatus": "Enabled",
+      "consumedUnits": 1,
+      "id": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32_a929cd4d-8672-47c9-8664-159c1f322ba8",
+      "prepaidUnits": {
+        "enabled": 1,
+        "lockedOut": 0,
+        "suspended": 0,
+        "warning": 0
+      },
+      "servicePlans": [
+        {
+          "appliesTo": "User",
+          "provisioningStatus": "Success",
+          "servicePlanId": "795aec3a-93a2-45be-92c4-47b9a76340ca",
+          "servicePlanName": "CLOUD_PKI",
+          "servicePlanType": "SCO"
+        }
+      ],
+      "skuId": "a929cd4d-8672-47c9-8664-159c1f322ba8",
+      "skuPartNumber": "Microsoft_Intune_Suite",
+      "subscriptionIds": [
+        "a7d1c39e-8d40-4eb1-9549-cd4a3f227632"
+      ]
+    },
+    {
+      "accountId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+      "accountName": "m7knio",
+      "appliesTo": "User",
+      "capabilityStatus": "Enabled",
+      "consumedUnits": 1,
+      "id": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32_b05e124f-c7cc-45a0-a6aa-8cf78c946968",
+      "prepaidUnits": {
+        "enabled": 1,
+        "lockedOut": 0,
+        "suspended": 0,
+        "warning": 0
+      },
+      "servicePlans": [
+        {
+          "appliesTo": "User",
+          "provisioningStatus": "Success",
+          "servicePlanId": "eec0eb4f-6444-4f95-aba0-50c24d67f998",
+          "servicePlanName": "AAD_PREMIUM_P2",
+          "servicePlanType": "AADPremiumService"
+        }
+      ],
+      "skuId": "b05e124f-c7cc-45a0-a6aa-8cf78c946968",
+      "skuPartNumber": "EMSPREMIUM",
+      "subscriptionIds": [
+        "a7ef3a79-838f-4468-a45d-a45e04453c2a"
+      ]
+    },
+    {
+      "accountId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+      "accountName": "m7knio",
+      "appliesTo": "User",
+      "capabilityStatus": "Enabled",
+      "consumedUnits": 1,
+      "id": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32_b126b073-72db-4a9d-87a4-b17afe41d4ab",
+      "prepaidUnits": {
+        "enabled": 1,
+        "lockedOut": 0,
+        "suspended": 0,
+        "warning": 0
+      },
+      "servicePlans": [
+        {
+          "appliesTo": "User",
+          "provisioningStatus": "Success",
+          "servicePlanId": "871d91ec-ec1a-452b-a83f-bd76c7d770ef",
+          "servicePlanName": "WINDEFATP",
+          "servicePlanType": "WindowsDefenderATP"
+        }
+      ],
+      "skuId": "b126b073-72db-4a9d-87a4-b17afe41d4ab",
+      "skuPartNumber": "MDATP_XPLAT",
+      "subscriptionIds": [
+        "bdf52da9-64c7-4d68-aff7-21cd3881adf0"
+      ]
+    },
+    {
+      "accountId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+      "accountName": "m7knio",
+      "appliesTo": "User",
+      "capabilityStatus": "Enabled",
+      "consumedUnits": 2,
+      "id": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32_f30db892-07e9-47e9-837c-80727f46fd3d",
+      "prepaidUnits": {
+        "enabled": 10000,
+        "lockedOut": 0,
+        "suspended": 0,
+        "warning": 0
+      },
+      "servicePlans": [
+        {
+          "appliesTo": "User",
+          "provisioningStatus": "Success",
+          "servicePlanId": "50e68c76-46c6-4674-81f9-75456511b170",
+          "servicePlanName": "FLOW_P2_VIRAL",
+          "servicePlanType": "ProcessSimple"
+        }
+      ],
+      "skuId": "f30db892-07e9-47e9-837c-80727f46fd3d",
+      "skuPartNumber": "FLOW_FREE",
+      "subscriptionIds": [
+        "946baf8d-3d31-4221-bfa0-82b71fd1cbe8"
+      ]
+    },
+    {
+      "accountId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+      "accountName": "m7knio",
+      "appliesTo": "User",
+      "capabilityStatus": "Enabled",
+      "consumedUnits": 1,
+      "id": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32_6a0f6da5-0b87-4190-a6ae-9bb5a2b9546a",
+      "prepaidUnits": {
+        "enabled": 1,
+        "lockedOut": 0,
+        "suspended": 0,
+        "warning": 0
+      },
+      "servicePlans": [
+        {
+          "appliesTo": "User",
+          "provisioningStatus": "Success",
+          "servicePlanId": "9a6eeb79-0b4b-4bf0-9808-39d99a2cd5a3",
+          "servicePlanName": "Windows_Autopatch",
+          "servicePlanType": "Modern-Workplace-Core-ITaas"
+        }
+      ],
+      "skuId": "6a0f6da5-0b87-4190-a6ae-9bb5a2b9546a",
+      "skuPartNumber": "Win10_VDA_E3",
+      "subscriptionIds": [
+        "7c77fad7-88d6-4d8a-a7f6-d739bbbe9ba7"
+      ]
+    }
+  ]
 }`
 
+// TestCollectEmitsPerSKUConsumedAndEnabledGauges drives the verbatim live
+// capture end-to-end (Collect -> Recorder) and pins the per-SKU consumed and
+// enabled gauges against the real subscribedSkus the m7kni tenant returns —
+// including FLOW_FREE's distinct 2-consumed / 10000-enabled shape, which a
+// docs fixture's round numbers would have hidden.
 func TestCollectEmitsPerSKUConsumedAndEnabledGauges(t *testing.T) {
-	g := &fakeGraph{bodies: map[string]string{skusURL: twoSkusBody}}
+	g := &fakeGraph{bodies: map[string]string{skusURL: liveSubscribedSkus}}
 	rec := telemetrytest.New()
 
 	c := New(g, nil)
@@ -67,7 +214,13 @@ func TestCollectEmitsPerSKUConsumedAndEnabledGauges(t *testing.T) {
 	for _, p := range rec.MetricPoints(consumedMetricName) {
 		consumed[p.Attrs["sku"]] = p.Value
 	}
-	wantConsumed := map[string]float64{"ENTERPRISEPACK": 42, "POWER_BI_STANDARD": 7}
+	wantConsumed := map[string]float64{
+		"Microsoft_Intune_Suite": 1,
+		"EMSPREMIUM":             1,
+		"MDATP_XPLAT":            1,
+		"FLOW_FREE":              2,
+		"Win10_VDA_E3":           1,
+	}
 	if len(consumed) != len(wantConsumed) {
 		t.Fatalf("got %d consumed series, want %d: %v", len(consumed), len(wantConsumed), consumed)
 	}
@@ -81,7 +234,13 @@ func TestCollectEmitsPerSKUConsumedAndEnabledGauges(t *testing.T) {
 	for _, p := range rec.MetricPoints(enabledMetricName) {
 		enabled[p.Attrs["sku"]] = p.Value
 	}
-	wantEnabled := map[string]float64{"ENTERPRISEPACK": 50, "POWER_BI_STANDARD": 100}
+	wantEnabled := map[string]float64{
+		"Microsoft_Intune_Suite": 1,
+		"EMSPREMIUM":             1,
+		"MDATP_XPLAT":            1,
+		"FLOW_FREE":              10000,
+		"Win10_VDA_E3":           1,
+	}
 	if len(enabled) != len(wantEnabled) {
 		t.Fatalf("got %d enabled series, want %d: %v", len(enabled), len(wantEnabled), enabled)
 	}
@@ -157,7 +316,7 @@ func TestCollectHandlesEmptyTenant(t *testing.T) {
 // two bounded per-SKU gauges and nothing else, no matter what the fake backend
 // returns.
 func TestCollectNeverEmitsPerUserOrAssignmentErrorSeries(t *testing.T) {
-	g := &fakeGraph{bodies: map[string]string{skusURL: twoSkusBody}}
+	g := &fakeGraph{bodies: map[string]string{skusURL: liveSubscribedSkus}}
 	rec := telemetrytest.New()
 
 	c := New(g, nil)
