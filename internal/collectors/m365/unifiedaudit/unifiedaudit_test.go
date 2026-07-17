@@ -95,15 +95,18 @@ func TestMap(t *testing.T) {
 		"record_type": "ExchangeItemAggregated",
 		"service":     "Exchange",
 		"user_type":   "Regular",
-		// The wire field is `userId`, but its CONTENT is the classic schema's
-		// UserKey — so the attribute is named user_key. See
-		// TestTopLevelUserIDIsTheClassicUserKey.
-		"user_key":            "user-guid-1",
-		"user_principal_name": "alice@contoso.com",
-		"client_ip":           "203.0.113.7",
-		"object_id":           "obj-42",
-		"workload":            "Exchange",
-		"result_status":       "Succeeded",
+		// The two wire field names are CROSSED relative to the attributes, and
+		// that is deliberate — each attribute is named for what it contains, not
+		// for the field it came from. See TestTopLevelUserIDIsTheClassicUserKey.
+		//
+		//	wire userId            -> user_key (classic UserKey)
+		//	wire userPrincipalName -> user_id  (classic UserId)
+		"user_key":      "user-guid-1",
+		"user_id":       "alice@contoso.com",
+		"client_ip":     "203.0.113.7",
+		"object_id":     "obj-42",
+		"workload":      "Exchange",
+		"result_status": "Succeeded",
 	}
 	for k, v := range want {
 		if ev.Attrs[k] != v {
@@ -112,24 +115,30 @@ func TestMap(t *testing.T) {
 	}
 }
 
-// TestTopLevelUserIDIsTheClassicUserKey is the semantic guard for #151: the
-// query API's top-level `userId` field is the classic O365 schema's UserKey,
-// NOT the classic UserId — so it is emitted as `user_key`, never `user_id`.
+// TestTopLevelUserIDIsTheClassicUserKey is the semantic guard for #151, and the
+// single most counter-intuitive assertion in this package: the two user fields
+// are CROSSED between wire and attribute.
 //
-// Live-verified on m7kni, 500/500 records over the same tenant and window as
-// the m365.activity twin (2026-07-17, #100/#151):
+//	wire userId            -> attr user_key   (it holds the classic UserKey)
+//	wire userPrincipalName -> attr user_id    (it holds the classic UserId)
+//
+// The query API's top-level `userId` field is the classic O365 schema's UserKey,
+// NOT the classic UserId. Its name is a Microsoft misnomer. Live-verified on
+// m7kni, 500/500 records over the same tenant and window as the m365.activity
+// twin (2026-07-17, #100/#151):
 //
 //	queryAPI.userId            == classic UserKey : 500/500
 //	queryAPI.userPrincipalName == classic UserId  : 500/500  (byte-identical)
 //
-// The wire field's NAME is a Microsoft misnomer, and taking it at face value is
-// what produced #151: `user_id` meant UserKey here and UserId on m365.activity
-// — one attribute, two meanings, with nothing on the record saying which. The
-// mapper must translate the field to what it CONTAINS, not to what it is called.
+// Taking the wire name at face value is exactly what produced #151: `user_id`
+// meant UserKey here and UserId on m365.activity — one attribute, two meanings,
+// with nothing on the record saying which. The mapper must translate each field
+// to what it CONTAINS, not to what Microsoft calls it. The crossover looks like a
+// bug on every reading; it is the fix.
 //
-// After this, `user_key` means the classic UserKey on BOTH transports and
-// `user_principal_name` means the classic UserId on BOTH. No attribute carries
-// two meanings.
+// `user_principal_name` is the name `user_id` used to carry here, and it must not
+// return: the value is the classic UserId, which is UPN-shaped on only ~91% of
+// live records.
 func TestTopLevelUserIDIsTheClassicUserKey(t *testing.T) {
 	rec := map[string]any{
 		"id":                 "rec-key-1",
@@ -146,14 +155,15 @@ func TestTopLevelUserIDIsTheClassicUserKey(t *testing.T) {
 	_, ev := mapRecord(rec)
 
 	if got := ev.Attrs["user_key"]; got != "10037FFE8E38C3F1" {
-		t.Errorf("user_key = %v, want %q — the query API's top-level userId IS the classic UserKey (live 500/500, #151) and must be emitted under the name of what it contains",
+		t.Errorf("user_key = %v, want %q — the query API's top-level userId IS the classic UserKey (live 500/500, #151) and must be emitted under the name of what it contains, NOT as user_id",
 			got, "10037FFE8E38C3F1")
 	}
-	if got, present := ev.Attrs["user_id"]; present {
-		t.Errorf("user_id = %v, want the attribute ABSENT — this field is the classic UserKey, not the classic UserId. Emitting it as `user_id` is #151: it makes `user_id` mean UserKey here and UserId on m365.activity, one attribute with two meanings.", got)
+	if got := ev.Attrs["user_id"]; got != "rob@m7kni.io" {
+		t.Errorf("user_id = %v, want %q — it must come from the wire's userPrincipalName, which IS the classic UserId (live 500/500, byte-identical, #151). Sourcing user_id from the wire's `userId` field instead would make it mean UserKey here and UserId on m365.activity: one attribute, two meanings.",
+			got, "rob@m7kni.io")
 	}
-	if got := ev.Attrs["user_principal_name"]; got != "rob@m7kni.io" {
-		t.Errorf("user_principal_name = %v, want %q — this field IS the classic UserId (live 500/500, byte-identical, #151)", got, "rob@m7kni.io")
+	if got, present := ev.Attrs["user_principal_name"]; present {
+		t.Errorf("user_principal_name = %v, want the attribute ABSENT — it was renamed to user_id because the value is the classic UserId, which is UPN-shaped on only ~91%% of live records. Emitting both would rebuild #151: two attributes set from one variable, identical by construction.", got)
 	}
 }
 
@@ -168,7 +178,7 @@ func TestMapOmitsAbsentAttrs(t *testing.T) {
 		"service":            "SharePoint",
 	}
 	_, ev := mapRecord(rec)
-	for _, k := range []string{"user_principal_name", "client_ip", "object_id", "user_key"} {
+	for _, k := range []string{"user_id", "client_ip", "object_id", "user_key"} {
 		if _, ok := ev.Attrs[k]; ok {
 			t.Errorf("absent field produced attr %q = %v", k, ev.Attrs[k])
 		}

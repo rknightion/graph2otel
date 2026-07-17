@@ -135,12 +135,12 @@ func TestMapRecordConvergesWithUnifiedAudit(t *testing.T) {
 		// (live 500/500, #151) — so this attribute means the same thing on
 		// both transports.
 		"user_key": "user-key-1",
-		// The classic UserId IS the query API's userPrincipalName — live-verified
+		// The classic UserId, emitted as `user_id`. The query API carries the
+		// same value in its `userPrincipalName` field — live-verified
 		// byte-identical on 500/500 records (2026-07-17, m7kni; see
-		// TestUserPrincipalNameIsTheClassicUserIDVerbatim). This attribute was the
-		// last convergence gap against m365.unified_audit, which has always emitted
-		// it.
-		"user_principal_name": "alice@contoso.com",
+		// TestUserIDIsTheClassicUserIDVerbatim) — and emits it under this same
+		// name, so `user_id` means the classic UserId on both transports.
+		"user_id": "alice@contoso.com",
 	}
 	for k, v := range want {
 		if ev.Attrs[k] != v {
@@ -149,16 +149,15 @@ func TestMapRecordConvergesWithUnifiedAudit(t *testing.T) {
 	}
 }
 
-// TestUserPrincipalNameIsTheClassicUserIDVerbatim is the mutation-resistant
-// half of the UPN convergence, and it exists to stop a specific "improvement".
+// TestUserIDIsTheClassicUserIDVerbatim is the mutation-resistant half of the
+// classic-UserId convergence, and it exists to stop a specific "improvement".
 //
 // The obvious instinct — and the one this collector's first pass acted on — is
-// that copying UserId into a second attribute "invents a value", because the
-// classic schema has no field literally named UserPrincipalName and UserId is
-// NOT always UPN-shaped. Live on m7kni, 918 Management API records: UserId is
-// UPN-shaped on only 837 (91.2%). The other 81 are bare GUIDs, the literal
-// sentinel "Not Available", "ServicePrincipal_<guid>", and one display name
-// ("Microsoft Security"). So a shape gate looks not just defensible but careful.
+// that this value is a UPN, and that a non-UPN-shaped one should be gated out.
+// Live on m7kni, 918 Management API records: UserId is UPN-shaped on only 837
+// (91.2%). The other 81 are bare GUIDs, the literal sentinel "Not Available",
+// "ServicePrincipal_<guid>", and one display name ("Microsoft Security"). So a
+// shape gate looks not just defensible but careful.
 //
 // It is WRONG, and only the wire says so. Measured 2026-07-17 against the SAME
 // tenant and window through the query API (500 records):
@@ -166,18 +165,23 @@ func TestMapRecordConvergesWithUnifiedAudit(t *testing.T) {
 //	userPrincipalName == auditData.UserId : 500/500   (byte-identical)
 //	userPrincipalName != auditData.UserId :   0/500
 //
-// The query API passes UserId straight through into userPrincipalName WITHOUT a
-// shape gate — it emits userPrincipalName="Not Available" and a bare GUID
-// happily. So gating here would DIVERGE from the twin on exactly the ~9% of
-// records where the value is not UPN-shaped: unifiedaudit would emit the
-// attribute and this collector would omit it, for the same event. That is the
-// silent-fork failure the package doc exists to prevent.
+// The query API passes UserId straight through WITHOUT a shape gate — it emits
+// "Not Available" and a bare GUID happily. So gating here would DIVERGE from the
+// twin on exactly the ~9% of records where the value is not UPN-shaped:
+// unifiedaudit would emit the attribute and this collector would omit it, for
+// the same event. That is the silent-fork failure the package doc exists to
+// prevent.
+//
+// That same ~9% is why the attribute is `user_id` and NOT `user_principal_name`:
+// the field holds the classic UserId, which is only mostly UPN-shaped, so the
+// old name asserted something false about ~1 record in 11. The name now
+// describes the CONTENT, which is also the rule that governs `user_key`.
 //
 // UserType is not a usable gate either, for the record: 22 live records carry a
 // UPN-shaped UserId with UserType=5, and 5 carry a bare GUID with UserType=0.
 //
 // Each case below is a real value observed on the live wire.
-func TestUserPrincipalNameIsTheClassicUserIDVerbatim(t *testing.T) {
+func TestUserIDIsTheClassicUserIDVerbatim(t *testing.T) {
 	for _, tc := range []struct {
 		userID string
 		src    string
@@ -197,39 +201,51 @@ func TestUserPrincipalNameIsTheClassicUserIDVerbatim(t *testing.T) {
 			if !ok {
 				t.Fatal("mapRecord returned ok=false for a well-formed record")
 			}
-			if got := ev.Attrs["user_principal_name"]; got != tc.userID {
-				t.Errorf("user_principal_name = %v, want %q verbatim.\nprovenance: %s\nThe query API emits userPrincipalName == auditData.UserId on 500/500 live records with NO shape gate; adding one here diverges from m365.unified_audit for the same event.",
+			if got := ev.Attrs["user_id"]; got != tc.userID {
+				t.Errorf("user_id = %v, want %q verbatim.\nprovenance: %s\nThe query API emits userPrincipalName == auditData.UserId on 500/500 live records with NO shape gate; adding one here diverges from m365.unified_audit for the same event.",
 					got, tc.userID, tc.src)
 			}
 		})
 	}
 }
 
-// TestNoUserIDAttr is the #151 guard on this transport: `user_id` must NOT be
-// emitted, because it was a 100% redundant duplicate of `user_principal_name`.
+// TestUserIdentityAttrsAreExactlyKeyAndID is the standing guard against the
+// #151 shape of mistake: a THIRD user-identity attribute carrying a value one
+// of the other two already carries.
 //
-// Both were set from the SAME variable — the classic UserId — unconditionally,
-// so `user_id` never carried a value `user_principal_name` did not already
-// carry, on any record, ever. It was not a second identifier; it was the same
-// string under a second key.
+// The classic schema has exactly TWO user identifiers, so this signal emits
+// exactly two attributes, each named for what it CONTAINS:
 //
-// Dropping it loses nothing and buys the cross-transport contract: `user_id` was
-// the ONE attribute whose meaning depended on which collector produced the row
-// (classic UserId here, classic UserKey on m365.unified_audit — #151). Removing
-// it here and renaming the twin's to `user_key` leaves both transports emitting
-// exactly `user_key` (classic UserKey) + `user_principal_name` (classic UserId).
-// Symmetric, and no attribute means two things.
+//	user_key <- classic UserKey (opaque)      <- wire UserKey
+//	user_id  <- classic UserId                <- wire UserId
 //
-// The classic UserId is NOT lost — it remains, verbatim, as
-// `user_principal_name`. See TestUserPrincipalNameIsTheClassicUserIDVerbatim.
-func TestNoUserIDAttr(t *testing.T) {
+// `user_principal_name` is the name this second attribute used to carry, and it
+// must not come back. It was retired because it asserted something false: the
+// classic UserId is UPN-shaped on only ~91% of live records (bare GUIDs, the
+// literal "Not Available", "ServicePrincipal_<guid>", and a display name make up
+// the rest — see TestUserIDIsTheClassicUserIDVerbatim). A name that is wrong one
+// row in eleven is worse than no name.
+//
+// #151 is the reason this asserts the SET rather than one key. That bug was two
+// attributes set from one variable, unconditionally — identical by construction,
+// with no branch that could ever make them differ. Re-adding
+// `user_principal_name` alongside `user_id` would rebuild it exactly.
+func TestUserIdentityAttrsAreExactlyKeyAndID(t *testing.T) {
 	_, ev, ok := mapRecord(liveRecord())
 	if !ok {
 		t.Fatal("mapRecord returned ok=false for a well-formed record")
 	}
-	if got, present := ev.Attrs["user_id"]; present {
-		t.Errorf("user_id = %v, want the attribute ABSENT (#151).\nIt duplicated user_principal_name exactly (both were set from the classic UserId, unconditionally), and `user_id` meant the classic UserKey on the m365.unified_audit twin — one attribute, two meanings. The value survives as user_principal_name = %v.",
-			got, ev.Attrs["user_principal_name"])
+
+	var got []string
+	for k := range ev.Attrs {
+		if strings.HasPrefix(k, "user_") && k != "user_type" && k != "user_type_id" {
+			got = append(got, k)
+		}
+	}
+	slices.Sort(got)
+
+	if want := []string{"user_id", "user_key"}; !slices.Equal(got, want) {
+		t.Errorf("user-identity attrs = %v, want %v.\nThe classic schema has exactly two user identifiers. A third attribute here is #151 rebuilt: that bug shipped `user_id` and `user_principal_name` set from ONE variable, byte-identical on every record forever. `user_principal_name` specifically must not return — the classic UserId is UPN-shaped on only ~91%% of live records, so the name is a lie on the rest.", got, want)
 	}
 }
 
@@ -237,6 +253,11 @@ func TestNoUserIDAttr(t *testing.T) {
 // `user_key` carries the classic UserKey on this transport, and the query API
 // emits the same value under the same name from its (misnamed) top-level
 // `userId` field. One name, one meaning, both transports.
+//
+// It also pins that the two identifiers are DISTINCT values on the live fixture.
+// That is the property #151 lost: two user attributes that cannot differ are one
+// attribute wearing two names, and the failure is invisible on any fixture where
+// they happen to coincide.
 func TestUserKeyIsTheClassicUserKey(t *testing.T) {
 	_, ev, ok := mapRecord(liveRecord())
 	if !ok {
@@ -245,14 +266,16 @@ func TestUserKeyIsTheClassicUserKey(t *testing.T) {
 	if got := ev.Attrs["user_key"]; got != "user-key-1" {
 		t.Errorf("user_key = %v, want %q — the classic UserKey, which is also what m365.unified_audit's user_key carries (live 500/500, #151)", got, "user-key-1")
 	}
+	if ev.Attrs["user_key"] == ev.Attrs["user_id"] {
+		t.Errorf("user_key and user_id are both %v — they are different classic identifiers (UserKey vs UserId) and must be sourced from different wire fields; equal values here mean one field is feeding both, which is #151", ev.Attrs["user_key"])
+	}
 }
 
-// TestUserPrincipalNameOmittedWhenUserIDAbsent keeps the new attribute inside
-// the package's existing rule: set only what is present, never an empty
-// attribute. Live, UserId was present on 918/918 records, so this is a
-// should-never-happen path — pinned because a contract silent on its edges gets
-// read two ways.
-func TestUserPrincipalNameOmittedWhenUserIDAbsent(t *testing.T) {
+// TestUserIDOmittedWhenClassicUserIDAbsent keeps the attribute inside the
+// package's existing rule: set only what is present, never an empty attribute.
+// Live, UserId was present on 918/918 records, so this is a should-never-happen
+// path — pinned because a contract silent on its edges gets read two ways.
+func TestUserIDOmittedWhenClassicUserIDAbsent(t *testing.T) {
 	r := liveRecord()
 	delete(r, "UserId")
 
@@ -260,8 +283,8 @@ func TestUserPrincipalNameOmittedWhenUserIDAbsent(t *testing.T) {
 	if !ok {
 		t.Fatal("mapRecord returned ok=false for a well-formed record")
 	}
-	if _, present := ev.Attrs["user_principal_name"]; present {
-		t.Errorf("user_principal_name = %v on a record with no UserId, want the attribute omitted", ev.Attrs["user_principal_name"])
+	if _, present := ev.Attrs["user_id"]; present {
+		t.Errorf("user_id = %v on a record with no UserId, want the attribute omitted", ev.Attrs["user_id"])
 	}
 }
 
@@ -633,8 +656,8 @@ func TestLogAttrKeySetIsExact(t *testing.T) {
 		"record_type_id",
 		"result_status",
 		"service",
+		"user_id",
 		"user_key",
-		"user_principal_name",
 		"user_type",
 		"user_type_id",
 		"version",

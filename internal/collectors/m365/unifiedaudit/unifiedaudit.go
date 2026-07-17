@@ -163,22 +163,34 @@ func mapRecord(rec map[string]any) (string, telemetry.Event) {
 	setStr(attrs, "record_type", recordType)
 	setStr(attrs, "service", service)
 	setStr(attrs, "user_type", str(rec, "userType"))
-	// `userId` on the wire, `user_key` as the attribute — NOT a typo. This
-	// field's CONTENT is the classic O365 schema's UserKey, not the classic
-	// UserId; the wire name is a Microsoft misnomer. Live-verified 500/500 over
+	// The two user fields are CROSSED between wire and attribute — NOT a typo,
+	// and the single most counter-intuitive pair of lines in this package:
+	//
+	//	wire userId            -> attr user_key : it holds the classic UserKey
+	//	wire userPrincipalName -> attr user_id  : it holds the classic UserId
+	//
+	// The wire's `userId` is a Microsoft misnomer: its CONTENT is the classic
+	// O365 schema's UserKey, not the classic UserId. Live-verified 500/500 over
 	// the same tenant and window as the m365.activity twin (2026-07-17,
 	// #100/#151):
 	//
 	//	userId            == classic UserKey : 500/500
 	//	userPrincipalName == classic UserId  : 500/500 (byte-identical)
 	//
-	// Taking the wire name at face value IS #151: it made `user_id` mean UserKey
+	// Taking the wire names at face value IS #151: it made `user_id` mean UserKey
 	// here and UserId on m365.activity — one attribute, two meanings, with
-	// nothing on the record saying which. Both transports now emit `user_key`
-	// (classic UserKey) and `user_principal_name` (classic UserId), so no
-	// attribute carries two meanings. See TestTopLevelUserIDIsTheClassicUserKey.
+	// nothing on the record saying which. Each attribute is named for what it
+	// CONTAINS, so both transports emit `user_key` (classic UserKey) and
+	// `user_id` (classic UserId), and no attribute carries two meanings. See
+	// TestTopLevelUserIDIsTheClassicUserKey.
+	//
+	// `user_id` was called `user_principal_name` until 2026-07-17. The classic
+	// UserId is UPN-shaped on only ~91% of live records (bare GUIDs, "Not
+	// Available", "ServicePrincipal_<guid>", display names make up the rest), so
+	// that name was false on the rest. Do not re-add it alongside `user_id`:
+	// two attributes from one field, identical by construction, is #151 exactly.
 	setStr(attrs, "user_key", str(rec, "userId"))
-	setStr(attrs, "user_principal_name", str(rec, "userPrincipalName"))
+	setStr(attrs, "user_id", str(rec, "userPrincipalName"))
 	setStr(attrs, "client_ip", str(rec, "clientIp"))
 	setStr(attrs, "object_id", str(rec, "objectId"))
 
@@ -201,8 +213,12 @@ func mapRecord(rec map[string]any) (string, telemetry.Event) {
 }
 
 // auditBody builds a short human-readable summary line for an audit record.
-func auditBody(operation, service, upn string) string {
-	who := upn
+//
+// userID is the classic UserId (the wire's userPrincipalName). It is NOT
+// necessarily a UPN — ~9% of live records carry a GUID or a sentinel — which is
+// why neither the parameter nor the attribute calls it one.
+func auditBody(operation, service, userID string) string {
+	who := userID
 	if who == "" {
 		who = "unknown principal"
 	}

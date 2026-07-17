@@ -36,21 +36,30 @@
 // # User identity: two identifiers, two names, same meaning on both transports
 //
 // The classic schema carries TWO distinct user identifiers, and this collector
-// and its twin now name them identically (#151):
+// and its twin name them identically (#151):
 //
-//	user_key            <- classic UserKey  (an opaque key)
-//	user_principal_name <- classic UserId   (the UPN, or a live sentinel)
+//	user_key <- classic UserKey  (an opaque key)
+//	user_id  <- classic UserId   (usually a UPN, sometimes a sentinel)
 //
 // The trap is that the query API's top-level `userId` field is NOT the classic
 // UserId — it is the classic UserKey, and its `userPrincipalName` is the classic
-// UserId (live-verified 500/500, 2026-07-17). Taking that field name at face
-// value produced #151: an attribute called `user_id` meaning UserKey on one
-// transport and UserId on the other, with nothing on the record saying which.
-// Both transports map to what the field CONTAINS, not what Microsoft calls it.
+// UserId (live-verified 500/500, 2026-07-17). So on the twin the two fields are
+// CROSSED between wire and attribute. Taking the wire names at face value
+// produced #151: an attribute called `user_id` meaning UserKey on one transport
+// and UserId on the other, with nothing on the record saying which. Both
+// transports map to what the field CONTAINS, not what Microsoft calls it.
 //
-// There is deliberately no `user_id` on either transport. Do not add one back:
-// the name is now ambiguous by history, and both identifiers already ship under
-// names that say what they are.
+// `user_id` is deliberately NOT called `user_principal_name`, which is the name
+// it carried until 2026-07-17. The classic UserId is UPN-shaped on only ~91% of
+// live records — the rest are bare GUIDs, the literal "Not Available",
+// "ServicePrincipal_<guid>", or a display name — so the old name asserted
+// something false about roughly one record in eleven. `user_id` is what the
+// classic schema calls the field and what it actually holds.
+//
+// Exactly TWO user-identity attributes ship on each transport. Do not add a
+// third: #151 was `user_id` and `user_principal_name` set from ONE variable,
+// unconditionally, byte-identical on every record forever. See
+// TestUserIdentityAttrsAreExactlyKeyAndID.
 //
 // Running both at once therefore DUPLICATES every overlapping record. That is
 // degraded, not broken (same id, so downstream dedupe works), and it resolves
@@ -364,8 +373,8 @@ func mapRecord(rec map[string]any) (string, telemetry.Event, bool) {
 	workload := str(rec, "Workload")
 	// UserId on the classic schema IS the query API's userPrincipalName —
 	// live-verified byte-identical on 500/500 records over the same tenant and
-	// window (2026-07-17, #100), sentinels and all. So it feeds
-	// `user_principal_name`, and the copy is UNCONDITIONAL.
+	// window (2026-07-17, #100), sentinels and all. So it feeds `user_id` on
+	// both transports, and the copy is UNCONDITIONAL.
 	//
 	// The unconditional part is the whole finding and it is counter-intuitive.
 	// UserId is NOT always UPN-shaped: live it is a bare GUID, the literal
@@ -376,17 +385,17 @@ func mapRecord(rec map[string]any) (string, telemetry.Event, bool) {
 	// attribute on exactly the records where the twin emits it. This attribute
 	// was withheld entirely on a first pass for the same "would be inventing a
 	// value" reasoning; the wire settled it. See
-	// TestUserPrincipalNameIsTheClassicUserIDVerbatim.
+	// TestUserIDIsTheClassicUserIDVerbatim.
 	//
-	// There is deliberately NO `user_id` attribute (#151). It used to exist and
-	// was set from this same variable, unconditionally — a byte-for-byte
-	// duplicate of `user_principal_name` on every record, carrying nothing the
-	// latter did not. Worse, `user_id` on the m365.unified_audit twin carried the
-	// classic UserKey, so one attribute meant two different things depending on
-	// which transport produced the row. Dropping it here and renaming the twin's
-	// to `user_key` leaves both transports emitting exactly `user_key` (classic
-	// UserKey) + `user_principal_name` (classic UserId). No data is lost — this
-	// value is right there as `user_principal_name`. Do not re-add it.
+	// That same ~9% is why this is `user_id` and not `user_principal_name` (the
+	// name it carried until 2026-07-17): a value that is a GUID or "Not
+	// Available" is not a principal NAME, so the old name was wrong on roughly
+	// one record in eleven. Renaming lost nothing — same field, same value, a
+	// name that matches the classic schema's own.
+	//
+	// Do NOT re-add `user_principal_name` alongside this. That is #151 rebuilt:
+	// the bug was these two names set from this one variable, unconditionally,
+	// identical by construction with no branch that could ever separate them.
 	userID := str(rec, "UserId")
 	result := str(rec, "ResultStatus")
 
@@ -396,10 +405,12 @@ func mapRecord(rec map[string]any) (string, telemetry.Event, bool) {
 	setStr(attrs, "workload", workload)
 	setStr(attrs, "service", workload)
 	setStr(attrs, "result_status", result)
-	// The query API's direct twin of the classic UserId. See the comment above
-	// for why this is an unconditional copy rather than a UPN-shape-gated one,
-	// and why there is no `user_id` alongside it.
-	setStr(attrs, "user_principal_name", userID)
+	// The classic UserId. The query API carries the same value in its
+	// `userPrincipalName` field and emits it under this same name, so `user_id`
+	// means the classic UserId on both transports. See the comment above for why
+	// this is an unconditional copy rather than a UPN-shape-gated one, and why
+	// no `user_principal_name` sits alongside it.
+	setStr(attrs, "user_id", userID)
 	// The classic UserKey. The query API carries the same value in its
 	// (misnamed) top-level `userId` field and emits it under this same name, so
 	// `user_key` means the classic UserKey on both transports (#151).

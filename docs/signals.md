@@ -100,18 +100,19 @@ identically:
 | attribute | meaning | `m365.unified_audit` wire field | `m365.activity` wire field |
 | --- | --- | --- | --- |
 | `user_key` | classic **UserKey** — an opaque identifier | `userId` | `UserKey` |
-| `user_principal_name` | classic **UserId** — the UPN, or a sentinel | `userPrincipalName` | `UserId` |
+| `user_id` | classic **UserId** — usually the UPN, sometimes a sentinel | `userPrincipalName` | `UserId` |
 
-**There is no `user_id` attribute on either signal, and one must not be added back.** The
-query API's top-level `userId` field is a Microsoft misnomer: its content is the classic
-UserKey, not the classic UserId (live-verified 500/500 over one tenant and window,
-2026-07-17). Both collectors map each field to what it *contains*, not to what it is
-called. Anyone previously correlating the two signals on `user_id` was silently comparing
-UserKeys against UserIds.
+**Correlate the two signals on `user_id`.** Both collectors map each wire field to what it
+*contains*, not to what it is called — which is why the query API's row above looks
+inverted and is not. Its top-level `userId` field is a Microsoft misnomer holding the
+classic UserKey (live-verified 500/500 over one tenant and window, 2026-07-17), while its
+`userPrincipalName` field holds the classic UserId. Reading the wire names at face value
+silently compares UserKeys against UserIds.
 
-`user_principal_name` is **not always UPN-shaped** — about 9% of live records carry a bare
-GUID, the literal `Not Available`, `ServicePrincipal_<guid>`, or a display name. Both
-transports emit it verbatim with no shape gate, so do not assume an email address.
+`user_id` is **not always UPN-shaped** — about 9% of live records carry a bare GUID, the
+literal `Not Available`, `ServicePrincipal_<guid>`, or a display name. Both transports emit
+it verbatim with no shape gate, so do not assume an email address. It was called
+`user_principal_name` until 2026-07-17; the name claimed a shape the value does not have.
 
 ## Risk signals: the two transports are NOT interchangeable
 
