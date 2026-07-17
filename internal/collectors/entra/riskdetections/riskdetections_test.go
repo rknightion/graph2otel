@@ -2,6 +2,9 @@ package riskdetections
 
 import (
 	"context"
+	"encoding/json"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +18,209 @@ import (
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
+// liveRiskDetection is a VERBATIM GET /identityProtection/riskDetections record
+// from the m7kni tenant, read as graph2otel-poller on 2026-07-17
+// `[live-measured 2026-07-17, #129]`. It is the risk event #129 synthesized (a
+// Tor sign-in), and it is the only real risk record this project has ever seen —
+// the collection is empty on a healthy tenant, which is exactly why two mapping
+// defects survived to #153.
+//
+// It is pinned, not hand-written, because a hand-written fixture is what caused
+// the bug it now guards: the previous version of this test INVENTED a "riskType"
+// key, which made the dead `risk_type` mapper line look tested and green for the
+// life of the project. Same failure as #142's `"platform": "windows"`.
+//
+// Trimmed of nothing. The fields graph2otel does not map (tokenIssuerType,
+// userDisplayName, location.state, location.geoCoordinates, and additionalInfo's
+// userAgent) are left in on purpose, so this stays a faithful record of what the
+// endpoint actually returns.
+//
+// Note `additionalInfo`: it is a JSON-encoded STRING holding an array of
+// {"Key","Value"} pairs — NOT a JSON object. A mapper written against the
+// intuitive object shape parses nothing and reports success forever.
+const liveRiskDetection = `{
+  "id": "661b3630a381bc220d8b84c965daa092f4113dbff677c21450582fd5ca322a19",
+  "requestId": "c0ee37b3-2cd2-43c0-a7d9-d36e31425600",
+  "correlationId": "39e1e8c0-a497-4e5b-b8a5-354d297c68a9",
+  "riskEventType": "anonymizedIPAddress",
+  "riskState": "atRisk",
+  "riskLevel": "medium",
+  "riskDetail": "none",
+  "source": "IdentityProtection",
+  "detectionTimingType": "realtime",
+  "activity": "signin",
+  "tokenIssuerType": "AzureAD",
+  "ipAddress": "2001:67c:e60:c0c:192:42:116:55",
+  "activityDateTime": "2026-07-17T10:07:37.5365166Z",
+  "detectedDateTime": "2026-07-17T10:07:37.5365166Z",
+  "lastUpdatedDateTime": "2026-07-17T10:09:47.256866Z",
+  "userId": "5289e9c7-3945-4ffd-8fd3-d56124baf45d",
+  "userDisplayName": "RISK SYNTH - DELETE ME (graph2otel #129)",
+  "userPrincipalName": "risk-synth-DELETE-ME@m7kni.io",
+  "additionalInfo": "[{\"Key\":\"userAgent\",\"Value\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:140.0) Gecko/20100101 Firefox/140.0\"},{\"Key\":\"mitreTechniques\",\"Value\":\"T1090.003,T1078\"}]",
+  "location": {
+    "city": "Camperduin",
+    "state": "Noord-Holland",
+    "countryOrRegion": "NL",
+    "geoCoordinates": {
+      "latitude": 52.733,
+      "longitude": 4.65
+    }
+  }
+}`
+
+// decodeLive unmarshals a pinned live record into the untyped shape the
+// logpipeline engine hands to the mapper.
+func decodeLive(t *testing.T, raw string) map[string]any {
+	t.Helper()
+	var rec map[string]any
+	if err := json.Unmarshal([]byte(raw), &rec); err != nil {
+		t.Fatalf("decode live record: %v", err)
+	}
+	return rec
+}
+
+// TestLiveRiskDetectionCarriesNoRiskTypeField pins the WIRE fact behind #153's
+// first defect, independent of any mapper behavior: the Graph v1.0 riskDetection
+// resource has no `riskType` key. Only `riskEventType` exists.
+//
+// This is the test to read before re-adding a `risk_type` mapping. The value
+// such a line would carry already ships as `risk_event_type` (both are
+// "anonymizedIPAddress" on the blob path, where riskType does exist), so
+// reintroducing it would emit a duplicate attribute that is present ONLY on
+// blob-sourced records — an accidental provenance signal, which #141 owns and
+// which must not be smuggled in via an attribute's presence.
+func TestLiveRiskDetectionCarriesNoRiskTypeField(t *testing.T) {
+	rec := decodeLive(t, liveRiskDetection)
+	if v, present := rec["riskType"]; present {
+		t.Fatalf("live riskDetection carries riskType = %v; #153's premise (and this package's mapper) assumes it does not", v)
+	}
+	if got := str(rec, "riskEventType"); got != "anonymizedIPAddress" {
+		t.Errorf("riskEventType = %q, want anonymizedIPAddress (the value a risk_type line would have duplicated)", got)
+	}
+}
+
+// TestMapRiskDetectionAgainstLiveRecord pins the EXACT attribute set the mapper
+// produces from the one real record this project has. Exact-set equality is the
+// point: it fails on a missing attribute (a dropped field) AND on an unexpected
+// one (a fabricated field), which is the pair of mistakes #153 and #142 are made
+// of.
+func TestMapRiskDetectionAgainstLiveRecord(t *testing.T) {
+	id, ev := mapRiskDetection(decodeLive(t, liveRiskDetection))
+
+	if id != "661b3630a381bc220d8b84c965daa092f4113dbff677c21450582fd5ca322a19" {
+		t.Errorf("dedupe id = %q, want the record's immutable detection id", id)
+	}
+
+	wantKeys := []string{
+		"activity",
+		"correlation_id",
+		"detection_timing_type",
+		"id",
+		"ip_address",
+		"location_city",
+		"location_country_or_region",
+		"mitre_techniques",
+		"request_id",
+		"risk_detail",
+		"risk_event_type",
+		"risk_level",
+		"risk_state",
+		"source",
+		"user_id",
+		"user_principal_name",
+	}
+	gotKeys := make([]string, 0, len(ev.Attrs))
+	for k := range ev.Attrs {
+		gotKeys = append(gotKeys, k)
+	}
+	sort.Strings(gotKeys)
+	if !reflect.DeepEqual(gotKeys, wantKeys) {
+		t.Errorf("attribute key set mismatch\n got: %v\nwant: %v", gotKeys, wantKeys)
+	}
+
+	wantScalars := map[string]any{
+		"id":                         "661b3630a381bc220d8b84c965daa092f4113dbff677c21450582fd5ca322a19",
+		"risk_event_type":            "anonymizedIPAddress",
+		"risk_level":                 "medium",
+		"risk_state":                 "atRisk",
+		"risk_detail":                "none",
+		"detection_timing_type":      "realtime",
+		"source":                     "IdentityProtection",
+		"ip_address":                 "2001:67c:e60:c0c:192:42:116:55",
+		"user_principal_name":        "risk-synth-DELETE-ME@m7kni.io",
+		"user_id":                    "5289e9c7-3945-4ffd-8fd3-d56124baf45d",
+		"correlation_id":             "39e1e8c0-a497-4e5b-b8a5-354d297c68a9",
+		"request_id":                 "c0ee37b3-2cd2-43c0-a7d9-d36e31425600",
+		"activity":                   "signin",
+		"location_city":              "Camperduin",
+		"location_country_or_region": "NL",
+	}
+	for k, want := range wantScalars {
+		if got := ev.Attrs[k]; got != want {
+			t.Errorf("attr %q = %v, want %v", k, got, want)
+		}
+	}
+}
+
+// TestMapRiskDetectionEmitsMitreTechniques pins #153's third finding: the MITRE
+// ATT&CK technique ids Identity Protection buries inside additionalInfo reach the
+// log record.
+//
+// T1090.003 is Multi-hop Proxy — it correctly named the Tor sign-in #129
+// synthesized — and T1078 is Valid Accounts. This is the highest-value SIEM
+// field on the record and it was being discarded on both transports.
+//
+// It is a LOG attribute and must never become a metric label (#112): the value
+// is per-detection and its combinations are unbounded. This package emits no
+// metrics at all, so the boundary holds by construction.
+func TestMapRiskDetectionEmitsMitreTechniques(t *testing.T) {
+	_, ev := mapRiskDetection(decodeLive(t, liveRiskDetection))
+
+	got, ok := ev.Attrs["mitre_techniques"].([]string)
+	if !ok {
+		t.Fatalf("mitre_techniques = %#v, want []string parsed out of additionalInfo", ev.Attrs["mitre_techniques"])
+	}
+	want := []string{"T1090.003", "T1078"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("mitre_techniques = %v, want %v", got, want)
+	}
+}
+
+// TestMitreTechniquesToleratesAdditionalInfoShapes pins that the additionalInfo
+// parser never emits a junk attribute and never panics on a record whose
+// additionalInfo is missing, malformed, or simply carries no mitreTechniques
+// pair. Every case must omit the attribute rather than emit an empty one.
+//
+// This matters more than usual here: additionalInfo's contents are undocumented
+// and vary by riskEventType, so most records will legitimately lack the key.
+func TestMitreTechniquesToleratesAdditionalInfoShapes(t *testing.T) {
+	cases := []struct {
+		name           string
+		additionalInfo any
+	}{
+		{"absent", nil},
+		{"empty string", ""},
+		{"malformed json", `[{"Key":`},
+		{"json object rather than the real array shape", `{"mitreTechniques":"T1078"}`},
+		{"array without a mitreTechniques pair", `[{"Key":"userAgent","Value":"curl/8.0"}]`},
+		{"mitreTechniques present but empty", `[{"Key":"mitreTechniques","Value":""}]`},
+		{"wrong json type entirely", float64(42)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := map[string]any{"id": "rd-x", "riskLevel": "low"}
+			if tc.additionalInfo != nil {
+				rec["additionalInfo"] = tc.additionalInfo
+			}
+			_, ev := mapRiskDetection(rec)
+			if v, present := ev.Attrs["mitre_techniques"]; present {
+				t.Errorf("mitre_techniques = %#v, want the attribute omitted entirely", v)
+			}
+		})
+	}
+}
+
 // recordingFetcher is a logpipeline.PageFetcher that returns a fixed set of
 // records once and records every requested page URL.
 type recordingFetcher struct {
@@ -27,11 +233,17 @@ func (f *recordingFetcher) FetchPage(_ context.Context, pageURL string) ([]map[s
 	return f.records, "", nil
 }
 
+// TestMapRiskDetection covers the mapper's plumbing on a synthetic record.
+//
+// It deliberately carries NO "riskType" key: this fixture used to invent one, and
+// asserted a "risk_type" attribute that the live endpoint can never produce. That
+// fabrication is what kept the dead mapper line green for the life of the project
+// (#153). The authority on this record's shape is liveRiskDetection above; keep
+// this fixture a subset of those keys.
 func TestMapRiskDetection(t *testing.T) {
 	rec := map[string]any{
 		"id":                  "rd-1",
 		"riskEventType":       "anonymizedIPAddress",
-		"riskType":            "anonymizedIPAddress",
 		"riskLevel":           "medium",
 		"riskState":           "atRisk",
 		"riskDetail":          "none",
@@ -64,7 +276,6 @@ func TestMapRiskDetection(t *testing.T) {
 	wantAttrs := map[string]any{
 		"id":                         "rd-1",
 		"risk_event_type":            "anonymizedIPAddress",
-		"risk_type":                  "anonymizedIPAddress",
 		"risk_level":                 "medium",
 		"risk_state":                 "atRisk",
 		"risk_detail":                "none",

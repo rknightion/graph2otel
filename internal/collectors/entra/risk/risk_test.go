@@ -2,6 +2,7 @@ package risk
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -51,10 +52,55 @@ const spsBody = `{"value":[
 	{"id":"sp1","riskLevel":"low","riskState":"remediated","riskDetail":"adminConfirmedServicePrincipalCompromised","riskLastUpdatedDateTime":"2026-07-16T08:30:00Z","appId":"11111111-2222-3333-4444-555555555555","displayName":"Legacy Sync App","servicePrincipalType":"Application"}
 ]}`
 
+// liveUsersBody wraps a VERBATIM GET /identityProtection/riskyUsers record from
+// the m7kni tenant, read as graph2otel-poller on 2026-07-17
+// `[live-measured 2026-07-17, #129/#153]`. It is the risky user #129 synthesized,
+// and the only real one this project has ever observed — riskyUsers is empty on a
+// healthy tenant, which is why unmapped fields went unnoticed for the life of the
+// project.
+//
+// Pinned rather than hand-written because it settles two things no doc could:
+//
+//  1. isProcessing IS on the wire (#153). It is mapped; see the log-twin test.
+//  2. isDeleted is `false` on a user that was definitively deleted — 404 on
+//     /users/{id}, and present in /directory/deletedItems. That is #153's second
+//     defect, still reproducing on this read. isDeleted is therefore deliberately
+//     NOT mapped: an operator filtering isDeleted=false would believe they had
+//     excluded deleted users while including this very one. The decision is parked
+//     on a post-purge re-check after 2026-08-16, which is what distinguishes
+//     soft-delete lag from a permanent lie. Do not map it before that check.
+//
+// Note riskLevel is "low" here while the same user's riskDetections record says
+// "medium" — Microsoft aggregates user risk differently from detection risk, so
+// entra.risk and entra.risk_detections legitimately disagree on severity for one
+// incident. Not a graph2otel bug; documented in docs/signals.md.
+const liveUsersBody = `{"value":[
+	{
+		"id": "5289e9c7-3945-4ffd-8fd3-d56124baf45d",
+		"isDeleted": false,
+		"isProcessing": false,
+		"riskLevel": "low",
+		"riskState": "atRisk",
+		"riskDetail": "none",
+		"riskLastUpdatedDateTime": "2026-07-17T10:14:47.3023572Z",
+		"userDisplayName": "RISK SYNTH - DELETE ME (graph2otel #129)",
+		"userPrincipalName": "risk-synth-DELETE-ME@m7kni.io"
+	}
+]}`
+
 func fullFixture() *fakeGraph {
 	return &fakeGraph{bodies: map[string]string{
 		usersURL: usersBody,
 		spsURL:   spsBody,
+	}}
+}
+
+// liveFixture serves the pinned live riskyUsers record, with no risky service
+// principals (the live tenant has none).
+func liveFixture() *fakeGraph {
+	return &fakeGraph{bodies: map[string]string{
+		usersURL: liveUsersBody,
+		spsURL:   `{"value":[]}`,
 	}}
 }
 
@@ -124,6 +170,107 @@ func TestCollectNoPerEntitySeries(t *testing.T) {
 				if k != "risk_level" && k != "risk_state" {
 					t.Errorf("metric %s has unexpected attribute %q (per-entity leak?): %v", name, k, p.Attrs)
 				}
+			}
+		}
+	}
+}
+
+// TestLogTwinEmitsIsProcessingFromLiveRiskyUser pins #153's isProcessing
+// finding: the field is on the wire and reaches the log twin.
+//
+// It carries real operational meaning rather than trivia: isProcessing=true means
+// Identity Protection is still recalculating that user's risk, so riskLevel and
+// riskState are mid-flight and may change without any new detection. An analyst
+// who does not know that reads a transient value as settled fact.
+//
+// It is a bool, so `false` is a real answer ("this state is settled"), not an
+// absence — hence it is emitted whenever the field is present, unlike the string
+// attributes which are omitted when empty. A filter on is_processing=false would
+// silently drop every settled user if false were treated as "unset".
+// It is asserted against logTwin directly rather than through the recorder on
+// purpose: telemetrytest flattens log attributes with log.Value.AsString(), which
+// yields "" for every non-string kind — so a bool attribute reads as present-but-
+// empty there and its VALUE cannot be checked. Driving the mapper is what the
+// recorder's own doc comment recommends.
+func TestLogTwinEmitsIsProcessingFromLiveRiskyUser(t *testing.T) {
+	item := decodeFirstUser(t, liveUsersBody)
+
+	// The *bool decode is half of what is under test: absent must survive as nil.
+	if item.IsProcessing == nil {
+		t.Fatal("isProcessing decoded to nil from a live record that carries it")
+	}
+
+	ev := logTwin(item, usersHalf)
+	got, ok := ev.Attrs["is_processing"]
+	if !ok {
+		t.Fatalf("is_processing absent, want false from the live record; attrs=%v", ev.Attrs)
+	}
+	if got != false {
+		t.Errorf("is_processing = %#v, want the bool false (not a string)", got)
+	}
+
+	// isDeleted must NOT be mapped — see liveUsersBody. Guarding it here keeps the
+	// parked decision (#153, post-2026-08-16 re-check) from being quietly undone.
+	if v, ok := ev.Attrs["is_deleted"]; ok {
+		t.Errorf("is_deleted = %v, want it unmapped: it reports false for a deleted user, so emitting it would let a filter exclude deleted users while including this one (#153)", v)
+	}
+}
+
+// TestCollectLiveRecordKeepsGaugeBounded pins that the live record — now that it
+// contributes a bool attribute to the log twin — still buckets the gauge by only
+// the two bounded enums. Per-entity detail belongs to the twin, never a series
+// (#112).
+func TestCollectLiveRecordKeepsGaugeBounded(t *testing.T) {
+	rec := telemetrytest.New()
+	if err := New(liveFixture(), bothCaps(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	pts := rec.MetricPoints(metricRiskyUsers)
+	if len(pts) != 1 {
+		t.Fatalf("got %d %s series, want 1", len(pts), metricRiskyUsers)
+	}
+	for _, p := range pts {
+		for k := range p.Attrs {
+			if k != "risk_level" && k != "risk_state" {
+				t.Errorf("metric %s gained attribute %q from the live record (per-entity leak?): %v", metricRiskyUsers, k, p.Attrs)
+			}
+		}
+	}
+	if got := logsNamed(rec.LogRecords(), eventRiskyUser); len(got) != 1 {
+		t.Errorf("emitted %d %s logs, want 1 (the log twin carries the entity)", len(got), eventRiskyUser)
+	}
+}
+
+// decodeFirstUser pulls the first riskyUser out of a list-response body.
+func decodeFirstUser(t *testing.T, body string) riskyEntity {
+	t.Helper()
+	var resp struct {
+		Value []riskyEntity `json:"value"`
+	}
+	if err := json.Unmarshal([]byte(body), &resp); err != nil {
+		t.Fatalf("decode riskyUsers body: %v", err)
+	}
+	if len(resp.Value) == 0 {
+		t.Fatal("no riskyUser records in body")
+	}
+	return resp.Value[0]
+}
+
+// TestLogTwinOmitsIsProcessingWhenAbsentFromWire pins the absent-vs-false
+// distinction. riskyServicePrincipal has no isProcessing field at all, and a
+// riskyUser record that omits it must not be reported as "not processing" — that
+// would be graph2otel asserting a fact the wire never stated.
+func TestLogTwinOmitsIsProcessingWhenAbsentFromWire(t *testing.T) {
+	rec := telemetrytest.New()
+	if err := New(fullFixture(), bothCaps(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	for _, name := range []string{eventRiskyUser, eventRiskySP} {
+		for _, r := range logsNamed(rec.LogRecords(), name) {
+			if v, ok := r.Attrs["is_processing"]; ok {
+				t.Errorf("%s (id=%s) emitted is_processing = %q, want it omitted: the record carries no isProcessing field", name, r.Attrs["id"], v)
 			}
 		}
 	}

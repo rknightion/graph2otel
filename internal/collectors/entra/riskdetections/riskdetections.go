@@ -33,7 +33,9 @@
 package riskdetections
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collector"
@@ -109,10 +111,35 @@ func mapRiskDetection(rec map[string]any) (string, telemetry.Event) {
 	riskLevel := str(rec, "riskLevel")
 	userPrincipalName := str(rec, "userPrincipalName")
 
+	// No risk_type attribute is emitted, and one must not be re-added here.
+	//
+	// The Graph v1.0 riskDetection resource has NO riskType field — the complete
+	// live key set is pinned in liveRiskDetection (riskdetections_test.go)
+	// `[live-measured 2026-07-17, #129/#153]`. The line that used to sit here read
+	// it anyway; setStr skips empty values, so it emitted nothing for the life of
+	// the project while looking like a working mapping (#153).
+	//
+	// The UserRiskEvents *blob* category does carry riskType, and it is a
+	// duplicate of riskEventType (both "anonymizedIPAddress"), so nothing is lost
+	// by dropping it. Reinstating it as a blob-only attribute would be worse than
+	// useless on both counts it could serve:
+	//
+	//   - the VALUE is already published, on every transport, as risk_event_type;
+	//   - the PROVENANCE is already published, on every log record, as
+	//     semconv.AttrIngestTransport (#141, landed) — so an attribute that exists
+	//     only on blob-sourced records adds nothing but a second, implicit, and
+	//     silently transport-dependent way to ask the same question.
+	//
+	// It would also make any `risk_type=...` SIEM rule match one transport only,
+	// while looking like it matched both.
+	//
+	// Note this is where risk records DIVERGE from sign-ins across transports:
+	// signins can share one mapper because its blob `properties` object IS the
+	// Graph resource field-for-field, which is not true here. #141 and #138 both
+	// reason from the sign-in case; this is the counter-example.
 	attrs := telemetry.Attrs{}
 	setStr(attrs, "id", id)
 	setStr(attrs, "risk_event_type", riskEventType)
-	setStr(attrs, "risk_type", str(rec, "riskType"))
 	setStr(attrs, "risk_level", riskLevel)
 	setStr(attrs, "risk_state", str(rec, "riskState"))
 	setStr(attrs, "risk_detail", str(rec, "riskDetail"))
@@ -130,12 +157,73 @@ func mapRiskDetection(rec map[string]any) (string, telemetry.Event) {
 		setStr(attrs, "location_country_or_region", str(loc, "countryOrRegion"))
 	}
 
+	// MITRE ATT&CK technique ids, dug out of additionalInfo (#153). This is the
+	// highest-value SIEM field on the record — on the live sample it is
+	// "T1090.003,T1078", i.e. Multi-hop Proxy + Valid Accounts, which named the
+	// Tor sign-in #129 synthesized more precisely than riskEventType did.
+	//
+	// LOG attribute only. The id combinations are per-detection and unbounded, so
+	// this must never become a metric label (#112) — this package emits no
+	// metrics, so that holds by construction.
+	if techniques := mitreTechniques(rec); len(techniques) > 0 {
+		attrs["mitre_techniques"] = techniques
+	}
+
 	return id, telemetry.Event{
 		Name:     eventName,
 		Body:     fmt.Sprintf("risk detection %s (%s) for %s", riskEventType, riskLevel, userPrincipalName),
 		Severity: severityFor(riskLevel),
 		Attrs:    attrs,
 	}
+}
+
+// mitreTechniques extracts the MITRE ATT&CK technique ids from a detection's
+// additionalInfo, returning nil when the record carries none.
+//
+// THE trap on this path, and the reason this is written against a live sample
+// rather than the docs (#142): additionalInfo is not an object. It is a
+// JSON-encoded STRING holding an array of {"Key","Value"} pairs, so the whole
+// thing must be unmarshalled twice — once out of the record as a string, then
+// again as JSON. Verbatim from the wire on 2026-07-17:
+//
+//	"additionalInfo": "[{\"Key\":\"userAgent\",\"Value\":\"Mozilla/5.0 …\"},
+//	                    {\"Key\":\"mitreTechniques\",\"Value\":\"T1090.003,T1078\"}]"
+//
+// A mapper written against the intuitive `{"mitreTechniques": "..."}` object
+// shape compiles, runs, finds nothing, and reports success forever — invisible,
+// because the risk collection is empty on a healthy tenant anyway (#153).
+//
+// Every failure mode returns nil (attribute omitted) rather than an error: the
+// contents of additionalInfo are undocumented and vary by riskEventType, so a
+// record with no mitreTechniques pair is the NORMAL case, not a fault. A
+// malformed payload must not sink an otherwise good detection record.
+func mitreTechniques(rec map[string]any) []string {
+	raw := str(rec, "additionalInfo")
+	if raw == "" {
+		return nil
+	}
+
+	var pairs []struct {
+		Key   string `json:"Key"`
+		Value string `json:"Value"`
+	}
+	if err := json.Unmarshal([]byte(raw), &pairs); err != nil {
+		return nil
+	}
+
+	for _, p := range pairs {
+		if p.Key != "mitreTechniques" {
+			continue
+		}
+		var out []string
+		for _, t := range strings.Split(p.Value, ",") {
+			if t = strings.TrimSpace(t); t != "" {
+				out = append(out, t)
+			}
+		}
+		return out
+	}
+	return nil
 }
 
 // severityFor maps a riskDetection's riskLevel to a log Severity: "high" is

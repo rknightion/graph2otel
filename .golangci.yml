@@ -21,9 +21,13 @@ linters:
       # "cancelled" is the literal Microsoft Graph auditLogQueryStatus wire value
       # (verified against the Graph docs) — the API returns the British spelling,
       # so the jobpipeline status constant and its collectors must match it.
+      # "mitre" is MITRE, the proper noun behind the ATT&CK framework, whose
+      # technique ids (T1090.003, …) entra/risk_detection emits; misspell
+      # otherwise "corrects" it to "miter".
       ignore-rules:
         - signins
         - cancelled
+        - mitre
   exclusions:
     generated: lax
     presets:

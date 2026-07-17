@@ -130,6 +130,27 @@ type riskyEntity struct {
 	UserPrincipalName string `json:"userPrincipalName"`
 	UserDisplayName   string `json:"userDisplayName"`
 
+	// IsProcessing reports whether Identity Protection is still recalculating
+	// this user's risk — i.e. RiskLevel/RiskState are mid-flight and may change
+	// with no new detection behind them (#153). riskyUser only; live-verified on
+	// the wire 2026-07-17.
+	//
+	// A POINTER, deliberately. A plain bool cannot tell "the wire said false"
+	// from "the wire said nothing", and this struct decodes BOTH halves — every
+	// riskyServicePrincipal record would silently decode to false and be reported
+	// as "not processing", which is graph2otel asserting a fact Microsoft never
+	// stated. nil means absent, and emits no attribute.
+	IsProcessing *bool `json:"isProcessing"`
+
+	// isDeleted is deliberately NOT decoded (#153). It reports false for users
+	// that are definitively deleted (confirmed live 2026-07-17: 404 on
+	// /users/{id}, present in /directory/deletedItems), so emitting it would be
+	// actively harmful — an operator filtering isDeleted=false would believe they
+	// had excluded deleted users while including exactly the ones they meant to
+	// exclude. Parked pending a post-purge re-check after 2026-08-16, which
+	// decides whether this is soft-delete lag or permanent. Do not add it before
+	// that check lands.
+
 	// riskyServicePrincipal only.
 	AppID                string `json:"appId"`
 	DisplayName          string `json:"displayName"`
@@ -258,6 +279,14 @@ func logTwin(item riskyEntity, h half) telemetry.Event {
 	setStr(attrs, "app_id", item.AppID)
 	setStr(attrs, "display_name", item.DisplayName)
 	setStr(attrs, "service_principal_type", item.ServicePrincipalType)
+
+	// Emitted whenever the wire carried it, including false — unlike the string
+	// attributes above, false is an answer ("this risk state is settled"), not an
+	// absence. Omitting it would break the useful filter (is_processing=false)
+	// rather than the useless one. nil = the field was absent; see riskyEntity.
+	if item.IsProcessing != nil {
+		attrs["is_processing"] = *item.IsProcessing
+	}
 
 	// Only "high" escalates: riskLevel's other values (low/medium/hidden/none)
 	// are routine background state on any real tenant, and warning on them would
