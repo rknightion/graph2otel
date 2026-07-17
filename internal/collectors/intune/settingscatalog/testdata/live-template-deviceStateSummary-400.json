@@ -1,0 +1,11 @@
+{
+  "error": {
+    "code": "BadRequest",
+    "innerError": {
+      "client-request-id": "567896df-eda3-4166-b7a1-c13c5fd2bc99",
+      "date": "2026-07-17T16:09:08",
+      "request-id": "567896df-eda3-4166-b7a1-c13c5fd2bc99"
+    },
+    "message": "Resource not found for the segment 'deviceStateSummary'."
+  }
+}

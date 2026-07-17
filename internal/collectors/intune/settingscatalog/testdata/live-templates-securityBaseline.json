@@ -1,0 +1,18 @@
+{
+  "@odata.context": "https://graph.microsoft.com/beta/$metadata#deviceManagement/templates",
+  "value": [
+    {
+      "@odata.type": "#microsoft.graph.securityBaselineTemplate",
+      "description": "MDM Security Baseline for Windows 10 and later",
+      "displayName": "MDM Security Baseline for Windows 10 and later for November 2021",
+      "id": "034ccd46-190c-4afc-adf1-ad7cc11262eb",
+      "intentCount": 0,
+      "isDeprecated": false,
+      "platformType": "windows10AndLater",
+      "publishedDateTime": "2021-10-22T00:00:00Z",
+      "templateSubtype": "none",
+      "templateType": "securityBaseline",
+      "versionInfo": "November 2021"
+    }
+  ]
+}

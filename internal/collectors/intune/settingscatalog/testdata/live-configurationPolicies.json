@@ -1,0 +1,112 @@
+{
+  "@odata.context": "https://graph.microsoft.com/beta/$metadata#deviceManagement/configurationPolicies",
+  "@odata.count": 25,
+  "@odata.nextLink": "https://graph.microsoft.com/beta/deviceManagement/configurationPolicies?$skiptoken=%255Bcosmosdb%255D%255B%257B%2522compositeToken%2522%253A%257B%2522token%2522%253Anull%252C%2522range%2522%253A%257B%2522min%2522%253A%2522033E6C6FD4E03029BD670DBC28A0E77A%2522%252C%2522max%2522%253A%252206C46D1EDD04AA76D43667BE6AA13245%2522%257D%257D%252C%2522resumeValues%2522%253A%255B%2522macos%2520defender%2520dlp%2522%255D%252C%2522rid%2522%253A%2522z2oNAPrcMybcKBUAAACAAw%253D%253D%2522%252C%2522skipCount%2522%253A1%257D%255D",
+  "value": [
+    {
+      "createdDateTime": "2025-09-11T16:59:30.6273924Z",
+      "creationSource": null,
+      "description": "",
+      "id": "2b2afea1-88b2-45c0-9af6-b1d04d7fec26",
+      "lastModifiedDateTime": "2026-01-17T10:38:12.2198423Z",
+      "name": "autopilot",
+      "platforms": "windows10",
+      "priorityMetaData": null,
+      "roleScopeTagIds": [
+        "0"
+      ],
+      "settingCount": 9,
+      "technologies": "enrollment",
+      "templateReference": {
+        "templateDisplayName": "Device Preparation",
+        "templateDisplayVersion": "Version 1",
+        "templateFamily": "enrollmentConfiguration",
+        "templateId": "80d33118-b7b4-40d8-b15f-81be745e053f_1"
+      }
+    },
+    {
+      "createdDateTime": "2026-07-13T21:34:34.9470065Z",
+      "creationSource": null,
+      "description": "Prevents local administrators from adding their own Defender exclusions/list settings that merge with (and weaken) MDM-managed policy. Roadmap #10, 2026-07-13.",
+      "id": "ab1a6dae-5a93-4983-a250-a4ede43728c0",
+      "lastModifiedDateTime": "2026-07-13T21:34:34.9470065Z",
+      "name": "Defender - Disable Local Admin Merge",
+      "platforms": "windows10",
+      "priorityMetaData": null,
+      "roleScopeTagIds": [
+        "0"
+      ],
+      "settingCount": 1,
+      "technologies": "mdm",
+      "templateReference": {
+        "templateDisplayName": null,
+        "templateDisplayVersion": null,
+        "templateFamily": "none",
+        "templateId": ""
+      }
+    },
+    {
+      "createdDateTime": "2025-09-11T16:14:09.3307259Z",
+      "creationSource": null,
+      "description": "",
+      "id": "c2df372b-b650-43d1-a526-9f4876df1252",
+      "lastModifiedDateTime": "2025-10-09T09:38:57.175957Z",
+      "name": "ES Account Protection",
+      "platforms": "windows10",
+      "priorityMetaData": null,
+      "roleScopeTagIds": [
+        "0"
+      ],
+      "settingCount": 3,
+      "technologies": "mdm",
+      "templateReference": {
+        "templateDisplayName": "Account Protection",
+        "templateDisplayVersion": "Version 1",
+        "templateFamily": "endpointSecurityAccountProtection",
+        "templateId": "fcef01f2-439d-4c3f-9184-823fd6e97646_1"
+      }
+    },
+    {
+      "createdDateTime": "2026-07-13T21:36:14.6394117Z",
+      "creationSource": null,
+      "description": "All ASR rules in AUDIT mode + Controlled Folder Access in Audit. Telemetry only, zero enforcement. Review DeviceEvents ActionType startswith \"Asr\" after 1-2 weeks, then promote clean rules to Block. Roadmap #5, 2026-07-13.",
+      "id": "f3ff1853-dd29-432b-9a1e-d0f0075663b0",
+      "lastModifiedDateTime": "2026-07-15T20:14:15.8793771Z",
+      "name": "ES Attack Surface Reduction",
+      "platforms": "windows10",
+      "priorityMetaData": null,
+      "roleScopeTagIds": [
+        "0"
+      ],
+      "settingCount": 2,
+      "technologies": "mdm,microsoftSense",
+      "templateReference": {
+        "templateDisplayName": "Attack Surface Reduction Rules",
+        "templateDisplayVersion": "Version 1",
+        "templateFamily": "endpointSecurityAttackSurfaceReduction",
+        "templateId": "e8c053d6-9f95-42b1-a7f1-ebfd71c67a4b_1"
+      }
+    },
+    {
+      "createdDateTime": "2025-09-11T16:06:23.851919Z",
+      "creationSource": null,
+      "description": "",
+      "id": "1fcdc0c7-dd28-4b99-87b4-297b60113837",
+      "lastModifiedDateTime": "2026-07-13T21:32:06.0594181Z",
+      "name": "ES AV",
+      "platforms": "windows10",
+      "priorityMetaData": null,
+      "roleScopeTagIds": [
+        "0"
+      ],
+      "settingCount": 25,
+      "technologies": "mdm,microsoftSense",
+      "templateReference": {
+        "templateDisplayName": "Microsoft Defender Antivirus",
+        "templateDisplayVersion": "Version 1",
+        "templateFamily": "endpointSecurityAntivirus",
+        "templateId": "804339ad-1553-4478-a742-138fb5807418_1"
+      }
+    }
+  ]
+}

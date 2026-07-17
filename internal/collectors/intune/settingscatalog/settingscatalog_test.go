@@ -2,6 +2,7 @@ package settingscatalog
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"testing"
 
@@ -343,6 +344,114 @@ func TestCollectConfigurationPoliciesForbiddenIsSkippedNotFailed(t *testing.T) {
 // must be treated as a per-item skip - like a 403/404 - not a collector
 // failure, and must not suppress the base inventory counts (which come from
 // the list responses, not the summary sub-fetch).
+// Verbatim live captures, read as graph2otel-poller against the m7kni tenant on
+// 2026-07-17 `[live-measured 2026-07-17, #165]`, one file per exact beta
+// endpoint this collector polls. None of these list calls sends $select — the
+// collector reads the full entity — so the captures carry every field the wire
+// returns:
+//
+//	live-configurationPolicies.json  GET /beta/deviceManagement/configurationPolicies
+//	live-intents-empty.json          GET /beta/deviceManagement/intents
+//	live-templates-securityBaseline.json  GET /beta/deviceManagement/templates?$filter=templateType eq 'securityBaseline'
+//	live-template-deviceStateSummary-400.json  GET /beta/deviceManagement/templates/{id}/deviceStateSummary (HTTP 400 body)
+//
+// The intents surface is genuinely empty on this tenant — the capture is a real
+// empty page, kept as the pinned empty shape. The configurationPolicies capture
+// is page 1 of 25 (@odata.count=25) and carries a real @odata.nextLink; the
+// template's deviceStateSummary answered HTTP 400 with a not-found-segment body
+// (securityBaselineTemplate exposes no deviceStateSummary navigation property).
+var (
+	//go:embed testdata/live-configurationPolicies.json
+	liveConfigPolicies string
+	//go:embed testdata/live-intents-empty.json
+	liveIntentsEmpty string
+	//go:embed testdata/live-templates-securityBaseline.json
+	liveTemplatesBaseline string
+)
+
+// configPoliciesNextLink is the exact @odata.nextLink carried by page 1 of the
+// live configurationPolicies capture. GetAllValues follows it, so the live
+// end-to-end test serves an empty terminating page here rather than editing the
+// verbatim page-1 body to drop its nextLink.
+const configPoliciesNextLink = "https://graph.microsoft.com/beta/deviceManagement/configurationPolicies?$skiptoken=%255Bcosmosdb%255D%255B%257B%2522compositeToken%2522%253A%257B%2522token%2522%253Anull%252C%2522range%2522%253A%257B%2522min%2522%253A%2522033E6C6FD4E03029BD670DBC28A0E77A%2522%252C%2522max%2522%253A%252206C46D1EDD04AA76D43667BE6AA13245%2522%257D%257D%252C%2522resumeValues%2522%253A%255B%2522macos%2520defender%2520dlp%2522%255D%252C%2522rid%2522%253A%2522z2oNAPrcMybcKBUAAACAAw%253D%253D%2522%252C%2522skipCount%2522%253A1%257D%255D"
+
+// liveSecurityBaselineTemplateID is the id of the one securityBaseline template
+// the tenant returned ("MDM Security Baseline for Windows 10 and later for
+// November 2021").
+const liveSecurityBaselineTemplateID = "034ccd46-190c-4afc-adf1-ad7cc11262eb"
+
+// TestCollectAgainstLiveCaptures drives the VERBATIM live captures through the
+// real Collect path.
+//
+// Unlike the scripts collector, settingscatalog decodes each deviceStateSummary
+// singleton directly (no {"value":{…}} envelope), so there is no decode defect
+// to expose here — this test confirms the real wire shapes flow correctly:
+//
+//   - the 5 real configurationPolicies (page 1 of 25) bucket into 5 distinct
+//     (platform, technology, template_family) series, each value 1 — including
+//     the templateReference.templateFamily=="none"/templateId=="" row, which
+//     must land in a "none" family bucket, not crash on the empty templateId;
+//   - the empty intents page emits present-but-empty intent metrics;
+//   - the one securityBaseline template's deviceStateSummary answers HTTP 400
+//     with a not-found-segment body, so its device-state gauge is skipped
+//     (per-item), and Collect still succeeds.
+func TestCollectAgainstLiveCaptures(t *testing.T) {
+	bodies := map[string]string{
+		configPoliciesURL:      liveConfigPolicies,
+		configPoliciesNextLink: `{"value":[]}`, // terminating page for the verbatim nextLink
+		intentsURL:             liveIntentsEmpty,
+		baselinesURL:           liveTemplatesBaseline,
+	}
+	errs := map[string]error{
+		// securityBaselineTemplate exposes no deviceStateSummary segment: live
+		// HTTP 400 with "Resource not found for the segment 'deviceStateSummary'."
+		// (verbatim message in testdata/live-template-deviceStateSummary-400.json).
+		baselineSummaryURL(liveSecurityBaselineTemplateID): summaryNotFound400(baselineSummaryURL(liveSecurityBaselineTemplateID)),
+	}
+	g := &fakeGraph{bodies: bodies, errs: errs}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect against live captures: %v", err)
+	}
+
+	// The 5 real page-1 policies bucket into 5 distinct series, each count 1.
+	pts := rec.MetricPoints(policyCountMetricName)
+	got := map[string]float64{}
+	for _, p := range pts {
+		got[p.Attrs["platform"]+"|"+p.Attrs["technology"]+"|"+p.Attrs["template_family"]] += p.Value
+	}
+	want := map[string]float64{
+		"windows10|enrollment|enrollmentConfiguration":                        1,
+		"windows10|mdm|none":                                                  1,
+		"windows10|mdm|endpointSecurityAccountProtection":                     1,
+		"windows10|mdm,microsoftSense|endpointSecurityAttackSurfaceReduction": 1,
+		"windows10|mdm,microsoftSense|endpointSecurityAntivirus":              1,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("policy.count series = %d, want %d: %v", len(got), len(want), got)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("policy.count series %s = %v, want %v", k, got[k], v)
+		}
+	}
+
+	// intents is empty on the tenant → present-but-empty intent metrics.
+	if pts := rec.MetricPoints(intentCountMetricName); len(pts) != 0 {
+		t.Errorf("intent.count points = %d, want 0 (intents empty on tenant), got %+v", len(pts), pts)
+	}
+	if pts := rec.MetricPoints(intentDevicesMetricName); len(pts) != 0 {
+		t.Errorf("intent.devices points = %d, want 0, got %+v", len(pts), pts)
+	}
+
+	// The one securityBaseline template is listed, but its deviceStateSummary
+	// 400s with a not-found-segment body → skipped per-item, no device points.
+	if pts := rec.MetricPoints(baselineDevicesMetricName); len(pts) != 0 {
+		t.Errorf("baseline.devices points = %d, want 0 (deviceStateSummary 400 not-found-segment), got %+v", len(pts), pts)
+	}
+}
+
 func TestCollectSkipsSummaryNotFoundSegmentWithoutFailing(t *testing.T) {
 	bodies := merge(emptyEndpoints(), map[string]string{
 		configPoliciesURL: `{"value":[
