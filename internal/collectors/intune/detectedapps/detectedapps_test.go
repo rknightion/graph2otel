@@ -33,6 +33,77 @@ var _ collectors.GraphClient = (*fakeGraph)(nil)
 
 const listURL = "https://graph.microsoft.com/v1.0/deviceManagement/detectedApps"
 
+// liveDetectedAppsPage is a VERBATIM first page of
+// GET /deviceManagement/detectedApps read as graph2otel-poller against the
+// m7kni tenant `[live-measured 2026-07-17, #165]`. It is the collector's own
+// exact query (the engine requests the largest page size via a Prefer header,
+// not a query param, so the first-page URL is the bare endpoint; Graph paged it
+// at $top=5, hence the @odata.nextLink).
+//
+// It is pinned, not hand-written, so the wire shape stays honest: every field
+// name (displayName, platform, deviceCount) the mapper reads is present exactly
+// as Graph spells it, alongside the fields it deliberately ignores (publisher,
+// sizeInByte, version, id) — a docs-derived fixture is what let "platform" get
+// invented on the wrong resource (#142). Trimmed of nothing.
+//
+// The live top-of-catalog carries NONE of defaultAllowedApps: the first five
+// rows are long-tail consumer apps ("Pizza Plus", 1Blocker, 23andMe,
+// 50onPaletteServer), which is exactly why the allow-list promotion path can
+// only be exercised by the synthetic fixtures below — no live row matches it —
+// while catalog_size counts every row regardless.
+const liveDetectedAppsPage = `{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#deviceManagement/detectedApps",
+  "@odata.count": 1115,
+  "@odata.nextLink": "https://graph.microsoft.com/v1.0/deviceManagement/detectedApps?$top=5&$skip=5",
+  "value": [
+    {
+      "deviceCount": 1,
+      "displayName": "\"Pizza Plus\"",
+      "id": "004d72f9549b60ec78f335983adae52bfae6e116d5b57d50c25dbe87f5bcfe50",
+      "platform": "ios",
+      "publisher": "",
+      "sizeInByte": 0,
+      "version": "9 (12.1)"
+    },
+    {
+      "deviceCount": 1,
+      "displayName": "1Blocker",
+      "id": "25970763056e35c86bc478ed4f622109958ade693c1bcd3d07adc3ea1d299c8c",
+      "platform": "macOS",
+      "publisher": "",
+      "sizeInByte": 0,
+      "version": "6.5.3"
+    },
+    {
+      "deviceCount": 1,
+      "displayName": "1Blocker",
+      "id": "f5303158d1794b08316e956c9014da014d75c745afe9304ff9664e4885723d10",
+      "platform": "ios",
+      "publisher": "",
+      "sizeInByte": 0,
+      "version": "1352 (6.5.3)"
+    },
+    {
+      "deviceCount": 1,
+      "displayName": "23andMe",
+      "id": "4b86f95be87b26cacf5cf393e15515da64cd4f316621450e70e862f302593559",
+      "platform": "ios",
+      "publisher": "",
+      "sizeInByte": 0,
+      "version": "115.27.0 (15.27.0)"
+    },
+    {
+      "deviceCount": 1,
+      "displayName": "50onPaletteServer",
+      "id": "bc1ba865da5b79a600c574e8a1c63b187db8851a56e9edd150f805746ff993d5",
+      "platform": "macOS",
+      "publisher": "",
+      "sizeInByte": 0,
+      "version": "1.1.0"
+    }
+  ]
+}`
+
 func TestCollectEmitsDeviceCountForAllowListedAppsOnlyGroupedByPlatform(t *testing.T) {
 	body := `{"value":[
 	  {"id":"1","displayName":"Google Chrome","version":"120.0","deviceCount":50,"platform":"windows"},
@@ -98,6 +169,42 @@ func TestCollectEmitsCatalogSizeForEveryEntryRegardlessOfAllowList(t *testing.T)
 	}
 	if len(points[0].Attrs) != 0 {
 		t.Errorf("catalog_size must carry no labels, got %v", points[0].Attrs)
+	}
+}
+
+// TestCollectEmitsLiveCatalogEndToEnd drives the one real capture this package
+// has through the full Collect path into a Recorder, rather than a hand-built
+// success body. It pins two live facts: catalog_size reflects every fetched row
+// (the second page is empty here, so 5), and the live top-of-catalog promotes
+// ZERO device_count series because none of its rows are allow-listed — the
+// steady state on a real tenant, and the reason the allow-list assertions above
+// must stay synthetic.
+func TestCollectEmitsLiveCatalogEndToEnd(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		listURL: liveDetectedAppsPage,
+		// GetAllValues follows @odata.nextLink verbatim; terminate the walk with
+		// an empty continuation so the collector sees exactly the captured page.
+		listURL + "?$top=5&$skip=5": `{"value":[]}`,
+	}}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	catalog := rec.MetricPoints(catalogSizeMetric)
+	if len(catalog) != 1 {
+		t.Fatalf("want exactly 1 catalog_size point, got %d", len(catalog))
+	}
+	if catalog[0].Value != 5 {
+		t.Errorf("catalog_size = %v, want 5 (the captured page's rows)", catalog[0].Value)
+	}
+	if len(catalog[0].Attrs) != 0 {
+		t.Errorf("catalog_size must carry no labels, got %v", catalog[0].Attrs)
+	}
+
+	if pts := rec.MetricPoints(deviceCountMetric); len(pts) != 0 {
+		t.Errorf("device_count = %+v, want no series (no live top-of-catalog row is allow-listed)", pts)
 	}
 }
 
