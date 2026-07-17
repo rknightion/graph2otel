@@ -6,9 +6,14 @@
       "AttrKeys": [
         "activity_display_name",
         "category",
+        "correlation_id",
         "id",
         "ingest_transport",
-        "result"
+        "initiator_app_display_name",
+        "logged_by_service",
+        "result",
+        "target_display_names",
+        "target_resource_count"
       ]
     }
   ]
