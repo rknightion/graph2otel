@@ -42,10 +42,98 @@ var _ collectors.GraphClient = (*fakeGraph)(nil)
 
 const domainsURL = "https://graph.microsoft.com/v1.0/domains"
 
-// fourDomainsBody covers all four (authentication_type, is_verified) posture
-// combinations: managed/verified, managed/unverified, federated/verified,
-// federated/unverified. isDefault and domain id/name are deliberately varied
-// too, to prove they never leak into a metric attribute.
+// liveDomains is a VERBATIM GET /domains capture from the m7kni tenant, read as
+// graph2otel-poller on 2026-07-17 `[live-measured 2026-07-17, #165]`. It
+// replaces the invented contoso.com/fabrikam.com/adatum.com fixture as the
+// authority on this endpoint's real wire shape.
+//
+// The m7kni tenant's four domains are ALL Managed and ALL verified — the live
+// tenant has no federated or unverified domain, so the federated/unverified
+// posture combinations and the Warn-severity log path cannot be exercised by
+// any live capture. Those branches are covered by the synthetic fourDomainsBody
+// below, which is retained on purpose for exactly that reason. Every field here
+// is verbatim (isRoot/isAdminManaged are true on the wire, which the docs
+// fixture never carried), trimmed of nothing.
+const liveDomains = `{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#domains",
+  "value": [
+    {
+      "authenticationType": "Managed",
+      "availabilityStatus": null,
+      "id": "m7knio.onmicrosoft.com",
+      "isAdminManaged": true,
+      "isDefault": false,
+      "isInitial": true,
+      "isRoot": true,
+      "isVerified": true,
+      "passwordNotificationWindowInDays": 14,
+      "passwordValidityPeriodInDays": 2147483647,
+      "state": null,
+      "supportedServices": [
+        "Email",
+        "OfficeCommunicationsOnline"
+      ]
+    },
+    {
+      "authenticationType": "Managed",
+      "availabilityStatus": null,
+      "id": "m7kni.io",
+      "isAdminManaged": true,
+      "isDefault": true,
+      "isInitial": false,
+      "isRoot": true,
+      "isVerified": true,
+      "passwordNotificationWindowInDays": 14,
+      "passwordValidityPeriodInDays": 2147483647,
+      "state": null,
+      "supportedServices": [
+        "Email",
+        "Intune"
+      ]
+    },
+    {
+      "authenticationType": "Managed",
+      "availabilityStatus": null,
+      "id": "rob-knight.com",
+      "isAdminManaged": true,
+      "isDefault": false,
+      "isInitial": false,
+      "isRoot": true,
+      "isVerified": true,
+      "passwordNotificationWindowInDays": 14,
+      "passwordValidityPeriodInDays": 2147483647,
+      "state": null,
+      "supportedServices": [
+        "Intune"
+      ]
+    },
+    {
+      "authenticationType": "Managed",
+      "availabilityStatus": null,
+      "id": "m7kni.com",
+      "isAdminManaged": true,
+      "isDefault": false,
+      "isInitial": false,
+      "isRoot": true,
+      "isVerified": true,
+      "passwordNotificationWindowInDays": 14,
+      "passwordValidityPeriodInDays": 2147483647,
+      "state": null,
+      "supportedServices": [
+        "Email",
+        "Intune"
+      ]
+    }
+  ]
+}`
+
+// fourDomainsBody is a deliberately SYNTHETIC fixture covering all four
+// (authentication_type, is_verified) posture combinations: managed/verified,
+// managed/unverified, federated/verified, federated/unverified. The live m7kni
+// tenant has only managed, verified domains (see liveDomains), so the
+// federated and unverified branches — and the Warn-severity log escalation —
+// have no live capture and are exercised here. isDefault and domain id/name are
+// deliberately varied too, to prove they never leak into a metric attribute.
 const fourDomainsBody = `{
   "value": [
     {"id": "contoso.com", "authenticationType": "Managed", "isVerified": true, "isDefault": true, "supportedServices": ["Email"]},
@@ -256,6 +344,77 @@ func TestCollectPropagatesListFailure(t *testing.T) {
 	}
 	if pts := rec.MetricPoints(metricFederatedTotal); len(pts) != 0 {
 		t.Errorf("got %d points for %s, want 0 when the list call failed", len(pts), metricFederatedTotal)
+	}
+}
+
+// TestCollectorEmitsLiveRecordEndToEnd drives the verbatim /domains capture
+// through Collect into a Recorder, pinning what the real m7kni tenant produces:
+// all four domains bucket into the single managed/verified posture series,
+// federated.total is 0, and each domain gets one log twin carrying its real
+// identity/posture. It keeps testdata/signals.json honest — the golden records
+// the union of what the package's tests emit, so the live record has to reach
+// the emitter for the golden to reflect a real response.
+func TestCollectorEmitsLiveRecordEndToEnd(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{domainsURL: liveDomains}}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	// All four live domains are managed + verified, so they collapse into a
+	// single bounded posture series of value 4.
+	pts := rec.MetricPoints(metricTotal)
+	if len(pts) != 1 {
+		t.Fatalf("got %d posture series, want 1 (all live domains are managed/verified): %+v", len(pts), pts)
+	}
+	if pts[0].Value != 4 || pts[0].Attrs["authentication_type"] != "managed" || pts[0].Attrs["is_verified"] != "true" {
+		t.Errorf("posture series = %+v, want value=4 managed/verified", pts[0])
+	}
+
+	fed := rec.MetricPoints(metricFederatedTotal)
+	if len(fed) != 1 || fed[0].Value != 0 {
+		t.Errorf("federated.total = %+v, want single point value=0 (tenant has no federated domain)", fed)
+	}
+
+	recs := rec.LogRecords()
+	if len(recs) != 4 {
+		t.Fatalf("got %d log twins, want 4 (one per live domain)", len(recs))
+	}
+	byID := map[string]telemetrytest.LogRecord{}
+	for _, r := range recs {
+		if r.EventName != "entra.domain" {
+			t.Errorf("EventName = %q, want entra.domain", r.EventName)
+		}
+		byID[r.Attrs["id"]] = r
+	}
+
+	initial, ok := byID["m7knio.onmicrosoft.com"]
+	if !ok {
+		t.Fatal("no log twin for m7knio.onmicrosoft.com")
+	}
+	wantInitial := map[string]string{
+		"id":                  "m7knio.onmicrosoft.com",
+		"authentication_type": "managed",
+		"is_verified":         "true",
+		"is_default":          "false",
+		"is_initial":          "true",
+		"is_root":             "true",
+		"is_admin_managed":    "true",
+		"supported_services":  "Email,OfficeCommunicationsOnline",
+	}
+	for k, v := range wantInitial {
+		if initial.Attrs[k] != v {
+			t.Errorf("m7knio.onmicrosoft.com attr %s = %q, want %q (all: %v)", k, initial.Attrs[k], v, initial.Attrs)
+		}
+	}
+
+	def, ok := byID["m7kni.io"]
+	if !ok {
+		t.Fatal("no log twin for m7kni.io")
+	}
+	if def.Attrs["is_default"] != "true" {
+		t.Errorf("m7kni.io is_default = %q, want true", def.Attrs["is_default"])
 	}
 }
 
