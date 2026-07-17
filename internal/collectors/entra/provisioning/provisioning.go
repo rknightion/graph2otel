@@ -112,13 +112,15 @@ func mapProvisioning(rec map[string]any) (string, telemetry.Event) {
 		setStr(attrs, "target_identity_id", str(tgt, "id"))
 		setStr(attrs, "target_identity_display_name", str(tgt, "displayName"))
 	}
-	// servicePrincipal is a COLLECTION on provisioningObjectSummary (per the
-	// Graph resource doc), unlike the single-object sourceIdentity/
-	// targetIdentity; a provisioning job runs through exactly one service
-	// principal in practice, so the first entry is used.
-	if sp := firstNested(rec, "servicePrincipal"); sp != nil {
+	// servicePrincipal is a SINGLE OBJECT on provisioningObjectSummary
+	// `[live-measured 2026-07-17, #165, #167]`, not the collection the Graph
+	// resource doc describes, and its name field is "displayName", not "name".
+	// The old firstNested/"name" reading matched the doc but never the wire,
+	// so service_principal_id/service_principal_name were silently dropped
+	// from every real record.
+	if sp := nested(rec, "servicePrincipal"); sp != nil {
 		setStr(attrs, "service_principal_id", str(sp, "id"))
-		setStr(attrs, "service_principal_name", str(sp, "name"))
+		setStr(attrs, "service_principal_name", str(sp, "displayName"))
 	}
 
 	return id, telemetry.Event{
@@ -139,21 +141,6 @@ func str(m map[string]any, key string) string {
 func nested(m map[string]any, key string) map[string]any {
 	n, _ := m[key].(map[string]any)
 	return n
-}
-
-// firstNested returns the first element of an array-valued field as a
-// map[string]any, or nil when the field is absent, not an array, empty, or
-// its first element is not an object.
-func firstNested(m map[string]any, key string) map[string]any {
-	raw, ok := m[key].([]any)
-	if !ok || len(raw) == 0 {
-		return nil
-	}
-	first, ok := raw[0].(map[string]any)
-	if !ok {
-		return nil
-	}
-	return first
 }
 
 // setStr adds key=val only when val is non-empty, so absent fields don't

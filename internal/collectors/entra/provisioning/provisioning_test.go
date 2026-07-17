@@ -225,11 +225,10 @@ func TestLiveProvisioningServicePrincipalIsSingleObject(t *testing.T) {
 			"asserts the wire carries only \"displayName\" — if this fires, defect (2) is stale", v)
 	}
 
-	// The consequence, pinned so it cannot be lost: firstNested — the accessor
-	// the mapper actually uses — returns nil for this record.
-	if got := firstNested(rec, "servicePrincipal"); got != nil {
-		t.Errorf("firstNested(servicePrincipal) = %v, want nil "+
-			"(it type asserts to []any, which a JSON object fails)", got)
+	// The fix, pinned so it cannot be lost: nested — the accessor the mapper
+	// actually uses now — reads the object straight off the record.
+	if got := nested(rec, "servicePrincipal"); got == nil {
+		t.Error("nested(servicePrincipal) = nil, want the single JSON object")
 	}
 }
 
@@ -238,16 +237,14 @@ func TestLiveProvisioningServicePrincipalIsSingleObject(t *testing.T) {
 // fails on a missing attribute (a dropped field) and on an unexpected one (a
 // fabricated field) — the pair of mistakes #165 exists to catch.
 //
-// READ THIS BEFORE "FIXING" THE ASSERTION: service_principal_id and
-// service_principal_name are absent from wantKeys, and that is a DEFECT being
-// recorded, not a behavior being blessed. See
-// TestLiveProvisioningServicePrincipalIsSingleObject for the wire facts and the
-// two stacked causes. This set is what the collector ships TODAY; when the
-// mapper is fixed, both attributes join this list and the golden grows.
+// service_principal_id and service_principal_name are now in wantKeys: #167
+// fixed the two stacked defects TestLiveProvisioningServicePrincipalIsSingleObject
+// documents (servicePrincipal is a single object, not a collection, and its name
+// field is displayName, not name).
 //
-// target_identity_display_name is likewise absent, but for a legitimate reason:
-// the wire carries `"displayName": ""` on targetIdentity for a SCIM group, and
-// setStr correctly omits empty values rather than emitting an empty attribute.
+// target_identity_display_name is absent for a legitimate reason: the wire
+// carries `"displayName": ""` on targetIdentity for a SCIM group, and setStr
+// correctly omits empty values rather than emitting an empty attribute.
 func TestMapProvisioningAgainstLiveRecord(t *testing.T) {
 	id, ev := mapProvisioning(decodeLive(t, liveProvisioning))
 
@@ -271,6 +268,8 @@ func TestMapProvisioningAgainstLiveRecord(t *testing.T) {
 		"id",
 		"job_id",
 		"provisioning_action",
+		"service_principal_id",
+		"service_principal_name",
 		"source_identity_display_name",
 		"source_identity_id",
 		"status",
@@ -295,6 +294,8 @@ func TestMapProvisioningAgainstLiveRecord(t *testing.T) {
 		"source_identity_id":           "ae0c9dc4-faba-477f-952c-423c67237700",
 		"source_identity_display_name": "macos-servers-dynamic",
 		"target_identity_id":           "ffsdj2g8zwtfkd",
+		"service_principal_id":         "e7e9d06f-8673-4759-bfed-67d499095d2f",
+		"service_principal_name":       "Grafana PS",
 	}
 	for k, want := range wantScalars {
 		if got := ev.Attrs[k]; got != want {
@@ -380,20 +381,12 @@ func TestCollectorEmitsLiveRecordEndToEnd(t *testing.T) {
 		"source_identity_id":           "ae0c9dc4-faba-477f-952c-423c67237700",
 		"source_identity_display_name": "macos-servers-dynamic",
 		"target_identity_id":           "ffsdj2g8zwtfkd",
+		"service_principal_id":         "e7e9d06f-8673-4759-bfed-67d499095d2f",
+		"service_principal_name":       "Grafana PS",
 	}
 	for k, want := range wantAttrs {
 		if v := got.Attrs[k]; v != want {
 			t.Errorf("emitted attr %q = %q, want %q", k, v, want)
-		}
-	}
-
-	// The defect, asserted at the emitter too: a real record ships no service
-	// principal attribution at all. Delete these two checks as part of fixing
-	// the mapper — not before.
-	for _, k := range []string{"service_principal_id", "service_principal_name"} {
-		if v, present := got.Attrs[k]; present {
-			t.Errorf("emitted attr %q = %q; if this fires the mapper has been fixed — "+
-				"update this test, TestMapProvisioningAgainstLiveRecord's wantKeys, and the golden", k, v)
 		}
 	}
 }
@@ -402,17 +395,11 @@ func TestCollectorEmitsLiveRecordEndToEnd(t *testing.T) {
 // synthetic record.
 //
 // PROVENANCE: docs-derived, NOT measured. Every value here is invented
-// ("prov-1", "src-guid", "Alice Source") and the servicePrincipal shape it
-// asserts — an array, with a "name" field — is one the endpoint has never been
-// observed to send. See TestLiveProvisioningServicePrincipalIsSingleObject.
-//
-// It is kept, rather than deleted, because it is the only test covering the
-// service principal block at all, and it documents the shape the mapper is
-// currently written for. Its assertions are therefore a record of the mapper's
-// intent, not of the wire. The authority on this record's shape is
-// liveProvisioning; when the mapper is fixed to the real shape, this fixture
-// must change with it. It is deliberately NOT driven through the emitter, so
-// its invented attribute keys stay out of testdata/signals.json.
+// ("prov-1", "src-guid", "Alice Source"), but the servicePrincipal shape now
+// matches the wire: a single object keyed by displayName (#167 fixed this
+// fixture alongside the mapper — see TestLiveProvisioningServicePrincipalIsSingleObject
+// for the live facts). It is deliberately NOT driven through the emitter, so
+// its invented attribute values stay out of testdata/signals.json.
 func TestMapProvisioningSuccess(t *testing.T) {
 	rec := map[string]any{
 		"id":                 "prov-1",
@@ -432,8 +419,8 @@ func TestMapProvisioningSuccess(t *testing.T) {
 			"id":          "tgt-guid",
 			"displayName": "Alice Target",
 		},
-		"servicePrincipal": []any{
-			map[string]any{"id": "sp-guid", "name": "ServiceNow"},
+		"servicePrincipal": map[string]any{
+			"id": "sp-guid", "displayName": "ServiceNow",
 		},
 	}
 

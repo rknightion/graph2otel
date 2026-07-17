@@ -10,6 +10,8 @@
         "ingest_transport",
         "job_id",
         "provisioning_action",
+        "service_principal_id",
+        "service_principal_name",
         "source_identity_display_name",
         "source_identity_id",
         "status",
