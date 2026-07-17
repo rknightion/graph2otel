@@ -127,8 +127,8 @@ retunes them, see [`configuration.md`](./configuration.md).
 
 | Collector | Collects | Graph endpoint(s) | Required scope(s) | License / beta | Interval | Metric namespace |
 | --- | --- | --- | --- | --- | --- | --- |
-| `purview.sensitivity_labels` | Sensitivity label catalog: a count by applicable-to type, plus a log twin per label carrying its priority and `hasProtection` — which is how label encryption activation is readable at all. Bind the label's text to `name`: `displayName` is present but always null | `/security/dataSecurityAndGovernance/sensitivityLabels` | `SensitivityLabel.Read` | `needs-license/purview_information_protection` | 1h | `purview.labels.count{applicable_to}`, plus a log twin per label |
 | `purview.retention_labels` | Retention label definitions + retention event types, each with a log twin. Blocked app-only on a live tenant — both endpoints 500 with `DataInsightsRequestError`/Forbidden even with the scope granted, because Microsoft documents Application access as not supported — so the collector recognizes that specific pair and reports unavailable rather than failing | `/security/labels/retentionLabels`, `/security/triggerTypes/retentionEventTypes` | `RecordsManagement.Read.All` | `needs-license/purview_records_management` | 1h | `purview.retention.labels.count`, `purview.retention.event_types.count`, plus a log twin per row |
+| `purview.sensitivity_labels` | Sensitivity label catalog: a count by applicable-to type, plus a log twin per label carrying its priority and `hasProtection` — which is how label encryption activation is readable at all. Bind the label's text to `name`: `displayName` is present but always null | `/security/dataSecurityAndGovernance/sensitivityLabels` | `SensitivityLabel.Read` | `needs-license/purview_information_protection` | 1h | `purview.labels.count{applicable_to}`, plus a log twin per label |
 
 <!-- END GENERATED COLLECTOR REFERENCE -->
 

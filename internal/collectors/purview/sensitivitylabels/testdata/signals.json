@@ -1,0 +1,22 @@
+{
+  "Metrics": [
+    {
+      "Name": "purview.labels.count",
+      "AttrKeys": [
+        "applicable_to"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "purview.sensitivity_label",
+      "AttrKeys": [
+        "applicable_to",
+        "description",
+        "id",
+        "name",
+        "priority"
+      ]
+    }
+  ]
+}

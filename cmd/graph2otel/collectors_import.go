@@ -55,5 +55,6 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/updates"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/activity"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/unifiedaudit"
-	_ "github.com/rknightion/graph2otel/internal/collectors/purview/labels"
+	_ "github.com/rknightion/graph2otel/internal/collectors/purview/retentionlabels"
+	_ "github.com/rknightion/graph2otel/internal/collectors/purview/sensitivitylabels"
 )

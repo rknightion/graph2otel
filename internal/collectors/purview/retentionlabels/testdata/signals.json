@@ -1,12 +1,6 @@
 {
   "Metrics": [
     {
-      "Name": "purview.labels.count",
-      "AttrKeys": [
-        "applicable_to"
-      ]
-    },
-    {
       "Name": "purview.retention.event_types.count",
       "AttrKeys": []
     },
@@ -38,16 +32,6 @@
         "id",
         "name",
         "retention_trigger"
-      ]
-    },
-    {
-      "EventName": "purview.sensitivity_label",
-      "AttrKeys": [
-        "applicable_to",
-        "description",
-        "id",
-        "name",
-        "priority"
       ]
     }
   ]
