@@ -9,6 +9,7 @@
         "enrollment_type",
         "failure_category",
         "failure_reason",
+        "id",
         "ingest_transport",
         "operating_system",
         "os_version",

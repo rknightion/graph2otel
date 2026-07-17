@@ -113,6 +113,7 @@ func mapEnrollmentEvent(rec map[string]any) (string, telemetry.Event) {
 	operatingSystem := str(rec, "operatingSystem")
 
 	attrs := telemetry.Attrs{}
+	setStr(attrs, "id", id)
 	setStr(attrs, "failure_category", failureCategory)
 	setStr(attrs, "enrollment_type", enrollmentType)
 	setStr(attrs, "operating_system", operatingSystem)

@@ -79,6 +79,7 @@ func TestMapEnrollmentEvent(t *testing.T) {
 	}
 
 	wantAttrs := map[string]any{
+		"id":               "evt-1",
 		"failure_category": "authentication",
 		"enrollment_type":  "windowsAzureADJoin",
 		"operating_system": "Windows",
@@ -152,19 +153,16 @@ func TestCollectorEmitsFullRecordEndToEnd(t *testing.T) {
 		"correlation_id":   "corr-1",
 		// The transport stamp the engine applies at the emitter boundary (#141).
 		"ingest_transport": "graph",
+		// The record's own id, so a SIEM analyst can pivot back to the source
+		// troubleshootingEvent — every sibling window collector
+		// (intune/autopilotevents, intune/auditevents, entra/riskdetections)
+		// emits it too (#166).
+		"id": "evt-1",
 	}
 	for k, want := range wantAttrs {
 		if v := got.Attrs[k]; v != want {
 			t.Errorf("emitted attr %q = %q, want %q", k, v, want)
 		}
-	}
-
-	// The record's own id is the dedupe key but is NOT emitted as an attribute
-	// — unlike every sibling window collector (intune/autopilotevents,
-	// intune/auditevents, entra/riskdetections all emit "id"). Pinned as
-	// observed behavior, not endorsed: see #164 for the report.
-	if _, present := got.Attrs["id"]; present {
-		t.Errorf("id is unexpectedly emitted now, attrs=%v — update this test and #164", got.Attrs)
 	}
 }
 
