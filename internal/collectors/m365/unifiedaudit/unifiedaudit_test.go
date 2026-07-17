@@ -429,6 +429,9 @@ func TestMap(t *testing.T) {
 		"object_id":     "00000002-0000-0000-c000-000000000000",
 		"workload":      "AzureActiveDirectory",
 		"result_status": "Success",
+		// From auditData.ClientIP, not the envelope's (always-null) clientIp —
+		// see TestTopLevelClientIPIsNull (#170).
+		"client_ip": "2001:db8::1038",
 	}
 	for k, v := range want {
 		if ev.Attrs[k] != v {
@@ -582,51 +585,116 @@ func TestUserIDIsNotAlwaysUPNShaped(t *testing.T) {
 }
 
 // TestTopLevelClientIPIsNull pins a live fact the old hand-written fixture had
-// hidden behind a plausible placeholder: the query API's ENVELOPE does not carry
-// the client IP. `clientIp` was null on 500/500 captured rows, while
-// `auditData.ClientIP` held a real address on 474 of them. So mapRecord's
-// `client_ip` line — which reads the envelope — emits nothing on any record this
-// project has ever seen, and testdata/signals.json no longer lists client_ip.
+// hidden behind a plausible placeholder: the query API's ENVELOPE does not
+// carry the client IP. `clientIp` was null on 500/500 captured rows, while
+// `auditData.ClientIP` held a real address on 474 of them (#170). The
+// placeholder said otherwise: it set `"clientIp": "203.0.113.7"` (TEST-NET-3,
+// a documentation address) at the top level, which made the old
+// envelope-reading mapper line look exercised and its attribute look like a
+// shipped signal. Same shape of defect as #153's invented `riskType` key and
+// #142's `"platform": "windows"`.
 //
-// The placeholder said otherwise: it set `"clientIp": "203.0.113.7"` (TEST-NET-3,
-// a documentation address), which made that mapper line look exercised and its
-// attribute look like a shipped signal. Same shape of defect as #153's invented
-// `riskType` key and #142's `"platform": "windows"`.
+// mapRecord now reads auditData.ClientIP instead (#170), so this test asserts
+// both halves per captured record: the envelope's clientIp stays null (a
+// non-null value here would mean the fixture was edited), and client_ip is
+// populated from auditData.ClientIP when that field is present there, and
+// absent when it is not — two of the four captures have it (both AAD
+// sign-ins), two don't (DataInsights, AuditSearch).
 //
-// Scope of the claim, deliberately narrow: all 500 rows were record types this
-// collector's recordTypeFilters EXCLUDE (the tenant emitted no
-// Exchange/SharePoint/Teams audit records in the window). Whether an
-// exchangeItemAggregated or sharePointFileOperation row populates the envelope's
-// clientIp is UNMEASURED. This test asserts what was seen, not more.
+// Scope of the claim, deliberately narrow: all four fixtures below are record
+// types this collector's recordTypeFilters EXCLUDE (the 2026-07-17 capture's
+// window held no Exchange/SharePoint/Teams audit records). Whether an
+// exchangeItemAggregated or sharePointFileOperation row populates
+// auditData.ClientIP the same way is UNMEASURED here —
+// TestClientIPFromAuditDataReachesEmitterForInScopeRecord exercises the fixed
+// path on an in-scope record type instead, with a synthetic (not live) address.
 func TestTopLevelClientIPIsNull(t *testing.T) {
-	for _, raw := range []string{
-		liveUserLoggedInRecord,
-		liveGUIDUserIDRecord,
-		liveNotAvailableUserIDRecord,
-		liveNullSentinelUserKeyRecord,
-	} {
-		rec := decodeLive(t, raw)
-
-		if got, present := rec["clientIp"]; present && got != nil {
-			t.Errorf("captured record %v has clientIp = %v — live it was null on 500/500; a non-null value here means the fixture was edited", rec["id"], got)
-		}
-
-		_, ev := mapRecord(rec)
-		if got, present := ev.Attrs["client_ip"]; present {
-			t.Errorf("client_ip = %v, want the attribute ABSENT — the envelope's clientIp is null live, so a client_ip attribute can only come from an invented value", got)
-		}
+	cases := []struct {
+		name         string
+		raw          string
+		wantClientIP string // "" means the attribute must be absent
+	}{
+		{"AAD sign-in (rich record): auditData.ClientIP present", liveUserLoggedInRecord, "2001:db8::1038"},
+		{"DataInsights search: auditData has no ClientIP", liveGUIDUserIDRecord, ""},
+		{"AAD sign-in (Not Available user): auditData.ClientIP present", liveNotAvailableUserIDRecord, "2001:db8::1038"},
+		{"AuditSearch: auditData has no ClientIP", liveNullSentinelUserKeyRecord, ""},
 	}
 
-	// The address is in the record, just not where mapRecord looks. Pinned so
-	// that a future decision to map it starts from evidence rather than from
-	// this test's silence.
-	rec := fullAuditRecord(t)
-	data, ok := rec["auditData"].(map[string]any)
-	if !ok {
-		t.Fatal("live record has no auditData object")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := decodeLive(t, tc.raw)
+
+			if got, present := rec["clientIp"]; present && got != nil {
+				t.Fatalf("captured record %v has clientIp = %v — live it was null on 500/500; a non-null value here means the fixture was edited", rec["id"], got)
+			}
+
+			_, ev := mapRecord(rec)
+			got, present := ev.Attrs["client_ip"]
+			if tc.wantClientIP == "" {
+				if present {
+					t.Errorf("client_ip = %v, want the attribute ABSENT — this record's auditData carries no ClientIP", got)
+				}
+				return
+			}
+			if !present || got != tc.wantClientIP {
+				t.Errorf("client_ip = %v (present=%v), want %q — must come from auditData.ClientIP; the envelope's clientIp is always null", got, present, tc.wantClientIP)
+			}
+		})
 	}
-	if got := data["ClientIP"]; got != "2001:db8::1038" {
-		t.Errorf("auditData.ClientIP = %v, want 2001:db8::1038 — the client IP lives in the classic sub-object, not the envelope", got)
+}
+
+// syntheticInScopeClientIPRecord is a hand-built minimal envelope of a record
+// type THIS COLLECTOR'S recordTypeFilters actually returns
+// (sharePointFileOperation), carrying an auditData.ClientIP. None of the four
+// live captures above are an in-scope record type (see the package-level
+// comment above them), so nothing above proves the #170 fix works on a record
+// this collector would really be asked to map — this fixture closes that gap.
+// The address is RFC 5737 TEST-NET-2 documentation space, not a real one: no
+// live capture of an in-scope record type with clientIp populated exists yet.
+const syntheticInScopeClientIPRecord = `{
+  "id": "rec-sp-clientip-1",
+  "createdDateTime": "2026-07-16T09:25:00Z",
+  "auditLogRecordType": "SharePointFileOperation",
+  "operation": "FileAccessed",
+  "service": "SharePoint",
+  "auditData": {
+    "Workload": "SharePoint",
+    "ResultStatus": "Success",
+    "ClientIP": "198.51.100.42"
+  }
+}`
+
+// TestClientIPFromAuditDataReachesEmitterForInScopeRecord drives
+// syntheticInScopeClientIPRecord through the real jobpipeline engine into an
+// emitter (create -> poll -> page -> emit), the same shape of proof
+// TestCollectorEmitsFullRecordEndToEnd gives the user-field crossing, but for
+// an in-scope record type — the AAD sign-in captures the other client_ip
+// tests use are all types this collector's recordTypeFilters would never
+// return.
+func TestClientIPFromAuditDataReachesEmitterForInScopeRecord(t *testing.T) {
+	rec := telemetrytest.New()
+	fake := &fakeJobClient{
+		statuses: []string{jobpipeline.StatusSucceeded},
+		records:  []map[string]any{decodeLive(t, syntheticInScopeClientIPRecord)},
+	}
+	c := newCollector(deps(t, fake))
+
+	from := time.Date(2026, 7, 16, 9, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 7, 16, 9, 30, 0, 0, time.UTC)
+	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter()); err != nil {
+		t.Fatalf("CollectWindow: %v", err)
+	}
+
+	logs := rec.LogRecords()
+	if len(logs) != 1 {
+		t.Fatalf("emitted %d records, want 1", len(logs))
+	}
+	got := logs[0]
+	if got.Attrs["record_type"] != "SharePointFileOperation" {
+		t.Fatalf("record_type = %v, want an in-scope type (SharePointFileOperation) — this test exists to prove the fix on a type the collector actually returns", got.Attrs["record_type"])
+	}
+	if got.Attrs["client_ip"] != "198.51.100.42" {
+		t.Errorf("client_ip = %v, want 198.51.100.42 — must reach the emitter from auditData.ClientIP for an in-scope record type", got.Attrs["client_ip"])
 	}
 }
 
@@ -820,6 +888,9 @@ func TestCollectorEmitsFullRecordEndToEnd(t *testing.T) {
 		"object_id":     "00000002-0000-0000-c000-000000000000",
 		"workload":      "AzureActiveDirectory",
 		"result_status": "Success",
+		// From auditData.ClientIP; the envelope's own clientIp is always
+		// null (#170) and must not be what reaches the emitter.
+		"client_ip": "2001:db8::1038",
 	}
 	for k, want := range wantAttrs {
 		if v := got.Attrs[k]; v != want {

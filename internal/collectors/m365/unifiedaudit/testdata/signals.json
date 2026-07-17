@@ -4,6 +4,7 @@
     {
       "EventName": "m365.audit",
       "AttrKeys": [
+        "client_ip",
         "id",
         "ingest_transport",
         "object_id",

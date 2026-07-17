@@ -148,9 +148,11 @@ func buildRequest(from, to time.Time) ([]byte, error) {
 // mapRecord turns one raw auditLogRecord (the #98 live shape) into its dedupe id
 // (the immutable auditLogRecord.id) and the OTLP log Event. It sets only the
 // attributes actually present, so a record without a UPN or client IP simply
-// omits them rather than emitting empty ones. Workload and ResultStatus come
-// from the polymorphic auditData sub-object (the classic O365 Management schema
-// embedded there).
+// omits them rather than emitting empty ones. Workload, ResultStatus, and
+// ClientIP all come from the polymorphic auditData sub-object (the classic
+// O365 Management schema embedded there) — see the client_ip comment below for
+// why, unlike additionalInfo on entra/riskdetections, auditData needs no
+// second JSON decode here.
 func mapRecord(rec map[string]any) (string, telemetry.Event) {
 	id := str(rec, "id")
 	operation := str(rec, "operation")
@@ -191,7 +193,6 @@ func mapRecord(rec map[string]any) (string, telemetry.Event) {
 	// two attributes from one field, identical by construction, is #151 exactly.
 	setStr(attrs, "user_key", str(rec, "userId"))
 	setStr(attrs, "user_id", str(rec, "userPrincipalName"))
-	setStr(attrs, "client_ip", str(rec, "clientIp"))
 	setStr(attrs, "object_id", str(rec, "objectId"))
 
 	sev := telemetry.SeverityInfo
@@ -202,6 +203,14 @@ func mapRecord(rec map[string]any) (string, telemetry.Event) {
 		if result == "Failed" || result == "Failure" {
 			sev = telemetry.SeverityWarn
 		}
+		// The envelope's top-level clientIp is null on every record this
+		// project has ever captured (500/500, #170); the real address lives
+		// nested in auditData, which is already a decoded map[string]any at
+		// this point (unlike entra/riskdetections' additionalInfo, auditData
+		// is NOT a doubly-JSON-encoded string on this transport — it arrives
+		// as a plain nested object, same as Workload/ResultStatus above), so
+		// no second json.Unmarshal is needed to reach it.
+		setStr(attrs, "client_ip", str(data, "ClientIP"))
 	}
 
 	return id, telemetry.Event{
