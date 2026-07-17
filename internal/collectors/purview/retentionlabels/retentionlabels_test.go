@@ -148,6 +148,22 @@ func TestForbiddenSkipIsRetentionOnly(t *testing.T) {
 }
 
 // --- retention labels + event types ---
+//
+// PROVENANCE of the success-shaped bodies below: docs-derived; success body
+// UNVERIFIABLE — both endpoints are app-only BLOCKED (HTTP 500
+// DataInsightsRequestError Forbidden), live-measured 2026-07-17 (#165). Under
+// graph2otel-poller's own identity, GET /security/labels/retentionLabels and
+// GET /security/triggerTypes/retentionEventTypes each returned HTTP 500 wrapping
+//
+//	{"ErrorCode":"DataInsightsRequestError","Message":"DataInsights command(GET) FAILED - Forbidden. TargetServer = ...PROD.OUTLOOK.COM"}
+//
+// — the Exchange compliance data plane refusing app-only, exactly the signature
+// dataInsightsForbidden above encodes. There is no 200 body to capture, so the
+// bodies these tests decode remain docs-derived and cannot be replaced with a
+// verbatim live record (unlike the sibling sensitivity collector, #165). The
+// live-verified reality this package pins is the SKIP path, not the happy path:
+// TestRetentionDataInsightsForbiddenIsSkipped drives that exact 500 signature
+// and asserts the collector skips it cleanly.
 
 func TestRetentionCollectBucketsAndCountsEventTypes(t *testing.T) {
 	rl := `{"value":[

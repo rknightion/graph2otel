@@ -49,6 +49,12 @@ func page(itemsJSON string) string {
 	return `{"value":[` + itemsJSON + `]}`
 }
 
+// twoAgreements is the primary fixture data for this package's tests.
+//
+// Provenance: docs-derived; endpoint returns 0 rows / not-configured on the
+// m7kni tenant, live-checked 2026-07-17 (#165) — no live sample to pin. No
+// terms-of-use agreement is configured on the tenant, so termsOfUse/agreements
+// returned 0 rows and no wire record could be captured.
 const twoAgreements = `
 {"id":"a1","displayName":"All users terms of use"},
 {"id":"a2","displayName":"Contoso ToU for guest users"}

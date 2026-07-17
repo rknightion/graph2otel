@@ -47,8 +47,9 @@ func newTestCollector(r exportjob.Runner) *Collector {
 // WARNING - the column names here are live-verified; the `status` VALUES the
 // tests pass ("issued", "revoked", ...) are NOT. They are the assumed
 // certificateIssuanceState vocabulary (see the package doc's collapse caveat).
-// m7kni has zero device certificates, so no real value has ever been seen on
-// this report, and #142 could not settle it.
+// m7kni has zero device certificates (AllDeviceCertificates returned a header
+// row and 0 data rows, live-checked 2026-07-17 — #165, #142), so no real status
+// value has ever been seen on this report, and #142 could not settle it.
 //
 // Do not read a passing test in this file as evidence that the export sends
 // these strings. That inference is precisely what shipped #142: the sibling

@@ -43,6 +43,9 @@ const base = "https://graph.microsoft.com/v1.0"
 
 // allCounts returns a canned body for every URL the collector is expected to
 // issue: one per groupSlices entry plus the role-assignable count.
+//
+// count-only collector — wire is a scalar $count integer per filter, no record
+// shape to pin; docs-provenance N/A (#165).
 func allCounts() map[string]string {
 	bodies := map[string]string{
 		filterCountURL(base, roleAssignableFilter): "9",

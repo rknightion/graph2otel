@@ -37,7 +37,8 @@ func (f *recordingFetcher) FetchPage(_ context.Context, pageURL string) ([]map[s
 // GET beta/deviceManagement/autopilotEvents response, so no field NAME here is
 // evidence of wire shape — they are docs-level claims, and this endpoint is
 // BETA, where an undocumented schema change is an expected risk (see #164, and
-// CLAUDE.md on "platform": "windows", #142).
+// CLAUDE.md on "platform": "windows", #142). autopilotEvents returned 0 rows —
+// endpoint empty on tenant 2026-07-17 (#165) — so no live sample exists to pin.
 //
 // What the end-to-end test proves regardless of provenance: whatever
 // mapAutopilotEvent sets survives the engine to the emitter — which is what

@@ -71,6 +71,9 @@ func countURL(filter string) string {
 
 // allPopulationCounts returns canned $count bodies for every population
 // bucket, each with a distinct value so a test can catch a mislabeled attr.
+//
+// count-only collector — wire is a scalar $count integer per filter, no record
+// shape to pin; docs-provenance N/A (#165).
 func allPopulationCounts() map[string]string {
 	bodies := map[string]string{}
 	for i, pf := range populationFilters {

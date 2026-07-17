@@ -79,6 +79,14 @@ func registrationWithApp(platformODataType, appIDKey, appIDValue string, flagged
 	return m
 }
 
+// fullFixtureBodies is this package's primary fixture.
+//
+// Provenance: docs-derived; endpoint returns 0 rows / not-configured on the
+// m7kni tenant, live-checked 2026-07-17 (#165) — no live sample to pin. The
+// iOS/android managedAppProtections, targetedManagedAppConfigurations and mdmWIP
+// collections all returned 0 rows, and windowsInformationProtectionPolicies
+// returned a 200 with an EMPTY body (the empty-body handling is pinned by
+// TestWIPEmptyBodyBucketsAsZeroKnownPolicies below).
 func fullFixtureBodies() map[string]string {
 	return map[string]string{
 		iosPoliciesURL():     page(assignable(true), assignable(true), assignable(false)),

@@ -45,6 +45,28 @@ const (
 // given case, so Collect's other sub-fetches don't fail on a missing body.
 const emptyPage = `{"value":[]}`
 
+// PROVENANCE of every success-shaped body in this file: docs-derived, endpoint
+// not-provisioned (400) or empty (0 rows) on tenant 2026-07-17 (#165). There is
+// no live success body to convert to a verbatim capture, because probing as
+// graph2otel-poller on 2026-07-17 found none of the six sub-endpoints returned
+// populated data on this tenant:
+//
+//   - userExperienceAnalyticsOverview — HTTP 400, code "ResourceNotFound",
+//     "Resource not found for segment 'userExperienceAnalyticsOverview'" (the
+//     feature-not-provisioned shape isFeatureNotProvisioned skips).
+//   - userExperienceAnalyticsDeviceStartupHistories — HTTP 400, "Resource not
+//     found for the segment 'userExperienceAnalyticsDeviceStartupHistories'"
+//     (same not-provisioned skip, code "BadRequest" but matched on the message).
+//   - userExperienceAnalyticsAppHealthApplicationPerformance (v1.0), and the
+//     beta batteryHealth / resourcePerformance / baselines families — all HTTP
+//     200 with an empty value array (0 rows).
+//
+// So the bodies below stay docs-derived rather than becoming live captures. The
+// live-verified reality this package pins is the SKIP path: the two 400 shapes
+// above are exercised by TestCollectSkipsResourceNotFound400Gracefully, whose
+// error string matches what the live capture returned — confirming the
+// not-provisioned handling still catches the tenant's actual 400.
+
 func allEndpoints(overrides map[string]string) map[string]string {
 	m := map[string]string{
 		overviewURL:     `{"overallScore":80,"state":"meetingGoals"}`,

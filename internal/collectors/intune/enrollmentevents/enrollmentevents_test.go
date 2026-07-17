@@ -37,8 +37,10 @@ func (f *recordingFetcher) FetchPage(_ context.Context, pageURL string) ([]map[s
 // entra/riskdetections' liveRiskDetection, this tree pins no verbatim GET
 // /deviceManagement/troubleshootingEvents response, so no field NAME here is
 // evidence of wire shape — they are docs-level claims (see #164, and CLAUDE.md
-// on "platform": "windows", #142). Nothing was invented or enriched for the
-// golden's benefit; this is the record the mapper test already used.
+// on "platform": "windows", #142). troubleshootingEvents returned 0 rows —
+// endpoint empty on tenant 2026-07-17 (#165) — so no live sample exists to pin.
+// Nothing was invented or enriched for the golden's benefit; this is the record
+// the mapper test already used.
 //
 // What the end-to-end test proves regardless of provenance: whatever
 // mapEnrollmentEvent sets survives the engine to the emitter — which is what

@@ -36,6 +36,10 @@ var _ collectors.GraphClient = (*fakeGraph)(nil)
 
 const base = "https://graph.microsoft.com/v1.0"
 
+// allCounts returns the canned $count bodies for every directory object type.
+//
+// count-only collector — wire is a scalar $count integer per filter, no record
+// shape to pin; docs-provenance N/A (#165).
 func allCounts() map[string]string {
 	return map[string]string{
 		base + "/users/$count":             "100",

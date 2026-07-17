@@ -80,6 +80,9 @@ func staleURL(t time.Time) string {
 // trust_type sums to 98 (leaving 2 "unknown"), compliance/managed sum
 // exactly to total (no leftover expected there), and OS buckets sum to 90
 // (leaving 10 "other").
+//
+// count-only collector — wire is a scalar $count integer per filter, no record
+// shape to pin; docs-provenance N/A (#165).
 func fullFixture() map[string]string {
 	m := map[string]string{
 		totalURL(): "100",

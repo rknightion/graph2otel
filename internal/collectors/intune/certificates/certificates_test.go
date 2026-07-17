@@ -126,6 +126,12 @@ func daysFromNow(d int) *time.Time {
 // baseFixture wires one deviceConfigurations page containing one iOS SCEP
 // cert profile and one non-certificate profile (which must be skipped), plus
 // canned certificate states for the matched profile and an empty pfx list.
+//
+// Provenance: docs-derived; endpoint returns 0 rows / not-configured on the
+// m7kni tenant, live-checked 2026-07-17 (#165) — no live sample to pin. The
+// deviceConfigurations cert-profile subtypes and userPfxCertificates both
+// returned zero device certs on the tenant, so no wire record could be
+// captured to pin these field names against.
 func baseFixture() map[string]string {
 	return map[string]string{
 		deviceConfigsURL(): page(
