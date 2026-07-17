@@ -129,17 +129,22 @@ Independent ceilings, none of which reliably send `Retry-After` — client-side 
 - **Retention labels are app-only-blocked** `[live 2026-07-16, #109/#126]`:
   `/security/labels/retentionLabels` → 500 `DataInsightsRequestError` + "Forbidden" on
   v1.0 and beta with `RecordsManagement.Read.All` granted (documented Application: Not
-  supported). `purview/labels.isUnavailable` must match that **specific** signature —
-  a generic 500 must still surface, and a sensitivity-label 403 must fail the collector
-  (#126 residual).
+  supported). `purview/retentionlabels.isRetentionUnavailable` must match that
+  **specific** signature — a generic 500 must still surface, and a sensitivity-label 403
+  must fail the collector (#126 residual).
 - **Purview/M365 policy *configuration* is S&C-PowerShell-only** `[live, #99]`: DLP
   policy state, retention policy bindings. The Purview Ecosystem API's app-only roles all
   evaluate content against policy — they never enumerate policy. Retention label
   *definitions* and sensitivity labels ARE Graph-exposed.
-- **eDiscovery is the counter-example to "403 = missing scope"** `[live, #102]`:
-  `eDiscovery.Read.All` granted, in the token, still 401s — the blocker is Purview-side
-  service-principal registration via S&C PowerShell (a human/portal action). Both
-  outcomes are real; verify, never infer.
+- **eDiscovery is the counter-example to "403 = missing scope"** `[live-measured
+  2026-07-17, #102/#148]`: `eDiscovery.Read.All` granted and in the token still 401'd.
+  No Graph scope fixes it — the data plane simply did not know the principal. Registering
+  it Purview-side via S&C PowerShell (`New-ServicePrincipal` + `Add-RoleGroupMember
+  eDiscoveryManager` + `Add-eDiscoveryCaseAdmin`) moved `security/cases/ediscoveryCases`
+  from 401 to **200 on the first probe**, no replication wait. So **401 with the scope
+  present means a missing data-plane registration, not a missing scope** — a different
+  failure from the 403 above, and the reason to verify rather than infer. The procedure
+  is [`data-plane-registration.md`](data-plane-registration.md).
 
 ## Permanent gaps and the fallback path
 

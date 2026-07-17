@@ -80,6 +80,21 @@ three opt-in export collectors, is the sole exception to graph2otel's read-only 
 these collectors are all opt-in (`Experimental`, see [`collectors.md`](./collectors.md)), a
 default/read-only deployment never requests this scope at all.
 
+## 4b. Some endpoints need a second, non-Graph registration (gotcha #4)
+
+A granted Graph scope is not always sufficient. Purview eDiscovery
+(`security/cases/ediscoveryCases`) returns **401 with `eDiscovery.Read.All` present in the
+token** until the app's service principal is separately registered with the Security &
+Compliance data plane via PowerShell. No Graph scope moves it — the data plane does not
+know the principal, which is a different failure from a missing scope (that one 403s).
+
+`graph2otel check` cannot detect this: it reports what is granted and consented, and the
+grant is not the problem.
+
+Only Purview eDiscovery (`purview.ediscovery_cases`, opt-in) needs this today. If you
+enable it, see [`data-plane-registration.md`](./data-plane-registration.md) for the
+procedure.
+
 ## 5. Verify with `graph2otel check`
 
 The `check` subcommand (landed as part of M1, tracked in
