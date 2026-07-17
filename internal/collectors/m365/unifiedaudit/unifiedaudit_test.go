@@ -57,62 +57,366 @@ func TestBuildRequest(t *testing.T) {
 	}
 }
 
-// fullAuditRecord returns the richest auditLogRecord this package has: every
-// field mapRecord reads, in the #98 live shape.
+// --- live fixtures ---
 //
-// Provenance, stated rather than assumed: this is HAND-WRITTEN in the live
-// shape — it is NOT a live capture. The field NAMES and the crossed user-field
-// semantics behind them are live-verified (500/500 on m7kni, 2026-07-17,
-// #100/#151); the VALUES are placeholders — contoso.com is Microsoft's example
-// domain, 203.0.113.7 is TEST-NET-3, "rec-abc-123" and "obj-42" are invented.
-// No captured auditLogRecord exists in this package's testdata. So this fixture
-// is evidence about field names and mapper wiring, and evidence about nothing
-// else: #142's `"platform": "windows"` was also a plausible value that was never
-// on the wire.
+// The four records below are VERBATIM rows from a POST /security/auditLog/
+// queries result set, read as graph2otel-poller against the m7kni tenant on
+// 2026-07-17 `[live-measured 2026-07-17, #165]`. Nothing is trimmed, renamed or
+// rounded: the GUIDs, the PUIDs, the UPN and the timestamps are what the wire
+// sent.
+//
+// Provenance is per-fact here, which is the whole reason this package was worth
+// recapturing (#165). Two facts, two different histories:
+//
+//   - The field NAMES and the crossed user-field semantics were ALREADY
+//     live-verified before this change — 500/500 records on m7kni, #100/#151.
+//     That half was never in doubt.
+//   - The VALUES were not. Until #165 they were Microsoft's documentation
+//     placeholders — alice@contoso.com (contoso.com is Microsoft's own example
+//     domain), 203.0.113.7 (TEST-NET-3), "rec-abc-123", "obj-42", "user-guid-1".
+//     A hand-written value cannot fail: it encodes the author's belief and then
+//     confirms it, which is exactly how #142's `"platform": "windows"` and #153's
+//     invented `riskType` key stayed green for the life of the project.
+//
+// Two things the capture changed, both of which a placeholder had hidden:
+//
+//   - `clientIp` is null on the wire. See TestTopLevelClientIPIsNull.
+//   - The crossing is now demonstrated instead of asserted. `auditData` carries
+//     the CLASSIC O365 schema's field names, so each record proves the crossing
+//     against itself: top-level `userId` == `auditData.UserKey` and top-level
+//     `userPrincipalName` == `auditData.UserId`, on 500/500 of the captured rows.
+//     No cross-signal correlation needed — the wire argues with its own envelope.
+//
+// Known limit, stated rather than papered over: NONE of the 500 captured rows is
+// of a record type in this collector's recordTypeFilters include-list. The
+// window held only DLPEndpoint (468), DataInsightsRestApiAudit (18), AuditSearch
+// (6), AzureActiveDirectoryStsLogon (6) and AzureActiveDirectory (2) — the
+// tenant emitted no Exchange/SharePoint/Teams audit records in it, and the
+// capturing query was unfiltered. So these fixtures are real rows of the query
+// API's ENVELOPE (which is what mapRecord reads, and which is uniform across
+// record types), but they are not rows this collector's own filter would return.
+// A record type in the include-list is still unmeasured here.
+
+// liveUserLoggedInRecord is the richest captured row: every top-level field
+// mapRecord reads is populated except `clientIp`, and its two user fields carry
+// clearly different values — an opaque GUID UserKey against a real UPN — which
+// is what makes the crossed mapping legible.
+const liveUserLoggedInRecord = `{
+  "id": "d87d2977-96b6-4c65-aa44-032f7e314400",
+  "createdDateTime": "2026-07-17T08:28:17Z",
+  "auditLogRecordType": "AzureActiveDirectoryStsLogon",
+  "operation": "UserLoggedIn",
+  "organizationId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+  "userType": "Regular",
+  "userId": "bbcfc3c5-0b93-4135-9ef9-18477a9fb504",
+  "service": "AzureActiveDirectory",
+  "objectId": "00000002-0000-0000-c000-000000000000",
+  "userPrincipalName": "rob@m7kni.io",
+  "clientIp": null,
+  "administrativeUnits": [
+    ""
+  ],
+  "auditData": {
+    "@odata.type": "#microsoft.graph.security.defaultAuditData",
+    "CreationTime": "2026-07-17T08:28:17Z",
+    "Id": "d87d2977-96b6-4c65-aa44-032f7e314400",
+    "Operation": "UserLoggedIn",
+    "OrganizationId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+    "RecordType@odata.type": "#Int64",
+    "RecordType": 15,
+    "ResultStatus": "Success",
+    "UserKey": "bbcfc3c5-0b93-4135-9ef9-18477a9fb504",
+    "UserType@odata.type": "#Int64",
+    "UserType": 0,
+    "Version@odata.type": "#Int64",
+    "Version": 1,
+    "Workload": "AzureActiveDirectory",
+    "ClientIP": "2001:8b0:1f05::1038",
+    "ObjectId": "00000002-0000-0000-c000-000000000000",
+    "UserId": "rob@m7kni.io",
+    "AzureActiveDirectoryEventType@odata.type": "#Int64",
+    "AzureActiveDirectoryEventType": 1,
+    "ActorContextId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+    "ActorIpAddress": "2001:8b0:1f05::1038",
+    "InterSystemsId": "7e6ddcaf-16a1-4605-a1db-31d339c6c71b",
+    "IntraSystemId": "d87d2977-96b6-4c65-aa44-032f7e314400",
+    "SupportTicketId": "",
+    "TargetContextId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+    "ApplicationId": "80ccca67-54bd-44ab-8625-4b79c4dc7775",
+    "ErrorNumber": "0",
+    "ExtendedProperties@odata.type": "#Collection(microsoft.graph.security.defaultAuditData)",
+    "ExtendedProperties": [
+      {
+        "Name": "ResultStatusDetail",
+        "Value": "Success"
+      },
+      {
+        "Name": "UserAgent",
+        "Value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
+      },
+      {
+        "Name": "RequestType",
+        "Value": "OAuth2:Authorize"
+      }
+    ],
+    "ModifiedProperties@odata.type": "#Collection(microsoft.graph.security.defaultAuditData)",
+    "ModifiedProperties": [],
+    "Actor@odata.type": "#Collection(microsoft.graph.security.defaultAuditData)",
+    "Actor": [
+      {
+        "ID": "bbcfc3c5-0b93-4135-9ef9-18477a9fb504",
+        "Type@odata.type": "#Int64",
+        "Type": 0
+      },
+      {
+        "ID": "rob@m7kni.io",
+        "Type@odata.type": "#Int64",
+        "Type": 5
+      }
+    ],
+    "Target@odata.type": "#Collection(microsoft.graph.security.defaultAuditData)",
+    "Target": [
+      {
+        "ID": "00000002-0000-0000-c000-000000000000",
+        "Type@odata.type": "#Int64",
+        "Type": 0
+      }
+    ],
+    "DeviceProperties@odata.type": "#Collection(microsoft.graph.security.defaultAuditData)",
+    "DeviceProperties": [
+      {
+        "Name": "OS",
+        "Value": "MacOs"
+      },
+      {
+        "Name": "BrowserType",
+        "Value": "Chrome"
+      },
+      {
+        "Name": "IsCompliant",
+        "Value": "False"
+      },
+      {
+        "Name": "IsCompliantAndManaged",
+        "Value": "False"
+      },
+      {
+        "Name": "SessionId",
+        "Value": "009ce429-40c2-14b7-a6c2-73f53f4e8d22"
+      }
+    ]
+  }
+}`
+
+// liveGUIDUserIDRecord is a captured row whose classic UserId is a bare GUID
+// (the user's directory object id) and whose UserKey is a bare PUID. Both wire
+// fields are non-UPN-shaped, so a reader who trusted the name
+// `userPrincipalName` here gets a GUID.
+const liveGUIDUserIDRecord = `{
+  "id": "30e16c03-f0f0-4d99-a41d-08dee38e05ea",
+  "createdDateTime": "2026-07-16T23:00:25Z",
+  "auditLogRecordType": "DataInsightsRestApiAudit",
+  "operation": "Search",
+  "organizationId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+  "userType": "Regular",
+  "userId": "10032005000C4421",
+  "service": "SecurityComplianceCenter",
+  "objectId": null,
+  "userPrincipalName": "bbcfc3c5-0b93-4135-9ef9-18477a9fb504",
+  "clientIp": null,
+  "administrativeUnits": [
+    ""
+  ],
+  "auditData": {
+    "@odata.type": "#microsoft.graph.security.defaultAuditData",
+    "CreationTime": "2026-07-16T23:00:25Z",
+    "Id": "30e16c03-f0f0-4d99-a41d-08dee38e05ea",
+    "Operation": "Search",
+    "OrganizationId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+    "RecordType@odata.type": "#Int64",
+    "RecordType": 52,
+    "UserKey": "10032005000C4421",
+    "UserType@odata.type": "#Int64",
+    "UserType": 0,
+    "Version@odata.type": "#Int64",
+    "Version": 1,
+    "Workload": "SecurityComplianceCenter",
+    "UserId": "bbcfc3c5-0b93-4135-9ef9-18477a9fb504",
+    "AadAppId": "80ccca67-54bd-44ab-8625-4b79c4dc7775",
+    "DataType": "TrialOffer",
+    "DatabaseType": "Directory",
+    "RelativeUrl": "/DataInsights/DataInsightsService.svc/Find/TrialOffer?tenantid=4b8c18bd-2f9f-4227-af55-9f1061cf9c32&Filter=Sku%20eq%205c403172-39ec-4bd1-8ec3-efe39e64afb9",
+    "ResultCount": "1"
+  }
+}`
+
+// liveNotAvailableUserIDRecord is a captured row whose classic UserId is the
+// literal sentinel "Not Available".
+const liveNotAvailableUserIDRecord = `{
+  "id": "9b8c866e-3596-445c-b1a3-9fc5b3553700",
+  "createdDateTime": "2026-07-16T11:27:24Z",
+  "auditLogRecordType": "AzureActiveDirectoryStsLogon",
+  "operation": "UserLoggedIn",
+  "organizationId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+  "userType": "System",
+  "userId": "de342dab-62a6-46e6-af34-56d7e66e00cf",
+  "service": "AzureActiveDirectory",
+  "objectId": "797f4846-ba00-4fd7-ba43-dac1f8f63013",
+  "userPrincipalName": "Not Available",
+  "clientIp": null,
+  "administrativeUnits": [
+    ""
+  ],
+  "auditData": {
+    "@odata.type": "#microsoft.graph.security.defaultAuditData",
+    "CreationTime": "2026-07-16T11:27:24Z",
+    "Id": "9b8c866e-3596-445c-b1a3-9fc5b3553700",
+    "Operation": "UserLoggedIn",
+    "OrganizationId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+    "RecordType@odata.type": "#Int64",
+    "RecordType": 15,
+    "ResultStatus": "Success",
+    "UserKey": "de342dab-62a6-46e6-af34-56d7e66e00cf",
+    "UserType@odata.type": "#Int64",
+    "UserType": 4,
+    "Version@odata.type": "#Int64",
+    "Version": 1,
+    "Workload": "AzureActiveDirectory",
+    "ClientIP": "2001:8b0:1f05::1038",
+    "ObjectId": "797f4846-ba00-4fd7-ba43-dac1f8f63013",
+    "UserId": "Not Available",
+    "AzureActiveDirectoryEventType@odata.type": "#Int64",
+    "AzureActiveDirectoryEventType": 1,
+    "ActorContextId": "39307a09-1fd5-481d-88d7-854919f289fd",
+    "ActorIpAddress": "2001:8b0:1f05::1038",
+    "InterSystemsId": "019f6aae-536e-78cb-9f5b-6285759e2c7a",
+    "IntraSystemId": "9b8c866e-3596-445c-b1a3-9fc5b3553700",
+    "SupportTicketId": "",
+    "TargetContextId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+    "ApplicationId": "c44b4083-3bb0-49c1-b47d-974e53cbdf3c",
+    "ErrorNumber": "0",
+    "ExtendedProperties@odata.type": "#Collection(microsoft.graph.security.defaultAuditData)",
+    "ExtendedProperties": [
+      {
+        "Name": "ResultStatusDetail",
+        "Value": "Success"
+      },
+      {
+        "Name": "UserAgent",
+        "Value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
+      },
+      {
+        "Name": "RequestType",
+        "Value": "SAS:EndAuth"
+      }
+    ],
+    "ModifiedProperties@odata.type": "#Collection(microsoft.graph.security.defaultAuditData)",
+    "ModifiedProperties": [],
+    "Actor@odata.type": "#Collection(microsoft.graph.security.defaultAuditData)",
+    "Actor": [
+      {
+        "ID": "de342dab-62a6-46e6-af34-56d7e66e00cf",
+        "Type@odata.type": "#Int64",
+        "Type": 0
+      }
+    ],
+    "Target@odata.type": "#Collection(microsoft.graph.security.defaultAuditData)",
+    "Target": [
+      {
+        "ID": "797f4846-ba00-4fd7-ba43-dac1f8f63013",
+        "Type@odata.type": "#Int64",
+        "Type": 0
+      }
+    ]
+  }
+}`
+
+// liveNullSentinelUserKeyRecord is a captured row whose classic UserKey is the
+// literal sentinel "__NULL__" — a string, not a JSON null, so it is non-empty
+// and IS emitted as user_key. Its classic UserId is a bare GUID: the object id
+// of the app that ran the query (graph2otel-poller auditing its own audit
+// search).
+const liveNullSentinelUserKeyRecord = `{
+  "id": "391be9d4-1b0f-408e-b570-d9b6e87b0cd8",
+  "createdDateTime": "2026-07-16T20:46:00Z",
+  "auditLogRecordType": "AuditSearch",
+  "operation": "AuditSearchCompleted",
+  "organizationId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+  "userType": "System",
+  "userId": "__NULL__",
+  "service": "SecurityComplianceCenter",
+  "objectId": null,
+  "userPrincipalName": "2c92ce28-126c-47c1-82b0-410b64502989",
+  "clientIp": null,
+  "administrativeUnits": [
+    ""
+  ],
+  "auditData": {
+    "@odata.type": "#microsoft.graph.security.defaultAuditData",
+    "SearchJobId": "59ddb974-d5c0-4cf9-b73c-0370966eda30",
+    "SearchSource": "App",
+    "IsInternalServiceRequest": "false",
+    "SearchFilters": "{\"SearchName\":null,\"Id\":\"59ddb974-d5c0-4cf9-b73c-0370966eda30\",\"RequestType\":\"AuditSearch\",\"StartDateUtc\":\"2026-07-16T14:12:06Z\",\"EndDateUtc\":\"2026-07-16T19:44:42Z\",\"RecordType\":null,\"RecordTypes\":[1,50,6,36,56,14,25,57],\"Workload\":null,\"Workloads\":[],\"WorkloadsToInclude\":[],\"WorkloadsToExclude\":[],\"ScopedWorkloadSearchEnabled\":true,\"Operations\":null,\"Users\":null,\"ObjectIds\":null,\"RecordIds\":[],\"UserKeys\":[],\"UserTypes\":[],\"IsGraphSearch\":true,\"ExportRequest\":null,\"IPAddresses\":null,\"SiteIds\":null,\"AssociatedAdminUnits\":null,\"FreeText\":null,\"ResultSize\":0,\"TimeoutInSeconds\":86400,\"ScopedAdminWithoutAdminUnits\":false}",
+    "CompletionStatus": "Succeeded",
+    "ResultsCount@odata.type": "#Int64",
+    "ResultsCount": 0,
+    "UserId": "2c92ce28-126c-47c1-82b0-410b64502989",
+    "Id": "391be9d4-1b0f-408e-b570-d9b6e87b0cd8",
+    "RecordType@odata.type": "#Int64",
+    "RecordType": 295,
+    "CreationTime": "2026-07-16T20:46:00Z",
+    "Operation": "AuditSearchCompleted",
+    "OrganizationId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+    "UserType@odata.type": "#Int64",
+    "UserType": 4,
+    "UserKey": "__NULL__",
+    "Workload": "SecurityComplianceCenter",
+    "Version@odata.type": "#Int64",
+    "Version": 1
+  }
+}`
+
+// decodeLive unmarshals a pinned live record into the untyped shape the
+// jobpipeline engine hands to the mapper.
+func decodeLive(t *testing.T, raw string) map[string]any {
+	t.Helper()
+	var rec map[string]any
+	if err := json.Unmarshal([]byte(raw), &rec); err != nil {
+		t.Fatalf("decode live record: %v", err)
+	}
+	return rec
+}
+
+// fullAuditRecord returns the richest auditLogRecord this package has: a
+// verbatim live row (liveUserLoggedInRecord) carrying every field mapRecord
+// reads except the always-null clientIp.
 //
 // Returned from a function rather than shared as a package-level var so no test
 // can mutate the record another test reads.
-func fullAuditRecord() map[string]any {
-	return map[string]any{
-		"id":                 "rec-abc-123",
-		"createdDateTime":    "2026-07-16T09:15:00Z",
-		"auditLogRecordType": "ExchangeItemAggregated",
-		"operation":          "MailItemsAccessed",
-		"service":            "Exchange",
-		"userType":           "Regular",
-		"userId":             "user-guid-1",
-		"userPrincipalName":  "alice@contoso.com",
-		"clientIp":           "203.0.113.7",
-		"objectId":           "obj-42",
-		"auditData": map[string]any{
-			"@odata.type":  "#microsoft.graph.security.defaultAuditData",
-			"RecordType":   float64(2),
-			"Workload":     "Exchange",
-			"ResultStatus": "Succeeded",
-			"Operation":    "MailItemsAccessed",
-		},
-	}
+func fullAuditRecord(t *testing.T) map[string]any {
+	t.Helper()
+	return decodeLive(t, liveUserLoggedInRecord)
 }
 
-// TestMap maps a representative auditLogRecord (the #98 live shape) to its
-// dedupe id and per-record log attributes, and confirms per-entity detail
-// (UPN, IP, object id) lands as LOG attributes.
+// TestMap maps the richest captured auditLogRecord to its dedupe id and
+// per-record log attributes, and confirms per-entity detail (the classic UserId,
+// object id) lands as LOG attributes.
 func TestMap(t *testing.T) {
-	rec := fullAuditRecord()
+	rec := fullAuditRecord(t)
 
 	id, ev := mapRecord(rec)
-	if id != "rec-abc-123" {
-		t.Fatalf("dedupe id = %q, want rec-abc-123", id)
+	if id != "d87d2977-96b6-4c65-aa44-032f7e314400" {
+		t.Fatalf("dedupe id = %q, want d87d2977-96b6-4c65-aa44-032f7e314400", id)
 	}
 	if ev.Name != eventName {
 		t.Errorf("event name = %q, want %q", ev.Name, eventName)
 	}
 
 	want := map[string]any{
-		"id":          "rec-abc-123",
-		"operation":   "MailItemsAccessed",
-		"record_type": "ExchangeItemAggregated",
-		"service":     "Exchange",
+		"id":          "d87d2977-96b6-4c65-aa44-032f7e314400",
+		"operation":   "UserLoggedIn",
+		"record_type": "AzureActiveDirectoryStsLogon",
+		"service":     "AzureActiveDirectory",
 		"user_type":   "Regular",
 		// The two wire field names are CROSSED relative to the attributes, and
 		// that is deliberate — each attribute is named for what it contains, not
@@ -120,12 +424,11 @@ func TestMap(t *testing.T) {
 		//
 		//	wire userId            -> user_key (classic UserKey)
 		//	wire userPrincipalName -> user_id  (classic UserId)
-		"user_key":      "user-guid-1",
-		"user_id":       "alice@contoso.com",
-		"client_ip":     "203.0.113.7",
-		"object_id":     "obj-42",
-		"workload":      "Exchange",
-		"result_status": "Succeeded",
+		"user_key":      "bbcfc3c5-0b93-4135-9ef9-18477a9fb504",
+		"user_id":       "rob@m7kni.io",
+		"object_id":     "00000002-0000-0000-c000-000000000000",
+		"workload":      "AzureActiveDirectory",
+		"result_status": "Success",
 	}
 	for k, v := range want {
 		if ev.Attrs[k] != v {
@@ -149,6 +452,12 @@ func TestMap(t *testing.T) {
 //	queryAPI.userId            == classic UserKey : 500/500
 //	queryAPI.userPrincipalName == classic UserId  : 500/500  (byte-identical)
 //
+// Since #165 the fixture DEMONSTRATES that rather than restating it. `auditData`
+// carries the classic schema's own field names, so the record contradicts its
+// own envelope in a single object, and the first two assertions below read the
+// proof straight off the wire: the envelope's `userId` is `auditData.UserKey`;
+// the envelope's `userPrincipalName` is `auditData.UserId`.
+//
 // Taking the wire name at face value is exactly what produced #151: `user_id`
 // meant UserKey here and UserId on m365.activity — one attribute, two meanings,
 // with nothing on the record saying which. The mapper must translate each field
@@ -156,38 +465,180 @@ func TestMap(t *testing.T) {
 // bug on every reading; it is the fix.
 //
 // `user_principal_name` is the name `user_id` used to carry here, and it must not
-// return: the value is the classic UserId, which is UPN-shaped on only ~91% of
-// live records.
+// return: the value is the classic UserId, which is not always UPN-shaped — see
+// TestUserIDIsNotAlwaysUPNShaped, which drives three captured rows where it is
+// not.
 func TestTopLevelUserIDIsTheClassicUserKey(t *testing.T) {
-	rec := map[string]any{
-		"id":                 "rec-key-1",
-		"createdDateTime":    "2026-07-16T09:15:00Z",
-		"auditLogRecordType": "AzureActiveDirectory",
-		"operation":          "UserLoggedIn",
-		"service":            "AzureActiveDirectory",
-		// Live shape: the two fields carry DIFFERENT values, which is the whole
-		// point — userId is an opaque key, userPrincipalName is the UPN.
-		"userId":            "10037FFE8E38C3F1",
-		"userPrincipalName": "rob@m7kni.io",
+	rec := fullAuditRecord(t)
+
+	// The wire's own proof, read out of the same record: auditData speaks the
+	// CLASSIC schema, the envelope speaks Microsoft's misnomer. If a future
+	// fixture ever loses this property it stops being evidence for the crossing,
+	// so fail loudly rather than assert the mapping against nothing.
+	data, ok := rec["auditData"].(map[string]any)
+	if !ok {
+		t.Fatal("live record has no auditData object — the fixture can no longer prove the crossing")
+	}
+	if got, want := rec["userId"], data["UserKey"]; got != want {
+		t.Fatalf("fixture: envelope userId = %v but auditData.UserKey = %v — pick a fixture where they match, or the crossing is unproven", got, want)
+	}
+	if got, want := rec["userPrincipalName"], data["UserId"]; got != want {
+		t.Fatalf("fixture: envelope userPrincipalName = %v but auditData.UserId = %v — pick a fixture where they match, or the crossing is unproven", got, want)
 	}
 
 	_, ev := mapRecord(rec)
 
-	if got := ev.Attrs["user_key"]; got != "10037FFE8E38C3F1" {
-		t.Errorf("user_key = %v, want %q — the query API's top-level userId IS the classic UserKey (live 500/500, #151) and must be emitted under the name of what it contains, NOT as user_id",
-			got, "10037FFE8E38C3F1")
+	if got := ev.Attrs["user_key"]; got != "bbcfc3c5-0b93-4135-9ef9-18477a9fb504" {
+		t.Errorf("user_key = %v, want %q — the query API's top-level userId IS the classic UserKey (live 500/500, #151; and auditData.UserKey on this very record says so) and must be emitted under the name of what it contains, NOT as user_id",
+			got, "bbcfc3c5-0b93-4135-9ef9-18477a9fb504")
 	}
 	if got := ev.Attrs["user_id"]; got != "rob@m7kni.io" {
-		t.Errorf("user_id = %v, want %q — it must come from the wire's userPrincipalName, which IS the classic UserId (live 500/500, byte-identical, #151). Sourcing user_id from the wire's `userId` field instead would make it mean UserKey here and UserId on m365.activity: one attribute, two meanings.",
+		t.Errorf("user_id = %v, want %q — it must come from the wire's userPrincipalName, which IS the classic UserId (live 500/500, byte-identical, #151; and auditData.UserId on this very record says so). Sourcing user_id from the wire's `userId` field instead would make it mean UserKey here and UserId on m365.activity: one attribute, two meanings.",
 			got, "rob@m7kni.io")
 	}
 	if got, present := ev.Attrs["user_principal_name"]; present {
-		t.Errorf("user_principal_name = %v, want the attribute ABSENT — it was renamed to user_id because the value is the classic UserId, which is UPN-shaped on only ~91%% of live records. Emitting both would rebuild #151: two attributes set from one variable, identical by construction.", got)
+		t.Errorf("user_principal_name = %v, want the attribute ABSENT — it was renamed to user_id because the value is the classic UserId, which is not always UPN-shaped (see TestUserIDIsNotAlwaysUPNShaped). Emitting both would rebuild #151: two attributes set from one variable, identical by construction.", got)
 	}
 }
 
-// TestMapOmitsAbsentAttrs asserts a sparse record (SharePoint file op with no
-// UPN) omits absent attributes rather than emitting empty strings.
+// TestUserIDIsNotAlwaysUPNShaped drives the captured rows where the classic
+// UserId is NOT an email address, so the "usually a UPN, sometimes anything
+// else" claim in docs/signals.md is exercised rather than merely written down.
+//
+// It is the reason `user_principal_name` was renamed to `user_id` (#163): the
+// old name promised a shape the value does not have. 13 of the 500 captured rows
+// (2.6%) carry a non-UPN-shaped classic UserId — a bare GUID (10) or the literal
+// "Not Available" (3). #151's wider measurement puts it around 9%; whichever
+// figure holds for a given tenant and window, the shape is not guaranteed, and
+// the mapper must emit the value verbatim with no shape gate rather than
+// normalizing or dropping what it does not recognize.
+//
+// `ServicePrincipal_<guid>` and display-name forms are documented in
+// docs/signals.md from #151's measurement but do not appear in this capture, so
+// they are not fixtured here — a shape nobody has a row for does not get an
+// invented row.
+func TestUserIDIsNotAlwaysUPNShaped(t *testing.T) {
+	cases := []struct {
+		name        string
+		raw         string
+		wantUserKey string
+		wantUserID  string
+	}{
+		{
+			// Both fields non-UPN-shaped: the classic UserId is the user's
+			// directory object id, the UserKey a bare PUID.
+			name:        "classic UserId is a bare GUID",
+			raw:         liveGUIDUserIDRecord,
+			wantUserKey: "10032005000C4421",
+			wantUserID:  "bbcfc3c5-0b93-4135-9ef9-18477a9fb504",
+		},
+		{
+			name:        "classic UserId is the sentinel Not Available",
+			raw:         liveNotAvailableUserIDRecord,
+			wantUserKey: "de342dab-62a6-46e6-af34-56d7e66e00cf",
+			wantUserID:  "Not Available",
+		},
+		{
+			// The sentinel is on the OTHER field here: "__NULL__" is a string,
+			// not a JSON null, so setStr sees a non-empty value and emits it.
+			name:        "classic UserKey is the sentinel __NULL__",
+			raw:         liveNullSentinelUserKeyRecord,
+			wantUserKey: "__NULL__",
+			wantUserID:  "2c92ce28-126c-47c1-82b0-410b64502989",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := decodeLive(t, tc.raw)
+
+			// Same self-proof as TestTopLevelUserIDIsTheClassicUserKey: the
+			// crossing holds on these rows too, which is what makes them
+			// evidence rather than decoration.
+			data, ok := rec["auditData"].(map[string]any)
+			if !ok {
+				t.Fatal("live record has no auditData object")
+			}
+			if got, want := rec["userId"], data["UserKey"]; got != want {
+				t.Fatalf("fixture: envelope userId = %v but auditData.UserKey = %v", got, want)
+			}
+			if got, want := rec["userPrincipalName"], data["UserId"]; got != want {
+				t.Fatalf("fixture: envelope userPrincipalName = %v but auditData.UserId = %v", got, want)
+			}
+
+			_, ev := mapRecord(rec)
+
+			if got := ev.Attrs["user_key"]; got != tc.wantUserKey {
+				t.Errorf("user_key = %v, want %q", got, tc.wantUserKey)
+			}
+			if got := ev.Attrs["user_id"]; got != tc.wantUserID {
+				t.Errorf("user_id = %v, want %q — emit the classic UserId verbatim; it is not always UPN-shaped and must not be shape-gated, normalized or dropped", got, tc.wantUserID)
+			}
+			if strings.Contains(tc.wantUserID, "@") {
+				t.Fatalf("test bug: %q is UPN-shaped, so this case proves nothing", tc.wantUserID)
+			}
+		})
+	}
+}
+
+// TestTopLevelClientIPIsNull pins a live fact the old hand-written fixture had
+// hidden behind a plausible placeholder: the query API's ENVELOPE does not carry
+// the client IP. `clientIp` was null on 500/500 captured rows, while
+// `auditData.ClientIP` held a real address on 474 of them. So mapRecord's
+// `client_ip` line — which reads the envelope — emits nothing on any record this
+// project has ever seen, and testdata/signals.json no longer lists client_ip.
+//
+// The placeholder said otherwise: it set `"clientIp": "203.0.113.7"` (TEST-NET-3,
+// a documentation address), which made that mapper line look exercised and its
+// attribute look like a shipped signal. Same shape of defect as #153's invented
+// `riskType` key and #142's `"platform": "windows"`.
+//
+// Scope of the claim, deliberately narrow: all 500 rows were record types this
+// collector's recordTypeFilters EXCLUDE (the tenant emitted no
+// Exchange/SharePoint/Teams audit records in the window). Whether an
+// exchangeItemAggregated or sharePointFileOperation row populates the envelope's
+// clientIp is UNMEASURED. This test asserts what was seen, not more.
+func TestTopLevelClientIPIsNull(t *testing.T) {
+	for _, raw := range []string{
+		liveUserLoggedInRecord,
+		liveGUIDUserIDRecord,
+		liveNotAvailableUserIDRecord,
+		liveNullSentinelUserKeyRecord,
+	} {
+		rec := decodeLive(t, raw)
+
+		if got, present := rec["clientIp"]; present && got != nil {
+			t.Errorf("captured record %v has clientIp = %v — live it was null on 500/500; a non-null value here means the fixture was edited", rec["id"], got)
+		}
+
+		_, ev := mapRecord(rec)
+		if got, present := ev.Attrs["client_ip"]; present {
+			t.Errorf("client_ip = %v, want the attribute ABSENT — the envelope's clientIp is null live, so a client_ip attribute can only come from an invented value", got)
+		}
+	}
+
+	// The address is in the record, just not where mapRecord looks. Pinned so
+	// that a future decision to map it starts from evidence rather than from
+	// this test's silence.
+	rec := fullAuditRecord(t)
+	data, ok := rec["auditData"].(map[string]any)
+	if !ok {
+		t.Fatal("live record has no auditData object")
+	}
+	if got := data["ClientIP"]; got != "2001:8b0:1f05::1038" {
+		t.Errorf("auditData.ClientIP = %v, want 2001:8b0:1f05::1038 — the client IP lives in the classic sub-object, not the envelope", got)
+	}
+}
+
+// TestMapOmitsAbsentAttrs asserts a sparse record omits absent attributes rather
+// than emitting empty strings.
+//
+// This record is deliberately SYNTHETIC and claims nothing about the wire: it is
+// a hand-built minimal envelope, used because every one of the 500 captured rows
+// carries both user fields, so no live row exercises their absence. It tests
+// mapRecord's omission behavior, not Microsoft's record shape. (The live rows
+// DO cover two real absences — see TestTopLevelClientIPIsNull for clientIp, and
+// liveGUIDUserIDRecord's null objectId.)
 func TestMapOmitsAbsentAttrs(t *testing.T) {
 	rec := map[string]any{
 		"id":                 "rec-sp-1",
@@ -204,6 +655,13 @@ func TestMapOmitsAbsentAttrs(t *testing.T) {
 	}
 	if ev.Attrs["record_type"] != "SharePointFileOperation" {
 		t.Errorf("record_type = %v, want SharePointFileOperation", ev.Attrs["record_type"])
+	}
+
+	// A live row proves the same omission for object_id: the envelope's objectId
+	// is null on the DataInsights rows.
+	_, live := mapRecord(decodeLive(t, liveGUIDUserIDRecord))
+	if got, present := live.Attrs["object_id"]; present {
+		t.Errorf("object_id = %v, want ABSENT — the captured row's objectId is null", got)
 	}
 }
 
@@ -247,6 +705,14 @@ func TestFactoryWiresJobCollector(t *testing.T) {
 // the real jobpipeline engine against a fake JobClient, proving the QueryConfig
 // is wired correctly (the create body carries the filters, records are emitted
 // as logs, checkpoint advances).
+//
+// The two records are deliberately SYNTHETIC scaffolding and assert nothing
+// about record shape: this test is about the engine emitting one log per record
+// and the create body carrying the filters, so the records are minimal on
+// purpose. Their record types are include-list members that the 2026-07-17
+// capture happened not to contain — plausible, unmeasured, and load-bearing for
+// nothing here. TestCollectorEmitsFullRecordEndToEnd is the test that drives a
+// real row.
 func TestCollectWindowEndToEnd(t *testing.T) {
 	rec := telemetrytest.New()
 	fake := &fakeJobClient{
@@ -289,8 +755,9 @@ func TestCollectWindowEndToEnd(t *testing.T) {
 }
 
 // TestCollectorEmitsFullRecordEndToEnd drives the richest record this package
-// has (fullAuditRecord) through the real jobpipeline engine into an emitter,
-// rather than calling mapRecord directly the way TestMap does.
+// has (fullAuditRecord — a verbatim live row since #165) through the real
+// jobpipeline engine into an emitter, rather than calling mapRecord directly the
+// way TestMap does.
 //
 // It exists for #164, and the golden is the point. The signal gate
 // (internal/signalcapture) records the union of what a package's tests EMIT, so
@@ -313,12 +780,15 @@ func TestCollectorEmitsFullRecordEndToEnd(t *testing.T) {
 	rec := telemetrytest.New()
 	fake := &fakeJobClient{
 		statuses: []string{jobpipeline.StatusSucceeded},
-		records:  []map[string]any{fullAuditRecord()},
+		records:  []map[string]any{fullAuditRecord(t)},
 	}
 	c := newCollector(deps(t, fake))
 
-	from := time.Date(2026, 7, 16, 8, 0, 0, 0, time.UTC)
-	to := time.Date(2026, 7, 16, 9, 30, 0, 0, time.UTC)
+	// The window brackets the captured record's real createdDateTime
+	// (2026-07-17T08:28:17Z) — the fixture's timestamp is the wire's, so the
+	// window moves to it rather than the record being re-dated to the window.
+	from := time.Date(2026, 7, 17, 8, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 7, 17, 9, 0, 0, 0, time.UTC)
 	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter()); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
@@ -340,17 +810,16 @@ func TestCollectorEmitsFullRecordEndToEnd(t *testing.T) {
 	// userId -> user_key, wire userPrincipalName -> user_id. See
 	// TestTopLevelUserIDIsTheClassicUserKey for why that is the fix and not a bug.
 	wantAttrs := map[string]string{
-		"id":            "rec-abc-123",
-		"operation":     "MailItemsAccessed",
-		"record_type":   "ExchangeItemAggregated",
-		"service":       "Exchange",
+		"id":            "d87d2977-96b6-4c65-aa44-032f7e314400",
+		"operation":     "UserLoggedIn",
+		"record_type":   "AzureActiveDirectoryStsLogon",
+		"service":       "AzureActiveDirectory",
 		"user_type":     "Regular",
-		"user_key":      "user-guid-1",
-		"user_id":       "alice@contoso.com",
-		"client_ip":     "203.0.113.7",
-		"object_id":     "obj-42",
-		"workload":      "Exchange",
-		"result_status": "Succeeded",
+		"user_key":      "bbcfc3c5-0b93-4135-9ef9-18477a9fb504",
+		"user_id":       "rob@m7kni.io",
+		"object_id":     "00000002-0000-0000-c000-000000000000",
+		"workload":      "AzureActiveDirectory",
+		"result_status": "Success",
 	}
 	for k, want := range wantAttrs {
 		if v := got.Attrs[k]; v != want {
