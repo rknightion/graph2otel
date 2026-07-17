@@ -2,7 +2,10 @@ package auditevents
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -35,26 +38,132 @@ func depsWith(t *testing.T, f *recordingFetcher) collectors.WindowDeps {
 	}
 }
 
-// --- shared fixtures ---
+// liveAuditEvent is a VERBATIM GET /deviceManagement/auditEvents record from the
+// m7kni tenant, read as graph2otel-poller on 2026-07-17
+// `[live-measured 2026-07-17, #165]`. It is the richest of the five rows
+// captured that day: two resources (one with an EMPTY modifiedProperties array,
+// one with seven) and an actor carrying BOTH a user and an application identity
+// at once — so a single real record exercises the mapper's resources[] loop and
+// every actor_* branch, which the docs fixtures below could only cover by
+// splitting across two hand-written records.
 //
-// The three records below are this package's richest fixtures. They are shared
-// by the mapper tests and by TestCollectorEmitsFullRecordsEndToEnd so the two
-// can never drift into describing different records, mirroring how
-// entra/riskdetections shares one record between its mapper tests and its
-// end-to-end test.
+// It is the emitter/golden authority for this package because a hand-written
+// fixture cannot fail: it encodes the author's belief about the wire and then
+// confirms it. That is the exact failure class of #142 ("platform":"windows",
+// never on the wire) and #153 (an invented riskType key that kept a dead mapper
+// line green for the life of the project). The docs-derived fixtures this record
+// replaces used Microsoft's own documentation placeholders — alice@contoso.com
+// and 203.0.113.9 (TEST-NET-3) — and are kept below ONLY as mapper-level
+// branch coverage, never driven into the golden.
 //
-// They are SYNTHETIC, and that is a real gap worth stating rather than
-// implying: unlike entra/riskdetections' liveRiskDetection, this tree pins no
-// verbatim GET /deviceManagement/auditEvents response, so no field NAME here is
-// evidence of wire shape — they are docs-level claims (see #164, and CLAUDE.md
-// on "platform": "windows", #142). Nothing below was invented or enriched for
-// the golden's benefit; each record is the one its mapper test already used.
+// Wire facts this record establishes that no docs fixture would have guessed
+// (see TestMapAuditEventAgainstLiveRecord, which pins the exact emitted set):
+//   - actor.ipAddress is null and the top-level activity field is null on all
+//     five captured rows, so actor_ip_address and activity are NOT in this
+//     record's emitted attribute set.
+//   - a resource's displayName can be the LITERAL string "<null>" (not JSON
+//     null); the mapper treats it as a present name and emits it verbatim in
+//     resource_display_names.
+//   - modifiedProperties can be an empty array on one resource of a
+//     multi-resource record.
+//   - the modifiedProperties newValues here are benign config strings, but the
+//     mapper still emits only the property NAMES — the one content exclusion in
+//     graph2otel holds on real data, not just on the synthetic secret fixture.
+const liveAuditEvent = `{
+  "activity": null,
+  "activityDateTime": "2025-09-12T16:02:46.1164804Z",
+  "activityOperationType": "Create",
+  "activityResult": "Success",
+  "activityType": "Create DeviceManagementConfigurationPolicyAssignment",
+  "actor": {
+    "applicationDisplayName": "Microsoft Intune portal extension",
+    "applicationId": "5926fc8e-304e-4f59-8bed-58ca97cc39a4",
+    "auditActorType": "ItPro",
+    "ipAddress": null,
+    "servicePrincipalName": null,
+    "userId": "bbcfc3c5-0b93-4135-9ef9-18477a9fb504",
+    "userPermissions": [
+      "*"
+    ],
+    "userPrincipalName": "rob@m7kni.com"
+  },
+  "category": "DeviceConfiguration",
+  "componentName": "DeviceConfiguration",
+  "correlationId": "e785a76a-b122-44d2-9438-32d87da0e217",
+  "displayName": "Create device configuration assignment 2.0 (beta)",
+  "id": "a7c4ee76-621e-4795-aaf4-3dae19f03c35",
+  "resources": [
+    {
+      "auditResourceType": "DeviceManagementConfigurationPolicy",
+      "displayName": "MacOS Updates",
+      "modifiedProperties": [],
+      "resourceId": "867a3c3f-b8c1-493b-8934-8c613c585cb9"
+    },
+    {
+      "auditResourceType": "DeviceManagementConfigurationPolicyAssignment",
+      "displayName": "<null>",
+      "modifiedProperties": [
+        {
+          "displayName": "Target.Type",
+          "newValue": "AllDevicesAssignmentTarget",
+          "oldValue": null
+        },
+        {
+          "displayName": "Target.DeviceAndAppManagementAssignmentFilterId",
+          "newValue": "<null>",
+          "oldValue": null
+        },
+        {
+          "displayName": "Target.DeviceAndAppManagementAssignmentFilterType",
+          "newValue": "None",
+          "oldValue": null
+        },
+        {
+          "displayName": "Id",
+          "newValue": "867a3c3f-b8c1-493b-8934-8c613c585cb9_adadadad-808e-44e2-905a-0b7873a8a531",
+          "oldValue": null
+        },
+        {
+          "displayName": "Source",
+          "newValue": "Direct",
+          "oldValue": null
+        },
+        {
+          "displayName": "SourceId",
+          "newValue": "867a3c3f-b8c1-493b-8934-8c613c585cb9",
+          "oldValue": null
+        },
+        {
+          "displayName": "DeviceManagementAPIVersion",
+          "newValue": "5025-06-03",
+          "oldValue": null
+        }
+      ],
+      "resourceId": "867a3c3f-b8c1-493b-8934-8c613c585cb9_adadadad-808e-44e2-905a-0b7873a8a531"
+    }
+  ]
+}`
+
+// decodeLive unmarshals a pinned live record into the untyped shape the
+// logpipeline engine hands to the mapper.
+func decodeLive(t *testing.T, raw string) map[string]any {
+	t.Helper()
+	var rec map[string]any
+	if err := json.Unmarshal([]byte(raw), &rec); err != nil {
+		t.Fatalf("decode live record: %v", err)
+	}
+	return rec
+}
+
+// --- docs-derived synthetic fixtures, kept for MAPPER branch coverage only ---
 //
-// What the end-to-end test does prove regardless of provenance: whatever
-// mapAuditEvent sets survives the engine to the emitter. That is what makes
-// testdata/signals.json honest, because the golden records attribute KEYS ONLY
-// (internal/signalcapture) — a key set is unaffected by whether the values a
-// fixture carries are real.
+// These are NOT wire records — they carry Microsoft's documentation placeholder
+// values (alice@contoso.com, 203.0.113.9) and are the shape #164/#165 warn about:
+// no field NAME here is evidence of wire shape. They are retained, per #165's
+// "mark, don't invent" guidance, ONLY because each exercises a branch the five
+// captured live rows cannot, and each is driven through mapAuditEvent DIRECTLY
+// (never into a Recorder), so none of their keys reach testdata/signals.json —
+// the golden is the live record's witnessed surface alone.
 //
 // Each is a func returning a fresh map so the engine can never mutate a literal
 // shared across tests.
@@ -66,9 +175,10 @@ const (
 	secretNew = "MIIC-fake-new-certificate-blob-DO-NOT-LEAK"
 )
 
-// userInitiatedAuditEvent is a successful ItPro-actor policy change: the
-// richest single record here, and the only source of the actor_user_* and
-// resource_* attributes.
+// userInitiatedAuditEvent is a successful ItPro-actor policy change. Docs-derived,
+// kept for branch coverage of actor_ip_address and a populated top-level
+// activity field — both null on all five live rows, so the live record's emitted
+// set carries neither. Mapper-only; never reaches the golden.
 func userInitiatedAuditEvent() map[string]any {
 	return map[string]any{
 		"id":                    "audit-1",
@@ -99,9 +209,9 @@ func userInitiatedAuditEvent() map[string]any {
 	}
 }
 
-// appInitiatedFailureAuditEvent is an application-actor failure: the only
-// source of the actor_application_* attributes, which the user-actor record
-// above cannot produce.
+// appInitiatedFailureAuditEvent is an application-actor failure. Docs-derived,
+// kept for branch coverage of the failure→Warn severity path: all five captured
+// live rows are activityResult "Success". Mapper-only; never reaches the golden.
 func appInitiatedFailureAuditEvent() map[string]any {
 	return map[string]any{
 		"id":               "audit-2",
@@ -116,9 +226,12 @@ func appInitiatedFailureAuditEvent() map[string]any {
 	}
 }
 
-// secretBearingAuditEvent is a certificate change whose modifiedProperties
-// carry a credential in oldValue/newValue — the shape the ONE content
-// exclusion in graph2otel exists for.
+// secretBearingAuditEvent is a certificate change whose modifiedProperties carry
+// a credential in oldValue/newValue. Docs-derived, kept for branch coverage of
+// the ONE content exclusion in graph2otel: no captured live row carries a secret
+// in modifiedProperties, so proving the redaction requires a fixture that does.
+// This is the only synthetic driven end-to-end, so the redaction can be asserted
+// at the EMITTER, not just at the mapper.
 func secretBearingAuditEvent() map[string]any {
 	return map[string]any{
 		"id":               "audit-3",
@@ -142,6 +255,130 @@ func secretBearingAuditEvent() map[string]any {
 	}
 }
 
+// TestMapAuditEventAgainstLiveRecord pins the EXACT attribute set the mapper
+// produces from the richest real record this project has captured. Exact-set
+// equality is the point (mirroring entra/riskdetections'
+// TestMapRiskDetectionAgainstLiveRecord): it fails on a dropped field AND on a
+// fabricated one — the pair of mistakes #142/#153 are made of — and it is the
+// authority that testdata/signals.json's log key set is checked against.
+func TestMapAuditEventAgainstLiveRecord(t *testing.T) {
+	id, ev := mapAuditEvent(decodeLive(t, liveAuditEvent))
+
+	if id != "a7c4ee76-621e-4795-aaf4-3dae19f03c35" {
+		t.Errorf("dedupe id = %q, want the record's immutable audit id", id)
+	}
+	if ev.Name != eventName {
+		t.Fatalf("event name = %q, want %q", ev.Name, eventName)
+	}
+	if ev.Severity != telemetry.SeverityInfo {
+		t.Errorf("Success activityResult severity = %v, want Info", ev.Severity)
+	}
+
+	// The exact emitted key set. activity and actor_ip_address are DELIBERATELY
+	// absent: the wire carries both as null on all five captured rows.
+	wantKeys := []string{
+		"activity_operation_type",
+		"activity_result",
+		"activity_type",
+		"actor_application_display_name",
+		"actor_application_id",
+		"actor_type",
+		"actor_user_id",
+		"actor_user_principal_name",
+		"category",
+		"component_name",
+		"correlation_id",
+		"display_name",
+		"id",
+		"modified_property_names",
+		"resource_display_names",
+		"resource_types",
+	}
+	gotKeys := make([]string, 0, len(ev.Attrs))
+	for k := range ev.Attrs {
+		gotKeys = append(gotKeys, k)
+	}
+	sort.Strings(gotKeys)
+	if !reflect.DeepEqual(gotKeys, wantKeys) {
+		t.Errorf("attribute key set mismatch\n got: %v\nwant: %v", gotKeys, wantKeys)
+	}
+
+	wantScalars := map[string]any{
+		"id":                             "a7c4ee76-621e-4795-aaf4-3dae19f03c35",
+		"activity_type":                  "Create DeviceManagementConfigurationPolicyAssignment",
+		"activity_operation_type":        "Create",
+		"activity_result":                "Success",
+		"category":                       "DeviceConfiguration",
+		"component_name":                 "DeviceConfiguration",
+		"display_name":                   "Create device configuration assignment 2.0 (beta)",
+		"correlation_id":                 "e785a76a-b122-44d2-9438-32d87da0e217",
+		"actor_type":                     "ItPro",
+		"actor_user_principal_name":      "rob@m7kni.com",
+		"actor_user_id":                  "bbcfc3c5-0b93-4135-9ef9-18477a9fb504",
+		"actor_application_display_name": "Microsoft Intune portal extension",
+		"actor_application_id":           "5926fc8e-304e-4f59-8bed-58ca97cc39a4",
+	}
+	for k, want := range wantScalars {
+		if got := ev.Attrs[k]; got != want {
+			t.Errorf("attr %q = %v, want %v", k, got, want)
+		}
+	}
+
+	// Slice attributes: both resources contribute their type; the literal
+	// "<null>" resource displayName is emitted verbatim; only the SECOND
+	// resource has modifiedProperties (the first's array is empty).
+	wantSlices := map[string][]string{
+		"resource_types": {
+			"DeviceManagementConfigurationPolicy",
+			"DeviceManagementConfigurationPolicyAssignment",
+		},
+		"resource_display_names": {"MacOS Updates", "<null>"},
+		"modified_property_names": {
+			"Target.Type",
+			"Target.DeviceAndAppManagementAssignmentFilterId",
+			"Target.DeviceAndAppManagementAssignmentFilterType",
+			"Id",
+			"Source",
+			"SourceId",
+			"DeviceManagementAPIVersion",
+		},
+	}
+	for k, want := range wantSlices {
+		got, ok := ev.Attrs[k].([]string)
+		if !ok {
+			t.Errorf("attr %q = %#v, want []string", k, ev.Attrs[k])
+			continue
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("attr %q = %v, want %v", k, got, want)
+		}
+	}
+
+	// The secrets rule, checked on REAL data: the property NAMES are emitted,
+	// but no modifiedProperties VALUE (newValue/oldValue) may appear in any
+	// attribute. These four are newValues that are not also legitimate attribute
+	// values elsewhere on the record ("<null>" is excluded from this check
+	// precisely because it is ALSO a real resource displayName above).
+	forbiddenValues := []string{
+		"AllDevicesAssignmentTarget",
+		"Direct",
+		"5025-06-03",
+		"867a3c3f-b8c1-493b-8934-8c613c585cb9_adadadad-808e-44e2-905a-0b7873a8a531",
+	}
+	for k, v := range ev.Attrs {
+		rendered := fmt.Sprintf("%v", v)
+		for _, forbidden := range forbiddenValues {
+			if strings.Contains(rendered, forbidden) {
+				t.Errorf("attr %q = %v leaked a modifiedProperties value %q", k, v, forbidden)
+			}
+		}
+	}
+}
+
+// TestMapAuditEventUserInitiatedSuccess is docs-derived (see the fixture): it
+// keeps mapper-level coverage of actor_ip_address and a populated top-level
+// activity, both of which the live record leaves null. It drives the mapper
+// directly, so its placeholder values never reach the golden.
 func TestMapAuditEventUserInitiatedSuccess(t *testing.T) {
 	rec := userInitiatedAuditEvent()
 
@@ -246,9 +483,9 @@ func TestMapAuditEventNeverEmitsModifiedPropertyValues(t *testing.T) {
 	}
 }
 
-// TestCollectorEmitsFullRecordsEndToEnd drives this package's three richest
-// records through the real engine into an emitter, rather than calling
-// mapAuditEvent directly like the tests above.
+// TestCollectorEmitsFullRecordsEndToEnd drives the live record and the
+// secret-bearing synthetic through the real engine into an emitter, rather than
+// calling mapAuditEvent directly like the tests above.
 //
 // Two things depend on it. First, it proves every attribute mapAuditEvent sets
 // survives the whole path — including the secret redaction, which is asserted
@@ -258,31 +495,31 @@ func TestMapAuditEventNeverEmitsModifiedPropertyValues(t *testing.T) {
 // Second, it is what makes testdata/signals.json honest. The signal gate
 // goldens the union of what a package's tests EMIT, so with only the minimal
 // synthetic records of the watermark/dedupe tests reaching the emitter, the
-// golden recorded a 4-attribute surface (activity_result, category, id,
-// ingest_transport) for a collector that really ships 19 — understating the
-// exact thing the golden exists to make reviewable (#164).
-//
-// All three records are needed for the full key surface: the user-actor record
-// alone cannot produce actor_application_*, and the app-actor record alone
-// cannot produce actor_user_* or the resource_* set.
+// golden recorded a 4-attribute surface for a collector that really ships its
+// full audit surface — understating the exact thing the golden exists to make
+// reviewable (#164). The live record supplies that full surface with REAL values
+// (#165); the docs synthetics stay mapper-only so nothing fictional reaches the
+// golden. secretBearing is driven here (and nowhere else in the emitter path)
+// solely to prove the redaction end-to-end — no live row carries a secret.
 func TestCollectorEmitsFullRecordsEndToEnd(t *testing.T) {
 	f := &recordingFetcher{records: []map[string]any{
-		userInitiatedAuditEvent(),
-		appInitiatedFailureAuditEvent(),
+		decodeLive(t, liveAuditEvent),
 		secretBearingAuditEvent(),
 	}}
 	rec := telemetrytest.New()
 	c := newCollector(collectors.WindowDeps{TenantID: "t1", Fetcher: f, Store: checkpoint.NewStore(t.TempDir())})
 
-	// Wide enough to span all three records (10:00, 11:00, 12:00).
-	from := time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(4*time.Hour), rec.Emitter()); err != nil {
+	// Wide enough to span the live record (2025-09) and the secret synthetic
+	// (2026-07); this endpoint is server-filtered, so the fetcher's records are
+	// emitted regardless of the window bounds.
+	from := time.Date(2025, 9, 1, 0, 0, 0, 0, time.UTC)
+	if _, err := c.CollectWindow(context.Background(), from, time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), rec.Emitter()); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 
 	logs := rec.LogRecords()
-	if len(logs) != 3 {
-		t.Fatalf("emitted %d records, want 3", len(logs))
+	if len(logs) != 2 {
+		t.Fatalf("emitted %d records, want 2", len(logs))
 	}
 	for _, got := range logs {
 		if got.EventName != eventName {
@@ -293,64 +530,78 @@ func TestCollectorEmitsFullRecordsEndToEnd(t *testing.T) {
 	// THE content exclusion, checked at the emitter: a modifiedProperties
 	// old/new value must never appear in ANY attribute or body of ANY emitted
 	// record. For a credential change the value IS the credential (CLAUDE.md:
-	// the one content exclusion in graph2otel, about secrets, not PII).
+	// the one content exclusion in graph2otel, about secrets, not PII). Both the
+	// synthetic secret AND the live record's real newValues are checked.
+	forbidden := []string{
+		secretOld, secretNew,
+		"AllDevicesAssignmentTarget", "Direct", "5025-06-03",
+		"867a3c3f-b8c1-493b-8934-8c613c585cb9_adadadad-808e-44e2-905a-0b7873a8a531",
+	}
 	for _, got := range logs {
 		for k, v := range got.Attrs {
-			if strings.Contains(v, secretOld) || strings.Contains(v, secretNew) {
-				t.Fatalf("emitted attr %q = %q leaked a modifiedProperties value", k, v)
+			for _, bad := range forbidden {
+				if strings.Contains(v, bad) {
+					t.Fatalf("emitted attr %q = %q leaked a modifiedProperties value %q", k, v, bad)
+				}
 			}
 		}
-		if strings.Contains(got.Body, secretOld) || strings.Contains(got.Body, secretNew) {
-			t.Fatalf("emitted body %q leaked a modifiedProperties value", got.Body)
+		for _, bad := range forbidden {
+			if strings.Contains(got.Body, bad) {
+				t.Fatalf("emitted body %q leaked a modifiedProperties value %q", got.Body, bad)
+			}
 		}
 	}
 
-	// The property NAME survives to the emitter — only the value is excluded.
 	byID := map[string]map[string]string{}
 	for _, got := range logs {
 		byID[got.Attrs["id"]] = got.Attrs
 	}
+
+	// The property NAME survives to the emitter — only the value is excluded.
 	if got := byID["audit-3"]["modified_property_names"]; got != "certificate" {
 		t.Errorf("audit-3 modified_property_names = %q, want %q", got, "certificate")
 	}
 
-	// Attributes checked at the emitter rather than the mapper. []string attrs
-	// arrive comma-joined (telemetry.toLogKV), which is the shape on the wire.
-	wantUser := map[string]string{
-		"id":                        "audit-1",
-		"activity":                  "Create",
-		"activity_type":             "deviceConfiguration",
-		"activity_operation_type":   "Create",
-		"activity_result":           "success",
-		"category":                  "DeviceConfiguration",
-		"component_name":            "DeviceConfiguration",
-		"display_name":              "Create deviceConfiguration",
-		"correlation_id":            "corr-1",
-		"actor_type":                "ItPro",
-		"actor_user_principal_name": "alice@contoso.com",
-		"actor_user_id":             "user-guid",
-		"actor_ip_address":          "203.0.113.9",
-		"resource_types":            "deviceConfiguration",
-		"resource_display_names":    "Baseline Config",
-		"modified_property_names":   "displayName",
+	// The live record's full surface at the emitter. []string attrs arrive
+	// comma-joined (telemetry.toLogKV), which is the shape on the wire. This one
+	// real record carries BOTH the user actor and the application actor, and the
+	// full resources[] surface — what the old docs fixtures needed two separate
+	// records to cover.
+	live := byID["a7c4ee76-621e-4795-aaf4-3dae19f03c35"]
+	wantLive := map[string]string{
+		"id":                             "a7c4ee76-621e-4795-aaf4-3dae19f03c35",
+		"activity_type":                  "Create DeviceManagementConfigurationPolicyAssignment",
+		"activity_operation_type":        "Create",
+		"activity_result":                "Success",
+		"category":                       "DeviceConfiguration",
+		"component_name":                 "DeviceConfiguration",
+		"display_name":                   "Create device configuration assignment 2.0 (beta)",
+		"correlation_id":                 "e785a76a-b122-44d2-9438-32d87da0e217",
+		"actor_type":                     "ItPro",
+		"actor_user_principal_name":      "rob@m7kni.com",
+		"actor_user_id":                  "bbcfc3c5-0b93-4135-9ef9-18477a9fb504",
+		"actor_application_display_name": "Microsoft Intune portal extension",
+		"actor_application_id":           "5926fc8e-304e-4f59-8bed-58ca97cc39a4",
+		"resource_types":                 "DeviceManagementConfigurationPolicy,DeviceManagementConfigurationPolicyAssignment",
+		"resource_display_names":         "MacOS Updates,<null>",
+		"modified_property_names":        "Target.Type,Target.DeviceAndAppManagementAssignmentFilterId,Target.DeviceAndAppManagementAssignmentFilterType,Id,Source,SourceId,DeviceManagementAPIVersion",
 	}
-	for k, want := range wantUser {
-		if got := byID["audit-1"][k]; got != want {
-			t.Errorf("audit-1 emitted attr %q = %q, want %q", k, got, want)
+	for k, want := range wantLive {
+		if got := live[k]; got != want {
+			t.Errorf("live record emitted attr %q = %q, want %q", k, got, want)
 		}
 	}
-	wantApp := map[string]string{
-		"actor_application_display_name": "My Automation App",
-		"actor_application_id":           "app-guid",
-	}
-	for k, want := range wantApp {
-		if got := byID["audit-2"][k]; got != want {
-			t.Errorf("audit-2 emitted attr %q = %q, want %q", k, got, want)
+
+	// actor_ip_address and activity are null on the wire, so they must NOT be on
+	// the emitted live record — the exact thing that keeps the golden honest.
+	for _, k := range []string{"actor_ip_address", "activity"} {
+		if v, present := live[k]; present && v != "" {
+			t.Errorf("live record emitted %q = %q, want it absent (null on the wire)", k, v)
 		}
 	}
 
 	// The transport stamp the engine applies at the emitter boundary (#141).
-	if got := byID["audit-1"]["ingest_transport"]; got != "graph" {
+	if got := live["ingest_transport"]; got != "graph" {
 		t.Errorf("ingest_transport = %q, want graph", got)
 	}
 }

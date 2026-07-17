@@ -10,7 +10,6 @@
         "activity_type",
         "actor_application_display_name",
         "actor_application_id",
-        "actor_ip_address",
         "actor_type",
         "actor_user_id",
         "actor_user_principal_name",
