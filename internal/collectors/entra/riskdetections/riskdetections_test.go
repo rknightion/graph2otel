@@ -30,10 +30,12 @@ import (
 // key, which made the dead `risk_type` mapper line look tested and green for the
 // life of the project. Same failure as #142's `"platform": "windows"`.
 //
-// Trimmed of nothing. The fields graph2otel does not map (tokenIssuerType,
-// userDisplayName, location.state, location.geoCoordinates, and additionalInfo's
-// userAgent) are left in on purpose, so this stays a faithful record of what the
-// endpoint actually returns.
+// Trimmed of nothing, so it stays a faithful record of what the endpoint
+// actually returns. Every field on it is now mapped (#159 landed the last five:
+// tokenIssuerType, userDisplayName, location.state, location.geoCoordinates and
+// additionalInfo's userAgent); the timestamps the engine consumes rather than the
+// mapper — activityDateTime, detectedDateTime, lastUpdatedDateTime — are the only
+// keys with no attribute of their own.
 //
 // Note `additionalInfo`: it is a JSON-encoded STRING holding an array of
 // {"Key","Value"} pairs — NOT a JSON object. A mapper written against the
@@ -120,6 +122,9 @@ func TestMapRiskDetectionAgainstLiveRecord(t *testing.T) {
 		"ip_address",
 		"location_city",
 		"location_country_or_region",
+		"location_latitude",
+		"location_longitude",
+		"location_state",
 		"mitre_techniques",
 		"request_id",
 		"risk_detail",
@@ -127,6 +132,9 @@ func TestMapRiskDetectionAgainstLiveRecord(t *testing.T) {
 		"risk_level",
 		"risk_state",
 		"source",
+		"token_issuer_type",
+		"user_agent",
+		"user_display_name",
 		"user_id",
 		"user_principal_name",
 	}
@@ -153,8 +161,14 @@ func TestMapRiskDetectionAgainstLiveRecord(t *testing.T) {
 		"correlation_id":             "39e1e8c0-a497-4e5b-b8a5-354d297c68a9",
 		"request_id":                 "c0ee37b3-2cd2-43c0-a7d9-d36e31425600",
 		"activity":                   "signin",
+		"token_issuer_type":          "AzureAD",
+		"user_display_name":          "RISK SYNTH - DELETE ME (graph2otel #129)",
+		"user_agent":                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:140.0) Gecko/20100101 Firefox/140.0",
 		"location_city":              "Camperduin",
+		"location_state":             "Noord-Holland",
 		"location_country_or_region": "NL",
+		"location_latitude":          52.733,
+		"location_longitude":         4.65,
 	}
 	for k, want := range wantScalars {
 		if got := ev.Attrs[k]; got != want {
@@ -187,25 +201,47 @@ func TestMapRiskDetectionEmitsMitreTechniques(t *testing.T) {
 	}
 }
 
-// TestMitreTechniquesToleratesAdditionalInfoShapes pins that the additionalInfo
-// parser never emits a junk attribute and never panics on a record whose
-// additionalInfo is missing, malformed, or simply carries no mitreTechniques
-// pair. Every case must omit the attribute rather than emit an empty one.
+// TestMapRiskDetectionEmitsUserAgent pins #159's headline field: the client
+// string behind a risk detection, which Identity Protection buries in the same
+// double-encoded additionalInfo payload as mitreTechniques.
+//
+// It is a first-order SIEM pivot — "what was the client behind this Tor
+// sign-in" — and it was being read past on both transports. The attribute name
+// matches entra.graph_activity's existing user_agent.
+func TestMapRiskDetectionEmitsUserAgent(t *testing.T) {
+	_, ev := mapRiskDetection(decodeLive(t, liveRiskDetection))
+
+	want := "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:140.0) Gecko/20100101 Firefox/140.0"
+	if got := ev.Attrs["user_agent"]; got != want {
+		t.Errorf("user_agent = %v, want %v (parsed out of additionalInfo)", got, want)
+	}
+}
+
+// TestAdditionalInfoToleratedShapes pins that the shared additionalInfo parser
+// never emits a junk attribute and never panics on a record whose additionalInfo
+// is missing, malformed, or simply carries none of the pairs we want. Every case
+// must omit the attribute rather than emit an empty one.
 //
 // This matters more than usual here: additionalInfo's contents are undocumented
-// and vary by riskEventType, so most records will legitimately lack the key.
-func TestMitreTechniquesToleratesAdditionalInfoShapes(t *testing.T) {
+// and vary by riskEventType, so most records will legitimately lack a given key.
+//
+// Both consumers (mitre_techniques and user_agent, #153/#159) are asserted on
+// every case because they share one parser: a tolerance bug found via one key
+// would otherwise be re-found via the other.
+func TestAdditionalInfoToleratedShapes(t *testing.T) {
 	cases := []struct {
 		name           string
 		additionalInfo any
+		wantUserAgent  string // "" means the attribute must be omitted
 	}{
-		{"absent", nil},
-		{"empty string", ""},
-		{"malformed json", `[{"Key":`},
-		{"json object rather than the real array shape", `{"mitreTechniques":"T1078"}`},
-		{"array without a mitreTechniques pair", `[{"Key":"userAgent","Value":"curl/8.0"}]`},
-		{"mitreTechniques present but empty", `[{"Key":"mitreTechniques","Value":""}]`},
-		{"wrong json type entirely", float64(42)},
+		{name: "absent", additionalInfo: nil},
+		{name: "empty string", additionalInfo: ""},
+		{name: "malformed json", additionalInfo: `[{"Key":`},
+		{name: "json object rather than the real array shape", additionalInfo: `{"mitreTechniques":"T1078","userAgent":"curl/8.0"}`},
+		{name: "array without a mitreTechniques pair", additionalInfo: `[{"Key":"userAgent","Value":"curl/8.0"}]`, wantUserAgent: "curl/8.0"},
+		{name: "mitreTechniques present but empty", additionalInfo: `[{"Key":"mitreTechniques","Value":""}]`},
+		{name: "userAgent present but empty", additionalInfo: `[{"Key":"userAgent","Value":""}]`},
+		{name: "wrong json type entirely", additionalInfo: float64(42)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -217,8 +253,69 @@ func TestMitreTechniquesToleratesAdditionalInfoShapes(t *testing.T) {
 			if v, present := ev.Attrs["mitre_techniques"]; present {
 				t.Errorf("mitre_techniques = %#v, want the attribute omitted entirely", v)
 			}
+			got, present := ev.Attrs["user_agent"]
+			switch {
+			case tc.wantUserAgent == "" && present:
+				t.Errorf("user_agent = %#v, want the attribute omitted entirely", got)
+			case tc.wantUserAgent != "" && got != tc.wantUserAgent:
+				t.Errorf("user_agent = %#v, want %q", got, tc.wantUserAgent)
+			}
 		})
 	}
+}
+
+// TestMapRiskDetectionGeoCoordinatesArePresenceGated pins the one trap in
+// mapping geoCoordinates: latitude/longitude are numbers, so presence — not
+// truthiness — decides whether the attribute is emitted.
+//
+// 0,0 is a real coordinate (the Gulf of Guinea, and the classic value of a
+// broken geo-IP lookup — precisely the thing a SIEM rule wants to see), but it
+// is also float64's zero value. A setStr-style "skip the empty value" guard
+// would silently drop it, so the coordinate accessors gate on the type
+// assertion instead.
+func TestMapRiskDetectionGeoCoordinatesArePresenceGated(t *testing.T) {
+	t.Run("zero coordinates are emitted, not treated as absent", func(t *testing.T) {
+		rec := map[string]any{
+			"id":       "rd-geo-zero",
+			"location": map[string]any{"geoCoordinates": map[string]any{"latitude": float64(0), "longitude": float64(0)}},
+		}
+		_, ev := mapRiskDetection(rec)
+		for _, k := range []string{"location_latitude", "location_longitude"} {
+			got, present := ev.Attrs[k]
+			if !present {
+				t.Fatalf("attr %q missing; 0 is a real coordinate, not an absent one", k)
+			}
+			if got != float64(0) {
+				t.Errorf("attr %q = %#v, want float64(0)", k, got)
+			}
+		}
+	})
+
+	t.Run("absent or non-numeric coordinates omit the attributes", func(t *testing.T) {
+		cases := []struct {
+			name     string
+			location map[string]any
+		}{
+			{"no geoCoordinates", map[string]any{"city": "London"}},
+			{"geoCoordinates is not an object", map[string]any{"geoCoordinates": "52.733,4.65"}},
+			{"coordinates are strings", map[string]any{"geoCoordinates": map[string]any{"latitude": "52.733", "longitude": "4.65"}}},
+			{"latitude only", map[string]any{"geoCoordinates": map[string]any{"latitude": 52.733}}},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				_, ev := mapRiskDetection(map[string]any{"id": "rd-geo", "location": tc.location})
+				if v, present := ev.Attrs["location_longitude"]; present {
+					t.Errorf("location_longitude = %#v, want the attribute omitted entirely", v)
+				}
+				if tc.name == "latitude only" {
+					return // latitude legitimately present; only longitude must be absent
+				}
+				if v, present := ev.Attrs["location_latitude"]; present {
+					t.Errorf("location_latitude = %#v, want the attribute omitted entirely", v)
+				}
+			})
+		}
+	})
 }
 
 // recordingFetcher is a logpipeline.PageFetcher that returns a fixed set of
@@ -323,7 +420,10 @@ func TestMapRiskDetectionOmitsAbsentOptionalFields(t *testing.T) {
 		"riskLevel": "low",
 	}
 	_, ev := mapRiskDetection(rec)
-	for _, k := range []string{"request_id", "activity", "location_city", "location_country_or_region", "ip_address", "correlation_id"} {
+	for _, k := range []string{
+		"request_id", "activity", "location_city", "location_country_or_region", "ip_address", "correlation_id",
+		"location_state", "location_latitude", "location_longitude", "token_issuer_type", "user_agent", "user_display_name",
+	} {
 		if _, present := ev.Attrs[k]; present {
 			t.Errorf("attr %q must be omitted when absent from the record, attrs=%v", k, ev.Attrs)
 		}
@@ -383,6 +483,67 @@ func TestPageSizeIsCappedAt500(t *testing.T) {
 	}
 	if !strings.Contains(f.seenURLs[0], "%24top=500") && !strings.Contains(f.seenURLs[0], "$top=500") {
 		t.Errorf("first-page URL = %q, want $top=500 (Identity Protection caps page size at 500)", f.seenURLs[0])
+	}
+}
+
+// TestCollectorEmitsLiveRecordEndToEnd drives the one real record this project
+// has through the engine into an emitter, rather than calling the mapper
+// directly like the tests above.
+//
+// Two things depend on it. First, it proves the #159 fields survive the whole
+// path, not just mapRiskDetection. Second, it is what makes testdata/signals.json
+// honest: the signal gate goldens the union of what a package's tests EMIT, so
+// with only minimal synthetic fixtures reaching the emitter, the golden recorded
+// a 4-attribute surface for a collector that really ships 22 — understating the
+// exact thing the golden exists to make reviewable.
+func TestCollectorEmitsLiveRecordEndToEnd(t *testing.T) {
+	f := &recordingFetcher{records: []map[string]any{decodeLive(t, liveRiskDetection)}}
+	rec := telemetrytest.New()
+	c := newCollector(collectors.WindowDeps{TenantID: "t1", Fetcher: f, Store: checkpoint.NewStore(t.TempDir())})
+
+	from := time.Date(2026, 7, 17, 10, 0, 0, 0, time.UTC)
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter()); err != nil {
+		t.Fatalf("CollectWindow: %v", err)
+	}
+
+	logs := rec.LogRecords()
+	if len(logs) != 1 {
+		t.Fatalf("emitted %d records, want 1", len(logs))
+	}
+	got := logs[0]
+	if got.EventName != eventName {
+		t.Errorf("event name = %q, want %q", got.EventName, eventName)
+	}
+
+	// The #159 fields specifically, checked at the emitter rather than the
+	// mapper: these are the ones that were on the wire and being dropped.
+	wantAttrs := map[string]string{
+		"user_agent":        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:140.0) Gecko/20100101 Firefox/140.0",
+		"token_issuer_type": "AzureAD",
+		"user_display_name": "RISK SYNTH - DELETE ME (graph2otel #129)",
+		"location_state":    "Noord-Holland",
+	}
+	for k, want := range wantAttrs {
+		if v := got.Attrs[k]; v != want {
+			t.Errorf("emitted attr %q = %q, want %q", k, v, want)
+		}
+	}
+
+	// The geo coordinates are checked for PRESENCE only, and their values are
+	// pinned at the mapper instead (TestMapRiskDetectionAgainstLiveRecord).
+	//
+	// Not an oversight, and do not "fix" it by asserting values here: they are
+	// emitted as OTLP doubles (telemetry.toLogKV maps float64 → log.Float64,
+	// which is correct on the wire), but telemetrytest.Recorder flattens every
+	// log attribute through log.Value.AsString(), which yields "" for any
+	// non-string Kind. So the recorder cannot represent a float attribute's
+	// value — a limitation of the test harness, not of the emission. The
+	// "AsString / invalid Kind Float64" lines in this package's test output are
+	// that same limitation talking.
+	for _, k := range []string{"location_latitude", "location_longitude"} {
+		if _, present := got.Attrs[k]; !present {
+			t.Errorf("emitted attrs missing %q", k)
+		}
 	}
 }
 

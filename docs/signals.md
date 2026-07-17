@@ -134,6 +134,17 @@ counter-example worth knowing:
   extracted from `additionalInfo`. It is usually the most precise thing on the record —
   more specific than `riskEventType` — and is the field to pivot on for ATT&CK-aligned
   rules.
+- **`user_agent`** is also on `entra.risk_detection`, and also comes out of
+  `additionalInfo` rather than a top-level field. `additionalInfo` is a JSON-encoded
+  **string** holding `[{"Key":…,"Value":…}]` pairs — not an object — so a query written
+  against the shape the name suggests finds nothing.
+- **`location_latitude` / `location_longitude`** are emitted when the record carries
+  coordinates, and are **presence-gated, not value-gated**: `0` is both a real coordinate
+  and the canonical output of a failed geo-IP lookup, so it is emitted rather than
+  treated as absent. `altitude` is documented by Microsoft but has never been observed
+  live, so it is not mapped.
+- `entra.risk_detection` also carries `token_issuer_type`, `user_display_name`,
+  `location_state`, `location_city` and `location_country_or_region`.
 - **`isDeleted` is not emitted** on `entra.risk`. It returns `false` for users that are
   definitively deleted, so a filter on it would quietly include the accounts it was meant
   to exclude. The gauge therefore counts deleted-but-once-risky identities until Microsoft

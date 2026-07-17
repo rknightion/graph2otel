@@ -25,9 +25,11 @@
 // degraded/misleading detail.
 //
 // Cardinality note (LOGS, inverted from the metric collectors): per-entity
-// detail — id, correlationId, ipAddress, userPrincipalName — belongs here as
-// structured log attributes. That same data must NEVER become a metric
-// label; this package emits no metrics, only logs.
+// detail — id, correlationId, ipAddress, userPrincipalName, userDisplayName,
+// userAgent, geo coordinates — belongs here as structured log attributes. That
+// same data must NEVER become a metric label; this package emits no metrics,
+// only logs, so #112 holds by construction and every field on the record is
+// mapped rather than bucketed away (#159).
 //
 // See GitHub issue #24.
 package riskdetections
@@ -148,25 +150,58 @@ func mapRiskDetection(rec map[string]any) (string, telemetry.Event) {
 	setStr(attrs, "ip_address", str(rec, "ipAddress"))
 	setStr(attrs, "user_principal_name", userPrincipalName)
 	setStr(attrs, "user_id", str(rec, "userId"))
+	setStr(attrs, "user_display_name", str(rec, "userDisplayName"))
 	setStr(attrs, "correlation_id", str(rec, "correlationId"))
 	setStr(attrs, "request_id", str(rec, "requestId"))
 	setStr(attrs, "activity", str(rec, "activity"))
+	// tokenIssuerType ("AzureAD" live) separates cloud-issued from federated
+	// tokens on a risk event — the pivot for "is our federated IdP the one
+	// producing these" (#159). Bounded vocabulary, but log-only like everything
+	// else here: this package emits no metrics.
+	setStr(attrs, "token_issuer_type", str(rec, "tokenIssuerType"))
 
 	if loc := nested(rec, "location"); loc != nil {
 		setStr(attrs, "location_city", str(loc, "city"))
+		setStr(attrs, "location_state", str(loc, "state"))
 		setStr(attrs, "location_country_or_region", str(loc, "countryOrRegion"))
+
+		// geoCoordinates feed impossible-travel and geofencing rules, which
+		// cannot work off city/country strings (#159).
+		//
+		// Presence-gated, NOT value-gated, unlike every setStr above: 0 is a
+		// real coordinate — the Gulf of Guinea, and the canonical output of a
+		// failed geo-IP lookup, which is itself worth alerting on — but it is
+		// also float64's zero value, so a "skip the empty value" guard would
+		// drop exactly the records worth seeing.
+		//
+		// Only latitude/longitude are mapped. The Graph docs also list an
+		// altitude on geoCoordinates; it is NOT on the live record, so it is
+		// unverified and stays unmapped rather than invented (#142).
+		if geo := nested(loc, "geoCoordinates"); geo != nil {
+			setNum(attrs, "location_latitude", geo, "latitude")
+			setNum(attrs, "location_longitude", geo, "longitude")
+		}
 	}
 
-	// MITRE ATT&CK technique ids, dug out of additionalInfo (#153). This is the
-	// highest-value SIEM field on the record — on the live sample it is
-	// "T1090.003,T1078", i.e. Multi-hop Proxy + Valid Accounts, which named the
-	// Tor sign-in #129 synthesized more precisely than riskEventType did.
+	// additionalInfo carries the two highest-value SIEM fields on the record,
+	// and it is decoded ONCE here for both — it is a doubly-encoded payload
+	// (see additionalInfoPairs), so a second parser would be a second place to
+	// get that wrong.
 	//
-	// LOG attribute only. The id combinations are per-detection and unbounded, so
-	// this must never become a metric label (#112) — this package emits no
+	// Both are LOG attributes only. mitre_techniques' id combinations are
+	// per-detection and unbounded, and user_agent is famously unbounded, so
+	// neither may ever become a metric label (#112) — this package emits no
 	// metrics, so that holds by construction.
-	if techniques := mitreTechniques(rec); len(techniques) > 0 {
-		attrs["mitre_techniques"] = techniques
+	if pairs := additionalInfoPairs(rec); len(pairs) > 0 {
+		// The MITRE ATT&CK technique ids (#153). On the live sample this is
+		// "T1090.003,T1078" — Multi-hop Proxy + Valid Accounts — which named
+		// the Tor sign-in #129 synthesized more precisely than riskEventType did.
+		if techniques := mitreTechniques(pairs); len(techniques) > 0 {
+			attrs["mitre_techniques"] = techniques
+		}
+		// The client string behind the detection (#159): a first-order pivot
+		// for "what was this", and the join key onto the sign-in logs.
+		setStr(attrs, "user_agent", pairs["userAgent"])
 	}
 
 	return id, telemetry.Event{
@@ -177,8 +212,8 @@ func mapRiskDetection(rec map[string]any) (string, telemetry.Event) {
 	}
 }
 
-// mitreTechniques extracts the MITRE ATT&CK technique ids from a detection's
-// additionalInfo, returning nil when the record carries none.
+// additionalInfoPairs decodes a detection's additionalInfo into its Key→Value
+// pairs, returning nil when the record carries none or the payload is unusable.
 //
 // THE trap on this path, and the reason this is written against a live sample
 // rather than the docs (#142): additionalInfo is not an object. It is a
@@ -191,13 +226,17 @@ func mapRiskDetection(rec map[string]any) (string, telemetry.Event) {
 //
 // A mapper written against the intuitive `{"mitreTechniques": "..."}` object
 // shape compiles, runs, finds nothing, and reports success forever — invisible,
-// because the risk collection is empty on a healthy tenant anyway (#153).
+// because the risk collection is empty on a healthy tenant anyway (#153). That
+// is exactly why this decode is shared rather than copied per field: it is the
+// one place to get it right, and every consumer inherits the fix.
 //
-// Every failure mode returns nil (attribute omitted) rather than an error: the
+// Every failure mode returns nil (attributes omitted) rather than an error: the
 // contents of additionalInfo are undocumented and vary by riskEventType, so a
-// record with no mitreTechniques pair is the NORMAL case, not a fault. A
-// malformed payload must not sink an otherwise good detection record.
-func mitreTechniques(rec map[string]any) []string {
+// record missing any given pair is the NORMAL case, not a fault. A malformed
+// payload must not sink an otherwise good detection record.
+//
+// First occurrence of a duplicated Key wins, matching the wire order.
+func additionalInfoPairs(rec map[string]any) map[string]string {
 	raw := str(rec, "additionalInfo")
 	if raw == "" {
 		return nil
@@ -211,19 +250,25 @@ func mitreTechniques(rec map[string]any) []string {
 		return nil
 	}
 
+	out := make(map[string]string, len(pairs))
 	for _, p := range pairs {
-		if p.Key != "mitreTechniques" {
-			continue
+		if _, dup := out[p.Key]; !dup {
+			out[p.Key] = p.Value
 		}
-		var out []string
-		for _, t := range strings.Split(p.Value, ",") {
-			if t = strings.TrimSpace(t); t != "" {
-				out = append(out, t)
-			}
-		}
-		return out
 	}
-	return nil
+	return out
+}
+
+// mitreTechniques splits the comma-separated MITRE ATT&CK technique ids out of
+// a decoded additionalInfo payload, returning nil when it carries none.
+func mitreTechniques(pairs map[string]string) []string {
+	var out []string
+	for _, t := range strings.Split(pairs["mitreTechniques"], ",") {
+		if t = strings.TrimSpace(t); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // severityFor maps a riskDetection's riskLevel to a log Severity: "high" is
@@ -250,6 +295,15 @@ func str(m map[string]any, key string) string {
 func nested(m map[string]any, key string) map[string]any {
 	n, _ := m[key].(map[string]any)
 	return n
+}
+
+// setNum adds key=<number> only when the source field is actually a JSON
+// number, gating on PRESENCE rather than value — 0 is a meaningful coordinate,
+// so the setStr "skip the empty value" pattern must not be reused here.
+func setNum(attrs telemetry.Attrs, key string, m map[string]any, srcKey string) {
+	if f, ok := m[srcKey].(float64); ok {
+		attrs[key] = f
+	}
 }
 
 // setStr adds key=val only when val is non-empty, so absent fields don't

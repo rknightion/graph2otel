@@ -4,9 +4,28 @@
     {
       "EventName": "entra.risk_detection",
       "AttrKeys": [
+        "activity",
+        "correlation_id",
+        "detection_timing_type",
         "id",
         "ingest_transport",
+        "ip_address",
+        "location_city",
+        "location_country_or_region",
+        "location_latitude",
+        "location_longitude",
+        "location_state",
+        "mitre_techniques",
+        "request_id",
+        "risk_detail",
+        "risk_event_type",
         "risk_level",
+        "risk_state",
+        "source",
+        "token_issuer_type",
+        "user_agent",
+        "user_display_name",
+        "user_id",
         "user_principal_name"
       ]
     }
