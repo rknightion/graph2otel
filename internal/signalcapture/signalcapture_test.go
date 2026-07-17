@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/signalcapture"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
@@ -128,6 +129,95 @@ func TestSelfObsTenantIDIsNotAViolation(t *testing.T) {
 
 	if v := signalcapture.PerEntityViolations(signalcapture.Union([]*telemetrytest.Recorder{r})); len(v) != 0 {
 		t.Errorf("self-obs labels flagged: %+v — tenant_id on graph2otel.* is correct (#143)", v)
+	}
+}
+
+// TestNoSignalsAtAllIsThin is #164's floor: a collector package whose tests
+// drove no emission at all produces a golden that asserts nothing, while looking
+// exactly like a passing gate.
+//
+// entra/graphactivity shipped in that state — `"Logs": null` against a mapper
+// setting 22 attributes — and the gate was green over it for as long as it
+// existed.
+func TestNoSignalsAtAllIsThin(t *testing.T) {
+	reasons := signalcapture.ThinReasons(signalcapture.Signals{})
+
+	if len(reasons) != 1 {
+		t.Fatalf("ThinReasons(empty) = %v, want exactly 1 reason — a collector "+
+			"package that emitted nothing has a golden that gates nothing (#164)", reasons)
+	}
+	if !strings.Contains(reasons[0], "no signals") {
+		t.Errorf("reason = %q, want it to name the empty capture", reasons[0])
+	}
+}
+
+// TestLogCarryingOnlyFrameworkStampsIsThin closes the cheapest escape from the
+// floor above.
+//
+// The floor asks for "at least one signal". The lowest-effort way to satisfy it
+// without doing the work #164 asks for is to drive an EMPTY record through the
+// engine: the emitter decorators still stamp ingest_transport (#141) and
+// tenant_id (#143), so a log record appears, the golden is non-empty, and it
+// still describes none of the collector's own attributes. Those two keys are
+// authored by telemetry.WithTransport/WithTenant, not by the collector, so a
+// record carrying only them is the "Logs": null failure one notch up.
+func TestLogCarryingOnlyFrameworkStampsIsThin(t *testing.T) {
+	for _, attrs := range []telemetry.Attrs{
+		{semconv.AttrIngestTransport: "graph"},
+		{semconv.AttrIngestTransport: "blob", semconv.AttrTenantID: "t1"},
+	} {
+		r := telemetrytest.New()
+		r.Emitter().LogEvent(telemetry.Event{Name: "test.hollow", Attrs: attrs})
+
+		reasons := signalcapture.ThinReasons(signalcapture.Union([]*telemetrytest.Recorder{r}))
+
+		if len(reasons) != 1 {
+			t.Fatalf("ThinReasons(log with only %v) = %v, want 1 reason — the collector "+
+				"authored none of these keys, so the golden describes nothing (#164)", attrs, reasons)
+		}
+		if !strings.Contains(reasons[0], "test.hollow") {
+			t.Errorf("reason = %q, want it to name the hollow event", reasons[0])
+		}
+	}
+}
+
+// TestLogWithOneCollectorAttrIsNotThin: the framework-stamp rule must trip only
+// when the collector contributed NOTHING. One real attribute alongside the
+// stamps is a real (if small) surface, and judging its richness is not something
+// this check can do without reading the mapper — which #164 forbids.
+func TestLogWithOneCollectorAttrIsNotThin(t *testing.T) {
+	r := telemetrytest.New()
+	r.Emitter().LogEvent(telemetry.Event{Name: "test.real", Attrs: telemetry.Attrs{
+		semconv.AttrIngestTransport: "graph",
+		"operation":                 "Add user",
+	}})
+
+	if reasons := signalcapture.ThinReasons(signalcapture.Union([]*telemetrytest.Recorder{r})); len(reasons) != 0 {
+		t.Errorf("a log with a real collector attribute was flagged: %v", reasons)
+	}
+}
+
+// TestBareMetricWithNoAttrKeysIsNotThin guards the false positive that killed
+// the obvious generalization of this check.
+//
+// "Every signal must carry an attribute" reads well and is WRONG: measured
+// 2026-07-17, 11 of 52 packages legitimately emit at least one metric with zero
+// labels — entra.secure_score.current, entra.organization.age_days,
+// entra.agreements.total, intune.devices.overview.enrolled_device_count. A
+// tenant-wide total has nothing to break down BY. Flagging them would have made
+// this gate cry wolf on a fifth of the tree on day one, and a gate people exempt
+// is worse than no gate (the app_name lesson, one door down in perEntityKeys).
+//
+// So the attribute-level rule applies to LOGS only, where the framework stamps
+// give a precise "the collector contributed nothing" test. `[live-measured
+// 2026-07-17, #164]`
+func TestBareMetricWithNoAttrKeysIsNotThin(t *testing.T) {
+	r := telemetrytest.New()
+	r.Emitter().Gauge("entra.secure_score.current", "1", "d", 42, telemetry.Attrs{})
+
+	if reasons := signalcapture.ThinReasons(signalcapture.Union([]*telemetrytest.Recorder{r})); len(reasons) != 0 {
+		t.Errorf("an unlabeled tenant-total metric was flagged as thin: %v\n"+
+			"11 of 52 packages emit one; a tenant-wide total has nothing to break down by.", reasons)
 	}
 }
 

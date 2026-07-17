@@ -20,14 +20,43 @@
 // has to be written twice, and no test has to opt in. A gate a new test can
 // silently escape is not a gate.
 //
-// # Known limit, stated rather than implied
+// # The lower bound is wide, and here is what actually causes it
 //
-// The union is a LOWER BOUND on a collector's true signal surface: a code path
-// no test exercises emits nothing here, so it cannot be judged. This gate
-// therefore proves "nothing a test exercises breaks the rule", not "nothing
-// breaks the rule". That is a real limit, but it fails in the safe direction —
-// it never green-lights an emission it has seen — and a signal no test reaches
-// is a coverage problem worth having anyway.
+// The union is a LOWER BOUND on a collector's true signal surface: this gate
+// proves "nothing a test exercises breaks the rule", not "nothing breaks the
+// rule". Do not read that as an edge case. Measured across the tree on
+// 2026-07-17 (#164), 12 of 51 packages understated what they emit —
+// entra/graphactivity goldened `"Logs": null`, nothing at all, against a mapper
+// setting 22 attributes; intune/auditevents 4 of 18; entra/provisioning 3 of 14.
+//
+// The cause is NOT what a "lower bound" usually implies. It is not dead code or
+// an exotic branch no test reaches. The normal shape of a collector package here
+// is a RICH LIVE fixture that only ever reaches the MAPPER — asserted on
+// directly, never emitted — plus a MINIMAL SYNTHETIC fixture that is the only
+// thing driven through the engine into a Recorder. The golden faithfully
+// captures the synthetic one. The rich fixture is already in the tree; it simply
+// does not reach the emitter. That is the norm, not the exception, and it is why
+// the shortfall is measured in whole attribute sets rather than in odd branches.
+//
+// # The two halves of the gate fail differently, and only one fails safe
+//
+// For the #112 CARDINALITY half, the lower bound fails in the safe direction: it
+// never green-lights an emission it has seen, so a truncated golden means an
+// unjudged metric, not an approved one.
+//
+// For the #140 DRIFT half it does not fail safe at all — it is weakened exactly
+// in proportion to the shortfall, because a golden that never saw an attribute
+// cannot detect that attribute changing. m365/unifiedaudit's golden covered no
+// user attribute, so the user_principal_name → user_id rename (#163) did not
+// trip its drift gate; its twin m365/activity, same signal and same event name,
+// caught it. That asymmetry is the reason a thin golden is a defect rather than
+// a coverage aspiration: it looks like a passing gate and is not one.
+//
+// ThinReasons is the mechanical floor against regressing to zero (#164). Above
+// that floor the remedy is per package and is not automatable without becoming
+// the static analysis this package must not be: drive the richest LIVE fixture
+// end-to-end into a Recorder. entra/riskdetections is the reference — doing it
+// took its golden from 4 attribute keys to 23.
 package signalcapture
 
 import (
@@ -39,6 +68,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -209,6 +239,101 @@ func PerEntityViolations(s Signals) []Violation {
 	return out
 }
 
+// frameworkStamped are the attribute keys a collector does NOT author: the
+// emitter decorators add them to every log record that passes through, whatever
+// the collector put in the Event. telemetry.WithTransport stamps
+// ingest_transport (#141) and telemetry.WithTenant stamps tenant_id (#143).
+//
+// They are named via semconv rather than as literals so that renaming a stamp
+// moves this set with it. A literal here would drift silently, and a
+// thin-golden check that has quietly stopped recognizing the stamps would pass
+// hollow records — the failure shape this whole gate exists to prevent.
+var frameworkStamped = map[string]struct{}{
+	semconv.AttrIngestTransport: {},
+	semconv.AttrTenantID:        {},
+}
+
+// ThinReasons reports why a package's captured signals are too thin to gate
+// anything, or nil when they are usable. It is #164's mechanical check.
+//
+// # What it is for
+//
+// Golden below fails when a package's emissions CHANGE. It says nothing about
+// whether there were any emissions to begin with, so a package whose tests never
+// drove a record into a Recorder goldens `{"Metrics": null, "Logs": null}` and
+// passes forever. entra/graphactivity shipped exactly that — nothing at all,
+// against a mapper setting 22 attributes — and 11 more packages goldened a
+// fraction of their surface (#164, measured 2026-07-17). The cause is not an
+// unexercised code path: it is that the rich live fixture stops at the mapper
+// while a minimal synthetic one is the only thing driven end-to-end. The golden
+// faithfully captures the synthetic one. Nothing failed, which is the problem.
+//
+// # The two rules, and why there is no third
+//
+//  1. A package that emitted NOTHING is thin. This is the floor #164 asks for.
+//  2. A LOG record carrying only frameworkStamped keys is thin: the collector
+//     contributed none of them, so the record proves the emitter ran and nothing
+//     more. This closes rule 1's cheapest escape — driving an empty record
+//     through an engine makes a golden non-empty while keeping it worthless.
+//
+// The tempting third rule, "every signal must carry an attribute", is a
+// FALSE-POSITIVE GENERATOR and is deliberately absent: 11 of 52 packages
+// legitimately emit an unlabeled metric (entra.secure_score.current,
+// entra.organization.age_days, intune.devices.overview.enrolled_device_count) —
+// a tenant-wide total has nothing to break down by. It would have cried wolf on
+// a fifth of the tree on day one. `[live-measured 2026-07-17, #164]`
+//
+// # Why it does not read the collector's source
+//
+// #164's obvious framing is "fail when a golden is empty while its source sets
+// attributes", which invites a regex over the mapper. This does not do that, for
+// the reason #164 gives for the golden itself: the golden's one real guarantee
+// is that it is built FROM emissions, so it cannot describe a signal that does
+// not exist. A source regex reintroduces exactly that credibility gap, one level
+// up — and worse, it is an EXEMPTION. A package whose emit style the regex fails
+// to match is silently excused, which is #139/#100's shape verbatim: a gate
+// reporting coverage it does not have.
+//
+// The "is this a collector package that ought to emit?" question needs no regex,
+// because the tree already answers it. Every package under internal/collectors
+// installs Main, and cmd/graph2otel's TestEveryCollectorPackageEnforcesCardinality
+// walks the tree to prove it. So Main running IS the coarse signal: this is a
+// collector package, and a collector that emits nothing is not a collector. That
+// enumeration is tree-walked rather than hand-kept precisely so it cannot rot.
+//
+// # Its honest limit
+//
+// This is a floor, not a measure. It catches "nothing" and "nothing but stamps";
+// it cannot catch a golden that captures 4 of 22 real attributes, because
+// judging that needs to know what the mapper COULD emit — which is the static
+// analysis #164 forbids. Rules 1 and 2 stop the next collector regressing to
+// zero silently; keeping a golden honest above zero is a review duty, discharged
+// by driving the package's richest live fixture end-to-end (entra/riskdetections
+// is the reference shape: 4 keys goldened became 23 once its live record reached
+// the emitter).
+func ThinReasons(s Signals) []string {
+	if len(s.Metrics) == 0 && len(s.Logs) == 0 {
+		return []string{"this package's tests emitted no signals at all, so testdata/signals.json " +
+			"gates nothing: it cannot detect an attribute changing that it never saw"}
+	}
+
+	var out []string
+	for _, l := range s.Logs {
+		authored := 0
+		for _, k := range l.AttrKeys {
+			if _, stamped := frameworkStamped[k]; !stamped {
+				authored++
+			}
+		}
+		if authored == 0 {
+			out = append(out, fmt.Sprintf("log %q carries no attribute the collector authored "+
+				"(only %v, stamped by the emitter for every record): the record proves the emitter "+
+				"ran, not what this collector emits", l.EventName, l.AttrKeys))
+		}
+	}
+	return out
+}
+
 // update is the shared -update flag every collector package's TestMain exposes,
 // matching the house pattern (docs/env-vars.md, docs/collectors.md).
 var update = flag.Bool("update", false, "rewrite this package's testdata/signals.json golden")
@@ -278,6 +403,25 @@ func Main(m *testing.M) {
 		flag.Parse()
 	}
 	code := m.Run()
+	// Thinness is checked BEFORE Golden, and therefore before -update writes
+	// anything. A thin golden is created by an -update run, so refusing to write
+	// one fails at the moment of the mistake rather than goldening it and
+	// reporting it later — by which time the file looks like an accepted baseline.
+	if code == 0 {
+		if r := ThinReasons(Union(telemetrytest.Live())); len(r) > 0 {
+			fmt.Fprintf(os.Stderr, "\nthin signal golden (#164) — this package's tests do not drive\n"+
+				"their fixture all the way into a Recorder, so testdata/signals.json understates what\n"+
+				"the collector emits and cannot detect those attributes changing.\n\n")
+			for _, x := range r {
+				fmt.Fprintf(os.Stderr, "  - %s\n", x)
+			}
+			fmt.Fprintf(os.Stderr, "\nDrive this package's RICHEST LIVE fixture end-to-end (through the\n"+
+				"collector into a telemetrytest Recorder), not just into the mapper.\n"+
+				"entra/riskdetections' TestCollectorEmitsLiveRecordEndToEnd is the reference\n"+
+				"shape: doing this took its golden from 4 attribute keys to 23.\n\n")
+			code = 1
+		}
+	}
 	if code == 0 {
 		if err := Golden(*update); err != nil {
 			fmt.Fprintf(os.Stderr, "\nsignal drift (#140): %v\n\n", err)
