@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
@@ -275,5 +276,40 @@ func TestRun_CreateGivesUpAfterMaxRetries(t *testing.T) {
 	}
 	if client.createCalls != 3 { // 1 + 2 retries
 		t.Errorf("CreateQuery called %d times, want 3 (1 + CreateMaxRetries)", client.createCalls)
+	}
+}
+
+// TestRunStampsAuditQueryTransport pins that every record this engine emits
+// names the transport that produced it (#141).
+func TestRunStampsAuditQueryTransport(t *testing.T) {
+	rec := telemetrytest.New()
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+
+	sleeps := 0
+	cfg := baseConfig()
+	cfg.PageSize = 100
+	cfg.Sleep = noSleep(&sleeps)
+
+	page1 := "https://graph.microsoft.com/v1.0/security/auditLog/queries/query-1/records?$top=100"
+	client := &fakeJobClient{
+		statuses: []string{StatusSucceeded},
+		pages: map[string]fakePage{
+			page1: {records: []map[string]any{
+				{"id": "a", "createdDateTime": from.Add(5 * time.Minute).Format(time.RFC3339)},
+			}},
+		},
+	}
+
+	if _, err := Run(context.Background(), cfg, newCheckpoint("t1", cfg.CreatePath), from, to, client, rec.Emitter()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	logs := rec.LogRecords()
+	if len(logs) != 1 {
+		t.Fatalf("got %d log records, want 1", len(logs))
+	}
+	if got := logs[0].Attrs[semconv.AttrIngestTransport]; got != string(telemetry.TransportAuditQuery) {
+		t.Errorf("%s = %q, want %q", semconv.AttrIngestTransport, got, telemetry.TransportAuditQuery)
 	}
 }

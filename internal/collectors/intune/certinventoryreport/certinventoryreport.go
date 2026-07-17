@@ -320,6 +320,11 @@ func (c *Collector) RequiredPermissions() []string {
 // never a returned error — since the underlying report is opt-in and
 // best-effort.
 func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+	// Stamped here because no engine can: internal/exportjob never calls
+	// LogEvent, so report_export has no engine seam (#141). See
+	// appinstallreport.Collect for the full reasoning.
+	e = telemetry.WithTransport(e, telemetry.TransportReportExport)
+
 	if c.export == nil {
 		c.logger.Warn("cert_inventory: export runner not configured; skipping", "collector", collectorName)
 		return nil

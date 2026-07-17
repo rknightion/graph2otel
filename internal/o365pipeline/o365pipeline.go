@@ -194,6 +194,9 @@ func New(c *o365activityclient.Client, store *checkpoint.Store, cfg EndpointConf
 // The checkpoint is persisted even when a content type fails, so partial
 // progress survives; the failure is still returned.
 func (c *Collector) Collect(ctx context.Context, from, to time.Time, e telemetry.Emitter) error {
+	// Name the transport once per cycle rather than per record (#141).
+	e = telemetry.WithTransport(e, telemetry.TransportO365Activity)
+
 	cp, err := c.store.Load(c.client.TenantID, c.cfg.CheckpointKey)
 	if err != nil {
 		return fmt.Errorf("o365pipeline: %s: load checkpoint: %w", c.cfg.CollectorName, err)

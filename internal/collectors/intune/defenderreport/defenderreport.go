@@ -377,6 +377,11 @@ func (c *Collector) RequiredPermissions() []string {
 // logged and swallowed rather than treated as a scheduler-visible error -
 // see the package doc and the exportjob seam's sentinel errors.
 func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+	// Stamped here because no engine can: internal/exportjob never calls
+	// LogEvent, so report_export has no engine seam (#141). See
+	// appinstallreport.Collect for the full reasoning.
+	e = telemetry.WithTransport(e, telemetry.TransportReportExport)
+
 	if c.export == nil {
 		c.logger.Info("defenderreport: no export runner configured; skipping", "collector", collectorName)
 		return nil

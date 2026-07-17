@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
@@ -379,5 +380,32 @@ func TestPollContinuesWhenTheCursorSaveFails(t *testing.T) {
 	}
 	if got := bodies(r); len(got) != 2 {
 		t.Errorf("emitted %v, want both records — a save failure must not stop draining", got)
+	}
+}
+
+// TestPollStampsBlobTransport pins that every record this engine emits names
+// the transport that produced it (#141).
+//
+// This is the sharp case the attribute exists for. A blob-ingested sign-in and
+// a Graph-polled one are byte-identical by design — one shared mapper, on
+// purpose — so this stamp is the ONLY thing that tells an operator which lane a
+// record arrived by, and the only way to attribute a duplicate to #138's
+// at-least-once delivery rather than to both transports running at once.
+func TestPollStampsBlobTransport(t *testing.T) {
+	src := &fakeSource{blobs: map[string]string{
+		"tenantId=t1/y=2026/m=07/d=16/h=00/m=00/PT1H.json": rec("a"),
+	}}
+	r := telemetrytest.New()
+
+	if err := Poll(context.Background(), testConfig(), newCursor(), src, r.Emitter(), discardLogger(), nil); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+
+	logs := r.LogRecords()
+	if len(logs) != 1 {
+		t.Fatalf("got %d log records, want 1", len(logs))
+	}
+	if got := logs[0].Attrs[semconv.AttrIngestTransport]; got != string(telemetry.TransportBlob) {
+		t.Errorf("%s = %q, want %q", semconv.AttrIngestTransport, got, telemetry.TransportBlob)
 	}
 }

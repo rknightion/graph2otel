@@ -133,6 +133,12 @@ func Poll(
 	log *slog.Logger,
 	save SaveFunc,
 ) error {
+	// Name the transport once per cycle rather than per record (#141). This is
+	// the stamp that makes a blob-ingested record distinguishable from its
+	// Graph-polled twin — they are byte-identical otherwise, deliberately, via
+	// one shared mapper.
+	e = telemetry.WithTransport(e, telemetry.TransportBlob)
+
 	blobs, err := src.List(ctx, cfg.Container, cfg.Prefix)
 	if err != nil {
 		return fmt.Errorf("blobpipeline: list %s/%s: %w", cfg.Container, cfg.Prefix, err)

@@ -13,6 +13,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/o365activityclient"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
@@ -824,5 +825,32 @@ func TestCollectToleratesAnAlreadyEnabledSubscription(t *testing.T) {
 	// past the write and actually collected.
 	if got := len(rc.LogRecords()); got != 1 {
 		t.Errorf("emitted %d records, want 1 — the collector must proceed past an already-enabled subscription, not stop at it", got)
+	}
+}
+
+// TestCollectStampsO365ActivityTransport pins that every record this engine
+// emits names the transport that produced it (#141).
+func TestCollectStampsO365ActivityTransport(t *testing.T) {
+	base := testBase()
+	api := newFakeAPI(t, blobSpec{
+		contentType: o365activityclient.ContentExchange,
+		contentID:   "blob-1",
+		created:     base.Add(1 * time.Hour),
+		records:     []map[string]any{rec("r1", base.Add(50*time.Minute))},
+	})
+
+	rc := telemetrytest.New()
+	c := New(api.client(t), newStore(t), testConfig(o365activityclient.ContentExchange))
+
+	if err := c.Collect(context.Background(), base, base.Add(3*time.Hour), rc.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	logs := rc.LogRecords()
+	if len(logs) != 1 {
+		t.Fatalf("got %d log records, want 1", len(logs))
+	}
+	if got := logs[0].Attrs[semconv.AttrIngestTransport]; got != string(telemetry.TransportO365Activity) {
+		t.Errorf("%s = %q, want %q", semconv.AttrIngestTransport, got, telemetry.TransportO365Activity)
 	}
 }

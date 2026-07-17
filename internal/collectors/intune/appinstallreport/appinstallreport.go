@@ -224,6 +224,15 @@ type seriesKey struct {
 // swallowed rather than treated as a scheduler-visible error — see the
 // package doc and the exportjob seam's sentinel errors.
 func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+	// This collector names its own transport because no engine can (#141):
+	// internal/exportjob creates/polls/downloads the job and hands rows back
+	// without ever calling LogEvent, so there is no engine seam to stamp from.
+	// Left unstamped, the Scheduler's "graph" baseline would be the only stamp
+	// these rows got — a confident lie, which is the exact failure #141 exists
+	// to remove. exportjob's own graph2otel.export.* self-obs metrics pass
+	// through untouched: the decorator is log-only.
+	e = telemetry.WithTransport(e, telemetry.TransportReportExport)
+
 	if c.export == nil {
 		c.logger.Info("appinstallreport: no export runner configured; skipping", "collector", collectorName)
 		return nil

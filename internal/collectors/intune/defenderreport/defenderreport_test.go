@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/exportjob"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
@@ -384,5 +385,30 @@ func TestExperimentalAndPermissions(t *testing.T) {
 	}
 	if c.DefaultInterval().Hours() != 6 {
 		t.Errorf("DefaultInterval() = %v, want 6h", c.DefaultInterval())
+	}
+}
+
+// TestCollectStampsReportExportTransport pins that this collector names its own
+// transport (#141). internal/exportjob has no LogEvent call sites, so there is
+// no engine seam to stamp report_export from — the collector must do it, or the
+// Scheduler's "graph" baseline mislabels every row.
+func TestCollectStampsReportExportTransport(t *testing.T) {
+	c := New(&fakeRunner{rows: []exportjob.Row{
+		row("dev-1", "LAPTOP-1", "alice@contoso.com", "0", "0", true, true, true, true, true),
+	}}, nil)
+	rec := telemetrytest.New()
+
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	logs := rec.LogRecords()
+	if len(logs) == 0 {
+		t.Fatal("no log records emitted")
+	}
+	for i, l := range logs {
+		if got := l.Attrs[semconv.AttrIngestTransport]; got != string(telemetry.TransportReportExport) {
+			t.Errorf("log[%d] %s = %q, want %q", i, semconv.AttrIngestTransport, got, telemetry.TransportReportExport)
+		}
 	}
 }

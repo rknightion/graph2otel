@@ -286,6 +286,9 @@ func Run(ctx context.Context, cfg QueryConfig, cp *checkpoint.Checkpoint, from, 
 		return cp.Watermark, fmt.Errorf("jobpipeline: %s: BuildRequest and Map are required", cfg.CreatePath)
 	}
 
+	// Name the transport once per cycle rather than per record (#141).
+	e = telemetry.WithTransport(e, telemetry.TransportAuditQuery)
+
 	queryID, windowTo, err := resumeOrCreate(ctx, cfg, cp, from, to, client)
 	if err != nil {
 		return cp.Watermark, err

@@ -173,6 +173,10 @@ type PageFetcher interface {
 func Poll(ctx context.Context, cfg EndpointConfig, cp *checkpoint.Checkpoint, from, to time.Time, fetcher PageFetcher, e telemetry.Emitter) (highWater time.Time, err error) {
 	cfg = cfg.withDefaults()
 
+	// Name the transport once per cycle rather than per record: every record
+	// drained below is a direct Graph poll by construction (#141).
+	e = telemetry.WithTransport(e, telemetry.TransportGraph)
+
 	type drainedRecord struct {
 		id string
 		ev telemetry.Event

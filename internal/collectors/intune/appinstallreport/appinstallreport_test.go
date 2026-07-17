@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/exportjob"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
@@ -463,6 +464,34 @@ func TestPlatformLocSiblingIsNeverUsedAsALabel(t *testing.T) {
 	for _, p := range rec.MetricPoints(installationsMetricName) {
 		if got := p.Attrs["platform"]; got != "macos" {
 			t.Errorf("metric label platform = %q, want %q - the label must derive from the stable Platform code, never the locale-dependent Platform_loc (#142)", got, "macos")
+		}
+	}
+}
+
+// TestCollectStampsReportExportTransport pins that this collector names its own
+// transport (#141).
+//
+// The stamp is here, on the collector, rather than in an engine — and that is
+// forced, not a shortcut. internal/exportjob has ZERO LogEvent call sites: it
+// creates, polls, and downloads a job, then hands rows back for the collector to
+// emit. So there is no engine seam to stamp report_export from, and without this
+// the Scheduler's "graph" baseline would be the only stamp these rows ever got,
+// which would be a confident lie about a transport that is not Graph polling.
+func TestCollectStampsReportExportTransport(t *testing.T) {
+	c := New(&fakeRunner{rows: []exportjob.Row{row("Contoso Agent", "app-1", "5", 10, 2, 1, 3, 0)}}, nil)
+	rec := telemetrytest.New()
+
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	logs := rec.LogRecords()
+	if len(logs) == 0 {
+		t.Fatal("no log records emitted")
+	}
+	for i, l := range logs {
+		if got := l.Attrs[semconv.AttrIngestTransport]; got != string(telemetry.TransportReportExport) {
+			t.Errorf("log[%d] %s = %q, want %q", i, semconv.AttrIngestTransport, got, telemetry.TransportReportExport)
 		}
 	}
 }

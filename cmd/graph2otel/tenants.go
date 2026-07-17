@@ -201,7 +201,22 @@ func setupTenant(
 	}
 
 	status := collector.NewStatusTracker()
-	sched := collector.NewScheduler(emitter, collector.NewMemoryStore(),
+	// The transport baseline (#141). Every collector receives its emitter from
+	// the Scheduler, so this is the one seam that reaches all of them — including
+	// the SnapshotCollector log twins (entra/risk being the reference shape) that
+	// poll Graph and emit inline with no engine between them and the emitter.
+	// "graph" is the truthful default for those.
+	//
+	// Everything that is NOT a direct Graph poll re-wraps with its own transport
+	// closer to the record, and the outermost stamp wins, so this baseline never
+	// clobbers a truer one: the four engines stamp at their own entry points, and
+	// the three exportjob collectors stamp themselves (exportjob emits no logs, so
+	// report_export has no engine seam — see appinstallreport.Collect).
+	//
+	// Self-obs is unaffected: emitScrapeMetrics and emitCheckpointPersistError
+	// emit metrics only, and the decorator is log-only by design (#82).
+	sched := collector.NewScheduler(
+		telemetry.WithTransport(emitter, telemetry.TransportGraph), collector.NewMemoryStore(),
 		collector.WithTenant(ta.TenantID),
 		collector.WithStatusTracker(status),
 		collector.WithLogger(tlog),

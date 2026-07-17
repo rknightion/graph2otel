@@ -13,6 +13,8 @@ import (
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/logpipeline"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
@@ -362,4 +364,131 @@ func compactJSON(t *testing.T, raw string) string {
 		t.Fatalf("compacting the pinned record: %v", err)
 	}
 	return buf.String()
+}
+
+// pageFetcherFunc adapts a plain function to logpipeline.PageFetcher, so the
+// equivalence gate below can drive the real polled engine without a Graph client.
+type pageFetcherFunc func(ctx context.Context, pageURL string) ([]map[string]any, string, error)
+
+func (f pageFetcherFunc) FetchPage(ctx context.Context, pageURL string) ([]map[string]any, string, error) {
+	return f(ctx, pageURL)
+}
+
+// TestBlobAndPolledSignInDifferOnlyByIngestTransport is #141's load-bearing
+// gate, and the reason the provenance attribute exists at all.
+//
+// It drives BOTH real engines from ONE live-pinned record: the blob side gets
+// the full diagnostic-settings envelope, and the polled side gets that
+// envelope's inner `properties` object — which IS the Graph signIn resource,
+// verified field-for-field against live samples of all four sign-in categories.
+// So this is not two fixtures asserted to agree; it is one record arriving two
+// ways, which is exactly the production case.
+//
+// Two properties are pinned together, and they are in tension:
+//
+//  1. The two records differ by ingest_transport. Without this the transports
+//     are indistinguishable and an operator cannot measure the blob-vs-poll
+//     split, or attribute a duplicate to #138's at-least-once blob delivery
+//     rather than to both lanes running at once.
+//  2. They differ by NOTHING ELSE — same event name, same id, same every
+//     attribute. This is what keeps them dedupe-able on `id` (blob.go:138-146),
+//     and it is the property a careless "fix" breaks: forking mapSignIn into a
+//     blob variant and a polled variant would satisfy (1) and silently destroy
+//     (2). CLAUDE.md pins the single shared mapper for this reason.
+func TestBlobAndPolledSignInDifferOnlyByIngestTransport(t *testing.T) {
+	const tenant = "4b8c18bd-2f9f-4227-af55-9f1061cf9c32"
+
+	// --- blob transport: the full envelope, through the real blob engine.
+	blobRec := telemetrytest.New()
+	bc := newBlobCollector(blobSpecs[0], collectors.BlobDeps{
+		TenantID: tenant,
+		Source: &staticSource{
+			name: "tenantId=" + tenant + "/y=2026/m=07/d=16/h=15/m=00/PT1H.json",
+			data: []byte(compactJSON(t, realBlobFailure) + "\r\n"),
+		},
+		Store:  checkpoint.NewStore(t.TempDir()),
+		Logger: slog.New(slog.DiscardHandler),
+	})
+	if err := bc.Collect(context.Background(), blobRec.Emitter()); err != nil {
+		t.Fatalf("blob Collect: %v", err)
+	}
+
+	// --- graph transport: the SAME record's inner properties (the signIn
+	// resource Graph itself would return), through the real polled engine.
+	inner := innerProperties(t, realBlobFailure)
+	polledRec := telemetrytest.New()
+	cfg := logpipeline.EndpointConfig{
+		Path:            signInsPath,
+		TimeField:       "createdDateTime",
+		Flavor:          logpipeline.FlavorGeLe,
+		OrderByReliable: true,
+		Map:             mapSignIn,
+	}
+	from := time.Date(2026, 7, 16, 15, 0, 0, 0, time.UTC)
+	fetcher := pageFetcherFunc(func(context.Context, string) ([]map[string]any, string, error) {
+		return []map[string]any{inner}, "", nil
+	})
+	cp := &checkpoint.Checkpoint{TenantID: tenant, Endpoint: cfg.Path, SeenIDs: checkpoint.NewSeenIDs()}
+	if _, err := logpipeline.Poll(context.Background(), cfg, cp, from, from.Add(time.Hour), fetcher, polledRec.Emitter()); err != nil {
+		t.Fatalf("polled Poll: %v", err)
+	}
+
+	blobLogs, polledLogs := blobRec.LogRecords(), polledRec.LogRecords()
+	if len(blobLogs) != 1 || len(polledLogs) != 1 {
+		t.Fatalf("emitted blob=%d polled=%d records, want 1 each", len(blobLogs), len(polledLogs))
+	}
+	b, p := blobLogs[0], polledLogs[0]
+
+	// (1) They differ by the provenance attribute.
+	if got := b.Attrs[semconv.AttrIngestTransport]; got != string(telemetry.TransportBlob) {
+		t.Errorf("blob record %s = %q, want %q", semconv.AttrIngestTransport, got, telemetry.TransportBlob)
+	}
+	if got := p.Attrs[semconv.AttrIngestTransport]; got != string(telemetry.TransportGraph) {
+		t.Errorf("polled record %s = %q, want %q", semconv.AttrIngestTransport, got, telemetry.TransportGraph)
+	}
+	if b.Attrs[semconv.AttrIngestTransport] == p.Attrs[semconv.AttrIngestTransport] {
+		t.Fatal("the two transports are indistinguishable — the whole point of #141")
+	}
+
+	// (2) They differ by nothing else. Same event name, same dedupe key, and
+	// every other attribute identical in both directions.
+	if b.EventName != p.EventName {
+		t.Errorf("event name differs: blob %q vs polled %q — a blob-sourced sign-in is the "+
+			"same signal as a polled one and must not be separable by name", b.EventName, p.EventName)
+	}
+	if b.Attrs["id"] != p.Attrs["id"] || b.Attrs["id"] == "" {
+		t.Errorf("dedupe key differs: blob id=%q vs polled id=%q — they must stay dedupe-able on `id`",
+			b.Attrs["id"], p.Attrs["id"])
+	}
+	for k, bv := range b.Attrs {
+		if k == semconv.AttrIngestTransport {
+			continue
+		}
+		if pv, ok := p.Attrs[k]; !ok {
+			t.Errorf("attr %q present on the blob record (%q) but absent on the polled one", k, bv)
+		} else if bv != pv {
+			t.Errorf("attr %q differs: blob %q vs polled %q", k, bv, pv)
+		}
+	}
+	for k := range p.Attrs {
+		if k == semconv.AttrIngestTransport {
+			continue
+		}
+		if _, ok := b.Attrs[k]; !ok {
+			t.Errorf("attr %q present on the polled record but absent on the blob one", k)
+		}
+	}
+}
+
+// innerProperties pulls the `properties` object out of a diagnostic-settings
+// envelope — the object Graph's /auditLogs/signIns would have returned for the
+// same event.
+func innerProperties(t *testing.T, raw string) map[string]any {
+	t.Helper()
+	env := decodeBlobRecord(t, raw)
+	inner, ok := env["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("pinned record has no properties object")
+	}
+	return inner
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/graphclient"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
@@ -470,5 +471,45 @@ func TestBuildFirstURLPathMatchesConfigAndClassifiesWorkload(t *testing.T) {
 	}
 	if workload := graphclient.ClassifyWorkload(u.Path); workload != graphclient.WorkloadReporting {
 		t.Fatalf("ClassifyWorkload(%q) = %q, want %q", u.Path, workload, graphclient.WorkloadReporting)
+	}
+}
+
+// TestPollStampsGraphTransport pins that every record this engine emits names
+// the transport that produced it (#141).
+//
+// The engine stamps for itself rather than leaning on the Scheduler's "graph"
+// baseline, even though the baseline would produce the same value today. Two
+// reasons: the engine is then self-describing (a reader sees its transport here,
+// not by tracing back through the composition root), and the value stops
+// depending on a default set two packages away that nothing here would notice
+// changing.
+func TestPollStampsGraphTransport(t *testing.T) {
+	rec := telemetrytest.New()
+	cfg := EndpointConfig{
+		Path:            "/auditLogs/signIns",
+		TimeField:       "createdDateTime",
+		Flavor:          FlavorGeLe,
+		OrderByReliable: true,
+		Map:             mapByID,
+	}
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+
+	fetcher := pageFetcherFunc(func(_ context.Context, _ string) ([]map[string]any, string, error) {
+		return []map[string]any{
+			{"id": "a", "createdDateTime": from.Add(10 * time.Minute).Format(time.RFC3339)},
+		}, "", nil
+	})
+
+	if _, err := Poll(context.Background(), cfg, newCheckpoint("t1", cfg.Path), from, to, fetcher, rec.Emitter()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+
+	logs := rec.LogRecords()
+	if len(logs) != 1 {
+		t.Fatalf("got %d log records, want 1", len(logs))
+	}
+	if got := logs[0].Attrs[semconv.AttrIngestTransport]; got != string(telemetry.TransportGraph) {
+		t.Errorf("%s = %q, want %q", semconv.AttrIngestTransport, got, telemetry.TransportGraph)
 	}
 }
