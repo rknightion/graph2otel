@@ -131,6 +131,12 @@ func mapAuditEvent(rec map[string]any) (string, telemetry.Event) {
 	activityOperationType := str(rec, "activityOperationType")
 	activityResult := str(rec, "activityResult")
 	category := str(rec, "category")
+	// activity is null on every live-captured row (#172, live-measured
+	// 2026-07-17) — setStr already omits it here when empty, so this is a
+	// no-op on real data today. Kept (not removed) because a non-empty
+	// activity is plausible on some activityType this project hasn't
+	// captured yet; do not "fix" the gap by inventing a fixture value for
+	// it — that's the exact regression #172 documents.
 	activity := str(rec, "activity")
 
 	attrs := telemetry.Attrs{}
@@ -196,9 +202,16 @@ func mapAuditEvent(rec map[string]any) (string, telemetry.Event) {
 		sev = telemetry.SeverityWarn
 	}
 
+	// Body uses displayName, not the top-level activity field: activity is
+	// null on every live-captured row (#172), which rendered every Body with
+	// an empty middle ("DeviceConfiguration:  (Success)"). displayName is the
+	// populated, human-readable one-line summary ("Create device
+	// configuration assignment 2.0 (beta)"). The activity ATTRIBUTE mapping
+	// above is unchanged — setStr already omits it when empty — this only
+	// changes what the log Body renders from.
 	return id, telemetry.Event{
 		Name:     eventName,
-		Body:     fmt.Sprintf("%s: %s (%s)", category, activity, activityResult),
+		Body:     fmt.Sprintf("%s: %s (%s)", category, str(rec, "displayName"), activityResult),
 		Severity: sev,
 		Attrs:    attrs,
 	}

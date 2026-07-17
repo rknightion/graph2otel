@@ -274,6 +274,15 @@ func TestMapAuditEventAgainstLiveRecord(t *testing.T) {
 		t.Errorf("Success activityResult severity = %v, want Info", ev.Severity)
 	}
 
+	// #172 regression guard: Body must render from displayName, not the
+	// top-level activity field — activity is null on every live-captured row,
+	// which used to render every Body with an empty middle
+	// ("DeviceConfiguration:  (Success)").
+	wantBody := "DeviceConfiguration: Create device configuration assignment 2.0 (beta) (Success)"
+	if ev.Body != wantBody {
+		t.Errorf("body = %q, want %q", ev.Body, wantBody)
+	}
+
 	// The exact emitted key set. activity and actor_ip_address are DELIBERATELY
 	// absent: the wire carries both as null on all five captured rows.
 	wantKeys := []string{
@@ -392,7 +401,7 @@ func TestMapAuditEventUserInitiatedSuccess(t *testing.T) {
 	if ev.Severity != telemetry.SeverityInfo {
 		t.Errorf("successful audit severity = %v, want Info", ev.Severity)
 	}
-	wantBody := "DeviceConfiguration: Create (success)"
+	wantBody := "DeviceConfiguration: Create deviceConfiguration (success)"
 	if ev.Body != wantBody {
 		t.Errorf("body = %q, want %q", ev.Body, wantBody)
 	}
