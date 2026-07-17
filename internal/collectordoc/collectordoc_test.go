@@ -56,7 +56,7 @@ func newBlob(name, container, cursorKey string) *blobpipeline.BlobCollector {
 }
 
 func TestRowForReadsRegistryFacts(t *testing.T) {
-	ann := Annotation{Collects: "things", Source: "`/things`", Emits: "`x.things.total`"}
+	ann := Annotation{Collects: "things", Source: "`/things`"}
 	row, err := RowFor(fakeFull{fakeSnapshot{name: "entra.things", iv: 30 * time.Minute}}, KindSnapshot, ann)
 	if err != nil {
 		t.Fatalf("RowFor: %v", err)
@@ -201,7 +201,7 @@ func TestDurRendersOperatorNotation(t *testing.T) {
 func TestRenderEscapesPipesInProse(t *testing.T) {
 	rows := []Row{{
 		Name: "entra.x", Domain: "Entra ID", Kind: KindSnapshot, Interval: time.Minute,
-		Ann: Annotation{Collects: "a | b", Source: "`/x`", Emits: "`entra.x.total`"},
+		Ann: Annotation{Collects: "a | b", Source: "`/x`"},
 	}}
 	out, err := Render(rows)
 	if err != nil {
@@ -244,7 +244,7 @@ func TestRenderBlobSectionUsesBlobColumns(t *testing.T) {
 	rows := []Row{{
 		Name: "entra.graph_activity", Domain: "Entra ID", Kind: KindBlob, Interval: 5 * time.Minute,
 		Container: "insights-logs-microsoftgraphactivitylogs", CursorKey: "insights-logs-microsoftgraphactivitylogs",
-		Ann: Annotation{Collects: "graph calls", Category: "MicrosoftGraphActivityLogs", Emits: "`entra.graph_activity`"},
+		Ann: Annotation{Collects: "graph calls", Category: "MicrosoftGraphActivityLogs"},
 	}}
 	out, err := Render(rows)
 	if err != nil {

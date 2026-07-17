@@ -13,7 +13,7 @@
 // # The split: registry facts are generated, prose is hand-written, neither is
 // written twice
 //
-// Each row is a MERGE of two sources, and every fact has exactly one home:
+// Each row is a MERGE of three sources, and every fact has exactly one home:
 //
 //   - Facts the registry knows — name, kind, poll interval, safety lag,
 //     Experimental, the license.CapabilityRequirer capability, the declared Graph
@@ -21,17 +21,20 @@
 //     key — are read off the CONSTRUCTED collector here. They are never written
 //     by hand, so they cannot be wrong.
 //   - Facts the registry does not know — what the collector is FOR, which Graph
-//     endpoints it polls, which metrics or log events it emits, and any partial
-//     license gating that lives inside Collect() rather than in a declared
-//     interface — are hand-written prose in annotations.go, keyed by collector
-//     name.
+//     endpoints it polls, and any partial license gating that lives inside
+//     Collect() rather than in a declared interface — are hand-written prose in
+//     annotations.go, keyed by collector name.
+//   - The metric and log-event names a collector emits are GENERATED from its
+//     package's testdata/signals.json golden (#140, internal/signalcapture) —
+//     see signals.go. They used to be hand-written prose here, and that prose
+//     drifted uncaught: annotations.go once said entra.organization emitted
+//     `entra.organization.directory.sync.last_sync_age_seconds`, a name the
+//     collector never had. A golden produced FROM the real emissions cannot
+//     describe a signal that does not exist.
 //
-// Metric and log-event names are hand-written on purpose: they are string
-// literals inside each collector's Collect(), invisible to the registry, and
-// extracting them would need an AST walk or a runtime-capture harness. Carrying
-// them as gated prose is the honest option — see the doc gate in
-// cmd/graph2otel/collectordoc_test.go, which fails when a registered collector
-// has no annotation.
+// See the doc gate in cmd/graph2otel/collectordoc_test.go, which fails when a
+// registered collector has no annotation, and Rows below, which fails when a
+// registered collector's package has no signals.json golden.
 //
 // The rendered tables live between markers in docs/collectors.md; everything
 // outside them (the intro, the per-section notes, the cardinality rule) is
@@ -48,6 +51,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/blobpipeline"
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/preflight"
+	"github.com/rknightion/graph2otel/internal/signalcapture"
 )
 
 // Markers delimit the generated block inside docs/collectors.md. Splice
@@ -88,10 +92,6 @@ type Annotation struct {
 	// collector's container (e.g. "MicrosoftGraphActivityLogs"). Its casing is
 	// not recoverable from the container name, which is lowercased. Blob only.
 	Category string
-	// Emits names the metric namespace (snapshot) or the OTLP log event name
-	// (window/blob) the collector produces. Hand-written because these are
-	// string literals inside Collect(), invisible to the registry.
-	Emits string
 	// Gating carries license/beta nuance the registry cannot express: a
 	// collector that PARTIALLY degrades gates inside Collect() on Deps.Caps
 	// rather than declaring license.CapabilityRequirer, so no interface reports
@@ -113,6 +113,11 @@ type Row struct {
 	Container    string // blob only
 	CursorKey    string // blob only; the EFFECTIVE key, with the container default resolved
 	Ann          Annotation
+	// Signals is what the collector's package actually emits, per its
+	// testdata/signals.json golden (#140). Populated by Rows, never by RowFor:
+	// RowFor is tested with bare Row{} literals that carry no golden on disk,
+	// so resolving it there would force every white-box test to fake one.
+	Signals signalcapture.Signals
 }
 
 // domains maps a collector name's first dotted segment to its doc domain. A
@@ -299,7 +304,14 @@ func CheckAnnotations(registered []string) error {
 // kind split here is about the cursor. (Contrast blob collectors, which get
 // their own kind because a byte-offset-per-blob cursor genuinely cannot express
 // a [from, to] window.)
-func Rows(snapshot, window, blob, o365 []any) ([]Row, error) {
+//
+// root is the repo root (e.g. filepath.Join("..", "..") from a test two
+// directories under it), used to resolve each collector's package back to its
+// testdata/signals.json golden (#140, see signals.go). A collector whose
+// package has no golden hard-errors here — the same convention blobConfig
+// uses for a missing container: a blank signal cell would be a silently wrong
+// doc, which is what this whole package exists to prevent.
+func Rows(snapshot, window, blob, o365 []any, root string) ([]Row, error) {
 	var rows []Row
 	for _, group := range []struct {
 		kind Kind
@@ -314,6 +326,15 @@ func Rows(snapshot, window, blob, o365 []any) ([]Row, error) {
 			if err != nil {
 				return nil, err
 			}
+			pkgDir, err := packageDir(c)
+			if err != nil {
+				return nil, err
+			}
+			sig, err := loadSignals(root, pkgDir)
+			if err != nil {
+				return nil, err
+			}
+			row.Signals = sig
 			rows = append(rows, row)
 		}
 	}
@@ -396,17 +417,17 @@ func cellsFor(r Row) ([]string, error) {
 	case KindSnapshot:
 		return []string{
 			code(r.Name), esc(r.Ann.Collects), esc(or(r.Ann.Source, "—")),
-			scopes(r.Permissions), gatingCell(r), dur(r.Interval), esc(or(r.Ann.Emits, "—")),
+			scopes(r.Permissions), gatingCell(r), dur(r.Interval), esc(or(signalCell(r), "—")),
 		}, nil
 	case KindWindow:
 		return []string{
 			code(r.Name), esc(r.Ann.Collects), esc(or(r.Ann.Source, "—")),
-			scopes(r.Permissions), gatingCell(r), dur(r.Interval), dur(r.Lag), esc(or(r.Ann.Emits, "—")),
+			scopes(r.Permissions), gatingCell(r), dur(r.Interval), dur(r.Lag), esc(or(signalCell(r), "—")),
 		}, nil
 	case KindBlob:
 		return []string{
 			code(r.Name), esc(r.Ann.Collects), containerCell(r), code(r.CursorKey),
-			"`Storage Blob Data Reader`", gatingCell(r), dur(r.Interval), esc(or(r.Ann.Emits, "—")),
+			"`Storage Blob Data Reader`", gatingCell(r), dur(r.Interval), esc(or(signalCell(r), "—")),
 		}, nil
 	}
 	return nil, fmt.Errorf("collectordoc: collector %q has unknown kind %d", r.Name, r.Kind)

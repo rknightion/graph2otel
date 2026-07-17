@@ -112,7 +112,8 @@ func TestCollectorReferenceDocInSync(t *testing.T) {
 	docPath := filepath.Join("..", "..", "docs", "collectors.md")
 
 	snapshot, window, blob, o365 := registrySnapshot()
-	rows, err := collectordoc.Rows(snapshot, window, blob, o365)
+	root := filepath.Join("..", "..")
+	rows, err := collectordoc.Rows(snapshot, window, blob, o365, root)
 	if err != nil {
 		t.Fatalf("rows: %v", err)
 	}
@@ -139,5 +140,17 @@ func TestCollectorReferenceDocInSync(t *testing.T) {
 	if want != string(current) {
 		t.Errorf("docs/collectors.md is out of date with the collector registry — regenerate with " +
 			"`scripts/regen-generated.sh collectordoc` (or `go test ./cmd/graph2otel -run TestCollectorReferenceDocInSync -update`) and commit the result")
+	}
+}
+
+// TestRowsHardErrorsWhenACollectorPackageHasNoGolden proves the signal column
+// fails loudly rather than rendering blank: every registered collector here
+// is real, so packageDir resolves every one of them fine, but pointing Rows
+// at a root with no testdata/signals.json anywhere under it must still fail —
+// a missing golden is a build error, never a silently empty cell.
+func TestRowsHardErrorsWhenACollectorPackageHasNoGolden(t *testing.T) {
+	snapshot, window, blob, o365 := registrySnapshot()
+	if _, err := collectordoc.Rows(snapshot, window, blob, o365, t.TempDir()); err == nil {
+		t.Fatal("Rows accepted a root with no signals.json golden for any collector")
 	}
 }

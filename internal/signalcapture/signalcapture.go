@@ -334,10 +334,6 @@ func ThinReasons(s Signals) []string {
 	return out
 }
 
-// update is the shared -update flag every collector package's TestMain exposes,
-// matching the house pattern (docs/env-vars.md, docs/collectors.md).
-var update = flag.Bool("update", false, "rewrite this package's testdata/signals.json golden")
-
 // Golden writes or verifies a package's captured signals against
 // testdata/signals.json, and is the drift gate #140 asks for: it fails a plain
 // `go test` when a package's real emissions change.
@@ -397,8 +393,20 @@ func Golden(update bool) error {
 // than in a test is what makes it unforgettable — it needs no test to call it,
 // so it covers emissions from tests written later by someone who has never heard
 // of #112.
+//
+// The -update flag is registered HERE, inside Main, rather than at package
+// var-init time: internal/collectordoc imports this package for the plain
+// Signals/MetricSignal/LogSignal types (#140), not for Main, but a
+// package-level flag.Bool runs on import regardless — which collided with
+// cmd/graph2otel's own pre-existing "-update" flag the moment collectordoc
+// started importing this package, panicking with "flag redefined: update" in
+// every run of `go test ./cmd/graph2otel`. Main is the only reader of the
+// flag and only collector packages that install it as their TestMain ever
+// call it, so registering it here means importing this package's TYPES alone
+// — as collectordoc now does — never touches the flag package at all.
 func Main(m *testing.M) {
 	telemetrytest.StartCapture()
+	update := flag.Bool("update", false, "rewrite this package's testdata/signals.json golden")
 	if !flag.Parsed() {
 		flag.Parse()
 	}
