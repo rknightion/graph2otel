@@ -131,13 +131,13 @@ const liveUserLoggedInRecord = `{
     "Version@odata.type": "#Int64",
     "Version": 1,
     "Workload": "AzureActiveDirectory",
-    "ClientIP": "2001:8b0:1f05::1038",
+    "ClientIP": "2001:db8::1038",
     "ObjectId": "00000002-0000-0000-c000-000000000000",
     "UserId": "rob@m7kni.io",
     "AzureActiveDirectoryEventType@odata.type": "#Int64",
     "AzureActiveDirectoryEventType": 1,
     "ActorContextId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
-    "ActorIpAddress": "2001:8b0:1f05::1038",
+    "ActorIpAddress": "2001:db8::1038",
     "InterSystemsId": "7e6ddcaf-16a1-4605-a1db-31d339c6c71b",
     "IntraSystemId": "d87d2977-96b6-4c65-aa44-032f7e314400",
     "SupportTicketId": "",
@@ -282,13 +282,13 @@ const liveNotAvailableUserIDRecord = `{
     "Version@odata.type": "#Int64",
     "Version": 1,
     "Workload": "AzureActiveDirectory",
-    "ClientIP": "2001:8b0:1f05::1038",
+    "ClientIP": "2001:db8::1038",
     "ObjectId": "797f4846-ba00-4fd7-ba43-dac1f8f63013",
     "UserId": "Not Available",
     "AzureActiveDirectoryEventType@odata.type": "#Int64",
     "AzureActiveDirectoryEventType": 1,
     "ActorContextId": "39307a09-1fd5-481d-88d7-854919f289fd",
-    "ActorIpAddress": "2001:8b0:1f05::1038",
+    "ActorIpAddress": "2001:db8::1038",
     "InterSystemsId": "019f6aae-536e-78cb-9f5b-6285759e2c7a",
     "IntraSystemId": "9b8c866e-3596-445c-b1a3-9fc5b3553700",
     "SupportTicketId": "",
@@ -625,8 +625,8 @@ func TestTopLevelClientIPIsNull(t *testing.T) {
 	if !ok {
 		t.Fatal("live record has no auditData object")
 	}
-	if got := data["ClientIP"]; got != "2001:8b0:1f05::1038" {
-		t.Errorf("auditData.ClientIP = %v, want 2001:8b0:1f05::1038 — the client IP lives in the classic sub-object, not the envelope", got)
+	if got := data["ClientIP"]; got != "2001:db8::1038" {
+		t.Errorf("auditData.ClientIP = %v, want 2001:db8::1038 — the client IP lives in the classic sub-object, not the envelope", got)
 	}
 }
 
