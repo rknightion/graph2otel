@@ -4,8 +4,15 @@
     {
       "EventName": "intune.enrollment_event",
       "AttrKeys": [
+        "correlation_id",
+        "device_id",
+        "enrollment_type",
         "failure_category",
-        "ingest_transport"
+        "failure_reason",
+        "ingest_transport",
+        "operating_system",
+        "os_version",
+        "user_id"
       ]
     }
   ]

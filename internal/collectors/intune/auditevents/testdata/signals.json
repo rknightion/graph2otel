@@ -4,10 +4,25 @@
     {
       "EventName": "intune.audit_event",
       "AttrKeys": [
+        "activity",
+        "activity_operation_type",
         "activity_result",
+        "activity_type",
+        "actor_application_display_name",
+        "actor_application_id",
+        "actor_ip_address",
+        "actor_type",
+        "actor_user_id",
+        "actor_user_principal_name",
         "category",
+        "component_name",
+        "correlation_id",
+        "display_name",
         "id",
-        "ingest_transport"
+        "ingest_transport",
+        "modified_property_names",
+        "resource_display_names",
+        "resource_types"
       ]
     }
   ]

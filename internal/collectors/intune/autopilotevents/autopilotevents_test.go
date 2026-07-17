@@ -25,8 +25,33 @@ func (f *recordingFetcher) FetchPage(_ context.Context, pageURL string) ([]map[s
 	return f.records, "", nil
 }
 
-func TestMapAutopilotEventBasic(t *testing.T) {
-	rec := map[string]any{
+// --- shared fixtures ---
+//
+// Shared by the mapper tests and by TestCollectorEmitsFullRecordsEndToEnd so
+// the two can never drift into describing different records, mirroring how
+// entra/riskdetections shares one record between its mapper tests and its
+// end-to-end test.
+//
+// They are SYNTHETIC, and that gap is worth stating rather than implying:
+// unlike entra/riskdetections' liveRiskDetection, this tree pins no verbatim
+// GET beta/deviceManagement/autopilotEvents response, so no field NAME here is
+// evidence of wire shape — they are docs-level claims, and this endpoint is
+// BETA, where an undocumented schema change is an expected risk (see #164, and
+// CLAUDE.md on "platform": "windows", #142).
+//
+// What the end-to-end test proves regardless of provenance: whatever
+// mapAutopilotEvent sets survives the engine to the emitter — which is what
+// makes testdata/signals.json honest, since the golden records attribute KEYS
+// ONLY (internal/signalcapture) and a key set does not depend on whether the
+// values a fixture carries are real.
+//
+// Each returns a fresh map so the engine can never mutate a shared literal.
+
+// successfulAutopilotEvent is the richest single record here: every field
+// mapAutopilotEvent reads except enrollmentFailureDetails, which by definition
+// cannot appear on a success.
+func successfulAutopilotEvent() map[string]any {
+	return map[string]any{
 		"id":                   "evt-1",
 		"deviceId":             "device-guid",
 		"deviceSerialNumber":   "SN12345",
@@ -39,6 +64,30 @@ func TestMapAutopilotEventBasic(t *testing.T) {
 		"accountSetupDuration": "PT1M0S",
 		"eventDateTime":        "2026-07-01T10:00:00Z",
 	}
+}
+
+// failedAutopilotEvent is the only source of the enrollment_failure_details
+// attribute.
+//
+// It composes two records this package's tests already had, and invents
+// nothing: the id/deploymentState/enrollmentFailureDetails values are verbatim
+// from TestMapAutopilotEventFailureIsError's record, and eventDateTime is the
+// envelope field the engine requires — a failure record carrying one is
+// likewise already in this file (TestCollectorDrainsEmitsAndPersistsWatermark's
+// "evt-b"). The mapper test could omit eventDateTime because it never reaches
+// the engine; the end-to-end test cannot, since this endpoint is NoServerFilter
+// and the engine drops any record whose TimeField falls outside [from, to].
+func failedAutopilotEvent() map[string]any {
+	return map[string]any{
+		"id":                       "evt-3",
+		"deploymentState":          "failed",
+		"enrollmentFailureDetails": "aadJoinFailed",
+		"eventDateTime":            "2026-07-01T10:30:00Z",
+	}
+}
+
+func TestMapAutopilotEventBasic(t *testing.T) {
+	rec := successfulAutopilotEvent()
 	id, ev := mapAutopilotEvent(rec)
 	if id != "evt-1" {
 		t.Fatalf("dedupe id = %q, want evt-1", id)
@@ -91,11 +140,7 @@ func TestMapAutopilotEventKeepsThreePhasesDistinct(t *testing.T) {
 }
 
 func TestMapAutopilotEventFailureIsError(t *testing.T) {
-	rec := map[string]any{
-		"id":                       "evt-3",
-		"deploymentState":          "failed",
-		"enrollmentFailureDetails": "aadJoinFailed",
-	}
+	rec := failedAutopilotEvent()
 	_, ev := mapAutopilotEvent(rec)
 	if ev.Severity != 2 { // SeverityError
 		t.Errorf("failed event severity = %v, want Error", ev.Severity)
@@ -218,6 +263,83 @@ func TestCollectorIsExperimentalAndUsesBetaEndpointWithNoServerFilter(t *testing
 	}
 	if strings.Contains(u, "$filter=") {
 		t.Errorf("first-page URL = %q, want NO $filter (NoServerFilter: no documented server-side filter)", u)
+	}
+}
+
+// TestCollectorEmitsFullRecordsEndToEnd drives this package's two richest
+// records through the real engine into an emitter, rather than calling
+// mapAutopilotEvent directly like the tests above.
+//
+// It proves every attribute mapAutopilotEvent sets survives the whole path, and
+// it is what makes testdata/signals.json honest: the signal gate goldens the
+// union of what a package's tests EMIT, so with only the minimal synthetic
+// records of the watermark test reaching the emitter, the golden recorded a
+// 3-attribute surface (deployment_state, id, ingest_transport) for a collector
+// that really ships 12 — understating the exact thing the golden exists to make
+// reviewable (#164). Both records are needed: a success record cannot carry
+// enrollment_failure_details.
+func TestCollectorEmitsFullRecordsEndToEnd(t *testing.T) {
+	f := &recordingFetcher{records: []map[string]any{
+		successfulAutopilotEvent(),
+		failedAutopilotEvent(),
+	}}
+	rec := telemetrytest.New()
+	c := newCollector(collectors.WindowDeps{TenantID: "t1", Fetcher: f, Store: checkpoint.NewStore(t.TempDir())})
+
+	// Both records' eventDateTime (10:00, 10:30) must fall inside [from, to]:
+	// this endpoint is NoServerFilter, so the engine bounds the window
+	// client-side and drops anything outside it.
+	from := time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC)
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(2*time.Hour), rec.Emitter()); err != nil {
+		t.Fatalf("CollectWindow: %v", err)
+	}
+
+	logs := rec.LogRecords()
+	if len(logs) != 2 {
+		t.Fatalf("emitted %d records, want 2", len(logs))
+	}
+	byID := map[string]map[string]string{}
+	for _, got := range logs {
+		if got.EventName != eventName {
+			t.Errorf("event name = %q, want %q", got.EventName, eventName)
+		}
+		byID[got.Attrs["id"]] = got.Attrs
+	}
+
+	// String attributes checked at the emitter rather than the mapper.
+	wantSuccess := map[string]string{
+		"id":                   "evt-1",
+		"device_id":            "device-guid",
+		"device_serial_number": "SN12345",
+		"enrollment_type":      "windowsAzureADJoin",
+		"deployment_state":     "success",
+		"device_setup_status":  "success",
+		"account_setup_status": "success",
+		// The transport stamp the engine applies at the emitter boundary (#141).
+		"ingest_transport": "graph",
+	}
+	for k, want := range wantSuccess {
+		if got := byID["evt-1"][k]; got != want {
+			t.Errorf("evt-1 emitted attr %q = %q, want %q", k, got, want)
+		}
+	}
+	if got := byID["evt-3"]["enrollment_failure_details"]; got != "aadJoinFailed" {
+		t.Errorf("evt-3 emitted attr %q = %q, want %q", "enrollment_failure_details", got, "aadJoinFailed")
+	}
+
+	// The three phase durations are checked for PRESENCE only, and their values
+	// are pinned at the mapper instead (TestMapAutopilotEventBasic).
+	//
+	// Not an oversight, and do not "fix" it by asserting values here: they are
+	// emitted as OTLP doubles (telemetry.toLogKV maps float64 → log.Float64,
+	// which is correct on the wire), but telemetrytest.Recorder flattens every
+	// log attribute through log.Value.AsString(), which yields "" for any
+	// non-string Kind. So the recorder cannot represent a float attribute's
+	// value — a limitation of the test harness, not of the emission.
+	for _, k := range []string{"deployment_duration_seconds", "device_setup_duration_seconds", "account_setup_duration_seconds"} {
+		if _, present := byID["evt-1"][k]; !present {
+			t.Errorf("evt-1 emitted attrs missing %q", k)
+		}
 	}
 }
 

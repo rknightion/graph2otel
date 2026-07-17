@@ -4,7 +4,16 @@
     {
       "EventName": "intune.autopilot_event",
       "AttrKeys": [
+        "account_setup_duration_seconds",
+        "account_setup_status",
+        "deployment_duration_seconds",
         "deployment_state",
+        "device_id",
+        "device_serial_number",
+        "device_setup_duration_seconds",
+        "device_setup_status",
+        "enrollment_failure_details",
+        "enrollment_type",
         "id",
         "ingest_transport"
       ]
