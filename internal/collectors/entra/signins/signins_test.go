@@ -2,6 +2,9 @@ package signins
 
 import (
 	"context"
+	"encoding/json"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +14,252 @@ import (
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
+
+// liveInteractiveSignIn is a VERBATIM GET /auditLogs/signIns record from the
+// m7kni tenant's v1.0 interactive stream, read as graph2otel-poller on
+// 2026-07-17 `[live-measured 2026-07-17, #165]`. It is the first of five records
+// returned by GET /auditLogs/signIns?$top=5 (v1.0, no filter — the default
+// collection is the interactive user slice this package's `entra.signins.interactive`
+// stream polls; the other three streams are beta-only via BaseURLOverride).
+//
+// It is the POLLED envelope's native wire shape, which is distinct from the blob
+// envelope pinned in realBlobFailure (the polled record has no diagnostic-settings
+// wrapper — the sign-in fields sit at the top level, not under a `properties`
+// object). Pinning it separately is the point: the inner sign-in fields overlap
+// the blob record but the surrounding shape does not, and the polled path is what
+// mapSignIn is fed by the logpipeline engine.
+//
+// The fields graph2otel does not map (appliedConditionalAccessPolicies,
+// deviceDetail, isInteractive, location.city/state/geoCoordinates, riskDetail,
+// riskEventTypes, riskLevelAggregated, userDisplayName, status.additionalDetails)
+// are left in on purpose so this stays a faithful sample of what the endpoint
+// returns. UPN and corporate identity are retained (SIEM by design).
+//
+// REDACTED for a public repo (the mapper reads none of these, so it is
+// shape-only): ipAddress, location.city/state, and geoCoordinates were the
+// tenant owner's home address in effect — replaced with documentation values
+// (2001:db8::/32, London city-center coordinates). Everything else is verbatim.
+//
+// WIRE FACT worth its own guard (TestLiveInteractiveRecordCarriesNoSignInEventTypes):
+// the v1.0 default collection returns NO `signInEventTypes` key. The synthetic
+// fixture in TestMapSignInUserSignInSuccess invents one; the interactive stream
+// never sees it (isInteractive:true is what the wire carries instead).
+const liveInteractiveSignIn = `{
+  "appDisplayName": "One Outlook Web",
+  "appId": "9199bf20-a13f-4107-85dc-02114787ef48",
+  "appliedConditionalAccessPolicies": [
+    {
+      "displayName": "Reduced reauth frequency at home",
+      "enforcedGrantControls": [],
+      "enforcedSessionControls": ["SignInFrequency"],
+      "id": "3fa9321f-1213-47c8-87be-eeb71bb4e6fc",
+      "result": "success"
+    },
+    {
+      "displayName": "Require multifactor authentication for all users",
+      "enforcedGrantControls": ["Mfa"],
+      "enforcedSessionControls": [],
+      "id": "013f1d6b-785b-4520-b0f9-31bfaefb8e2b",
+      "result": "success"
+    },
+    {
+      "displayName": "Block legacy authentication",
+      "enforcedGrantControls": ["Block"],
+      "enforcedSessionControls": [],
+      "id": "738ad89e-6820-4164-84f1-53d295360d42",
+      "result": "notApplied"
+    }
+  ],
+  "clientAppUsed": "Browser",
+  "conditionalAccessStatus": "success",
+  "correlationId": "845e7924-e581-7853-4d9d-56a508b211b9",
+  "createdDateTime": "2026-07-17T14:10:02Z",
+  "deviceDetail": {
+    "browser": "Chrome 151.0.0",
+    "deviceId": "",
+    "displayName": "",
+    "isCompliant": false,
+    "isManaged": false,
+    "operatingSystem": "MacOs",
+    "trustType": null
+  },
+  "id": "d70d10b6-221a-4840-899d-87ee20ff5900",
+  "ipAddress": "2001:db8::1038",
+  "isInteractive": true,
+  "location": {
+    "city": "London",
+    "countryOrRegion": "GB",
+    "geoCoordinates": {
+      "altitude": null,
+      "latitude": 51.5074,
+      "longitude": -0.1278
+    },
+    "state": "England"
+  },
+  "resourceDisplayName": "Office 365 Exchange Online",
+  "resourceId": "00000002-0000-0ff1-ce00-000000000000",
+  "riskDetail": "none",
+  "riskEventTypes": [],
+  "riskEventTypes_v2": [],
+  "riskLevelAggregated": "none",
+  "riskLevelDuringSignIn": "none",
+  "riskState": "none",
+  "status": {
+    "additionalDetails": "MFA requirement satisfied by claim in the token",
+    "errorCode": 0,
+    "failureReason": "Other."
+  },
+  "userDisplayName": "Rob Knight",
+  "userId": "bbcfc3c5-0b93-4135-9ef9-18477a9fb504",
+  "userPrincipalName": "rob@m7kni.io"
+}`
+
+// decodeLive unmarshals a pinned live record into the untyped shape the
+// logpipeline engine hands to mapSignIn.
+func decodeLive(t *testing.T, raw string) map[string]any {
+	t.Helper()
+	var rec map[string]any
+	if err := json.Unmarshal([]byte(raw), &rec); err != nil {
+		t.Fatalf("decode live record: %v", err)
+	}
+	return rec
+}
+
+// TestLiveInteractiveRecordCarriesNoSignInEventTypes pins the wire fact behind
+// this package's one fabrication risk: the v1.0 default /auditLogs/signIns
+// collection returns NO `signInEventTypes` property (0 of 5 records in the
+// $top=5 capture carried it). The mapper reads that key, so on the interactive
+// v1.0 stream the `sign_in_event_types` attribute is never emitted — it exists
+// only on the three beta signInEventTypes-filtered streams, whose responses do
+// echo the filtered value.
+//
+// The synthetic TestMapSignInUserSignInSuccess fixture invents
+// signInEventTypes:["interactiveUser"] on what it labels a user sign-in; the
+// real interactive record carries isInteractive:true instead. This is the same
+// class of hand-written fabrication as #142's "platform":"windows" — read this
+// test before trusting the synthetic fixture's shape.
+func TestLiveInteractiveRecordCarriesNoSignInEventTypes(t *testing.T) {
+	rec := decodeLive(t, liveInteractiveSignIn)
+	if v, present := rec["signInEventTypes"]; present {
+		t.Fatalf("live v1.0 interactive signIn carries signInEventTypes = %v; the interactive stream's mapper assumes it does not", v)
+	}
+	if v, present := rec["isInteractive"]; !present || v != true {
+		t.Errorf("isInteractive = %v (present=%v), want true — the field the v1.0 collection actually uses to mark an interactive sign-in", v, present)
+	}
+}
+
+// TestMapSignInAgainstLiveInteractiveRecord pins the EXACT attribute set
+// mapSignIn produces from a real polled record. Exact-set equality fails on a
+// dropped field AND on a fabricated one — the pair of mistakes #142/#153 are
+// made of.
+//
+// Note status_failure_reason = "Other." is emitted on a SUCCESSFUL sign-in
+// (errorCode 0): Graph populates failureReason with the placeholder "Other." on
+// every success, and the mapper sets the attribute whenever the field is present
+// regardless of errorCode. That is faithful to the wire (all 5 captured records
+// carry it), so it is pinned here rather than "fixed".
+func TestMapSignInAgainstLiveInteractiveRecord(t *testing.T) {
+	id, ev := mapSignIn(decodeLive(t, liveInteractiveSignIn))
+
+	if id != "d70d10b6-221a-4840-899d-87ee20ff5900" {
+		t.Errorf("dedupe id = %q, want the record's immutable sign-in id", id)
+	}
+	if ev.Name != eventName {
+		t.Errorf("event name = %q, want %q", ev.Name, eventName)
+	}
+	if ev.Severity != 0 { // SeverityInfo — errorCode 0
+		t.Errorf("severity = %v, want Info for a successful sign-in", ev.Severity)
+	}
+
+	wantKeys := []string{
+		"app_display_name",
+		"app_id",
+		"client_app_used",
+		"conditional_access_status",
+		"correlation_id",
+		"id",
+		"ip_address",
+		"location_country_or_region",
+		"resource_display_name",
+		"resource_id",
+		"risk_level_during_sign_in",
+		"risk_state",
+		"status_error_code",
+		"status_failure_reason",
+		"user_id",
+		"user_principal_name",
+	}
+	gotKeys := make([]string, 0, len(ev.Attrs))
+	for k := range ev.Attrs {
+		gotKeys = append(gotKeys, k)
+	}
+	sort.Strings(gotKeys)
+	if !reflect.DeepEqual(gotKeys, wantKeys) {
+		t.Errorf("attribute key set mismatch\n got: %v\nwant: %v", gotKeys, wantKeys)
+	}
+
+	wantScalars := map[string]any{
+		"id":                         "d70d10b6-221a-4840-899d-87ee20ff5900",
+		"correlation_id":             "845e7924-e581-7853-4d9d-56a508b211b9",
+		"user_principal_name":        "rob@m7kni.io",
+		"user_id":                    "bbcfc3c5-0b93-4135-9ef9-18477a9fb504",
+		"app_id":                     "9199bf20-a13f-4107-85dc-02114787ef48",
+		"app_display_name":           "One Outlook Web",
+		"resource_display_name":      "Office 365 Exchange Online",
+		"resource_id":                "00000002-0000-0ff1-ce00-000000000000",
+		"ip_address":                 "2001:db8::1038",
+		"client_app_used":            "Browser",
+		"conditional_access_status":  "success",
+		"risk_level_during_sign_in":  "none",
+		"risk_state":                 "none",
+		"location_country_or_region": "GB",
+		"status_error_code":          0,
+		"status_failure_reason":      "Other.",
+	}
+	for k, want := range wantScalars {
+		if got := ev.Attrs[k]; got != want {
+			t.Errorf("attr %q = %v, want %v", k, got, want)
+		}
+	}
+}
+
+// TestCollectorEmitsLiveInteractiveRecordEndToEnd drives the real polled record
+// through the logpipeline engine into an emitter, rather than calling mapSignIn
+// directly, so the #112 signal gate (testdata/signals.json) goldens the true
+// emitted surface of a real interactive sign-in — not the thinner set the
+// minimal {id, createdDateTime} fixtures reach the emitter with.
+func TestCollectorEmitsLiveInteractiveRecordEndToEnd(t *testing.T) {
+	f := &recordingFetcher{records: []map[string]any{decodeLive(t, liveInteractiveSignIn)}}
+	rec := telemetrytest.New()
+	c := newCollector(specByName(t, "entra.signins.interactive"), depsWith(t, f))
+
+	from := time.Date(2026, 7, 17, 14, 0, 0, 0, time.UTC)
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter()); err != nil {
+		t.Fatalf("CollectWindow: %v", err)
+	}
+
+	logs := rec.LogRecords()
+	if len(logs) != 1 {
+		t.Fatalf("emitted %d records, want 1", len(logs))
+	}
+	got := logs[0]
+	if got.EventName != eventName {
+		t.Errorf("event name = %q, want %q", got.EventName, eventName)
+	}
+	wantAttrs := map[string]string{
+		"user_principal_name":        "rob@m7kni.io",
+		"user_id":                    "bbcfc3c5-0b93-4135-9ef9-18477a9fb504",
+		"app_display_name":           "One Outlook Web",
+		"ip_address":                 "2001:db8::1038",
+		"conditional_access_status":  "success",
+		"location_country_or_region": "GB",
+	}
+	for k, want := range wantAttrs {
+		if v := got.Attrs[k]; v != want {
+			t.Errorf("emitted attr %q = %q, want %q", k, v, want)
+		}
+	}
+}
 
 // recordingFetcher is a logpipeline.PageFetcher that returns a fixed set of
 // records once and records every requested page URL, so a test can both drain

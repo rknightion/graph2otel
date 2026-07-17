@@ -22,6 +22,7 @@
         "sign_in_event_types",
         "status_error_code",
         "status_failure_reason",
+        "user_id",
         "user_principal_name"
       ]
     }
