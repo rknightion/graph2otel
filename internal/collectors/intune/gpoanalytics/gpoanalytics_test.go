@@ -39,18 +39,65 @@ const (
 	configurationsURL   = "https://graph.microsoft.com/beta/deviceManagement/groupPolicyConfigurations"
 )
 
+// liveConfigurations is a VERBATIM GET
+// /beta/deviceManagement/groupPolicyConfigurations body (BETA endpoint), read
+// as graph2otel-poller against the m7kni tenant
+// `[live-measured 2026-07-17, #165]`. All three real configurations are
+// custom-ingested (this tenant imports no built-in GPO baselines), so the live
+// data exercises only the "custom" bucket — the other documented ingestion
+// types are covered synthetically by TestCollectMapsKnownIngestionTypeBuckets
+// below, since the tenant has no live example of them. The pagination envelope
+// is re-wrapped as a single {"value":[...]} page; the elements are byte-verbatim.
+const liveConfigurations = `{"value":[
+{
+  "createdDateTime": "2025-10-09T09:37:58.749014Z",
+  "description": "",
+  "displayName": "Windows Tailscale",
+  "id": "6310fdf4-7c43-4371-b1ba-5410061ab33a",
+  "lastModifiedDateTime": "2026-03-23T11:50:05.9936454Z",
+  "policyConfigurationIngestionType": "custom",
+  "roleScopeTagIds": [
+    "0"
+  ]
+},
+{
+  "createdDateTime": "2025-11-22T20:36:39.1153603Z",
+  "description": "",
+  "displayName": "Winget-AutoUpdate-aaS",
+  "id": "f87cd908-5612-4d66-abe7-7b29e0475441",
+  "lastModifiedDateTime": "2025-11-23T11:59:51.1687505Z",
+  "policyConfigurationIngestionType": "custom",
+  "roleScopeTagIds": [
+    "0"
+  ]
+},
+{
+  "createdDateTime": "2025-10-09T13:03:33.3575712Z",
+  "description": "",
+  "displayName": "Windows Google",
+  "id": "814e0ee7-cfb9-4efa-966b-de8a25a3f3f2",
+  "lastModifiedDateTime": "2025-10-09T13:03:34.6085458Z",
+  "policyConfigurationIngestionType": "custom",
+  "roleScopeTagIds": [
+    "0"
+  ]
+}
+]}`
+
 func fullFixtureBodies() map[string]string {
 	return map[string]string{
+		// docs-derived, endpoint empty on tenant 2026-07-17 (#165): the live
+		// groupPolicyMigrationReports collection returned zero rows (this tenant
+		// has imported no GPOs to score), so there is no live record to pin the
+		// readiness/percent mappers against. This synthetic body stands in for
+		// the readiness and percent tests until a tenant with imported GPOs is
+		// available.
 		migrationReportsURL: `{"value":[
 			{"displayName":"Finance GPO","migrationReadiness":"complete","totalSettingsCount":10,"supportedSettingsCount":10},
 			{"displayName":"Legacy GPO","migrationReadiness":"partial","totalSettingsCount":8,"supportedSettingsCount":2},
 			{"displayName":"Empty GPO","migrationReadiness":"notApplicable","totalSettingsCount":0,"supportedSettingsCount":0}
 		]}`,
-		configurationsURL: `{"value":[
-			{"displayName":"Config A","policyConfigurationIngestionType":"builtIn"},
-			{"displayName":"Config B","policyConfigurationIngestionType":"builtIn"},
-			{"displayName":"Config C","policyConfigurationIngestionType":"custom"}
-		]}`,
+		configurationsURL: liveConfigurations,
 	}
 }
 
@@ -109,7 +156,11 @@ func TestCollectComputesPercentFromCounts(t *testing.T) {
 	}
 }
 
-func TestCollectAggregatesConfigCountByIngestionType(t *testing.T) {
+// TestCollectAggregatesConfigCountFromLiveCapture drives the verbatim live
+// groupPolicyConfigurations capture through Collect. Every real configuration
+// on this tenant is custom-ingested, so the whole collection aggregates into a
+// single ingestion_type="custom" series of count 3.
+func TestCollectAggregatesConfigCountFromLiveCapture(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixtureBodies()}
 	rec := telemetrytest.New()
 
@@ -121,7 +172,51 @@ func TestCollectAggregatesConfigCountByIngestionType(t *testing.T) {
 	for _, p := range rec.MetricPoints(configCountMetric) {
 		got[p.Attrs["ingestion_type"]] = p.Value
 	}
-	want := map[string]float64{"builtIn": 2, "custom": 1}
+	want := map[string]float64{"custom": 3}
+	if len(got) != len(want) {
+		t.Fatalf("got %d ingestion_type series, want %d: %v", len(got), len(want), got)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("ingestion_type=%s = %v, want %v", k, got[k], v)
+		}
+	}
+}
+
+// TestCollectMapsKnownIngestionTypeBuckets covers the documented ingestion-type
+// enum values the live tenant has no example of (it imports only custom GPOs).
+// Synthetic by necessity — there is no live capture of a builtIn/mixed
+// configuration — it guards the pass-through mapping so a rename of a bucket
+// key can't silently pass.
+func TestCollectMapsKnownIngestionTypeBuckets(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		migrationReportsURL: `{"value":[]}`,
+		configurationsURL: `{"value":[
+			{"policyConfigurationIngestionType":"builtIn"},
+			{"policyConfigurationIngestionType":"builtIn"},
+			{"policyConfigurationIngestionType":"custom"},
+			{"policyConfigurationIngestionType":"mixed"},
+			{"policyConfigurationIngestionType":"unknown"},
+			{"policyConfigurationIngestionType":"unknownFutureValue"}
+		]}`,
+	}}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	got := map[string]float64{}
+	for _, p := range rec.MetricPoints(configCountMetric) {
+		got[p.Attrs["ingestion_type"]] = p.Value
+	}
+	want := map[string]float64{
+		"builtIn":            2,
+		"custom":             1,
+		"mixed":              1,
+		"unknown":            1,
+		"unknownFutureValue": 1,
+	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d ingestion_type series, want %d: %v", len(got), len(want), got)
 	}
