@@ -25,6 +25,28 @@ USAGE
     scripts/storage-report.py --account otheracct   # a different storage account
     scripts/storage-report.py --json                # machine-readable snapshot to stdout
 
+COST MODELLING (what-if scenarios — all overridable, none change what's measured)
+    Each container's cost is derived from its live bytes: bytes -> AppendBlock rate
+    (via the ACTUAL retention window) -> priced over a month. The scenario knobs let
+    you re-price that same measured rate under different assumptions:
+
+    --retention-days D          actual lifecycle delete age (measurement anchor;
+                                default: auto-detected from the account policy)
+    --model-retention-days D    what-if retention to price against (storage scales
+                                with it, write-ops don't) — e.g. "what if I kept 7d?"
+    --volume-scale X            scale ALL activity by X (2.0 = double traffic/polls)
+    --scale NAME=X              scale one container (substring match), repeatable —
+                                e.g. --scale graphactivity=0.5 models halving
+                                graph2otel's own Graph poll frequency (MGAL is ~60%
+                                graph2otel's own calls, so this is a real lever)
+    --price-storage-gb-mo / --price-write-10k / --avg-append-bytes   meter overrides
+
+    Examples:
+      # what does dropping to 1-day retention save?
+      scripts/storage-report.py --model-retention-days 1
+      # model turning cloudappevents off and halving poll frequency
+      scripts/storage-report.py --scale cloudappevents=0 --scale graphactivity=0.5
+
     Growth appears automatically once there are >=2 snapshots in the history file
     (default ~/.local/state/graph2otel/storage-history.jsonl). Run it on a cron/launchd
     timer (say hourly or daily) to build a real growth curve.
@@ -118,24 +140,47 @@ def detect_retention_days(account: str) -> int | None:
     return min(days) if days else None
 
 
-def monthly_cost(nbytes: int, retention_days: float, p: dict) -> tuple[float, float, float]:
-    """Estimated (storage, write, total) £/month for one container.
+def append_rate_per_day(nbytes: int, p: dict) -> float:
+    """Back out the container's AppendBlock rate (ops/day) from its measured
+    resident bytes. At steady state the resident bytes are the append rate times
+    avg_append_bytes times the ACTUAL retention window, so rate = bytes /
+    (avg_append * actual_retention). This rate is what drives the write bill and
+    is independent of the retention you later choose to model."""
+    avg, aret = p["avg_append"], p["actual_retention"]
+    return nbytes / (avg * aret) if (avg and aret) else 0.0
 
-    Storage: resident bytes are a fair proxy for the average GiB-month at steady
-    state (a rolling `retention_days` window). Write: the resident bytes represent
-    `retention_days` worth of AppendBlock ops, so monthly ops = (bytes/avg_append)
-    scaled from the retention window up to a month. Reads/listing are excluded
-    (small, and not implied by container size). Assumes steady state — a container
-    still backfilling reads high."""
-    storage = (nbytes / GIB) * p["storage"]
-    resident_appends = nbytes / p["avg_append"] if p["avg_append"] else 0
-    monthly_appends = resident_appends * (DAYS_PER_MONTH / retention_days) if retention_days else 0
-    write = (monthly_appends / 10_000) * p["write_10k"]
-    return storage, write, storage + write
+
+def effective_scale(short_name: str, p: dict) -> float:
+    """Per-container activity multiplier: the global --volume-scale times any
+    --scale NAME=FACTOR whose NAME is a substring of the (insights-logs-stripped)
+    container name. Models 'what if this stream were busier/quieter' — e.g. halving
+    graph2otel's own poll frequency roughly halves the graphactivity container."""
+    s = p["volume_scale"]
+    for pat, f in p["per_container"].items():
+        if pat in short_name:
+            s *= f
+    return s
+
+
+def cost_row(nbytes: int, scale: float, p: dict) -> tuple[float, float, float, float]:
+    """Estimated (storage, write, total) £/month for one container under the
+    current scenario, plus its modeled resident bytes.
+
+    Forward model: measured bytes -> append rate (via ACTUAL retention) -> apply
+    the activity `scale` -> price the writes at that rate over a month, and price
+    storage against the bytes that rate leaves resident under the MODELED
+    retention. With scale=1 and model_retention==actual_retention it reproduces
+    the measured bytes exactly. Reads/listing are excluded (small, not implied by
+    size). Assumes steady state — a container still backfilling reads high."""
+    rate = append_rate_per_day(nbytes, p) * scale
+    write = (rate * DAYS_PER_MONTH / 10_000) * p["write_10k"]
+    modeled_bytes = rate * p["avg_append"] * p["model_retention"]
+    storage = (modeled_bytes / GIB) * p["storage"]
+    return storage, write, storage + write, modeled_bytes
 
 
 def gbp(n: float) -> str:
-    return f"£{n:,.2f}" if n >= 0.005 else f"£{n:.3f}"
+    return f"£{n:,.2f}" if abs(n) >= 0.005 else f"£{n:.3f}"
 
 
 def list_containers(account: str, flags: list[str]) -> list[str]:
@@ -243,7 +288,7 @@ def per_day(cur_bytes: int, base: dict | None, name: str) -> float | None:
 # ----- report rendering ------------------------------------------------------
 def render_terminal(account: str, rows: list[dict], prev: dict | None,
                     oldest: dict | None, auth_label: str, top: int | None,
-                    retention_days: float, retention_detected: bool, pricing: dict) -> None:
+                    p: dict, retention_detected: bool) -> None:
     total = sum(r["bytes"] for r in rows)
     total_blobs = sum(r["blobs"] for r in rows)
     shown = rows[:top] if top else rows
@@ -272,16 +317,19 @@ def render_terminal(account: str, rows: list[dict], prev: dict | None,
         rate = per_day(r["bytes"], oldest, r["name"])
         rate_s = "-" if rate is None else human_signed(rate)
         rate_c = DIM(rate_s) if rate is None else (GREEN if rate >= 0 else RED)(rate_s)
-        _, _, cost = monthly_cost(r["bytes"], retention_days, pricing)
         name = r["name"].replace("insights-logs-", "")
+        _, _, cost, _ = cost_row(r["bytes"], effective_scale(name, p), p)
         big = r["bytes"] >= 20 * 1024**2
         name_c = (YELLOW if big else CYAN)(f"{name:<40.40}")
         print(f"  {name_c}{human(r['bytes']):>10} {gbp(cost):>8} {pct:>4.1f}%  {bar:<{barw}} "
               f"{r['blobs']:>6} {age(r['newest']):>6} {rate_c:>10}")
+    baseline = 0.0  # measured total (scale=1, model_retention==actual): the "today" number
     for r in rows:  # cost totals over ALL containers, not just the shown top-N
-        s, w, _ = monthly_cost(r["bytes"], retention_days, pricing)
+        s, w, _, _ = cost_row(r["bytes"], effective_scale(r["name"].replace("insights-logs-", ""), p), p)
         tot_store += s
         tot_write += w
+        bs, bw, _, _ = cost_row(r["bytes"], 1.0, {**p, "model_retention": p["actual_retention"]})
+        baseline += bs + bw
     if top and len(rows) > top:
         rest = sum(r["bytes"] for r in rows[top:])
         print(DIM(f"  … {len(rows)-top} more containers, {human(rest)}"))
@@ -289,17 +337,30 @@ def render_terminal(account: str, rows: list[dict], prev: dict | None,
     total_label = f"{'TOTAL':<40}"
     print("  " + BOLD(total_label) + BOLD(f"{human(total):>10}") + BOLD(f" {gbp(tot_store+tot_write):>8}"))
     ret_src = "detected" if retention_detected else "assumed"
+    scenario = (p["model_retention"] != p["actual_retention"] or p["volume_scale"] != 1.0 or p["per_container"])
+    total_cost = tot_store + tot_write
     print()
-    print(DIM(f"  est. monthly cost ≈ {gbp(tot_store + tot_write)}"
+    label = "modeled monthly cost" if scenario else "est. monthly cost"
+    print(DIM(f"  {label} ≈ {gbp(total_cost)}"
               f"  (storage {gbp(tot_store)} + write-ops {gbp(tot_write)})"))
-    print(DIM(f"  assumptions: Hot LRS uksouth · storage £{pricing['storage']}/GiB-mo · "
-              f"write £{pricing['write_10k']}/10k · {pricing['avg_append']}B/append · "
-              f"retention {retention_days:g}d ({ret_src})"))
-    print(DIM("  write-ops dominate the bill and scale with fleet/collector count, not resident size.\n"))
+    if scenario:
+        delta = total_cost - baseline
+        arrow = (GREEN if delta <= 0 else RED)(f"{'+' if delta > 0 else ''}{gbp(delta)}")
+        print(DIM(f"  vs measured today {gbp(baseline)} → ") + arrow)
+        knobs = [f"model-retention {p['model_retention']:g}d"]
+        if p["volume_scale"] != 1.0:
+            knobs.append(f"volume ×{p['volume_scale']:g}")
+        for k, v in p["per_container"].items():
+            knobs.append(f"{k} ×{v:g}")
+        print(DIM("  scenario: " + " · ".join(knobs)))
+    print(DIM(f"  anchor: Hot LRS uksouth · storage £{p['storage']}/GiB-mo · "
+              f"write £{p['write_10k']}/10k · {p['avg_append']}B/append · "
+              f"actual retention {p['actual_retention']:g}d ({ret_src})"))
+    print(DIM("  write-ops dominate the bill and scale with fleet/collector activity, not resident size.\n"))
 
 
 def render_html(path: str, account: str, rows: list[dict], prev: dict | None,
-                oldest: dict | None, retention_days: float, pricing: dict) -> None:
+                oldest: dict | None, p: dict) -> None:
     total = sum(r["bytes"] for r in rows) or 1
     biggest = max((r["bytes"] for r in rows), default=1) or 1
     tot_cost = 0.0
@@ -309,10 +370,10 @@ def render_html(path: str, account: str, rows: list[dict], prev: dict | None,
         w = 100 * r["bytes"] / biggest
         rate = per_day(r["bytes"], oldest, r["name"])
         rate_s = "—" if rate is None else human_signed(rate)
-        _, _, cost = monthly_cost(r["bytes"], retention_days, pricing)
+        name = r["name"].replace("insights-logs-", "")
+        _, _, cost, _ = cost_row(r["bytes"], effective_scale(name, p), p)
         tot_cost += cost
         big = r["bytes"] >= 20 * 1024**2
-        name = r["name"].replace("insights-logs-", "")
         trs.append(
             f"<tr><td class='n'>{name}{' <span class=hi>HV</span>' if big else ''}</td>"
             f"<td class='num'>{human(r['bytes'])}</td><td class='num'>{gbp(cost)}</td><td class='num'>{pct:.1f}%</td>"
@@ -343,7 +404,7 @@ def render_html(path: str, account: str, rows: list[dict], prev: dict | None,
 <th>Share</th><th class=num>Blobs</th><th class=num>Δ/day</th></tr></thead>
 <tbody>{''.join(trs)}</tbody>
 <tfoot><tr><td>TOTAL</td><td class=num>{human(total)}</td><td class=num>{gbp(tot_cost)}</td><td colspan=4></td></tr></tfoot></table>
-<p class=sub>Est. monthly cost ≈ <b>{gbp(tot_cost)}</b> (Hot LRS uksouth, {retention_days:g}d retention, write-ops dominated). HV = high-volume (&ge;20&nbsp;MB). Δ/day from the oldest snapshot.</p>
+<p class=sub>{'Modeled' if (p['model_retention'] != p['actual_retention'] or p['volume_scale'] != 1.0 or p['per_container']) else 'Est.'} monthly cost ≈ <b>{gbp(tot_cost)}</b> (Hot LRS uksouth, actual retention {p['actual_retention']:g}d, model retention {p['model_retention']:g}d, volume ×{p['volume_scale']:g}, write-ops dominated). HV = high-volume (&ge;20&nbsp;MB). Δ/day from the oldest snapshot.</p>
 """
     open(path, "w").write(html)
 
@@ -357,7 +418,21 @@ def main() -> None:
     ap.add_argument("--no-record", action="store_true", help="do not append a snapshot to history")
     ap.add_argument("--html", metavar="PATH", help="also write a standalone HTML report")
     ap.add_argument("--json", action="store_true", help="print the snapshot as JSON (no table)")
-    ap.add_argument("--retention-days", type=float, help=f"lifecycle delete age for the cost estimate (default: auto-detect, else {DEFAULT_RETENTION_DAYS})")
+    ap.add_argument("--retention-days", type=float, metavar="D",
+                    help="ACTUAL lifecycle delete age — the measurement anchor used to read each "
+                         "container's append rate from its bytes (default: auto-detect, else "
+                         f"{DEFAULT_RETENTION_DAYS}). Override only if auto-detect is wrong.")
+    ap.add_argument("--model-retention-days", type=float, metavar="D",
+                    help="WHAT-IF retention to price against (default: same as actual). Model a "
+                         "different retention without changing the measured append rate — storage "
+                         "scales with it, write-ops don't.")
+    ap.add_argument("--volume-scale", type=float, default=1.0, metavar="X",
+                    help="scale every container's activity by X (e.g. 2.0 = double the traffic/poll "
+                         "frequency). Both write-ops and resident storage scale with it.")
+    ap.add_argument("--scale", action="append", default=[], metavar="NAME=X",
+                    help="scale one container's activity: NAME is a substring of the container name, "
+                         "X the factor. Repeatable. E.g. --scale graphactivity=0.5 models halving "
+                         "graph2otel's own poll frequency.")
     ap.add_argument("--price-storage-gb-mo", type=float, default=PRICE_STORAGE_GB_MONTH, help="£/GiB-month storage price")
     ap.add_argument("--price-write-10k", type=float, default=PRICE_WRITE_PER_10K, help="£ per 10k write ops")
     ap.add_argument("--avg-append-bytes", type=int, default=AVG_APPEND_BYTES, help="mean AppendBlock size in bytes")
@@ -369,13 +444,32 @@ def main() -> None:
     if not names:
         sys.exit(f"No containers found in '{args.account}'.")
 
-    pricing = {"storage": args.price_storage_gb_mo, "write_10k": args.price_write_10k, "avg_append": args.avg_append_bytes}
     if args.retention_days is not None:
-        retention_days, retention_detected = args.retention_days, False
+        actual_retention, retention_detected = args.retention_days, False
     else:
         detected = detect_retention_days(args.account)
-        retention_days = detected if detected else DEFAULT_RETENTION_DAYS
+        actual_retention = detected if detected else DEFAULT_RETENTION_DAYS
         retention_detected = detected is not None
+
+    per_container = {}
+    for spec in args.scale:
+        if "=" not in spec:
+            sys.exit(f"--scale expects NAME=FACTOR, got {spec!r}")
+        k, v = spec.rsplit("=", 1)
+        try:
+            per_container[k] = float(v)
+        except ValueError:
+            sys.exit(f"--scale factor must be a number, got {v!r}")
+
+    pricing = {
+        "storage": args.price_storage_gb_mo,
+        "write_10k": args.price_write_10k,
+        "avg_append": args.avg_append_bytes,
+        "actual_retention": actual_retention,
+        "model_retention": args.model_retention_days if args.model_retention_days is not None else actual_retention,
+        "volume_scale": args.volume_scale,
+        "per_container": per_container,
+    }
 
     with ThreadPoolExecutor(max_workers=12) as ex:
         rows = list(ex.map(lambda n: size_container(args.account, flags, n), names))
@@ -397,7 +491,7 @@ def main() -> None:
         print(json.dumps(snap, indent=2))
     else:
         render_terminal(args.account, rows, prev, oldest, auth_label, args.top,
-                        retention_days, retention_detected, pricing)
+                        pricing, retention_detected)
         errs = [r for r in rows if r.get("error")]
         if errs:
             print(RED(f"  {len(errs)} container(s) errored:"))
@@ -405,7 +499,7 @@ def main() -> None:
                 print(RED(f"    {r['name']}: {r['error']}"))
 
     if args.html:
-        render_html(args.html, args.account, rows, prev, oldest, retention_days, pricing)
+        render_html(args.html, args.account, rows, prev, oldest, pricing)
         if not args.json:
             print(DIM(f"  HTML report written to {args.html}\n"))
 
