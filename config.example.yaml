@@ -47,6 +47,10 @@ tenants:
     # AZURE_* credential is reused, and it needs the DATA-plane role
     # "Storage Blob Data Reader" on that account (Owner is NOT enough; it grants
     # container listing but not blob content reads).
+    #
+    # Setting account_url ALSO turns on the Defender XDR advanced-hunting
+    # collectors (defender.*) — they are read-only blob ingest, on by default
+    # once a storage account is configured, not a per-collector opt-in.
     # blob_ingest:
     #   account_url: "https://myaccount.blob.core.windows.net"
     #   # Opt-in, default-off: drop graph2otel's OWN polling exhaust from the blob

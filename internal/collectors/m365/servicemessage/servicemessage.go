@@ -90,11 +90,6 @@ func (c *Collector) Name() string { return collectorName }
 // of messages) twin volume sane.
 func (c *Collector) DefaultInterval() time.Duration { return time.Hour }
 
-// Experimental marks the collector opt-in: it needs a second scope
-// (ServiceMessage.Read.All) beyond the health collector and is the higher-volume
-// half of the surface, so it is off unless a tenant explicitly enables it (#182).
-func (c *Collector) Experimental() bool { return true }
-
 // RequiredPermissions declares exactly ServiceMessage.Read.All.
 func (c *Collector) RequiredPermissions() []string {
 	return []string{"ServiceMessage.Read.All"}
@@ -167,7 +162,4 @@ func init() {
 	})
 }
 
-var (
-	_ collector.SnapshotCollector = (*Collector)(nil)
-	_ collectors.Experimental     = (*Collector)(nil)
-)
+var _ collector.SnapshotCollector = (*Collector)(nil)

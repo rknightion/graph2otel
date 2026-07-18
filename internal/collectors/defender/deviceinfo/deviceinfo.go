@@ -137,15 +137,10 @@ func mapRecord(rec map[string]any) (telemetry.Event, bool) {
 
 // blobCollector wraps the generic BlobCollector so collectordoc recovers THIS
 // package by reflection (a bare *blobpipeline.BlobCollector resolves to the
-// blobpipeline package), and so Experimental() marks it opt-in.
+// blobpipeline package).
 type blobCollector struct {
 	*blobpipeline.BlobCollector
 }
-
-// Experimental reports true: the Defender advanced-hunting tables are the
-// highest-volume surface graph2otel touches, so each is off by default and
-// enabled explicitly per tenant (#106).
-func (blobCollector) Experimental() bool { return true }
 
 func newBlobCollector(d collectors.BlobDeps) collector.SnapshotCollector {
 	return blobCollector{defender.New(name, table, mapRecord, d)}
@@ -153,7 +148,4 @@ func newBlobCollector(d collectors.BlobDeps) collector.SnapshotCollector {
 
 func init() { collectors.RegisterBlob(newBlobCollector) }
 
-var (
-	_ collector.SnapshotCollector = blobCollector{}
-	_ collectors.Experimental     = blobCollector{}
-)
+var _ collector.SnapshotCollector = blobCollector{}

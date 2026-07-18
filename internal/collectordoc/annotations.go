@@ -163,71 +163,71 @@ var annotations = map[string]Annotation{
 
 	// ---- Defender — blob collectors (advanced-hunting tables, #106) ----
 	"defender.device_registry": {
-		Collects: "One log per Windows registry create/set/delete Defender for Endpoint observes (`DeviceRegistryEvents`) — a primary persistence-hunting signal (Run keys, service installs, policy tampering) Graph exposes nowhere. Each record pairs the registry change with the full InitiatingProcess block, so a LogQL join answers which process wrote a key. Experimental + off by default (highest-volume surface; opt in per tenant)",
+		Collects: "One log per Windows registry create/set/delete Defender for Endpoint observes (`DeviceRegistryEvents`) — a primary persistence-hunting signal (Run keys, service installs, policy tampering) Graph exposes nowhere. Each record pairs the registry change with the full InitiatingProcess block, so a LogQL join answers which process wrote a key. The highest-volume Defender surface; on when blob ingest is configured",
 		Category: "AdvancedHunting-DeviceRegistryEvents",
 	},
 	"defender.device_logon": {
-		Collects: "One log per interactive/network/service logon Defender for Endpoint observes (`DeviceLogonEvents`) — the local and non-Entra logons Entra sign-in logs never see, with the initiating process, remote IP, and logon type. Experimental + off by default",
+		Collects: "One log per interactive/network/service logon Defender for Endpoint observes (`DeviceLogonEvents`) — the local and non-Entra logons Entra sign-in logs never see, with the initiating process, remote IP, and logon type. On when blob ingest is configured",
 		Category: "AdvancedHunting-DeviceLogonEvents",
 	},
 	"defender.device_info": {
-		Collects: "One log per periodic device-inventory snapshot from Defender for Endpoint (`DeviceInfo`) — OS, onboarding, exposure level, sensor health, and cloud-hosting metadata not in Graph. Snapshot-shaped (no ActionType), so it re-emits per cycle. Experimental + off by default",
+		Collects: "One log per periodic device-inventory snapshot from Defender for Endpoint (`DeviceInfo`) — OS, onboarding, exposure level, sensor health, and cloud-hosting metadata not in Graph. Snapshot-shaped (no ActionType), so it re-emits per cycle. On when blob ingest is configured",
 		Category: "AdvancedHunting-DeviceInfo",
 	},
 	"defender.email": {
-		Collects: "One log per message Defender for Office 365 processes (`EmailEvents`) — sender/recipient, delivery action, threat verdicts, and authentication results; zero MDO email coverage exists today. Experimental + off by default",
+		Collects: "One log per message Defender for Office 365 processes (`EmailEvents`) — sender/recipient, delivery action, threat verdicts, and authentication results; zero MDO email coverage exists today. On when blob ingest is configured",
 		Category: "AdvancedHunting-EmailEvents",
 	},
 	"defender.alert_evidence": {
-		Collects: "One log per evidence row Defender attaches to an alert (`AlertEvidence`, absorbing #93) — the per-entity detail (real UPN/IP/geo/session/file) that `entra.security_alerts` collapses to a bare `evidence_count`. Joins to the alert on `alert_id`. Experimental + off by default",
+		Collects: "One log per evidence row Defender attaches to an alert (`AlertEvidence`, absorbing #93) — the per-entity detail (real UPN/IP/geo/session/file) that `entra.security_alerts` collapses to a bare `evidence_count`. Joins to the alert on `alert_id`. On when blob ingest is configured",
 		Category: "AdvancedHunting-AlertEvidence",
 	},
 	"defender.device_process": {
-		Collects: "One log per process creation Defender for Endpoint observes (`DeviceProcessEvents`) — the process tree (created process + full initiating-process lineage, command lines, hashes, signer) that is the core of endpoint hunting. The largest-volume Defender table; Experimental + off by default",
+		Collects: "One log per process creation Defender for Endpoint observes (`DeviceProcessEvents`) — the process tree (created process + full initiating-process lineage, command lines, hashes, signer) that is the core of endpoint hunting. The largest-volume Defender table; on when blob ingest is configured",
 		Category: "AdvancedHunting-DeviceProcessEvents",
 	},
 	"defender.device_file": {
-		Collects: "One log per file create/modify/rename/delete Defender for Endpoint observes (`DeviceFileEvents`) — file hashes, paths, origin URL/IP, share and sensitivity-label context, with the initiating process. Experimental + off by default",
+		Collects: "One log per file create/modify/rename/delete Defender for Endpoint observes (`DeviceFileEvents`) — file hashes, paths, origin URL/IP, share and sensitivity-label context, with the initiating process. On when blob ingest is configured",
 		Category: "AdvancedHunting-DeviceFileEvents",
 	},
 	"defender.device_network": {
-		Collects: "One log per network connection Defender for Endpoint observes (`DeviceNetworkEvents`) — local/remote IP+port, URL, protocol, with the initiating process; the C2/exfil/lateral-movement signal. Experimental + off by default",
+		Collects: "One log per network connection Defender for Endpoint observes (`DeviceNetworkEvents`) — local/remote IP+port, URL, protocol, with the initiating process; the C2/exfil/lateral-movement signal. On when blob ingest is configured",
 		Category: "AdvancedHunting-DeviceNetworkEvents",
 	},
 	"defender.device_event": {
-		Collects: "One log per miscellaneous endpoint event Defender records (`DeviceEvents`) — the catch-all table spanning AMSI/`ScriptContent`, memory-injection API calls, USB mounts, WMI process creation, and more, keyed by `action_type`. `ScriptContent` (the full script body, inside `additional_fields`) ships verbatim per #106. Experimental + off by default",
+		Collects: "One log per miscellaneous endpoint event Defender records (`DeviceEvents`) — the catch-all table spanning AMSI/`ScriptContent`, memory-injection API calls, USB mounts, WMI process creation, and more, keyed by `action_type`. `ScriptContent` (the full script body, inside `additional_fields`) ships verbatim per #106. On when blob ingest is configured",
 		Category: "AdvancedHunting-DeviceEvents",
 	},
 	"defender.device_image_load": {
-		Collects: "One log per image (DLL/module) load Defender for Endpoint observes (`DeviceImageLoadEvents`) — the DLL-side-load hunting signal, with the loaded file's hashes/path and the full initiating-process lineage. Experimental + off by default",
+		Collects: "One log per image (DLL/module) load Defender for Endpoint observes (`DeviceImageLoadEvents`) — the DLL-side-load hunting signal, with the loaded file's hashes/path and the full initiating-process lineage. On when blob ingest is configured",
 		Category: "AdvancedHunting-DeviceImageLoadEvents",
 	},
 	"defender.device_network_info": {
-		Collects: "One log per device network-adapter snapshot (`DeviceNetworkInfo`) — MAC, adapter name/type/status/vendor, DHCP flags, tunnel type, and the (stringified) IP/DNS/gateway/connected-network lists. Enrichment companion to `device_network`. Snapshot; Experimental + off by default",
+		Collects: "One log per device network-adapter snapshot (`DeviceNetworkInfo`) — MAC, adapter name/type/status/vendor, DHCP flags, tunnel type, and the (stringified) IP/DNS/gateway/connected-network lists. Enrichment companion to `device_network`. Snapshot; on when blob ingest is configured",
 		Category: "AdvancedHunting-DeviceNetworkInfo",
 	},
 	"defender.device_file_certificate": {
-		Collects: "One log per file code-signing certificate Defender observes (`DeviceFileCertificateInfo`) — signer/issuer + hashes, signature type, serial, validity window, CRL URLs, and trust/root-Microsoft flags. Companion to `device_file`/`device_process` for signing-trust hunting. Snapshot; Experimental + off by default",
+		Collects: "One log per file code-signing certificate Defender observes (`DeviceFileCertificateInfo`) — signer/issuer + hashes, signature type, serial, validity window, CRL URLs, and trust/root-Microsoft flags. Companion to `device_file`/`device_process` for signing-trust hunting. Snapshot; on when blob ingest is configured",
 		Category: "AdvancedHunting-DeviceFileCertificateInfo",
 	},
 	"defender.email_url": {
-		Collects: "One log per URL found in a message (`EmailUrlInfo`) — the URL, its domain, and position in the redirect chain, joined to `defender.email` on `network_message_id`. Experimental + off by default",
+		Collects: "One log per URL found in a message (`EmailUrlInfo`) — the URL, its domain, and position in the redirect chain, joined to `defender.email` on `network_message_id`. On when blob ingest is configured",
 		Category: "AdvancedHunting-EmailUrlInfo",
 	},
 	"defender.email_attachment": {
-		Collects: "One log per email attachment (`EmailAttachmentInfo`) — file name/type/extension/size, `sha256` (malware-hash hunting), detection methods and threat verdicts, sender/recipient — joined to `defender.email` on `network_message_id`. Experimental + off by default",
+		Collects: "One log per email attachment (`EmailAttachmentInfo`) — file name/type/extension/size, `sha256` (malware-hash hunting), detection methods and threat verdicts, sender/recipient — joined to `defender.email` on `network_message_id`. On when blob ingest is configured",
 		Category: "AdvancedHunting-EmailAttachmentInfo",
 	},
 	"defender.identity_logon": {
-		Collects: "One log per identity logon Defender for Identity observes (`IdentityLogonEvents`) — on-prem/hybrid AD + cloud logons Entra sign-in logs never see, with account/target/destination, logon type, IP + geo/ISP, and the raw `additional_fields`. Experimental + off by default",
+		Collects: "One log per identity logon Defender for Identity observes (`IdentityLogonEvents`) — on-prem/hybrid AD + cloud logons Entra sign-in logs never see, with account/target/destination, logon type, IP + geo/ISP, and the raw `additional_fields`. On when blob ingest is configured",
 		Category: "AdvancedHunting-IdentityLogonEvents",
 	},
 	"defender.identity_info": {
-		Collects: "One log per identity snapshot (`IdentityInfo`) — the enrichment Graph doesn't expose: `criticality_level`, `blast_radius`, `privileged_entra_pim_roles`, risk level, plus directory attributes (department/title/manager/on-prem+cloud SIDs). Snapshot; Experimental + off by default",
+		Collects: "One log per identity snapshot (`IdentityInfo`) — the enrichment Graph doesn't expose: `criticality_level`, `blast_radius`, `privileged_entra_pim_roles`, risk level, plus directory attributes (department/title/manager/on-prem+cloud SIDs). Snapshot; on when blob ingest is configured",
 		Category: "AdvancedHunting-IdentityInfo",
 	},
 	"defender.cloud_app_event": {
-		Collects: "One log per cloud-app activity Defender for Cloud Apps records (`CloudAppEvents`) — SharePoint/Exchange/OAuth file ops, ACL changes, mail access, sign-ins — with actor/app/object, IP+geo, admin/external/impersonation flags, and the raw event payload (`raw_event_data`). Experimental + off by default",
+		Collects: "One log per cloud-app activity Defender for Cloud Apps records (`CloudAppEvents`) — SharePoint/Exchange/OAuth file ops, ACL changes, mail access, sign-ins — with actor/app/object, IP+geo, admin/external/impersonation flags, and the raw event payload (`raw_event_data`). On when blob ingest is configured",
 		Category: "AdvancedHunting-CloudAppEvents",
 	},
 
@@ -349,7 +349,7 @@ var annotations = map[string]Annotation{
 		Source:   "`/admin/serviceAnnouncement/healthOverviews?$expand=issues`",
 	},
 	"m365.servicemessages": {
-		Collects: "M365 message-center posts — the upcoming-change announcements (`planForChange`/`preventOrFixIssue`/`stayInformed`), a different question from service health. Bounded count by category+severity, plus a log twin (`m365.service_message`) per message carrying title/body/services/dates/`isMajorChange`/`actionRequiredByDateTime`. Experimental + off by default (needs its own `ServiceMessage.Read.All` scope and is the higher-volume half of the surface); a major change escalates the twin to Warn",
+		Collects: "M365 message-center posts — the upcoming-change announcements (`planForChange`/`preventOrFixIssue`/`stayInformed`), a different question from service health. Bounded count by category+severity, plus a log twin (`m365.service_message`) per message carrying title/body/services/dates/`isMajorChange`/`actionRequiredByDateTime`. On by default; needs its own `ServiceMessage.Read.All` scope (the higher-volume half of the surface); a major change escalates the twin to Warn",
 		Source:   "`/admin/serviceAnnouncement/messages`",
 	},
 
