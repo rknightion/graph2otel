@@ -183,8 +183,12 @@ const (
 //     entra.signins.interactive (a live blob held 8 UserLoggedIn of 20 records,
 //     #100). Both are logs-only, so running them together ships dupes.
 //   - DLP.All: needs the ActivityFeed.ReadDlp role this collector does not
-//     declare, and had zero content live (m7kni has no DLP policy matches), so
-//     its record shape is unverified.
+//     declare. Its record shape is now verified [live-measured 2026-07-18, #100]:
+//     m7kni DLP policies DO match (RecordType 13 ComplianceDLPExchange
+//     DlpRuleMatch records landed in DLP.All after the #148 test match, including
+//     from a TestWithNotifyUser simulation-mode rule), so the earlier "zero
+//     content, no policy matches" note is stale. But see RequiredPermissions on
+//     ReadDlp: the payload is a secrets hazard, not just an unverified shape.
 //
 // Once enabled, a content type ships EVERY record it carries — no record-type
 // include-list. #112: fetching per-entity rows and discarding them is a bug.
@@ -263,6 +267,17 @@ func (c *collectorImpl) ConflictsWith() []string {
 // ActivityFeed.ReadDlp is deliberately NOT declared: it gates DLP.All's
 // sensitive-data detail, which is not a default content type. A tenant opting
 // into DLP.All needs that role granted separately.
+//
+// SECURITY, if a DLP.All mapper is ever built: for a DLP match the value IS the
+// secret. The payload carries the raw matched content at PolicyDetails[].Rules[]
+// .ConditionsMatched.SensitiveInformation[].SensitiveInformationDetections
+// .DetectedValues[].Value — live-measured 2026-07-18 (#100) holding a full
+// credit-card number plus its surrounding message text, with
+// SensitiveInfoDetectionIsIncluded:true. This is the same class as
+// ModifiedProperties OldValue/NewValue (see mapRecord): emit the classification
+// metadata (SensitiveInformationTypeName, Confidence, Count, Location,
+// PolicyName, Severity) and NEVER DetectedValues. mapRecord's allowlist already
+// excludes it by construction; a richer DLP mapper must keep that boundary.
 func (c *collectorImpl) RequiredPermissions() []string {
 	return []string{"ActivityFeed.Read"}
 }
