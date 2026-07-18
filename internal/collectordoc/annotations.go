@@ -79,6 +79,11 @@ var annotations = map[string]Annotation{
 		Source:   "`/identityProtection/riskyUsers`, `/identityProtection/riskyServicePrincipals`",
 		Gating:   "risky users need `entra_p2`, risky SPs need `workload_identities_premium` — two INDEPENDENT partial gates checked inside Collect() against the tenant's capabilities, so each half runs and emits only if its own capability is present; neither is declared as a whole-collector requirement",
 	},
+	"entra.risky_users": {
+		Collects: "Blob transport for the risky-USER twin (#135-C): the `RiskyUsers` diagnostic-settings category, emitting the same `entra.risky_user` records the polled `entra.risk` twin would (reuses `logTwin`), bound to `riskLastUpdatedDateTime`. Log-only — a separate collector, NOT a source swap: `entra.risk` keeps polling for its bounded (riskLevel, riskState) gauge, and the composition root suppresses only its per-entity twin while this runs (keep-gauges/suppress-twin, blob twin XOR polled twin). Dodges the Identity Protection 1 req/s per-tenant ceiling for the per-entity stream",
+		Source:   "`insights-logs-riskyusers` (RiskyUsers)",
+		Category: "RiskyUsers",
+	},
 	"entra.roles": {
 		Collects: "Standing directory-role membership; PIM active/eligible/permanent assignment counts",
 		Source:   "`/directoryRoles`, `/roleManagement/directory/roleAssignmentScheduleInstances`, `.../roleEligibilityScheduleInstances`",

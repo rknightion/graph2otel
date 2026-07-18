@@ -69,6 +69,16 @@ type Deps struct {
 	// tests), each collector falls back to its own DirectFleetFetcher, so its
 	// behavior is unchanged.
 	Fleet FleetFetcher
+	// SuppressedTwins names the per-entity log-twin EVENT names this collector
+	// must NOT emit because a blob-sourced twin already owns them (#135-C). A
+	// metric-emitting SnapshotCollector that also emits a per-entity twin (e.g.
+	// entra.risk, intune.devices) keeps its gauges but skips a twin whose event
+	// name is present here, so the blob and polled paths never double-ship the
+	// same per-entity record. Populated by the composition root from
+	// RegisterBlobTwinOwner declarations (see SuppressedTwins) — only when blob
+	// ingest is configured AND the owning blob collector is enabled, so a twin is
+	// never suppressed into a hole. nil/empty means suppress nothing.
+	SuppressedTwins map[string]bool
 }
 
 // Factory constructs one snapshot collector instance for a tenant. Window

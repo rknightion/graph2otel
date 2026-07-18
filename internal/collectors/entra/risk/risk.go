@@ -78,6 +78,10 @@ type Collector struct {
 	caps    license.Capabilities
 	baseURL string
 	logger  *slog.Logger
+	// suppressedTwins names the per-entity twin events a blob collector owns, so
+	// this collector emits its gauges but not those twins (#135-C). nil = emit
+	// everything (the default, and every unit test).
+	suppressedTwins map[string]bool
 }
 
 // New builds the risk collector. caps is the tenant's detected license
@@ -245,7 +249,13 @@ func (c *Collector) collectHalf(ctx context.Context, e telemetry.Emitter, h half
 			return fmt.Errorf("decode %s: %w", h.path, err)
 		}
 		counts[[2]string{item.RiskLevel, item.RiskState}]++
-		e.LogEvent(logTwin(item, h))
+		// Suppress the per-entity twin when a blob-sourced twin owns this event
+		// (#135-C) — the gauge below still aggregates every entity, so the
+		// bounded count is unaffected; only the duplicate per-entity log is
+		// dropped, because the blob collector emits it.
+		if !c.suppressedTwins[h.eventName] {
+			e.LogEvent(logTwin(item, h))
+		}
 	}
 
 	points := make([]telemetry.GaugePoint, 0, len(counts))
@@ -318,6 +328,8 @@ func displayOf(item riskyEntity) string {
 
 func init() {
 	collectors.Register(func(d collectors.Deps) collector.SnapshotCollector {
-		return New(d.Graph, d.Caps, d.Logger)
+		c := New(d.Graph, d.Caps, d.Logger)
+		c.suppressedTwins = d.SuppressedTwins
+		return c
 	})
 }

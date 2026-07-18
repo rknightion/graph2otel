@@ -148,6 +148,17 @@ func setupTenant(
 	// disabling a collector when there is no blob source to switch to.
 	polledNames := map[string]bool{}
 	blobConfigured := tenantBlobAccountURL(cfg, ta.TenantID) != ""
+	// #135-C: a polled collector that emits both gauges and a per-entity twin
+	// (entra.risk, intune.devices) suppresses its twin when a blob-sourced twin
+	// owns it and will actually run (blob configured AND the blob collector
+	// enabled) — the same per-entity record must not ship on both transports.
+	// Gauges are unaffected. Computed BEFORE the factory loop so every polled
+	// collector reads a stable set. Unlike the log-only source: graph|blob swap
+	// (#135-D), here the polled collector keeps running for its gauges.
+	deps.SuppressedTwins = collectors.SuppressedTwins(blobConfigured, func(name string) bool {
+		enabled, _ := cfg.CollectorSettings(ta.TenantID, name)
+		return enabled
+	})
 	for _, factory := range collectors.All() {
 		c := factory(deps)
 		polledNames[c.Name()] = true
