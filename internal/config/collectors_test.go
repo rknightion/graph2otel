@@ -67,6 +67,48 @@ collectors:
 
 // TestPerTenantOverrideWins: a per-tenant collector override wins over the
 // global collector config.
+func TestCollectorSourceResolution(t *testing.T) {
+	const y = `
+otlp:
+  protocol: stdout
+collectors:
+  entra.directory_audits:
+    source: blob
+  entra.provisioning:
+    source: graph
+tenants:
+  - tenant_id: "aaaa"
+    collectors:
+      entra.directory_audits:
+        source: graph
+  - tenant_id: "bbbb"
+    collectors:
+      entra.provisioning:
+        source: blob
+`
+	cfg := mustLoad(t, y)
+	// Default when nothing is set: graph.
+	if got := cfg.CollectorSource("aaaa", "entra.signins.interactive"); got != "graph" {
+		t.Errorf("unset source = %q, want graph", got)
+	}
+	// Global blob, per-tenant override back to graph wins.
+	if got := cfg.CollectorSource("aaaa", "entra.directory_audits"); got != "graph" {
+		t.Errorf("tenant aaaa directory_audits = %q, want graph (override wins)", got)
+	}
+	// Global blob, no tenant override → blob.
+	if got := cfg.CollectorSource("cccc", "entra.directory_audits"); got != "blob" {
+		t.Errorf("tenant cccc directory_audits = %q, want blob (global)", got)
+	}
+	// Global graph, per-tenant override to blob wins.
+	if got := cfg.CollectorSource("bbbb", "entra.provisioning"); got != "blob" {
+		t.Errorf("tenant bbbb provisioning = %q, want blob (override wins)", got)
+	}
+	// Global graph, no override → graph.
+	if got := cfg.CollectorSource("aaaa", "entra.provisioning"); got != "graph" {
+		t.Errorf("tenant aaaa provisioning = %q, want graph", got)
+	}
+}
+
 func TestPerTenantOverrideWins(t *testing.T) {
 	const y = `
 otlp:

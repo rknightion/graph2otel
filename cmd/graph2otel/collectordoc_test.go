@@ -93,13 +93,47 @@ func TestCollectorAnnotationsCoverEveryCollector(t *testing.T) {
 // TestEveryCollectorNameIsUnique guards the assumption the annotation map makes:
 // annotations are keyed by name, so two collectors sharing one would silently
 // share a row — and one of them would document the other.
+//
+// The ONE deliberate exception is a source-switchable collector (#135 group D):
+// entra.directory_audits / entra.provisioning register under the SAME name on
+// both the polled (window) path and the blob path, because they are one
+// collector with two transports selected by `source: graph|blob`. They are
+// mutually exclusive at runtime (exactly one registers per tenant), and they
+// share one annotation/config/self-obs identity BY DESIGN, so that cross-path
+// sharing is not a collision. What is still a bug is two collectors sharing a
+// name within the SAME category — so uniqueness is checked per category.
 func TestEveryCollectorNameIsUnique(t *testing.T) {
-	seen := map[string]bool{}
-	for _, n := range registeredNames(t) {
-		if seen[n] {
-			t.Errorf("collector name %q is registered twice — names are the annotation key, the config key, and the self-obs attribute, so they must be unique", n)
+	snapshot, window, blob, o365 := registrySnapshot()
+	nameOf := func(c any) string {
+		n, ok := c.(interface{ Name() string })
+		if !ok {
+			t.Fatalf("%T has no Name()", c)
 		}
-		seen[n] = true
+		return n.Name()
+	}
+
+	// Polled paths (snapshot/window/o365) share one namespace: a name there must
+	// be unique — two polled collectors sharing one would be indistinguishable.
+	polled := map[string]bool{}
+	for _, group := range [][]any{snapshot, window, o365} {
+		for _, c := range group {
+			n := nameOf(c)
+			if polled[n] {
+				t.Errorf("collector name %q is registered twice on the polled paths — names are the annotation key, the config key, and the self-obs attribute, so they must be unique", n)
+			}
+			polled[n] = true
+		}
+	}
+
+	// Blob names must be unique among blob collectors. A name also present on a
+	// polled path is the allowed source-switchable twin, not a duplicate.
+	blobSeen := map[string]bool{}
+	for _, c := range blob {
+		n := nameOf(c)
+		if blobSeen[n] {
+			t.Errorf("blob collector name %q is registered twice on the blob path", n)
+		}
+		blobSeen[n] = true
 	}
 }
 

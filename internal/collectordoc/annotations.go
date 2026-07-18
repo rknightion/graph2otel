@@ -121,12 +121,14 @@ var annotations = map[string]Annotation{
 		Source:   "`/auditLogs/signIns` (beta, `signInEventTypes` filter)",
 	},
 	"entra.directory_audits": {
-		Collects: "Directory audit log events",
+		Collects: "Directory audit log events (source: graph|blob — poll `/auditLogs/directoryAudits`, or consume the `AuditLogs` diagnostic-settings container; exactly one per config)",
 		Source:   "`/auditLogs/directoryAudits`",
+		Category: "AuditLogs",
 	},
 	"entra.provisioning": {
-		Collects: "Provisioning (sync) events",
+		Collects: "Provisioning (sync) events (source: graph|blob — poll `/auditLogs/provisioning`, or consume the `ProvisioningLogs` diagnostic-settings container; exactly one per config)",
 		Source:   "`/auditLogs/provisioning`",
+		Category: "ProvisioningLogs",
 	},
 	"entra.risk_detections": {
 		Collects: "Identity Protection risk detection events (`$top` capped at 500, not 1000)",

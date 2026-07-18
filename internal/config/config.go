@@ -83,6 +83,19 @@ type CollectorConfig struct {
 	// inherit the lower layer, ultimately the collector's DefaultInterval
 	// (resolved by the scheduler, not here).
 	Interval time.Duration `yaml:"interval"`
+	// Source selects the ingest TRANSPORT for a collector that supports both:
+	// "graph" (poll the Graph API — the default) or "blob" (consume the Azure
+	// Storage diagnostic-settings container instead). Empty means unset →
+	// "graph". Only meaningful for a source-switchable collector — a log-shaped
+	// event stream whose blob twin reuses the same mapper and emits the same
+	// records (e.g. entra.directory_audits); it is ignored on a collector with
+	// no blob source. The two transports are mutually exclusive per collector
+	// (#131/#144): exactly one is active, so the same event is never ingested
+	// twice. Blob scales better on high-volume tenants (Graph's reporting
+	// endpoints throttle hard, blob does not), so it is the right choice for a
+	// large deployment; graph is the default because a deployment with no blob
+	// ingest configured has no blob source to switch to.
+	Source string `yaml:"source"`
 }
 
 // AdminConfig configures the admin/health HTTP endpoint (#12).
@@ -315,6 +328,31 @@ func (c *Config) CollectorExplicitlyEnabled(tenantID, collectorName string) bool
 		break
 	}
 	return explicit
+}
+
+// CollectorSource resolves the ingest transport for a collector, applying the
+// same precedence as CollectorSettings (per-tenant override > global collectors
+// config > built-in default). Returns "graph" (the default) or "blob"; any
+// unset or unrecognized value resolves to "graph", so a typo can never silently
+// disable a collector by selecting a transport that does not exist.
+func (c *Config) CollectorSource(tenantID, collectorName string) string {
+	src := ""
+	if gc, ok := c.Collectors[collectorName]; ok && gc.Source != "" {
+		src = gc.Source
+	}
+	for i := range c.Tenants {
+		if c.Tenants[i].TenantID != tenantID {
+			continue
+		}
+		if tc, ok := c.Tenants[i].Collectors[collectorName]; ok && tc.Source != "" {
+			src = tc.Source
+		}
+		break
+	}
+	if src == "blob" {
+		return "blob"
+	}
+	return "graph"
 }
 
 // OTLPConfig configures the OTLP exporter.

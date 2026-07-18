@@ -140,8 +140,17 @@ func setupTenant(
 	// tuning) just reduces the reuse rate, never correctness.
 	fleet := collectors.NewCachingFleetFetcher(gc, "https://graph.microsoft.com/v1.0", 30*time.Minute)
 	deps := collectors.Deps{Graph: gc, TenantID: ta.TenantID, Logger: tlog, Caps: caps, Export: exporter, Fleet: fleet}
+	// polledNames records the stable name of every graph/window (polled)
+	// collector, gated in or not, so a same-named blob twin can be recognized as
+	// the second TRANSPORT of a polled collector and selected against it by
+	// `source: graph|blob` (#135 group D) rather than registered as an always-on
+	// duplicate. blobConfigured guards the source=blob path from silently
+	// disabling a collector when there is no blob source to switch to.
+	polledNames := map[string]bool{}
+	blobConfigured := tenantBlobAccountURL(cfg, ta.TenantID) != ""
 	for _, factory := range collectors.All() {
 		c := factory(deps)
+		polledNames[c.Name()] = true
 		if interval, ok := gateCollector(c, ta, cfg, caps, tlog, skips); ok {
 			registry.Register(c, interval)
 		}
@@ -166,6 +175,20 @@ func setupTenant(
 		if rw.Collector == nil {
 			continue
 		}
+		wname := rw.Collector.Name()
+		polledNames[wname] = true
+		// source: blob selects the blob transport for a source-switchable
+		// collector — skip its polled (graph) registration so the same-named blob
+		// twin (registerBlobCollectors) is the one that runs. Exactly one side
+		// registers, so the event is never ingested twice (#135 group D).
+		wsource := cfg.CollectorSource(ta.TenantID, wname)
+		if !graphPollingActive(wsource, blobConfigured) {
+			tlog.Info("collector source is blob: graph polling disabled; the blob twin is active", "collector", wname)
+			continue
+		}
+		if wsource == "blob" {
+			tlog.Warn("collector source=blob but no blob_ingest.account_url is configured; falling back to graph polling", "collector", wname)
+		}
 		if interval, ok := gateCollector(rw.Collector, ta, cfg, caps, tlog, skips); ok {
 			registry.RegisterWindow(rw.Collector, interval, initialLookback(cfg, rw), rw.MaxWindow)
 		}
@@ -176,7 +199,7 @@ func setupTenant(
 	// for at all. Configuring blob_ingest.account_url IS the opt-in: a tenant
 	// that has provisioned no storage account registers none of these, so a
 	// default deployment is untouched.
-	registerBlobCollectors(cfg, ta, caps, store, tlog, registry, skips)
+	registerBlobCollectors(cfg, ta, caps, store, tlog, registry, skips, polledNames)
 
 	// O365 Management Activity API collectors (#100) — the second non-Graph
 	// first-party API. Unlike blob ingest this needs no infrastructure opt-in:
@@ -296,6 +319,25 @@ func initialLookback(cfg *config.Config, rw collectors.RegisteredWindow) time.Du
 // otherwise "blob ingest is silently doing nothing" looks identical to "the
 // data has not arrived yet", which is the documented way this path gets
 // misdiagnosed.
+// graphPollingActive reports whether a source-switchable collector's polled
+// (graph) registration should run. It is skipped ONLY when source=blob AND a
+// blob source is actually configured to take over — so source=blob with no blob
+// ingest falls back to graph rather than leaving the collector running nowhere
+// (#135 group D).
+func graphPollingActive(source string, blobConfigured bool) bool {
+	return source != "blob" || !blobConfigured
+}
+
+// blobTwinSelected reports whether a blob collector should register. A blob
+// collector whose name also belongs to a polled collector is that collector's
+// second TRANSPORT (a source-switchable twin) and registers only when
+// source=blob; a pure-blob collector (no polled twin) always registers. Together
+// with graphPollingActive this makes graph and blob mutually exclusive per
+// collector: exactly one side registers, so an event is never ingested twice.
+func blobTwinSelected(name string, polledNames map[string]bool, source string) bool {
+	return !polledNames[name] || source == "blob"
+}
+
 func registerBlobCollectors(
 	cfg *config.Config,
 	ta *auth.TenantAuth,
@@ -304,6 +346,7 @@ func registerBlobCollectors(
 	tlog *slog.Logger,
 	registry *collector.Registry,
 	skips map[admin.SkipKey]string,
+	polledNames map[string]bool,
 ) {
 	accountURL := tenantBlobAccountURL(cfg, ta.TenantID)
 	if accountURL == "" {
@@ -338,6 +381,14 @@ func registerBlobCollectors(
 	}
 	for _, bf := range collectors.BlobAll() {
 		c := bf(bdeps)
+		// A blob collector whose name matches a polled collector is that
+		// collector's second TRANSPORT (#135 group D): register it only when
+		// source=blob, so it and the polled twin are never both active. A
+		// pure-blob collector (no polled twin — sign-ins, graph_activity) has no
+		// name match and always registers, exactly as before.
+		if !blobTwinSelected(c.Name(), polledNames, cfg.CollectorSource(ta.TenantID, c.Name())) {
+			continue
+		}
 		if interval, ok := gateCollector(c, ta, cfg, caps, tlog, skips); ok {
 			registry.Register(c, interval)
 		}

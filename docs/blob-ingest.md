@@ -21,7 +21,7 @@ The Azure SDK lives behind one interface (`blobpipeline.Source`, implemented in
 | `NonInteractiveUserSignInLogs` | `entra.signins.non_interactive.blob` | Retires a `/beta` dependency (see below). |
 | `ManagedIdentitySignInLogs` | — | Same case as the two above, but **not built**: the container does not exist on the verification tenant, so there is no live sample to map against and this project does not map from documentation (#135). |
 | Intune `OperationalLogs` | — | **No Graph endpoint** (#94). The compliance-alert *fired-event* stream; Graph exposes only the notification templates. |
-| `AuditLogs`, `ProvisioningLogs` | — | Polled today (`entra.directory_audits` / `entra.provisioning`, default-on). A blob twin needs the `source: graph\|blob` toggle first — both enabled would ship every record twice (#135 group D; #131 closed confirming source mutual exclusion, enforced by #144). `AuditLogs` is verified mappable via the existing `mapDirectoryAudit`. |
+| `AuditLogs`, `ProvisioningLogs` | `entra.directory_audits` / `entra.provisioning` (blob source) | **Built (#135 group D).** Same collectors as the polled versions, switched by the per-collector `source: graph\|blob` config (default `graph`; set `blob` to consume the diagnostic-settings container instead). One transport per collector — never both, so no double-ship — via the `source` toggle rather than a second collector; the blob path reuses `mapDirectoryAudit`/`mapProvisioning` unchanged and binds the timestamp to `properties.activityDateTime`. These are log-only signals (zero metrics), so `source: blob` is a clean full swap; blob is the more scalable transport on a high-volume tenant. |
 
 ### The sign-in collectors
 
