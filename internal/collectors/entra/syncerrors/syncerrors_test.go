@@ -210,13 +210,10 @@ func TestZeroCaseEmitsExplicitZero(t *testing.T) {
 	}
 }
 
-func TestNamePermissionsAndOptIn(t *testing.T) {
+func TestNameAndPermissions(t *testing.T) {
 	c := New(&fakeGraph{}, nil)
 	if c.Name() != "entra.syncerrors" {
 		t.Errorf("Name = %q, want entra.syncerrors", c.Name())
-	}
-	if !c.Experimental() {
-		t.Error("Experimental() = false, want true (opt-in/default-off — pages the full user collection)")
 	}
 	perms := map[string]bool{}
 	for _, p := range c.RequiredPermissions() {

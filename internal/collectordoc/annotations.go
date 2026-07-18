@@ -95,7 +95,7 @@ var annotations = map[string]Annotation{
 	"entra.syncerrors": {
 		Collects: "Hybrid directory-sync provisioning errors (onPremisesProvisioningErrors) — UPN/proxy-address conflicts that fail silently while sync freshness stays green — bucketed by object type/category/property, plus a log twin per errored object carrying the conflicting value",
 		Source:   "`/organization` (sync-state probe), `/users` (full page-walk, client-side filtered)",
-		Gating:   "opt-in / default-off — it pages the full user collection, so the opt-in is for COST not API instability; both endpoints are v1.0 stable, not beta. No-ops without paging when the tenant is cloud-only, i.e. onPremisesSyncEnabled is false or null",
+		Gating:   "runs on every tier (both endpoints are v1.0 stable, not beta); no-ops without paging when the tenant is cloud-only, i.e. onPremisesSyncEnabled is false or null, so only hybrid-synced tenants pay the full /users sweep",
 	},
 	"entra.users": {
 		Collects: "User population by account-enabled/user-type/on-prem-sync (marginal + joint user_type×account_enabled), staleness",

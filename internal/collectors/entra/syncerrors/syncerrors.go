@@ -16,17 +16,18 @@
 //     field — the conflicting value that has to be resolved. "Not a metric label"
 //     means "log twin", never "dropped" (#112/#114).
 //
-// # Cost, opt-in, and the free cloud-only skip
+// # The free cloud-only skip
 //
 // onPremisesProvisioningErrors is NOT $filter-able and has no $count shortcut, so
 // the only path is paging the full /users collection with a trimmed $select and
-// filtering client-side. That page-walk is the cost, so this collector is
-// OPT-IN / default-off (via the Experimental gate — the only default-off lever
-// the framework has). The endpoint itself is Graph v1.0 STABLE: the opt-in is for
-// COST, not API instability, unlike a true beta collector. A cheap
-// /organization probe gates the whole thing — when the tenant is cloud-only
-// (onPremisesSyncEnabled is false/null, the default for most tenants) the
-// collector no-ops without paging anything.
+// filtering client-side — the same full-collection page-walk entra.users and
+// intune.devices already do, so this collector is default-on like them. Both
+// endpoints are Graph v1.0 STABLE (no beta gate). A cheap /organization probe
+// gates the sweep: when the tenant is cloud-only (onPremisesSyncEnabled is
+// false/null, the default for most tenants) the collector no-ops without paging
+// anything — so cloud-only tenants pay one small request and only hybrid-synced
+// tenants pay the sweep. The 6h default interval keeps even the hybrid case a
+// negligible share of the directory throttle bucket.
 //
 // v1 sweeps USERS only. Group provisioning conflicts are rarer than user ones and
 // the user sweep delivers most of the value; a group sweep can follow (#123).
@@ -116,12 +117,6 @@ func (c *Collector) Name() string { return collectorName }
 // cheap — six hours is ample and keeps this a negligible share of the directory
 // throttle bucket.
 func (c *Collector) DefaultInterval() time.Duration { return 6 * time.Hour }
-
-// Experimental marks this collector OPT-IN / default-off. The gate is the only
-// default-off lever the framework exposes; here it guards COST (the full /users
-// page-walk), not a beta/preview endpoint — /users and /organization are both
-// Graph v1.0 stable. See the package doc.
-func (c *Collector) Experimental() bool { return true }
 
 // RequiredPermissions declares least-privilege scopes: User.Read.All for the user
 // sweep, Organization.Read.All for the sync-state probe.
