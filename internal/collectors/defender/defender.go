@@ -233,3 +233,73 @@ func StampDeviceCommon(attrs telemetry.Attrs, props map[string]any) {
 	StampStrings(attrs, props, deviceCommonStrFields)
 	telemetry.SetNum(attrs, semconv.AttrReportId, props, "ReportId")
 }
+
+// accountStrFields is the event-level account block (the account the event
+// happened AS/TO, distinct from the InitiatingProcess account) shared by
+// DeviceProcessEvents and DeviceEvents.
+var accountStrFields = []StrField{
+	{semconv.AttrAccountName, "AccountName"},
+	{semconv.AttrAccountDomain, "AccountDomain"},
+	{semconv.AttrAccountSid, "AccountSid"},
+	{semconv.AttrAccountUpn, "AccountUpn"},
+	{semconv.AttrAccountObjectId, "AccountObjectId"},
+}
+
+// StampAccount applies the event-level account block.
+func StampAccount(attrs telemetry.Attrs, props map[string]any) {
+	StampStrings(attrs, props, accountStrFields)
+}
+
+// fileHashStrFields is the event-level file block (the file the event acted on)
+// shared by DeviceProcessEvents, DeviceFileEvents, and DeviceEvents. Hashes and
+// paths are the point of these tables and are in scope (#106) — never file
+// content.
+var fileHashStrFields = []StrField{
+	{semconv.AttrFileName, "FileName"},
+	{semconv.AttrFolderPath, "FolderPath"},
+	{semconv.AttrSha1, "SHA1"},
+	{semconv.AttrSha256, "SHA256"},
+	{semconv.AttrMd5, "MD5"},
+}
+
+// StampFileHash applies the event-level file/hash block (FileSize is numeric).
+func StampFileHash(attrs telemetry.Attrs, props map[string]any) {
+	StampStrings(attrs, props, fileHashStrFields)
+	telemetry.SetNum(attrs, semconv.AttrFileSize, props, "FileSize")
+}
+
+// processStrFields is the created-process block (the process the event created
+// or acted on, distinct from InitiatingProcess) shared by DeviceProcessEvents
+// and DeviceEvents.
+var processStrFields = []StrField{
+	{semconv.AttrProcessCommandLine, "ProcessCommandLine"},
+	{semconv.AttrProcessCreationTime, "ProcessCreationTime"},
+	{semconv.AttrProcessIntegrityLevel, "ProcessIntegrityLevel"},
+	{semconv.AttrProcessTokenElevation, "ProcessTokenElevation"},
+	{semconv.AttrProcessUniqueId, "ProcessUniqueId"},
+	{semconv.AttrProcessRemoteSessionDeviceName, "ProcessRemoteSessionDeviceName"},
+	{semconv.AttrProcessRemoteSessionIp, "ProcessRemoteSessionIP"},
+	{semconv.AttrProcessVersionInfoCompanyName, "ProcessVersionInfoCompanyName"},
+	{semconv.AttrProcessVersionInfoProductName, "ProcessVersionInfoProductName"},
+	{semconv.AttrProcessVersionInfoProductVersion, "ProcessVersionInfoProductVersion"},
+	{semconv.AttrProcessVersionInfoInternalFileName, "ProcessVersionInfoInternalFileName"},
+	{semconv.AttrProcessVersionInfoOriginalFileName, "ProcessVersionInfoOriginalFileName"},
+	{semconv.AttrProcessVersionInfoFileDescription, "ProcessVersionInfoFileDescription"},
+}
+
+var processNumFields = []NumField{
+	{semconv.AttrProcessId, "ProcessId"},
+	{semconv.AttrCreatedProcessSessionId, "CreatedProcessSessionId"},
+	{semconv.AttrLogonId, "LogonId"},
+}
+
+var processBoolFields = []BoolField{
+	{semconv.AttrIsProcessRemoteSession, "IsProcessRemoteSession"},
+}
+
+// StampProcess applies the created-process block.
+func StampProcess(attrs telemetry.Attrs, props map[string]any) {
+	StampStrings(attrs, props, processStrFields)
+	StampNums(attrs, props, processNumFields)
+	StampBools(attrs, props, processBoolFields)
+}

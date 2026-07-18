@@ -182,6 +182,22 @@ var annotations = map[string]Annotation{
 		Collects: "One log per evidence row Defender attaches to an alert (`AlertEvidence`, absorbing #93) — the per-entity detail (real UPN/IP/geo/session/file) that `entra.security_alerts` collapses to a bare `evidence_count`. Joins to the alert on `alert_id`. Experimental + off by default",
 		Category: "AdvancedHunting-AlertEvidence",
 	},
+	"defender.device_process": {
+		Collects: "One log per process creation Defender for Endpoint observes (`DeviceProcessEvents`) — the process tree (created process + full initiating-process lineage, command lines, hashes, signer) that is the core of endpoint hunting. The largest-volume Defender table; Experimental + off by default",
+		Category: "AdvancedHunting-DeviceProcessEvents",
+	},
+	"defender.device_file": {
+		Collects: "One log per file create/modify/rename/delete Defender for Endpoint observes (`DeviceFileEvents`) — file hashes, paths, origin URL/IP, share and sensitivity-label context, with the initiating process. Experimental + off by default",
+		Category: "AdvancedHunting-DeviceFileEvents",
+	},
+	"defender.device_network": {
+		Collects: "One log per network connection Defender for Endpoint observes (`DeviceNetworkEvents`) — local/remote IP+port, URL, protocol, with the initiating process; the C2/exfil/lateral-movement signal. Experimental + off by default",
+		Category: "AdvancedHunting-DeviceNetworkEvents",
+	},
+	"defender.device_event": {
+		Collects: "One log per miscellaneous endpoint event Defender records (`DeviceEvents`) — the catch-all table spanning AMSI/`ScriptContent`, memory-injection API calls, USB mounts, WMI process creation, and more, keyed by `action_type`. `ScriptContent` (the full script body, inside `additional_fields`) ships verbatim per #106. Experimental + off by default",
+		Category: "AdvancedHunting-DeviceEvents",
+	},
 
 	// ---- Intune — snapshot collectors ----
 	"intune.apple_tokens": {

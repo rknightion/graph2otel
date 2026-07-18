@@ -6,8 +6,12 @@ package main
 // in tenants.go never changes.
 import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/alertevidence"
+	_ "github.com/rknightion/graph2otel/internal/collectors/defender/deviceevent"
+	_ "github.com/rknightion/graph2otel/internal/collectors/defender/devicefile"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/deviceinfo"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/devicelogon"
+	_ "github.com/rknightion/graph2otel/internal/collectors/defender/devicenetwork"
+	_ "github.com/rknightion/graph2otel/internal/collectors/defender/deviceprocess"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/deviceregistry"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/email"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/agreements"

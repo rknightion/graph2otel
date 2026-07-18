@@ -1,0 +1,38 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "defender.device_event",
+      "AttrKeys": [
+        "action_type",
+        "additional_fields",
+        "device_id",
+        "device_name",
+        "ingest_transport",
+        "initiating_process_account_domain",
+        "initiating_process_account_name",
+        "initiating_process_account_sid",
+        "initiating_process_command_line",
+        "initiating_process_creation_time",
+        "initiating_process_file_name",
+        "initiating_process_file_size",
+        "initiating_process_folder_path",
+        "initiating_process_id",
+        "initiating_process_logon_id",
+        "initiating_process_md5",
+        "initiating_process_parent_creation_time",
+        "initiating_process_parent_file_name",
+        "initiating_process_parent_id",
+        "initiating_process_sha1",
+        "initiating_process_sha256",
+        "initiating_process_unique_id",
+        "initiating_process_version_info_company_name",
+        "is_initiating_process_remote_session",
+        "is_process_remote_session",
+        "machine_group",
+        "report_id",
+        "sha256"
+      ]
+    }
+  ]
+}
