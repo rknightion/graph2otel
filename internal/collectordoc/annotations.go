@@ -131,8 +131,9 @@ var annotations = map[string]Annotation{
 		Category: "ProvisioningLogs",
 	},
 	"entra.risk_detections": {
-		Collects: "Identity Protection risk detection events (`$top` capped at 500, not 1000)",
+		Collects: "Identity Protection risk detection events (source: graph|blob — poll `/identityProtection/riskDetections`, `$top` capped at 500; or consume the `UserRiskEvents` diagnostic-settings container, which dodges the 1 req/s IPC ceiling — the blob `properties` IS the riskDetection resource, reusing mapRiskDetection; exactly one per config)",
 		Source:   "`/identityProtection/riskDetections`",
+		Category: "UserRiskEvents",
 	},
 	"entra.security_alerts": {
 		Collects: "Security alerts (`alerts_v2`)",
