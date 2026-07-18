@@ -3,28 +3,35 @@
 // fleet-shaped aggregates over device startup performance, app crash health,
 // battery health, resource performance, and baselines.
 //
-// MIXED v1.0/beta surface. The tenant-wide overview singleton, the device
+// MIXED v1.0/beta surface. The per-device scores collection, the device
 // startup history collection, and the app health performance collection are
 // all v1.0. The battery health, resource performance, and baseline families
-// exist only on /beta. Because this framework's Experimental opt-in is
+// exist only on /beta. There is no tenant-wide overview singleton: Graph's
+// userExperienceAnalyticsOverview segment was removed and 400s on both v1.0
+// and beta (live-measured 2026-07-18, #179), so the score signal comes from
+// the per-device userExperienceAnalyticsDeviceScores collection instead.
+// Because this framework's Experimental opt-in is
 // per-collector (not per-metric - see internal/collectors.Experimental), and
 // a meaningful slice of this collector's value lives on those beta-only
 // families, the WHOLE collector is Experimental (opt-in, default-off): when a
 // tenant enables it, every signal below is emitted together, including the
-// v1.0 overview.
+// v1.0 device scores.
 //
-// Two of the v1.0 collections (device startup histories, app health
-// performance) are PER-BOOT / PER-APPLICATION-INSTANCE rows that scale with
+// The v1.0 per-device scores and both PER-BOOT / PER-APPLICATION-INSTANCE
+// collections (device startup histories, app health performance) scale with
 // fleet size and polling cadence - a 10k-device fleet can produce hundreds of
 // thousands of startup-history rows a month. Per CLAUDE.md's cardinality
 // rule, none of that raw shape becomes a metric label: startup history rolls
 // up into bounded boot/login-time HISTOGRAMS (bucketed only by the fixed
-// restartCategory enum), and app health crash counts are summed only for a
-// small, fixed ALLOW-LIST of common executable names (mirroring
-// intune/detectedapps' allow-list pattern) - never a series per raw exe name.
-// The beta battery-health and resource-performance families are similarly
-// per-device rows, aggregated down to device counts and score histograms by
-// the bounded healthStatus enum, never a per-device series.
+// restartCategory enum); per-device scores roll into a bounded score histogram
+// (by the fixed category set) plus a device count by the bounded healthStatus
+// enum, with NO log twin (see collectDeviceScores for the #114 exception); and
+// app health crash counts are summed only for a small, fixed ALLOW-LIST of
+// common executable names (mirroring intune/detectedapps' allow-list pattern) -
+// never a series per raw exe name. The beta battery-health and
+// resource-performance families are similarly per-device rows, aggregated down
+// to device counts and score histograms by the bounded healthStatus enum,
+// never a per-device series.
 //
 // insufficientData is a normal, expected healthStatus/state value on an
 // immature or small tenant that hasn't accumulated enough telemetry yet - it
@@ -52,7 +59,8 @@ const collectorName = "intune.endpoint_analytics"
 
 // Metric names this collector emits.
 const (
-	scoreMetric               = "intune.uxa.score"
+	deviceScoreMetric         = "intune.uxa.device_score"
+	deviceScoreCountMetric    = "intune.uxa.device_count"
 	bootTimeMetric            = "intune.uxa.boot_time_ms"
 	loginTimeMetric           = "intune.uxa.login_time_ms"
 	appCrashCountMetric       = "intune.uxa.app_crash_count"
@@ -63,7 +71,7 @@ const (
 	baselineScoreMetric       = "intune.uxa.baseline_score"
 )
 
-// defaultBaseURL / betaBaseURL: the overview singleton, startup histories,
+// defaultBaseURL / betaBaseURL: the per-device scores, startup histories,
 // and app health performance are v1.0; battery health, resource performance,
 // and baselines exist only on beta (see the package doc for why the
 // collector as a whole is still Experimental).
@@ -149,45 +157,33 @@ var defaultAllowedApps = []string{
 	"explorer.exe",
 }
 
-// overview is the subset of the v1.0 userExperienceAnalyticsOverview
-// singleton this collector reads
-// (https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-userexperienceanalyticsoverview).
-type overview struct {
-	OverallScore                      int    `json:"overallScore"`
-	DeviceBootPerformanceOverallScore int    `json:"deviceBootPerformanceOverallScore"`
-	BestPracticesOverallScore         int    `json:"bestPracticesOverallScore"`
-	WorkFromAnywhereOverallScore      int    `json:"workFromAnywhereOverallScore"`
-	AppHealthOverallScore             int    `json:"appHealthOverallScore"`
-	ResourcePerformanceOverallScore   int    `json:"resourcePerformanceOverallScore"`
-	BatteryHealthOverallScore         int    `json:"batteryHealthOverallScore"`
-	State                             string `json:"state"`
-	DeviceBootPerformanceHealthState  string `json:"deviceBootPerformanceHealthState"`
-	BestPracticesHealthState          string `json:"bestPracticesHealthState"`
-	WorkFromAnywhereHealthState       string `json:"workFromAnywhereHealthState"`
-	AppHealthState                    string `json:"appHealthState"`
-	ResourcePerformanceHealthState    string `json:"resourcePerformanceHealthState"`
-	BatteryHealthState                string `json:"batteryHealthState"`
-}
-
-// points returns the overview's 7 fixed category scores as bounded gauge
-// points, one per Microsoft-documented schema field - the category set can
-// never grow with tenant size, only with a future Graph schema change.
-func (o overview) points() []telemetry.GaugePoint {
-	cat := func(score int, category, state string) telemetry.GaugePoint {
-		return telemetry.GaugePoint{
-			Value: float64(score),
-			Attrs: telemetry.Attrs{semconv.AttrCategory: category, semconv.AttrHealthState: healthStateBucketFor(state)},
-		}
-	}
-	return []telemetry.GaugePoint{
-		cat(o.OverallScore, "overall", o.State),
-		cat(o.DeviceBootPerformanceOverallScore, "device_boot_performance", o.DeviceBootPerformanceHealthState),
-		cat(o.BestPracticesOverallScore, "best_practices", o.BestPracticesHealthState),
-		cat(o.WorkFromAnywhereOverallScore, "work_from_anywhere", o.WorkFromAnywhereHealthState),
-		cat(o.AppHealthOverallScore, "app_health", o.AppHealthState),
-		cat(o.ResourcePerformanceOverallScore, "resource_performance", o.ResourcePerformanceHealthState),
-		cat(o.BatteryHealthOverallScore, "battery_health", o.BatteryHealthState),
-	}
+// deviceScore is the subset of the v1.0 userExperienceAnalyticsDeviceScores
+// resource this collector reads
+// (https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-userexperienceanalyticsdevicescores).
+// It replaces the removed userExperienceAnalyticsOverview singleton (#179): the
+// tenant-wide overview segment 400s on both versions now, and per-device scores
+// are the live source of the same "how is the fleet scoring" signal.
+//
+// deviceName/model/manufacturer are deliberately never read, and this collector
+// emits NO log twin for these rows. That is the SAME #114-audited exception the
+// startupHistory rows carry (see below): per-device Endpoint Analytics scores
+// are an ops question - Intune's own Endpoint Analytics console answers "which
+// device scores low" better than a log stream, and there is no security signal
+// here - so the rows roll straight into bounded aggregates. Reconsider only if
+// a device's UXA score becomes a security signal for someone.
+//
+// A score of -1 is Endpoint Analytics' "not enough data yet" sentinel, not a
+// real 0-100 value (live-measured 2026-07-18, #179: a device reported
+// startupPerformanceScore -1 while its other scores were populated). Sentinels
+// are excluded from the score histogram so they cannot drag the distribution
+// toward zero; the device still counts in device_count under its healthStatus.
+type deviceScore struct {
+	EndpointAnalyticsScore  float64 `json:"endpointAnalyticsScore"`
+	StartupPerformanceScore float64 `json:"startupPerformanceScore"`
+	AppReliabilityScore     float64 `json:"appReliabilityScore"`
+	WorkFromAnywhereScore   float64 `json:"workFromAnywhereScore"`
+	BatteryHealthScore      float64 `json:"batteryHealthScore"`
+	HealthStatus            string  `json:"healthStatus"`
 }
 
 // startupHistory is the subset of the v1.0 userExperienceAnalyticsDeviceStartupHistory
@@ -291,7 +287,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		name string
 		fn   func(context.Context, telemetry.Emitter) error
 	}{
-		{"overview", c.collectOverview},
+		{"device scores", c.collectDeviceScores},
 		{"startup histories", c.collectStartupHistories},
 		{"app health", c.collectAppHealth},
 		{"battery health", c.collectBatteryHealth},
@@ -302,33 +298,73 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	var errs []error
 	for _, f := range fetchers {
 		if err := f.fn(ctx, e); err != nil {
-			if isUnavailable(err) || isFeatureNotProvisioned(err) {
-				c.logger.Info("endpoint analytics sub-endpoint not available on this tenant; skipping",
+			if isNotLicensed(err) {
+				c.logger.Info("endpoint analytics sub-endpoint not licensed on this tenant; skipping",
 					"collector", collectorName, "endpoint", f.name, "error", err)
 				continue
 			}
-			c.logger.Warn("endpoint analytics sub-fetch failed", "collector", collectorName, "endpoint", f.name, "error", err)
+			// A wrong/dead route segment is graph2otel asking for a URL that does
+			// not exist - our bug, never a tenant condition (#179). It is joined
+			// into the error like any other failure, but logged distinctly so it
+			// cannot masquerade as a quiet "not available on this tenant" skip for
+			// the life of the collector, which is exactly how the removed overview
+			// and the plural startup-history URL hid until #179.
+			if isWrongEndpoint(err) {
+				c.logger.Error("endpoint analytics sub-endpoint URL is wrong/dead - this is a graph2otel bug, not a tenant gap",
+					"collector", collectorName, "endpoint", f.name, "error", err)
+			} else {
+				c.logger.Warn("endpoint analytics sub-fetch failed", "collector", collectorName, "endpoint", f.name, "error", err)
+			}
 			errs = append(errs, fmt.Errorf("%s: %w", f.name, err))
 		}
 	}
 	return errors.Join(errs...)
 }
 
-func (c *Collector) collectOverview(ctx context.Context, e telemetry.Emitter) error {
-	body, err := c.g.RawGet(ctx, c.baseURL+"/deviceManagement/userExperienceAnalyticsOverview")
+// collectDeviceScores fetches the per-device Endpoint Analytics scores and
+// rolls them into a bounded score histogram (by category, sentinels excluded)
+// plus a device count by health state - see the deviceScore doc for why there
+// is no log twin.
+func (c *Collector) collectDeviceScores(ctx context.Context, e telemetry.Emitter) error {
+	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/userExperienceAnalyticsDeviceScores", nil)
 	if err != nil {
 		return err
 	}
-	var ov overview
-	if err := json.Unmarshal(body, &ov); err != nil {
-		return fmt.Errorf("decode userExperienceAnalyticsOverview: %w", err)
+	counts := map[string]int64{}
+	for _, r := range raw {
+		var d deviceScore
+		if err := json.Unmarshal(r, &d); err != nil {
+			c.logger.Warn("endpoint_analytics: skipping malformed device score row", "collector", collectorName, "error", err)
+			continue
+		}
+		counts[healthStateBucketFor(d.HealthStatus)]++
+		for _, cs := range []struct {
+			category string
+			score    float64
+		}{
+			{"endpoint_analytics", d.EndpointAnalyticsScore},
+			{"startup_performance", d.StartupPerformanceScore},
+			{"app_reliability", d.AppReliabilityScore},
+			{"work_from_anywhere", d.WorkFromAnywhereScore},
+			{"battery_health", d.BatteryHealthScore},
+		} {
+			if cs.score < 0 {
+				continue // -1 = "not enough data" sentinel, never a real 0-100 score
+			}
+			e.Histogram(deviceScoreMetric, "{score}", "Intune Endpoint Analytics per-device score distribution (0-100), by score category.",
+				cs.score, scoreBounds, telemetry.Attrs{semconv.AttrCategory: cs.category})
+		}
 	}
-	e.GaugeSnapshot(scoreMetric, "{score}", "Intune Endpoint Analytics overall and per-category scores (0-100).", ov.points())
+	points := make([]telemetry.GaugePoint, 0, len(counts))
+	for state, n := range counts {
+		points = append(points, telemetry.GaugePoint{Value: float64(n), Attrs: telemetry.Attrs{semconv.AttrHealthState: state}})
+	}
+	e.GaugeSnapshot(deviceScoreCountMetric, "{device}", "Intune Endpoint Analytics device count, by overall Endpoint Analytics health state.", points)
 	return nil
 }
 
 func (c *Collector) collectStartupHistories(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/userExperienceAnalyticsDeviceStartupHistories", nil)
+	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/userExperienceAnalyticsDeviceStartupHistory", nil)
 	if err != nil {
 		return err
 	}
@@ -463,24 +499,28 @@ func orUnknown(s string) string {
 	return s
 }
 
-// isUnavailable reports whether err is a 4xx from a sub-endpoint being
-// unavailable/unlicensed on the tenant (403 forbidden, 404 not found) - an
-// expected "no data here" condition, not a failure.
-func isUnavailable(err error) bool {
-	s := err.Error()
-	return strings.Contains(s, "status 403") || strings.Contains(s, "status 404")
+// isNotLicensed reports whether err is a 403 from a sub-endpoint the tenant is
+// not licensed/permitted for - the one genuinely quiet "no data here" skip.
+//
+// Deliberately 403-only. The previous version also swallowed a "400/404 Resource
+// not found for segment" as a "feature not provisioned" gap, but #179 showed
+// that was a misdiagnosis: userExperienceAnalyticsOverview (dead segment) and
+// the plural userExperienceAnalyticsDeviceStartupHistories (wrong name) BOTH
+// returned that exact 400 shape while valid segments on the SAME tenant returned
+// 200 with data. A route-segment error means graph2otel asked for a URL that
+// does not exist (isWrongEndpoint), not that the tenant lacks the feature - a
+// valid UXA segment returns 200 with insufficientData even on an immature
+// tenant, never a segment 400. So a segment error must be loud, and only a 403
+// stays a quiet skip. [live-measured 2026-07-18, #179]
+func isNotLicensed(err error) bool {
+	return strings.Contains(err.Error(), "status 403")
 }
 
-// isFeatureNotProvisioned reports whether err is Graph's "the Endpoint
-// Analytics feature segment doesn't exist on this tenant at all" shape -
-// observed live (M4 verification) as HTTP 400 (sometimes 404), Graph error
-// code "ResourceNotFound", message "Resource not found for segment '...'".
-// This is NOT the same as insufficientData (a 200 response body state value
-// for an enabled-but-immature tenant) - it means the tenant never onboarded
-// Endpoint Analytics, so every UXA endpoint 400s this way every cycle.
-// Deliberately specific: a plain malformed-query 400 (wrong code/message)
-// must still surface as a real collector error, not be silently swallowed.
-func isFeatureNotProvisioned(err error) bool {
+// isWrongEndpoint reports whether err is Graph's "no such route segment" shape
+// (HTTP 400/404, code "ResourceNotFound"/"BadRequest", message "Resource not
+// found for [the ]segment '...'"). That is a graph2otel bug - a URL that does
+// not exist - so the caller surfaces it loudly rather than skipping it (#179).
+func isWrongEndpoint(err error) bool {
 	s := err.Error()
 	if !strings.Contains(s, "status 400") && !strings.Contains(s, "status 404") {
 		return false

@@ -32,6 +32,18 @@
       ]
     },
     {
+      "Name": "intune.uxa.device_count",
+      "AttrKeys": [
+        "health_state"
+      ]
+    },
+    {
+      "Name": "intune.uxa.device_score",
+      "AttrKeys": [
+        "category"
+      ]
+    },
+    {
       "Name": "intune.uxa.login_time_ms",
       "AttrKeys": [
         "restart_category"
@@ -46,13 +58,6 @@
     {
       "Name": "intune.uxa.resource_performance_score",
       "AttrKeys": [
-        "health_state"
-      ]
-    },
-    {
-      "Name": "intune.uxa.score",
-      "AttrKeys": [
-        "category",
         "health_state"
       ]
     }

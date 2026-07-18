@@ -197,8 +197,8 @@ var annotations = map[string]Annotation{
 		Source:   "`/deviceManagement/detectedApps`",
 	},
 	"intune.endpoint_analytics": {
-		Collects: "UXA scores, boot/login time histograms, app crash counts, battery health, resource performance — the heaviest collector",
-		Source:   "`/deviceManagement/userExperienceAnalytics*` (beta)",
+		Collects: "UXA per-device scores, boot/login time histograms, app crash counts, battery health, resource performance — the heaviest collector",
+		Source:   "`/deviceManagement/userExperienceAnalytics*` (v1.0 + beta)",
 	},
 	"intune.enrollment": {
 		Collects: "Enrollment configuration inventory (restrictions, VPP, ESP, etc.) + priority + version",

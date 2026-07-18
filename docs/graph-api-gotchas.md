@@ -84,10 +84,22 @@ Independent ceilings, none of which reliably send `Retry-After` — client-side 
   deliverable (a bounded count cannot replace them; also `managedDeviceOverview`'s OS
   summary sums to 9 on a real fleet of 10 — no Linux bucket). #132 tracks the one
   possible retirement route (blob inventory categories).
-- **"Feature not provisioned" is HTTP 400 `ResourceNotFound` / "not found for segment",
-  not 403/404** `[live, M4]` (variant: `exchangeConnectors` → 501 `NotSupported`).
-  Recognize the specific signature and skip that sub-fetch gracefully — but do NOT
-  blanket-swallow 400s: malformed-query 400s (page size, unescaped filter) must surface.
+- **A 400/404 "not found for segment" is a WRONG-URL bug, not "feature not provisioned"**
+  `[live-measured 2026-07-18, #179]`. This corrects an earlier M4 reading. A valid Intune
+  segment returns 200 (with `insufficientData` / empty on an immature tenant), never a
+  segment-404 — so a `ResourceNotFound` / "not found for segment" naming a route segment
+  means graph2otel asked for a URL that does not exist. Surface it **loudly**; do not skip
+  it. Swallowing it as a tenant gap hid two dead UXA URLs for the life of the collector
+  (below). Only a genuine **403** (not licensed/permitted) is a quiet skip. (Variant:
+  `exchangeConnectors` → 501 `NotSupported`.)
+- **User Experience Analytics (UXA / Endpoint Analytics) surface** `[live-measured
+  2026-07-18, #179]`: there is **no tenant-wide overview singleton** — `userExperience
+  AnalyticsOverview` 400s on both v1.0 and beta (segment removed); use the per-device
+  `userExperienceAnalyticsDeviceScores` (v1.0) for the score signal. Startup history is
+  **singular** `userExperienceAnalyticsDeviceStartupHistory` (the plural `…Histories`
+  400s). `batteryHealthDevicePerformance` and `resourcePerformance` are **beta-only** (400
+  on v1.0). Device scores use **`-1` as a "not enough data" sentinel**, not a real 0-100
+  value — exclude it from score aggregates.
 - **Per-device sub-resources 404 routinely** `[live, M4]` — e.g.
   `windowsProtectionState` for a device that hasn't reported it. Skip-and-count, never
   fail the sweep; emit an empty snapshot (not all-zeros) when zero devices returned data.
