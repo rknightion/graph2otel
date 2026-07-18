@@ -57,27 +57,40 @@ is enforced in config (#144's `ConflictsWith`). The one genuinely dual-capable s
 
 ## What it costs
 
-**~£0.85/month** on a small tenant, dominated by `MicrosoftGraphActivityLogs`. There is
-**no standing charge** — that was the point.
+**~£3.07/month** on a small tenant, dominated by `MicrosoftGraphActivityLogs` and the
+service-principal sign-in categories. There is **no standing charge** — that was the point.
 
-The bill is almost entirely **write operations**, not storage: 0.7 GB/month of data costs
-about a penny, while the AppendBlock calls that put it there cost ~£0.81. Measured live at
-**247 appends/hour** (~10.6 KB per append — Azure batches roughly 4 records per call),
-which is ~180,000 appends/month at the ~£0.0447/10K write rate. Storage is ~£0.0145/GB/mo,
-reads ~£0.0036/10K, and **listing is billed at the write rate**.
+The bill is almost entirely **write operations**, not storage: ~5.0 GB/month of data costs
+about 7p resident, while the AppendBlock calls that put it there cost ~£3.05. Measured live
+on a backfill-free window at **935 appends/hour** (~7.3 KB per append), which is ~683,000
+appends/month at the ~£0.0447/10K write rate. Storage is ~£0.0145/GB/mo, reads ~£0.0036/10K,
+and **listing is billed at the write rate**. `[live-measured 2026-07-17, #137]`
 
-> **Corrected 2026-07-16.** An earlier estimate here said £0.05–0.24/month. That was wrong:
-> it assumed roughly one append per minute, and the real rate is ~4× that. The number is
-> exactly measurable rather than modelled — `append_blob_committed_block_count` is a direct
-> count of billable AppendBlock operations, because an append blob supports no other write.
-> Don't guess at the batching; read the counter.
+> **Cost scales with graph2otel's own collector count, not just tenant size.** Every Graph
+> call a collector makes writes a `MicrosoftGraphActivityLogs` record, which the blob path
+> then pays to ingest — so **graph2otel is 59.9% of its own MGAL volume** (14,404 of 24,048
+> records carry the poller's own appId; top URIs `/groups/$count`, `/devices/$count`,
+> `/servicePrincipals`). Enabling a Graph-polled collector bills twice: once for the poll,
+> once for ingesting the MGAL record it created, so a 60-collector tenant costs more than a
+> 20-collector tenant of the same size. The opt-in self-exhaust exclusion (#154) is the lever;
+> the self-share also means any "who is calling Graph in this tenant" reading of MGAL is ~60%
+> the observer. A second, unrelated concentration distorts the bill the same way: one Defender
+> TVM scan-agent SP is 96.4% of `ServicePrincipalSignInLogs`.
 
-Log Analytics (£1.54/mo) and Event Hub (£8.34/mo standing) were both evaluated against this
-and closed. The correction does not reopen either — #89 pre-registered that the decision was
-not close enough for a 4× cost error to flip it, and it isn't. Event Hub's entire measured
-advantage was **12 seconds** of latency, because the ~4-minute delay is Entra-side — upstream
-of where the transport forks — so paying for a faster destination cannot buy back time
-already spent. Full evaluation: #89.
+> **The £0.85/month figure previously here was measured 2026-07-16 mid-backfill**, before those
+> volume drivers were fully in play — honest when taken, ~3.6× low at steady state. The append
+> count is exactly measurable rather than modelled: `append_blob_committed_block_count` is a
+> direct count of billable AppendBlock operations, because an append blob supports no other
+> write. Don't guess at the batching; read the counter.
+
+Log Analytics and Event Hub were both evaluated against this and closed (#89). The 3.6×
+correction does not reopen either — re-ranked at the measured volume against #89's live-queried
+uksouth prices, the margin **widens**: blob **£3.07** < Event Hub **£8.32** < Log Analytics
+**£10.88**. Blob is priced on write operations and LA on GB ingested, so a volume underestimate
+hurts LA harder, not blob. Event Hub's entire measured advantage was **12 seconds** of latency,
+and the ~4-minute delay is Entra-side — upstream of where the transport forks — so a faster
+destination cannot buy back time already spent. Full evaluation: #89.
+`[live-measured volume × docs-priced meters, 2026-07-17, #137]`
 
 ## Setup
 
@@ -156,22 +169,35 @@ and it is not derivable from the clock. Hence:
 Backfill on enablement is **good news**, incidentally: turning the destination on recovers
 history rather than starting from zero.
 
-**Still open** (#137): whether a frozen hour can EVER grow again once enablement backfill
-is fully done — unanswerable until the verification tenant finishes backfilling.
-Re-measure before assuming either way; the byte-offset design is safe under both. The
-~2.3% duplicate rate below was also measured DURING backfill and needs the same re-measure.
+**Resolved** (#137, `[live-measured 2026-07-17, n=1 tenant, 19h window]`): backfill on this
+tenant ended `2026-07-16T17:00Z`; in steady state a bucket freezes **~2–8 minutes after its
+hour closes**, and no closed bucket was observed growing across a ~19h window (16 settled
+hours, 6 categories). That is not proof it can *never* grow — a genuinely rare late record on
+a larger or more distributed tenant would not necessarily surface in 19h here — so the
+re-check-every-blob design stays: correct under both answers, and cheap. A settle-horizon
+optimisation (stop re-reading blobs older than N) is **explicitly not built**: below a **13h**
+horizon it would have silently dropped real backfill data on this very tenant on 2026-07-16.
+Evidence class: cheap to reopen, not armored.
 
-### Azure delivers at-least-once: ~2.3% of records arrive more than once
+### Azure delivers at-least-once: ~2.7% (MGAL) / ~4% (sign-ins) of records arrive more than once
 
-Measured live 2026-07-16 across every category with data — a consistent **2.3%–2.8%**, with one
-event observed delivered **three** times:
+Measured live on a clean backfill-free window (2026-07-17, `[live-measured, #137]`), and
+cross-checked against the backfill window — the two agreed within noise, so **at-least-once
+re-delivery is a steady-state property of Azure's delivery, not a backfill artifact**. The
+sign-in family clusters near **4%**, higher than MGAL's 2.7%, and one event was observed
+delivered **four** times (an earlier measurement, on ~4–12× less data, saw a max of three and
+a flat ~2.3–2.8%):
 
-| category | records | re-delivered |
-| --- | ---: | ---: |
-| `MicrosoftGraphActivityLogs` | 11,134 | 302 (2.71%) |
-| `ServicePrincipalSignInLogs` | 771 | 18 (2.33%) |
-| `MicrosoftServicePrincipalSignInLogs` | 216 | 6 (2.78%) |
-| `NonInteractiveUserSignInLogs` | 40 | 1 (2.50%) |
+| category | records | re-delivered | max multiplicity |
+| --- | ---: | ---: | ---: |
+| `MicrosoftGraphActivityLogs` | 24,048 | 654 (2.72%) | ×4 |
+| `ServicePrincipalSignInLogs` | 9,578 | 389 (4.06%) | ×4 |
+| `MicrosoftServicePrincipalSignInLogs` | 2,927 | 120 (4.10%) | ×4 |
+| `NonInteractiveUserSignInLogs` | 908 | 27 (2.97%) | ×4 |
+
+`AuditLogs` showed 0/73 dupes across both windows, but n=73 is too small to tell exactly-once
+from a ~3% rate (expected ~2 dupes) — **do not record it as exactly-once**. A downstream dedupe
+must not assume at-most-two copies: multiplicity reaches ×4.
 
 A re-delivered event is written as a **separate line**, usually into the same hour blob, with a
 **byte-identical `properties` payload** and a **fresh envelope `time`**. One `h=04` blob carried the
@@ -186,8 +212,9 @@ loss.
 
 The consequence is real and currently unmitigated: **blob-sourced collectors ship Azure's
 duplicates through to your backend.** The polled path does not have this problem — `logpipeline`
-carries a seen-id set in its checkpoint and dedupes. `blobpipeline` has no equivalent, so ~2.3% of
-blob-sourced records are duplicates. Every collector emits the identifying attribute (`id` for
+carries a seen-id set in its checkpoint and dedupes. `blobpipeline` has no equivalent, so ~2.7%
+(MGAL) / ~4% (sign-ins) of blob-sourced records are duplicates. Every collector emits the
+identifying attribute (`id` for
 sign-ins, `request_id` for Graph activity), so downstream dedupe is possible today. Closing the gap
 in the engine is **#138**.
 
