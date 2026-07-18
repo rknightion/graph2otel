@@ -1,0 +1,17 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "defender.email_url",
+      "AttrKeys": [
+        "ingest_transport",
+        "network_message_id",
+        "report_id",
+        "url",
+        "url_chain_position",
+        "url_domain",
+        "url_location"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "defender.cloud_app_event",
+      "AttrKeys": [
+        "account_display_name",
+        "account_id",
+        "account_object_id",
+        "account_type",
+        "action_type",
+        "activity_objects",
+        "activity_type",
+        "additional_fields",
+        "app_instance_id",
+        "application",
+        "application_id",
+        "audit_source",
+        "city",
+        "country_code",
+        "ingest_transport",
+        "ip_address",
+        "ip_category",
+        "ip_tags",
+        "is_admin_operation",
+        "is_anonymous_proxy",
+        "is_external_user",
+        "is_impersonated",
+        "isp",
+        "last_seen_for_user",
+        "raw_event_data",
+        "report_id"
+      ]
+    }
+  ]
+}

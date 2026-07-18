@@ -1,0 +1,20 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "defender.device_network_info",
+      "AttrKeys": [
+        "device_id",
+        "device_name",
+        "ingest_transport",
+        "ip_addresses",
+        "mac_address",
+        "machine_group",
+        "network_adapter_name",
+        "network_adapter_status",
+        "network_adapter_type",
+        "tunnel_type"
+      ]
+    }
+  ]
+}

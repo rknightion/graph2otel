@@ -1,0 +1,29 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "defender.identity_info",
+      "AttrKeys": [
+        "account_display_name",
+        "account_domain",
+        "account_name",
+        "account_object_id",
+        "account_upn",
+        "change_source",
+        "cloud_sid",
+        "created_date_time",
+        "criticality_level",
+        "identity_environment",
+        "identity_id",
+        "ingest_transport",
+        "is_account_enabled",
+        "report_id",
+        "risk_level",
+        "risk_level_details",
+        "source_provider",
+        "source_providers",
+        "type"
+      ]
+    }
+  ]
+}

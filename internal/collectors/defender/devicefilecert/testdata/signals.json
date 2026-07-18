@@ -1,0 +1,28 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "defender.device_file_certificate",
+      "AttrKeys": [
+        "certificate_creation_time",
+        "certificate_expiration_time",
+        "certificate_serial_number",
+        "crl_distribution_point_urls",
+        "device_id",
+        "device_name",
+        "ingest_transport",
+        "is_root_signer_microsoft",
+        "is_signed",
+        "is_trusted",
+        "issuer",
+        "issuer_hash",
+        "machine_group",
+        "report_id",
+        "sha1",
+        "signature_type",
+        "signer",
+        "signer_hash"
+      ]
+    }
+  ]
+}

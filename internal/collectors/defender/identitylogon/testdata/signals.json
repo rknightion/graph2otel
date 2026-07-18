@@ -1,0 +1,26 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "defender.identity_logon",
+      "AttrKeys": [
+        "account_display_name",
+        "account_domain",
+        "account_name",
+        "account_object_id",
+        "account_upn",
+        "action_type",
+        "additional_fields",
+        "application",
+        "device_type",
+        "ingest_transport",
+        "ip_address",
+        "isp",
+        "location",
+        "logon_type",
+        "os_platform",
+        "report_id"
+      ]
+    }
+  ]
+}

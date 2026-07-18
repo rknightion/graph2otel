@@ -198,6 +198,38 @@ var annotations = map[string]Annotation{
 		Collects: "One log per miscellaneous endpoint event Defender records (`DeviceEvents`) — the catch-all table spanning AMSI/`ScriptContent`, memory-injection API calls, USB mounts, WMI process creation, and more, keyed by `action_type`. `ScriptContent` (the full script body, inside `additional_fields`) ships verbatim per #106. Experimental + off by default",
 		Category: "AdvancedHunting-DeviceEvents",
 	},
+	"defender.device_image_load": {
+		Collects: "One log per image (DLL/module) load Defender for Endpoint observes (`DeviceImageLoadEvents`) — the DLL-side-load hunting signal, with the loaded file's hashes/path and the full initiating-process lineage. Experimental + off by default",
+		Category: "AdvancedHunting-DeviceImageLoadEvents",
+	},
+	"defender.device_network_info": {
+		Collects: "One log per device network-adapter snapshot (`DeviceNetworkInfo`) — MAC, adapter name/type/status/vendor, DHCP flags, tunnel type, and the (stringified) IP/DNS/gateway/connected-network lists. Enrichment companion to `device_network`. Snapshot; Experimental + off by default",
+		Category: "AdvancedHunting-DeviceNetworkInfo",
+	},
+	"defender.device_file_certificate": {
+		Collects: "One log per file code-signing certificate Defender observes (`DeviceFileCertificateInfo`) — signer/issuer + hashes, signature type, serial, validity window, CRL URLs, and trust/root-Microsoft flags. Companion to `device_file`/`device_process` for signing-trust hunting. Snapshot; Experimental + off by default",
+		Category: "AdvancedHunting-DeviceFileCertificateInfo",
+	},
+	"defender.email_url": {
+		Collects: "One log per URL found in a message (`EmailUrlInfo`) — the URL, its domain, and position in the redirect chain, joined to `defender.email` on `network_message_id`. Experimental + off by default",
+		Category: "AdvancedHunting-EmailUrlInfo",
+	},
+	"defender.email_attachment": {
+		Collects: "One log per email attachment (`EmailAttachmentInfo`) — file name/type/extension/size, `sha256` (malware-hash hunting), detection methods and threat verdicts, sender/recipient — joined to `defender.email` on `network_message_id`. Experimental + off by default",
+		Category: "AdvancedHunting-EmailAttachmentInfo",
+	},
+	"defender.identity_logon": {
+		Collects: "One log per identity logon Defender for Identity observes (`IdentityLogonEvents`) — on-prem/hybrid AD + cloud logons Entra sign-in logs never see, with account/target/destination, logon type, IP + geo/ISP, and the raw `additional_fields`. Experimental + off by default",
+		Category: "AdvancedHunting-IdentityLogonEvents",
+	},
+	"defender.identity_info": {
+		Collects: "One log per identity snapshot (`IdentityInfo`) — the enrichment Graph doesn't expose: `criticality_level`, `blast_radius`, `privileged_entra_pim_roles`, risk level, plus directory attributes (department/title/manager/on-prem+cloud SIDs). Snapshot; Experimental + off by default",
+		Category: "AdvancedHunting-IdentityInfo",
+	},
+	"defender.cloud_app_event": {
+		Collects: "One log per cloud-app activity Defender for Cloud Apps records (`CloudAppEvents`) — SharePoint/Exchange/OAuth file ops, ACL changes, mail access, sign-ins — with actor/app/object, IP+geo, admin/external/impersonation flags, and the raw event payload (`raw_event_data`). Experimental + off by default",
+		Category: "AdvancedHunting-CloudAppEvents",
+	},
 
 	// ---- Intune — snapshot collectors ----
 	"intune.apple_tokens": {

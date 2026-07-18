@@ -1,0 +1,22 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "defender.email_attachment",
+      "AttrKeys": [
+        "file_extension",
+        "file_name",
+        "file_size",
+        "file_type",
+        "ingest_transport",
+        "network_message_id",
+        "recipient_email_address",
+        "report_id",
+        "sender_display_name",
+        "sender_from_address",
+        "sender_object_id",
+        "sha256"
+      ]
+    }
+  ]
+}
