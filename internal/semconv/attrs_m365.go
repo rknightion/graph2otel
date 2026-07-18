@@ -14,6 +14,14 @@ const (
 	AttrRecordTypeId           = "record_type_id"
 	AttrResultStatus           = "result_status"
 
+	// Service-health issue (m365/servicehealth, #119) attribute keys.
+	AttrFeature              = "feature"
+	AttrFeatureGroup         = "feature_group"
+	AttrImpactDescription    = "impact_description"
+	AttrIsResolved           = "is_resolved"
+	AttrLastModifiedDateTime = "last_modified_date_time"
+	AttrOrigin               = "origin"
+
 	// AttrService and AttrWorkload are DELIBERATELY ALIASED: m365/activity sets
 	// both from one source value (auditData.Workload) at activity.go — see
 	// setStr(attrs, "workload", workload) / setStr(attrs, "service", workload).

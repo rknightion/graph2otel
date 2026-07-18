@@ -12,6 +12,18 @@ convention.
 - **`defender.*`** — Microsoft Defender XDR advanced-hunting tables (endpoint EDR,
   email/MDO, identity, alert evidence), ingested over the streaming API → Storage
   blob path. Log-only, Experimental, off by default (#106).
+- **`m365.service_health.status{service}` enum** (#119) — the gauge encodes
+  Microsoft's `microsoftServiceHealthStatus` as a numeric severity ladder:
+  `0` = `serviceOperational` / `falsePositive`; `1` = resolved states
+  (`serviceRestored`, `postIncidentReviewPublished`, `resolved`, `resolvedExternal`,
+  `mitigated`, `mitigatedExternal`); `2` = in-recovery (`verifyingService`,
+  `restoringService`, `extendedRecovery`, `investigationSuspended`); `3` = active
+  investigation (`reported`, `investigating`, `confirmed`); `4` =
+  `serviceDegradation`; `5` = `serviceInterruption`; `-1` = an unmapped/new
+  Microsoft status (visible rather than silently bucketed as healthy). Alert on
+  `> 3` for a live outage. There is deliberately no companion mapping metric — this
+  table is the mapping. The per-issue detail (title/impact) is in the
+  `m365.service_health_issue` log twin, never a metric label.
 - **`graph2otel.*`** — self-observability: collector success/duration/staleness,
   export-job health, active series counts, build info. Not tenant domain data.
 

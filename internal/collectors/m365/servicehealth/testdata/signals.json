@@ -1,0 +1,42 @@
+{
+  "Metrics": [
+    {
+      "Name": "m365.service_health.issues.total",
+      "AttrKeys": [
+        "classification",
+        "status"
+      ]
+    },
+    {
+      "Name": "m365.service_health.services.total",
+      "AttrKeys": [
+        "status"
+      ]
+    },
+    {
+      "Name": "m365.service_health.status",
+      "AttrKeys": [
+        "service"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.service_health_issue",
+      "AttrKeys": [
+        "classification",
+        "feature",
+        "feature_group",
+        "id",
+        "impact_description",
+        "is_resolved",
+        "last_modified_date_time",
+        "origin",
+        "service",
+        "start_date_time",
+        "status",
+        "title"
+      ]
+    }
+  ]
+}
