@@ -1,0 +1,35 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "defender.email",
+      "AttrKeys": [
+        "attachment_count",
+        "authentication_details",
+        "delivery_action",
+        "delivery_location",
+        "email_cluster_id",
+        "email_direction",
+        "email_language",
+        "email_size",
+        "ingest_transport",
+        "internet_message_id",
+        "is_first_contact",
+        "network_message_id",
+        "recipient_domain",
+        "recipient_email_address",
+        "recipient_object_id",
+        "report_id",
+        "sender_display_name",
+        "sender_from_address",
+        "sender_from_domain",
+        "sender_ipv4",
+        "sender_mail_from_address",
+        "sender_mail_from_domain",
+        "subject",
+        "to",
+        "url_count"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "defender.device_info",
+      "AttrKeys": [
+        "aad_device_id",
+        "client_version",
+        "connectivity_type",
+        "device_category",
+        "device_id",
+        "device_name",
+        "device_subtype",
+        "device_type",
+        "exposure_level",
+        "hardware_uuid",
+        "ingest_transport",
+        "is_azure_ad_joined",
+        "is_excluded",
+        "is_transient",
+        "join_type",
+        "logged_on_users",
+        "machine_group",
+        "model",
+        "onboarding_status",
+        "os_architecture",
+        "os_distribution",
+        "os_platform",
+        "os_version",
+        "public_ip",
+        "registry_device_tag",
+        "sensor_health_state",
+        "vendor"
+      ]
+    }
+  ]
+}

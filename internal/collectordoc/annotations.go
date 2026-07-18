@@ -166,6 +166,22 @@ var annotations = map[string]Annotation{
 		Collects: "One log per Windows registry create/set/delete Defender for Endpoint observes (`DeviceRegistryEvents`) — a primary persistence-hunting signal (Run keys, service installs, policy tampering) Graph exposes nowhere. Each record pairs the registry change with the full InitiatingProcess block, so a LogQL join answers which process wrote a key. Experimental + off by default (highest-volume surface; opt in per tenant)",
 		Category: "AdvancedHunting-DeviceRegistryEvents",
 	},
+	"defender.device_logon": {
+		Collects: "One log per interactive/network/service logon Defender for Endpoint observes (`DeviceLogonEvents`) — the local and non-Entra logons Entra sign-in logs never see, with the initiating process, remote IP, and logon type. Experimental + off by default",
+		Category: "AdvancedHunting-DeviceLogonEvents",
+	},
+	"defender.device_info": {
+		Collects: "One log per periodic device-inventory snapshot from Defender for Endpoint (`DeviceInfo`) — OS, onboarding, exposure level, sensor health, and cloud-hosting metadata not in Graph. Snapshot-shaped (no ActionType), so it re-emits per cycle. Experimental + off by default",
+		Category: "AdvancedHunting-DeviceInfo",
+	},
+	"defender.email": {
+		Collects: "One log per message Defender for Office 365 processes (`EmailEvents`) — sender/recipient, delivery action, threat verdicts, and authentication results; zero MDO email coverage exists today. Experimental + off by default",
+		Category: "AdvancedHunting-EmailEvents",
+	},
+	"defender.alert_evidence": {
+		Collects: "One log per evidence row Defender attaches to an alert (`AlertEvidence`, absorbing #93) — the per-entity detail (real UPN/IP/geo/session/file) that `entra.security_alerts` collapses to a bare `evidence_count`. Joins to the alert on `alert_id`. Experimental + off by default",
+		Category: "AdvancedHunting-AlertEvidence",
+	},
 
 	// ---- Intune — snapshot collectors ----
 	"intune.apple_tokens": {

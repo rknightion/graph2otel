@@ -1,0 +1,25 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "defender.alert_evidence",
+      "AttrKeys": [
+        "additional_fields",
+        "alert_id",
+        "categories",
+        "detection_source",
+        "entity_type",
+        "evidence_role",
+        "geo_asn",
+        "geo_city",
+        "geo_country",
+        "geo_state",
+        "ingest_transport",
+        "remote_ip",
+        "service_source",
+        "severity",
+        "title"
+      ]
+    }
+  ]
+}

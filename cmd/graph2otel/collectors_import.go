@@ -5,7 +5,11 @@ package main
 // gates, and schedules. Adding a collector = adding one line here; the wiring
 // in tenants.go never changes.
 import (
+	_ "github.com/rknightion/graph2otel/internal/collectors/defender/alertevidence"
+	_ "github.com/rknightion/graph2otel/internal/collectors/defender/deviceinfo"
+	_ "github.com/rknightion/graph2otel/internal/collectors/defender/devicelogon"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/deviceregistry"
+	_ "github.com/rknightion/graph2otel/internal/collectors/defender/email"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/agreements"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/authmethodspolicy"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/conditionalaccess"

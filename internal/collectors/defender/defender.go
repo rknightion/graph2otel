@@ -29,7 +29,6 @@
 package defender
 
 import (
-	"strconv"
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/blobpipeline"
@@ -226,19 +225,11 @@ var deviceCommonStrFields = []StrField{
 }
 
 // StampDeviceCommon applies the device-identity block plus the numeric ReportId
-// the event tables carry. DeviceInfo (snapshot, string ReportId, no ActionType)
-// does not use this — it maps its own identity fields.
+// the event tables carry. Their ReportId is small (≤ ~40k) and so exact through
+// a float64 decode. DeviceInfo does NOT use this — it is a snapshot with no
+// ActionType, and its ReportId is an 18-digit sequence that float64 cannot hold
+// exactly, so DeviceInfo maps its own identity fields and omits ReportId (#106).
 func StampDeviceCommon(attrs telemetry.Attrs, props map[string]any) {
 	StampStrings(attrs, props, deviceCommonStrFields)
 	telemetry.SetNum(attrs, semconv.AttrReportId, props, "ReportId")
-}
-
-// FormatInt renders an integer-valued float64 column as a plain string, for the
-// few id-like numeric fields a table wants as a string attribute. Absent/
-// non-numeric yields "".
-func FormatInt(props map[string]any, key string) string {
-	if f, ok := props[key].(float64); ok {
-		return strconv.FormatInt(int64(f), 10)
-	}
-	return ""
 }
