@@ -23,9 +23,11 @@
 // thousands of startup-history rows a month. Per CLAUDE.md's cardinality
 // rule, none of that raw shape becomes a metric label: startup history rolls
 // up into bounded boot/login-time HISTOGRAMS (bucketed only by the fixed
-// restartCategory enum); per-device scores roll into a bounded score histogram
-// (by the fixed category set) plus a device count by the bounded healthStatus
-// enum, with NO log twin (see collectDeviceScores for the #114 exception); and
+// restartCategory enum) with NO log twin (per-boot attribution is pure ops -
+// the #114-audited exception, see collectStartupHistories); per-device scores
+// roll into a bounded score histogram (by the fixed category set) plus a device
+// count by the bounded healthStatus enum, AND a per-device log twin carrying
+// the scores (the #112/#114 shape - the twin answers "which device"); and
 // app health crash counts are summed only for a small, fixed ALLOW-LIST of
 // common executable names (mirroring intune/detectedapps' allow-list pattern) -
 // never a series per raw exe name. The beta battery-health and
@@ -44,6 +46,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -70,6 +73,13 @@ const (
 	resourceScoreMetric       = "intune.uxa.resource_performance_score"
 	baselineScoreMetric       = "intune.uxa.baseline_score"
 )
+
+// eventDeviceScore is the EventName of the per-device Endpoint Analytics log
+// twin (#179). It follows the intune.device_* twin convention (cf.
+// intune.device_malware_state / intune.device_certificate) and sits outside the
+// intune.uxa.* metric namespace so it does not collide with the device_score
+// metric.
+const eventDeviceScore = "intune.device_endpoint_analytics"
 
 // defaultBaseURL / betaBaseURL: the per-device scores, startup histories,
 // and app health performance are v1.0; battery health, resource performance,
@@ -164,20 +174,27 @@ var defaultAllowedApps = []string{
 // tenant-wide overview segment 400s on both versions now, and per-device scores
 // are the live source of the same "how is the fleet scoring" signal.
 //
-// deviceName/model/manufacturer are deliberately never read, and this collector
-// emits NO log twin for these rows. That is the SAME #114-audited exception the
-// startupHistory rows carry (see below): per-device Endpoint Analytics scores
-// are an ops question - Intune's own Endpoint Analytics console answers "which
-// device scores low" better than a log stream, and there is no security signal
-// here - so the rows roll straight into bounded aggregates. Reconsider only if
-// a device's UXA score becomes a security signal for someone.
+// Unlike the startupHistory rows - a per-BOOT firehose that keeps its
+// #114-audited no-twin exception (see below) because boot-time attribution is
+// pure ops and Intune's console answers it - these are per-DEVICE STATE with a
+// stable identity and a small fixed score set, so each device also gets a log
+// twin (eventDeviceScore). That is the #112/#114 shape: the bounded metrics
+// answer "how many / what distribution", the twin answers "which device". id is
+// the managed-device id (live-verified 2026-07-18 equal to the battery-health
+// resource's deviceId).
 //
 // A score of -1 is Endpoint Analytics' "not enough data yet" sentinel, not a
 // real 0-100 value (live-measured 2026-07-18, #179: a device reported
 // startupPerformanceScore -1 while its other scores were populated). Sentinels
 // are excluded from the score histogram so they cannot drag the distribution
-// toward zero; the device still counts in device_count under its healthStatus.
+// toward zero, AND omitted from the twin (absence = not reported) so nothing
+// reads -1 as a real score; the device still counts in device_count under its
+// healthStatus.
 type deviceScore struct {
+	ID                      string  `json:"id"`
+	DeviceName              string  `json:"deviceName"`
+	Model                   string  `json:"model"`
+	Manufacturer            string  `json:"manufacturer"`
 	EndpointAnalyticsScore  float64 `json:"endpointAnalyticsScore"`
 	StartupPerformanceScore float64 `json:"startupPerformanceScore"`
 	AppReliabilityScore     float64 `json:"appReliabilityScore"`
@@ -337,23 +354,47 @@ func (c *Collector) collectDeviceScores(ctx context.Context, e telemetry.Emitter
 			c.logger.Warn("endpoint_analytics: skipping malformed device score row", "collector", collectorName, "error", err)
 			continue
 		}
-		counts[healthStateBucketFor(d.HealthStatus)]++
+		state := healthStateBucketFor(d.HealthStatus)
+		counts[state]++
+
+		// The per-device log twin: identity + every score the device actually
+		// reported. -1 sentinels are omitted (absence = not reported).
+		attrs := telemetry.Attrs{semconv.AttrHealthState: state}
+		telemetry.SetStr(attrs, semconv.AttrId, d.ID)
+		telemetry.SetStr(attrs, semconv.AttrDeviceName, d.DeviceName)
+		telemetry.SetStr(attrs, semconv.AttrModel, d.Model)
+		telemetry.SetStr(attrs, semconv.AttrManufacturer, d.Manufacturer)
 		for _, cs := range []struct {
 			category string
+			attr     string
 			score    float64
 		}{
-			{"endpoint_analytics", d.EndpointAnalyticsScore},
-			{"startup_performance", d.StartupPerformanceScore},
-			{"app_reliability", d.AppReliabilityScore},
-			{"work_from_anywhere", d.WorkFromAnywhereScore},
-			{"battery_health", d.BatteryHealthScore},
+			{"endpoint_analytics", semconv.AttrEndpointAnalyticsScore, d.EndpointAnalyticsScore},
+			{"startup_performance", semconv.AttrStartupPerformanceScore, d.StartupPerformanceScore},
+			{"app_reliability", semconv.AttrAppReliabilityScore, d.AppReliabilityScore},
+			{"work_from_anywhere", semconv.AttrWorkFromAnywhereScore, d.WorkFromAnywhereScore},
+			{"battery_health", semconv.AttrBatteryHealthScore, d.BatteryHealthScore},
 		} {
 			if cs.score < 0 {
-				continue // -1 = "not enough data" sentinel, never a real 0-100 score
+				continue // -1 = "not enough data" sentinel: excluded from the histogram AND omitted from the twin
 			}
 			e.Histogram(deviceScoreMetric, "{score}", "Intune Endpoint Analytics per-device score distribution (0-100), by score category.",
 				cs.score, scoreBounds, telemetry.Attrs{semconv.AttrCategory: cs.category})
+			// String-valued so it lands as clean Loki structured metadata (a
+			// double would be stringified downstream anyway); FormatFloat(-1)
+			// gives the minimal form ("86.62", "63", not "63.000000").
+			attrs[cs.attr] = strconv.FormatFloat(cs.score, 'f', -1, 64)
 		}
+		// Timestamp left zero (poll time): this is a STATE feed re-emitted every
+		// cycle, like entra/risk's twin - stamping the assessment time would pile
+		// repeats onto one instant and make "which device was failing at 14:00"
+		// unanswerable.
+		e.LogEvent(telemetry.Event{
+			Name:     eventDeviceScore,
+			Body:     fmt.Sprintf("endpoint analytics for %s: health=%s", deviceScoreDisplay(d), orUnknown(d.HealthStatus)),
+			Severity: telemetry.SeverityInfo,
+			Attrs:    attrs,
+		})
 	}
 	points := make([]telemetry.GaugePoint, 0, len(counts))
 	for state, n := range counts {
@@ -497,6 +538,15 @@ func orUnknown(s string) string {
 		return "unknown"
 	}
 	return s
+}
+
+// deviceScoreDisplay picks the most human-readable identifier a device-score
+// row carries for the twin's body line, falling back device name -> id.
+func deviceScoreDisplay(d deviceScore) string {
+	if d.DeviceName != "" {
+		return d.DeviceName
+	}
+	return orUnknown(d.ID)
 }
 
 // isNotLicensed reports whether err is a 403 from a sub-endpoint the tenant is

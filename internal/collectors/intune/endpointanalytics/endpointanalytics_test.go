@@ -126,6 +126,54 @@ func TestCollectEmitsDeviceScoresAsBoundedAggregatesExcludingSentinel(t *testing
 	}
 }
 
+// TestDeviceScoresEmitPerDeviceLogTwinOmittingSentinel asserts the #179 twin:
+// one log record per device carrying its identity + every score it actually
+// reported, with the -1 "not enough data" sentinel OMITTED (never carried as
+// -1). Per-entity detail belongs in a log, not a metric label (#112/#114).
+func TestDeviceScoresEmitPerDeviceLogTwinOmittingSentinel(t *testing.T) {
+	body := `{"value":[
+	  {"id":"dev-1","deviceName":"LAPHAM","model":"Standard","manufacturer":"PCSpecialist","endpointAnalyticsScore":86.62,"startupPerformanceScore":-1,"appReliabilityScore":100,"workFromAnywhereScore":96.88,"batteryHealthScore":63,"healthStatus":"meetingGoals"},
+	  {"id":"dev-2","deviceName":"OTHER","model":"XPS","manufacturer":"Dell","endpointAnalyticsScore":40,"startupPerformanceScore":55,"appReliabilityScore":70,"workFromAnywhereScore":80,"batteryHealthScore":30,"healthStatus":"needsAttention"}
+	]}`
+	g := &fakeGraph{bodies: allEndpoints(map[string]string{deviceScoresURL: body})}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	byDevice := map[string]telemetrytest.LogRecord{}
+	for _, lr := range rec.LogRecords() {
+		if lr.EventName == eventDeviceScore {
+			byDevice[lr.Attrs["device_name"]] = lr
+		}
+	}
+	if len(byDevice) != 2 {
+		t.Fatalf("want 2 per-device twins, got %d", len(byDevice))
+	}
+
+	lapham, ok := byDevice["LAPHAM"]
+	if !ok {
+		t.Fatal("no twin for LAPHAM")
+	}
+	for k, want := range map[string]string{"id": "dev-1", "model": "Standard", "manufacturer": "PCSpecialist", "health_state": "meeting_goals"} {
+		if lapham.Attrs[k] != want {
+			t.Errorf("LAPHAM twin %s = %q, want %q", k, lapham.Attrs[k], want)
+		}
+	}
+	if lapham.Attrs["endpoint_analytics_score"] != "86.62" {
+		t.Errorf("LAPHAM twin endpoint_analytics_score = %q, want 86.62", lapham.Attrs["endpoint_analytics_score"])
+	}
+	if lapham.Attrs["battery_health_score"] != "63" {
+		t.Errorf("LAPHAM twin battery_health_score = %q, want 63", lapham.Attrs["battery_health_score"])
+	}
+	if v, present := lapham.Attrs["startup_performance_score"]; present {
+		t.Errorf("LAPHAM twin should OMIT the -1 startup_performance_score sentinel, got %q", v)
+	}
+	if other := byDevice["OTHER"]; other.Attrs["startup_performance_score"] != "55" {
+		t.Errorf("OTHER twin (all scores populated) startup_performance_score = %q, want 55", other.Attrs["startup_performance_score"])
+	}
+}
+
 // TestCollectTreatsInsufficientDataAsNormalNotError asserts that a device
 // entirely in the insufficientData state (a new/small tenant with too little
 // accumulated telemetry - all scores are the -1 sentinel) is counted as a

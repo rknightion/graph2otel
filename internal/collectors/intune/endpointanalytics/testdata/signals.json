@@ -62,5 +62,21 @@
       ]
     }
   ],
-  "Logs": null
+  "Logs": [
+    {
+      "EventName": "intune.device_endpoint_analytics",
+      "AttrKeys": [
+        "app_reliability_score",
+        "battery_health_score",
+        "device_name",
+        "endpoint_analytics_score",
+        "health_state",
+        "id",
+        "manufacturer",
+        "model",
+        "startup_performance_score",
+        "work_from_anywhere_score"
+      ]
+    }
+  ]
 }
