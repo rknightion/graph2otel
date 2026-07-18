@@ -92,10 +92,13 @@ func deviceWithVersion(compliance, os, version string, encrypted bool, lastSync 
 }
 
 // liveManagedDevices is the VERBATIM value array of a
-// GET /deviceManagement/managedDevices?$select=id,complianceState,operatingSystem,isEncrypted,lastSyncDateTime,deviceName,serialNumber,userPrincipalName
-// response from the m7kni tenant, read as graph2otel-poller on 2026-07-17
-// `[live-measured 2026-07-17, #165]`. It carries exactly the collector's
-// $select projection and nothing more.
+// GET /deviceManagement/managedDevices?$select=...,model,manufacturer,wiFiMacAddress,partnerReportedThreatState
+// response from the m7kni tenant, read as graph2otel-poller on 2026-07-18
+// `[live-measured 2026-07-18, #180]` (the hardware/threat fields added by #180;
+// the identity/state fields and their pinned per-device values are unchanged
+// from the 2026-07-17 #165 capture, so the sync/compliance bucketing stays
+// deterministic). It carries exactly the collector's $select projection and
+// nothing more.
 //
 // It replaces a hand-written docs-derived fixture (alice@example.com / dev-1 /
 // SN123 / LAPTOP-A) that never existed on the wire - the same class of
@@ -104,9 +107,11 @@ func deviceWithVersion(compliance, os, version string, encrypted bool, lastSync 
 // mapping claim untestable. Pinned real, it keeps the bounded gauges honest
 // against a fleet that actually spans noncompliant/unknown/compliant and
 // Windows/Linux/iOS/macOS, and - the thing a docs fixture would never invent -
-// two rows with an empty serialNumber AND empty userPrincipalName (oli,
-// WINSRV), which is what exercises setStr's omit-empty behavior against reality
-// rather than against a fixture where every device conveniently has both.
+// two rows with an empty serialNumber AND empty userPrincipalName AND empty
+// wiFiMacAddress (oli, WINSRV), which is what exercises setStr's omit-empty
+// behavior against reality rather than against a fixture where every device
+// conveniently has every field. partnerReportedThreatState is "unknown" on the
+// whole fleet (no active MTD connector) - the real steady state, not a gap.
 const liveManagedDevices = `[
   {
     "complianceState": "noncompliant",
@@ -114,9 +119,13 @@ const liveManagedDevices = `[
     "id": "d5900d67-e50c-44ef-9d5c-6a2f891099c6",
     "isEncrypted": true,
     "lastSyncDateTime": "2026-07-16T15:13:29Z",
+    "manufacturer": "PCSpecialist",
+    "model": "Standard",
     "operatingSystem": "Windows",
+    "partnerReportedThreatState": "unknown",
     "serialNumber": "PH4TRX1S2146S0097",
-    "userPrincipalName": "rob@m7kni.io"
+    "userPrincipalName": "rob@m7kni.io",
+    "wiFiMacAddress": "701AB8C7BE06"
   },
   {
     "complianceState": "unknown",
@@ -124,9 +133,13 @@ const liveManagedDevices = `[
     "id": "e4639a7f-4d77-d901-1e78-57646ca78cb8",
     "isEncrypted": false,
     "lastSyncDateTime": "2026-05-23T08:55:35Z",
+    "manufacturer": "Gigabyte Technology Co., Ltd.",
+    "model": "Z690 UD DDR4",
     "operatingSystem": "Linux",
+    "partnerReportedThreatState": "unknown",
     "serialNumber": "",
-    "userPrincipalName": ""
+    "userPrincipalName": "",
+    "wiFiMacAddress": ""
   },
   {
     "complianceState": "unknown",
@@ -134,9 +147,13 @@ const liveManagedDevices = `[
     "id": "f780403a-4ccd-e3ef-ac17-9f1c61c00244",
     "isEncrypted": false,
     "lastSyncDateTime": "2026-07-17T14:14:19Z",
+    "manufacturer": "QEMU",
+    "model": "Standard PC (Q35 + ICH9, 2009)",
     "operatingSystem": "Windows",
+    "partnerReportedThreatState": "unknown",
     "serialNumber": "",
-    "userPrincipalName": ""
+    "userPrincipalName": "",
+    "wiFiMacAddress": ""
   },
   {
     "complianceState": "compliant",
@@ -144,9 +161,13 @@ const liveManagedDevices = `[
     "id": "2af9ec65-db9b-455c-8b3a-7a2691958b88",
     "isEncrypted": true,
     "lastSyncDateTime": "2026-07-17T14:49:20Z",
+    "manufacturer": "Apple",
+    "model": "iPad Pro (12.9\")(5th generation)",
     "operatingSystem": "iOS",
+    "partnerReportedThreatState": "unknown",
     "serialNumber": "NP412Q6YQ0",
-    "userPrincipalName": "rob@m7kni.io"
+    "userPrincipalName": "rob@m7kni.io",
+    "wiFiMacAddress": "88665af33c71"
   },
   {
     "complianceState": "compliant",
@@ -154,9 +175,13 @@ const liveManagedDevices = `[
     "id": "57d346d7-ddf1-489b-b70d-a30dce1e2458",
     "isEncrypted": true,
     "lastSyncDateTime": "2026-07-17T15:06:48Z",
+    "manufacturer": "Apple",
+    "model": "MacBook Pro",
     "operatingSystem": "macOS",
+    "partnerReportedThreatState": "unknown",
     "serialNumber": "YJY0H9JDGP",
-    "userPrincipalName": "rob@m7kni.io"
+    "userPrincipalName": "rob@m7kni.io",
+    "wiFiMacAddress": "f4d488683c84"
   }
 ]`
 
@@ -607,7 +632,7 @@ func TestNewWiresFleetFetcherWithWidenedSelect(t *testing.T) {
 	if !ok {
 		t.Fatalf("fleet fetcher = %T, want *collectors.DirectFleetFetcher", c.fleet)
 	}
-	for _, field := range []string{"id", "deviceName", "serialNumber", "userPrincipalName", "complianceState", "operatingSystem", "isEncrypted", "lastSyncDateTime"} {
+	for _, field := range []string{"id", "deviceName", "serialNumber", "userPrincipalName", "complianceState", "operatingSystem", "isEncrypted", "lastSyncDateTime", "model", "manufacturer", "wiFiMacAddress", "partnerReportedThreatState"} {
 		if !strings.Contains(df.URL, field) {
 			t.Errorf("fleet fetcher URL = %q, missing field %q required for the intune.managed_device log twin", df.URL, field)
 		}
@@ -664,15 +689,19 @@ func TestLogTwinCarriesDeviceIdentityAndState(t *testing.T) {
 	}
 	l := logs[0]
 	want := map[string]string{
-		"id":                  "57d346d7-ddf1-489b-b70d-a30dce1e2458",
-		"device_name":         "MBP16",
-		"serial_number":       "YJY0H9JDGP",
-		"user_principal_name": "rob@m7kni.io",
-		"compliance_state":    "compliant",
-		"operating_system":    "macOS",
-		"is_encrypted":        "true",
-		"staleness_bucket":    "under_1d",
-		"last_sync_date_time": "2026-07-17T15:06:48Z",
+		"id":                            "57d346d7-ddf1-489b-b70d-a30dce1e2458",
+		"device_name":                   "MBP16",
+		"serial_number":                 "YJY0H9JDGP",
+		"user_principal_name":           "rob@m7kni.io",
+		"compliance_state":              "compliant",
+		"operating_system":              "macOS",
+		"is_encrypted":                  "true",
+		"staleness_bucket":              "under_1d",
+		"last_sync_date_time":           "2026-07-17T15:06:48Z",
+		"model":                         "MacBook Pro",
+		"manufacturer":                  "Apple",
+		"wifi_mac_address":              "f4d488683c84",
+		"partner_reported_threat_state": "unknown",
 	}
 	for k, v := range want {
 		if l.Attrs[k] != v {
@@ -778,13 +807,14 @@ func TestCollectEmitsLiveFleetEndToEnd(t *testing.T) {
 
 	type want struct {
 		name, serial, upn, compliance, os, encrypted, stale, severity string
+		model, manufacturer, wifiMac                                  string
 	}
 	wants := map[string]want{
-		"d5900d67-e50c-44ef-9d5c-6a2f891099c6": {"LAPHAM", "PH4TRX1S2146S0097", "rob@m7kni.io", "noncompliant", "Windows", "true", "1d_7d", telemetry.SeverityWarn.String()},
-		"e4639a7f-4d77-d901-1e78-57646ca78cb8": {"oli", "", "", "unknown", "Linux", "false", "over_30d", telemetry.SeverityWarn.String()},
-		"f780403a-4ccd-e3ef-ac17-9f1c61c00244": {"WINSRV", "", "", "unknown", "Windows", "false", "under_1d", telemetry.SeverityWarn.String()},
-		"2af9ec65-db9b-455c-8b3a-7a2691958b88": {"TampooniPad", "NP412Q6YQ0", "rob@m7kni.io", "compliant", "iOS", "true", "under_1d", telemetry.SeverityInfo.String()},
-		"57d346d7-ddf1-489b-b70d-a30dce1e2458": {"MBP16", "YJY0H9JDGP", "rob@m7kni.io", "compliant", "macOS", "true", "under_1d", telemetry.SeverityInfo.String()},
+		"d5900d67-e50c-44ef-9d5c-6a2f891099c6": {"LAPHAM", "PH4TRX1S2146S0097", "rob@m7kni.io", "noncompliant", "Windows", "true", "1d_7d", telemetry.SeverityWarn.String(), "Standard", "PCSpecialist", "701AB8C7BE06"},
+		"e4639a7f-4d77-d901-1e78-57646ca78cb8": {"oli", "", "", "unknown", "Linux", "false", "over_30d", telemetry.SeverityWarn.String(), "Z690 UD DDR4", "Gigabyte Technology Co., Ltd.", ""},
+		"f780403a-4ccd-e3ef-ac17-9f1c61c00244": {"WINSRV", "", "", "unknown", "Windows", "false", "under_1d", telemetry.SeverityWarn.String(), "Standard PC (Q35 + ICH9, 2009)", "QEMU", ""},
+		"2af9ec65-db9b-455c-8b3a-7a2691958b88": {"TampooniPad", "NP412Q6YQ0", "rob@m7kni.io", "compliant", "iOS", "true", "under_1d", telemetry.SeverityInfo.String(), "iPad Pro (12.9\")(5th generation)", "Apple", "88665af33c71"},
+		"57d346d7-ddf1-489b-b70d-a30dce1e2458": {"MBP16", "YJY0H9JDGP", "rob@m7kni.io", "compliant", "macOS", "true", "under_1d", telemetry.SeverityInfo.String(), "MacBook Pro", "Apple", "f4d488683c84"},
 	}
 	for id, w := range wants {
 		l, ok := byID[id]
@@ -825,6 +855,26 @@ func TestCollectEmitsLiveFleetEndToEnd(t *testing.T) {
 			}
 		} else if l.Attrs["user_principal_name"] != w.upn {
 			t.Errorf("%s user_principal_name = %q, want %q", id, l.Attrs["user_principal_name"], w.upn)
+		}
+		// #180 hardware/threat fields: model + manufacturer are populated on
+		// every live device; wiFiMacAddress is empty on oli/WINSRV (no wifi) and
+		// must be OMITTED, never emitted as ""; threat state is "unknown"
+		// fleet-wide (no active MTD connector) and always present.
+		if l.Attrs["model"] != w.model {
+			t.Errorf("%s model = %q, want %q", id, l.Attrs["model"], w.model)
+		}
+		if l.Attrs["manufacturer"] != w.manufacturer {
+			t.Errorf("%s manufacturer = %q, want %q", id, l.Attrs["manufacturer"], w.manufacturer)
+		}
+		if w.wifiMac == "" {
+			if _, present := l.Attrs["wifi_mac_address"]; present {
+				t.Errorf("%s (%s) emitted wifi_mac_address %q, want the attribute omitted (empty on the wire)", id, w.name, l.Attrs["wifi_mac_address"])
+			}
+		} else if l.Attrs["wifi_mac_address"] != w.wifiMac {
+			t.Errorf("%s wifi_mac_address = %q, want %q", id, l.Attrs["wifi_mac_address"], w.wifiMac)
+		}
+		if l.Attrs["partner_reported_threat_state"] != "unknown" {
+			t.Errorf("%s partner_reported_threat_state = %q, want %q", id, l.Attrs["partner_reported_threat_state"], "unknown")
 		}
 	}
 }

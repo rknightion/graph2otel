@@ -102,7 +102,7 @@ const eventManagedDevice = "intune.managed_device"
 // deliberate: every field here rides along on a full-fleet page walk (see the
 // package/issue notes on why full-fleet paging is the accepted exception for
 // this endpoint).
-const managedDevicesSelect = "?$select=id,complianceState,operatingSystem,isEncrypted,lastSyncDateTime,deviceName,serialNumber,userPrincipalName,osVersion"
+const managedDevicesSelect = "?$select=id,complianceState,operatingSystem,isEncrypted,lastSyncDateTime,deviceName,serialNumber,userPrincipalName,osVersion,model,manufacturer,wiFiMacAddress,partnerReportedThreatState"
 
 // complianceBuckets maps every documented managedDevice complianceState
 // value (https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-manageddevice)
@@ -251,6 +251,16 @@ func deviceLogTwin(d managedDevice, complianceBucket, stalenessBucket string) te
 	telemetry.SetStr(attrs, semconv.AttrOsVersion, osVersionOrUnknown(d.OsVersion))
 	attrs[semconv.AttrIsEncrypted] = strconv.FormatBool(d.IsEncrypted)
 	attrs[semconv.AttrStalenessBucket] = stalenessBucket
+	// #180 hardware/threat fields from the same $select page-walk. SetStr omits
+	// empties, so model/manufacturer/wiFiMacAddress drop out for devices that
+	// lack them (e.g. no-wifi Windows/Linux hosts) rather than emitting "".
+	// partnerReportedThreatState is the MTD/Defender-reported threat state
+	// (bounded enum, "unknown" when no MTD connector is active) — the field the
+	// Intune DeviceComplianceOrg blob surfaces as DeviceHealthThreatLevel.
+	telemetry.SetStr(attrs, semconv.AttrModel, d.Model)
+	telemetry.SetStr(attrs, semconv.AttrManufacturer, d.Manufacturer)
+	telemetry.SetStr(attrs, semconv.AttrWifiMacAddress, d.WifiMacAddress)
+	telemetry.SetStr(attrs, semconv.AttrPartnerReportedThreatState, d.PartnerReportedThreatState)
 	if d.LastSyncDateTime != nil && !d.LastSyncDateTime.IsZero() {
 		attrs[semconv.AttrLastSyncDateTime] = d.LastSyncDateTime.Format(time.RFC3339)
 	}
@@ -294,6 +304,16 @@ type managedDevice struct {
 	DeviceName        string `json:"deviceName"`
 	SerialNumber      string `json:"serialNumber"`
 	UserPrincipalName string `json:"userPrincipalName"`
+
+	// Hardware + threat fields (#180): read from the same $select page-walk and
+	// carried only on the log twin, never a metric label (per-entity, #112).
+	// WifiMacAddress is empty on hosts with no Wi-Fi adapter; PartnerReportedThreatState
+	// is the MTD/Defender-reported threat state (the DeviceComplianceOrg blob's
+	// DeviceHealthThreatLevel).
+	Model                      string `json:"model"`
+	Manufacturer               string `json:"manufacturer"`
+	WifiMacAddress             string `json:"wiFiMacAddress"`
+	PartnerReportedThreatState string `json:"partnerReportedThreatState"`
 }
 
 // managedDeviceOverview is the managedDeviceOverview singleton

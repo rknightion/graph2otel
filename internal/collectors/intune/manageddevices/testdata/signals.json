@@ -54,11 +54,15 @@
         "id",
         "is_encrypted",
         "last_sync_date_time",
+        "manufacturer",
+        "model",
         "operating_system",
         "os_version",
+        "partner_reported_threat_state",
         "serial_number",
         "staleness_bucket",
-        "user_principal_name"
+        "user_principal_name",
+        "wifi_mac_address"
       ]
     }
   ]
