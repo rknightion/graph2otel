@@ -381,6 +381,10 @@ type Collector struct {
 	// now returns the current time; overridable in tests so staleness
 	// bucketing is deterministic and assertable.
 	now func() time.Time
+	// suppressedTwins names per-entity twin events a blob collector owns, so this
+	// collector emits its gauges but skips those twins (#135-C, #135-F). nil =
+	// emit everything (the default, and every unit test).
+	suppressedTwins map[string]bool
 }
 
 // New builds the managed-devices collector. A nil logger falls back to the
@@ -506,7 +510,12 @@ func (c *Collector) collectFleet(ctx context.Context, e telemetry.Emitter) error
 		staleBucket := stalenessBucketFor(now, d.LastSyncDateTime)
 		staleness[staleBucket]++
 		osVersionCounts[[2]string{os, osVersionOrUnknown(d.OsVersion)}]++
-		e.LogEvent(deviceLogTwin(d, compliance, staleBucket))
+		// Suppress the per-device twin when the blob Devices collector owns it
+		// (#135-F): the gauges above still bucket every device, so the counts are
+		// unaffected; only the duplicate per-device log is dropped.
+		if !c.suppressedTwins[eventManagedDevice] {
+			e.LogEvent(deviceLogTwin(d, compliance, staleBucket))
+		}
 	}
 
 	countPoints := make([]telemetry.GaugePoint, 0, len(counts))
@@ -550,6 +559,7 @@ func init() {
 		if d.Fleet != nil {
 			c.fleet = d.Fleet // shared per-tenant fetch (#87)
 		}
+		c.suppressedTwins = d.SuppressedTwins
 		return c
 	})
 }

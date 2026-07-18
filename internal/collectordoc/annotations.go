@@ -300,6 +300,11 @@ var annotations = map[string]Annotation{
 		Collects: "Managed-device inventory, encryption, sync recency, enrolled/MDM/dual-enrolled overview, plus a log twin per device. The full-fleet page-walk is irreducible by design: the per-device twins ARE the deliverable, so the bounded `managedDeviceOverview` cross-check cannot replace it",
 		Source:   "`/deviceManagement/managedDevices`, `managedDeviceOverview`",
 	},
+	"intune.devices_blob": {
+		Collects: "Blob transport for the per-device twin (#135-F): the `Devices` diagnostic-settings category, emitting the same `intune.managed_device` records the polled `intune.devices` twin would (reuses `deviceLogTwin`) — but the blob report uses PascalCase field names AND different enum VALUES, so each field is normalized onto the Graph shape first (`CompliantState \"Compliant\"`→`compliant`, `OS \"MacOS\"`→`macOS`, `EncryptionStatusString \"True\"`→bool), verified against both live shapes. A separate log-only collector, NOT a source swap: `intune.devices` keeps polling for its bounded fleet gauges (the blob inventory dump can't produce counts), and the composition root suppresses only its per-device twin while this runs (keep-gauges/suppress-twin). Staleness is computed against the snapshot's envelope time; the per-batch Stats summary record is skipped",
+		Source:   "`insights-logs-devices` (Devices)",
+		Category: "Devices",
+	},
 	"intune.mobile_apps": {
 		Collects: "Mobile app catalog (type, publishing state); mobile app config policy status",
 		Source:   "`/deviceAppManagement/mobileApps`, app configs",
