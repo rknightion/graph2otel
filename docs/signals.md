@@ -107,6 +107,18 @@ entities behind it, query the matching log stream:
 | --- | --- | --- |
 | How many users are at risk? | metric | `entra_risky_users_total{risk_level="high"}` |
 | **Which** users are at risk? | logs | `{service_name="graph2otel"} \| event_name=`entra.risky_user` \| risk_level=`high`` |
+| How many users fail to sync? | metric | `entra_directory_sync_errors_total` |
+| **Which** users, and what conflicts? | logs | `{service_name="graph2otel"} \| event_name=`entra.directory_sync_error`` — carries `user_principal_name`, `property_causing_error`, and the actionable `conflicting_value` |
+| How many groups have license errors? | metric | `entra_license_groups_with_errors_total` |
+| **Which** groups? | logs | `{service_name="graph2otel"} \| event_name=`entra.license_group_error`` — carries the group `id` + `display_name` |
+
+The same shape holds for the batch's other new signals: `intune.devices.os_version.count`
+buckets the fleet by OS build for the "how exposed to CVE-X" question, with the exact
+per-device build on the `intune.managed_device` twin's `os_version` attribute; and
+`entra.users.population{user_type, account_enabled}` answers joint questions the marginal
+`entra.users.total` axes cannot — e.g. `{user_type="guest", account_enabled="false"}` is the
+disabled-guests count directly. All new metric names appear normalized in
+[collectors.md](collectors.md) with their labels.
 
 Remember that log attributes are Loki **structured metadata**, not stream labels — the
 label-filter form above (`\| event_name=…`) is required; a `{event_name="…"}` selector

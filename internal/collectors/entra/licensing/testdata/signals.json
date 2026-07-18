@@ -1,6 +1,13 @@
 {
   "Metrics": [
     {
+      "Name": "entra.license.capability_status",
+      "AttrKeys": [
+        "sku",
+        "status"
+      ]
+    },
+    {
       "Name": "entra.license.consumed",
       "AttrKeys": [
         "sku"
@@ -11,7 +18,26 @@
       "AttrKeys": [
         "sku"
       ]
+    },
+    {
+      "Name": "entra.license.groups_with_errors.total",
+      "AttrKeys": []
+    },
+    {
+      "Name": "entra.license.units",
+      "AttrKeys": [
+        "sku",
+        "state"
+      ]
     }
   ],
-  "Logs": null
+  "Logs": [
+    {
+      "EventName": "entra.license_group_error",
+      "AttrKeys": [
+        "display_name",
+        "id"
+      ]
+    }
+  ]
 }

@@ -57,20 +57,20 @@ var _ collectors.GraphClient = (*fakeGraph)(nil)
 // synthetically by TestLogTwinSeverityAdminWithoutMfaCapableWarns, which drives
 // logTwin directly rather than through this fixture.
 //
-// FINDING (#173): the endpoint offers four fields the collector's $select does
-// NOT request — isSystemPreferredAuthenticationMethodEnabled,
+// RESOLVED (#173): the endpoint offers four more fields than the original
+// $select requested — isSystemPreferredAuthenticationMethodEnabled,
 // systemPreferredAuthenticationMethods,
-// userPreferredMethodForSecondaryAuthentication, and userType. They are absent
-// here because a $select response never carries them; an unfiltered probe
-// confirmed they exist and populate (userType being member/guest is the
-// standout — it would let every MFA-posture question slice member vs guest).
-// Adding them is a $select + struct change, filed as #173, not #165's
-// fixture-provenance scope.
+// userPreferredMethodForSecondaryAuthentication, and userType. An unfiltered
+// probe confirmed all four populate on 4/4 live rows (userType being
+// member/guest is the standout — it lets every MFA-posture question slice
+// member vs guest). requestPath now requests them: userType feeds the
+// entra.mfa.registration.users.total user_type label (Collect); the other
+// three are log-twin-only (logTwin), same as the original identity fields.
 const liveUsers = `
-{"id":"61851b42-fef7-4b43-ae43-4e335a60b306","isAdmin":false,"isMfaCapable":true,"isMfaRegistered":true,"isPasswordlessCapable":false,"isSsprCapable":true,"isSsprEnabled":true,"isSsprRegistered":true,"lastUpdatedDateTime":"2026-07-16T03:16:01.7292271Z","methodsRegistered":["email","microsoftAuthenticatorPush","softwareOneTimePasscode"],"userDisplayName":"Juraj Michalek (babe)","userPrincipalName":"juraj@m7kni.io"},
-{"id":"e755e472-f2eb-4ea6-829d-5a908600fdb1","isAdmin":true,"isMfaCapable":true,"isMfaRegistered":true,"isPasswordlessCapable":false,"isSsprCapable":true,"isSsprEnabled":true,"isSsprRegistered":true,"lastUpdatedDateTime":"2026-07-16T03:16:01.7570479Z","methodsRegistered":["microsoftAuthenticatorPush","softwareOneTimePasscode"],"userDisplayName":"Peter Hewitt","userPrincipalName":"peter.hewitt_grafana.com#EXT#@m7knio.onmicrosoft.com"},
-{"id":"bbcfc3c5-0b93-4135-9ef9-18477a9fb504","isAdmin":true,"isMfaCapable":true,"isMfaRegistered":true,"isPasswordlessCapable":true,"isSsprCapable":true,"isSsprEnabled":true,"isSsprRegistered":true,"lastUpdatedDateTime":"2026-07-17T12:33:37.9223339Z","methodsRegistered":["email","macOsSecureEnclaveKey","windowsHelloForBusiness","passKeySynced","microsoftAuthenticatorPasswordless","passKeyDeviceBoundAuthenticator","passKeyDeviceBound","microsoftAuthenticatorPush","softwareOneTimePasscode"],"userDisplayName":"Rob Knight","userPrincipalName":"rob@m7kni.io"},
-{"id":"c55ddc8b-52ee-44c6-a0bc-b388be43cd2f","isAdmin":true,"isMfaCapable":true,"isMfaRegistered":true,"isPasswordlessCapable":true,"isSsprCapable":true,"isSsprEnabled":true,"isSsprRegistered":true,"lastUpdatedDateTime":"2026-07-16T03:16:01.7301508Z","methodsRegistered":["passKeyDeviceBound","microsoftAuthenticatorPasswordless","passKeyDeviceBoundAuthenticator","mobilePhone","microsoftAuthenticatorPush","softwareOneTimePasscode"],"userDisplayName":"emergency","userPrincipalName":"emergency@m7knio.onmicrosoft.com"}
+{"id":"61851b42-fef7-4b43-ae43-4e335a60b306","isAdmin":false,"isMfaCapable":true,"isMfaRegistered":true,"isPasswordlessCapable":false,"isSsprCapable":true,"isSsprEnabled":true,"isSsprRegistered":true,"lastUpdatedDateTime":"2026-07-16T03:16:01.7292271Z","methodsRegistered":["email","microsoftAuthenticatorPush","softwareOneTimePasscode"],"userDisplayName":"Juraj Michalek (babe)","userPrincipalName":"juraj@m7kni.io","userType":"member","isSystemPreferredAuthenticationMethodEnabled":true,"systemPreferredAuthenticationMethods":["PhoneAppNotification"],"userPreferredMethodForSecondaryAuthentication":"push"},
+{"id":"e755e472-f2eb-4ea6-829d-5a908600fdb1","isAdmin":true,"isMfaCapable":true,"isMfaRegistered":true,"isPasswordlessCapable":false,"isSsprCapable":true,"isSsprEnabled":true,"isSsprRegistered":true,"lastUpdatedDateTime":"2026-07-16T03:16:01.7570479Z","methodsRegistered":["microsoftAuthenticatorPush","softwareOneTimePasscode"],"userDisplayName":"Peter Hewitt","userPrincipalName":"peter.hewitt_grafana.com#EXT#@m7knio.onmicrosoft.com","userType":"guest","isSystemPreferredAuthenticationMethodEnabled":true,"systemPreferredAuthenticationMethods":["PhoneAppNotification"],"userPreferredMethodForSecondaryAuthentication":"push"},
+{"id":"bbcfc3c5-0b93-4135-9ef9-18477a9fb504","isAdmin":true,"isMfaCapable":true,"isMfaRegistered":true,"isPasswordlessCapable":true,"isSsprCapable":true,"isSsprEnabled":true,"isSsprRegistered":true,"lastUpdatedDateTime":"2026-07-17T12:33:37.9223339Z","methodsRegistered":["email","macOsSecureEnclaveKey","windowsHelloForBusiness","passKeySynced","microsoftAuthenticatorPasswordless","passKeyDeviceBoundAuthenticator","passKeyDeviceBound","microsoftAuthenticatorPush","softwareOneTimePasscode"],"userDisplayName":"Rob Knight","userPrincipalName":"rob@m7kni.io","userType":"member","isSystemPreferredAuthenticationMethodEnabled":true,"systemPreferredAuthenticationMethods":["Fido2"],"userPreferredMethodForSecondaryAuthentication":"push"},
+{"id":"c55ddc8b-52ee-44c6-a0bc-b388be43cd2f","isAdmin":true,"isMfaCapable":true,"isMfaRegistered":true,"isPasswordlessCapable":true,"isSsprCapable":true,"isSsprEnabled":true,"isSsprRegistered":true,"lastUpdatedDateTime":"2026-07-16T03:16:01.7301508Z","methodsRegistered":["passKeyDeviceBound","microsoftAuthenticatorPasswordless","passKeyDeviceBoundAuthenticator","mobilePhone","microsoftAuthenticatorPush","softwareOneTimePasscode"],"userDisplayName":"emergency","userPrincipalName":"emergency@m7knio.onmicrosoft.com","userType":"member","isSystemPreferredAuthenticationMethodEnabled":true,"systemPreferredAuthenticationMethods":["Fido2"],"userPreferredMethodForSecondaryAuthentication":"push"}
 `
 
 func page(usersJSON string) string {
@@ -92,9 +92,12 @@ func TestCollectEmitsStatusCountsByFeature(t *testing.T) {
 	}
 
 	pts := rec.MetricPoints(statusMetricName)
+	// Sum across the (new, #173) user_type sub-dimension: this test pins the
+	// per-status totals regardless of how they're split by user_type — see
+	// TestCollectEmitsStatusCountsByUserType for the split itself.
 	got := map[string]float64{}
 	for _, p := range pts {
-		got[p.Attrs["status"]] = p.Value
+		got[p.Attrs["status"]] += p.Value
 	}
 	// Counts over the four live rows: every user is MFA-registered/capable
 	// and fully SSPR-enrolled on this real tenant; only rob + emergency are
@@ -112,8 +115,62 @@ func TestCollectEmitsStatusCountsByFeature(t *testing.T) {
 	}
 	for status, v := range want {
 		if got[status] != v {
-			t.Errorf("series status=%s value = %v, want %v", status, got[status], v)
+			t.Errorf("series status=%s total value = %v, want %v", status, got[status], v)
 		}
+	}
+}
+
+// TestCollectEmitsStatusCountsByUserType pins the #173 user_type label added
+// to entra.mfa.registration.users.total: it must bucket member vs guest
+// correctly, zero-filled per status for every user_type actually seen in the
+// tenant (mirroring the existing per-status zero-fill), and stay bounded to
+// the number of distinct userType values observed (2 on this fixture: member
+// and guest).
+func TestCollectEmitsStatusCountsByUserType(t *testing.T) {
+	g := &fakeGraph{bodies: fullFixture()}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	pts := rec.MetricPoints(statusMetricName)
+	type key struct{ status, userType string }
+	got := map[key]float64{}
+	for _, p := range pts {
+		got[key{p.Attrs["status"], p.Attrs["user_type"]}] = p.Value
+	}
+
+	// Of the four live rows: juraj/rob/emergency are member, peter is guest.
+	// All four are mfa_registered/mfa_capable/sspr_*; only rob + emergency
+	// (both member) are passwordless_capable, so guest's passwordless_capable
+	// bucket must be zero-filled, not absent.
+	want := map[key]float64{
+		{"mfa_registered", "member"}:       3,
+		{"mfa_registered", "guest"}:        1,
+		{"mfa_capable", "member"}:          3,
+		{"mfa_capable", "guest"}:           1,
+		{"sspr_registered", "member"}:      3,
+		{"sspr_registered", "guest"}:       1,
+		{"sspr_enabled", "member"}:         3,
+		{"sspr_enabled", "guest"}:          1,
+		{"sspr_capable", "member"}:         3,
+		{"sspr_capable", "guest"}:          1,
+		{"passwordless_capable", "member"}: 2,
+		{"passwordless_capable", "guest"}:  0,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d (status,user_type) series, want %d: %v", len(got), len(want), got)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("series status=%s user_type=%s value = %v, want %v", k.status, k.userType, got[k], v)
+		}
+	}
+
+	// Bounded: at most 6 statuses x 2 observed user types = 12 series.
+	if n := len(pts); n > 12 {
+		t.Errorf("status series count = %d, want <= 12 (6 statuses x 2 user types)", n)
 	}
 }
 
@@ -328,18 +385,22 @@ func TestCollectEmitsUserRegistrationLogTwinAttrs(t *testing.T) {
 	}
 
 	want := map[string]string{
-		"id":                   jurajID,
-		"user_principal_name":  "juraj@m7kni.io",
-		"user_display_name":    "Juraj Michalek (babe)",
-		"last_updated":         "2026-07-16T03:16:01.7292271Z",
-		"is_admin":             "false",
-		"mfa_registered":       "true",
-		"mfa_capable":          "true",
-		"sspr_registered":      "true",
-		"sspr_enabled":         "true",
-		"sspr_capable":         "true",
-		"passwordless_capable": "false",
-		"methods_registered":   "email,microsoftAuthenticatorPush,softwareOneTimePasscode",
+		"id":                              jurajID,
+		"user_principal_name":             "juraj@m7kni.io",
+		"user_display_name":               "Juraj Michalek (babe)",
+		"last_updated":                    "2026-07-16T03:16:01.7292271Z",
+		"is_admin":                        "false",
+		"mfa_registered":                  "true",
+		"mfa_capable":                     "true",
+		"sspr_registered":                 "true",
+		"sspr_enabled":                    "true",
+		"sspr_capable":                    "true",
+		"passwordless_capable":            "false",
+		"methods_registered":              "email,microsoftAuthenticatorPush,softwareOneTimePasscode",
+		"user_type":                       "member",
+		"system_preferred_auth_enabled":   "true",
+		"system_preferred_auth_methods":   "PhoneAppNotification",
+		"user_preferred_secondary_method": "push",
 	}
 	for k, v := range want {
 		if juraj.Attrs[k] != v {
@@ -355,12 +416,12 @@ func TestCollectEmitsUserRegistrationLogTwinAttrs(t *testing.T) {
 // false, so they're plain string assignments rather than setStr-omitted).
 func TestLogTwinOmitsAbsentAttrs(t *testing.T) {
 	ev := logTwin(userRegistrationDetail{})
-	for _, k := range []string{"id", "user_principal_name", "user_display_name", "last_updated", "methods_registered"} {
+	for _, k := range []string{"id", "user_principal_name", "user_display_name", "last_updated", "methods_registered", "user_type", "system_preferred_auth_methods", "user_preferred_secondary_method"} {
 		if v, ok := ev.Attrs[k]; ok {
 			t.Errorf("zero-value record emitted absent attr %q = %q, want it omitted", k, v)
 		}
 	}
-	for _, k := range []string{"is_admin", "mfa_registered", "mfa_capable", "sspr_registered", "sspr_enabled", "sspr_capable", "passwordless_capable"} {
+	for _, k := range []string{"is_admin", "mfa_registered", "mfa_capable", "sspr_registered", "sspr_enabled", "sspr_capable", "passwordless_capable", "system_preferred_auth_enabled"} {
 		if _, ok := ev.Attrs[k]; !ok {
 			t.Errorf("zero-value record missing boolean attr %q, want it present (as \"false\")", k)
 		}
@@ -396,6 +457,37 @@ func TestLogTwinSeverityAdminWithoutMfaCapableWarns(t *testing.T) {
 	}
 }
 
+// TestUserTypeIsLowercased pins #173's "lowercased as-is" rule for userType,
+// on both the log twin attribute and the users.total metric label — Graph's
+// wire value case is not guaranteed, and the label/attribute must be
+// consistent (member/guest) regardless of how Graph capitalizes it.
+func TestUserTypeIsLowercased(t *testing.T) {
+	ev := logTwin(userRegistrationDetail{UserType: "Member"})
+	if got := ev.Attrs["user_type"]; got != "member" {
+		t.Errorf("logTwin user_type = %q, want %q", got, "member")
+	}
+
+	g := &fakeGraph{bodies: map[string]string{
+		requestURL: page(`{"isAdmin":false,"isMfaRegistered":true,"isMfaCapable":true,"isSsprRegistered":false,"isSsprEnabled":false,"isSsprCapable":false,"isPasswordlessCapable":false,"methodsRegistered":["sms"],"userType":"Guest"}`),
+	}}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	found := false
+	for _, p := range rec.MetricPoints(statusMetricName) {
+		if p.Attrs["status"] == "mfa_registered" {
+			found = true
+			if got := p.Attrs["user_type"]; got != "guest" {
+				t.Errorf("users.total user_type = %q, want %q", got, "guest")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("no mfa_registered series found")
+	}
+}
+
 // TestNoPerEntitySeries guards the cardinality rule: none of this
 // collector's metrics may carry a per-user identifier (userPrincipalName,
 // userDisplayName, id) as an attribute, even though those fields ARE now
@@ -410,7 +502,9 @@ func TestNoPerEntitySeries(t *testing.T) {
 		t.Fatalf("Collect: %v", err)
 	}
 
-	allowedStatusAttrs := map[string]bool{"status": true}
+	// user_type (#173) is a bounded tenant-shaped label (member/guest), not a
+	// per-entity identifier, so it's allowed here alongside status.
+	allowedStatusAttrs := map[string]bool{"status": true, "user_type": true}
 	for _, p := range rec.MetricPoints(statusMetricName) {
 		for k := range p.Attrs {
 			if !allowedStatusAttrs[k] {
@@ -437,11 +531,11 @@ func TestNoPerEntitySeries(t *testing.T) {
 		}
 	}
 
-	// Cardinality is bounded regardless of tenant size: 6 fixed statuses, the
-	// small set of methods actually registered tenant-wide, and exactly 2
-	// is_admin values.
-	if n := len(rec.MetricPoints(statusMetricName)); n > 6 {
-		t.Errorf("status series count = %d, want <= 6", n)
+	// Cardinality is bounded regardless of tenant size: 6 fixed statuses x at
+	// most 2 observed user_type values (#173), the small set of methods
+	// actually registered tenant-wide, and exactly 2 is_admin values.
+	if n := len(rec.MetricPoints(statusMetricName)); n > 12 {
+		t.Errorf("status series count = %d, want <= 12 (6 statuses x 2 user types)", n)
 	}
 	if n := len(rec.MetricPoints(adminMfaCapableMetricName)); n > 2 {
 		t.Errorf("admin mfa-capable series count = %d, want <= 2", n)

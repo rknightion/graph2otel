@@ -137,11 +137,17 @@ const defaultBaseURL = "https://graph.microsoft.com/v1.0"
 // requestURL is the userRegistrationDetails read this collector issues. The
 // $select trims the response to exactly the fields this collector reads:
 // the seven posture booleans + methodsRegistered feed the bounded metrics
-// below, and id/userPrincipalName/userDisplayName/lastUpdatedDateTime feed
-// ONLY the per-user log twin (see the package doc) — never a metric label.
+// below; userType (#173) ALSO feeds a bounded metric label (see
+// statusMetricName's user_type dimension); the rest —
+// id/userPrincipalName/userDisplayName/lastUpdatedDateTime plus the three
+// #173 posture-detail fields (isSystemPreferredAuthenticationMethodEnabled,
+// systemPreferredAuthenticationMethods,
+// userPreferredMethodForSecondaryAuthentication) — feed ONLY the per-user log
+// twin (see the package doc) — never a metric label.
 const requestPath = "/reports/authenticationMethods/userRegistrationDetails" +
-	"?$select=isAdmin,isMfaRegistered,isMfaCapable,isSsprRegistered,isSsprEnabled,isSsprCapable,isPasswordlessCapable,methodsRegistered," +
-	"id,userPrincipalName,userDisplayName,lastUpdatedDateTime"
+	"?$select=isAdmin,isMfaRegistered,isMfaCapable,isSsprRegistered,isSsprEnabled,isSsprCapable,isPasswordlessCapable,methodsRegistered,userType," +
+	"id,userPrincipalName,userDisplayName,lastUpdatedDateTime,isSystemPreferredAuthenticationMethodEnabled," +
+	"systemPreferredAuthenticationMethods,userPreferredMethodForSecondaryAuthentication"
 
 var requestURL = defaultBaseURL + requestPath
 
@@ -187,11 +193,21 @@ type userRegistrationDetail struct {
 	IsPasswordlessCapable bool     `json:"isPasswordlessCapable"`
 	MethodsRegistered     []string `json:"methodsRegistered"`
 
+	// UserType (#173) is the one addition of this batch that IS a metric
+	// label: it feeds the entra.mfa.registration.users.total user_type
+	// dimension (Collect), lowercased at emit time. Bounded (member/guest).
+	UserType string `json:"userType"`
+
 	// Log-twin-only identity fields — never read into a metric attribute.
 	ID                  string `json:"id"`
 	UserPrincipalName   string `json:"userPrincipalName"`
 	UserDisplayName     string `json:"userDisplayName"`
 	LastUpdatedDateTime string `json:"lastUpdatedDateTime"`
+
+	// Log-twin-only posture detail added by #173 — never a metric label.
+	IsSystemPreferredAuthenticationMethodEnabled  bool     `json:"isSystemPreferredAuthenticationMethodEnabled"`
+	SystemPreferredAuthenticationMethods          []string `json:"systemPreferredAuthenticationMethods"`
+	UserPreferredMethodForSecondaryAuthentication string   `json:"userPreferredMethodForSecondaryAuthentication"`
 }
 
 // Collector polls the MFA/auth-methods registration report.
@@ -261,7 +277,11 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		return fmt.Errorf("mfa registration: fetch userRegistrationDetails: %w", err)
 	}
 
-	statusCounts := make(map[string]int64, len(registrationStatuses))
+	statusCounts := make(map[string]map[string]int64, len(registrationStatuses))
+	for _, rs := range registrationStatuses {
+		statusCounts[rs.attr] = map[string]int64{}
+	}
+	userTypesSeen := map[string]bool{}
 	methodCounts := map[string]int64{}
 	var adminMfaCapable, nonAdminMfaCapable int64
 
@@ -272,9 +292,12 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			continue
 		}
 
+		userType := strings.ToLower(u.UserType)
+		userTypesSeen[userType] = true
+
 		for _, rs := range registrationStatuses {
 			if rs.get(u) {
-				statusCounts[rs.attr]++
+				statusCounts[rs.attr][userType]++
 			}
 		}
 
@@ -293,12 +316,18 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		e.LogEvent(logTwin(u))
 	}
 
-	statusPoints := make([]telemetry.GaugePoint, 0, len(registrationStatuses))
+	// user_type (#173) zero-fills per status for every distinct userType
+	// value actually seen this cycle (bounded — real tenants have exactly
+	// "member"/"guest" — see TestCollectEmitsStatusCountsByUserType), the
+	// same zero-fill discipline the outer status loop already applies.
+	statusPoints := make([]telemetry.GaugePoint, 0, len(registrationStatuses)*len(userTypesSeen))
 	for _, rs := range registrationStatuses {
-		statusPoints = append(statusPoints, telemetry.GaugePoint{
-			Value: float64(statusCounts[rs.attr]),
-			Attrs: telemetry.Attrs{semconv.AttrStatus: rs.attr},
-		})
+		for userType := range userTypesSeen {
+			statusPoints = append(statusPoints, telemetry.GaugePoint{
+				Value: float64(statusCounts[rs.attr][userType]),
+				Attrs: telemetry.Attrs{semconv.AttrStatus: rs.attr, semconv.AttrUserType: userType},
+			})
+		}
 	}
 	e.GaugeSnapshot(statusMetricName, "{user}",
 		"Entra users by MFA/SSPR/passwordless registration and capability status.", statusPoints)
@@ -338,6 +367,14 @@ func logTwin(u userRegistrationDetail) telemetry.Event {
 	telemetry.SetStr(attrs, semconv.AttrLastUpdated, u.LastUpdatedDateTime)
 	telemetry.SetStr(attrs, semconv.AttrMethodsRegistered, strings.Join(u.MethodsRegistered, ","))
 
+	// #173: userType feeds BOTH the user_type metric label (Collect) and this
+	// log twin attribute, lowercased the same way in each place so the two
+	// stay consistent regardless of Graph's wire-value casing (see
+	// TestUserTypeIsLowercased).
+	telemetry.SetStr(attrs, semconv.AttrUserType, strings.ToLower(u.UserType))
+	telemetry.SetStr(attrs, semconv.AttrSystemPreferredAuthMethods, strings.Join(u.SystemPreferredAuthenticationMethods, ","))
+	telemetry.SetStr(attrs, semconv.AttrUserPreferredSecondaryMethod, u.UserPreferredMethodForSecondaryAuthentication)
+
 	// The seven posture booleans are always decoded (never legitimately
 	// absent), so they're direct string assignments rather than
 	// setStr-omitted — house convention is string-typed log attributes
@@ -350,6 +387,7 @@ func logTwin(u userRegistrationDetail) telemetry.Event {
 	attrs[semconv.AttrSsprEnabled] = strconv.FormatBool(u.IsSsprEnabled)
 	attrs[semconv.AttrSsprCapable] = strconv.FormatBool(u.IsSsprCapable)
 	attrs[semconv.AttrPasswordlessCapable] = strconv.FormatBool(u.IsPasswordlessCapable)
+	attrs[semconv.AttrSystemPreferredAuthEnabled] = strconv.FormatBool(u.IsSystemPreferredAuthenticationMethodEnabled)
 
 	// Only an admin who cannot currently complete a policy-compliant MFA
 	// challenge escalates: IsMfaCapable (not IsMfaRegistered) is the

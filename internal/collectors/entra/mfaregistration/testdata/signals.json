@@ -15,7 +15,8 @@
     {
       "Name": "entra.mfa.registration.users.total",
       "AttrKeys": [
-        "status"
+        "status",
+        "user_type"
       ]
     }
   ],
@@ -33,8 +34,12 @@
         "sspr_capable",
         "sspr_enabled",
         "sspr_registered",
+        "system_preferred_auth_enabled",
+        "system_preferred_auth_methods",
         "user_display_name",
-        "user_principal_name"
+        "user_preferred_secondary_method",
+        "user_principal_name",
+        "user_type"
       ]
     }
   ]

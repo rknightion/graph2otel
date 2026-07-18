@@ -29,8 +29,9 @@ const collectorName = "entra.users"
 
 // Metric names this collector emits.
 const (
-	metricPopulation = "entra.users.total"
-	metricStale      = "entra.users.stale.total"
+	metricPopulation      = "entra.users.total"
+	metricJointPopulation = "entra.users.population"
+	metricStale           = "entra.users.stale.total"
 )
 
 // defaultBaseURL is the Graph v1.0 root.
@@ -87,6 +88,32 @@ var populationAxes = []axis{
 			{"false", "onPremisesSyncEnabled eq false or onPremisesSyncEnabled eq null"},
 		},
 	},
+}
+
+// jointPopulationSlice pairs one (user_type, account_enabled) combination
+// with the compound $filter expression that selects it.
+type jointPopulationSlice struct {
+	userType       string
+	accountEnabled string
+	filter         string
+}
+
+// jointPopulationSlices is the fixed cross-product of the user_type and
+// account_enabled axes backing entra.users.population (#125): unlike
+// populationAxes' three INDEPENDENT marginal axes, this is a genuine joint
+// distribution — each of the four combinations is its own compound $count
+// call, so "how many disabled guests" is answerable directly instead of
+// requiring the two marginals to be combined (which they cannot be, being
+// independent slices of the same tenant). Values reuse the exact casing
+// (lowercase "member"/"guest", "true"/"false") already emitted by
+// populationAxes' account_enabled and user_type axes, for consistency across
+// the two metrics. Deliberately excludes on_premises_sync_enabled — a
+// three-way cross-product is out of scope for #125.
+var jointPopulationSlices = []jointPopulationSlice{
+	{"member", "true", "userType eq 'Member' and accountEnabled eq true"},
+	{"member", "false", "userType eq 'Member' and accountEnabled eq false"},
+	{"guest", "true", "userType eq 'Guest' and accountEnabled eq true"},
+	{"guest", "false", "userType eq 'Guest' and accountEnabled eq false"},
 }
 
 // Collector polls Entra user population counts and, when licensed, the
@@ -157,6 +184,27 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	e.GaugeSnapshot(metricPopulation, "{user}",
 		"Total Entra users, independently sliced by account_enabled, user_type, and on_premises_sync_enabled.",
 		points)
+
+	jointPoints := make([]telemetry.GaugePoint, 0, len(jointPopulationSlices))
+	for _, js := range jointPopulationSlices {
+		n, err := c.count(ctx, js.filter)
+		if err != nil {
+			c.logger.Warn("joint user population count failed",
+				"collector", collectorName, "user_type", js.userType, "account_enabled", js.accountEnabled, "error", err)
+			errs = append(errs, fmt.Errorf("user_type=%s,account_enabled=%s: %w", js.userType, js.accountEnabled, err))
+			continue
+		}
+		jointPoints = append(jointPoints, telemetry.GaugePoint{
+			Value: float64(n),
+			Attrs: telemetry.Attrs{
+				semconv.AttrUserType:       js.userType,
+				semconv.AttrAccountEnabled: js.accountEnabled,
+			},
+		})
+	}
+	e.GaugeSnapshot(metricJointPopulation, "{user}",
+		"Entra users jointly sliced by user_type and account_enabled (e.g. disabled guests), one series per combination.",
+		jointPoints)
 
 	if !c.caps.Has(license.CapEntraP1) && !c.caps.Has(license.CapEntraP2) {
 		c.logger.Info("skipping entra.users.stale.total: tenant lacks entra_p1/entra_p2 (signInActivity is licensed)",

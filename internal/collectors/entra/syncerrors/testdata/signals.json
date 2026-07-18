@@ -1,0 +1,26 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.directory.sync.errors.total",
+      "AttrKeys": [
+        "category",
+        "object_type",
+        "property_causing_error"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "entra.directory_sync_error",
+      "AttrKeys": [
+        "category",
+        "conflicting_value",
+        "id",
+        "object_type",
+        "occurred_date_time",
+        "property_causing_error",
+        "user_principal_name"
+      ]
+    }
+  ]
+}

@@ -79,11 +79,34 @@ func allPopulationCounts() map[string]string {
 	for i, pf := range populationFilters {
 		bodies[countURL(pf.filter)] = strconv.Itoa((i + 1) * 10)
 	}
+	// Also seed the joint (user_type x account_enabled) population counts, so
+	// every existing happy-path test — which builds its canned bodies from
+	// this helper — keeps working now that Collect issues four more compound
+	// $count requests per call. Distinct values (not overlapping the marginal
+	// axis range above) so a mislabeled attr would still be caught.
+	for i, jf := range jointPopulationFilters {
+		bodies[countURL(jf.filter)] = strconv.Itoa((i + 1) * 100)
+	}
 	return bodies
 }
 
 // staleURL builds the collection $count=true form the stale gauge uses (the
 // /users/$count segment 502s on a signInActivity filter).
+// jointPopulationFilters is the fixed set of (user_type, account_enabled,
+// filter) triples the joint population gauge (entra.users.population) is
+// expected to query — one compound $count call per combination, independent
+// of the production jointAxes var, mirroring populationFilters above.
+var jointPopulationFilters = []struct {
+	userType       string
+	accountEnabled string
+	filter         string
+}{
+	{"member", "true", "userType eq 'Member' and accountEnabled eq true"},
+	{"member", "false", "userType eq 'Member' and accountEnabled eq false"},
+	{"guest", "true", "userType eq 'Guest' and accountEnabled eq true"},
+	{"guest", "false", "userType eq 'Guest' and accountEnabled eq false"},
+}
+
 func staleURL(now time.Time, days int) string {
 	cutoff := now.UTC().AddDate(0, 0, -days).Truncate(time.Second).Format("2006-01-02T15:04:05Z")
 	filter := "signInActivity/lastSignInDateTime le " + cutoff
@@ -130,6 +153,106 @@ func TestCollectEmitsPopulationGaugesWithCorrectAttrs(t *testing.T) {
 	}
 }
 
+// TestCollectEmitsJointPopulationGauge covers #125: a joint
+// user_type x account_enabled population metric, so "how many disabled
+// guests" is answerable without combining two independent marginal axes.
+func TestCollectEmitsJointPopulationGauge(t *testing.T) {
+	g := &fakeGraph{bodies: allPopulationCounts()}
+	rec := telemetrytest.New()
+
+	c := New(g, license.Capabilities{}, nil)
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	pts := rec.MetricPoints(metricJointPopulation)
+	if len(pts) != len(jointPopulationFilters) {
+		t.Fatalf("got %d joint population series, want %d", len(pts), len(jointPopulationFilters))
+	}
+
+	for i, jf := range jointPopulationFilters {
+		want := float64((i + 1) * 100)
+		found := false
+		for _, p := range pts {
+			if p.Attrs["user_type"] == jf.userType && p.Attrs["account_enabled"] == jf.accountEnabled {
+				found = true
+				if p.Value != want {
+					t.Errorf("series user_type=%s,account_enabled=%s value = %v, want %v",
+						jf.userType, jf.accountEnabled, p.Value, want)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("no series found with user_type=%s, account_enabled=%s", jf.userType, jf.accountEnabled)
+		}
+	}
+}
+
+// TestCollectJointPopulationRequestsAreCorrectlyEncoded pins the exact
+// compound $filter URL for each joint combination — spaces, quotes, and the
+// "and" keyword must be percent-escaped in the issued request URL.
+func TestCollectJointPopulationRequestsAreCorrectlyEncoded(t *testing.T) {
+	g := &fakeGraph{bodies: allPopulationCounts()}
+	rec := telemetrytest.New()
+
+	if err := New(g, license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	for _, jf := range jointPopulationFilters {
+		want := countURL(jf.filter)
+		if _, ok := g.seenHeaders[want]; !ok {
+			t.Errorf("expected a request to %s (encoded from filter %q), but it was not seen; seen: %v",
+				want, jf.filter, g.seenHeaders)
+			continue
+		}
+		// Sanity: the encoded URL must not contain a raw space or quote — both
+		// must have been percent-escaped by url.QueryEscape.
+		if strings.ContainsAny(want, " '") {
+			t.Errorf("countURL(%q) = %q still contains an unescaped space or quote", jf.filter, want)
+		}
+	}
+}
+
+// TestCollectJointPopulationDoesNotAffectTotalMetric guards that adding the
+// joint metric left entra.users.total and its three marginal axes completely
+// unchanged — dashboards depend on that metric's existing attribute keys and
+// values.
+func TestCollectJointPopulationDoesNotAffectTotalMetric(t *testing.T) {
+	g := &fakeGraph{bodies: allPopulationCounts()}
+	rec := telemetrytest.New()
+
+	c := New(g, license.Capabilities{}, nil)
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	pts := rec.MetricPoints(metricPopulation)
+	if len(pts) != len(populationFilters) {
+		t.Fatalf("entra.users.total series = %d, want %d (unchanged by the joint metric)", len(pts), len(populationFilters))
+	}
+	for i, pf := range populationFilters {
+		want := float64((i + 1) * 10)
+		found := false
+		for _, p := range pts {
+			if p.Attrs[pf.attr] == pf.value {
+				found = true
+				if p.Value != want {
+					t.Errorf("series %s=%s value = %v, want %v (unchanged)", pf.attr, pf.value, p.Value, want)
+				}
+				// The total metric's points must carry exactly one attribute
+				// (its own axis key) — never the joint metric's second key.
+				if len(p.Attrs) != 1 {
+					t.Errorf("series %s=%s has attrs %v, want exactly 1 key (unchanged shape)", pf.attr, pf.value, p.Attrs)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("no series found with %s=%s", pf.attr, pf.value)
+		}
+	}
+}
+
 func TestCollectSetsConsistencyLevelOnEveryPopulationRequest(t *testing.T) {
 	g := &fakeGraph{bodies: allPopulationCounts()}
 	rec := telemetrytest.New()
@@ -137,8 +260,9 @@ func TestCollectSetsConsistencyLevelOnEveryPopulationRequest(t *testing.T) {
 	if err := New(g, license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter()); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
-	if len(g.seenHeaders) != len(populationFilters) {
-		t.Fatalf("saw %d requests, want %d", len(g.seenHeaders), len(populationFilters))
+	wantRequests := len(populationFilters) + len(jointPopulationFilters)
+	if len(g.seenHeaders) != wantRequests {
+		t.Fatalf("saw %d requests, want %d", len(g.seenHeaders), wantRequests)
 	}
 	for u, cl := range g.seenHeaders {
 		if cl != "eventual" {
@@ -282,9 +406,13 @@ func TestCollectNeverEmitsPerUserSeries(t *testing.T) {
 	}
 
 	popPts := rec.MetricPoints(metricPopulation)
+	jointPopPts := rec.MetricPoints(metricJointPopulation)
 	stalePts := rec.MetricPoints(metricStale)
 	if len(popPts) != len(populationFilters) {
 		t.Fatalf("population series = %d, want exactly %d regardless of tenant size", len(popPts), len(populationFilters))
+	}
+	if len(jointPopPts) != len(jointPopulationFilters) {
+		t.Fatalf("joint population series = %d, want exactly %d regardless of tenant size", len(jointPopPts), len(jointPopulationFilters))
 	}
 	if len(stalePts) != len(staleThresholdsDays) {
 		t.Fatalf("stale series = %d, want exactly %d regardless of tenant size", len(stalePts), len(staleThresholdsDays))

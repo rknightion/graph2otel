@@ -81,6 +81,16 @@ func daysAgo(d int) *time.Time {
 	return &t
 }
 
+// deviceWithVersion builds on device() by adding a raw osVersion field - kept
+// as a separate helper (rather than widening device()'s signature) so the
+// many existing device() call sites are undisturbed and continue to exercise
+// the empty/missing-osVersion path.
+func deviceWithVersion(compliance, os, version string, encrypted bool, lastSync *time.Time) map[string]any {
+	d := device(compliance, os, encrypted, lastSync)
+	d["osVersion"] = version
+	return d
+}
+
 // liveManagedDevices is the VERBATIM value array of a
 // GET /deviceManagement/managedDevices?$select=id,complianceState,operatingSystem,isEncrypted,lastSyncDateTime,deviceName,serialNumber,userPrincipalName
 // response from the m7kni tenant, read as graph2otel-poller on 2026-07-17
@@ -344,6 +354,135 @@ func TestCollectBucketsStaleness(t *testing.T) {
 		if got[k] != v {
 			t.Errorf("staleness_bucket=%s = %v, want %v", k, got[k], v)
 		}
+	}
+}
+
+// TestCollectEmitsOsVersionCounts pins #124's new standalone
+// intune.devices.os_version.count gauge: one point per distinct
+// (operating_system, os_version) pair, counted client-side over the same
+// fleet fetch the other gauges already page. A device reporting no osVersion
+// at all must bucket to os_version="unknown" rather than an empty-string
+// label or being dropped.
+func TestCollectEmitsOsVersionCounts(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		overviewURL(): overviewFixture,
+		fleetURL(): devicesPage(
+			deviceWithVersion("compliant", "Windows 10", "10.0.19045.1", true, daysAgo(0)),
+			deviceWithVersion("compliant", "Windows 10", "10.0.19045.1", true, daysAgo(1)),
+			deviceWithVersion("compliant", "Windows 10", "10.0.22631.1", true, daysAgo(0)),
+			deviceWithVersion("compliant", "iOS", "17.4.1", true, daysAgo(0)),
+			deviceWithVersion("unknown", "macOS", "", true, daysAgo(0)),
+		),
+	}}
+	rec := telemetrytest.New()
+
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	pts := rec.MetricPoints(osVersionCountMetricName)
+	got := map[string]float64{}
+	for _, p := range pts {
+		got[p.Attrs["operating_system"]+"/"+p.Attrs["os_version"]] = p.Value
+	}
+	want := map[string]float64{
+		"windows/10.0.19045.1": 2,
+		"windows/10.0.22631.1": 1,
+		"ios/17.4.1":           1,
+		"macos/unknown":        1,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d os_version series, want %d: %v", len(got), len(want), got)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%s = %v, want %v", k, got[k], v)
+		}
+	}
+}
+
+// TestCollectCountMetricAttrKeysUnchanged pins that the pre-existing
+// intune.devices.count gauge stays byte-identical in its attribute keys -
+// the new os_version dimension must NOT be folded into it (that would
+// silently multi-count a naive sum() over the metric, same rationale as the
+// package doc's per-metric-name-per-dimension rule).
+func TestCollectCountMetricAttrKeysUnchanged(t *testing.T) {
+	g := &fakeGraph{bodies: fullFixtureBodies()}
+	rec := telemetrytest.New()
+
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	pts := rec.MetricPoints(countMetricName)
+	if len(pts) == 0 {
+		t.Fatal("expected count metric points, got none")
+	}
+	wantKeys := map[string]bool{"compliance_state": true, "operating_system": true}
+	for _, p := range pts {
+		if len(p.Attrs) != len(wantKeys) {
+			t.Fatalf("intune.devices.count attrs = %v, want exactly %v", p.Attrs, wantKeys)
+		}
+		for k := range p.Attrs {
+			if !wantKeys[k] {
+				t.Errorf("intune.devices.count has unexpected attribute %q (want only compliance_state/operating_system)", k)
+			}
+		}
+	}
+}
+
+// TestLogTwinCarriesOsVersion pins that every intune.managed_device log
+// twin carries os_version - the raw osVersion string, or "unknown" when the
+// device reported none.
+func TestLogTwinCarriesOsVersion(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		overviewURL(): overviewFixture,
+		fleetURL(): devicesPage(
+			deviceWithVersion("compliant", "Windows 10", "10.0.19045.1", true, daysAgo(0)),
+			deviceWithVersion("unknown", "macOS", "", true, daysAgo(0)),
+		),
+	}}
+	rec := telemetrytest.New()
+
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	logs := rec.LogRecords()
+	if len(logs) != 2 {
+		t.Fatalf("got %d log records, want 2", len(logs))
+	}
+	gotVersions := map[string]bool{}
+	for _, l := range logs {
+		v, ok := l.Attrs["os_version"]
+		if !ok {
+			t.Fatalf("log twin missing os_version attribute entirely: %+v", l.Attrs)
+		}
+		gotVersions[v] = true
+	}
+	want := map[string]bool{"10.0.19045.1": true, "unknown": true}
+	if len(gotVersions) != len(want) {
+		t.Fatalf("os_version values across twins = %v, want %v", gotVersions, want)
+	}
+	for k := range want {
+		if !gotVersions[k] {
+			t.Errorf("missing expected os_version value %q across twins: %v", k, gotVersions)
+		}
+	}
+}
+
+// TestNewWiresFleetFetcherWithOsVersionSelect pins the #124 acceptance
+// criterion that the fleet-wide $select was widened to request osVersion -
+// the new os_version.count gauge and the log twin's os_version attribute
+// both ride on this same field, with no additional Graph request.
+func TestNewWiresFleetFetcherWithOsVersionSelect(t *testing.T) {
+	c := New(&fakeGraph{}, nil)
+	df, ok := c.fleet.(*collectors.DirectFleetFetcher)
+	if !ok {
+		t.Fatalf("fleet fetcher = %T, want *collectors.DirectFleetFetcher", c.fleet)
+	}
+	if !strings.Contains(df.URL, "osVersion") {
+		t.Errorf("fleet fetcher URL = %q, missing field %q required for the os_version.count gauge and log twin", df.URL, "osVersion")
 	}
 }
 

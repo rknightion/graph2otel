@@ -3,6 +3,7 @@ package licensing
 import (
 	"context"
 	"errors"
+	"net/url"
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
@@ -34,8 +35,28 @@ func (f *fakeGraph) RawGetWithHeaders(_ context.Context, url string, headers map
 
 var _ collectors.GraphClient = (*fakeGraph)(nil)
 
+func logsNamed(recs []telemetrytest.LogRecord, name string) []telemetrytest.LogRecord {
+	var out []telemetrytest.LogRecord
+	for _, r := range recs {
+		if r.EventName == name {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 const base = "https://graph.microsoft.com/v1.0"
 const skusURL = base + "/subscribedSkus"
+
+// groupsURL is the hasMembersWithLicenseErrors filter URL the collector
+// issues for #122. Built with net/url the same way the collector builds it,
+// so a change to either stays in sync.
+var groupsURL = base + "/groups?$filter=" + url.QueryEscape("hasMembersWithLicenseErrors eq true") + "&$select=id,displayName"
+
+// noGroupErrors is the fixture for "zero affected groups" - used by every
+// test that isn't specifically exercising the groups-with-errors path, so
+// the collector's second fetch has something valid to decode.
+const noGroupErrors = `{"value": []}`
 
 // liveSubscribedSkus is a VERBATIM GET /subscribedSkus capture from the m7kni
 // tenant, read as graph2otel-poller on 2026-07-17 `[live-measured 2026-07-17,
@@ -196,13 +217,25 @@ const liveSubscribedSkus = `{
   ]
 }`
 
+// twoErroredGroupsBody is the fake /groups?$filter=hasMembersWithLicenseErrors
+// eq true response used by tests exercising #122's group-level path: two
+// affected groups, one with a display name and one without (to exercise the
+// id fallback).
+const twoErroredGroupsBody = `{
+	"value": [
+		{"id": "11111111-1111-1111-1111-111111111111", "displayName": "Finance Team"},
+		{"id": "22222222-2222-2222-2222-222222222222", "displayName": ""}
+	]
+}`
+
 // TestCollectEmitsPerSKUConsumedAndEnabledGauges drives the verbatim live
 // capture end-to-end (Collect -> Recorder) and pins the per-SKU consumed and
 // enabled gauges against the real subscribedSkus the m7kni tenant returns —
 // including FLOW_FREE's distinct 2-consumed / 10000-enabled shape, which a
-// docs fixture's round numbers would have hidden.
+// docs fixture's round numbers would have hidden. entra.license.enabled must
+// stay byte-for-byte unchanged by #122 (see TestCollectEmitsPerSKUConsumedAndEnabledGauges).
 func TestCollectEmitsPerSKUConsumedAndEnabledGauges(t *testing.T) {
-	g := &fakeGraph{bodies: map[string]string{skusURL: liveSubscribedSkus}}
+	g := &fakeGraph{bodies: map[string]string{skusURL: liveSubscribedSkus, groupsURL: noGroupErrors}}
 	rec := telemetrytest.New()
 
 	c := New(g, nil)
@@ -261,9 +294,10 @@ func TestCollectFollowsPagination(t *testing.T) {
 	body2 := `{"value": [{"skuId": "sku-2", "skuPartNumber": "POWER_BI_STANDARD", "consumedUnits": 3, "prepaidUnits": {"enabled": 4}}]}`
 
 	g := &fakeGraph{bodies: map[string]string{
-		skusURL:  `{"value": [], "@odata.nextLink": "` + page1 + `"}`,
-		page1:    body1,
-		page2URL: body2,
+		skusURL:   `{"value": [], "@odata.nextLink": "` + page1 + `"}`,
+		page1:     body1,
+		page2URL:  body2,
+		groupsURL: noGroupErrors,
 	}}
 	rec := telemetrytest.New()
 
@@ -296,7 +330,7 @@ func TestCollectSurfacesGraphError(t *testing.T) {
 }
 
 func TestCollectHandlesEmptyTenant(t *testing.T) {
-	g := &fakeGraph{bodies: map[string]string{skusURL: `{"value": []}`}}
+	g := &fakeGraph{bodies: map[string]string{skusURL: `{"value": []}`, groupsURL: noGroupErrors}}
 	rec := telemetrytest.New()
 
 	c := New(g, nil)
@@ -316,7 +350,7 @@ func TestCollectHandlesEmptyTenant(t *testing.T) {
 // two bounded per-SKU gauges and nothing else, no matter what the fake backend
 // returns.
 func TestCollectNeverEmitsPerUserOrAssignmentErrorSeries(t *testing.T) {
-	g := &fakeGraph{bodies: map[string]string{skusURL: liveSubscribedSkus}}
+	g := &fakeGraph{bodies: map[string]string{skusURL: liveSubscribedSkus, groupsURL: twoErroredGroupsBody}}
 	rec := telemetrytest.New()
 
 	c := New(g, nil)
@@ -324,26 +358,36 @@ func TestCollectNeverEmitsPerUserOrAssignmentErrorSeries(t *testing.T) {
 		t.Fatalf("Collect: %v", err)
 	}
 
+	// The full bounded metric set: per-SKU consumed/enabled/units/capability
+	// plus the scalar group-error count. The per-user assignment-error series
+	// (#45) is still deliberately absent; the #122 group path is bounded and
+	// group-keyed, not per-user.
 	names := rec.MetricNames()
-	want := map[string]bool{consumedMetricName: true, enabledMetricName: true}
+	want := map[string]bool{
+		consumedMetricName:         true,
+		enabledMetricName:          true,
+		unitsMetricName:            true,
+		capabilityStatusMetricName: true,
+		groupsWithErrorsMetricName: true,
+	}
 	for _, n := range names {
 		if !want[n] {
-			t.Errorf("unexpected metric %q emitted; only %v are expected (assignment-errors aggregate is deferred, see collector doc comment)", n, want)
+			t.Errorf("unexpected metric %q emitted; only %v are expected (per-user assignment-errors aggregate is deferred, see collector doc comment)", n, want)
 		}
 	}
 	if len(names) != len(want) {
 		t.Errorf("got metrics %v, want exactly %v", names, want)
 	}
 
-	// Every emitted point's only attribute must be the bounded "sku" key -
-	// never a per-user identifier.
+	// Every emitted point may carry ONLY bounded, tenant-shaped keys — never a
+	// per-user or per-group identifier (group id/name live on the log twin).
+	allowed := map[string]bool{"sku": true, "state": true, "status": true}
 	for _, name := range names {
 		for _, p := range rec.MetricPoints(name) {
-			if len(p.Attrs) != 1 {
-				t.Errorf("%s point has %d attrs, want exactly 1 (sku): %v", name, len(p.Attrs), p.Attrs)
-			}
-			if _, ok := p.Attrs["sku"]; !ok {
-				t.Errorf("%s point missing sku attr: %v", name, p.Attrs)
+			for k := range p.Attrs {
+				if !allowed[k] {
+					t.Errorf("metric %s carries unexpected attribute %q (per-entity leak?): %v", name, k, p.Attrs)
+				}
 			}
 		}
 	}
@@ -356,7 +400,7 @@ func TestCollectSkipsMalformedSKUButEmitsOthers(t *testing.T) {
 			{"skuId": "sku-2", "skuPartNumber": "POWER_BI_STANDARD", "consumedUnits": 3, "prepaidUnits": {"enabled": 4}}
 		]
 	}`
-	g := &fakeGraph{bodies: map[string]string{skusURL: body}}
+	g := &fakeGraph{bodies: map[string]string{skusURL: body, groupsURL: noGroupErrors}}
 	rec := telemetrytest.New()
 
 	c := New(g, nil)
@@ -381,8 +425,106 @@ func TestNameIntervalAndPermissions(t *testing.T) {
 	if c.DefaultInterval() <= 0 {
 		t.Error("DefaultInterval must be positive")
 	}
-	perms := c.RequiredPermissions()
-	if len(perms) != 1 || perms[0] != "LicenseAssignment.Read.All" {
-		t.Errorf("RequiredPermissions = %v, want [LicenseAssignment.Read.All]", perms)
+	perms := map[string]bool{}
+	for _, p := range c.RequiredPermissions() {
+		perms[p] = true
+	}
+	for _, want := range []string{"LicenseAssignment.Read.All", "Group.Read.All"} {
+		if !perms[want] {
+			t.Errorf("RequiredPermissions missing %q; got %v", want, c.RequiredPermissions())
+		}
+	}
+}
+
+// TestCollectEmitsUnitStatesAndCapabilityStatus pins #122's subscription-health
+// signals: all four prepaidUnits states per SKU, and the capabilityStatus info
+// gauge (value 1, status lowercased).
+func TestCollectEmitsUnitStatesAndCapabilityStatus(t *testing.T) {
+	body := `{"value":[
+		{"skuId":"s1","skuPartNumber":"ENTERPRISEPACK","consumedUnits":90,"capabilityStatus":"Warning",
+		 "prepaidUnits":{"enabled":100,"suspended":5,"warning":3,"lockedOut":1}}
+	]}`
+	g := &fakeGraph{bodies: map[string]string{skusURL: body, groupsURL: noGroupErrors}}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	gotUnits := map[string]float64{}
+	for _, p := range rec.MetricPoints(unitsMetricName) {
+		if p.Attrs["sku"] != "ENTERPRISEPACK" {
+			t.Errorf("units point wrong sku: %v", p.Attrs)
+		}
+		gotUnits[p.Attrs["state"]] = p.Value
+	}
+	wantUnits := map[string]float64{"enabled": 100, "suspended": 5, "warning": 3, "locked_out": 1}
+	if len(gotUnits) != len(wantUnits) {
+		t.Fatalf("got %d unit states, want 4: %v", len(gotUnits), gotUnits)
+	}
+	for k, v := range wantUnits {
+		if gotUnits[k] != v {
+			t.Errorf("units state=%s = %v, want %v", k, gotUnits[k], v)
+		}
+	}
+
+	caps := rec.MetricPoints(capabilityStatusMetricName)
+	if len(caps) != 1 {
+		t.Fatalf("got %d capability_status points, want 1", len(caps))
+	}
+	if caps[0].Value != 1 || caps[0].Attrs["status"] != "warning" || caps[0].Attrs["sku"] != "ENTERPRISEPACK" {
+		t.Errorf("capability_status = %v attrs %v, want value 1 status=warning sku=ENTERPRISEPACK", caps[0].Value, caps[0].Attrs)
+	}
+}
+
+// TestCollectEmitsGroupsWithErrors pins the #122 group-level path: the scalar
+// count and one log twin per affected group, and that group id/name never leak
+// onto a metric.
+func TestCollectEmitsGroupsWithErrors(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{skusURL: `{"value":[]}`, groupsURL: twoErroredGroupsBody}}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	pts := rec.MetricPoints(groupsWithErrorsMetricName)
+	if len(pts) != 1 || pts[0].Value != 2 {
+		t.Fatalf("groups_with_errors = %v, want a single point valued 2", pts)
+	}
+	if len(pts[0].Attrs) != 0 {
+		t.Errorf("groups_with_errors carries attrs %v, want none (scalar)", pts[0].Attrs)
+	}
+
+	logs := logsNamed(rec.LogRecords(), eventLicenseGroupError)
+	if len(logs) != 2 {
+		t.Fatalf("emitted %d %s logs, want 2", len(logs), eventLicenseGroupError)
+	}
+	var finance *telemetrytest.LogRecord
+	for i := range logs {
+		if logs[i].Attrs["id"] == "11111111-1111-1111-1111-111111111111" {
+			finance = &logs[i]
+		}
+	}
+	if finance == nil || finance.Attrs["display_name"] != "Finance Team" {
+		t.Errorf("Finance Team log missing or wrong: %v", logs)
+	}
+}
+
+// TestZeroGroupsEmitsExplicitZeroNoLogs pins the healthy case: no affected
+// groups still emits groups_with_errors.total = 0 (never absent) and no logs.
+func TestZeroGroupsEmitsExplicitZeroNoLogs(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{skusURL: `{"value":[]}`, groupsURL: noGroupErrors}}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	pts := rec.MetricPoints(groupsWithErrorsMetricName)
+	if len(pts) != 1 || pts[0].Value != 0 {
+		t.Fatalf("groups_with_errors = %v, want a single point valued 0", pts)
+	}
+	if logs := logsNamed(rec.LogRecords(), eventLicenseGroupError); len(logs) != 0 {
+		t.Errorf("emitted %d logs with zero affected groups, want 0", len(logs))
 	}
 }

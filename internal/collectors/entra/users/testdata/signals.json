@@ -1,6 +1,13 @@
 {
   "Metrics": [
     {
+      "Name": "entra.users.population",
+      "AttrKeys": [
+        "account_enabled",
+        "user_type"
+      ]
+    },
+    {
       "Name": "entra.users.stale.total",
       "AttrKeys": [
         "threshold_days"

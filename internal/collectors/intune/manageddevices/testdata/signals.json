@@ -14,6 +14,13 @@
       ]
     },
     {
+      "Name": "intune.devices.os_version.count",
+      "AttrKeys": [
+        "operating_system",
+        "os_version"
+      ]
+    },
+    {
       "Name": "intune.devices.overview.dual_enrolled_device_count",
       "AttrKeys": []
     },
@@ -48,6 +55,7 @@
         "is_encrypted",
         "last_sync_date_time",
         "operating_system",
+        "os_version",
         "serial_number",
         "staleness_bucket",
         "user_principal_name"

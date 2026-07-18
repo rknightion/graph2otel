@@ -92,8 +92,13 @@ var annotations = map[string]Annotation{
 		Collects: "Stale service principals / app credentials (no recent sign-in), app sign-in result summary",
 		Source:   "`/reports/servicePrincipalSignInActivities`, `/reports/appCredentialSignInActivities` (beta)",
 	},
+	"entra.syncerrors": {
+		Collects: "Hybrid directory-sync provisioning errors (onPremisesProvisioningErrors) — UPN/proxy-address conflicts that fail silently while sync freshness stays green — bucketed by object type/category/property, plus a log twin per errored object carrying the conflicting value",
+		Source:   "`/organization` (sync-state probe), `/users` (full page-walk, client-side filtered)",
+		Gating:   "opt-in / default-off — it pages the full user collection, so the opt-in is for COST not API instability; both endpoints are v1.0 stable, not beta. No-ops without paging when the tenant is cloud-only, i.e. onPremisesSyncEnabled is false or null",
+	},
 	"entra.users": {
-		Collects: "User population by account-enabled/user-type/on-prem-sync, staleness",
+		Collects: "User population by account-enabled/user-type/on-prem-sync (marginal + joint user_type×account_enabled), staleness",
 		Source:   "`/users`, `/users/$count` (`GET /users?…&$count=true` for signInActivity-based slices)",
 		Gating:   "staleness slice only, checked inside Collect(): signInActivity needs `entra_p1` or `entra_p2`; the population counts run on every tier",
 	},

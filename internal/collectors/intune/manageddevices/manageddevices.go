@@ -71,6 +71,15 @@ const (
 	overviewEnrolledMetricName = "intune.devices.overview.enrolled_device_count"
 	overviewMdmMetricName      = "intune.devices.overview.mdm_enrolled_device_count"
 	overviewDualEnrolledMetric = "intune.devices.overview.dual_enrolled_device_count"
+	// osVersionCountMetricName (#124) is a standalone gauge, deliberately
+	// NOT folded into countMetricName's (compliance_state, operating_system)
+	// series - see the metric-naming rule above. It carries the fleet count
+	// per distinct (operating_system, os_version) pair, one point per pair,
+	// counted client-side over the same managedDevices fetch collectFleet
+	// already pages (no additional Graph request). os_version rides the raw
+	// operatingSystemVersion string unbucketed - see the const's own doc
+	// comment for why, and what would change that.
+	osVersionCountMetricName = "intune.devices.os_version.count"
 )
 
 // defaultBaseURL is the Graph v1.0 root. Both endpoints this collector polls
@@ -86,11 +95,14 @@ const eventManagedDevice = "intune.managed_device"
 // managedDevicesSelect limits the fleet-wide paged fetch to the fields the
 // bounded gauges aggregate on (complianceState, operatingSystem, isEncrypted,
 // lastSyncDateTime) PLUS the per-device identity fields the intune.managed_device
-// log twin carries (id, deviceName, serialNumber, userPrincipalName) - #114.
-// Widening this further should stay deliberate: every field here rides along
-// on a full-fleet page walk (see the package/issue notes on why full-fleet
-// paging is the accepted exception for this endpoint).
-const managedDevicesSelect = "?$select=id,complianceState,operatingSystem,isEncrypted,lastSyncDateTime,deviceName,serialNumber,userPrincipalName"
+// log twin carries (id, deviceName, serialNumber, userPrincipalName) - #114 -
+// PLUS osVersion (#124), which rides the same fetch to feed the standalone
+// intune.devices.os_version.count gauge and the log twin's os_version
+// attribute at zero extra Graph cost. Widening this further should stay
+// deliberate: every field here rides along on a full-fleet page walk (see the
+// package/issue notes on why full-fleet paging is the accepted exception for
+// this endpoint).
+const managedDevicesSelect = "?$select=id,complianceState,operatingSystem,isEncrypted,lastSyncDateTime,deviceName,serialNumber,userPrincipalName,osVersion"
 
 // complianceBuckets maps every documented managedDevice complianceState
 // value (https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-manageddevice)
@@ -148,6 +160,21 @@ func hasPrefixFold(s, prefix string) bool {
 		return false
 	}
 	return strings.EqualFold(s[:len(prefix)], prefix)
+}
+
+// osVersionOrUnknown returns the raw managedDevice.osVersion value verbatim,
+// or "unknown" when the device didn't report one (#124). Unlike
+// operatingSystem, osVersion is deliberately NOT bucketed further here - it
+// ships as the full raw version string on both the os_version.count gauge and
+// the intune.managed_device log twin. A live distinct-version-count
+// measurement is the documented follow-up: if that count turns out large on
+// a real fleet, minor-version bucketing (e.g. major.minor only) is the
+// fallback, not a redesign.
+func osVersionOrUnknown(raw string) string {
+	if raw == "" {
+		return "unknown"
+	}
+	return raw
 }
 
 // stalenessBuckets are the fixed sync-recency buckets for
@@ -221,6 +248,7 @@ func deviceLogTwin(d managedDevice, complianceBucket, stalenessBucket string) te
 	telemetry.SetStr(attrs, semconv.AttrUserPrincipalName, d.UserPrincipalName)
 	telemetry.SetStr(attrs, semconv.AttrComplianceState, d.ComplianceState)
 	telemetry.SetStr(attrs, semconv.AttrOperatingSystem, d.OperatingSystem)
+	telemetry.SetStr(attrs, semconv.AttrOsVersion, osVersionOrUnknown(d.OsVersion))
 	attrs[semconv.AttrIsEncrypted] = strconv.FormatBool(d.IsEncrypted)
 	attrs[semconv.AttrStalenessBucket] = stalenessBucket
 	if d.LastSyncDateTime != nil && !d.LastSyncDateTime.IsZero() {
@@ -258,6 +286,7 @@ func deviceLogTwin(d managedDevice, complianceBucket, stalenessBucket string) te
 type managedDevice struct {
 	ComplianceState  string     `json:"complianceState"`
 	OperatingSystem  string     `json:"operatingSystem"`
+	OsVersion        string     `json:"osVersion"`
 	IsEncrypted      bool       `json:"isEncrypted"`
 	LastSyncDateTime *time.Time `json:"lastSyncDateTime"`
 
@@ -439,6 +468,7 @@ func (c *Collector) collectFleet(ctx context.Context, e telemetry.Emitter) error
 	counts := map[[2]string]int64{}
 	encrypted := map[string]int64{}
 	staleness := map[string]int64{}
+	osVersionCounts := map[[2]string]int64{}
 	now := c.now()
 
 	for _, r := range raw {
@@ -455,6 +485,7 @@ func (c *Collector) collectFleet(ctx context.Context, e telemetry.Emitter) error
 		}
 		staleBucket := stalenessBucketFor(now, d.LastSyncDateTime)
 		staleness[staleBucket]++
+		osVersionCounts[[2]string{os, osVersionOrUnknown(d.OsVersion)}]++
 		e.LogEvent(deviceLogTwin(d, compliance, staleBucket))
 	}
 
@@ -478,6 +509,15 @@ func (c *Collector) collectFleet(ctx context.Context, e telemetry.Emitter) error
 		stalePoints = append(stalePoints, telemetry.GaugePoint{Value: float64(v), Attrs: telemetry.Attrs{semconv.AttrStalenessBucket: bucket}})
 	}
 	e.GaugeSnapshot(stalenessMetricName, "{device}", "Intune managed devices bucketed by time since lastSyncDateTime.", stalePoints)
+
+	osVersionPoints := make([]telemetry.GaugePoint, 0, len(osVersionCounts))
+	for k, v := range osVersionCounts {
+		osVersionPoints = append(osVersionPoints, telemetry.GaugePoint{
+			Value: float64(v),
+			Attrs: telemetry.Attrs{semconv.AttrOperatingSystem: k[0], semconv.AttrOsVersion: k[1]},
+		})
+	}
+	e.GaugeSnapshot(osVersionCountMetricName, "{device}", "Intune managed device fleet count, by operating system bucket and raw operatingSystemVersion (unbucketed full version string; osVersion=\"unknown\" when the device reported none).", osVersionPoints)
 
 	return nil
 }
