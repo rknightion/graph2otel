@@ -1,0 +1,45 @@
+{
+  "Metrics": [
+    {
+      "Name": "m365.storage.drives.total",
+      "AttrKeys": [
+        "drive_type",
+        "quota_state"
+      ]
+    },
+    {
+      "Name": "m365.storage.total_bytes",
+      "AttrKeys": [
+        "drive_type"
+      ]
+    },
+    {
+      "Name": "m365.storage.used_bytes",
+      "AttrKeys": [
+        "drive_type"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.drive_storage",
+      "AttrKeys": [
+        "active_file_count",
+        "drive_type",
+        "file_count",
+        "is_deleted",
+        "last_activity_date",
+        "names_concealed",
+        "owner_display_name",
+        "owner_principal_name",
+        "quota_state",
+        "root_web_template",
+        "site_id",
+        "site_url",
+        "storage_allocated_bytes",
+        "storage_remaining_bytes",
+        "storage_used_bytes"
+      ]
+    }
+  ]
+}

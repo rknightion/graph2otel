@@ -212,6 +212,34 @@ counter-example worth knowing:
   to exclude. The gauge therefore counts deleted-but-once-risky identities until Microsoft
   drops the row.
 
+## SharePoint/OneDrive storage: derived quota state + report concealment
+
+`m365.storage` is built on the M365 usage-**reporting** API, not the live per-drive `quota`
+facet — two facts follow that a dashboard author must know.
+
+- **`quota_state` is derived, not Microsoft's verdict.** The live `/sites/{id}/drive` facet
+  carries Microsoft's own `state` (`normal`/`nearing`/`critical`/`exceeded`) and a `deleted`
+  byte count, but reading it app-only needs `Sites.Read.All` + `Files.Read.All` —
+  read-everything-in-SharePoint scopes, disproportionate for a capacity signal (live-measured
+  2026-07-18, #120). So graph2otel computes `quota_state` from `used ÷ allocated`:
+  `normal` <75%, `nearing` ≥75%, `critical` ≥90%, `exceeded` ≥100%, `unknown` when allocated
+  is 0. There is **no `deleted_bytes` series** — the reporting API does not expose it.
+  `m365.storage.drives.total{drive_type,quota_state}` emits the full grid every cycle, so
+  `quota_state="critical"` exists at `0` for a stable alert baseline.
+- **SharePoint `total_bytes` is the pooled ceiling, not a sum.** SharePoint storage is pooled:
+  every site's `Storage Allocated` is the same tenant ceiling (~25 TiB on m7kni), so the
+  tenant SP total is the max, not the sum. OneDrive quotas are per-user, so they *do* sum. The
+  metric reflects this — do not add the two `drive_type` totals expecting a grand total.
+- **Report name concealment silently hashes identity.** The tenant setting
+  `displayConcealedNames` (M365 admin center → Settings → Org settings → Reports) hashes
+  `owner_display_name`, `owner_principal_name`, and blanks `site_url` / zeroes `site_id`
+  across *all* usage reports — storage bytes are unaffected. When it is on, `m365.drive_storage`
+  carries `names_concealed="true"` and the collector logs a startup warning; the identity
+  attributes are present but hashed. It was ON on m7kni at build time (live-measured
+  2026-07-18). graph2otel reads `/admin/reportSettings` to detect it (optional
+  `ReportSettings.Read.All`), falling back to a data heuristic (all-zeroed `site_id`) when that
+  scope is absent.
+
 ## Multi-tenant labeling
 
 **Every signal carries a `tenant_id` attribute** — domain and self-observability, metrics

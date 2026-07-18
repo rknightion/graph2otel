@@ -364,6 +364,10 @@ var annotations = map[string]Annotation{
 		Collects: "Tenant SharePoint/OneDrive sharing posture from one `/admin/sharepoint/settings` fetch: external-sharing capability + domain-restriction mode, legacy-auth toggle, external-resharing, unmanaged-sync restriction, idle-session sign-out, and default storage/retention limits — as bounded security-posture gauges, plus a log twin carrying the full config including the sharing domain allow/block lists (unbounded, so log-only per #112). Legacy-auth-on escalates the twin to Warn",
 		Source:   "`/admin/sharepoint/settings`",
 	},
+	"m365.storage": {
+		Collects: "SharePoint + OneDrive storage utilization from the M365 usage-reporting API (`getSharePointSiteUsageStorage`/`getOneDriveUsageStorage` + the two `*Detail` functions, CSV via a 302). Tenant used/total bytes by drive type, and a drive count per derived quota state (`normal`/`nearing`/`critical`/`exceeded`, computed from used÷allocated — the live `quota.state` facet needs read-everything SharePoint scopes, so it is intentionally not used). One log twin per site/drive carries owner, site URL, byte counts, and quota state (unbounded, so log-only per #112). Reads `/admin/reportSettings` to warn when report name-concealment is on",
+		Source:   "`/reports/getSharePointSiteUsageStorage`, `/reports/getOneDriveUsageStorage`, `/reports/getSharePointSiteUsageDetail`, `/reports/getOneDriveUsageAccountDetail`",
+	},
 
 	// ---- Purview — snapshot collectors ----
 	"purview.sensitivity_labels": {

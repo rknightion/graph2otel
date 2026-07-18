@@ -77,6 +77,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/servicehealth"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/servicemessage"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/sharepointsettings"
+	_ "github.com/rknightion/graph2otel/internal/collectors/m365/storage"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/unifiedaudit"
 	_ "github.com/rknightion/graph2otel/internal/collectors/purview/retentionlabels"
 	_ "github.com/rknightion/graph2otel/internal/collectors/purview/sensitivitylabels"
