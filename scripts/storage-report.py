@@ -41,11 +41,35 @@ COST MODELLING (what-if scenarios — all overridable, none change what's measur
                                 graph2otel's own calls, so this is a real lever)
     --price-storage-gb-mo / --price-write-10k / --avg-append-bytes   meter overrides
 
-    Examples:
-      # what does dropping to 1-day retention save?
-      scripts/storage-report.py --model-retention-days 1
-      # model turning cloudappevents off and halving poll frequency
-      scripts/storage-report.py --scale cloudappevents=0 --scale graphactivity=0.5
+    When any knob is set the report switches to "modelled" mode and prints the new
+    total, the delta vs measured-today, and which knobs are active. With no knobs
+    (or model_retention==actual and scale==1) it reproduces the measured number
+    exactly.
+
+    Worked examples (numbers from the m7kni account, ~£11.90/mo measured today):
+      # model 7-day retention + halve graph2otel's own poll frequency
+      scripts/storage-report.py --model-retention-days 7 --scale graphactivity=0.5
+        -> ~£10.66 (-£1.24). Storage barely moves (£0.02 -> £0.05 even at 3.5x the
+           retention); the whole saving is write-ops from the poll reduction.
+      # model turning cloudappevents off and dropping to 1-day retention
+      scripts/storage-report.py --scale cloudappevents=0 --model-retention-days 1
+        -> ~£10.25 (-£1.66)
+      # model doubling all activity
+      scripts/storage-report.py --volume-scale 2
+        -> ~£23.81 (+£11.91), near-linear because writes dominate
+
+    The honest lesson the model makes visible: RETENTION IS NEARLY FREE, VOLUME IS
+    THE BILL. Resident storage is pennies; the cost is AppendBlock write-ops, which
+    scale with tenant activity and — for MicrosoftGraphActivityLogs — with
+    graph2otel's own poll frequency. So the real levers are "which high-churn tables
+    do I stream" and "how often do I poll", not "how long do I keep the data".
+
+    Caveat on --avg-append-bytes: the 7300 B/append mean was measured on the Entra
+    categories (MGAL / sign-ins); the Defender tables may batch differently, so tune
+    it with --avg-append-bytes once you have a real Defender reading. The write-op
+    count is exactly measurable from the `append_blob_committed_block_count` metric
+    (an append blob supports no other write), if you ever want to replace the
+    bytes/avg_append estimate with a hard number.
 
     Growth appears automatically once there are >=2 snapshots in the history file
     (default ~/.local/state/graph2otel/storage-history.jsonl). Run it on a cron/launchd
