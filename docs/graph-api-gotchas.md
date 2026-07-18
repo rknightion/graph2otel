@@ -155,6 +155,11 @@ templates; the dedicated Intune API `0000000a-…` exposes **zero app-only roles
 `api.manage.microsoft.com` is NXDOMAIN — no grant can ever unblock it), DLP policy
 enumeration, retention policy bindings.
 
+Intune `OperationalLogs` is a **Graph** gap only: its diagnostic-settings blob container
+`insights-logs-operationallogs` now carries a live fired-alert sample on the verification
+tenant `[live-measured 2026-07-18, #171]`, so it is buildable via the blob escape hatch
+below even though Graph never exposes it.
+
 Corrected non-gaps: `NetworkAccessTrafficLogs` has a beta endpoint that names its own
 scope (#130 — out of scope until a GSA tenant exists); Purview sensitivity labels (#126).
 
