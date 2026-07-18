@@ -52,6 +52,39 @@ resource attributes) are stream labels. This changes how you write LogQL:
   group) and any dashboard log panel must use — building a Grafana alert on
   `{event_name="…"}` is the single most common way to get a rule that silently never fires.
 
+## Deduplicating blob-sourced records — Azure delivers at-least-once
+
+Records ingested over the blob transport (`ingest_transport="blob"`) can arrive **more than
+once**: Azure Monitor's diagnostic-settings pipeline is at-least-once, so ~2.7% of
+`MicrosoftGraphActivityLogs` and ~4% of sign-in records are re-delivered, with a max
+multiplicity of **×4** (live-measured, steady-state — see
+[blob-ingest.md](blob-ingest.md#azure-delivers-at-least-once-27-mgal--4-sign-ins-of-records-arrive-more-than-once)).
+graph2otel ships these through faithfully by design — the byte-offset cursor is provably
+exact, and deduping in the engine would need an unbounded, restart-persisted seen-id set to
+do correctly, so the decision (#138) is to **dedupe downstream**, where it costs nothing and
+cannot go stale. Every blob-sourced record already carries the key you need:
+
+| collector | dedupe key (structured metadata) |
+| --- | --- |
+| `entra.signin` (and the service-principal / non-interactive sign-in twins) | `id` |
+| `entra.graph_activity` | `request_id` |
+
+The duplicates are **byte-identical** apart from a fresh envelope timestamp, so any one copy
+is the whole event — dedupe on the identity key, never on time. Two ways to do it:
+
+- **Counting / alerting** — count distinct identity values, not raw lines. Grouping by the
+  structured-metadata key collapses the copies:
+
+  ```logql
+  count(sum by (id) (count_over_time({service_name="graph2otel"} | event_name=`entra.signin` [1h])))
+  ```
+
+  Counting `count_over_time` lines directly would over-count by the ~2.7–4% duplication rate.
+
+- **Raw event export (SIEM feed)** — dedupe in whatever store consumes the feed, keeping one
+  row per `id` / `request_id` (Loki has no row-level dedupe-on-read). **Do not assume
+  at-most-two copies** — multiplicity reaches ×4.
+
 ## Cardinality shape
 
 **Metrics answer "how many"; logs answer "which one".** That is the single most useful

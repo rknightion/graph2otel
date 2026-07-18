@@ -249,13 +249,25 @@ across a cold start plus a restart, for all 1,035 emitted ids, the number of tim
 emitted a record **exactly equalled** the number of times Azure wrote it — no over-emission, no
 loss.
 
-The consequence is real and currently unmitigated: **blob-sourced collectors ship Azure's
-duplicates through to your backend.** The polled path does not have this problem — `logpipeline`
-carries a seen-id set in its checkpoint and dedupes. `blobpipeline` has no equivalent, so ~2.7%
-(MGAL) / ~4% (sign-ins) of blob-sourced records are duplicates. Every collector emits the
-identifying attribute (`id` for
-sign-ins, `request_id` for Graph activity), so downstream dedupe is possible today. Closing the gap
-in the engine is **#138**.
+The consequence is real: **blob-sourced collectors ship Azure's duplicates through to your
+backend.** The polled path does not have this problem — `logpipeline` carries a seen-id set in
+its checkpoint and dedupes. `blobpipeline` has no equivalent, so ~2.7% (MGAL) / ~4% (sign-ins)
+of blob-sourced records are duplicates.
+
+**Decision (#138): dedupe downstream, not in the engine.** Engine-side dedupe is the wrong
+trade here. It would need a seen-id set that (a) is **unbounded** — Azure re-delivers across the
+full 7-day retention with no natural window to bound it by (MGAL alone is ~150k rows/7d), unlike
+`logpipeline`'s overlap window; (b) **persists across restart**, growing the byte-offset
+checkpoint without limit; and (c) is **correct across hour blobs** (re-deliveries cross blob
+boundaries, so per-blob dedup is insufficient). Against that, the engine is *provably exact*
+today — a bounded/lossy set risks dropping genuinely distinct events to catch a 2.7–4%
+duplication that the backend deduplicates for free and exactly. Every blob-sourced record
+already carries its identity attribute as structured metadata (`id` for sign-ins, `request_id`
+for Graph activity), the duplicates are byte-identical, and the rate is steady-state — so
+downstream dedupe costs graph2otel nothing, cannot go stale, and has no memory-bound failure
+mode. The recipe (LogQL for counts, store-side `distinct` for raw export, with the ×4
+multiplicity caveat) is in
+[signals.md](signals.md#deduplicating-blob-sourced-records--azure-delivers-at-least-once).
 
 ### Field types are inconsistent within a single record
 
