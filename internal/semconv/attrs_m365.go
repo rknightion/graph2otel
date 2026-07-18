@@ -22,6 +22,13 @@ const (
 	AttrLastModifiedDateTime = "last_modified_date_time"
 	AttrOrigin               = "origin"
 
+	// Message-center message (m365/servicemessage, #182) attribute keys.
+	AttrActionRequiredByDateTime = "action_required_by_date_time"
+	AttrHasAttachments           = "has_attachments"
+	AttrIsMajorChange            = "is_major_change"
+	AttrMessageBody              = "message_body"
+	AttrServices                 = "services"
+
 	// AttrService and AttrWorkload are DELIBERATELY ALIASED: m365/activity sets
 	// both from one source value (auditData.Workload) at activity.go — see
 	// setStr(attrs, "workload", workload) / setStr(attrs, "service", workload).

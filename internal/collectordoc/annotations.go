@@ -316,6 +316,10 @@ var annotations = map[string]Annotation{
 		Collects: "M365 service health, so \"is this us or Microsoft?\" is answerable in-band. From ONE `?$expand=issues` fetch: service count by health status, a numeric status enum per service (mapping in `docs/signals.md`), open-issue count by classification+status, and a log twin (`m365.service_health_issue`) per UNRESOLVED issue carrying id/title/impactDescription/service/timestamps — resolved history is covered by the aggregate counts, not re-twinned every cycle. Snapshot, not a window collector (no delta/time filter); `endDateTime` is null while open, so no duration is derived",
 		Source:   "`/admin/serviceAnnouncement/healthOverviews?$expand=issues`",
 	},
+	"m365.servicemessages": {
+		Collects: "M365 message-center posts — the upcoming-change announcements (`planForChange`/`preventOrFixIssue`/`stayInformed`), a different question from service health. Bounded count by category+severity, plus a log twin (`m365.service_message`) per message carrying title/body/services/dates/`isMajorChange`/`actionRequiredByDateTime`. Experimental + off by default (needs its own `ServiceMessage.Read.All` scope and is the higher-volume half of the surface); a major change escalates the twin to Warn",
+		Source:   "`/admin/serviceAnnouncement/messages`",
+	},
 
 	// ---- Purview — snapshot collectors ----
 	"purview.sensitivity_labels": {

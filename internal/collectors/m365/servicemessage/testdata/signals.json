@@ -1,0 +1,30 @@
+{
+  "Metrics": [
+    {
+      "Name": "m365.service_messages.total",
+      "AttrKeys": [
+        "category",
+        "severity"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.service_message",
+      "AttrKeys": [
+        "action_required_by_date_time",
+        "category",
+        "end_date_time",
+        "has_attachments",
+        "id",
+        "is_major_change",
+        "last_modified_date_time",
+        "message_body",
+        "services",
+        "severity",
+        "start_date_time",
+        "title"
+      ]
+    }
+  ]
+}
