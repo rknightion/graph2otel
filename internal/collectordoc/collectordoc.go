@@ -124,10 +124,11 @@ type Row struct {
 // name outside this set is an error rather than a default, so a new top-level
 // namespace forces a deliberate decision about where it belongs.
 var domains = map[string]string{
-	"entra":   "Entra ID",
-	"intune":  "Intune",
-	"m365":    "M365",
-	"purview": "Purview",
+	"entra":    "Entra ID",
+	"intune":   "Intune",
+	"m365":     "M365",
+	"purview":  "Purview",
+	"defender": "Defender",
 }
 
 // collectorFacts is the mandatory interface every collector satisfies
@@ -362,6 +363,7 @@ var sections = []section{
 	{"M365", KindSnapshot, "M365 — metrics (snapshot collectors)"},
 	{"Purview", KindSnapshot, "Purview — metrics (snapshot collectors)"},
 	{"Purview", KindWindow, "Purview — logs (window collectors)"},
+	{"Defender", KindBlob, "Defender — logs (blob collectors)"},
 }
 
 // headers is the column set per kind. Blob collectors get their own: they poll

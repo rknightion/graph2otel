@@ -161,6 +161,12 @@ var annotations = map[string]Annotation{
 		Category: "NonInteractiveUserSignInLogs",
 	},
 
+	// ---- Defender — blob collectors (advanced-hunting tables, #106) ----
+	"defender.device_registry": {
+		Collects: "One log per Windows registry create/set/delete Defender for Endpoint observes (`DeviceRegistryEvents`) — a primary persistence-hunting signal (Run keys, service installs, policy tampering) Graph exposes nowhere. Each record pairs the registry change with the full InitiatingProcess block, so a LogQL join answers which process wrote a key. Experimental + off by default (highest-volume surface; opt in per tenant)",
+		Category: "AdvancedHunting-DeviceRegistryEvents",
+	},
+
 	// ---- Intune — snapshot collectors ----
 	"intune.apple_tokens": {
 		Collects: "APNS/VPP token expiry + synced device counts; DEP onboarding settings polled best-effort",

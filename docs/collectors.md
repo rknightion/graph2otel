@@ -139,6 +139,12 @@ retunes them, see [`configuration.md`](./configuration.md).
 | `purview.retention_labels` | Retention label definitions + retention event types, each with a log twin. Blocked app-only on a live tenant — both endpoints 500 with `DataInsightsRequestError`/Forbidden even with the scope granted, because Microsoft documents Application access as not supported — so the collector recognizes that specific pair and reports unavailable rather than failing | `/security/labels/retentionLabels`, `/security/triggerTypes/retentionEventTypes` | `RecordsManagement.Read.All` | `needs-license/purview_records_management` | 1h | `purview.retention.event_types.count`, `purview.retention.labels.count{action_after_retention,behavior_during_retention,retention_trigger}`, plus a log twin per `purview.retention_event_type`, `purview.retention_label` |
 | `purview.sensitivity_labels` | Sensitivity label catalog: a count by applicable-to type, plus a log twin per label carrying its priority and `hasProtection` — which is how label encryption activation is readable at all. Bind the label's text to `name`: `displayName` is present but always null | `/security/dataSecurityAndGovernance/sensitivityLabels` | `SensitivityLabel.Read` | `needs-license/purview_information_protection` | 1h | `purview.labels.count{applicable_to}`, plus a log twin per `purview.sensitivity_label` |
 
+## Defender — logs (blob collectors)
+
+| Collector | Collects | Container (diagnostic category) | Cursor key | Required role | License / beta | Interval | Log event |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `defender.device_registry` | One log per Windows registry create/set/delete Defender for Endpoint observes (`DeviceRegistryEvents`) — a primary persistence-hunting signal (Run keys, service installs, policy tampering) Graph exposes nowhere. Each record pairs the registry change with the full InitiatingProcess block, so a LogQL join answers which process wrote a key. Experimental + off by default (highest-volume surface; opt in per tenant) | `insights-logs-advancedhunting-deviceregistryevents` (AdvancedHunting-DeviceRegistryEvents) | `insights-logs-advancedhunting-deviceregistryevents` | `Storage Blob Data Reader` | `beta` | 5m | `defender.device_registry` |
+
 <!-- END GENERATED COLLECTOR REFERENCE -->
 
 ## Notes

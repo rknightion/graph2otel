@@ -7,6 +7,11 @@ convention.
 
 - **`entra.*`** — Entra ID directory, sign-in, and audit signals.
 - **`intune.*`** — Intune device management and compliance signals.
+- **`m365.*`** — Microsoft 365 service signals (unified audit, activity).
+- **`purview.*`** — Purview compliance signals (retention / sensitivity labels).
+- **`defender.*`** — Microsoft Defender XDR advanced-hunting tables (endpoint EDR,
+  email/MDO, identity, alert evidence), ingested over the streaming API → Storage
+  blob path. Log-only, Experimental, off by default (#106).
 - **`graph2otel.*`** — self-observability: collector success/duration/staleness,
   export-job health, active series counts, build info. Not tenant domain data.
 
