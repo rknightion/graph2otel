@@ -1,0 +1,60 @@
+{
+  "Metrics": [
+    {
+      "Name": "m365.sharepoint.deleted_user_retention_days",
+      "AttrKeys": []
+    },
+    {
+      "Name": "m365.sharepoint.external_resharing_enabled",
+      "AttrKeys": []
+    },
+    {
+      "Name": "m365.sharepoint.idle_session_signout_enabled",
+      "AttrKeys": []
+    },
+    {
+      "Name": "m365.sharepoint.legacy_auth_enabled",
+      "AttrKeys": []
+    },
+    {
+      "Name": "m365.sharepoint.personal_site_storage_limit_mb",
+      "AttrKeys": []
+    },
+    {
+      "Name": "m365.sharepoint.sharing",
+      "AttrKeys": [
+        "sharing_capability",
+        "sharing_domain_restriction_mode"
+      ]
+    },
+    {
+      "Name": "m365.sharepoint.sharing_allowed_domains",
+      "AttrKeys": []
+    },
+    {
+      "Name": "m365.sharepoint.sharing_blocked_domains",
+      "AttrKeys": []
+    },
+    {
+      "Name": "m365.sharepoint.site_storage_limit_mb",
+      "AttrKeys": []
+    },
+    {
+      "Name": "m365.sharepoint.unmanaged_sync_restricted",
+      "AttrKeys": []
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.sharepoint_settings",
+      "AttrKeys": [
+        "external_resharing_enabled",
+        "idle_session_signout_enabled",
+        "legacy_auth_enabled",
+        "sharing_capability",
+        "sharing_domain_restriction_mode",
+        "unmanaged_sync_restricted"
+      ]
+    }
+  ]
+}

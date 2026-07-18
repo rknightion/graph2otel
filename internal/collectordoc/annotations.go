@@ -360,6 +360,10 @@ var annotations = map[string]Annotation{
 		Collects: "M365 message-center posts — the upcoming-change announcements (`planForChange`/`preventOrFixIssue`/`stayInformed`), a different question from service health. Bounded count by category+severity, plus a log twin (`m365.service_message`) per message carrying title/body/services/dates/`isMajorChange`/`actionRequiredByDateTime`. On by default; needs its own `ServiceMessage.Read.All` scope (the higher-volume half of the surface); a major change escalates the twin to Warn",
 		Source:   "`/admin/serviceAnnouncement/messages`",
 	},
+	"m365.sharepoint_settings": {
+		Collects: "Tenant SharePoint/OneDrive sharing posture from one `/admin/sharepoint/settings` fetch: external-sharing capability + domain-restriction mode, legacy-auth toggle, external-resharing, unmanaged-sync restriction, idle-session sign-out, and default storage/retention limits — as bounded security-posture gauges, plus a log twin carrying the full config including the sharing domain allow/block lists (unbounded, so log-only per #112). Legacy-auth-on escalates the twin to Warn",
+		Source:   "`/admin/sharepoint/settings`",
+	},
 
 	// ---- Purview — snapshot collectors ----
 	"purview.sensitivity_labels": {
