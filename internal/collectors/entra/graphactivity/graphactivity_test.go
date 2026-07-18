@@ -84,6 +84,24 @@ func mapRealRecord(t *testing.T) telemetry.Event {
 	return ev
 }
 
+// TestCallerAppIDMatchesTheEmittedAppID ties the exclude_self extractor (#154) to
+// the mapper: callerAppID must read the SAME properties.appId that mapActivity
+// labels the record with, so the self-filter can never compare a different field
+// than the one shipped. Sourced from mapActivity's app_id attribute (line ~117).
+func TestCallerAppIDMatchesTheEmittedAppID(t *testing.T) {
+	rec := decode(t, realRecord)
+	got := callerAppID(rec)
+	if got == "" {
+		t.Fatal("callerAppID returned empty for a record with properties.appId set")
+	}
+	if want := mapRealRecord(t).Attrs["app_id"]; got != want {
+		t.Errorf("callerAppID = %q, want %q (the appId the mapper emits)", got, want)
+	}
+	if got != "c98e5057-edde-4666-b301-186a01b4dc58" {
+		t.Errorf("callerAppID = %q, want the record's properties.appId", got)
+	}
+}
+
 func TestMapActivitySetsEventNameAndTimestamp(t *testing.T) {
 	ev := mapRealRecord(t)
 	if ev.Name != eventName {

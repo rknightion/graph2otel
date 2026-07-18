@@ -25,6 +25,7 @@ import (
 	"sort"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -35,6 +36,15 @@ import (
 // capping the memory a single tick can claim. It only paces: a blob that
 // exceeds it is finished on the next tick, never dropped.
 const DefaultMaxBytesPerTick = 32 << 20
+
+// metricSelfExcluded counts records dropped by exclude_self (#154): a blob record
+// whose actor appId equals the tenant's own poller client_id — graph2otel's own
+// polling exhaust, up to ~60% of MicrosoftGraphActivityLogs volume (#152). It is
+// a LOUD drop, never a silent one: a self-observability counter labeled per
+// collector, so a blob stream that goes ~60% quieter with the filter on reads as
+// "the filter is working", not "ingest broke". Normalizes to
+// graph2otel_blob_self_excluded_total on the Prometheus side (#82).
+const metricSelfExcluded = "graph2otel.blob.self_excluded"
 
 // BlobInfo is one blob as returned by a listing: its name and current size.
 // Size is the read bound for this tick — the blob may grow immediately after,
@@ -84,6 +94,32 @@ type ContainerConfig struct {
 	// emit. Returning false drops the record — the bytes are still consumed, so
 	// a record this collector does not want never stalls the cursor.
 	Map func(rec map[string]any) (telemetry.Event, bool)
+
+	// ExcludeSelf, when true, drops a record whose actor appId equals SelfClientID
+	// before Map is called — graph2otel's own polling exhaust in the categories
+	// that carry an appId (MicrosoftGraphActivityLogs and the service-principal
+	// sign-in categories), which is up to ~60% of MGAL volume (#152/#154). Default
+	// false: nothing is filtered unless a tenant opts in with
+	// blob_ingest.exclude_self. A dropped record's bytes are still consumed, so the
+	// cursor advances exactly as for a Map-rejected record — undedupeable is
+	// degraded, misdated is wrong; this is neither, just deliberately unshipped.
+	ExcludeSelf bool
+	// SelfClientID is this tenant's own poller client_id, the value ExcludeSelf
+	// compares each record's SelfAppID against. Empty disables the filter even when
+	// ExcludeSelf is true — there is no "self" to match — so a tenant relying on a
+	// shared AZURE_CLIENT_ID rather than a configured client_id safely no-ops
+	// rather than matching every record's empty appId.
+	SelfClientID string
+	// SelfAppID extracts the actor appId from a raw record, reading the SAME field
+	// the category's Map does (one source of truth, so the filter can never compare
+	// a different field than the one emitted). Nil means this category carries no
+	// appId (e.g. AuditLogs) and is therefore NEVER self-filtered, regardless of
+	// ExcludeSelf.
+	SelfAppID func(rec map[string]any) string
+
+	// CollectorName labels the metricSelfExcluded self-obs counter so a drop is
+	// attributable to its collector. Read only when a self-exclusion fires.
+	CollectorName string
 }
 
 // cursorKey returns the cursor namespace for this container.
@@ -251,6 +287,19 @@ func emitLines(data []byte, cfg ContainerConfig, e telemetry.Emitter, log *slog.
 			// A data defect, not a reason to stop: skip it and keep the blob
 			// moving. The bytes are still consumed, so this never wedges.
 			log.Warn("skipping malformed record", "container", cfg.Container, "blob", blob, "error", err)
+			continue
+		}
+		if cfg.ExcludeSelf && cfg.SelfAppID != nil && cfg.SelfClientID != "" && cfg.SelfAppID(rec) == cfg.SelfClientID {
+			// graph2otel's own polling exhaust (#154). Drop it before Map, but
+			// LOUDLY: a per-collector self-obs counter, never a silent skip, so a
+			// quieter blob stream reads as "the filter is working", not "ingest
+			// broke". The bytes are still consumed by consumeBlob's cursor math,
+			// exactly as a Map-rejected record is, so an excluded record never
+			// stalls the cursor. Self-ONLY: any other appId falls through
+			// untouched — a third party's records are never filtered.
+			e.Counter(metricSelfExcluded, "{record}",
+				"Blob records dropped by blob_ingest.exclude_self because their appId matched this tenant's own poller client_id (#154).",
+				1, telemetry.Attrs{semconv.AttrCollector: cfg.CollectorName})
 			continue
 		}
 		ev, ok := cfg.Map(rec)

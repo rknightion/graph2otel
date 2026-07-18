@@ -49,6 +49,13 @@ tenants:
     # container listing but not blob content reads).
     # blob_ingest:
     #   account_url: "https://myaccount.blob.core.windows.net"
+    #   # Opt-in, default-off: drop graph2otel's OWN polling exhaust from the blob
+    #   # feed — records whose appId is this tenant's client_id, up to ~60% of the
+    #   # MicrosoftGraphActivityLogs volume (see docs/blob-ingest.md). Self-only and
+    #   # per-tenant; a third party's records always pass through. Needs client_id
+    #   # (above) set to identify "self". Every drop increments the
+    #   # graph2otel.blob.self_excluded counter, so the reduction is visible, not silent.
+    #   exclude_self: false
     #
     # Optional: which Office 365 Management Activity API content types the
     # m365.activity collector subscribes to. Unlike blob_ingest this is NOT an

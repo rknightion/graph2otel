@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"sync"
 	"time"
 
@@ -320,7 +321,21 @@ func registerBlobCollectors(
 		return
 	}
 
-	bdeps := collectors.BlobDeps{Source: src, TenantID: ta.TenantID, Logger: tlog, Store: store}
+	excludeSelf, clientID := tenantBlobExcludeSelf(cfg, ta.TenantID)
+	if excludeSelf && clientID == "" {
+		// exclude_self on but no way to identify "self": the filter would no-op
+		// silently, which is the exact failure mode the loud-drop design (#154)
+		// exists to avoid. Say so once at startup rather than leaving an operator
+		// to wonder why a ~60% reduction never appeared.
+		tlog.Warn("blob_ingest.exclude_self is enabled but 'self' cannot be identified; "+
+			"self-exhaust filtering is DISABLED — set tenants[].client_id to the poller's "+
+			"app registration ID, or provide AZURE_CLIENT_ID in the environment (#154)",
+			"tenant", ta.TenantID)
+	}
+	bdeps := collectors.BlobDeps{
+		Source: src, TenantID: ta.TenantID, Logger: tlog, Store: store,
+		ExcludeSelf: excludeSelf, SelfClientID: clientID,
+	}
 	for _, bf := range collectors.BlobAll() {
 		c := bf(bdeps)
 		if interval, ok := gateCollector(c, ta, cfg, caps, tlog, skips); ok {
@@ -455,6 +470,30 @@ func tenantBlobAccountURL(cfg *config.Config, tenantID string) string {
 		}
 	}
 	return ""
+}
+
+// tenantBlobExcludeSelf returns the tenant's blob_ingest.exclude_self flag and
+// its poller client_id — the two values the self-exhaust filter needs (#154).
+// The client_id is the identity "self" is matched against; an empty one leaves
+// the filter unable to identify self (it then no-ops, and the caller warns).
+func tenantBlobExcludeSelf(cfg *config.Config, tenantID string) (excludeSelf bool, clientID string) {
+	for _, t := range cfg.Tenants {
+		if t.TenantID == tenantID {
+			clientID = t.ClientID
+			if clientID == "" {
+				// The poller commonly authenticates through
+				// DefaultAzureCredential's AZURE_CLIENT_ID env leg (camden does),
+				// which never lands in config — so fall back to it, else
+				// exclude_self silently no-ops on the exact production deployment
+				// it exists for. Config client_id still wins, so a multi-tenant
+				// process running a distinct app per tenant stays per-tenant
+				// correct (#154).
+				clientID = os.Getenv("AZURE_CLIENT_ID")
+			}
+			return t.BlobIngest.ExcludeSelf, clientID
+		}
+	}
+	return false, ""
 }
 
 // gateCollector applies the three registration gates shared by snapshot and

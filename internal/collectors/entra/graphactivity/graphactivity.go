@@ -65,11 +65,28 @@ func blobPrefix(tenantID string) string {
 // newCollector builds the MicrosoftGraphActivityLogs blob collector for a tenant.
 func newCollector(d collectors.BlobDeps) collector.SnapshotCollector {
 	cfg := blobpipeline.ContainerConfig{
-		Container: container,
-		Prefix:    blobPrefix(d.TenantID),
-		Map:       mapActivity,
+		Container:     container,
+		Prefix:        blobPrefix(d.TenantID),
+		Map:           mapActivity,
+		CollectorName: collectorName,
+		// exclude_self (#154): drop this tenant's own polling exhaust. MGAL carries
+		// the caller's appId, so it is in scope; the filter compares callerAppID
+		// against the tenant's own client_id and no-ops when either is off/unset.
+		ExcludeSelf:  d.ExcludeSelf,
+		SelfClientID: d.SelfClientID,
+		SelfAppID:    callerAppID,
 	}
 	return blobpipeline.NewBlobCollector(collectorName, interval, d.TenantID, cfg, d.Source, d.Store, d.Logger)
+}
+
+// callerAppID returns the appId of the app that made this Graph call, read from
+// the properties object. It is the single definition of where the caller appId
+// lives, shared by mapActivity (which labels every record with it) and the
+// exclude_self filter (#154) — so the filter can never compare a different field
+// than the one the record ships. Verified live: this appId equals the poller's
+// own app-registration client_id (14,404 MGAL records matched, #154).
+func callerAppID(rec map[string]any) string {
+	return str(nested(rec, "properties"), "appId")
 }
 
 // mapActivity turns one raw MicrosoftGraphActivityLogs record into its OTLP log
@@ -114,7 +131,7 @@ func mapActivity(rec map[string]any) (telemetry.Event, bool) {
 
 	// Caller identity. A call is either app-only (servicePrincipalId) or
 	// delegated (userId) — never both — and C_Idtyp says which.
-	telemetry.SetStr(attrs, semconv.AttrAppId, str(props, "appId"))
+	telemetry.SetStr(attrs, semconv.AttrAppId, callerAppID(rec))
 	telemetry.SetStr(attrs, semconv.AttrServicePrincipalId, str(props, "servicePrincipalId"))
 	telemetry.SetStr(attrs, semconv.AttrUserId, str(props, "userId"))
 	telemetry.SetStr(attrs, semconv.AttrUserPrincipalObjectId, str(props, "UserPrincipalObjectID"))

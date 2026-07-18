@@ -144,9 +144,18 @@ func (c *blobCollectorImpl) ConflictsWith() []string { return c.conflicts }
 // the three never collide.
 func newBlobCollector(s blobSpec, d collectors.BlobDeps) *blobCollectorImpl {
 	cfg := blobpipeline.ContainerConfig{
-		Container: s.container,
-		Prefix:    blobPrefix(d.TenantID),
-		Map:       mapBlobSignIn,
+		Container:     s.container,
+		Prefix:        blobPrefix(d.TenantID),
+		Map:           mapBlobSignIn,
+		CollectorName: s.name,
+		// exclude_self (#154): a sign-in record carries the signing-in app's appId,
+		// so a poller-authored sign-in is droppable. Self-only and per-tenant: the
+		// filter compares blobSelfAppID against the tenant's own client_id and
+		// no-ops when either is off/unset — a third party (including Microsoft's own
+		// first-party SPs in MicrosoftServicePrincipalSignInLogs) always passes.
+		ExcludeSelf:  d.ExcludeSelf,
+		SelfClientID: d.SelfClientID,
+		SelfAppID:    blobSelfAppID,
 	}
 	return &blobCollectorImpl{
 		BlobCollector: blobpipeline.NewBlobCollector(
@@ -200,6 +209,15 @@ func mapBlobSignIn(rec map[string]any) (telemetry.Event, bool) {
 	_, ev := mapSignIn(props)
 	ev.Timestamp = ts
 	return ev, true
+}
+
+// blobSelfAppID returns the sign-in's actor appId, read from the properties
+// object — the SAME properties.appId that mapSignIn labels the record with (via
+// mapBlobSignIn, which hands it the unwrapped properties object). It is shared
+// with the exclude_self filter (#154) so the filter compares the field that
+// actually ships, never a divergent one.
+func blobSelfAppID(rec map[string]any) string {
+	return str(nested(rec, "properties"), "appId")
 }
 
 // blobEventTime resolves the sign-in's real event time from

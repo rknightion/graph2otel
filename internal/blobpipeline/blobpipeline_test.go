@@ -409,3 +409,158 @@ func TestPollStampsBlobTransport(t *testing.T) {
 		t.Errorf("%s = %q, want %q", semconv.AttrIngestTransport, got, telemetry.TransportBlob)
 	}
 }
+
+// --- exclude_self: dropping graph2otel's own polling exhaust (#154) ---
+
+// recWithApp builds a record whose actor appId lives at properties.appId — the
+// path the real MGAL and sign-in SelfAppID extractors read (#154). The record's
+// "id" doubles as the emitted body (via selfTestConfig's Map), so tests can
+// assert exactly which records survived the filter.
+func recWithApp(id, appID string) string {
+	return fmt.Sprintf(
+		`{"time":"2026-07-16T13:00:00Z","id":%q,"properties":{"appId":%q}}`, id, appID,
+	) + "\r\n"
+}
+
+// propsAppID reads properties.appId, mirroring the graphactivity/signins
+// extractors. Used as the ContainerConfig.SelfAppID in these engine tests.
+func propsAppID(rec map[string]any) string {
+	p, _ := rec["properties"].(map[string]any)
+	s, _ := p["appId"].(string)
+	return s
+}
+
+// selfTestConfig is testConfig plus the exclude_self wiring, so a test controls
+// ExcludeSelf/SelfClientID while the Map still names each event after its id.
+func selfTestConfig(excludeSelf bool, selfClientID string, selfAppID func(map[string]any) string) ContainerConfig {
+	cfg := testConfig()
+	cfg.ExcludeSelf = excludeSelf
+	cfg.SelfClientID = selfClientID
+	cfg.SelfAppID = selfAppID
+	cfg.CollectorName = "entra.graph_activity"
+	return cfg
+}
+
+// TestPollExcludesSelfAuthoredRecordsButNotThirdParty is the #152/#154 guard: a
+// record whose appId is the tenant's own poller client_id is dropped, and a
+// third party's record — ANY other appId — always passes through untouched.
+func TestPollExcludesSelfAuthoredRecordsButNotThirdParty(t *testing.T) {
+	src := &fakeSource{blobs: map[string]string{
+		"tenantId=t1/y=2026/m=07/d=16/h=00/m=00/PT1H.json": recWithApp("self", "POLLER") + recWithApp("other", "THIRDPARTY"),
+	}}
+	r := telemetrytest.New()
+	cur := newCursor()
+	cfg := selfTestConfig(true, "POLLER", propsAppID)
+
+	if err := Poll(context.Background(), cfg, cur, src, r.Emitter(), discardLogger(), nil); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+
+	got := bodies(r)
+	if len(got) != 1 || got[0] != "other" {
+		t.Fatalf("emitted %v, want only the third-party record [other]", got)
+	}
+
+	// The bytes are still consumed: the excluded record must not stall the cursor.
+	name := "tenantId=t1/y=2026/m=07/d=16/h=00/m=00/PT1H.json"
+	full := int64(len(recWithApp("self", "POLLER") + recWithApp("other", "THIRDPARTY")))
+	if cur.Offsets[name] != full {
+		t.Errorf("offset = %d, want %d (both records consumed, one filtered)", cur.Offsets[name], full)
+	}
+}
+
+// TestPollDoesNotFilterWhenExcludeSelfIsOff is the default-off regression guard:
+// with ExcludeSelf false, a self-authored record ships exactly as before.
+func TestPollDoesNotFilterWhenExcludeSelfIsOff(t *testing.T) {
+	src := &fakeSource{blobs: map[string]string{
+		"tenantId=t1/y=2026/m=07/d=16/h=00/m=00/PT1H.json": recWithApp("self", "POLLER") + recWithApp("other", "THIRDPARTY"),
+	}}
+	r := telemetrytest.New()
+	cfg := selfTestConfig(false, "POLLER", propsAppID)
+
+	if err := Poll(context.Background(), cfg, newCursor(), src, r.Emitter(), discardLogger(), nil); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+
+	got := bodies(r)
+	if len(got) != 2 || got[0] != "self" || got[1] != "other" {
+		t.Fatalf("emitted %v, want both records [self other] (filter off)", got)
+	}
+	if pts := r.MetricPoints(metricSelfExcluded); len(pts) != 0 {
+		t.Errorf("self_excluded points = %d, want 0 with exclude_self off: %+v", len(pts), pts)
+	}
+}
+
+// TestPollCountsEverySelfExclusionPerCollector pins the loud-drop contract: the
+// self-obs counter increments once per excluded record, labeled with the
+// collector, so a quieter dashboard is visible and alertable rather than looking
+// like breakage (#154).
+func TestPollCountsEverySelfExclusionPerCollector(t *testing.T) {
+	src := &fakeSource{blobs: map[string]string{
+		"tenantId=t1/y=2026/m=07/d=16/h=00/m=00/PT1H.json": recWithApp("s1", "POLLER") + recWithApp("other", "THIRDPARTY") + recWithApp("s2", "POLLER"),
+	}}
+	r := telemetrytest.New()
+	cfg := selfTestConfig(true, "POLLER", propsAppID)
+
+	if err := Poll(context.Background(), cfg, newCursor(), src, r.Emitter(), discardLogger(), nil); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+
+	pts := r.MetricPoints(metricSelfExcluded)
+	if len(pts) != 1 {
+		t.Fatalf("self_excluded points = %d, want 1 series: %+v", len(pts), pts)
+	}
+	p := pts[0]
+	if !p.Monotonic {
+		t.Errorf("%s must be a monotonic counter", metricSelfExcluded)
+	}
+	if p.Value != 2 {
+		t.Errorf("%s value = %v, want 2 (two self records dropped)", metricSelfExcluded, p.Value)
+	}
+	if p.Attrs[semconv.AttrCollector] != "entra.graph_activity" {
+		t.Errorf("collector attr = %q, want entra.graph_activity; attrs=%v", p.Attrs[semconv.AttrCollector], p.Attrs)
+	}
+}
+
+// TestPollNeverFiltersWhenSelfAppIDIsNil models a category with no appId field
+// (e.g. AuditLogs): SelfAppID is nil, so nothing is filtered even with
+// exclude_self on and a client id set.
+func TestPollNeverFiltersWhenSelfAppIDIsNil(t *testing.T) {
+	src := &fakeSource{blobs: map[string]string{
+		"tenantId=t1/y=2026/m=07/d=16/h=00/m=00/PT1H.json": recWithApp("a", "POLLER") + recWithApp("b", "POLLER"),
+	}}
+	r := telemetrytest.New()
+	cfg := selfTestConfig(true, "POLLER", nil)
+
+	if err := Poll(context.Background(), cfg, newCursor(), src, r.Emitter(), discardLogger(), nil); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	if got := bodies(r); len(got) != 2 {
+		t.Errorf("emitted %v, want both records (nil SelfAppID never filters)", got)
+	}
+	if pts := r.MetricPoints(metricSelfExcluded); len(pts) != 0 {
+		t.Errorf("self_excluded points = %d, want 0 for a no-appId category", len(pts))
+	}
+}
+
+// TestPollNeverFiltersWhenSelfClientIDIsEmpty guards the "self is unknown" case:
+// a tenant relying on a shared AZURE_CLIENT_ID with no configured client_id must
+// not have every record match an empty appId — the filter no-ops instead.
+func TestPollNeverFiltersWhenSelfClientIDIsEmpty(t *testing.T) {
+	src := &fakeSource{blobs: map[string]string{
+		// One record deliberately has an empty appId; it must NOT be treated as self.
+		"tenantId=t1/y=2026/m=07/d=16/h=00/m=00/PT1H.json": recWithApp("a", "") + recWithApp("b", "THIRDPARTY"),
+	}}
+	r := telemetrytest.New()
+	cfg := selfTestConfig(true, "", propsAppID)
+
+	if err := Poll(context.Background(), cfg, newCursor(), src, r.Emitter(), discardLogger(), nil); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	if got := bodies(r); len(got) != 2 {
+		t.Errorf("emitted %v, want both records (empty SelfClientID never filters)", got)
+	}
+	if pts := r.MetricPoints(metricSelfExcluded); len(pts) != 0 {
+		t.Errorf("self_excluded points = %d, want 0 when SelfClientID is empty", len(pts))
+	}
+}

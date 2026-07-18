@@ -92,6 +92,45 @@ and the ~4-minute delay is Entra-side — upstream of where the transport forks 
 destination cannot buy back time already spent. Full evaluation: #89.
 `[live-measured volume × docs-priced meters, 2026-07-17, #137]`
 
+### Excluding graph2otel's own exhaust (`exclude_self`)
+
+Because ~60% of `MicrosoftGraphActivityLogs` is graph2otel calling Graph (above),
+there is an opt-in filter that drops the poller's own records before they are
+emitted: `blob_ingest.exclude_self`, **default off**.
+
+```yaml
+tenants:
+  - tenant_id: "..."
+    client_id: "<the poller's app registration id>"
+    blob_ingest:
+      account_url: "https://myaccount.blob.core.windows.net"
+      exclude_self: true
+```
+
+- **Self-only, by `appId`.** A record is dropped **if and only if** its actor
+  `appId` equals *this tenant's own* `client_id` — the poller's app registration
+  (live-verified: the poller's `client_id` is exactly the MGAL `appId`, 14,404
+  records matched, #154). Any other `appId` — including Microsoft's own
+  first-party service principals — always passes through untouched.
+- **Per-tenant.** "Self" is that tenant's `client_id`, never a global list, so one
+  deployment polling many tenants filters each against its own poller identity.
+- **Scope: the blob categories that carry an `appId`** — `MicrosoftGraphActivityLogs`
+  (`entra.graph_activity`) and the service-principal sign-in categories
+  (`entra.signins.*`). Categories with no `appId` (e.g. `AuditLogs`) are never
+  filtered. The Graph-polled path and `m365.activity` are other transports and out
+  of scope.
+- **Loud, never silent.** Every dropped record increments the
+  `graph2otel.blob.self_excluded` counter (`_total` on the Prometheus side),
+  labelled `collector`, so a ~60%-quieter dashboard is visible and alertable rather
+  than looking like breakage. The bytes are still consumed, so the byte-offset
+  cursor advances exactly as for any other dropped record.
+- **Resolving "self".** The poller's app id comes from the tenant's `client_id`,
+  falling back to the `AZURE_CLIENT_ID` the `DefaultAzureCredential` env leg already
+  uses — so an env-authenticated deployment (the common case) works without duplicating
+  the id into config, while a per-tenant `client_id` still wins for a multi-app process.
+  Only if neither is set can "self" not be identified; the filter then no-ops and
+  graph2otel logs a warning at startup rather than silently doing nothing.
+
 ## Setup
 
 1. **Create a storage account** (StorageV2, Hot, LRS is fine; disable public blob access)

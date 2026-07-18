@@ -161,6 +161,28 @@ func TestMapBlobSignInDerivesSeverityFromStatusNotLevel(t *testing.T) {
 // diagnostic-settings `properties` object IS the Graph signIn resource (verified
 // field-for-field against live samples of all four sign-in categories), so both
 // sources must be indistinguishable downstream apart from the timestamp fix.
+// TestBlobSelfAppIDMatchesTheEmittedAppID ties the exclude_self extractor (#154)
+// to the mapper: blobSelfAppID must read the SAME properties.appId that
+// mapBlobSignIn labels the record with, so the self-filter compares the field
+// that actually ships.
+func TestBlobSelfAppIDMatchesTheEmittedAppID(t *testing.T) {
+	rec := decodeBlobRecord(t, realBlobFailure)
+	got := blobSelfAppID(rec)
+	if got == "" {
+		t.Fatal("blobSelfAppID returned empty for a record with properties.appId set")
+	}
+	ev, ok := mapBlobSignIn(rec)
+	if !ok {
+		t.Fatal("mapBlobSignIn rejected a valid record")
+	}
+	if want := ev.Attrs["app_id"]; got != want {
+		t.Errorf("blobSelfAppID = %q, want %q (the appId the mapper emits)", got, want)
+	}
+	if got != "1b912ec3-a9dd-4c4d-a53e-76aa7adb28d7" {
+		t.Errorf("blobSelfAppID = %q, want the record's properties.appId", got)
+	}
+}
+
 func TestMapBlobSignInUnwrapsTheEnvelopeAndReusesTheCanonicalAttributes(t *testing.T) {
 	rec := decodeBlobRecord(t, realBlobFailure)
 
