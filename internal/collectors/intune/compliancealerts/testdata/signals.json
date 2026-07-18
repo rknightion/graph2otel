@@ -1,0 +1,27 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "intune.compliance_alert",
+      "AttrKeys": [
+        "alert_display_name",
+        "alert_type",
+        "description",
+        "device_host_name",
+        "device_id",
+        "device_name",
+        "device_net_bios_name",
+        "ingest_transport",
+        "intune_account_id",
+        "intune_user_id",
+        "operating_system",
+        "operational_log_category",
+        "scale_unit",
+        "scenario_name",
+        "upn_suffix",
+        "user_display_name",
+        "user_name"
+      ]
+    }
+  ]
+}

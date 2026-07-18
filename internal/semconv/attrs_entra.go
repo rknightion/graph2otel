@@ -23,6 +23,7 @@ const (
 	AttrConditionalAccessStatus           = "conditional_access_status"
 	AttrConflictingValue                  = "conflicting_value"
 	AttrConsentType                       = "consent_type"
+	AttrContextId                         = "context_id"
 	AttrCreatedDateTime                   = "created_date_time"
 	AttrCreatedTime                       = "created_time"
 	AttrCredentialDisplayName             = "credential_display_name"
@@ -84,6 +85,7 @@ const (
 	AttrObjectType                        = "object_type"
 	AttrOccurredDateTime                  = "occurred_date_time"
 	AttrOperationId                       = "operation_id"
+	AttrOperationType                     = "operation_type"
 	AttrOwnerType                         = "owner_type"
 	AttrPasswordlessCapable               = "passwordless_capable"
 	AttrPermanent                         = "permanent"
@@ -107,7 +109,9 @@ const (
 	AttrResponseSizeBytes                 = "response_size_bytes"
 	AttrResponseStatusCode                = "response_status_code"
 	AttrResult                            = "result"
+	AttrResultDescription                 = "result_description"
 	AttrResultReason                      = "result_reason"
+	AttrResultStatusCode                  = "result_status_code"
 	AttrRiskDetail                        = "risk_detail"
 	AttrRiskEventType                     = "risk_event_type"
 	AttrRiskLastUpdated                   = "risk_last_updated"
@@ -154,6 +158,7 @@ const (
 	AttrUserPreferredSecondaryMethod      = "user_preferred_secondary_method"
 	AttrUserPrincipalObjectId             = "user_principal_object_id"
 	AttrWids                              = "wids"
+	AttrWorkloadNamespace                 = "workload_namespace"
 )
 
 // Attribute keys passed indirectly — via a helper-func param (devices.boolSnapshot)

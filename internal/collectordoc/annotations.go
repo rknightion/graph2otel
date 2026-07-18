@@ -148,6 +148,10 @@ var annotations = map[string]Annotation{
 		Collects: "One record per Graph API call made against the tenant: which app or user called which endpoint, with which permissions, from where, and what came back. Graph has no endpoint for its own API-call telemetry — none, permanently — so this signal exists only as diagnostic-settings output, and it is what justifies the whole blob path",
 		Category: "MicrosoftGraphActivityLogs",
 	},
+	"entra.graph_notifications": {
+		Collects: "One record per Graph change-notification publish event: which app owns the subscription, which workload it targets, where it published, and whether it succeeded (`result_status_code`). A change-notification subscription is a persistence/supply-chain foothold — a durable low-noise feed of tenant changes — so `application_id` (the subscription owner) is the load-bearing attribute. Exists only as diagnostic-settings output",
+		Category: "GraphNotificationsActivityLogs",
+	},
 	"entra.signins.microsoft_service_principal": {
 		Collects: "Sign-ins by Microsoft's own first-party service principals. No `.blob` suffix because this category has no Graph route and so no polled twin to disambiguate from",
 		Category: "MicrosoftServicePrincipalSignInLogs",
@@ -252,6 +256,10 @@ var annotations = map[string]Annotation{
 	"intune.compliance": {
 		Collects: "Tenant-wide + per-policy compliance state rollups",
 		Source:   "`/deviceManagement/deviceCompliancePolicies`, device compliance states",
+	},
+	"intune.compliance_alerts": {
+		Collects: "One record per Intune compliance fired-event — the \"managed device X is not compliant\" alerts an operator acts on, naming the device (host/NetBIOS/DNS), its owner (`user_name`/`upn_suffix`), and which compliance rule failed (the setting path in `description`). Graph exposes only the notification templates, not the fired events (#94). Emitted Warn: a device fell out of compliance",
+		Category: "OperationalLogs",
 	},
 	"intune.config_profiles": {
 		Collects: "Configuration profile status + version, per-setting state",

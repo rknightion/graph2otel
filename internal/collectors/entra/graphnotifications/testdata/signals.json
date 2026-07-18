@@ -1,0 +1,23 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "entra.graph_notifications",
+      "AttrKeys": [
+        "account_type",
+        "application_id",
+        "context_id",
+        "correlation_id",
+        "duration_ms",
+        "ingest_transport",
+        "is_replay",
+        "location",
+        "operation_type",
+        "result_description",
+        "result_status_code",
+        "subscription_id",
+        "workload_namespace"
+      ]
+    }
+  ]
+}
