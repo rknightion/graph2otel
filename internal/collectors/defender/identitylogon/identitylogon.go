@@ -62,7 +62,6 @@ var identityLogonStrFields = []defender.StrField{
 	{Attr: semconv.AttrDestinationIpAddress, Src: "DestinationIPAddress"},
 	{Attr: semconv.AttrTargetAccountDisplayName, Src: "TargetAccountDisplayName"},
 	{Attr: semconv.AttrTargetDeviceName, Src: "TargetDeviceName"},
-	{Attr: semconv.AttrLastSeenForUser, Src: "LastSeenForUser"},
 	{Attr: semconv.AttrReportId, Src: "ReportId"},
 }
 
@@ -95,7 +94,8 @@ func jsonStr(v any) string {
 
 // mapRecord turns one raw IdentityLogonEvents record into its OTLP log Event:
 // unwrap properties, bind the timestamp to properties.Timestamp, stamp this
-// table's string/numeric/boolean columns, and re-marshal AdditionalFields.
+// table's string/numeric/boolean columns, and re-marshal the native-object
+// AdditionalFields + LastSeenForUser.
 func mapRecord(rec map[string]any) (telemetry.Event, bool) {
 	props := defender.Props(rec)
 	if props == nil {
@@ -111,6 +111,11 @@ func mapRecord(rec map[string]any) (telemetry.Event, bool) {
 	defender.StampNums(attrs, props, identityLogonNumFields)
 	defender.StampBools(attrs, props, identityLogonBoolFields)
 	telemetry.SetStr(attrs, semconv.AttrAdditionalFields, jsonStr(props["AdditionalFields"]))
+	// LastSeenForUser is a native JSON object (per-signal "when was this last
+	// normal for this user" counts — the UEBA enrichment), not a scalar, so it is
+	// re-marshaled verbatim like AdditionalFields rather than mapped as a string
+	// column (#106).
+	telemetry.SetStr(attrs, semconv.AttrLastSeenForUser, jsonStr(props["LastSeenForUser"]))
 
 	return telemetry.Event{
 		Name:      eventName,

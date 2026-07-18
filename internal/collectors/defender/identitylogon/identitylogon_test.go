@@ -121,6 +121,13 @@ func TestMapRecordEmitsAccountAndLogonDetail(t *testing.T) {
 	if !strings.HasPrefix(additional, "{") {
 		t.Errorf("additional_fields = %q, want it to start with '{'", additional)
 	}
+
+	// LastSeenForUser is likewise a native JSON object (UEBA enrichment),
+	// re-marshaled to a string — present, not dropped (#106).
+	lastSeen, _ := ev.Attrs[semconv.AttrLastSeenForUser].(string)
+	if !strings.HasPrefix(lastSeen, "{") {
+		t.Errorf("last_seen_for_user = %q, want the re-marshaled object starting with '{'", lastSeen)
+	}
 }
 
 func TestMapRecordDropsMalformed(t *testing.T) {

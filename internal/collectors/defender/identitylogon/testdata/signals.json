@@ -16,6 +16,7 @@
         "ingest_transport",
         "ip_address",
         "isp",
+        "last_seen_for_user",
         "location",
         "logon_type",
         "os_platform",
