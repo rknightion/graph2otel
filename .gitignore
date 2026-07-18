@@ -29,3 +29,7 @@ config.smoke.yaml
 
 # Zensical docs-site build output (once the docs site exists)
 site/
+
+# Python bytecode from scripts/
+__pycache__/
+*.pyc
