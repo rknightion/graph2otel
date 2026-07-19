@@ -37,6 +37,7 @@ const base = "https://graph.microsoft.com/v1.0"
 
 const usersURL = base + "/identityProtection/riskyUsers"
 const spsURL = base + "/identityProtection/riskyServicePrincipals"
+const deletedUsersURL = base + "/directory/deletedItems/microsoft.graph.user?$select=id"
 
 // The per-entity fields below (UPN, appId, display names) MUST reach the log
 // twin and MUST NOT reach any metric attribute — see TestCollectNoPerEntitySeries
@@ -90,17 +91,19 @@ const liveUsersBody = `{"value":[
 
 func fullFixture() *fakeGraph {
 	return &fakeGraph{bodies: map[string]string{
-		usersURL: usersBody,
-		spsURL:   spsBody,
+		usersURL:        usersBody,
+		spsURL:          spsBody,
+		deletedUsersURL: `{"value":[]}`, // reconciliation succeeds, no user deleted
 	}}
 }
 
 // liveFixture serves the pinned live riskyUsers record, with no risky service
-// principals (the live tenant has none).
+// principals (the live tenant has none) and no deleted users.
 func liveFixture() *fakeGraph {
 	return &fakeGraph{bodies: map[string]string{
-		usersURL: liveUsersBody,
-		spsURL:   `{"value":[]}`,
+		usersURL:        liveUsersBody,
+		spsURL:          `{"value":[]}`,
+		deletedUsersURL: `{"value":[]}`,
 	}}
 }
 
@@ -200,7 +203,7 @@ func TestLogTwinEmitsIsProcessingFromLiveRiskyUser(t *testing.T) {
 		t.Fatal("isProcessing decoded to nil from a live record that carries it")
 	}
 
-	ev := logTwin(item, usersHalf)
+	ev := logTwin(item, usersHalf, nil)
 	got, ok := ev.Attrs["is_processing"]
 	if !ok {
 		t.Fatalf("is_processing absent, want false from the live record; attrs=%v", ev.Attrs)
@@ -209,10 +212,12 @@ func TestLogTwinEmitsIsProcessingFromLiveRiskyUser(t *testing.T) {
 		t.Errorf("is_processing = %#v, want the bool false (not a string)", got)
 	}
 
-	// isDeleted must NOT be mapped — see liveUsersBody. Guarding it here keeps the
-	// parked decision (#153, post-2026-08-16 re-check) from being quietly undone.
+	// is_deleted must never come from the riskyUsers.isDeleted field (it lies —
+	// #153/#155). With no reconciliation passed (deleted=nil), the mapper omits it.
+	// The reliable is_deleted, sourced from /directory/deletedItems, is asserted by
+	// TestCollectExcludesDeletedUserFromGaugeAndMarksTwin instead.
 	if v, ok := ev.Attrs["is_deleted"]; ok {
-		t.Errorf("is_deleted = %v, want it unmapped: it reports false for a deleted user, so emitting it would let a filter exclude deleted users while including this one (#153)", v)
+		t.Errorf("is_deleted = %v, want it omitted for a direct (unreconciled) mapper call: it must never be sourced from the lying riskyUsers.isDeleted field (#153/#155)", v)
 	}
 }
 
@@ -239,6 +244,101 @@ func TestCollectLiveRecordKeepsGaugeBounded(t *testing.T) {
 	}
 	if got := logsNamed(rec.LogRecords(), eventRiskyUser); len(got) != 1 {
 		t.Errorf("emitted %d %s logs, want 1 (the log twin carries the entity)", len(got), eventRiskyUser)
+	}
+}
+
+// TestCollectExcludesDeletedUserFromGaugeAndMarksTwin is the #155 fix: a risky
+// user present in /directory/deletedItems is dropped from the gauge (it is not
+// currently at risk — it no longer exists) but still emitted in the twin with a
+// RELIABLE is_deleted=true, sourced from the tombstone list, never the lying
+// riskyUsers.isDeleted field.
+func TestCollectExcludesDeletedUserFromGaugeAndMarksTwin(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		usersURL:        usersBody, // u1(high,atRisk) u2(high,atRisk) u3(medium,confirmedCompromised)
+		spsURL:          `{"value":[]}`,
+		deletedUsersURL: `{"value":[{"id":"u1"}]}`, // u1 is a tombstone
+	}}
+	rec := telemetrytest.New()
+	if err := New(g, license.Capabilities{license.CapEntraP2: true}, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	// Gauge: u1 excluded, so high/atRisk drops from 2 to 1.
+	got := metricAttrCounts(rec.MetricPoints(metricRiskyUsers))
+	want := map[[2]string]float64{
+		{"high", "atRisk"}:                 1,
+		{"medium", "confirmedCompromised"}: 1,
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("gauge[%v] = %v, want %v (deleted u1 must not be counted)", k, got[k], v)
+		}
+	}
+	if got[[2]string{"high", "atRisk"}] == 2 {
+		t.Errorf("deleted user u1 is still counted in the gauge (#155 ghost)")
+	}
+
+	// Twin: all three users still emitted — the deleted user is kept in logs so
+	// "which one" stays answerable (#114). The is_deleted VALUE is asserted in
+	// TestLogTwinIsDeletedFromReconciliation, which reads the telemetry.Event
+	// directly (telemetrytest's recorder cannot render a bool attribute — the same
+	// limitation is_processing works around).
+	if got := logsNamed(rec.LogRecords(), eventRiskyUser); len(got) != 3 {
+		t.Fatalf("emitted %d risky-user twins, want 3 (deleted user is kept in logs)", len(got))
+	}
+}
+
+// TestLogTwinIsDeletedFromReconciliation pins the is_deleted attribute mapping:
+// it comes from the reconciled *bool (see #155), never the riskyUsers.isDeleted
+// field. Driven through the mapper directly because the value is a bool and the
+// test recorder stringifies only via AsString, which cannot render Bool.
+func TestLogTwinIsDeletedFromReconciliation(t *testing.T) {
+	tr, fa := true, false
+	for _, tc := range []struct {
+		name    string
+		deleted *bool
+		wantOK  bool
+		wantVal bool
+	}{
+		{"tombstoned user -> true", &tr, true, true},
+		{"live user (reconciled) -> false", &fa, true, false},
+		{"not reconciled -> omitted", nil, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ev := logTwin(riskyEntity{ID: "u1", RiskLevel: "high", RiskState: "atRisk"}, usersHalf, tc.deleted)
+			v, ok := ev.Attrs["is_deleted"]
+			if ok != tc.wantOK {
+				t.Fatalf("is_deleted present=%v, want %v (attrs=%v)", ok, tc.wantOK, ev.Attrs)
+			}
+			if tc.wantOK && v != tc.wantVal {
+				t.Errorf("is_deleted = %#v, want the bool %v", v, tc.wantVal)
+			}
+		})
+	}
+}
+
+// TestReconciliationFailsOpenWhenDeletedItemsFails pins the fail-open contract: a
+// failing /directory/deletedItems fetch must never drop a live user from the
+// gauge, and must omit is_deleted rather than assert a value it did not verify.
+func TestReconciliationFailsOpenWhenDeletedItemsFails(t *testing.T) {
+	g := &fakeGraph{
+		bodies: map[string]string{usersURL: usersBody, spsURL: `{"value":[]}`},
+		errs:   map[string]error{deletedUsersURL: errors.New("deletedItems 503")},
+	}
+	rec := telemetrytest.New()
+	if err := New(g, license.Capabilities{license.CapEntraP2: true}, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	// All three users counted (nothing excluded on a reconciliation failure).
+	if got := metricAttrCounts(rec.MetricPoints(metricRiskyUsers))[[2]string{"high", "atRisk"}]; got != 2 {
+		t.Errorf("gauge high/atRisk = %v, want 2 (fail open: no user dropped)", got)
+	}
+	// is_deleted omitted everywhere (we did not verify deletion this cycle).
+	for _, r := range logsNamed(rec.LogRecords(), eventRiskyUser) {
+		if _, ok := r.Attrs["is_deleted"]; ok {
+			t.Errorf("twin id=%s emitted is_deleted on a reconciliation failure; want it omitted", r.Attrs["id"])
+		}
 	}
 }
 
@@ -344,7 +444,7 @@ func TestLogTwinSeverityTracksRiskLevel(t *testing.T) {
 		{"none", telemetry.SeverityInfo},
 		{"", telemetry.SeverityInfo},
 	} {
-		ev := logTwin(riskyEntity{ID: "u1", RiskLevel: tc.level, RiskState: "atRisk"}, usersHalf)
+		ev := logTwin(riskyEntity{ID: "u1", RiskLevel: tc.level, RiskState: "atRisk"}, usersHalf, nil)
 		if ev.Severity != tc.want {
 			t.Errorf("risk_level=%q severity = %v, want %v", tc.level, ev.Severity, tc.want)
 		}
@@ -505,7 +605,7 @@ func TestNameAndPermissions(t *testing.T) {
 		t.Errorf("Name = %q, want entra.risk", c.Name())
 	}
 	perms := c.RequiredPermissions()
-	want := map[string]bool{"IdentityRiskyUser.Read.All": true, "IdentityRiskyServicePrincipal.Read.All": true}
+	want := map[string]bool{"IdentityRiskyUser.Read.All": true, "IdentityRiskyServicePrincipal.Read.All": true, "User.Read.All": true}
 	if len(perms) != len(want) {
 		t.Fatalf("RequiredPermissions = %v, want %v", perms, want)
 	}

@@ -75,8 +75,8 @@ var annotations = map[string]Annotation{
 		Source:   "`/directory/recommendations` (beta)",
 	},
 	"entra.risk": {
-		Collects: "Current risky-users and risky-service-principals counts, with a log twin per risky entity",
-		Source:   "`/identityProtection/riskyUsers`, `/identityProtection/riskyServicePrincipals`",
+		Collects: "Current risky-users and risky-service-principals counts, with a log twin per risky entity. The risky-users gauge is reconciled against the directory's deleted-items tombstones so a deleted-but-once-risky user is not counted forever (#155); the twin keeps the entity, marked with a reliable `is_deleted`",
+		Source:   "`/identityProtection/riskyUsers`, `/identityProtection/riskyServicePrincipals`, `/directory/deletedItems/microsoft.graph.user`",
 		Gating:   "risky users need `entra_p2`, risky SPs need `workload_identities_premium` — two INDEPENDENT partial gates checked inside Collect() against the tenant's capabilities, so each half runs and emits only if its own capability is present; neither is declared as a whole-collector requirement",
 	},
 	"entra.risky_users": {

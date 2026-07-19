@@ -33,6 +33,7 @@
       "EventName": "entra.risky_user",
       "AttrKeys": [
         "id",
+        "is_deleted",
         "is_processing",
         "risk_detail",
         "risk_last_updated",

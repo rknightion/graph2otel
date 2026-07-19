@@ -207,10 +207,17 @@ counter-example worth knowing:
   live, so it is not mapped.
 - `entra.risk_detection` also carries `token_issuer_type`, `user_display_name`,
   `location_state`, `location_city` and `location_country_or_region`.
-- **`isDeleted` is not emitted** on `entra.risk`. It returns `false` for users that are
-  definitively deleted, so a filter on it would quietly include the accounts it was meant
-  to exclude. The gauge therefore counts deleted-but-once-risky identities until Microsoft
-  drops the row.
+- **`is_deleted` on `entra.risky_user` is reconciled, never the raw field.** Microsoft's
+  `riskyUsers.isDeleted` returns `false` for users that are definitively deleted (live-verified
+  2026-07-17 and 2026-07-19: 404 on `/users/{id}`, present in `/directory/deletedItems`), so it
+  is never emitted. graph2otel instead reconciles risky users against
+  `/directory/deletedItems/microsoft.graph.user` (#155): a tombstoned user is **excluded from
+  the `entra_risky_users_total` gauge** (it no longer exists, so it is not currently at risk),
+  and its `entra.risky_user` log twin carries a **reliable `is_deleted=true`** — so
+  `{service_name="graph2otel"} | event_name=`entra.risky_user` | is_deleted=`true`` answers "which
+  deleted accounts is Identity Protection still flagging". `is_deleted` is emitted only when the
+  reconciliation ran (the polled `entra.risk` collector); the blob-sourced `entra.risky_users`
+  twin and the service-principal twin omit it.
 
 ## SharePoint/OneDrive storage: derived quota state + report concealment
 

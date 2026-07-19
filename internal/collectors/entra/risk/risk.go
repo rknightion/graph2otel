@@ -112,7 +112,12 @@ func (c *Collector) DefaultInterval() time.Duration { return 15 * time.Minute }
 // the full permission requirement is visible regardless of which capability
 // is eventually granted.
 func (c *Collector) RequiredPermissions() []string {
-	return []string{"IdentityRiskyUser.Read.All", "IdentityRiskyServicePrincipal.Read.All"}
+	// User.Read.All backs the deleted-user reconciliation: the risky-users gauge
+	// is corrected against /directory/deletedItems/microsoft.graph.user, because
+	// riskyUsers.isDeleted reports false for a user that is definitively deleted
+	// (#155, live-verified). Without it the gauge counts deleted-but-once-risky
+	// identities as at-risk forever.
+	return []string{"IdentityRiskyUser.Read.All", "IdentityRiskyServicePrincipal.Read.All", "User.Read.All"}
 }
 
 // riskyEntity is the UNION of the riskyUser and riskyServicePrincipal
@@ -147,14 +152,14 @@ type riskyEntity struct {
 	// stated. nil means absent, and emits no attribute.
 	IsProcessing *bool `json:"isProcessing"`
 
-	// isDeleted is deliberately NOT decoded (#153). It reports false for users
-	// that are definitively deleted (confirmed live 2026-07-17: 404 on
-	// /users/{id}, present in /directory/deletedItems), so emitting it would be
-	// actively harmful — an operator filtering isDeleted=false would believe they
-	// had excluded deleted users while including exactly the ones they meant to
-	// exclude. Parked pending a post-purge re-check after 2026-08-16, which
-	// decides whether this is soft-delete lag or permanent. Do not add it before
-	// that check lands.
+	// isDeleted is deliberately NOT decoded — it is a known lie. It reports false
+	// for users that are definitively deleted (confirmed live 2026-07-17 and again
+	// 2026-07-19: 404 on /users/{id}, present in /directory/deletedItems), so
+	// trusting it would let an operator filter isDeleted=false believing they had
+	// excluded deleted users while including exactly the ones they meant to
+	// exclude. graph2otel derives the RELIABLE deletion state instead, from a
+	// /directory/deletedItems reconciliation (see fetchDeletedUserIDs / #155), and
+	// emits that as the is_deleted attribute — never this field.
 
 	// riskyServicePrincipal only.
 	AppID                string `json:"appId"`
@@ -203,7 +208,15 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	var errs []error
 
 	if c.caps.Has(license.CapEntraP2) {
-		if err := c.collectHalf(ctx, e, usersHalf); err != nil {
+		// Reconcile the risky-users gauge against the directory's deleted-items
+		// tombstones (#155): riskyUsers keeps returning deleted users with a stale
+		// riskState, so the gauge counts them as at-risk forever. deletedUsers is
+		// nil when the reconciliation fetch failed — collectHalf then counts every
+		// user (fail open) and omits is_deleted, never dropping a live user on a
+		// transient error. Only fetched for the users half; service principals use
+		// a different deleted-items type and have no live sample here.
+		deletedUsers := c.fetchDeletedUserIDs(ctx)
+		if err := c.collectHalf(ctx, e, usersHalf, deletedUsers); err != nil {
 			c.logger.Warn("risky users collection failed", "collector", collectorName, "error", err)
 			errs = append(errs, fmt.Errorf("risky users: %w", err))
 		}
@@ -212,7 +225,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	}
 
 	if c.caps.Has(license.CapWorkloadIdentitiesPremium) {
-		if err := c.collectHalf(ctx, e, spsHalf); err != nil {
+		if err := c.collectHalf(ctx, e, spsHalf, nil); err != nil {
 			c.logger.Warn("risky service principals collection failed", "collector", collectorName, "error", err)
 			errs = append(errs, fmt.Errorf("risky service principals: %w", err))
 		}
@@ -236,7 +249,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // No advanced $filter/$search is used here (the whole collection is fetched
 // and aggregated client-side), so no ConsistencyLevel header is required —
 // collectors.GetAllValues is called with nil headers.
-func (c *Collector) collectHalf(ctx context.Context, e telemetry.Emitter, h half) error {
+func (c *Collector) collectHalf(ctx context.Context, e telemetry.Emitter, h half, deletedIDs map[string]bool) error {
 	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+h.path, nil)
 	if err != nil {
 		return err
@@ -248,13 +261,25 @@ func (c *Collector) collectHalf(ctx context.Context, e telemetry.Emitter, h half
 		if err := json.Unmarshal(raw, &item); err != nil {
 			return fmt.Errorf("decode %s: %w", h.path, err)
 		}
-		counts[[2]string{item.RiskLevel, item.RiskState}]++
+		// deleted is nil when this half was not reconciled (service principals, or
+		// the users fetch failed) — is_deleted is then omitted, never asserted
+		// false. When reconciled, a tombstoned user is excluded from the gauge (it
+		// is not currently at risk, it no longer exists — #155) but still emitted in
+		// the twin with is_deleted=true, so the "which one" answer is not lost.
+		var deleted *bool
+		if deletedIDs != nil {
+			d := deletedIDs[item.ID]
+			deleted = &d
+		}
+		if deleted == nil || !*deleted {
+			counts[[2]string{item.RiskLevel, item.RiskState}]++
+		}
 		// Suppress the per-entity twin when a blob-sourced twin owns this event
-		// (#135-C) — the gauge below still aggregates every entity, so the
-		// bounded count is unaffected; only the duplicate per-entity log is
+		// (#135-C) — the gauge above still aggregates every non-deleted entity, so
+		// the bounded count is unaffected; only the duplicate per-entity log is
 		// dropped, because the blob collector emits it.
 		if !c.suppressedTwins[h.eventName] {
-			e.LogEvent(logTwin(item, h))
+			e.LogEvent(logTwin(item, h, deleted))
 		}
 	}
 
@@ -269,6 +294,41 @@ func (c *Collector) collectHalf(ctx context.Context, e telemetry.Emitter, h half
 	return nil
 }
 
+// deletedUsersPath lists the directory's soft-deleted users. $select=id keeps the
+// payload to the one field the reconciliation needs (#155). It is the reliable
+// deletion signal riskyUsers.isDeleted is not.
+const deletedUsersPath = "/directory/deletedItems/microsoft.graph.user?$select=id"
+
+// fetchDeletedUserIDs returns the set of soft-deleted user ids, or nil when the
+// fetch fails. nil is the fail-open signal: the caller then counts every risky
+// user (a transient directory error must never silently drop a live user from the
+// gauge) and omits is_deleted rather than guessing. An empty (non-nil) set means
+// the fetch succeeded and no users are deleted — every user is emitted with
+// is_deleted=false.
+func (c *Collector) fetchDeletedUserIDs(ctx context.Context) map[string]bool {
+	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+deletedUsersPath, nil)
+	if err != nil {
+		c.logger.Warn("risky-user deletion reconciliation unavailable this cycle; gauge may over-count deleted users",
+			"collector", collectorName, "error", err)
+		return nil
+	}
+	ids := make(map[string]bool, len(raws))
+	for _, raw := range raws {
+		var o struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &o); err != nil {
+			c.logger.Warn("risky-user deletion reconciliation unavailable this cycle: decoding a deleted-user record failed",
+				"collector", collectorName, "error", err)
+			return nil
+		}
+		if o.ID != "" {
+			ids[o.ID] = true
+		}
+	}
+	return ids
+}
+
 // logTwin renders one risky entity as an OTLP log record.
 //
 // Timestamp is deliberately left zero ("now", i.e. poll time) rather than set
@@ -278,7 +338,11 @@ func (c *Collector) collectHalf(ctx context.Context, e telemetry.Emitter, h half
 // instant and make "who was risky at 14:00" unanswerable — the whole point of
 // the twin. The assessment time is preserved as the risk_last_updated
 // attribute instead.
-func logTwin(item riskyEntity, h half) telemetry.Event {
+// deleted is the reconciled deletion state (#155): non-nil emits is_deleted with
+// that value, nil omits it. It is derived from /directory/deletedItems, NOT the
+// riskyUsers.isDeleted field (which lies — see riskyEntity). nil for the service
+// principals half and whenever the reconciliation fetch failed.
+func logTwin(item riskyEntity, h half, deleted *bool) telemetry.Event {
 	attrs := telemetry.Attrs{}
 	telemetry.SetStr(attrs, semconv.AttrId, item.ID)
 	telemetry.SetStr(attrs, semconv.AttrRiskLevel, item.RiskLevel)
@@ -297,6 +361,15 @@ func logTwin(item riskyEntity, h half) telemetry.Event {
 	// rather than the useless one. nil = the field was absent; see riskyEntity.
 	if item.IsProcessing != nil {
 		attrs[semconv.AttrIsProcessing] = *item.IsProcessing
+	}
+
+	// Reconciled deletion state (#155). Emitted only when this half was reconciled
+	// against /directory/deletedItems (deleted != nil): true marks a risky user
+	// that no longer exists in the directory, which the gauge excludes but the twin
+	// keeps so "which deleted user is Identity Protection still flagging" stays
+	// answerable. Sourced from the tombstone check, never riskyUsers.isDeleted.
+	if deleted != nil {
+		attrs[semconv.AttrIsDeleted] = *deleted
 	}
 
 	// Only "high" escalates: riskLevel's other values (low/medium/hidden/none)

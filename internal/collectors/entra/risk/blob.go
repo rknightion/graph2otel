@@ -98,7 +98,10 @@ func mapBlobRiskyUser(rec map[string]any) (telemetry.Event, bool) {
 	if err := json.Unmarshal(raw, &item); err != nil {
 		return telemetry.Event{}, false
 	}
-	ev := logTwin(item, usersHalf)
+	// nil: the blob RiskyUsers append-stream is not reconciled against
+	// /directory/deletedItems (that is the polled entra.risk collector's gauge
+	// path, #155), so is_deleted is omitted here rather than guessed.
+	ev := logTwin(item, usersHalf, nil)
 	ev.Timestamp = ts
 	return ev, true
 }
