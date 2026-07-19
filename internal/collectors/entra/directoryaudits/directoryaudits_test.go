@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -99,6 +100,132 @@ const liveDirectoryAudit = `{
       ],
       "type": "Device",
       "userPrincipalName": null
+    }
+  ]
+}`
+
+// liveRoleAssignment is a VERBATIM GET /auditLogs/directoryAudits record from
+// m7kni, read as graph2otel-poller on 2026-07-19 `[live-measured 2026-07-19,
+// #190]`: a RoleManagement "Add member to role" that granted the poller's own
+// service principal the "Purview Workload Content Writer" role. It is the wire
+// authority for #190's role_name extraction: the role name lives in the
+// `Role.DisplayName` modifiedProperty, whose newValue is a JSON-encoded string
+// (`"\"Purview Workload Content Writer\""`), spread across a targetResources
+// entry alongside four other Role.* / TargetId.* properties. Trimmed of nothing.
+const liveRoleAssignment = `{
+  "id": "Directory_36994c2a-d7ee-47cd-a06a-7ef7c4908563_I26NV_185150517",
+  "category": "RoleManagement",
+  "correlationId": "36994c2a-d7ee-47cd-a06a-7ef7c4908563",
+  "result": "success",
+  "resultReason": "",
+  "activityDisplayName": "Add member to role",
+  "activityDateTime": "2026-07-17T10:12:27.185138Z",
+  "loggedByService": "Core Directory",
+  "operationType": "Assign",
+  "initiatedBy": {
+    "user": null,
+    "app": {
+      "appId": null,
+      "displayName": "PurviewRoleAssignmentMigrator",
+      "servicePrincipalId": "21a5400e-6743-4c9f-812b-1791d41ab2b5",
+      "servicePrincipalName": null
+    }
+  },
+  "targetResources": [
+    {
+      "id": "13371536-9950-4988-90f4-343566456781",
+      "displayName": "graph2otel-poller",
+      "type": "ServicePrincipal",
+      "userPrincipalName": null,
+      "groupType": null,
+      "modifiedProperties": [
+        {"displayName": "Role.ObjectID", "oldValue": null, "newValue": "\"02d5655b-c1cf-4e5f-98da-5fb919085bf6\""},
+        {"displayName": "Role.DisplayName", "oldValue": null, "newValue": "\"Purview Workload Content Writer\""},
+        {"displayName": "Role.TemplateId", "oldValue": null, "newValue": "\"02d5655b-c1cf-4e5f-98da-5fb919085bf6\""},
+        {"displayName": "Role.WellKnownObjectName", "oldValue": null, "newValue": "\"PurviewWorkloadContentWriter\""},
+        {"displayName": "TargetId.ServicePrincipalNames", "oldValue": null, "newValue": "\"2c92ce28-126c-47c1-82b0-410b64502989\""}
+      ]
+    },
+    {
+      "id": "02d5655b-c1cf-4e5f-98da-5fb919085bf6",
+      "displayName": null,
+      "type": "Role",
+      "userPrincipalName": null,
+      "groupType": null,
+      "modifiedProperties": []
+    }
+  ]
+}`
+
+// liveAppRoleGrant is a VERBATIM GET /auditLogs/directoryAudits record from
+// m7kni, read as graph2otel-poller on 2026-07-19 `[live-measured 2026-07-19,
+// #190]`: an ApplicationManagement "Add app role assignment to service
+// principal" that granted the poller the `TeamSettings.Read.All` Graph app
+// role (this session's own #121 grant — the additionalDetails User-Agent proves
+// it). It is the wire authority for #190's granted_scope extraction: the
+// consented permission string lives in the `AppRole.Value` modifiedProperty
+// (JSON-encoded newValue `"\"TeamSettings.Read.All\""`). Note this record ALSO
+// carries no Role.DisplayName, so role_name must stay absent for it. Trimmed of
+// nothing.
+const liveAppRoleGrant = `{
+  "id": "Directory_4349d310-67d3-4bf8-835c-60e36b35bac4_U7DT3_22818033",
+  "category": "ApplicationManagement",
+  "correlationId": "4349d310-67d3-4bf8-835c-60e36b35bac4",
+  "result": "success",
+  "resultReason": "",
+  "activityDisplayName": "Add app role assignment to service principal",
+  "activityDateTime": "2026-07-19T14:46:48.608604Z",
+  "loggedByService": "Core Directory",
+  "operationType": "Assign",
+  "initiatedBy": {
+    "user": null,
+    "app": {
+      "appId": null,
+      "displayName": "homelab-agentic-mgmt",
+      "servicePrincipalId": "8f35f4e9-5c91-42db-a1f7-d77ada4cc0a2",
+      "servicePrincipalName": null
+    }
+  },
+  "targetResources": [
+    {
+      "id": "62cb17e7-d25e-4356-ad51-a861585f8634",
+      "displayName": "Microsoft Graph",
+      "type": "ServicePrincipal",
+      "userPrincipalName": null,
+      "groupType": null,
+      "modifiedProperties": [
+        {"displayName": "AppRole.Id", "oldValue": null, "newValue": "\"242607bd-1d2c-432c-82eb-bdb27baa23ab\""},
+        {"displayName": "AppRole.Value", "oldValue": null, "newValue": "\"TeamSettings.Read.All\""},
+        {"displayName": "AppRole.DisplayName", "oldValue": null, "newValue": "\"Read all teams' settings\""},
+        {"displayName": "AppRoleAssignment.CreatedDateTime", "oldValue": null, "newValue": "\"2026-07-19T14:46:48.5436038Z\""},
+        {"displayName": "ServicePrincipal.DisplayName", "oldValue": null, "newValue": "\"graph2otel-poller\""},
+        {"displayName": "ServicePrincipal.AppId", "oldValue": null, "newValue": "\"2c92ce28-126c-47c1-82b0-410b64502989\""}
+      ]
+    }
+  ]
+}`
+
+// liveAddServicePrincipal is a minimized-but-wire-shaped "Add service principal"
+// record whose modifiedProperties include a `Credential` property, whose
+// newValue on the real wire is a JSON blob describing the credential
+// (`[{"CredentialType":2,...}]`, live-observed 2026-07-19). CLAUDE.md's one
+// content exclusion says the mapper emits the NAMES of changed properties but
+// never a `Credential` VALUE (the value can BE the credential). This fixture
+// exists so a test can prove "Credential" appears in modified_property_names
+// while its value appears in no attribute.
+const liveAddServicePrincipal = `{
+  "id": "Directory_add_sp_1",
+  "category": "ApplicationManagement",
+  "result": "success",
+  "activityDisplayName": "Add service principal",
+  "targetResources": [
+    {
+      "displayName": "Some App",
+      "modifiedProperties": [
+        {"displayName": "AccountEnabled", "oldValue": null, "newValue": "[true]"},
+        {"displayName": "DisplayName", "oldValue": null, "newValue": "[\"Some App\"]"},
+        {"displayName": "Credential", "oldValue": null, "newValue": "[{\"CredentialType\":2,\"KeyId\":\"SECRET-KEY-MATERIAL\"}]"}
+      ]
     }
   ]
 }`
@@ -218,6 +345,7 @@ func TestMapDirectoryAuditAgainstLiveRecord(t *testing.T) {
 		"initiator_app_display_name",
 		"initiator_service_principal_id",
 		"logged_by_service",
+		"modified_property_names",
 		"result",
 		"target_display_names",
 		"target_resource_count",
@@ -251,6 +379,95 @@ func TestMapDirectoryAuditAgainstLiveRecord(t *testing.T) {
 	names, ok := ev.Attrs["target_display_names"].([]string)
 	if !ok || len(names) != 1 || names[0] != "Rob’s MacBook Pro" {
 		t.Errorf("target_display_names = %#v, want [Rob’s MacBook Pro]", ev.Attrs["target_display_names"])
+	}
+
+	// modified_property_names is the sorted, deduped union of the compliance
+	// flip's five modifiedProperty displayNames (#190). It carries NAMES only —
+	// never the newValues (that boundary is proved in
+	// TestMapDirectoryAuditNeverEmitsCredentialValue).
+	wantMods := []string{
+		"Included Updated Properties",
+		"IsCompliant",
+		"TargetId.DeviceId",
+		"TargetId.DeviceOSType",
+		"TargetId.DeviceTrustType",
+	}
+	if mods, ok := ev.Attrs["modified_property_names"].([]string); !ok || !reflect.DeepEqual(mods, wantMods) {
+		t.Errorf("modified_property_names = %#v, want %v", ev.Attrs["modified_property_names"], wantMods)
+	}
+	// This record is a device compliance flip, not a role/consent change, so the
+	// two extracted first-class attributes stay absent.
+	for _, k := range []string{"role_name", "granted_scope"} {
+		if _, present := ev.Attrs[k]; present {
+			t.Errorf("attr %q must be absent on a non-role/consent record, attrs=%v", k, ev.Attrs)
+		}
+	}
+}
+
+// TestMapDirectoryAuditExtractsRoleName pins #190's role_name extraction against
+// the live role-assignment record: the Role.DisplayName modifiedProperty's
+// JSON-encoded newValue is unwrapped to a clean role name, and every changed
+// property name appears in modified_property_names. granted_scope stays absent
+// (this is a directory-role change, not an app-role consent).
+func TestMapDirectoryAuditExtractsRoleName(t *testing.T) {
+	_, ev := mapDirectoryAudit(decodeLive(t, liveRoleAssignment))
+
+	if got := ev.Attrs["role_name"]; got != "Purview Workload Content Writer" {
+		t.Errorf("role_name = %v, want %q (unwrapped from Role.DisplayName newValue)", got, "Purview Workload Content Writer")
+	}
+	if _, present := ev.Attrs["granted_scope"]; present {
+		t.Errorf("granted_scope must be absent on a RoleManagement record, attrs=%v", ev.Attrs)
+	}
+	wantMods := []string{
+		"Role.DisplayName",
+		"Role.ObjectID",
+		"Role.TemplateId",
+		"Role.WellKnownObjectName",
+		"TargetId.ServicePrincipalNames",
+	}
+	if mods, ok := ev.Attrs["modified_property_names"].([]string); !ok || !reflect.DeepEqual(mods, wantMods) {
+		t.Errorf("modified_property_names = %#v, want %v", ev.Attrs["modified_property_names"], wantMods)
+	}
+}
+
+// TestMapDirectoryAuditExtractsGrantedScope pins #190's granted_scope extraction
+// against the live app-role-grant record: the AppRole.Value modifiedProperty's
+// JSON-encoded newValue is unwrapped to the exact consented permission string.
+// role_name stays absent (an app-role grant carries no Role.DisplayName).
+func TestMapDirectoryAuditExtractsGrantedScope(t *testing.T) {
+	_, ev := mapDirectoryAudit(decodeLive(t, liveAppRoleGrant))
+
+	if got := ev.Attrs["granted_scope"]; got != "TeamSettings.Read.All" {
+		t.Errorf("granted_scope = %v, want %q (unwrapped from AppRole.Value newValue)", got, "TeamSettings.Read.All")
+	}
+	if _, present := ev.Attrs["role_name"]; present {
+		t.Errorf("role_name must be absent on an app-role grant, attrs=%v", ev.Attrs)
+	}
+	mods, ok := ev.Attrs["modified_property_names"].([]string)
+	if !ok {
+		t.Fatalf("modified_property_names missing, attrs=%v", ev.Attrs)
+	}
+	if !slices.Contains(mods, "AppRole.Value") {
+		t.Errorf("modified_property_names = %v, want it to include AppRole.Value", mods)
+	}
+}
+
+// TestMapDirectoryAuditNeverEmitsCredentialValue enforces CLAUDE.md's one
+// content exclusion (#190 secret boundary): the mapper emits the NAME of a
+// changed Credential property but NEVER its value — the value can BE the
+// credential. So "Credential" appears in modified_property_names, and the secret
+// key material never appears in any attribute.
+func TestMapDirectoryAuditNeverEmitsCredentialValue(t *testing.T) {
+	_, ev := mapDirectoryAudit(decodeLive(t, liveAddServicePrincipal))
+
+	mods, ok := ev.Attrs["modified_property_names"].([]string)
+	if !ok || !slices.Contains(mods, "Credential") {
+		t.Errorf("modified_property_names = %v, want it to include the NAME Credential", ev.Attrs["modified_property_names"])
+	}
+	for k, v := range ev.Attrs {
+		if s, ok := v.(string); ok && strings.Contains(s, "SECRET-KEY-MATERIAL") {
+			t.Errorf("attr %q leaked a Credential newValue: %q", k, s)
+		}
 	}
 }
 
@@ -465,6 +682,47 @@ func TestCollectorEmitsLiveRecordEndToEnd(t *testing.T) {
 		if _, present := got.Attrs[k]; !present {
 			t.Errorf("emitted attrs missing %q", k)
 		}
+	}
+}
+
+// TestCollectorEmitsRoleAndScopeEndToEnd drives the two #190 live records
+// (a role assignment and an app-role grant) through the engine into an emitter,
+// so role_name and granted_scope reach testdata/signals.json — the golden
+// captures the UNION of what a package's tests EMIT, and #140 reads it to
+// generate docs/collectors.md's signal columns. Without this, the two enrichment
+// attributes would ship live but never appear in the golden or the docs, the
+// exact understatement #164 exists to prevent.
+func TestCollectorEmitsRoleAndScopeEndToEnd(t *testing.T) {
+	f := &recordingFetcher{records: []map[string]any{
+		decodeLive(t, liveRoleAssignment),
+		decodeLive(t, liveAppRoleGrant),
+	}}
+	rec := telemetrytest.New()
+	c := newCollector(depsWith(t, f))
+
+	from := time.Date(2026, 7, 17, 10, 0, 0, 0, time.UTC)
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(48*time.Hour), rec.Emitter()); err != nil {
+		t.Fatalf("CollectWindow: %v", err)
+	}
+
+	logs := rec.LogRecords()
+	if len(logs) != 2 {
+		t.Fatalf("emitted %d records, want 2", len(logs))
+	}
+	var gotRole, gotScope string
+	for _, l := range logs {
+		if v := l.Attrs["role_name"]; v != "" {
+			gotRole = v
+		}
+		if v := l.Attrs["granted_scope"]; v != "" {
+			gotScope = v
+		}
+	}
+	if gotRole != "Purview Workload Content Writer" {
+		t.Errorf("emitted role_name = %q, want %q", gotRole, "Purview Workload Content Writer")
+	}
+	if gotScope != "TeamSettings.Read.All" {
+		t.Errorf("emitted granted_scope = %q, want %q", gotScope, "TeamSettings.Read.All")
 	}
 }
 

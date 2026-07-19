@@ -38,6 +38,7 @@ const (
 	AttrDurationMs                        = "duration_ms"
 	AttrEndDateTime                       = "end_date_time"
 	AttrEvidenceCount                     = "evidence_count"
+	AttrGrantedScope                      = "granted_scope"
 	AttrGroupType                         = "group_type"
 	AttrIdentityProvider                  = "identity_provider"
 	AttrIdentityType                      = "identity_type"

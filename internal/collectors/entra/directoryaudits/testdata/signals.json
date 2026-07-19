@@ -7,12 +7,15 @@
         "activity_display_name",
         "category",
         "correlation_id",
+        "granted_scope",
         "id",
         "ingest_transport",
         "initiator_app_display_name",
         "initiator_service_principal_id",
         "logged_by_service",
+        "modified_property_names",
         "result",
+        "role_name",
         "target_display_names",
         "target_resource_count"
       ]

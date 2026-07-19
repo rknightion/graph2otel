@@ -126,7 +126,7 @@ var annotations = map[string]Annotation{
 		Source:   "`/auditLogs/signIns` (beta, `signInEventTypes` filter)",
 	},
 	"entra.directory_audits": {
-		Collects: "Directory audit log events (source: graph|blob — poll `/auditLogs/directoryAudits`, or consume the `AuditLogs` diagnostic-settings container; exactly one per config)",
+		Collects: "Directory audit log events (source: graph|blob — poll `/auditLogs/directoryAudits`, or consume the `AuditLogs` diagnostic-settings container; exactly one per config). Consent and role-change events additionally carry the changed `modified_property_names`, the assigned `role_name` (from a `Role.DisplayName` change), and the consented `granted_scope` (from an `AppRole.Value` change); property VALUES are never emitted (a `Credential` value can be the credential)",
 		Source:   "`/auditLogs/directoryAudits`",
 		Category: "AuditLogs",
 	},

@@ -17,7 +17,9 @@
 package directoryaudits
 
 import (
+	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collector"
@@ -109,6 +111,8 @@ func mapDirectoryAudit(rec map[string]any) (string, telemetry.Event) {
 	if targets, ok := rec["targetResources"].([]any); ok {
 		attrs[semconv.AttrTargetResourceCount] = len(targets)
 		var displayNames []string
+		var modNames []string
+		seenMod := map[string]bool{}
 		for _, tr := range targets {
 			t, ok := tr.(map[string]any)
 			if !ok {
@@ -117,9 +121,50 @@ func mapDirectoryAudit(rec map[string]any) (string, telemetry.Event) {
 			if dn := str(t, "displayName"); dn != "" {
 				displayNames = append(displayNames, dn)
 			}
+			// modifiedProperties[] carries the actually-actionable detail of a
+			// config change — WHICH role was assigned, WHICH scope was consented
+			// (#190). They are spread across the event's targetResources (most
+			// entries carry none), so walk them all and collect the union.
+			mods, ok := t["modifiedProperties"].([]any)
+			if !ok {
+				continue
+			}
+			for _, mp := range mods {
+				m, ok := mp.(map[string]any)
+				if !ok {
+					continue
+				}
+				dn := str(m, "displayName")
+				if dn == "" {
+					continue
+				}
+				if !seenMod[dn] {
+					seenMod[dn] = true
+					modNames = append(modNames, dn)
+				}
+				// Emit the NAMES of every changed property always; emit a VALUE
+				// only for the two safe, bounded, actionable fields. This is
+				// deliberately NOT a general newValue dump: CLAUDE.md's one
+				// content exclusion is that a `Credential` newValue can BE the
+				// credential, so arbitrary values are never emitted (#190).
+				switch dn {
+				case "Role.DisplayName":
+					if _, set := attrs[semconv.AttrRoleName]; !set {
+						telemetry.SetStr(attrs, semconv.AttrRoleName, unquoteAuditValue(str(m, "newValue")))
+					}
+				case "AppRole.Value":
+					if _, set := attrs[semconv.AttrGrantedScope]; !set {
+						telemetry.SetStr(attrs, semconv.AttrGrantedScope, unquoteAuditValue(str(m, "newValue")))
+					}
+				}
+			}
 		}
 		if len(displayNames) > 0 {
 			attrs[semconv.AttrTargetDisplayNames] = displayNames
+		}
+		if len(modNames) > 0 {
+			sort.Strings(modNames)
+			attrs[semconv.AttrModifiedPropertyNames] = modNames
 		}
 	}
 
@@ -146,6 +191,21 @@ func str(m map[string]any, key string) string {
 func nested(m map[string]any, key string) map[string]any {
 	n, _ := m[key].(map[string]any)
 	return n
+}
+
+// unquoteAuditValue strips the extra JSON-string layer Graph wraps a
+// modifiedProperty newValue in: the wire `"newValue":"\"Purview Workload
+// Content Writer\""` arrives here (after the engine's top-level JSON decode) as
+// the Go string `"Purview Workload Content Writer"` — quotes included — and this
+// unwraps it to `Purview Workload Content Writer`. A newValue that is not a JSON
+// string (e.g. `[true]`, or an already-bare value) is returned unchanged, so it
+// is safe to call on any property. [live-measured 2026-07-19, #190]
+func unquoteAuditValue(s string) string {
+	var out string
+	if json.Unmarshal([]byte(s), &out) == nil {
+		return out
+	}
+	return s
 }
 
 func init() {
