@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"time"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/semconv"
@@ -94,6 +95,18 @@ type ContainerConfig struct {
 	// emit. Returning false drops the record — the bytes are still consumed, so
 	// a record this collector does not want never stalls the cursor.
 	Map func(rec map[string]any) (telemetry.Event, bool)
+
+	// Derive turns one record into zero or more bounded metric increments,
+	// called only for records within RecencyWindow (#128), AFTER Map, and given
+	// Map's Event so it reuses one parse and one event-time source. Nil (the
+	// default) means this container emits no metrics — log-only, unchanged.
+	Derive func(rec map[string]any, ev telemetry.Event) []MetricPoint
+	// RecencyWindow gates Derive: a record whose event time is older than this
+	// takes the log path only (never a counter), so a backfilled event is never
+	// credited to "now". Set by the factory from BlobDeps.MetricRecencyWindow;
+	// a per-collector knob on ContainerConfig (like MaxBytesPerTick), not a Poll
+	// parameter. Only read when Derive is non-nil.
+	RecencyWindow time.Duration
 
 	// ExcludeSelf, when true, drops a record whose actor appId equals SelfClientID
 	// before Map is called — graph2otel's own polling exhaust in the categories
