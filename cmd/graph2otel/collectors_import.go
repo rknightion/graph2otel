@@ -61,6 +61,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/bootsecurity"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/certificates"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/certinventoryreport"
+	_ "github.com/rknightion/graph2otel/internal/collectors/intune/cloudpcaudit"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/compliance"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/compliancealerts"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/configassignments"

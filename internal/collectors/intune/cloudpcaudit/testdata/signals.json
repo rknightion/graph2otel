@@ -1,0 +1,25 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "intune.cloud_pc_audit",
+      "AttrKeys": [
+        "activity",
+        "activity_operation_type",
+        "activity_result",
+        "actor_application_id",
+        "actor_user_id",
+        "actor_user_principal_name",
+        "category",
+        "component_name",
+        "correlation_id",
+        "id",
+        "ingest_transport",
+        "modified_property_names",
+        "resource_display_names",
+        "resource_ids",
+        "resource_types"
+      ]
+    }
+  ]
+}

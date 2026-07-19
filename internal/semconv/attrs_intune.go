@@ -131,6 +131,7 @@ const (
 	AttrReportName                       = "report_name"
 	AttrReportStatus                     = "report_status"
 	AttrResourceDisplayNames             = "resource_display_names"
+	AttrResourceIds                      = "resource_ids"
 	AttrResourceType                     = "resource_type"
 	AttrResourceTypes                    = "resource_types"
 	AttrRestartCategory                  = "restart_category"

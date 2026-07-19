@@ -381,6 +381,10 @@ var annotations = map[string]Annotation{
 		Collects: "Intune audit events. Emits the NAMES of changed `modifiedProperties` but never their old/new values, which can carry credentials and certificates — the one genuine content exclusion in graph2otel",
 		Source:   "`/deviceManagement/auditEvents`",
 	},
+	"intune.cloud_pc_audit": {
+		Collects: "One log per Windows 365 / Cloud PC admin operation (provisioning-policy create/patch/delete, user-setting change, group assignment, reprovision, grace-period end) — the CloudPC control-plane audit trail, which has no Graph endpoint and exists only as a diagnostic-settings category. The intune.audit_events peer for Cloud PC: actor, target resource(s), and the NAMES of changed properties (never their values, #112). On when blob ingest is configured",
+		Category: "Windows365AuditLogs",
+	},
 	"intune.enrollment_events": {
 		Collects: "Enrollment troubleshooting events. The endpoint rejects a server-side `$filter` on its time field, so the window is bounded client-side instead",
 		Source:   "`/deviceManagement/troubleshootingEvents`",
