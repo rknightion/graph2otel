@@ -75,10 +75,12 @@ func newCollector(d collectors.BlobDeps) collector.SnapshotCollector {
 		ExcludeSelf:  d.ExcludeSelf,
 		SelfClientID: d.SelfClientID,
 		SelfAppID:    callerAppID,
-		// Derive the bounded request counter (#128), gated so a backfilled call
-		// is never credited to now. RecencyWindow comes from the tenant's config
+		// Derive the bounded request counter + native histograms (#128/#186) and
+		// the normalized-endpoint counter (#185), gated so a backfilled call is
+		// never credited to now. A fresh deriver per collector instance owns the
+		// endpoint path-cap state. RecencyWindow comes from the tenant's config
 		// (default 20m); the gate lives in the pipeline, not here.
-		Derive:        deriveActivity,
+		Derive:        newActivityDeriver().derive,
 		RecencyWindow: d.MetricRecencyWindow,
 	}
 	return blobpipeline.NewBlobCollector(collectorName, interval, d.TenantID, cfg, d.Source, d.Store, d.Logger)

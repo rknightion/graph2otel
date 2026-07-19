@@ -419,6 +419,8 @@ func emitLines(data []byte, cfg ContainerConfig, e telemetry.Emitter, stats *gat
 				// produces a native histogram. Passing nil bounds is deliberate —
 				// the View overrides any bounds anyway.
 				e.Histogram(mp.Name, mp.Unit, mp.Desc, mp.Value, nil, mp.Attrs)
+			case MetricGauge:
+				e.Gauge(mp.Name, mp.Unit, mp.Desc, mp.Value, mp.Attrs)
 			}
 		}
 	}

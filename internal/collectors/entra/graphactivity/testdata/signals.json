@@ -1,6 +1,14 @@
 {
   "Metrics": [
     {
+      "Name": "entra.graph_activity.endpoint_requests",
+      "AttrKeys": [
+        "normalized_path",
+        "request_method",
+        "response_status_class"
+      ]
+    },
+    {
       "Name": "entra.graph_activity.request.duration",
       "AttrKeys": [
         "request_method"
@@ -19,6 +27,12 @@
       "Name": "entra.graph_activity.response.size",
       "AttrKeys": [
         "request_method"
+      ]
+    },
+    {
+      "Name": "graph2otel.blob.endpoint_paths",
+      "AttrKeys": [
+        "collector"
       ]
     },
     {

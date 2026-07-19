@@ -17,6 +17,9 @@ const (
 	// these — the routing case exists so a later lane adds it without touching
 	// the gate.
 	MetricNativeHistogram
+	// MetricGauge is a last-value gauge, for a bounded derived observation such
+	// as the distinct-path headroom counter (#185).
+	MetricGauge
 )
 
 // MetricPoint is one bounded metric increment derived from a blob record. Attrs
