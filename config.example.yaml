@@ -131,6 +131,16 @@ collectors: {}
 #     enabled: true             # logs via the async Purview Audit query API. Needs
 #                               # AuditLogsQuery.Read.All + Purview Audit (E3+). Coarse
 #                               # interval only — the query API 429s on rapid create.
+#   "purview.ediscovery_cases": # eDiscovery (Premium) case inventory: a count of cases
+#     enabled: true             # by status + a log twin per case. It is v1.0 GA, NOT a
+#                               # beta endpoint — it is off-by-default because it needs
+#                               # TWO things a normal collector does not: (1) grant +
+#                               # admin-consent eDiscovery.Read.All, AND (2) register the
+#                               # app's service principal in the Security & Compliance
+#                               # data plane via PowerShell — the scope alone 401s. See
+#                               # docs/data-plane-registration.md for that second half,
+#                               # and docs/permissions.md section 4b. Enabling it without
+#                               # the registration produces a loud 401 every poll.
 #
 # Large-tenant tuning (10k+ users/devices). The built-in intervals are sized for
 # a typical tenant; every collector's cadence is already overridable here (and

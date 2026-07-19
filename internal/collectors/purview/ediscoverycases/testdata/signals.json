@@ -1,0 +1,24 @@
+{
+  "Metrics": [
+    {
+      "Name": "purview.ediscovery.cases",
+      "AttrKeys": [
+        "status"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "purview.ediscovery_case",
+      "AttrKeys": [
+        "closed_date_time",
+        "created_date_time",
+        "description",
+        "display_name",
+        "external_id",
+        "id",
+        "status"
+      ]
+    }
+  ]
+}

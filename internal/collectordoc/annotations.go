@@ -406,6 +406,10 @@ var annotations = map[string]Annotation{
 	},
 
 	// ---- Purview — snapshot collectors ----
+	"purview.ediscovery_cases": {
+		Collects: "eDiscovery (Premium) case inventory: a bounded count of cases by status, plus a log twin per case (id, display name, custodial description, external id, real created/closed times). Opt-in and default-off — v1.0 GA, but a granted `eDiscovery.Read.All` scope is not enough: the app's service principal must also be registered in the Security & Compliance data plane (see `docs/data-plane-registration.md`), so a default deployment would 401 on every poll. The `0001-01-01` .NET-zero createdDateTime on the auto-created default case is dropped, not emitted as a year-0001 timestamp",
+		Source:   "`/security/cases/ediscoveryCases`",
+	},
 	"purview.sensitivity_labels": {
 		Collects: "Sensitivity label catalog: a count by applicable-to type, plus a log twin per label carrying its priority and `hasProtection` — which is how label encryption activation is readable at all. Bind the label's text to `name`: `displayName` is present but always null",
 		Source:   "`/security/dataSecurityAndGovernance/sensitivityLabels`",

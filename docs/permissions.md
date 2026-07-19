@@ -92,9 +92,28 @@ know the principal, which is a different failure from a missing scope (that one 
 `graph2otel check` cannot detect this: it reports what is granted and consented, and the
 grant is not the problem.
 
-Only Purview eDiscovery (`purview.ediscovery_cases`, opt-in) needs this today. If you
-enable it, see [`data-plane-registration.md`](./data-plane-registration.md) for the
-procedure.
+Only Purview eDiscovery (`purview.ediscovery_cases`, opt-in) needs this today. It ships the
+eDiscovery (Premium) **case inventory** — a bounded count of cases by status plus a log twin
+per case. It is v1.0 GA, not a beta endpoint, but it is **off by default** because it needs
+two prerequisites a normal collector does not. To enable it:
+
+1. **Grant + admin-consent `eDiscovery.Read.All`** on the app registration (§2 above).
+2. **Register the app's service principal in the Security & Compliance data plane** via
+   PowerShell — the Graph scope alone returns 401 until you do. See
+   [`data-plane-registration.md`](./data-plane-registration.md) for the exact procedure.
+3. **Turn the collector on** — it is `Experimental` (opt-in), so it runs only when you
+   enable it explicitly in config (quote the dotted key):
+
+   ```yaml
+   collectors:
+     "purview.ediscovery_cases":
+       enabled: true
+   ```
+
+Enabling the collector without step 2 produces a loud 401 on every poll (by design — a
+swallowed 401 is how a half-configured data plane hides as "no cases"). `graph2otel check`
+cannot detect the missing data-plane registration: it reports what is granted and consented,
+and the grant is not the problem.
 
 ## 4c. One collector authenticates with a static token, not the Entra app (gotcha #5)
 
