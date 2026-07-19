@@ -55,6 +55,8 @@
 package spriskdetections
 
 import (
+	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collector"
@@ -139,6 +141,19 @@ func mapSPRiskDetection(rec map[string]any) (string, telemetry.Event) {
 	telemetry.SetStr(attrs, semconv.AttrServicePrincipalName, str(rec, "servicePrincipalDisplayName"))
 	telemetry.SetStr(attrs, semconv.AttrAppId, str(rec, "appId"))
 
+	// additionalInfo is the SAME doubly-encoded [{Key,Value}] string as on the
+	// user riskDetection (a JSON string of pairs — decode twice, #142). On the
+	// observed SP detection it carried the MITRE ATT&CK technique behind the
+	// compromise ("T1078" — Valid Accounts), the same high-value SIEM field the
+	// user-detection twin already extracts. Map it here too so the SP stream is not
+	// half a signal. alertUrl was null on the wire and has no bounded semconv key,
+	// so it is left undecoded.
+	if pairs := additionalInfoPairs(rec); len(pairs) > 0 {
+		if techniques := mitreTechniques(pairs); len(techniques) > 0 {
+			attrs[semconv.AttrMitreTechniques] = techniques
+		}
+	}
+
 	return id, telemetry.Event{
 		Name:     eventName,
 		Body:     detectionBody(rec, riskEventType, riskLevel),
@@ -175,6 +190,45 @@ func severityFor(riskLevel string) telemetry.Severity {
 func str(m map[string]any, key string) string {
 	s, _ := m[key].(string)
 	return s
+}
+
+// additionalInfoPairs decodes a detection's additionalInfo — a JSON-encoded
+// STRING holding an array of {"Key","Value"} pairs, so it is unmarshalled twice
+// (the #142 trap: a mapper written against a plain object shape finds nothing and
+// reports success forever). Every failure mode returns nil: the payload is
+// undocumented and varies by riskEventType, so a missing/malformed one is normal,
+// not a fault. First occurrence of a duplicate Key wins.
+func additionalInfoPairs(rec map[string]any) map[string]string {
+	raw := str(rec, "additionalInfo")
+	if raw == "" {
+		return nil
+	}
+	var pairs []struct {
+		Key   string `json:"Key"`
+		Value string `json:"Value"`
+	}
+	if err := json.Unmarshal([]byte(raw), &pairs); err != nil {
+		return nil
+	}
+	out := make(map[string]string, len(pairs))
+	for _, p := range pairs {
+		if _, dup := out[p.Key]; !dup {
+			out[p.Key] = p.Value
+		}
+	}
+	return out
+}
+
+// mitreTechniques splits the comma-separated MITRE ATT&CK technique ids out of a
+// decoded additionalInfo payload, returning nil when it carries none.
+func mitreTechniques(pairs map[string]string) []string {
+	var out []string
+	for _, t := range strings.Split(pairs["mitreTechniques"], ",") {
+		if t = strings.TrimSpace(t); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 func init() {

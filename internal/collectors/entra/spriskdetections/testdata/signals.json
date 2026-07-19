@@ -5,14 +5,18 @@
       "EventName": "entra.service_principal_risk_detection",
       "AttrKeys": [
         "activity",
+        "app_id",
         "detection_timing_type",
         "id",
         "ingest_transport",
+        "mitre_techniques",
         "risk_detail",
         "risk_event_type",
         "risk_level",
         "risk_state",
         "service_principal_id",
+        "service_principal_name",
+        "source",
         "token_issuer_type"
       ]
     }

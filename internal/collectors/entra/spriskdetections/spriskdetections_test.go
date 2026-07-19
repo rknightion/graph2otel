@@ -16,11 +16,13 @@ import (
 // record from m7kni, read as graph2otel-poller on 2026-07-19. It is the detection
 // #133 synthesized by admin-confirming compromise of a throwaway service principal
 // — the ONLY real servicePrincipalRiskDetection this project has observed, since
-// the collection is empty on a healthy tenant. Mapping against it (not the docs)
-// settles the field set: servicePrincipalId is present, servicePrincipalDisplayName
-// / appId / ipAddress / location are null on this admin-confirmed type, and
-// additionalInfo is a doubly-encoded string (here `[{"Key":"alertUrl","Value":null}]`)
-// deliberately left undecoded. `[live-measured 2026-07-19, #133]`
+// the collection is empty on a healthy tenant. This is the ENRICHED form captured
+// ~25min after synthesis (the detection populated fields over time: the first read
+// had source/detectionTimingType/servicePrincipalDisplayName/appId null and no
+// mitreTechniques). Mapping against the richest live form (#164) settles the field
+// set: servicePrincipalId/servicePrincipalDisplayName/appId present, ipAddress and
+// location null, and additionalInfo is a doubly-encoded string of {Key,Value}
+// pairs carrying the MITRE technique. `[live-measured 2026-07-19, #133]`
 const liveSPRiskDetection = `{
 	"id": "f8a18e4f6139a9c5d4c3a9fcbd311498e0b5ec7c1291fa98862a26e09f3ab71f",
 	"requestId": null,
@@ -29,8 +31,8 @@ const liveSPRiskDetection = `{
 	"riskState": "confirmedCompromised",
 	"riskLevel": "high",
 	"riskDetail": "adminConfirmedServicePrincipalCompromised",
-	"source": null,
-	"detectionTimingType": "notDefined",
+	"source": "IdentityProtection",
+	"detectionTimingType": "offline",
 	"activity": "servicePrincipal",
 	"tokenIssuerType": "AzureAD",
 	"ipAddress": null,
@@ -38,10 +40,10 @@ const liveSPRiskDetection = `{
 	"detectedDateTime": "2026-07-19T18:18:57.9138385Z",
 	"lastUpdatedDateTime": "2026-07-19T18:20:48.7934674Z",
 	"servicePrincipalId": "108e1411-1451-4f7d-970a-26bd3c6f67e5",
-	"servicePrincipalDisplayName": null,
-	"appId": null,
+	"servicePrincipalDisplayName": "g2o-sprisk-synth-DELETE-ME",
+	"appId": "0abab089-1400-471e-b44c-e94a3963e5d4",
 	"keyIds": [],
-	"additionalInfo": "[{\"Key\":\"alertUrl\",\"Value\":null}]",
+	"additionalInfo": "[{\"Key\":\"alertUrl\",\"Value\":null},{\"Key\":\"mitreTechniques\",\"Value\":\"T1078\"}]",
 	"location": null
 }`
 
@@ -63,22 +65,32 @@ func TestMapAgainstLiveRecord(t *testing.T) {
 		t.Errorf("id = %q", id)
 	}
 	want := map[string]string{
-		"risk_event_type":       "adminConfirmedServicePrincipalCompromised",
-		"risk_state":            "confirmedCompromised",
-		"risk_level":            "high",
-		"risk_detail":           "adminConfirmedServicePrincipalCompromised",
-		"detection_timing_type": "notDefined",
-		"activity":              "servicePrincipal",
-		"token_issuer_type":     "AzureAD",
-		"service_principal_id":  "108e1411-1451-4f7d-970a-26bd3c6f67e5",
+		"risk_event_type":        "adminConfirmedServicePrincipalCompromised",
+		"risk_state":             "confirmedCompromised",
+		"risk_level":             "high",
+		"risk_detail":            "adminConfirmedServicePrincipalCompromised",
+		"detection_timing_type":  "offline",
+		"activity":               "servicePrincipal",
+		"token_issuer_type":      "AzureAD",
+		"source":                 "IdentityProtection",
+		"service_principal_id":   "108e1411-1451-4f7d-970a-26bd3c6f67e5",
+		"service_principal_name": "g2o-sprisk-synth-DELETE-ME",
+		"app_id":                 "0abab089-1400-471e-b44c-e94a3963e5d4",
 	}
 	for k, v := range want {
 		if got, _ := ev.Attrs[k].(string); got != v {
 			t.Errorf("attr %q = %q, want %q", k, got, v)
 		}
 	}
-	// Null fields must be OMITTED, not emitted empty.
-	for _, k := range []string{"service_principal_name", "app_id", "ip_address", "source", "request_id", "correlation_id"} {
+	// The MITRE technique behind the detection, decoded from the doubly-encoded
+	// additionalInfo. Asserted on the Event directly ([]string, not renderable via
+	// the recorder's AsString flattening).
+	tech, ok := ev.Attrs["mitre_techniques"].([]string)
+	if !ok || len(tech) != 1 || tech[0] != "T1078" {
+		t.Errorf("mitre_techniques = %#v, want [T1078]", ev.Attrs["mitre_techniques"])
+	}
+	// Still-null fields must be OMITTED, not emitted empty.
+	for _, k := range []string{"ip_address", "request_id", "correlation_id"} {
 		if _, present := ev.Attrs[k]; present {
 			t.Errorf("attr %q present, want omitted (null on the wire)", k)
 		}
