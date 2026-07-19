@@ -47,6 +47,26 @@ const DefaultMaxBytesPerTick = 32 << 20
 // graph2otel_blob_self_excluded_total on the Prometheus side (#82).
 const metricSelfExcluded = "graph2otel.blob.self_excluded"
 
+// Blob-derived-metrics gate self-obs (#128). Counters are batched per tick per
+// category so a catch-up burst is one Add, not thousands.
+const (
+	metricGated          = "graph2otel.blob.metric_gated"
+	metricEmitted        = "graph2otel.blob.metric_emitted"
+	metricRecordsDropped = "graph2otel.blob.records_dropped"
+	metricEventAge       = "graph2otel.blob.event_age"
+)
+
+// gateStats accumulates one tick's recency-gate decisions across all of a
+// container's blobs, so the summary is logged and the self-obs counters emitted
+// once per tick per category — never once per record (a 12h backfill would
+// otherwise flood the log with the exact events the gate keeps out of metrics).
+type gateStats struct {
+	emitted, gated, dropped int
+	oldestGated             time.Duration
+	freshestAge             time.Duration
+	freshestSet             bool
+}
+
 // BlobInfo is one blob as returned by a listing: its name and current size.
 // Size is the read bound for this tick — the blob may grow immediately after,
 // which is picked up next tick.
@@ -196,11 +216,12 @@ func Poll(
 
 	pruneDeleted(cur, blobs)
 
+	var stats gateStats
 	for _, b := range blobs {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		advanced, err := consumeBlob(ctx, cfg, cur, src, e, log, b)
+		advanced, err := consumeBlob(ctx, cfg, cur, src, e, &stats, log, b)
 		if err != nil {
 			// One unreadable blob must not cost us the other 167.
 			log.Warn("blob read failed; skipping until next tick",
@@ -218,7 +239,45 @@ func Poll(
 				"container", cfg.Container, "blob", b.Name, "error", err)
 		}
 	}
+	reportGate(e, log, cfg, stats)
 	return nil
+}
+
+// reportGate emits the per-tick gate self-obs and the one summary line per tick
+// per category (#128). No-op unless a Derive is configured. Counters are batched
+// (one Add of the tick total) — under cumulative temporality that is identical
+// to N individual Add(1) calls, and keeps a backfill burst from thousands of
+// per-record emissions.
+func reportGate(e telemetry.Emitter, log *slog.Logger, cfg ContainerConfig, stats gateStats) {
+	if cfg.Derive == nil {
+		return
+	}
+	cat := cfg.CollectorName
+	window := cfg.RecencyWindow
+	if stats.emitted > 0 {
+		e.Counter(metricEmitted, "{record}", "Blob records that reached the metrics path (#128).",
+			float64(stats.emitted), telemetry.Attrs{semconv.AttrCollector: cat})
+		e.Gauge(metricEventAge, "s", "Freshest blob event age this tick — the metric propagation floor (#128).",
+			stats.freshestAge.Seconds(), telemetry.Attrs{semconv.AttrCollector: cat})
+	}
+	if stats.gated > 0 {
+		e.Counter(metricGated, "{record}", "Blob records too old for the metrics path, taken log-only (#128).",
+			float64(stats.gated), telemetry.Attrs{semconv.AttrCollector: cat})
+	}
+	if stats.dropped > 0 {
+		e.Counter(metricRecordsDropped, "{record}", "Blob records skipped by the metrics path for an unparseable event time (#128).",
+			float64(stats.dropped), telemetry.Attrs{semconv.AttrCollector: cat})
+	}
+	if stats.gated > 0 || stats.freshestSet {
+		log.Info("blob metric gate",
+			"category", cat, "emitted", stats.emitted, "gated", stats.gated,
+			"dropped", stats.dropped, "oldest_gated", stats.oldestGated.String(),
+			"freshest_age", stats.freshestAge.String(), "window", window.String())
+	}
+	if stats.freshestSet && stats.freshestAge > window*3/4 {
+		log.Warn("blob metric latency approaching gate",
+			"category", cat, "freshest_age", stats.freshestAge.String(), "window", window.String())
+	}
 }
 
 // pruneDeleted drops cursor offsets for blobs that are no longer listed. The
@@ -245,6 +304,7 @@ func consumeBlob(
 	cur *checkpoint.BlobCursor,
 	src Source,
 	e telemetry.Emitter,
+	stats *gateStats,
 	log *slog.Logger,
 	b BlobInfo,
 ) (bool, error) {
@@ -283,13 +343,17 @@ func consumeBlob(
 	}
 	complete := chunk[:nl+1]
 
-	emitLines(complete, cfg, e, log, b.Name)
+	emitLines(complete, cfg, e, stats, log, b.Name)
 	cur.Offsets[b.Name] = off + int64(len(complete))
 	return true, nil
 }
 
-// emitLines decodes and emits every complete JSON-Lines record in data.
-func emitLines(data []byte, cfg ContainerConfig, e telemetry.Emitter, log *slog.Logger, blob string) {
+// emitLines decodes and emits every complete JSON-Lines record in data. It
+// always emits the log twin; for a container with a Derive it additionally
+// routes each record's bounded metric increments, gated by RecencyWindow so a
+// backfilled event never touches a counter (#128). stats accumulates the gate
+// decisions for the per-tick summary.
+func emitLines(data []byte, cfg ContainerConfig, e telemetry.Emitter, stats *gateStats, log *slog.Logger, blob string) {
 	for _, line := range bytes.Split(data, []byte("\n")) {
 		line = bytes.TrimSpace(line) // drops the \r of the blobs' CRLF terminator
 		if len(line) == 0 {
@@ -320,5 +384,39 @@ func emitLines(data []byte, cfg ContainerConfig, e telemetry.Emitter, log *slog.
 			continue
 		}
 		e.LogEvent(ev)
+
+		if cfg.Derive == nil {
+			continue
+		}
+		if ev.Timestamp.IsZero() {
+			// No parseable event time: the log twin still emitted (with no
+			// timestamp), but a counter stamped "now" from an undated record
+			// would be a guess — skip the metric path and count it dropped.
+			stats.dropped++
+			continue
+		}
+		age, ok := withinWindow(ev.Timestamp, time.Now(), cfg.RecencyWindow)
+		if !ok {
+			// Too old (backfill/catch-up) or future-dated: log-only. Crediting it
+			// to "now" would be a spike that never happened (#128).
+			stats.gated++
+			if age > stats.oldestGated {
+				stats.oldestGated = age
+			}
+			continue
+		}
+		stats.emitted++
+		if !stats.freshestSet || age < stats.freshestAge {
+			stats.freshestAge, stats.freshestSet = age, true
+		}
+		for _, mp := range cfg.Derive(rec, ev) {
+			switch mp.Kind {
+			case MetricCounter:
+				e.Counter(mp.Name, mp.Unit, mp.Desc, mp.Value, mp.Attrs)
+			case MetricNativeHistogram:
+				// Native (base-2 exponential) histograms are wired in fast-follow
+				// F2 (View-backed aggregation in provider.go). Core derives none.
+			}
+		}
 	}
 }
