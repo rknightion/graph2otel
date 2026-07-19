@@ -289,7 +289,7 @@ var annotations = map[string]Annotation{
 		Source:   "`/deviceManagement/detectedApps`",
 	},
 	"intune.endpoint_analytics": {
-		Collects: "UXA per-device scores, boot/login time histograms, app crash counts, battery health, resource performance, anomaly-severity counts — the heaviest collector",
+		Collects: "UXA per-device scores, boot/login time histograms, app crash counts, battery health, resource performance, anomaly-severity counts, and per-device Windows 11 upgrade-readiness (the Work-From-Anywhere metricDevices navigation — eligibility, failed hardware checks, cloud posture) — the heaviest collector",
 		Source:   "`/deviceManagement/userExperienceAnalytics*` (v1.0 + beta)",
 	},
 	"intune.enrollment": {

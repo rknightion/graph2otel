@@ -66,6 +66,13 @@
       "AttrKeys": [
         "health_state"
       ]
+    },
+    {
+      "Name": "intune.uxa.work_from_anywhere.device_count",
+      "AttrKeys": [
+        "health_state",
+        "upgrade_eligibility"
+      ]
     }
   ],
   "Logs": [
@@ -81,6 +88,26 @@
         "manufacturer",
         "model",
         "startup_performance_score",
+        "work_from_anywhere_score"
+      ]
+    },
+    {
+      "EventName": "intune.device_work_from_anywhere",
+      "AttrKeys": [
+        "device_name",
+        "health_state",
+        "id",
+        "manufacturer",
+        "model",
+        "os",
+        "os_version",
+        "ownership",
+        "processor_family_check_failed",
+        "secure_boot_check_failed",
+        "serial_number",
+        "tpm_check_failed",
+        "upgrade_eligibility",
+        "windows_score",
         "work_from_anywhere_score"
       ]
     }

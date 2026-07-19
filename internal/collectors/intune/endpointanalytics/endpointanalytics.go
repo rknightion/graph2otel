@@ -73,6 +73,7 @@ const (
 	resourceScoreMetric       = "intune.uxa.resource_performance_score"
 	baselineScoreMetric       = "intune.uxa.baseline_score"
 	anomalyCountMetric        = "intune.uxa.anomaly_count"
+	wfaDeviceCountMetric      = "intune.uxa.work_from_anywhere.device_count"
 )
 
 // eventDeviceScore is the EventName of the per-device Endpoint Analytics log
@@ -81,6 +82,11 @@ const (
 // intune.uxa.* metric namespace so it does not collide with the device_score
 // metric.
 const eventDeviceScore = "intune.device_endpoint_analytics"
+
+// eventWorkFromAnywhere is the EventName of the per-device Work-From-Anywhere
+// Windows 11 upgrade-readiness twin (#194). Like eventDeviceScore it sits outside
+// the intune.uxa.* metric namespace and follows the intune.device_* convention.
+const eventWorkFromAnywhere = "intune.device_work_from_anywhere"
 
 // defaultBaseURL / betaBaseURL: the per-device scores, startup histories,
 // and app health performance are v1.0; battery health, resource performance,
@@ -273,6 +279,44 @@ type anomalySeverityOverview struct {
 	InformationalSeverityAnomalyCount int64 `json:"informationalSeverityAnomalyCount"`
 }
 
+// wfaMetricDevice is the subset of the beta
+// userExperienceAnalyticsWorkFromAnywhereMetrics/allDevices/metricDevices
+// navigation this collector reads (#194) — the per-device Windows 11
+// upgrade-readiness detail behind the tenant Work-From-Anywhere score. LIVE
+// FACTS (2026-07-19, m7kni, probed as graph2otel-poller): the singleton and
+// /allDevices paths 400 with "No OData route"; only the .../metricDevices leaf
+// returns 200. id is the managed-device id (deviceId is null on the wire); the
+// *CheckFailed fields are JSON booleans; the score fields are null on an
+// insufficiently-assessed device, so they are pointers (nil = omit, never a
+// misleading 0). upgradeEligibility is a small bounded enum
+// (upgraded/capable/notCapable/unknown/...).
+type wfaMetricDevice struct {
+	ID                            string   `json:"id"`
+	DeviceName                    string   `json:"deviceName"`
+	SerialNumber                  string   `json:"serialNumber"`
+	Manufacturer                  string   `json:"manufacturer"`
+	Model                         string   `json:"model"`
+	Ownership                     string   `json:"ownership"`
+	OSDescription                 string   `json:"osDescription"`
+	OSVersion                     string   `json:"osVersion"`
+	UpgradeEligibility            string   `json:"upgradeEligibility"`
+	HealthStatus                  string   `json:"healthStatus"`
+	RAMCheckFailed                bool     `json:"ramCheckFailed"`
+	StorageCheckFailed            bool     `json:"storageCheckFailed"`
+	ProcessorCoreCountCheckFailed bool     `json:"processorCoreCountCheckFailed"`
+	ProcessorSpeedCheckFailed     bool     `json:"processorSpeedCheckFailed"`
+	TPMCheckFailed                bool     `json:"tpmCheckFailed"`
+	SecureBootCheckFailed         bool     `json:"secureBootCheckFailed"`
+	ProcessorFamilyCheckFailed    bool     `json:"processorFamilyCheckFailed"`
+	Processor64BitCheckFailed     bool     `json:"processor64BitCheckFailed"`
+	OSCheckFailed                 bool     `json:"osCheckFailed"`
+	WorkFromAnywhereScore         *float64 `json:"workFromAnywhereScore"`
+	WindowsScore                  *float64 `json:"windowsScore"`
+	CloudManagementScore          *float64 `json:"cloudManagementScore"`
+	CloudIdentityScore            *float64 `json:"cloudIdentityScore"`
+	CloudProvisioningScore        *float64 `json:"cloudProvisioningScore"`
+}
+
 // Collector polls Intune Endpoint Analytics (User Experience Analytics).
 type Collector struct {
 	g       collectors.GraphClient
@@ -326,6 +370,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		{"resource performance", c.collectResourcePerformance},
 		{"baselines", c.collectBaselines},
 		{"anomaly severity overview", c.collectAnomalySeverityOverview},
+		{"work from anywhere readiness", c.collectWorkFromAnywhere},
 	}
 
 	var errs []error
@@ -559,6 +604,103 @@ func (c *Collector) collectAnomalySeverityOverview(ctx context.Context, e teleme
 		{Value: float64(o.InformationalSeverityAnomalyCount), Attrs: telemetry.Attrs{semconv.AttrAnomalySeverity: "informational"}},
 	}
 	e.GaugeSnapshot(anomalyCountMetric, "{anomaly}", "Intune Endpoint Analytics anomaly count by severity.", points)
+	return nil
+}
+
+// collectWorkFromAnywhere fetches the per-device Windows 11 upgrade-readiness
+// rows (the metricDevices navigation) and rolls them into a bounded device count
+// by (upgrade_eligibility, health_state), plus a per-device twin carrying the
+// readiness detail. The twin lists a hardware readiness check ONLY when it FAILED
+// (a device that meets every requirement carries no *_check_failed attribute) —
+// the failures are the actionable signal, and this keeps a clean device's twin
+// lean; the score fields are omitted when the device has not been assessed
+// (null on the wire). Severity escalates to WARN for a notCapable device.
+func (c *Collector) collectWorkFromAnywhere(ctx context.Context, e telemetry.Emitter) error {
+	raw, err := collectors.GetAllValues(ctx, c.g, c.beta+"/deviceManagement/userExperienceAnalyticsWorkFromAnywhereMetrics/allDevices/metricDevices", nil)
+	if err != nil {
+		return err
+	}
+	type wfaKey struct {
+		eligibility string
+		state       string
+	}
+	counts := map[wfaKey]int64{}
+	for _, r := range raw {
+		var d wfaMetricDevice
+		if err := json.Unmarshal(r, &d); err != nil {
+			c.logger.Warn("endpoint_analytics: skipping malformed work-from-anywhere row", "collector", collectorName, "error", err)
+			continue
+		}
+		eligibility := orUnknown(d.UpgradeEligibility)
+		state := healthStateBucketFor(d.HealthStatus)
+		counts[wfaKey{eligibility: eligibility, state: state}]++
+
+		attrs := telemetry.Attrs{semconv.AttrUpgradeEligibility: eligibility, semconv.AttrHealthState: state}
+		telemetry.SetStr(attrs, semconv.AttrId, d.ID)
+		telemetry.SetStr(attrs, semconv.AttrDeviceName, d.DeviceName)
+		telemetry.SetStr(attrs, semconv.AttrSerialNumber, d.SerialNumber)
+		telemetry.SetStr(attrs, semconv.AttrManufacturer, d.Manufacturer)
+		telemetry.SetStr(attrs, semconv.AttrModel, d.Model)
+		telemetry.SetStr(attrs, semconv.AttrOwnership, d.Ownership)
+		telemetry.SetStr(attrs, semconv.AttrOs, d.OSDescription)
+		telemetry.SetStr(attrs, semconv.AttrOsVersion, d.OSVersion)
+		// A readiness check rides the twin only when it FAILED (the actionable case).
+		for _, cf := range []struct {
+			failed bool
+			attr   string
+		}{
+			{d.RAMCheckFailed, semconv.AttrRamCheckFailed},
+			{d.StorageCheckFailed, semconv.AttrStorageCheckFailed},
+			{d.ProcessorCoreCountCheckFailed, semconv.AttrProcessorCoreCountCheckFailed},
+			{d.ProcessorSpeedCheckFailed, semconv.AttrProcessorSpeedCheckFailed},
+			{d.TPMCheckFailed, semconv.AttrTpmCheckFailed},
+			{d.SecureBootCheckFailed, semconv.AttrSecureBootCheckFailed},
+			{d.ProcessorFamilyCheckFailed, semconv.AttrProcessorFamilyCheckFailed},
+			{d.Processor64BitCheckFailed, semconv.AttrProcessor64BitCheckFailed},
+			{d.OSCheckFailed, semconv.AttrOsCheckFailed},
+		} {
+			if cf.failed {
+				attrs[cf.attr] = "true"
+			}
+		}
+		// Scores are omitted when unassessed (null on the wire) so nothing reads a
+		// missing score as 0.
+		for _, s := range []struct {
+			score *float64
+			attr  string
+		}{
+			{d.WorkFromAnywhereScore, semconv.AttrWorkFromAnywhereScore},
+			{d.WindowsScore, semconv.AttrWindowsScore},
+			{d.CloudManagementScore, semconv.AttrCloudManagementScore},
+			{d.CloudIdentityScore, semconv.AttrCloudIdentityScore},
+			{d.CloudProvisioningScore, semconv.AttrCloudProvisioningScore},
+		} {
+			if s.score != nil {
+				attrs[s.attr] = strconv.FormatFloat(*s.score, 'f', -1, 64)
+			}
+		}
+
+		severity := telemetry.SeverityInfo
+		if d.UpgradeEligibility == "notCapable" {
+			severity = telemetry.SeverityWarn
+		}
+		// Timestamp left zero (poll time): a re-emitted STATE feed, like the
+		// device-score twin.
+		e.LogEvent(telemetry.Event{
+			Name:     eventWorkFromAnywhere,
+			Body:     fmt.Sprintf("windows 11 upgrade readiness for %s: %s", orUnknown(d.DeviceName), eligibility),
+			Severity: severity,
+			Attrs:    attrs,
+		})
+	}
+	points := make([]telemetry.GaugePoint, 0, len(counts))
+	for k, n := range counts {
+		points = append(points, telemetry.GaugePoint{
+			Value: float64(n),
+			Attrs: telemetry.Attrs{semconv.AttrUpgradeEligibility: k.eligibility, semconv.AttrHealthState: k.state},
+		})
+	}
+	e.GaugeSnapshot(wfaDeviceCountMetric, "{device}", "Intune Endpoint Analytics device count by Windows 11 upgrade eligibility and health state; per-device readiness detail on the intune.device_work_from_anywhere log twin.", points)
 	return nil
 }
 

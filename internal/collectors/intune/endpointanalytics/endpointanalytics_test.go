@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -40,7 +41,13 @@ const (
 	resourcePerfURL = "https://graph.microsoft.com/beta/deviceManagement/userExperienceAnalyticsResourcePerformance"
 	baselineURL     = "https://graph.microsoft.com/beta/deviceManagement/userExperienceAnalyticsBaselines"
 	anomalyURL      = "https://graph.microsoft.com/beta/deviceManagement/userExperienceAnalyticsAnomalySeverityOverview"
+	wfaURL          = "https://graph.microsoft.com/beta/deviceManagement/userExperienceAnalyticsWorkFromAnywhereMetrics/allDevices/metricDevices"
 )
+
+// wfaLiveRow is the VERBATIM metricDevices row for LAPHAM (m7kni, probed as
+// graph2otel-poller 2026-07-19): upgraded, every hardware check passed, all
+// scores null (device not yet assessed). Used as the default WFA body.
+const wfaLiveRow = `{"id":"d5900d67-e50c-44ef-9d5c-6a2f891099c6","deviceId":null,"deviceName":"LAPHAM","serialNumber":"PH4TRX1S2146S0097","manufacturer":"PCSpecialist","model":"Standard","ownership":"Corporate","osDescription":"Windows","osVersion":"10.0.26120.3281","upgradeEligibility":"upgraded","ramCheckFailed":false,"storageCheckFailed":false,"processorCoreCountCheckFailed":false,"processorSpeedCheckFailed":false,"tpmCheckFailed":false,"secureBootCheckFailed":false,"processorFamilyCheckFailed":false,"processor64BitCheckFailed":false,"osCheckFailed":false,"workFromAnywhereScore":null,"windowsScore":null,"cloudManagementScore":null,"cloudIdentityScore":null,"cloudProvisioningScore":null,"healthStatus":"unknown"}`
 
 // anomalyDefaultBody is the live-verified all-zeros response of the beta
 // userExperienceAnalyticsAnomalySeverityOverview SINGLETON (a flat object, not
@@ -84,6 +91,7 @@ func allEndpoints(overrides map[string]string) map[string]string {
 		resourcePerfURL: emptyPage,
 		baselineURL:     emptyPage,
 		anomalyURL:      anomalyDefaultBody,
+		wfaURL:          `{"value":[` + wfaLiveRow + `]}`,
 	}
 	for k, v := range overrides {
 		m[k] = v
@@ -489,6 +497,84 @@ func TestCollectSkipsUnavailableAnomalyOverviewGracefully(t *testing.T) {
 	// A different sub-fetch (device scores) must still have emitted.
 	if len(rec.MetricPoints(deviceScoreCountMetric)) == 0 {
 		t.Error("device-score metrics should still emit despite the anomaly sub-fetch 403ing")
+	}
+}
+
+// wfaNotCapableRow is a SYNTHETIC metricDevices row (the tenant has no notCapable
+// device to capture) exercising the failed-check + WARN path: the fields and
+// their types are live-verified from wfaLiveRow, only the values are set to a
+// failing profile (tpm + secure boot failed, notCapable).
+const wfaNotCapableRow = `{"id":"9999","deviceName":"OLDBOX","serialNumber":"SN9","manufacturer":"Acme","model":"Pentium","ownership":"Personal","osDescription":"Windows","osVersion":"10.0.19045","upgradeEligibility":"notCapable","ramCheckFailed":false,"storageCheckFailed":false,"processorCoreCountCheckFailed":false,"processorSpeedCheckFailed":false,"tpmCheckFailed":true,"secureBootCheckFailed":true,"processorFamilyCheckFailed":true,"processor64BitCheckFailed":false,"osCheckFailed":false,"workFromAnywhereScore":42,"windowsScore":30,"cloudManagementScore":null,"cloudIdentityScore":null,"cloudProvisioningScore":null,"healthStatus":"needsAttention"}`
+
+// TestCollectWorkFromAnywhereReadiness pins the #194 Win11 upgrade-readiness
+// signal: a bounded device count by (upgrade_eligibility, health_state); a clean
+// device's twin carries NO *_check_failed attribute and omits null scores; a
+// notCapable device is WARN and lists exactly its failed checks plus its
+// populated scores.
+func TestCollectWorkFromAnywhereReadiness(t *testing.T) {
+	g := &fakeGraph{bodies: allEndpoints(map[string]string{
+		wfaURL: `{"value":[` + wfaLiveRow + `,` + wfaNotCapableRow + `]}`,
+	})}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	// Gauge: two distinct (eligibility, state) buckets, one device each.
+	type key struct{ elig, state string }
+	got := map[key]float64{}
+	for _, p := range rec.MetricPoints(wfaDeviceCountMetric) {
+		got[key{p.Attrs[semconv.AttrUpgradeEligibility], p.Attrs[semconv.AttrHealthState]}] = p.Value
+	}
+	if got[key{"upgraded", "unknown"}] != 1 || got[key{"notCapable", "needs_attention"}] != 1 {
+		t.Errorf("wfa device_count = %+v, want upgraded/unknown:1 notCapable/needs_attention:1", got)
+	}
+
+	byDevice := map[string]telemetrytest.LogRecord{}
+	for _, l := range rec.LogRecords() {
+		if l.EventName == eventWorkFromAnywhere {
+			byDevice[l.Attrs[semconv.AttrDeviceName]] = l
+		}
+	}
+	clean, ok := byDevice["LAPHAM"]
+	if !ok {
+		t.Fatalf("no WFA twin for LAPHAM")
+	}
+	if clean.Attrs[semconv.AttrUpgradeEligibility] != "upgraded" {
+		t.Errorf("LAPHAM upgrade_eligibility = %q", clean.Attrs[semconv.AttrUpgradeEligibility])
+	}
+	// A clean device carries no failed-check attribute at all, and no null score.
+	for _, k := range []string{
+		semconv.AttrTpmCheckFailed, semconv.AttrSecureBootCheckFailed, semconv.AttrRamCheckFailed,
+		semconv.AttrWorkFromAnywhereScore, semconv.AttrWindowsScore,
+	} {
+		if v, present := clean.Attrs[k]; present {
+			t.Errorf("clean device emitted %q = %q, want omitted", k, v)
+		}
+	}
+	if clean.SeverityText != "INFO" {
+		t.Errorf("clean device severity = %q, want INFO", clean.SeverityText)
+	}
+
+	bad := byDevice["OLDBOX"]
+	if bad.SeverityText != "WARN" {
+		t.Errorf("notCapable device severity = %q, want WARN", bad.SeverityText)
+	}
+	// Exactly the failed checks are present; a passed one is absent.
+	for _, k := range []string{semconv.AttrTpmCheckFailed, semconv.AttrSecureBootCheckFailed, semconv.AttrProcessorFamilyCheckFailed} {
+		if bad.Attrs[k] != "true" {
+			t.Errorf("notCapable device %q = %q, want \"true\"", k, bad.Attrs[k])
+		}
+	}
+	if _, present := bad.Attrs[semconv.AttrRamCheckFailed]; present {
+		t.Errorf("passed ram check should be omitted, got %q", bad.Attrs[semconv.AttrRamCheckFailed])
+	}
+	// Populated scores emit; null ones are omitted.
+	if bad.Attrs[semconv.AttrWorkFromAnywhereScore] != "42" {
+		t.Errorf("work_from_anywhere_score = %q, want 42", bad.Attrs[semconv.AttrWorkFromAnywhereScore])
+	}
+	if _, present := bad.Attrs[semconv.AttrCloudIdentityScore]; present {
+		t.Error("null cloud_identity_score should be omitted")
 	}
 }
 

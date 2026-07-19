@@ -211,3 +211,24 @@ const (
 	AttrVsmStatus                    = "vsm_status"
 	AttrWinpeStatus                  = "winpe_status"
 )
+
+// Attribute keys for the Endpoint Analytics Work-From-Anywhere per-device Windows
+// 11 upgrade-readiness signal (#194) — the metricDevices navigation under
+// userExperienceAnalyticsWorkFromAnywhereMetrics. Values live-captured from the
+// beta wire 2026-07-19 on m7kni.
+const (
+	AttrCloudIdentityScore            = "cloud_identity_score"
+	AttrCloudManagementScore          = "cloud_management_score"
+	AttrCloudProvisioningScore        = "cloud_provisioning_score"
+	AttrOsCheckFailed                 = "os_check_failed"
+	AttrProcessor64BitCheckFailed     = "processor_64bit_check_failed"
+	AttrProcessorCoreCountCheckFailed = "processor_core_count_check_failed"
+	AttrProcessorFamilyCheckFailed    = "processor_family_check_failed"
+	AttrProcessorSpeedCheckFailed     = "processor_speed_check_failed"
+	AttrRamCheckFailed                = "ram_check_failed"
+	AttrSecureBootCheckFailed         = "secure_boot_check_failed"
+	AttrStorageCheckFailed            = "storage_check_failed"
+	AttrTpmCheckFailed                = "tpm_check_failed"
+	AttrUpgradeEligibility            = "upgrade_eligibility"
+	AttrWindowsScore                  = "windows_score"
+)
