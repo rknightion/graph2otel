@@ -20,8 +20,16 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
+
+// metricSelfExcluded counts Graph-polled records dropped by exclude_self because
+// their appId matched this tenant's own poller client_id (#176). It is the
+// logpipeline analog of blobpipeline's graph2otel.blob.self_excluded, and
+// normalizes to graph2otel_logpipeline_self_excluded_total on the Prometheus
+// side (#82). A loud, per-collector counter — never a silent drop.
+const metricSelfExcluded = "graph2otel.logpipeline.self_excluded"
 
 // Default tuning applied by EndpointConfig.withDefaults when the
 // corresponding field is left zero.
@@ -115,6 +123,32 @@ type EndpointConfig struct {
 	// PageSize is the requested $top page size; defaults to
 	// DefaultPageSize when zero.
 	PageSize int
+	// ExcludeSelf, when true, drops a record whose actor appId (as read by
+	// SelfAppID) equals SelfClientID — this tenant's own poller — before it is
+	// mapped or emitted, mirroring blobpipeline's self-exhaust filter one
+	// transport over (#176). Default false: no filtering. Only the
+	// entra.signins.service_principal stream sets it; the self-share there is
+	// small (~1.1% live-measured 2026-07-19), so it is opt-in via the tenant's
+	// exclude_self flag. A dropped record still advances the window exactly as an
+	// empty window would (the watermark reaches to-SafetyLag regardless), so it
+	// never causes a re-scan loop.
+	ExcludeSelf bool
+	// SelfClientID is this tenant's own poller client_id, the value ExcludeSelf
+	// compares each record's SelfAppID against. Empty disables the filter even
+	// when ExcludeSelf is true — there is no "self" to match — so a tenant relying
+	// on a shared AZURE_CLIENT_ID with no configured client_id safely no-ops
+	// rather than matching every empty appId.
+	SelfClientID string
+	// SelfAppID extracts the actor appId from a raw record. nil disables the
+	// filter (a stream whose records carry no appId, i.e. every sign-in stream
+	// except service_principal), so ExcludeSelf is a no-op there even when set.
+	// It reads the SAME field the Map uses for the appId attribute, so a filtered
+	// record and an emitted one agree on identity.
+	SelfAppID func(record map[string]any) string
+	// CollectorName labels the metricSelfExcluded self-obs counter so a drop is
+	// attributable to its stream. Poll needs it because it receives only the
+	// EndpointConfig, not the owning collector's name.
+	CollectorName string
 	// Map turns one raw JSON record (as decoded from the Graph response's
 	// "value" array) into its immutable id — used for SeenIDs dedupe across
 	// the overlap window — and the OTLP log Event to emit for it.
@@ -191,6 +225,17 @@ func Poll(ctx context.Context, cfg EndpointConfig, cp *checkpoint.Checkpoint, fr
 			return cp.Watermark, fmt.Errorf("logpipeline: %s: fetch page: %w", cfg.Path, ferr)
 		}
 		for _, rec := range records {
+			if cfg.ExcludeSelf && cfg.SelfAppID != nil && cfg.SelfClientID != "" && cfg.SelfAppID(rec) == cfg.SelfClientID {
+				// graph2otel's own polling exhaust (#176). Drop it before Map, but
+				// LOUDLY: a per-collector self-obs counter, never a silent skip. Self-
+				// ONLY: any other appId falls through untouched. The record is simply
+				// not drained; the window still advances to to-SafetyLag below whether
+				// or not any non-self records remain, so a self-only window never loops.
+				e.Counter(metricSelfExcluded, "{record}",
+					"Graph-polled records dropped by exclude_self because their appId matched this tenant's own poller client_id (#176).",
+					1, telemetry.Attrs{semconv.AttrCollector: cfg.CollectorName})
+				continue
+			}
 			id, ev := cfg.Map(rec)
 			t, ok := recordTime(rec, cfg.TimeField)
 			if !ok {

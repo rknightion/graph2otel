@@ -175,14 +175,23 @@ func setupTenant(
 	// transport (one PageFetcher over gc) and the file-based checkpoint store.
 	fetcher := logpipeline.NewGraphPageFetcher(gc)
 	jobClient := jobpipeline.NewGraphJobClient(gc)
+	// exclude_self also filters the Graph-polled service-principal sign-in stream
+	// (#176): the same tenant flag that drops the poller's blob exhaust drops its
+	// own SP sign-ins. The self-share there is small (~1.1% live-measured) so this
+	// is off by default, but it is wired through so a tenant that opts in filters
+	// both transports with one key. A window collector that is not self-excludable
+	// simply ignores these fields.
+	wExcludeSelf, wClientID := tenantExcludeSelf(cfg, ta.TenantID)
 	wdeps := collectors.WindowDeps{
-		Graph:     gc,
-		TenantID:  ta.TenantID,
-		Logger:    tlog,
-		Caps:      caps,
-		Fetcher:   fetcher,
-		JobClient: jobClient,
-		Store:     store,
+		Graph:        gc,
+		TenantID:     ta.TenantID,
+		Logger:       tlog,
+		Caps:         caps,
+		Fetcher:      fetcher,
+		JobClient:    jobClient,
+		Store:        store,
+		ExcludeSelf:  wExcludeSelf,
+		SelfClientID: wClientID,
 	}
 	for _, wf := range collectors.WindowAll() {
 		rw := wf(wdeps)
@@ -384,15 +393,17 @@ func registerBlobCollectors(
 		return
 	}
 
-	excludeSelf, clientID := tenantBlobExcludeSelf(cfg, ta.TenantID)
+	excludeSelf, clientID := tenantExcludeSelf(cfg, ta.TenantID)
 	if excludeSelf && clientID == "" {
 		// exclude_self on but no way to identify "self": the filter would no-op
 		// silently, which is the exact failure mode the loud-drop design (#154)
 		// exists to avoid. Say so once at startup rather than leaving an operator
-		// to wonder why a ~60% reduction never appeared.
-		tlog.Warn("blob_ingest.exclude_self is enabled but 'self' cannot be identified; "+
+		// to wonder why a ~60% reduction never appeared. (Emitted once at the blob
+		// path; the window path shares the same resolver so a second warning would
+		// be redundant.)
+		tlog.Warn("exclude_self is enabled but 'self' cannot be identified; "+
 			"self-exhaust filtering is DISABLED — set tenants[].client_id to the poller's "+
-			"app registration ID, or provide AZURE_CLIENT_ID in the environment (#154)",
+			"app registration ID, or provide AZURE_CLIENT_ID in the environment (#176)",
 			"tenant", ta.TenantID)
 	}
 	bdeps := collectors.BlobDeps{
@@ -635,11 +646,13 @@ func tenantBlobAccountURL(cfg *config.Config, tenantID string) string {
 	return ""
 }
 
-// tenantBlobExcludeSelf returns the tenant's blob_ingest.exclude_self flag and
-// its poller client_id — the two values the self-exhaust filter needs (#154).
-// The client_id is the identity "self" is matched against; an empty one leaves
+// tenantExcludeSelf returns the tenant's exclude_self flag and its poller
+// client_id — the two values every transport's self-exhaust filter needs (#176,
+// generalized from #154's blob-only tenantBlobExcludeSelf). The flag is a
+// tenant-level key (tenants[].exclude_self) because "self" spans transports; the
+// client_id is the identity "self" is matched against, and an empty one leaves
 // the filter unable to identify self (it then no-ops, and the caller warns).
-func tenantBlobExcludeSelf(cfg *config.Config, tenantID string) (excludeSelf bool, clientID string) {
+func tenantExcludeSelf(cfg *config.Config, tenantID string) (excludeSelf bool, clientID string) {
 	for _, t := range cfg.Tenants {
 		if t.TenantID == tenantID {
 			clientID = t.ClientID
@@ -650,10 +663,10 @@ func tenantBlobExcludeSelf(cfg *config.Config, tenantID string) (excludeSelf boo
 				// exclude_self silently no-ops on the exact production deployment
 				// it exists for. Config client_id still wins, so a multi-tenant
 				// process running a distinct app per tenant stays per-tenant
-				// correct (#154).
+				// correct (#176).
 				clientID = os.Getenv("AZURE_CLIENT_ID")
 			}
-			return t.BlobIngest.ExcludeSelf, clientID
+			return t.ExcludeSelf, clientID
 		}
 	}
 	return false, ""

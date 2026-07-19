@@ -100,15 +100,18 @@ destination cannot buy back time already spent. Full evaluation: #89.
 
 Because ~60% of `MicrosoftGraphActivityLogs` is graph2otel calling Graph (above),
 there is an opt-in filter that drops the poller's own records before they are
-emitted: `blob_ingest.exclude_self`, **default off**.
+emitted: `exclude_self`, **default off**. It is a **tenant-level** key (a sibling
+of `client_id`, not under `blob_ingest`) because the same "self" spans transports
+— it filters both the blob feed and the Graph-polled service-principal sign-in
+stream with one flag (#176):
 
 ```yaml
 tenants:
   - tenant_id: "..."
     client_id: "<the poller's app registration id>"
+    exclude_self: true
     blob_ingest:
       account_url: "https://myaccount.blob.core.windows.net"
-      exclude_self: true
 ```
 
 - **Self-only, by `appId`.** A record is dropped **if and only if** its actor
@@ -118,16 +121,28 @@ tenants:
   first-party service principals — always passes through untouched.
 - **Per-tenant.** "Self" is that tenant's `client_id`, never a global list, so one
   deployment polling many tenants filters each against its own poller identity.
-- **Scope: the blob categories that carry an `appId`** — `MicrosoftGraphActivityLogs`
-  (`entra.graph_activity`) and the service-principal sign-in categories
-  (`entra.signins.*`). Categories with no `appId` (e.g. `AuditLogs`) are never
-  filtered. The Graph-polled path and `m365.activity` are other transports and out
-  of scope.
-- **Loud, never silent.** Every dropped record increments the
-  `graph2otel.blob.self_excluded` counter (`_total` on the Prometheus side),
-  labelled `collector`, so a ~60%-quieter dashboard is visible and alertable rather
-  than looking like breakage. The bytes are still consumed, so the byte-offset
-  cursor advances exactly as for any other dropped record.
+- **Which transports it covers (live-measured 2026-07-19, #176):**
+  - **Blob categories that carry an `appId`** — `MicrosoftGraphActivityLogs`
+    (`entra.graph_activity`) and the service-principal sign-in categories. This is
+    the material saving (~60% of MGAL). Categories with no `appId` (e.g.
+    `AuditLogs`) are never filtered.
+  - **The Graph-polled `entra.signins.service_principal` stream** — the poller's
+    token acquisitions are service-principal sign-ins, so its `appId` appears here
+    too. The self-share is small (**~1.1%** of that stream, vs 59.9% on the blob
+    MGAL feed), so this is filtered for completeness rather than volume; the one
+    tenant flag simply covers it too.
+  - **`m365.activity` is out of scope** — the poller does no Exchange/SharePoint
+    operations, so its exhaust in the default UAL subscription is **0%**
+    (0/131 SharePoint, 0/119 Exchange records carried the poller; only the
+    non-default `Audit.AzureActiveDirectory` had ~1.2%). No `m365.activity` self
+    filter is built.
+- **Loud, never silent.** Every dropped record increments a self-obs counter
+  (`_total` on the Prometheus side), labelled `collector`:
+  `graph2otel.blob.self_excluded` on the blob path,
+  `graph2otel.logpipeline.self_excluded` on the Graph-polled path — so a quieter
+  dashboard is visible and alertable rather than looking like breakage. On the blob
+  path the bytes are still consumed, so the byte-offset cursor advances exactly as
+  for any other dropped record.
 - **Resolving "self".** The poller's app id comes from the tenant's `client_id`,
   falling back to the `AZURE_CLIENT_ID` the `DefaultAzureCredential` env leg already
   uses — so an env-authenticated deployment (the common case) works without duplicating

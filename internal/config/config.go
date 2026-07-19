@@ -185,6 +185,30 @@ type TenantConfig struct {
 	// against this tenant. Optional: a single shared app registration across
 	// tenants can leave this unset and rely on AZURE_CLIENT_ID.
 	ClientID string `yaml:"client_id"`
+	// ExcludeSelf, when true, drops records authored by this tenant's own poller —
+	// graph2otel's polling exhaust — across every transport whose records carry an
+	// appId that can be matched to the poller. It is a TENANT-level flag (#176)
+	// because the same "self" spans transports: it drives both the blob consumer
+	// (the ~60% of MicrosoftGraphActivityLogs volume that is the poller's own
+	// traffic — #152/#154) and the Graph-polled service-principal sign-in stream
+	// (entra.signins.service_principal). Default false.
+	//
+	// "Self" is this tenant's client_id, per-tenant: one deployment polling many
+	// tenants filters each against its own poller identity, and a third party's
+	// records ALWAYS pass through untouched. It requires client_id to be set on the
+	// tenant — with a shared AZURE_CLIENT_ID and no client_id, "self" is taken from
+	// the AZURE_CLIENT_ID env leg; if neither is available the filter safely no-ops
+	// and the composition root logs a warning. Every dropped record increments a
+	// loud per-collector self-obs counter (graph2otel.blob.self_excluded /
+	// graph2otel.logpipeline.self_excluded), so the reduction is visible and
+	// alertable, never silent.
+	//
+	// Live-measured (2026-07-19, #176): the poller is 59.9% of blob MGAL volume
+	// but only ~1.1% of the Graph service-principal sign-in stream and 0% of the
+	// m365.activity default subscription — so the blob transport is the material
+	// saving; the Graph-stream filter is offered for completeness and stays off by
+	// default, and m365.activity carries no self filter at all.
+	ExcludeSelf bool `yaml:"exclude_self"`
 	// Collectors holds per-tenant collector overrides that layer on top of the
 	// global Config.Collectors — a tenant may disable a globally-enabled
 	// collector or tune its interval. See CollectorSettings.
@@ -258,19 +282,6 @@ type BlobIngestConfig struct {
 	// blob ingest entirely for this tenant: no blob collectors are registered,
 	// so a deployment with no storage account is unaffected.
 	AccountURL string `yaml:"account_url"`
-	// ExcludeSelf, when true, drops blob records authored by this tenant's own
-	// poller — graph2otel's polling exhaust in the categories that carry an appId
-	// (MicrosoftGraphActivityLogs and the service-principal sign-in categories),
-	// which is up to ~60% of MGAL volume (#152/#154). Default false.
-	//
-	// "Self" is this tenant's client_id, per-tenant: one deployment polling many
-	// tenants filters each against its own poller identity, and a third party's
-	// records ALWAYS pass through. It requires client_id to be set on the tenant —
-	// with a shared AZURE_CLIENT_ID and no client_id, "self" cannot be identified
-	// and the filter safely no-ops (the composition root logs a warning). Every
-	// dropped record increments the graph2otel.blob.self_excluded self-obs counter,
-	// so the reduction is visible and alertable, never silent.
-	ExcludeSelf bool `yaml:"exclude_self"`
 	// MetricRecencyWindow gates blob-derived metrics (#128): a record whose event
 	// time is older than this takes the log path only, never a counter, so a
 	// backfilled event can never be credited to "now" (OTEL counters are stamped

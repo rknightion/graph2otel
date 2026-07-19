@@ -48,6 +48,19 @@ type WindowDeps struct {
 	// SeenIDs) across restarts, namespaced per (tenant, endpoint). Shared by
 	// both engines (logpipeline and jobpipeline use the same checkpoint.Store).
 	Store *checkpoint.Store
+	// ExcludeSelf mirrors the tenant's exclude_self flag (#176): when true, a
+	// self-excludable window collector drops records authored by this tenant's own
+	// poller (SelfClientID). Default false — no filtering. Only the
+	// entra.signins.service_principal stream acts on it today; every other window
+	// collector ignores it. The self-share on this transport is small (~1.1%
+	// live-measured 2026-07-19), so this is opt-in, but the mechanism is wired so
+	// one tenant flag covers both the blob and Graph transports.
+	ExcludeSelf bool
+	// SelfClientID is this tenant's poller client_id (config tenants[].client_id,
+	// falling back to AZURE_CLIENT_ID), the value ExcludeSelf matches a record's
+	// appId against. Per-tenant, never a third party's id. Empty disables the
+	// filter even when ExcludeSelf is true — there is no "self" to match.
+	SelfClientID string
 }
 
 // RegisteredWindow bundles a constructed window collector with the schedule

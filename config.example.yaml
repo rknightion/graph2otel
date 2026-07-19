@@ -28,6 +28,15 @@ log_level: info # debug | info | warn | error
 tenants:
   - tenant_id: "00000000-0000-0000-0000-000000000000" # Entra tenant GUID or verified domain
     client_id: "" # app registration (application) ID; optional if AZURE_CLIENT_ID is set
+    # Opt-in, default-off: drop graph2otel's OWN polling exhaust — records whose
+    # appId is this tenant's poller (client_id above, falling back to
+    # AZURE_CLIENT_ID). A TENANT-level flag because "self" spans transports: it
+    # drives the blob feed (up to ~60% of MicrosoftGraphActivityLogs volume) AND
+    # the Graph-polled entra.signins.service_principal stream (~1.1% there —
+    # live-measured 2026-07-19, #176). Self-only and per-tenant; a third party's
+    # records always pass. Each drop increments graph2otel.blob.self_excluded /
+    # graph2otel.logpipeline.self_excluded, so the reduction is visible, not silent.
+    # exclude_self: false
     # Optional per-tenant collector overrides. These layer on top of the global
     # `collectors` block below, winning field-by-field, so one tenant can
     # disable a collector (or retune its interval) that the rest keep enabled.
@@ -53,13 +62,7 @@ tenants:
     # once a storage account is configured, not a per-collector opt-in.
     # blob_ingest:
     #   account_url: "https://myaccount.blob.core.windows.net"
-    #   # Opt-in, default-off: drop graph2otel's OWN polling exhaust from the blob
-    #   # feed — records whose appId is this tenant's client_id, up to ~60% of the
-    #   # MicrosoftGraphActivityLogs volume (see docs/blob-ingest.md). Self-only and
-    #   # per-tenant; a third party's records always pass through. Needs client_id
-    #   # (above) set to identify "self". Every drop increments the
-    #   # graph2otel.blob.self_excluded counter, so the reduction is visible, not silent.
-    #   exclude_self: false
+    #   # (self-exhaust filtering is the tenant-level exclude_self key above)
     #
     # Optional: which Office 365 Management Activity API content types the
     # m365.activity collector subscribes to. Unlike blob_ingest this is NOT an

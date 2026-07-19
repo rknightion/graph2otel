@@ -283,6 +283,81 @@ func depsWith(t *testing.T, f *recordingFetcher) collectors.WindowDeps {
 	}
 }
 
+// depsSelf is depsWith plus the exclude_self wiring (#176).
+func depsSelf(t *testing.T, f *recordingFetcher, excludeSelf bool, selfClientID string) collectors.WindowDeps {
+	t.Helper()
+	d := depsWith(t, f)
+	d.ExcludeSelf = excludeSelf
+	d.SelfClientID = selfClientID
+	return d
+}
+
+// signInWithApp is a minimal sign-in record carrying an appId, the field the
+// service-principal self filter reads.
+func signInWithApp(id, appID string) map[string]any {
+	return map[string]any{"id": id, "appId": appID, "createdDateTime": "2026-07-01T10:00:00Z"}
+}
+
+// TestServicePrincipalStreamExcludesSelfWhenEnabled is the #176 wiring guard: the
+// service-principal stream drops the poller's own sign-in (appId == self client
+// id) and passes a third party through when exclude_self is on.
+func TestServicePrincipalStreamExcludesSelfWhenEnabled(t *testing.T) {
+	f := &recordingFetcher{records: []map[string]any{
+		signInWithApp("self", "POLLER"), signInWithApp("other", "THIRDPARTY"),
+	}}
+	rec := telemetrytest.New()
+	c := newCollector(specByName(t, "entra.signins.service_principal"), depsSelf(t, f, true, "POLLER"))
+
+	from := time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC)
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(2*time.Hour), rec.Emitter()); err != nil {
+		t.Fatalf("CollectWindow: %v", err)
+	}
+	logs := rec.LogRecords()
+	if len(logs) != 1 || logs[0].Attrs["id"] != "other" {
+		t.Fatalf("emitted %+v, want only the third-party sign-in [other]", logs)
+	}
+}
+
+// TestServicePrincipalStreamKeepsSelfWhenDisabled is the default-off guard: with
+// exclude_self off, the poller's own sign-in ships exactly as before.
+func TestServicePrincipalStreamKeepsSelfWhenDisabled(t *testing.T) {
+	f := &recordingFetcher{records: []map[string]any{
+		signInWithApp("self", "POLLER"), signInWithApp("other", "THIRDPARTY"),
+	}}
+	rec := telemetrytest.New()
+	c := newCollector(specByName(t, "entra.signins.service_principal"), depsSelf(t, f, false, "POLLER"))
+
+	from := time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC)
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(2*time.Hour), rec.Emitter()); err != nil {
+		t.Fatalf("CollectWindow: %v", err)
+	}
+	if logs := rec.LogRecords(); len(logs) != 2 {
+		t.Fatalf("emitted %d, want both sign-ins (filter off)", len(logs))
+	}
+}
+
+// TestNonServicePrincipalStreamsIgnoreExcludeSelf guards that a user/managed
+// stream never filters — a record whose appId matches the poller id is NOT the
+// poller and must pass, because only the service-principal stream is
+// self-excludable (#176).
+func TestNonServicePrincipalStreamsIgnoreExcludeSelf(t *testing.T) {
+	for _, name := range []string{"entra.signins.interactive", "entra.signins.non_interactive", "entra.signins.managed_identity"} {
+		t.Run(name, func(t *testing.T) {
+			f := &recordingFetcher{records: []map[string]any{signInWithApp("a", "POLLER")}}
+			rec := telemetrytest.New()
+			c := newCollector(specByName(t, name), depsSelf(t, f, true, "POLLER"))
+
+			from := time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC)
+			if _, err := c.CollectWindow(context.Background(), from, from.Add(2*time.Hour), rec.Emitter()); err != nil {
+				t.Fatalf("CollectWindow: %v", err)
+			}
+			if logs := rec.LogRecords(); len(logs) != 1 {
+				t.Fatalf("%s emitted %d, want 1 (non-SP stream never self-filters)", name, len(logs))
+			}
+		})
+	}
+}
+
 func specByName(t *testing.T, name string) spec {
 	t.Helper()
 	for _, s := range specs {

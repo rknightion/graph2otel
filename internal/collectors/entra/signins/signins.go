@@ -68,13 +68,19 @@ type spec struct {
 	eventType  string // signInEventTypes value, e.g. "nonInteractiveUser"; "" = default interactive
 	beta       bool   // beta endpoint + Experimental opt-in
 	checkpoint string // checkpoint namespace suffix (streams share signInsPath)
+	// selfExcludable marks the stream whose records the tenant's exclude_self flag
+	// filters (#176): only the service-principal stream, because the poller's own
+	// token acquisitions ARE service-principal sign-ins (its appId appears here).
+	// User/managed-identity sign-ins are never the poller, so they are not
+	// self-excludable and ignore the flag.
+	selfExcludable bool
 }
 
 // specs is the fixed set of four sign-in streams.
 var specs = []spec{
 	{name: "entra.signins.interactive", eventType: "", beta: false, checkpoint: "interactive"},
 	{name: "entra.signins.non_interactive", eventType: "nonInteractiveUser", beta: true, checkpoint: "nonInteractiveUser"},
-	{name: "entra.signins.service_principal", eventType: "servicePrincipal", beta: true, checkpoint: "servicePrincipal"},
+	{name: "entra.signins.service_principal", eventType: "servicePrincipal", beta: true, checkpoint: "servicePrincipal", selfExcludable: true},
 	{name: "entra.signins.managed_identity", eventType: "managedIdentity", beta: true, checkpoint: "managedIdentity"},
 }
 
@@ -112,6 +118,15 @@ func newCollector(s spec, d collectors.WindowDeps) *collectorImpl {
 	if s.eventType != "" {
 		cfg.BaseURLOverride = betaBaseURL
 		cfg.FilterExtra = fmt.Sprintf("signInEventTypes/any(t: t eq '%s')", s.eventType)
+	}
+	if s.selfExcludable {
+		// The poller's own service-principal sign-ins carry its appId here (#176).
+		// Wire the tenant's exclude_self flag through; the filter no-ops unless the
+		// flag is on AND a self client_id is resolvable (both come from WindowDeps).
+		cfg.ExcludeSelf = d.ExcludeSelf
+		cfg.SelfClientID = d.SelfClientID
+		cfg.SelfAppID = func(rec map[string]any) string { return str(rec, "appId") }
+		cfg.CollectorName = s.name
 	}
 	lc := logpipeline.NewLogCollector(s.name, interval, lag, d.TenantID, cfg, d.Fetcher, d.Store)
 	return &collectorImpl{LogCollector: lc, beta: s.beta}

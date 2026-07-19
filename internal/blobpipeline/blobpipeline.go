@@ -133,7 +133,7 @@ type ContainerConfig struct {
 	// that carry an appId (MicrosoftGraphActivityLogs and the service-principal
 	// sign-in categories), which is up to ~60% of MGAL volume (#152/#154). Default
 	// false: nothing is filtered unless a tenant opts in with
-	// blob_ingest.exclude_self. A dropped record's bytes are still consumed, so the
+	// the tenant's exclude_self flag. A dropped record's bytes are still consumed, so the
 	// cursor advances exactly as for a Map-rejected record — undedupeable is
 	// degraded, misdated is wrong; this is neither, just deliberately unshipped.
 	ExcludeSelf bool
@@ -375,7 +375,7 @@ func emitLines(data []byte, cfg ContainerConfig, e telemetry.Emitter, stats *gat
 			// stalls the cursor. Self-ONLY: any other appId falls through
 			// untouched — a third party's records are never filtered.
 			e.Counter(metricSelfExcluded, "{record}",
-				"Blob records dropped by blob_ingest.exclude_self because their appId matched this tenant's own poller client_id (#154).",
+				"Blob records dropped by exclude_self because their appId matched this tenant's own poller client_id (#154).",
 				1, telemetry.Attrs{semconv.AttrCollector: cfg.CollectorName})
 			continue
 		}

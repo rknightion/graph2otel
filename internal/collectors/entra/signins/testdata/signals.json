@@ -26,6 +26,12 @@
       "AttrKeys": [
         "collector"
       ]
+    },
+    {
+      "Name": "graph2otel.logpipeline.self_excluded",
+      "AttrKeys": [
+        "collector"
+      ]
     }
   ],
   "Logs": [

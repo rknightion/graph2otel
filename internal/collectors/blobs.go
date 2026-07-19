@@ -32,7 +32,7 @@ type BlobDeps struct {
 	// across restarts. The same checkpoint.Store the window collectors use —
 	// the two cursor kinds are namespaced apart on disk.
 	Store *checkpoint.Store
-	// ExcludeSelf mirrors the tenant's blob_ingest.exclude_self (#154): when true,
+	// ExcludeSelf mirrors the tenant's exclude_self flag (#154/#176): when true,
 	// each blob collector whose records carry an appId drops the ones authored by
 	// this tenant's own poller (SelfClientID). Default false — no filtering. A
 	// factory copies it into its ContainerConfig; a category with no appId ignores

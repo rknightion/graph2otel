@@ -57,29 +57,31 @@ tenants:
 // exclude_self is the opt-in self-exhaust filter (#154): it round-trips through
 // per-tenant YAML exactly like account_url (a tenant sub-key, so no flat G2O_ env
 // var — the whole tenants list is file-only).
-func TestBlobIngestExcludeSelfLoadsPerTenant(t *testing.T) {
+// exclude_self is a TENANT-level key (#176), a sibling of client_id — not under
+// blob_ingest — because the same "self" spans the blob and Graph transports.
+func TestExcludeSelfLoadsPerTenant(t *testing.T) {
 	path := writeConfig(t, `
 otlp:
   protocol: stdout
 tenants:
   - tenant_id: "4b8c18bd-2f9f-4227-af55-9f1061cf9c32"
     client_id: "c98e5057-edde-4666-b301-186a01b4dc58"
+    exclude_self: true
     blob_ingest:
       account_url: "https://graph2otelm7kni.blob.core.windows.net"
-      exclude_self: true
 `)
 	cfg, err := Load(path)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if !cfg.Tenants[0].BlobIngest.ExcludeSelf {
-		t.Error("blob_ingest.exclude_self = false, want true when set in YAML")
+	if !cfg.Tenants[0].ExcludeSelf {
+		t.Error("exclude_self = false, want true when set in YAML")
 	}
 }
 
 // Default-off: an absent exclude_self (the common case) must leave the filter
 // off, so nobody loses ~60% of their MGAL feed without opting in.
-func TestBlobIngestExcludeSelfDefaultsToOff(t *testing.T) {
+func TestExcludeSelfDefaultsToOff(t *testing.T) {
 	path := writeConfig(t, `
 otlp:
   protocol: stdout
@@ -92,8 +94,8 @@ tenants:
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.Tenants[0].BlobIngest.ExcludeSelf {
-		t.Error("blob_ingest.exclude_self = true with no key set, want false (default off)")
+	if cfg.Tenants[0].ExcludeSelf {
+		t.Error("exclude_self = true with no key set, want false (default off)")
 	}
 }
 
