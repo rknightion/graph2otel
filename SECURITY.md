@@ -129,7 +129,8 @@ left as folklore, because "graph2otel only reads" is otherwise a claim an operat
 reasonably audit against and find false.
 
 1. **Intune reports-export job creation** — `intune.app_install_status`,
-   `intune.defender_agents`, `intune.cert_inventory`. The export API has no read-only form:
+   `intune.defender_agents`, `intune.cert_inventory`, `intune.config_assignment_status`,
+   `intune.noncompliant_settings`, `intune.device_attestation`. The export API has no read-only form:
    a report is produced by POSTing a job, polling it, and downloading the result. The write
    creates a job owned by the caller; it mutates no tenant data.
 2. **`POST /subscriptions/start` (O365 Management Activity API)** — `m365.activity`.

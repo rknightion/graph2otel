@@ -65,18 +65,19 @@ failure mode. Its own help text calls this limitation out explicitly.
 
 ## 4. The export-job ReadWrite caveat (gotcha #3)
 
-Three opt-in Intune collectors — `intune.app_install_status`, `intune.cert_inventory`, and
-`intune.defender_agents` — read their data via the **Intune Reports Export API**
+Six opt-in Intune collectors — `intune.app_install_status`, `intune.cert_inventory`,
+`intune.defender_agents`, `intune.config_assignment_status`, `intune.noncompliant_settings`, and
+`intune.device_attestation` — read their data via the **Intune Reports Export API**
 (`POST /deviceManagement/reports/exportJobs`, then poll and download the result). That API requires
 **`DeviceManagementManagedDevices.ReadWrite.All`**, a write-level scope, purely to **create** the
 export job. This is documented Microsoft Graph behavior, not a graph2otel design choice.
 
-If you're setting these three collectors up and notice a read-only telemetry exporter asking for a
+If you're setting these collectors up and notice a read-only telemetry exporter asking for a
 `ReadWrite` scope, this is why: graph2otel never uses that scope to write any Intune configuration
 or device state — it creates the export job, polls its status, and reads the exported result back.
 No collector ever touches `DeviceManagementManagedDevices.PrivilegedOperations.All` (remote wipe and
 other destructive actions) or any other write scope; this one `ReadWrite` grant, needed only by these
-three opt-in export collectors, is the sole exception to graph2otel's read-only posture. Because
+opt-in export collectors, is the sole exception to graph2otel's read-only posture. Because
 these collectors are all opt-in (`Experimental`, see [`collectors.md`](./collectors.md)), a
 default/read-only deployment never requests this scope at all.
 
@@ -156,6 +157,6 @@ follow-up rather than assuming per-collector enforcement is live today.
 - Never grant `DeviceManagementManagedDevices.PrivilegedOperations.All` — graph2otel has no use for
   destructive device actions and never requests it.
 - The one legitimate write-level exception is `DeviceManagementManagedDevices.ReadWrite.All`, and
-  only if you enable one of the three export-report collectors.
+  only if you enable one of the six export-report collectors.
 - See `SECURITY.md` for the full data-handling and cardinality posture this permission model
   supports.

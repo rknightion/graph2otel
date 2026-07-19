@@ -225,11 +225,12 @@ attribute. For why this path exists and how to provision it, see
 
 ### The export-report collectors need one write-level scope
 
-`intune.app_install_status`, `intune.cert_inventory`, and `intune.defender_agents` poll the
-**Reports Export API**: `POST /deviceManagement/reports/exportJobs`, then poll job status and
+`intune.app_install_status`, `intune.cert_inventory`, `intune.defender_agents`,
+`intune.config_assignment_status`, `intune.noncompliant_settings`, and `intune.device_attestation`
+poll the **Reports Export API**: `POST /deviceManagement/reports/exportJobs`, then poll job status and
 download the result. Creating that job requires `DeviceManagementManagedDevices.ReadWrite.All` —
 a write-level scope, and the single break in graph2otel's read-only property. graph2otel never
-writes Intune configuration or device state through it. All three are opt-in (`beta`). See
+writes Intune configuration or device state through it. All six are opt-in (`beta`). See
 [`permissions.md`](./permissions.md#4-the-export-job-readwrite-caveat-gotcha-3) for the full
 explanation.
 

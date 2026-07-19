@@ -140,8 +140,9 @@ The boundary rule **inverts** for logs: per-entity detail belongs here. The
 WindowCollectors (`entra.signins` ×4, `entra.directory_audit`,
 `entra.provisioning`, `entra.risk_detection`, `entra.security_alert`,
 `intune.audit_event`, `intune.enrollment_event`, `intune.autopilot_event`) and
-the three export-report per-row logs (`intune.device_certificate`,
-`intune.defender_agent`, `intune.app_install_status`) carry the expected
+the six export-report per-row logs (`intune.device_certificate`,
+`intune.defender_agent`, `intune.app_install_status`, `intune.config_assignment_status`,
+`intune.noncompliant_setting`, `intune.device_attestation`) carry the expected
 per-entity attributes: UPNs, user/device IDs, device names/serials, IPs,
 locations, correlation/request/incident IDs, certificate thumbprints/serials/
 subjects, provisioning identity IDs/names, sign-in resource/SP IDs/names. All of
@@ -170,9 +171,10 @@ redaction.
 ## Permission scopes — PASS (one inconsistency fixed)
 
 Every collector requests a **read-only** Graph scope matched to its own signal,
-with exactly one documented exception: the three Intune **export-report**
+with exactly one documented exception: the six Intune **export-report**
 collectors (`intune.app_install_status`, `intune.cert_inventory`,
-`intune.defender_agents`) each require **one write-level scope**,
+`intune.defender_agents`, `intune.config_assignment_status`,
+`intune.noncompliant_settings`, `intune.device_attestation`) each require **one write-level scope**,
 `DeviceManagementManagedDevices.ReadWrite.All`, solely to *create* an export job
 (`POST /deviceManagement/reports/exportJobs`) — a documented Microsoft Graph
 requirement, not a graph2otel design choice. graph2otel only reads the exported
