@@ -144,6 +144,10 @@ var annotations = map[string]Annotation{
 		Source:   "`/identityProtection/riskDetections`",
 		Category: "UserRiskEvents",
 	},
+	"entra.service_principal_risk_detections": {
+		Collects: "Identity Protection SERVICE-PRINCIPAL (workload-identity) risk detection events — the WHY behind entra.risk's risky-SP gauge (leaked credentials, anomalous SP activity, admin-confirmed compromise, …). One log per detection; log-shaped like `entra.risk_detections`, the SP-risk STATE gauge already ships via `entra.risk`. Needs Workload Identities Premium",
+		Source:   "`/identityProtection/servicePrincipalRiskDetections`",
+	},
 	"entra.security_alerts": {
 		Collects: "Security alerts (`alerts_v2`)",
 		Source:   "`/security/alerts_v2`",

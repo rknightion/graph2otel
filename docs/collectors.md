@@ -81,6 +81,7 @@ retunes them, see [`configuration.md`](./configuration.md).
 | `entra.signins.non_interactive` | Non-interactive sign-in events | `/auditLogs/signIns` (beta, `signInEventTypes` filter) | `AuditLog.Read.All` | `needs-license/entra_p1`, `beta` | 5m | 15m | `entra.signin` |
 | `entra.signins.service_principal` | Service principal sign-in events | `/auditLogs/signIns` (beta, `signInEventTypes` filter) | `AuditLog.Read.All` | `needs-license/entra_p1`, `beta` | 5m | 15m | `entra.signin` |
 | `entra.signins.managed_identity` | Managed identity sign-in events | `/auditLogs/signIns` (beta, `signInEventTypes` filter) | `AuditLog.Read.All` | `needs-license/entra_p1`, `beta` | 5m | 15m | `entra.signin` |
+| `entra.service_principal_risk_detections` | Identity Protection SERVICE-PRINCIPAL (workload-identity) risk detection events — the WHY behind entra.risk's risky-SP gauge (leaked credentials, anomalous SP activity, admin-confirmed compromise, …). One log per detection; log-shaped like `entra.risk_detections`, the SP-risk STATE gauge already ships via `entra.risk`. Needs Workload Identities Premium | `/identityProtection/servicePrincipalRiskDetections` | `IdentityRiskyServicePrincipal.Read.All` | `needs-license/workload_identities_premium` | 30m | 15m | `entra.service_principal_risk_detection` |
 
 ## Entra ID — logs (blob collectors)
 
