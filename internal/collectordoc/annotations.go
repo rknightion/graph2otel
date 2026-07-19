@@ -145,7 +145,7 @@ var annotations = map[string]Annotation{
 		Category: "UserRiskEvents",
 	},
 	"entra.service_principal_risk_detections": {
-		Collects: "Identity Protection SERVICE-PRINCIPAL (workload-identity) risk detection events — the WHY behind entra.risk's risky-SP gauge (leaked credentials, anomalous SP activity, admin-confirmed compromise, …). One log per detection; log-shaped like `entra.risk_detections`, the SP-risk STATE gauge already ships via `entra.risk`. Needs Workload Identities Premium",
+		Collects: "Identity Protection SERVICE-PRINCIPAL (workload-identity) risk detection events — the WHY behind entra.risk's risky-SP gauge (leaked credentials, anomalous SP activity, admin-confirmed compromise, …). One log per detection; log-shaped like `entra.risk_detections`, the SP-risk STATE gauge already ships via `entra.risk`. Ungated (polls unconditionally; returns 200/empty or 403→WARN where the feature is absent — a license gate would hide it on tenants where the endpoint works)",
 		Source:   "`/identityProtection/servicePrincipalRiskDetections`",
 	},
 	"entra.security_alerts": {

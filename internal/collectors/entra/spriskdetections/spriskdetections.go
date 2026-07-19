@@ -17,16 +17,25 @@
 // evidence stream — the detection EVENT, not the current state — so it is
 // log-shaped like entra.risk_detections, NOT a second gauge.
 //
-// # IPC workload + license
+// # IPC workload + why there is NO license gate
 //
 // This endpoint lives on the Identity Protection (IPC) workload: 1 request/second
 // per tenant, shared across ALL IPC callers, no Retry-After. graph2otel's
 // transport classifies the Path onto WorkloadIPC and serializes it through the
 // shared per-tenant limiter — this collector wires no limiter itself and polls
-// slowly. Workload-identity risk requires Microsoft Entra Workload Identities
-// Premium, so RequiredCapability gates on CapWorkloadIdentitiesPremium (matching
-// entra.risk's SP half); a tenant without it is skipped rather than 403'd every
-// cycle. The endpoint is v1.0 and stable, so this is default-on, not Experimental.
+// slowly.
+//
+// It is deliberately NOT gated on CapWorkloadIdentitiesPremium, unlike entra.risk's
+// riskyServicePrincipals half. That was the first design and it was WRONG:
+// live-verified 2026-07-19, m7kni's license detection reports NO Workload
+// Identities Premium (entra.risk internally skips its SP half there), yet
+// GET /identityProtection/servicePrincipalRiskDetections returns 200 with real
+// detections. A capability gate would permanently hide this collector on the exact
+// tenant where it works and has data. So it polls unconditionally and degrades
+// gracefully: a tenant that genuinely lacks the feature returns 200/empty (nothing
+// emitted) or 403 (surfaced as a WARN with the checkpoint unchanged, like every
+// other logpipeline collector). The endpoint is v1.0 and stable, so it is
+// default-on, not Experimental.
 //
 // # Cardinality (LOGS)
 //
@@ -50,7 +59,6 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
-	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
@@ -74,17 +82,9 @@ const (
 	maxWindow       = 24 * time.Hour
 )
 
-// collectorImpl is the SP risk-detections WindowCollector plus the license
-// declaration the composition root gates on.
+// collectorImpl is the SP risk-detections WindowCollector.
 type collectorImpl struct {
 	*logpipeline.LogCollector
-}
-
-// RequiredCapability declares that this collector needs Workload Identities
-// Premium (workload-identity risk is a WIP feature); the composition root skips
-// it below that tier. Implements license.CapabilityRequirer.
-func (c *collectorImpl) RequiredCapability() license.Capability {
-	return license.CapWorkloadIdentitiesPremium
 }
 
 // RequiredPermissions declares the least-privilege Graph application scope.
@@ -187,9 +187,7 @@ func init() {
 	})
 }
 
-// Compile-time checks that the collector satisfies every interface the
-// composition root type-asserts on.
-var (
-	_ collector.WindowCollector  = (*collectorImpl)(nil)
-	_ license.CapabilityRequirer = (*collectorImpl)(nil)
-)
+// Compile-time check that the collector satisfies the WindowCollector interface
+// the composition root type-asserts on. No license.CapabilityRequirer — this
+// collector is deliberately ungated (see the package doc).
+var _ collector.WindowCollector = (*collectorImpl)(nil)
