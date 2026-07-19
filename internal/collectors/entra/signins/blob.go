@@ -33,6 +33,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -156,6 +157,13 @@ func newBlobCollector(s blobSpec, d collectors.BlobDeps) *blobCollectorImpl {
 		ExcludeSelf:  d.ExcludeSelf,
 		SelfClientID: d.SelfClientID,
 		SelfAppID:    blobSelfAppID,
+		// Derive the bounded entra.signin.count counter (#187 F3), gated so a
+		// backfilled sign-in is never credited to now. RecencyWindow comes from
+		// the tenant's config (default 20m); the gate lives in the pipeline, not
+		// here. One shared deriver across all three sign-in blob containers,
+		// mirroring the shared Map — the record shape is identical.
+		Derive:        deriveSignin,
+		RecencyWindow: d.MetricRecencyWindow,
 	}
 	return &blobCollectorImpl{
 		BlobCollector: blobpipeline.NewBlobCollector(
@@ -209,6 +217,60 @@ func mapBlobSignIn(rec map[string]any) (telemetry.Event, bool) {
 	_, ev := mapSignIn(props)
 	ev.Timestamp = ts
 	return ev, true
+}
+
+// deriveSignin emits the bounded entra.signin.count counter for one sign-in
+// blob record (#187, fast-follow to #128/#135). Only bounded, tenant-shaped
+// labels (#112) — result, conditional access status, risk level, client app
+// used. Per-entity fields (id, appId, servicePrincipalId, ipAddress, UPN,
+// appDisplayName, resourceDisplayName) stay log-only in mapSignIn and never
+// appear here; errorCode itself also stays log-only (high-cardinality),
+// collapsed here to the bounded success/failure result label.
+//
+// One shared deriver across all three sign-in blob containers, mirroring the
+// shared mapSignIn — every category's `properties` object is the same Graph
+// signIn resource shape, so one definition of "what a sign-in metric looks
+// like" is correct for all of them.
+//
+// Labels are always assigned directly (never telemetry.SetStr, which omits
+// empty values) so every point carries the same four keys and series shape
+// never depends on which fields a particular sign-in happened to populate.
+func deriveSignin(rec map[string]any, _ telemetry.Event) []blobpipeline.MetricPoint {
+	props := nested(rec, "properties")
+	if props == nil {
+		return nil
+	}
+	attrs := telemetry.Attrs{}
+	attrs[semconv.AttrResult] = signinResult(props)
+	attrs[semconv.AttrConditionalAccessStatus] = str(props, "conditionalAccessStatus")
+	attrs[semconv.AttrRiskLevelDuringSignIn] = str(props, "riskLevelDuringSignIn")
+	attrs[semconv.AttrClientAppUsed] = str(props, "clientAppUsed")
+	return []blobpipeline.MetricPoint{{
+		Name:  "entra.signin.count",
+		Kind:  blobpipeline.MetricCounter,
+		Unit:  "{signin}",
+		Desc:  "Sign-ins against the tenant, by result, conditional access status, risk level, and client app used (#187).",
+		Value: 1,
+		Attrs: attrs,
+	}}
+}
+
+// signinResult reads properties.status.errorCode and collapses it to the
+// bounded "success"/"failure" label mapSignIn's own body-summary logic uses
+// (signInBody): 0, or an absent status/errorCode, means success; any other
+// value means failure. The numeric errorCode itself is deliberately not
+// carried onto the metric — it is per-failure-reason detail, unbounded across
+// a tenant's history, and stays log-only via status_error_code.
+func signinResult(props map[string]any) string {
+	st := nested(props, "status")
+	if st == nil {
+		return "success"
+	}
+	f, ok := st["errorCode"].(float64)
+	if !ok || f == 0 {
+		return "success"
+	}
+	return "failure"
 }
 
 // blobSelfAppID returns the sign-in's actor appId, read from the properties

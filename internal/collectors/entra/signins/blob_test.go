@@ -517,8 +517,8 @@ func innerProperties(t *testing.T, raw string) map[string]any {
 
 // TestDeriveSignin_BoundedLabelsOnly is #187 (F3)'s cardinality gate (#112):
 // deriveSignin must carry ONLY bounded, tenant-shaped labels — result,
-// conditional_access_status, risk_level_during_sign_in, client_app_used.
-// Any per-entity field (id, appId, servicePrincipalId, ipAddress, UPN,
+// conditional_access_status, risk_level_during_sign_in, client_app_used. Any
+// per-entity field (id, appId, servicePrincipalId, ipAddress, UPN,
 // appDisplayName, resourceDisplayName) leaking into a metric label is the
 // exact bug the cardinality rule forbids. Tested against the pinned live
 // failure record, not a hand-authored map — it exercises the failure branch
@@ -533,10 +533,10 @@ func TestDeriveSignin_BoundedLabelsOnly(t *testing.T) {
 		t.Fatalf("bad point: %+v", p)
 	}
 	want := map[string]any{
-		"result":                     "failure",
-		"conditional_access_status":  "notApplied",
-		"risk_level_during_sign_in":  "none",
-		"client_app_used":            "Unknown",
+		"result":                    "failure",
+		"conditional_access_status": "notApplied",
+		"risk_level_during_sign_in": "none",
+		"client_app_used":           "Unknown",
 	}
 	if len(p.Attrs) != len(want) {
 		t.Fatalf("attrs = %v, want exactly the 4 bounded labels %v", p.Attrs, want)
@@ -548,9 +548,9 @@ func TestDeriveSignin_BoundedLabelsOnly(t *testing.T) {
 	}
 }
 
-// realSignInSuccess is a minimal pinned-shape success record (errorCode 0, or
-// absent) so the result derivation's success branch is exercised against a
-// real field layout too, not inferred.
+// realSignInSuccessProps is a minimal pinned-shape success record
+// (errorCode 0) so the result derivation's success branch is exercised
+// against a real field layout too, not inferred.
 const realSignInSuccessProps = `{
   "id": "a1b2c3d4-1111-2222-3333-444455556666",
   "createdDateTime": "2026-07-16T15:31:34.1881867+00:00",

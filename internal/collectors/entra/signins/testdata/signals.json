@@ -1,5 +1,33 @@
 {
-  "Metrics": null,
+  "Metrics": [
+    {
+      "Name": "entra.signin.count",
+      "AttrKeys": [
+        "client_app_used",
+        "conditional_access_status",
+        "result",
+        "risk_level_during_sign_in"
+      ]
+    },
+    {
+      "Name": "graph2otel.blob.event_age",
+      "AttrKeys": [
+        "collector"
+      ]
+    },
+    {
+      "Name": "graph2otel.blob.metric_emitted",
+      "AttrKeys": [
+        "collector"
+      ]
+    },
+    {
+      "Name": "graph2otel.blob.metric_gated",
+      "AttrKeys": [
+        "collector"
+      ]
+    }
+  ],
   "Logs": [
     {
       "EventName": "entra.signin",
