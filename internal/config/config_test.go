@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/rknightion/graph2otel/internal/config"
 )
@@ -158,6 +159,38 @@ func TestValidateRejectsNegativeMetricLimit(t *testing.T) {
 	cfg.Cardinality.MetricLimit = -1
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("Validate accepted a negative cardinality.metric_limit")
+	}
+}
+
+// TestBlobMetricRecencyWindow_DefaultAndValidation: the gate window defaults to
+// 20m, honors a per-tenant override, and is validated to (0, 1h] — a larger
+// window would re-admit backfilled events into counters (#128).
+func TestBlobMetricRecencyWindow_DefaultAndValidation(t *testing.T) {
+	c := config.Default()
+	if got := c.BlobMetricRecencyWindow("t1"); got != 20*time.Minute {
+		t.Fatalf("default window = %v, want 20m", got)
+	}
+
+	c.Tenants = []config.TenantConfig{{TenantID: "t1", BlobIngest: config.BlobIngestConfig{MetricRecencyWindow: 30 * time.Minute}}}
+	if got := c.BlobMetricRecencyWindow("t1"); got != 30*time.Minute {
+		t.Fatalf("per-tenant window = %v, want 30m", got)
+	}
+	if got := c.BlobMetricRecencyWindow("other"); got != 20*time.Minute {
+		t.Fatalf("unknown tenant window = %v, want default 20m", got)
+	}
+
+	bad := config.Default()
+	bad.OTLP.Protocol = "stdout"
+	bad.Tenants = []config.TenantConfig{{TenantID: "t1", BlobIngest: config.BlobIngestConfig{MetricRecencyWindow: 2 * time.Hour}}}
+	if err := bad.Validate(); err == nil {
+		t.Fatal("Validate accepted a metric_recency_window > 1h")
+	}
+
+	neg := config.Default()
+	neg.OTLP.Protocol = "stdout"
+	neg.Tenants = []config.TenantConfig{{TenantID: "t1", BlobIngest: config.BlobIngestConfig{MetricRecencyWindow: -1}}}
+	if err := neg.Validate(); err == nil {
+		t.Fatal("Validate accepted a negative metric_recency_window")
 	}
 }
 

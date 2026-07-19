@@ -267,6 +267,35 @@ type BlobIngestConfig struct {
 	// dropped record increments the graph2otel.blob.self_excluded self-obs counter,
 	// so the reduction is visible and alertable, never silent.
 	ExcludeSelf bool `yaml:"exclude_self"`
+	// MetricRecencyWindow gates blob-derived metrics (#128): a record whose event
+	// time is older than this takes the log path only, never a counter, so a
+	// backfilled event can never be credited to "now" (OTEL counters are stamped
+	// at export time under cumulative temporality). Default 20m — steady-state
+	// blob latency is ~5m and the tick is 5m, so ~15m is the floor; 20m gives
+	// margin. Validated (0, 1h]: a larger window would re-admit backfill, the
+	// exact bug the gate exists to prevent.
+	MetricRecencyWindow time.Duration `yaml:"metric_recency_window"`
+}
+
+// DefaultMetricRecencyWindow is the blob-derived-metrics gate window when a
+// tenant leaves metric_recency_window unset (#128).
+const DefaultMetricRecencyWindow = 20 * time.Minute
+
+// MaxMetricRecencyWindow is the hard ceiling on the gate window: a larger value
+// would re-admit backfilled events into cumulative counters (#128).
+const MaxMetricRecencyWindow = time.Hour
+
+// BlobMetricRecencyWindow returns the effective blob-derived-metrics recency
+// window for a tenant. blob_ingest is a per-tenant, file-only key — there is no
+// top-level Config.BlobIngest — so this iterates tenants and falls back to
+// DefaultMetricRecencyWindow, never to a global block.
+func (c *Config) BlobMetricRecencyWindow(tenantID string) time.Duration {
+	for i := range c.Tenants {
+		if c.Tenants[i].TenantID == tenantID && c.Tenants[i].BlobIngest.MetricRecencyWindow > 0 {
+			return c.Tenants[i].BlobIngest.MetricRecencyWindow
+		}
+	}
+	return DefaultMetricRecencyWindow
 }
 
 // CollectorSettings resolves the effective enabled state and interval for a
@@ -502,6 +531,10 @@ func (c *Config) Validate() error {
 
 		if err := validateBlobAccountURL(t.BlobIngest.AccountURL); err != nil {
 			return fmt.Errorf("tenants[%d].blob_ingest.account_url: %w", i, err)
+		}
+
+		if w := t.BlobIngest.MetricRecencyWindow; w < 0 || w > MaxMetricRecencyWindow {
+			return fmt.Errorf("tenants[%d].blob_ingest.metric_recency_window: %v out of range (0, %v]", i, w, MaxMetricRecencyWindow)
 		}
 	}
 
