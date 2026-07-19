@@ -100,7 +100,8 @@ func deriveActivity(rec map[string]any, _ telemetry.Event) []blobpipeline.Metric
 	attrs[semconv.AttrResponseStatusCode] = status
 	replay, _ := props["isReplay"].(bool)
 	attrs[semconv.AttrIsReplay] = replay // always present -> stable series shape
-	return []blobpipeline.MetricPoint{{
+
+	pts := []blobpipeline.MetricPoint{{
 		Name:  "entra.graph_activity.requests",
 		Kind:  blobpipeline.MetricCounter,
 		Unit:  "{request}",
@@ -108,6 +109,35 @@ func deriveActivity(rec map[string]any, _ telemetry.Event) []blobpipeline.Metric
 		Value: 1,
 		Attrs: attrs,
 	}}
+
+	// Native-histogram distributions of Azure's SERVER-side timing/size of every
+	// app's Graph calls tenant-wide (#186) — a different population from our own
+	// client-side graph2otel.http.client.request.duration (poll only). Labeled by
+	// method alone: the per-entity detail stays on the log twin. Base-2
+	// exponential aggregation is supplied by a View (provider.go).
+	methodAttrs := telemetry.Attrs{}
+	telemetry.SetStr(methodAttrs, semconv.AttrRequestMethod, str(props, "requestMethod"))
+	if ms, ok := intOf(props, "durationMs"); ok {
+		pts = append(pts, blobpipeline.MetricPoint{
+			Name:  "entra.graph_activity.request.duration",
+			Kind:  blobpipeline.MetricNativeHistogram,
+			Unit:  "ms",
+			Desc:  "Server-side duration of Microsoft Graph API calls against the tenant, by method (#186).",
+			Value: float64(ms),
+			Attrs: methodAttrs,
+		})
+	}
+	if sz, ok := intOf(props, "responseSizeBytes"); ok {
+		pts = append(pts, blobpipeline.MetricPoint{
+			Name:  "entra.graph_activity.response.size",
+			Kind:  blobpipeline.MetricNativeHistogram,
+			Unit:  "By",
+			Desc:  "Response size of Microsoft Graph API calls against the tenant, by method (#186).",
+			Value: float64(sz),
+			Attrs: methodAttrs,
+		})
+	}
+	return pts
 }
 
 // callerAppID returns the appId of the app that made this Graph call, read from

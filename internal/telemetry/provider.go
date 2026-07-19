@@ -56,6 +56,20 @@ func noopExemplarSelector(_ sdkmetric.Aggregation) exemplar.ReservoirProvider {
 // scopeName is the instrumentation scope for all emitted telemetry.
 const scopeName = "github.com/rknightion/graph2otel"
 
+// nativeHistogramInstruments are the histogram instruments exported as base-2
+// exponential (Prometheus native) histograms rather than explicit-bucket ones
+// (#186). A View overrides each named instrument's aggregation, so the deriver
+// records them with no explicit bounds and the SDK produces an exponential
+// histogram; Grafana Cloud stores it as a native histogram. These are the
+// blob-derived MGAL latency/size distributions (#128). Add a name here to make
+// its histogram native. Kept a literal list rather than a wildcard so existing
+// explicit-bucket histograms (the graph2otel.*.http.client.request.duration
+// self-obs) are unaffected.
+var nativeHistogramInstruments = []string{
+	"entra.graph_activity.request.duration",
+	"entra.graph_activity.response.size",
+}
+
 // Options configures the OTLP/stdout telemetry pipeline.
 type Options struct {
 	ServiceName    string
@@ -119,16 +133,28 @@ type Provider struct {
 // needed for them.
 func metricProviderOptions(res *resource.Resource, cardinalityLimit int) []sdkmetric.Option {
 	noopMask := sdkmetric.Stream{ExemplarReservoirProviderSelector: noopExemplarSelector}
+	views := []sdkmetric.View{
+		sdkmetric.NewView(sdkmetric.Instrument{Name: "*", Kind: sdkmetric.InstrumentKindCounter}, noopMask),
+		sdkmetric.NewView(sdkmetric.Instrument{Name: "*", Kind: sdkmetric.InstrumentKindUpDownCounter}, noopMask),
+		sdkmetric.NewView(sdkmetric.Instrument{Name: "*", Kind: sdkmetric.InstrumentKindGauge}, noopMask),
+	}
+	for _, name := range nativeHistogramInstruments {
+		views = append(views, sdkmetric.NewView(
+			sdkmetric.Instrument{Name: name},
+			sdkmetric.Stream{
+				// Recorded via context.Background() through the blob seam, so an
+				// exemplar reservoir would be dead weight — reuse the no-op.
+				ExemplarReservoirProviderSelector: noopExemplarSelector,
+				Aggregation:                       sdkmetric.AggregationBase2ExponentialHistogram{MaxSize: 160, MaxScale: 20},
+			},
+		))
+	}
 	return []sdkmetric.Option{
 		sdkmetric.WithResource(res),
 		// Hard per-instrument cardinality limit (0/neg = SDK default of 2000).
 		sdkmetric.WithCardinalityLimit(cardinalityLimit),
 		sdkmetric.WithExemplarFilter(exemplar.TraceBasedFilter),
-		sdkmetric.WithView(
-			sdkmetric.NewView(sdkmetric.Instrument{Name: "*", Kind: sdkmetric.InstrumentKindCounter}, noopMask),
-			sdkmetric.NewView(sdkmetric.Instrument{Name: "*", Kind: sdkmetric.InstrumentKindUpDownCounter}, noopMask),
-			sdkmetric.NewView(sdkmetric.Instrument{Name: "*", Kind: sdkmetric.InstrumentKindGauge}, noopMask),
-		),
+		sdkmetric.WithView(views...),
 	}
 }
 

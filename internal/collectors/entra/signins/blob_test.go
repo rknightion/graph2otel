@@ -514,3 +514,132 @@ func innerProperties(t *testing.T, raw string) map[string]any {
 	}
 	return inner
 }
+
+// TestDeriveSignin_BoundedLabelsOnly is #187 (F3)'s cardinality gate (#112):
+// deriveSignin must carry ONLY bounded, tenant-shaped labels — result,
+// conditional_access_status, risk_level_during_sign_in, client_app_used.
+// Any per-entity field (id, appId, servicePrincipalId, ipAddress, UPN,
+// appDisplayName, resourceDisplayName) leaking into a metric label is the
+// exact bug the cardinality rule forbids. Tested against the pinned live
+// failure record, not a hand-authored map — it exercises the failure branch
+// of the result derivation (status.errorCode 7000113, non-zero).
+func TestDeriveSignin_BoundedLabelsOnly(t *testing.T) {
+	pts := deriveSignin(decodeBlobRecord(t, realBlobFailure), telemetry.Event{})
+	if len(pts) != 1 {
+		t.Fatalf("got %d points, want 1", len(pts))
+	}
+	p := pts[0]
+	if p.Name != "entra.signin.count" || p.Kind != blobpipeline.MetricCounter || p.Value != 1 {
+		t.Fatalf("bad point: %+v", p)
+	}
+	want := map[string]any{
+		"result":                     "failure",
+		"conditional_access_status":  "notApplied",
+		"risk_level_during_sign_in":  "none",
+		"client_app_used":            "Unknown",
+	}
+	if len(p.Attrs) != len(want) {
+		t.Fatalf("attrs = %v, want exactly the 4 bounded labels %v", p.Attrs, want)
+	}
+	for k, w := range want {
+		if p.Attrs[k] != w {
+			t.Errorf("attr %q = %#v, want %#v", k, p.Attrs[k], w)
+		}
+	}
+}
+
+// realSignInSuccess is a minimal pinned-shape success record (errorCode 0, or
+// absent) so the result derivation's success branch is exercised against a
+// real field layout too, not inferred.
+const realSignInSuccessProps = `{
+  "id": "a1b2c3d4-1111-2222-3333-444455556666",
+  "createdDateTime": "2026-07-16T15:31:34.1881867+00:00",
+  "userPrincipalName": "rob@m7kni.io",
+  "appId": "c98e5057-edde-4666-b301-186a01b4dc58",
+  "status": {"errorCode": 0},
+  "clientAppUsed": "Browser",
+  "conditionalAccessStatus": "success",
+  "riskLevelDuringSignIn": "none",
+  "riskState": "none"
+}`
+
+func TestDeriveSignin_SuccessWhenErrorCodeIsZero(t *testing.T) {
+	env := map[string]any{"properties": decodeBlobRecord(t, realSignInSuccessProps)}
+	pts := deriveSignin(env, telemetry.Event{})
+	if len(pts) != 1 {
+		t.Fatalf("got %d points, want 1", len(pts))
+	}
+	if got := pts[0].Attrs["result"]; got != "success" {
+		t.Errorf("result = %#v, want \"success\"", got)
+	}
+}
+
+// freshBlobSignin clones realBlobFailure with a within-window
+// properties.createdDateTime, so the derived counter is not gated by
+// RecencyWindow and reaches the recorder — the pinned realBlobFailure record
+// is always gated (its date is 2026-07-16) and never would.
+func freshBlobSignin(t *testing.T, at time.Time) string {
+	t.Helper()
+	rec := decodeBlobRecord(t, realBlobFailure)
+	ts := at.UTC().Format(time.RFC3339Nano)
+	if props, ok := rec["properties"].(map[string]any); ok {
+		props["createdDateTime"] = ts
+	}
+	b, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatalf("marshal fresh record: %v", err)
+	}
+	return string(b)
+}
+
+// TestCollectorDerivesSigninCounterForFreshRecord drives a within-window
+// record through the real blob collector (mirroring graphactivity's
+// TestCollectorDerivesRequestCounterForFreshRecord), so the signal-drift
+// golden actually sees what deriveSignin ships end to end, not just what the
+// unit-level test above pins.
+func TestCollectorDerivesSigninCounterForFreshRecord(t *testing.T) {
+	const tenant = "4b8c18bd-2f9f-4227-af55-9f1061cf9c32"
+	src := &staticSource{
+		name: "tenantId=" + tenant + "/y=2026/m=07/d=19/h=10/m=00/PT1H.json",
+		data: []byte(freshBlobSignin(t, time.Now().Add(-5*time.Minute)) + "\r\n"),
+	}
+	rec := telemetrytest.New()
+	c := newBlobCollector(blobSpecs[0], collectors.BlobDeps{
+		TenantID:            tenant,
+		Source:              src,
+		Store:               checkpoint.NewStore(t.TempDir()),
+		Logger:              slog.New(slog.DiscardHandler),
+		MetricRecencyWindow: 20 * time.Minute,
+	})
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	pts := rec.MetricPoints("entra.signin.count")
+	if len(pts) != 1 || pts[0].Value != 1 {
+		t.Fatalf("entra.signin.count = %+v, want a single point value 1", pts)
+	}
+	got := pts[0].Attrs
+	want := map[string]bool{
+		"result": true, "conditional_access_status": true,
+		"risk_level_during_sign_in": true, "client_app_used": true,
+	}
+	for k := range got {
+		if !want[k] {
+			t.Errorf("per-entity label leaked into metric: %q", k)
+		}
+	}
+	for k := range want {
+		if _, ok := got[k]; !ok {
+			t.Errorf("missing bounded label %q", k)
+		}
+	}
+	for _, forbidden := range []string{
+		"id", "app_id", "service_principal_id", "ip_address",
+		"user_principal_name", "app_display_name", "resource_display_name", "error_code",
+	} {
+		if _, present := got[forbidden]; present {
+			t.Errorf("forbidden per-entity label on metric: %q", forbidden)
+		}
+	}
+}

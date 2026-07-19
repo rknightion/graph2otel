@@ -175,6 +175,57 @@ func TestMeterProviderEnablesHistogramExemplars(t *testing.T) {
 	}
 }
 
+// TestMeterProviderMakesListedHistogramsNative asserts the View maps each
+// nativeHistogramInstruments name to base-2 exponential aggregation (#186), so
+// Grafana Cloud stores them as native histograms — while a histogram NOT on the
+// list stays explicit-bucket, so existing self-obs histograms are unaffected.
+func TestMeterProviderMakesListedHistogramsNative(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(append(
+		metricProviderOptions(resource.Empty(), 10000),
+		sdkmetric.WithReader(reader),
+	)...)
+	t.Cleanup(func() { _ = mp.Shutdown(context.Background()) })
+
+	m := mp.Meter("test")
+	for _, name := range nativeHistogramInstruments {
+		h, err := m.Float64Histogram(name) // no explicit bounds — the View supplies aggregation
+		if err != nil {
+			t.Fatalf("Float64Histogram(%q): %v", name, err)
+		}
+		h.Record(context.Background(), 42.0)
+	}
+	other, err := m.Float64Histogram("t.explicit.histogram", metric.WithExplicitBucketBoundaries(0, 10))
+	if err != nil {
+		t.Fatalf("Float64Histogram: %v", err)
+	}
+	other.Record(context.Background(), 7.0)
+
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &rm); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	got := map[string]string{}
+	for _, sm := range rm.ScopeMetrics {
+		for _, mm := range sm.Metrics {
+			switch mm.Data.(type) {
+			case metricdata.ExponentialHistogram[float64]:
+				got[mm.Name] = "exponential"
+			case metricdata.Histogram[float64]:
+				got[mm.Name] = "explicit"
+			}
+		}
+	}
+	for _, name := range nativeHistogramInstruments {
+		if got[name] != "exponential" {
+			t.Errorf("instrument %q aggregation = %q, want exponential (native)", name, got[name])
+		}
+	}
+	if got["t.explicit.histogram"] != "explicit" {
+		t.Errorf("unlisted histogram aggregation = %q, want explicit-bucket", got["t.explicit.histogram"])
+	}
+}
+
 // TestMeterProviderDropsExemplarsForSyncInstruments asserts that synchronous
 // Counter, UpDownCounter, and Gauge instruments produce ZERO exemplars even
 // under a SAMPLED span context. These are always recorded with

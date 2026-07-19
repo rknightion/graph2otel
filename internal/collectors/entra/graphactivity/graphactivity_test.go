@@ -413,12 +413,15 @@ func TestCollectorEmitsLiveRecordEndToEnd(t *testing.T) {
 // rule forbids. Tested against the pinned live record, not a hand-authored map.
 func TestDeriveActivity_BoundedLabelsOnly(t *testing.T) {
 	pts := deriveActivity(decode(t, realRecord), telemetry.Event{})
-	if len(pts) != 1 {
-		t.Fatalf("got %d points, want 1", len(pts))
+	byName := map[string]blobpipeline.MetricPoint{}
+	for _, p := range pts {
+		byName[p.Name] = p
 	}
-	p := pts[0]
-	if p.Name != "entra.graph_activity.requests" || p.Kind != blobpipeline.MetricCounter || p.Value != 1 {
-		t.Fatalf("bad point: %+v", p)
+
+	// The request counter carries exactly the four bounded labels.
+	c := byName["entra.graph_activity.requests"]
+	if c.Kind != blobpipeline.MetricCounter || c.Value != 1 {
+		t.Fatalf("bad counter point: %+v", c)
 	}
 	want := map[string]any{
 		"request_method":       "POST",
@@ -426,12 +429,26 @@ func TestDeriveActivity_BoundedLabelsOnly(t *testing.T) {
 		"identity_type":        "app",
 		"is_replay":            false,
 	}
-	if len(p.Attrs) != len(want) {
-		t.Fatalf("attrs = %v, want exactly the 4 bounded labels %v", p.Attrs, want)
+	if len(c.Attrs) != len(want) {
+		t.Fatalf("counter attrs = %v, want exactly the 4 bounded labels %v", c.Attrs, want)
 	}
 	for k, w := range want {
-		if p.Attrs[k] != w {
-			t.Errorf("attr %q = %#v, want %#v", k, p.Attrs[k], w)
+		if c.Attrs[k] != w {
+			t.Errorf("counter attr %q = %#v, want %#v", k, c.Attrs[k], w)
+		}
+	}
+
+	// The two native histograms carry method ONLY — no per-entity label (#186).
+	for _, name := range []string{"entra.graph_activity.request.duration", "entra.graph_activity.response.size"} {
+		h, ok := byName[name]
+		if !ok {
+			t.Fatalf("missing histogram %q", name)
+		}
+		if h.Kind != blobpipeline.MetricNativeHistogram {
+			t.Errorf("%q kind = %v, want native histogram", name, h.Kind)
+		}
+		if len(h.Attrs) != 1 || h.Attrs["request_method"] != "POST" {
+			t.Errorf("%q attrs = %v, want only {request_method: POST}", name, h.Attrs)
 		}
 	}
 }

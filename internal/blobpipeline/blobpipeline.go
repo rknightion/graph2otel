@@ -414,8 +414,11 @@ func emitLines(data []byte, cfg ContainerConfig, e telemetry.Emitter, stats *gat
 			case MetricCounter:
 				e.Counter(mp.Name, mp.Unit, mp.Desc, mp.Value, mp.Attrs)
 			case MetricNativeHistogram:
-				// Native (base-2 exponential) histograms are wired in fast-follow
-				// F2 (View-backed aggregation in provider.go). Core derives none.
+				// No explicit bounds: a View in provider.go maps these instrument
+				// names to base-2 exponential aggregation (#186), so the SDK
+				// produces a native histogram. Passing nil bounds is deliberate —
+				// the View overrides any bounds anyway.
+				e.Histogram(mp.Name, mp.Unit, mp.Desc, mp.Value, nil, mp.Attrs)
 			}
 		}
 	}
