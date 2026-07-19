@@ -61,6 +61,40 @@ type Checkpoint struct {
 	// omitted from the file — for every collector on the plain paged-GET engine
 	// (logpipeline), which creates no jobs at all.
 	InFlight *InFlightJob `json:"in_flight,omitempty"`
+	// ParseHealth is the mdca.discovery_parse collector's extra durable state
+	// (#145): the last successful parse time per input stream, kept so the
+	// last_success age gauge keeps climbing when uploads STOP — the alert-on-
+	// silence signal a failure counter structurally cannot produce (a dead
+	// uploader emits no failed tasks either). Nil — and omitted from the file —
+	// for every other collector, the same family-specific-optional-state pattern
+	// as InFlight. It is deliberately NOT evicted with SeenIDs: it must survive
+	// however long a pipeline stays silent.
+	ParseHealth *ParseHealth `json:"parse_health,omitempty"`
+}
+
+// ParseHealth carries the mdca.discovery_parse collector's parse-health cursor
+// (#145). It is separate from Watermark/SeenIDs because it answers a different
+// question — "how did each stream last parse" — and must outlive the overlap
+// window that EvictStale bounds SeenIDs to, so a gauge derived from it keeps
+// reporting when a stream goes silent (the alert-on-silence signal).
+type ParseHealth struct {
+	// Streams maps an MDCA inputStreamId to its last successful parse. Streams
+	// are single-digit per tenant, so this map is bounded by tenant shape, not by
+	// tenant size (#112).
+	Streams map[string]StreamHealth `json:"streams"`
+}
+
+// StreamHealth is the last successful DiscoveryParseLogTask observed for one
+// Cloud Discovery input stream. Persisting the counts (not just the time) keeps
+// the transactions/cloud_services gauges STABLE across quiet ticks rather than
+// flapping to absent whenever a window carries no new success.
+type StreamHealth struct {
+	// LastSuccess is the event time of the most recent successful parse.
+	LastSuccess time.Time `json:"last_success"`
+	// LastTransactions / LastCloudServices are that parse's discovered counts,
+	// from templateMessage.parameters.
+	LastTransactions  int64 `json:"last_transactions"`
+	LastCloudServices int64 `json:"last_cloud_services"`
 }
 
 // EvictStale prunes SeenIDs entries older than Watermark - OverlapWindow,

@@ -197,6 +197,10 @@ type TenantConfig struct {
 	// (#100). Unlike BlobIngest this needs no opt-in to run at all — the
 	// collector is default-on — so this block only widens what it subscribes to.
 	O365Activity O365ActivityConfig `yaml:"o365_activity"`
+	// MDCA configures the Microsoft Defender for Cloud Apps Cloud-Discovery
+	// collectors (#145), the one non-Graph, non-poller signal. Off unless
+	// mdca.portal_url is set. See MDCAConfig.
+	MDCA MDCAConfig `yaml:"mdca"`
 }
 
 // O365ActivityConfig selects which Management Activity API content types the
@@ -535,6 +539,10 @@ func (c *Config) Validate() error {
 
 		if w := t.BlobIngest.MetricRecencyWindow; w < 0 || w > MaxMetricRecencyWindow {
 			return fmt.Errorf("tenants[%d].blob_ingest.metric_recency_window: %v out of range (0, %v]", i, w, MaxMetricRecencyWindow)
+		}
+
+		if err := t.MDCA.validate(); err != nil {
+			return fmt.Errorf("tenants[%d].mdca.%w", i, err)
 		}
 	}
 

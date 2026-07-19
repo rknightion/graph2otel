@@ -1,0 +1,45 @@
+{
+  "Metrics": [
+    {
+      "Name": "mdca.discovery.parse.cloud_services",
+      "AttrKeys": [
+        "input_stream_id"
+      ]
+    },
+    {
+      "Name": "mdca.discovery.parse.last_success.age",
+      "AttrKeys": [
+        "input_stream_id"
+      ]
+    },
+    {
+      "Name": "mdca.discovery.parse.tasks",
+      "AttrKeys": [
+        "input_stream_id",
+        "is_success",
+        "template"
+      ]
+    },
+    {
+      "Name": "mdca.discovery.parse.transactions",
+      "AttrKeys": [
+        "input_stream_id"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "mdca.discovery_parse",
+      "AttrKeys": [
+        "cloud_services_count",
+        "id",
+        "ingest_transport",
+        "input_stream_id",
+        "is_success",
+        "state",
+        "template",
+        "transactions_count"
+      ]
+    }
+  ]
+}

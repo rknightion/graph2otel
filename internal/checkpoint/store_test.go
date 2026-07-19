@@ -1,6 +1,7 @@
 package checkpoint
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,6 +43,60 @@ func TestStoreSaveLoadRoundTrip(t *testing.T) {
 	}
 	if !got.SeenIDs.Has("event-1") {
 		t.Error("SeenIDs.Has(\"event-1\") = false after round-trip, want true")
+	}
+}
+
+func TestStoreSaveLoadParseHealthRoundTrip(t *testing.T) {
+	store := NewStore(t.TempDir())
+	watermark := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
+	lastSuccess := watermark.Add(-3 * time.Minute)
+
+	want := &Checkpoint{
+		TenantID:      "tenant-a",
+		Endpoint:      "/api/v1/governance#mdca.discovery_parse",
+		Watermark:     watermark,
+		OverlapWindow: 30 * time.Minute,
+		SeenIDs:       NewSeenIDs(),
+		ParseHealth: &ParseHealth{
+			Streams: map[string]StreamHealth{"stream-1": {
+				LastSuccess:       lastSuccess,
+				LastTransactions:  21559,
+				LastCloudServices: 70,
+			}},
+		},
+	}
+
+	if err := store.Save(want); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	got, err := store.Load("tenant-a", "/api/v1/governance#mdca.discovery_parse")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if got.ParseHealth == nil {
+		t.Fatal("ParseHealth = nil after round-trip, want the persisted state")
+	}
+	sh, ok := got.ParseHealth.Streams["stream-1"]
+	if !ok {
+		t.Fatalf("ParseHealth.Streams[stream-1] missing after round-trip")
+	}
+	if !sh.LastSuccess.Equal(lastSuccess) || sh.LastTransactions != 21559 || sh.LastCloudServices != 70 {
+		t.Errorf("StreamHealth = %+v, want {%v 21559 70}", sh, lastSuccess)
+	}
+}
+
+// TestCheckpointParseHealthOmittedWhenNil pins that a non-MDCA collector's
+// checkpoint file carries no parse_health key — the omitempty contract that
+// keeps this MDCA-specific state invisible to every other collector, exactly as
+// InFlight is omitted for non-job collectors.
+func TestCheckpointParseHealthOmittedWhenNil(t *testing.T) {
+	cp := &Checkpoint{TenantID: "t", Endpoint: "/auditLogs/signIns", SeenIDs: NewSeenIDs()}
+	b, err := json.Marshal(cp)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	if strings.Contains(string(b), "parse_health") {
+		t.Errorf("nil ParseHealth serialized a parse_health key: %s", b)
 	}
 }
 

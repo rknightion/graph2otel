@@ -39,7 +39,7 @@ var updateCollectorDoc = flag.Bool("update", false, "rewrite generated golden fi
 // hypothetical: O365All() (#100) was added as a fourth path and the annotation
 // gate went green over a collector missing from the reference entirely. If a
 // fifth path lands, it is added here too.
-func registrySnapshot() (snapshot, window, blob, o365 []any) {
+func registrySnapshot() (snapshot, window, blob, o365, mdca []any) {
 	for _, f := range collectors.All() {
 		snapshot = append(snapshot, f(collectors.Deps{}))
 	}
@@ -60,14 +60,21 @@ func registrySnapshot() (snapshot, window, blob, o365 []any) {
 		}
 		o365 = append(o365, rw.Collector)
 	}
-	return snapshot, window, blob, o365
+	for _, f := range collectors.MDCAAll() {
+		rw := f(collectors.MDCADeps{})
+		if rw.Collector == nil {
+			continue
+		}
+		mdca = append(mdca, rw.Collector)
+	}
+	return snapshot, window, blob, o365, mdca
 }
 
 func registeredNames(t *testing.T) []string {
 	t.Helper()
-	snapshot, window, blob, o365 := registrySnapshot()
+	snapshot, window, blob, o365, mdca := registrySnapshot()
 	var names []string
-	for _, group := range [][]any{snapshot, window, blob, o365} {
+	for _, group := range [][]any{snapshot, window, blob, o365, mdca} {
 		for _, c := range group {
 			n, ok := c.(interface{ Name() string })
 			if !ok {
@@ -103,7 +110,7 @@ func TestCollectorAnnotationsCoverEveryCollector(t *testing.T) {
 // sharing is not a collision. What is still a bug is two collectors sharing a
 // name within the SAME category — so uniqueness is checked per category.
 func TestEveryCollectorNameIsUnique(t *testing.T) {
-	snapshot, window, blob, o365 := registrySnapshot()
+	snapshot, window, blob, o365, mdca := registrySnapshot()
 	nameOf := func(c any) string {
 		n, ok := c.(interface{ Name() string })
 		if !ok {
@@ -115,7 +122,7 @@ func TestEveryCollectorNameIsUnique(t *testing.T) {
 	// Polled paths (snapshot/window/o365) share one namespace: a name there must
 	// be unique — two polled collectors sharing one would be indistinguishable.
 	polled := map[string]bool{}
-	for _, group := range [][]any{snapshot, window, o365} {
+	for _, group := range [][]any{snapshot, window, o365, mdca} {
 		for _, c := range group {
 			n := nameOf(c)
 			if polled[n] {
@@ -145,9 +152,9 @@ func TestEveryCollectorNameIsUnique(t *testing.T) {
 func TestCollectorReferenceDocInSync(t *testing.T) {
 	docPath := filepath.Join("..", "..", "docs", "collectors.md")
 
-	snapshot, window, blob, o365 := registrySnapshot()
+	snapshot, window, blob, o365, mdca := registrySnapshot()
 	root := filepath.Join("..", "..")
-	rows, err := collectordoc.Rows(snapshot, window, blob, o365, root)
+	rows, err := collectordoc.Rows(snapshot, window, blob, o365, mdca, root)
 	if err != nil {
 		t.Fatalf("rows: %v", err)
 	}
@@ -183,8 +190,8 @@ func TestCollectorReferenceDocInSync(t *testing.T) {
 // at a root with no testdata/signals.json anywhere under it must still fail —
 // a missing golden is a build error, never a silently empty cell.
 func TestRowsHardErrorsWhenACollectorPackageHasNoGolden(t *testing.T) {
-	snapshot, window, blob, o365 := registrySnapshot()
-	if _, err := collectordoc.Rows(snapshot, window, blob, o365, t.TempDir()); err == nil {
+	snapshot, window, blob, o365, mdca := registrySnapshot()
+	if _, err := collectordoc.Rows(snapshot, window, blob, o365, mdca, t.TempDir()); err == nil {
 		t.Fatal("Rows accepted a root with no signals.json golden for any collector")
 	}
 }

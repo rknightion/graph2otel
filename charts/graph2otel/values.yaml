@@ -166,6 +166,15 @@ config:
       # content reads, and that failure looks exactly like "no data yet".
       # blob_ingest:
       #   account_url: "https://myaccount.blob.core.windows.net"
+      #
+      # Microsoft Defender for Cloud Apps Cloud Discovery parse health
+      # (mdca.discovery_parse) — the one non-Graph, non-poller signal. Setting
+      # portal_url is the opt-in. Both fields are non-secret (URL + path); the
+      # static portal token lives at token_file, mounted as a k8s Secret volume,
+      # and must never appear in YAML or env. Experimental (legacy portal API).
+      # mdca:
+      #   portal_url: "https://<tenant>.<region>.portal.cloudappsecurity.com"
+      #   token_file: "/run/secrets/mdca_token"
 
   otlp:
     # -- Export protocol: http | grpc | stdout (stdout = local debug).

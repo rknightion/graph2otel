@@ -9,7 +9,7 @@ import (
 // Transport names the ingest path that produced a record. It is the value set of
 // the semconv.AttrIngestTransport attribute (#141).
 //
-// The set is closed and bounded (five values), which is what makes the attribute
+// The set is closed and bounded (six values), which is what makes the attribute
 // safe under the cardinality rule (#112): it never grows with tenant size.
 type Transport string
 
@@ -29,6 +29,13 @@ const (
 	TransportAuditQuery Transport = "audit_query"
 	// TransportReportExport is the Intune reports-export job engine (internal/exportjob).
 	TransportReportExport Transport = "report_export"
+	// TransportMDCA is the Microsoft Defender for Cloud Apps (MDCA) legacy portal
+	// API — the Cloud Discovery governance log (#145). It has no ingest engine: the
+	// mdca.discovery_parse WindowCollector polls the static-token portal API and
+	// stamps this transport inline, the same way the 15 engineless SnapshotCollectors
+	// carry TransportGraph. It is NOT a Graph transport (different host, static
+	// Authorization: Token auth, no azidentity).
+	TransportMDCA Transport = "mdca"
 )
 
 // transportEmitter stamps semconv.AttrIngestTransport onto every log record

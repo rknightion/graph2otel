@@ -741,3 +741,149 @@ groups:
           summary: "Graph-reported throttle budget consumption above 80% on the {{ $labels.workload }} workload (tenant {{ $labels.tenant_id }})"
           description: "graph2otel_throttle_limit_percentage (from the x-ms-throttle-limit-percentage response header) is above 80 for workload={{ $labels.workload }}, tenant {{ $labels.tenant_id }}, sustained for 15m. Best-effort: this header isn't guaranteed on every 429 or every workload, so absence of data here does NOT mean the budget is healthy — g2o-throttle-saturation is the primary signal; this is a companion when the header happens to be present. Paused by default."
         isPaused: true
+
+      # --- MDCA Cloud Discovery parse health (doc block 5) ---------------------
+      # Two rules because they catch DIFFERENT failures and neither covers the
+      # other: a dead uploader emits no failed tasks, so the failure rule stays
+      # green forever while data silently stops. See issue #145.
+      - uid: "g2o-mdca-uploads-stopped"
+        title: "graph2otel MDCA Cloud Discovery uploads stopped"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: "grafanacloud-prom"
+            model:
+              datasource:
+                type: "prometheus"
+                uid: "grafanacloud-prom"
+              editorMode: "code"
+              expr: "max by (tenant_id, input_stream_id) (mdca_discovery_parse_last_success_age_seconds)"
+              instant: false
+              range: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: "__expr__"
+            model:
+              datasource:
+                type: "__expr__"
+                uid: "__expr__"
+              expression: "A"
+              reducer: "last"
+              type: "reduce"
+              refId: "B"
+          - refId: "C"
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: "__expr__"
+            model:
+              datasource:
+                type: "__expr__"
+                uid: "__expr__"
+              expression: "B"
+              type: "threshold"
+              conditions:
+                - type: "query"
+                  evaluator:
+                    type: "gt"
+                    params:
+                      - 10800
+                  operator:
+                    type: "and"
+                  query:
+                    params:
+                      - "C"
+                  reducer:
+                    type: "last"
+                    params: []
+              refId: "C"
+        noDataState: "OK"
+        execErrState: "OK"
+        for: "15m"
+        labels:
+          severity: "critical"
+          category: "mdca-discovery"
+          source: "graph2otel"
+        annotations:
+          summary: "MDCA Cloud Discovery stream {{ $labels.input_stream_id }} hasn't parsed successfully in over 3h (tenant {{ $labels.tenant_id }})"
+          description: "mdca_discovery_parse_last_success_age_seconds for input_stream_id={{ $labels.input_stream_id }}, tenant {{ $labels.tenant_id }} has exceeded 10800s (3h) for 15m. This is the alert-on-SILENCE signal a failure counter cannot produce: a dead uploader emits no failed parse tasks, so g2o-mdca-parse-failing stays green while data silently stops. Replace 10800 with ~3x YOUR upload cadence in seconds. noDataState is OK because a tenant with no Cloud Discovery streams legitimately emits no series; once a stream has parsed once, the gauge is always present and keeps climbing when uploads stop."
+        isPaused: false
+
+      - uid: "g2o-mdca-parse-failing"
+        title: "graph2otel MDCA Cloud Discovery parse failing"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: "grafanacloud-prom"
+            model:
+              datasource:
+                type: "prometheus"
+                uid: "grafanacloud-prom"
+              editorMode: "code"
+              expr: "sum by (tenant_id, input_stream_id, template) (increase(mdca_discovery_parse_tasks_total{is_success=\"false\"}[1h]))"
+              instant: false
+              range: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: "__expr__"
+            model:
+              datasource:
+                type: "__expr__"
+                uid: "__expr__"
+              expression: "A"
+              reducer: "last"
+              type: "reduce"
+              refId: "B"
+          - refId: "C"
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: "__expr__"
+            model:
+              datasource:
+                type: "__expr__"
+                uid: "__expr__"
+              expression: "B"
+              type: "threshold"
+              conditions:
+                - type: "query"
+                  evaluator:
+                    type: "gt"
+                    params:
+                      - 0
+                  operator:
+                    type: "and"
+                  query:
+                    params:
+                      - "C"
+                  reducer:
+                    type: "last"
+                    params: []
+              refId: "C"
+        noDataState: "OK"
+        execErrState: "OK"
+        for: "5m"
+        labels:
+          severity: "warning"
+          category: "mdca-discovery"
+          source: "graph2otel"
+        annotations:
+          summary: "MDCA Cloud Discovery parse failing on stream {{ $labels.input_stream_id }} (tenant {{ $labels.tenant_id }})"
+          description: "increase(mdca_discovery_parse_tasks_total{is_success=\"false\"}[1h]) > 0 for input_stream_id={{ $labels.input_stream_id }}, template={{ $labels.template }}, tenant {{ $labels.tenant_id }}: at least one Cloud Discovery parse task FAILED in the last hour while the upload almost certainly reported HTTP 200. The template label names which failure (e.g. REPOOPER_COMPLETION_STATUS_BASELOGPARSER_UNEXPECTED_FORMAT = malformed log format). This is the 22-silent-failures outage from #145. Default-enabled; pair with g2o-mdca-uploads-stopped, which catches a dead uploader this rule cannot see."
+        isPaused: false

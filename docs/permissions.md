@@ -95,6 +95,24 @@ Only Purview eDiscovery (`purview.ediscovery_cases`, opt-in) needs this today. I
 enable it, see [`data-plane-registration.md`](./data-plane-registration.md) for the
 procedure.
 
+## 4c. One collector authenticates with a static token, not the Entra app (gotcha #5)
+
+`mdca.discovery_parse` (#145) is the single exception to "every scope is a Graph app-role on
+the poller." It reads the Microsoft Defender for Cloud Apps **Cloud Discovery governance log**,
+which lives only on the legacy MDCA portal API
+(`<tenant>.<region>.portal.cloudappsecurity.com`) — there is no Graph endpoint for it. That API
+authenticates with a **static portal token** in an `Authorization: Token <secret>` header, NOT
+`DefaultAzureCredential` and NOT a Graph token. So:
+
+- There is **no Graph scope to grant** for it — `RequiredPermissions()` is empty, and
+  `graph2otel check` neither lists nor verifies it (it has nothing to check against a Graph token).
+- The token is supplied per-tenant via `mdca.token_file` (a filesystem PATH in config; the token
+  itself is mounted as a file, never in YAML or env). Generate the token in the MDCA portal
+  (Settings → Cloud Discovery → automatic log upload / API tokens) with the least-privilege scope
+  your tenant offers.
+- The collector is `Experimental` (opt-in): the portal API is a legacy surface with no Graph
+  successor. Setting `mdca.portal_url` is the whole opt-in.
+
 ## 5. Verify with `graph2otel check`
 
 The `check` subcommand (landed as part of M1, tracked in

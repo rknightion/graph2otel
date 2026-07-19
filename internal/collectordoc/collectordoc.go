@@ -129,6 +129,7 @@ var domains = map[string]string{
 	"m365":     "M365",
 	"purview":  "Purview",
 	"defender": "Defender",
+	"mdca":     "Defender for Cloud Apps",
 }
 
 // collectorFacts is the mandatory interface every collector satisfies
@@ -312,12 +313,12 @@ func CheckAnnotations(registered []string) error {
 // package has no golden hard-errors here — the same convention blobConfig
 // uses for a missing container: a blank signal cell would be a silently wrong
 // doc, which is what this whole package exists to prevent.
-func Rows(snapshot, window, blob, o365 []any, root string) ([]Row, error) {
+func Rows(snapshot, window, blob, o365, mdca []any, root string) ([]Row, error) {
 	var rows []Row
 	for _, group := range []struct {
 		kind Kind
 		cs   []any
-	}{{KindSnapshot, snapshot}, {KindWindow, window}, {KindBlob, blob}, {KindWindow, o365}} {
+	}{{KindSnapshot, snapshot}, {KindWindow, window}, {KindBlob, blob}, {KindWindow, o365}, {KindWindow, mdca}} {
 		for _, c := range group.cs {
 			facts, ok := c.(collectorFacts)
 			if !ok {
@@ -364,6 +365,7 @@ var sections = []section{
 	{"Purview", KindSnapshot, "Purview — metrics (snapshot collectors)"},
 	{"Purview", KindWindow, "Purview — logs (window collectors)"},
 	{"Defender", KindBlob, "Defender — logs (blob collectors)"},
+	{"Defender for Cloud Apps", KindWindow, "Defender for Cloud Apps — logs (window collectors)"},
 }
 
 // headers is the column set per kind. Blob collectors get their own: they poll

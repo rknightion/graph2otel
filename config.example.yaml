@@ -88,6 +88,22 @@ tenants:
     # records; adding it here ships them twice.
     # o365_activity:
     #   content_types: ["Audit.Exchange", "Audit.SharePoint", "Audit.General"]
+    #
+    # Optional: Microsoft Defender for Cloud Apps (MDCA) Cloud Discovery parse
+    # health (mdca.discovery_parse). The ONE non-Graph, non-poller signal: the
+    # MDCA portal API authenticates with a static "Authorization: Token" token,
+    # not the Entra credential, so there is no app-registration scope to grant.
+    #
+    # Setting portal_url IS the opt-in: leave it unset and no MDCA collectors are
+    # registered. Both fields are non-secret — a URL and a filesystem PATH — so
+    # they belong in YAML; the token itself lives in the file at token_file and
+    # must NEVER appear in YAML or an env var (a per-tenant secret has no env path
+    # here: koanf cannot bind a value into a tenants[] slice element). Mount the
+    # token as a file (k8s secret / docker secret) and point token_file at it.
+    # The collector is Experimental — the MDCA portal API has no Graph successor.
+    # mdca:
+    #   portal_url: "https://<tenant>.<region>.portal.cloudappsecurity.com"
+    #   token_file: "/run/secrets/mdca_token"
 
 otlp:
   protocol: http # grpc | http | stdout (stdout = print signals to the console for local debug, no backend)

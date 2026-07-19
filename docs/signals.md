@@ -273,6 +273,32 @@ Why this does not violate the cardinality rule: `tenant_id` grows with the numbe
 an operator **deliberately configured**, not with tenant size. The [cardinality
 rule](#cardinality-shape) forbids the latter.
 
+## MDCA Cloud Discovery parse health: `ingest_transport="mdca"`
+
+`mdca.discovery_parse` (#145) is the one signal reached over neither Graph, Azure Storage,
+nor the O365 Management API, but the **Microsoft Defender for Cloud Apps legacy portal API**
+(`<tenant>.<region>.portal.cloudappsecurity.com/api/v1/governance/`) — a static
+`Authorization: Token` credential, not the Entra poller. Its records therefore carry a sixth
+`ingest_transport` value, `mdca`, alongside `graph`/`blob`/`o365_activity`/`audit_query`/`report_export`.
+
+Why the collector exists: a Cloud Discovery upload returns `200 {"success":true}` the moment the
+blob lands and a parse task is **queued** — the parse runs asynchronously and writes its verdict
+**only** to the governance log, so an uploader is structurally blind to whether its data actually
+parsed. One `mdca.discovery_parse` log ships per parse task:
+
+- A **queued** task carries `state="pending"` and NO `is_success` — a pending parse is not a failure.
+- A **completed** task carries `state="completed"`, `is_success` (bool), `template` (the stable
+  outcome enum — alert on this, never on localized prose), and, on success, `transactions_count` /
+  `cloud_services_count`. `is_success=false` is emitted at `ERROR` severity.
+
+Metrics (bounded to `input_stream_id` × `template`): `mdca.discovery.parse.last_success.age`
+(seconds since a stream last parsed — the alert-on-**silence** signal, since a dead uploader emits
+no failed tasks and this gauge keeps climbing), `mdca.discovery.parse.transactions` /
+`.cloud_services` (last successful parse's discovered counts), and the
+`mdca.discovery.parse.tasks` counter by outcome. Query the log as always with the
+`{service_name="graph2otel"} | event_name="mdca.discovery_parse"` form. See
+[alerts/README.md](../alerts/README.md) doc block 5 for the two rules.
+
 ## License/beta gating
 
 Some signals only populate under a Microsoft Entra P2 license (risk detections, PIM

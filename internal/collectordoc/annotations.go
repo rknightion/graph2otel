@@ -362,6 +362,12 @@ var annotations = map[string]Annotation{
 		Source:   "`manage.office.com/api/v1.0/{tenant}/activity/feed` — a second first-party API, NOT Graph: different audience, and `POST /subscriptions/start` is a write (the second break in graph2otel's read-only property, after the reports-export job)",
 	},
 
+	// ---- Defender for Cloud Apps (MDCA) — window collectors ----
+	"mdca.discovery_parse": {
+		Collects: "Cloud Discovery parse health, the signal no uploader can see: a Cloud Discovery upload 200s the moment the blob lands and a parse task is QUEUED, but the parse runs asynchronously and writes its verdict ONLY to the governance log — so 22 consecutive silent parse failures on the live tenant (2026-07-17) produced no signal anywhere while every upload reported green. Emits one log twin (`mdca.discovery_parse`) per DiscoveryParseLogTask (template, is_success, input_stream_id, transactions/cloud-services counts; Error severity on failure, a queued task is `state=pending` and NOT a failure), a `mdca.discovery.parse.last_success.age` gauge per stream that keeps CLIMBING when uploads stop (the alert-on-silence signal a failure counter cannot produce), and a `mdca.discovery.parse.tasks` counter by outcome. Dedupes on `_id`+`updateTimestamp` because a task's status MUTATES after creation — a naive `_id` dedupe ships only the queued state and hides every verdict. Experimental: the legacy portal API has no Graph successor",
+		Source:   "`{tenant}.{region}.portal.cloudappsecurity.com/api/v1/governance/` — the MDCA legacy portal API, NOT Graph: a static `Authorization: Token` credential (no azidentity, no app-role scope), 30 req/min per tenant, server-side filtering only on `timestamp` (taskName/status filters silently return empty, so they are applied client-side)",
+	},
+
 	// ---- M365 — snapshot collectors ----
 	"m365.servicehealth": {
 		Collects: "M365 service health, so \"is this us or Microsoft?\" is answerable in-band. From ONE `?$expand=issues` fetch: service count by health status, a numeric status enum per service (mapping in `docs/signals.md`), open-issue count by classification+status, and a log twin (`m365.service_health_issue`) per UNRESOLVED issue carrying id/title/impactDescription/service/timestamps — resolved history is covered by the aggregate counts, not re-twinned every cycle. Snapshot, not a window collector (no delta/time filter); `endDateTime` is null while open, so no duration is derived",

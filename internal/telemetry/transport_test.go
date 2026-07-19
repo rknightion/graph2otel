@@ -22,6 +22,7 @@ func TestWithTransportStampsIngestTransport(t *testing.T) {
 		{telemetry.TransportO365Activity, "o365_activity"},
 		{telemetry.TransportAuditQuery, "audit_query"},
 		{telemetry.TransportReportExport, "report_export"},
+		{telemetry.TransportMDCA, "mdca"},
 	} {
 		t.Run(tc.want, func(t *testing.T) {
 			rec := telemetrytest.New()

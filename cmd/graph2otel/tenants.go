@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/jobpipeline"
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
+	"github.com/rknightion/graph2otel/internal/mdcaclient"
 	"github.com/rknightion/graph2otel/internal/o365activityclient"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -218,6 +220,12 @@ func setupTenant(
 	// these are default-on.
 	registerO365Collectors(cfg, ta, caps, store, tlog, emitter, registry, skips)
 
+	// MDCA Cloud Discovery collectors (#145) — the FIFTH registration path and
+	// the one non-Graph, non-poller signal. Opt-in like blob ingest: setting the
+	// tenant's mdca.portal_url is the switch, so a tenant with no mdca block
+	// registers none of these.
+	registerMDCACollectors(cfg, ta, caps, store, tlog, emitter, registry, skips)
+
 	// Transport mutual-exclusion, checked AFTER every registration path above
 	// and before anything is scheduled (#144). Position is load-bearing: run
 	// between two paths and this silently stops seeing half the registry.
@@ -280,10 +288,10 @@ func setupTenant(
 // two transports for the same records (#144).
 //
 // It walks the assembled REGISTRY rather than re-walking collectors.All(),
-// WindowAll(), BlobAll() and O365All(), and that is the whole reason it can be
-// trusted. Every construction path funnels into this one Registry, so reading
-// it sees all of them without knowing how many there are — a fifth path is
-// covered the day it lands, for free.
+// WindowAll(), BlobAll(), O365All() and MDCAAll(), and that is the whole reason
+// it can be trusted. Every construction path funnels into this one Registry, so
+// reading it sees all of them without knowing how many there are — MDCAAll()
+// landed as the fifth path and was covered for free.
 //
 // The alternative is precisely the bug #139/#100 records: collectordoc.Rows
 // enumerated the registration paths by hand, O365All() landed as a fourth, and
@@ -477,6 +485,97 @@ func registerO365Collectors(
 			registry.RegisterWindow(rw.Collector, interval, initialLookback(cfg, rw), rw.MaxWindow)
 		}
 	}
+}
+
+// registerMDCACollectors wires the tenant's MDCA Cloud Discovery collectors
+// (#145), the fifth registration path.
+//
+// Opt-in like blob ingest: a tenant with no mdca.portal_url registers none of
+// these and records no skips (there is nothing to be absent). When it IS
+// configured, the static token is read from mdca.token_file — never from YAML or
+// env, because a per-tenant secret has no env path in this config (koanf cannot
+// bind a value into a tenants[] slice element; it wipes the slice). A token-file
+// read failure or a client-build failure skips only these collectors and records
+// the reason per collector, exactly as a blob Source failure skips only that
+// lane — "silently doing nothing" and "no data yet" must never look alike.
+func registerMDCACollectors(
+	cfg *config.Config,
+	ta *auth.TenantAuth,
+	caps license.Capabilities,
+	store *checkpoint.Store,
+	tlog *slog.Logger,
+	emitter telemetry.Emitter,
+	registry *collector.Registry,
+	skips map[admin.SkipKey]string,
+) {
+	mc := tenantMDCAConfig(cfg, ta.TenantID)
+	if !mc.Configured() {
+		return // opt-out: no mdca block, nothing to register or skip.
+	}
+
+	token, err := os.ReadFile(mc.TokenFile)
+	if err != nil {
+		tlog.Error("mdca disabled: reading token_file failed", "path", mc.TokenFile, "error", err)
+		recordMDCASkips(store, ta, tlog, skips, "mdca unavailable: reading token_file failed: "+err.Error())
+		return
+	}
+	client, err := mdcaclient.NewClient(ta.TenantID, mdcaclient.Options{
+		Emitter: emitter,
+		BaseURL: mc.PortalURL,
+		Token:   strings.TrimSpace(string(token)),
+		Limiter: mdcaclient.NewLimiter(),
+	})
+	if err != nil {
+		tlog.Error("mdca disabled: building the client failed", "error", err)
+		recordMDCASkips(store, ta, tlog, skips, "mdca unavailable: "+err.Error())
+		return
+	}
+
+	mdeps := collectors.MDCADeps{
+		Client:   client,
+		TenantID: ta.TenantID,
+		Logger:   tlog,
+		Store:    store,
+	}
+	for _, mf := range collectors.MDCAAll() {
+		rw := mf(mdeps)
+		if rw.Collector == nil {
+			continue
+		}
+		if interval, ok := gateCollector(rw.Collector, ta, cfg, caps, tlog, skips); ok {
+			registry.RegisterWindow(rw.Collector, interval, initialLookback(cfg, rw), rw.MaxWindow)
+		}
+	}
+}
+
+// recordMDCASkips marks every MDCA collector absent-with-a-reason. Constructed
+// with a nil Client purely to read each collector's Name(); the factories do no
+// I/O at construction.
+func recordMDCASkips(
+	store *checkpoint.Store,
+	ta *auth.TenantAuth,
+	tlog *slog.Logger,
+	skips map[admin.SkipKey]string,
+	reason string,
+) {
+	for _, mf := range collectors.MDCAAll() {
+		rw := mf(collectors.MDCADeps{TenantID: ta.TenantID, Logger: tlog, Store: store})
+		if rw.Collector == nil {
+			continue
+		}
+		skips[admin.SkipKey{TenantID: ta.TenantID, Collector: rw.Collector.Name()}] = reason
+	}
+}
+
+// tenantMDCAConfig returns the tenant's MDCA block, or a zero (opt-out) value if
+// the tenant is not found.
+func tenantMDCAConfig(cfg *config.Config, tenantID string) config.MDCAConfig {
+	for _, t := range cfg.Tenants {
+		if t.TenantID == tenantID {
+			return t.MDCA
+		}
+	}
+	return config.MDCAConfig{}
 }
 
 // recordO365Skips marks every O365 collector absent-with-a-reason. Constructed

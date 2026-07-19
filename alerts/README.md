@@ -219,6 +219,51 @@ the companion as a bonus when the header happens to be present. A dedicated
 per-workload budget-consumption gauge (rather than only-on-429 header
 capture) is a plausible follow-up if this proves too sparse in practice.
 
+## Doc block 5 — MDCA Cloud Discovery parse health
+
+**Rules:** `g2o-mdca-parse-failing` (default-enabled),
+`g2o-mdca-uploads-stopped` (default-enabled — the one that catches a dead
+pipeline).
+
+**What/why:** a Microsoft Defender for Cloud Apps Cloud Discovery upload
+(`upload_url` → PUT blob → `done_upload`) returns `200 {"success":true}` the
+moment the blob lands and a parse task is **queued** — that is all it means.
+The parse runs asynchronously and writes its verdict **only** to the MDCA
+governance log, as a `DiscoveryParseLogTask`. So every uploader is structurally
+blind to whether its data actually parsed: on the live tenant (2026-07-17) a
+malformed CEF line produced **22 consecutive silent parse failures** while
+every hourly upload reported green and zero transactions landed. The
+`mdca.discovery_parse` collector (`#145`) is the missing poll; these two rules
+turn its signals into alerts.
+
+**Why two rules:** they catch different failures and neither covers the other.
+`g2o-mdca-parse-failing` keys on
+`increase(mdca_discovery_parse_tasks_total{is_success="false"}[1h]) > 0` — any
+parse failure in the last hour (the `template` label names which failure). But
+a **dead uploader emits no failed tasks at all**, so that rule stays green
+forever while data silently stops. `g2o-mdca-uploads-stopped` covers exactly
+that: `mdca_discovery_parse_last_success_age_seconds > 10800` (3h) — the age
+gauge is emitted every tick from persistent state and keeps **climbing** when
+uploads stop, which a failure counter structurally cannot do.
+
+**Threshold rationale:** the failure rule fires on the first failure in an hour
+(`gt 0`, `for: 5m`) — a parse failure is never normal. The silence rule's
+10800s (3h) is a placeholder for ~3× your upload cadence; the live pipeline
+uploads hourly, so 3h means three missed uploads. Replace both defaults with
+values matched to your own cadence.
+
+**False positive looks like:** the silence rule's `noDataState` is `OK`
+because a tenant with no Cloud Discovery streams legitimately emits no series —
+absence is not silence. Once a stream has parsed successfully once, its age
+gauge is always present, so the rule only fires on a real stall, not on a
+never-configured tenant.
+
+**Applicability:** requires the `mdca.discovery_parse` collector to be
+configured (the tenant's `mdca.portal_url` + `mdca.token_file` set); it is
+opt-in and `Experimental`, since the MDCA portal API is a legacy surface with
+no Graph successor. `input_stream_id` and `template` are the only labels, both
+tenant-shaped and bounded.
+
 ## Validating
 
 ```bash
