@@ -281,7 +281,7 @@ var annotations = map[string]Annotation{
 		Source:   "`/deviceManagement/detectedApps`",
 	},
 	"intune.endpoint_analytics": {
-		Collects: "UXA per-device scores, boot/login time histograms, app crash counts, battery health, resource performance — the heaviest collector",
+		Collects: "UXA per-device scores, boot/login time histograms, app crash counts, battery health, resource performance, anomaly-severity counts — the heaviest collector",
 		Source:   "`/deviceManagement/userExperienceAnalytics*` (v1.0 + beta)",
 	},
 	"intune.enrollment": {
@@ -334,6 +334,21 @@ var annotations = map[string]Annotation{
 	},
 	"intune.defender_agents": {
 		Collects: "Defender agent health, via the Reports Export API",
+		Source:   "`POST /deviceManagement/reports/exportJobs`",
+		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
+	},
+	"intune.config_assignment_status": {
+		Collects: "Per-device configuration-policy assignment status/failures (succeeded/pending/error/conflict/noncompliant), via the Reports Export API. Uses the `DeviceAssignmentStatusByConfigurationPolicy` report — one row per device×policy assignment",
+		Source:   "`POST /deviceManagement/reports/exportJobs`",
+		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
+	},
+	"intune.noncompliant_settings": {
+		Collects: "Per-device, per-setting compliance failures — which specific setting is noncompliant on which device — via the Reports Export API. Uses the `NoncompliantDevicesAndSettings` report, the detail the summary-only `intune.compliance` gauges cannot answer",
+		Source:   "`POST /deviceManagement/reports/exportJobs`",
+		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
+	},
+	"intune.device_attestation": {
+		Collects: "Per-device TPM/health attestation status (attestation state, TPM manufacturer/version, model), via the Reports Export API. Uses the `TpmAttestationStatus` report — the `deviceHealthAttestationState` managedDevice property is null tenant-wide (live-measured), so the export is the working path",
 		Source:   "`POST /deviceManagement/reports/exportJobs`",
 		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
 	},

@@ -1,6 +1,12 @@
 {
   "Metrics": [
     {
+      "Name": "intune.uxa.anomaly_count",
+      "AttrKeys": [
+        "anomaly_severity"
+      ]
+    },
+    {
       "Name": "intune.uxa.app_crash_count",
       "AttrKeys": [
         "app_name"

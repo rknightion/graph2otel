@@ -72,6 +72,7 @@ const (
 	resourceDeviceCountMetric = "intune.uxa.resource_performance.device_count"
 	resourceScoreMetric       = "intune.uxa.resource_performance_score"
 	baselineScoreMetric       = "intune.uxa.baseline_score"
+	anomalyCountMetric        = "intune.uxa.anomaly_count"
 )
 
 // eventDeviceScore is the EventName of the per-device Endpoint Analytics log
@@ -258,6 +259,20 @@ type baseline struct {
 	IsBuiltIn    bool   `json:"isBuiltIn"`
 }
 
+// anomalySeverityOverview is the beta
+// userExperienceAnalyticsAnomalySeverityOverview SINGLETON - a single flat JSON
+// object (NOT an odata collection), so it is fetched as raw bytes and
+// unmarshalled directly rather than through a list helper. Each field is a
+// tenant-wide anomaly count for one bounded severity; they roll straight into a
+// bounded gauge by anomaly_severity, with no per-entity rows and so no log twin.
+// (live-measured 2026-07-19: HTTP 200 with exactly these four int fields.)
+type anomalySeverityOverview struct {
+	LowSeverityAnomalyCount           int64 `json:"lowSeverityAnomalyCount"`
+	MediumSeverityAnomalyCount        int64 `json:"mediumSeverityAnomalyCount"`
+	HighSeverityAnomalyCount          int64 `json:"highSeverityAnomalyCount"`
+	InformationalSeverityAnomalyCount int64 `json:"informationalSeverityAnomalyCount"`
+}
+
 // Collector polls Intune Endpoint Analytics (User Experience Analytics).
 type Collector struct {
 	g       collectors.GraphClient
@@ -310,6 +325,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		{"battery health", c.collectBatteryHealth},
 		{"resource performance", c.collectResourcePerformance},
 		{"baselines", c.collectBaselines},
+		{"anomaly severity overview", c.collectAnomalySeverityOverview},
 	}
 
 	var errs []error
@@ -517,6 +533,32 @@ func (c *Collector) collectBaselines(ctx context.Context, e telemetry.Emitter) e
 		})
 	}
 	e.GaugeSnapshot(baselineScoreMetric, "{score}", "Intune Endpoint Analytics baseline overall score, by baseline.", points)
+	return nil
+}
+
+// collectAnomalySeverityOverview fetches the beta anomaly-severity overview
+// singleton and emits one bounded gauge point per severity. Unlike the other
+// sub-fetches this is a single flat object, not an odata collection, so it is
+// fetched as raw bytes and unmarshalled directly (no GetAllValues). No log twin
+// - it is a tenant-wide aggregate with no per-entity rows. Errors are returned
+// unwrapped so Collect's shared skip-and-log path handles them exactly like the
+// other beta sub-fetches (a 403 on an unlicensed tenant is a quiet skip).
+func (c *Collector) collectAnomalySeverityOverview(ctx context.Context, e telemetry.Emitter) error {
+	body, err := c.g.RawGet(ctx, c.beta+"/deviceManagement/userExperienceAnalyticsAnomalySeverityOverview")
+	if err != nil {
+		return err
+	}
+	var o anomalySeverityOverview
+	if err := json.Unmarshal(body, &o); err != nil {
+		return fmt.Errorf("unmarshal anomaly severity overview: %w", err)
+	}
+	points := []telemetry.GaugePoint{
+		{Value: float64(o.LowSeverityAnomalyCount), Attrs: telemetry.Attrs{semconv.AttrAnomalySeverity: "low"}},
+		{Value: float64(o.MediumSeverityAnomalyCount), Attrs: telemetry.Attrs{semconv.AttrAnomalySeverity: "medium"}},
+		{Value: float64(o.HighSeverityAnomalyCount), Attrs: telemetry.Attrs{semconv.AttrAnomalySeverity: "high"}},
+		{Value: float64(o.InformationalSeverityAnomalyCount), Attrs: telemetry.Attrs{semconv.AttrAnomalySeverity: "informational"}},
+	}
+	e.GaugeSnapshot(anomalyCountMetric, "{anomaly}", "Intune Endpoint Analytics anomaly count by severity.", points)
 	return nil
 }
 

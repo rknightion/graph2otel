@@ -1,0 +1,28 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.config_assignment_status.assignments",
+      "AttrKeys": [
+        "policy_platform",
+        "report_status"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.config_assignment_status",
+      "AttrKeys": [
+        "assignment_status_code",
+        "device_id",
+        "device_name",
+        "ingest_transport",
+        "policy_id",
+        "policy_name",
+        "policy_platform",
+        "policy_type",
+        "report_status",
+        "upn"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.noncompliant_settings.count",
+      "AttrKeys": [
+        "os",
+        "setting_status"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.noncompliant_setting",
+      "AttrKeys": [
+        "device_id",
+        "device_name",
+        "error_code",
+        "ingest_transport",
+        "os",
+        "os_version",
+        "policy_name",
+        "setting_display_name",
+        "setting_name",
+        "setting_status",
+        "setting_status_code",
+        "upn"
+      ]
+    }
+  ]
+}

@@ -39,7 +39,14 @@ const (
 	batteryURL      = "https://graph.microsoft.com/beta/deviceManagement/userExperienceAnalyticsBatteryHealthDevicePerformance"
 	resourcePerfURL = "https://graph.microsoft.com/beta/deviceManagement/userExperienceAnalyticsResourcePerformance"
 	baselineURL     = "https://graph.microsoft.com/beta/deviceManagement/userExperienceAnalyticsBaselines"
+	anomalyURL      = "https://graph.microsoft.com/beta/deviceManagement/userExperienceAnalyticsAnomalySeverityOverview"
 )
+
+// anomalyDefaultBody is the live-verified all-zeros response of the beta
+// userExperienceAnalyticsAnomalySeverityOverview SINGLETON (a flat object, not
+// an odata page), used as the default so Collect's other sub-fetches don't fail
+// on a missing body (live-measured 2026-07-19).
+const anomalyDefaultBody = `{"lowSeverityAnomalyCount":0,"mediumSeverityAnomalyCount":0,"highSeverityAnomalyCount":0,"informationalSeverityAnomalyCount":0}`
 
 // emptyPage is a canned empty odata page for endpoints not under test in a
 // given case, so Collect's other sub-fetches don't fail on a missing body.
@@ -76,6 +83,7 @@ func allEndpoints(overrides map[string]string) map[string]string {
 		batteryURL:      emptyPage,
 		resourcePerfURL: emptyPage,
 		baselineURL:     emptyPage,
+		anomalyURL:      anomalyDefaultBody,
 	}
 	for k, v := range overrides {
 		m[k] = v
@@ -410,6 +418,77 @@ func TestCollectSurfacesPlainMalformed400(t *testing.T) {
 
 	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err == nil {
 		t.Error("a plain malformed-query 400 should surface as a collector error, not be swallowed")
+	}
+}
+
+// TestCollectEmitsAnomalyCountBySeverity pins the beta anomaly-severity
+// overview SINGLETON (live-measured 2026-07-19): a single flat JSON object of
+// four int counts rolls into exactly 4 gauge points, one per bounded
+// anomaly_severity (low/medium/high/informational), values straight from the
+// four fields. Exercised with both the all-zeros live sample and a non-zero
+// variant. No log twin - this is an aggregate singleton with no per-entity rows.
+func TestCollectEmitsAnomalyCountBySeverity(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want map[string]float64
+	}{
+		{
+			"all-zero live sample",
+			`{"lowSeverityAnomalyCount":0,"mediumSeverityAnomalyCount":0,"highSeverityAnomalyCount":0,"informationalSeverityAnomalyCount":0}`,
+			map[string]float64{"low": 0, "medium": 0, "high": 0, "informational": 0},
+		},
+		{
+			"non-zero variant",
+			`{"lowSeverityAnomalyCount":2,"mediumSeverityAnomalyCount":0,"highSeverityAnomalyCount":1,"informationalSeverityAnomalyCount":0}`,
+			map[string]float64{"low": 2, "medium": 0, "high": 1, "informational": 0},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := &fakeGraph{bodies: allEndpoints(map[string]string{anomalyURL: tc.body})}
+			rec := telemetrytest.New()
+
+			if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+				t.Fatalf("Collect: %v", err)
+			}
+
+			got := map[string]float64{}
+			for _, p := range rec.MetricPoints(anomalyCountMetric) {
+				got[p.Attrs["anomaly_severity"]] = p.Value
+			}
+			if len(got) != 4 {
+				t.Fatalf("want exactly 4 bounded anomaly_severity points, got %d: %v", len(got), got)
+			}
+			for sev, want := range tc.want {
+				if got[sev] != want {
+					t.Errorf("anomaly_count[%s] = %v, want %v", sev, got[sev], want)
+				}
+			}
+		})
+	}
+}
+
+// TestCollectSkipsUnavailableAnomalyOverviewGracefully asserts the anomaly
+// overview sub-fetch uses the SAME shared skip-and-log path the other beta
+// sub-fetches use: a 403 (Endpoint Analytics not licensed on this tenant) is
+// skipped-and-logged, not surfaced as a collector error, while every other
+// sub-fetch's metrics still emit.
+func TestCollectSkipsUnavailableAnomalyOverviewGracefully(t *testing.T) {
+	g := &fakeGraph{bodies: allEndpoints(nil)}
+	g.errs = map[string]error{
+		anomalyURL: errors.New("graphclient: GET " + anomalyURL + ": status 403: forbidden"),
+	}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Errorf("a 403 on the anomaly overview should be skipped, not surfaced: %v", err)
+	}
+	if len(rec.MetricPoints(anomalyCountMetric)) != 0 {
+		t.Error("no anomaly metrics should be emitted when the endpoint 403s")
+	}
+	// A different sub-fetch (device scores) must still have emitted.
+	if len(rec.MetricPoints(deviceScoreCountMetric)) == 0 {
+		t.Error("device-score metrics should still emit despite the anomaly sub-fetch 403ing")
 	}
 }
 

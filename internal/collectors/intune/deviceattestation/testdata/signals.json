@@ -1,0 +1,31 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.device_attestation.devices",
+      "AttrKeys": [
+        "attestation_status",
+        "os"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.device_attestation",
+      "AttrKeys": [
+        "attestation_status",
+        "attestation_status_detail",
+        "device_id",
+        "device_name",
+        "ingest_transport",
+        "last_checkin",
+        "model",
+        "os",
+        "os_version",
+        "ownership",
+        "tpm_manufacturer",
+        "tpm_version",
+        "upn"
+      ]
+    }
+  ]
+}
