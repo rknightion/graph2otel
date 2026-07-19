@@ -48,6 +48,8 @@
   tr.skip>td{color:var(--muted)}
   .mono{font-family:var(--mono);font-size:12px;overflow-wrap:anywhere}
   .muted{color:var(--muted)}
+  .cursor{display:block;font-size:11px;margin-top:3px;color:var(--muted)}
+  .cursor code{background:transparent;padding:0}
   svg.spark{width:84px;height:22px;vertical-align:middle;display:inline-block;
     fill:none;stroke:var(--accent);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round}
   .outcome{display:inline-flex;gap:2px;align-items:center}
@@ -88,7 +90,7 @@
       {{range .Collectors}}
         {{if .Enabled}}
         <tr{{if and .HasRun (not .LastSuccess)}} class="bad"{{end}}>
-          <td><code>{{.Name}}</code></td>
+          <td><code>{{.Name}}</code>{{with .State}}<span class="cursor mono" title="durable checkpoint cursor">{{if eq .Kind "blob"}}cursor {{.ByteOffset}}B &middot; {{.BlobsTracked}} blobs{{if .NewestBlob}} &middot; newest <code>{{.NewestBlob}}</code>{{end}}{{else}}{{if .Watermark}}watermark {{.Watermark}} &middot; {{.Staleness}} behind{{else}}cold start{{end}}{{if .SeenIDs}} &middot; {{.SeenIDs}} seen{{end}}{{if .InFlightJob}} &middot; job <code>{{.InFlightJob}}</code>{{end}}{{end}}</span>{{end}}</td>
           <td>{{if not .HasRun}}<span class="badge pending">starting</span>{{else if .LastSuccess}}<span class="badge ok">ok</span>{{else}}<span class="badge err">failing</span>{{end}}{{if .Transport}} <span class="muted mono" title="ingest transport">via {{.Transport}}</span>{{end}}</td>
           <td class="num">{{.IntervalSec}}s</td>
           <td class="num">{{if .HasRun}}{{printf "%.0f" .SuccessRatePct}}%{{else}}<span class="muted">&mdash;</span>{{end}}</td>

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
+	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -77,6 +78,32 @@ func (c *BlobCollector) DefaultInterval() time.Duration { return c.Interval }
 // telemetry.WithTransport (#141), so the admin status page (#178) and the log
 // records agree by construction.
 func (c *BlobCollector) IngestTransport() telemetry.Transport { return telemetry.TransportBlob }
+
+// CheckpointState reports this container's durable progress for the admin status
+// page (#178 Part B): the total bytes consumed, how many blobs are tracked, and
+// the newest (lexically greatest) blob name consumed. Read read-only from the
+// same cursor Collect persists; a read failure returns nil rather than erroring
+// the page — the failure already surfaces as the collector's own run error.
+func (c *BlobCollector) CheckpointState() *collector.CheckpointState {
+	cur, err := c.Store.LoadCursor(c.TenantID, c.Config.cursorKey())
+	if err != nil {
+		return nil
+	}
+	var total int64
+	var newest string
+	for name, off := range cur.Offsets {
+		total += off
+		if name > newest {
+			newest = name
+		}
+	}
+	return &collector.CheckpointState{
+		Kind:         collector.CheckpointKindBlob,
+		ByteOffset:   total,
+		BlobsTracked: len(cur.Offsets),
+		NewestBlob:   newest,
+	}
+}
 
 // Collect implements collector.SnapshotCollector: it loads this container's
 // cursor, drains whatever is new, and persists as each blob advances.

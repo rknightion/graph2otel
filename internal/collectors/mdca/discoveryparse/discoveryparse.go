@@ -154,6 +154,25 @@ func (c *Collector) IngestTransport() telemetry.Transport { return telemetry.Tra
 // path is documented in docs/permissions.md.
 func (c *Collector) RequiredPermissions() []string { return nil }
 
+// CheckpointState reports this collector's durable progress for the admin status
+// page (#178 Part B): its governance-log watermark and overlap-dedupe set size,
+// read read-only from the same checkpoint each tick persists. A read failure
+// returns nil rather than erroring the page — the failure already surfaces as
+// the collector's own run error, since CollectWindow loads the same file. Unlike
+// the engine collectors this collector owns its checkpoint directly (it is a
+// self-contained WindowCollector, no engine), so it implements this itself.
+func (c *Collector) CheckpointState() *collector.CheckpointState {
+	cp, err := c.store.Load(c.tenantID, checkpointKey)
+	if err != nil {
+		return nil
+	}
+	return &collector.CheckpointState{
+		Kind:      collector.CheckpointKindWindow,
+		Watermark: cp.Watermark,
+		SeenIDs:   len(cp.SeenIDs),
+	}
+}
+
 // taskMeta is the parsed, mapped facts about one governance record, shared
 // between the log twin and the metrics.
 type taskMeta struct {
@@ -408,6 +427,7 @@ func init() {
 // composition root type-asserts on.
 var (
 	_ collector.WindowCollector                          = (*Collector)(nil)
+	_ collector.CheckpointReporter                       = (*Collector)(nil)
 	_ interface{ Experimental() bool }                   = (*Collector)(nil)
 	_ interface{ IngestTransport() telemetry.Transport } = (*Collector)(nil)
 )

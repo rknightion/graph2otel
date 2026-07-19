@@ -134,6 +134,12 @@ type CollectorStatus struct {
 	// than a bare "disabled" — a covered signal is not a gap (#178). Nil when the
 	// collector is genuinely uncollected anywhere (the only real gap).
 	CoveredBy *Coverage `json:"covered_by,omitempty"`
+	// State is the collector's durable checkpoint progress, read read-only from
+	// the checkpoint store at render time (#178 Part B) — the watermark (+
+	// staleness) for a window poller, the byte offset/blobs/newest-hour for a blob
+	// consumer, and any in-flight job id. Nil for a collector that persists no
+	// cursor (an inline snapshot collector) or a skipped row (nothing running).
+	State *CollectorState `json:"state,omitempty"`
 
 	HasRun         bool   `json:"has_run"`
 	Runs           int64  `json:"runs"`
@@ -174,6 +180,52 @@ type Coverage struct {
 	Transport string `json:"transport"`
 }
 
+// CollectorState is a registered collector's durable checkpoint progress, the
+// payload of CollectorStatus.State (#178 Part B). Kind ("window"/"blob") selects
+// which fields are meaningful; empty fields are omitted from the JSON. It is a
+// read-only render-time snapshot — this is ops visibility, not per-entity data.
+type CollectorState struct {
+	Kind string `json:"kind"`
+	// Window fields.
+	Watermark    string `json:"watermark,omitempty"` // RFC3339; empty on cold start
+	StalenessSec int64  `json:"staleness_seconds,omitempty"`
+	Staleness    string `json:"staleness,omitempty"`
+	SeenIDs      int    `json:"seen_ids,omitempty"`
+	InFlightJob  string `json:"in_flight_job,omitempty"`
+	// Blob fields.
+	ByteOffset   int64  `json:"byte_offset,omitempty"`
+	BlobsTracked int    `json:"blobs_tracked,omitempty"`
+	NewestBlob   string `json:"newest_blob,omitempty"`
+}
+
+// collectorStateFrom maps a collector.CheckpointState (read from the checkpoint
+// store) into the admin JSON payload, computing watermark staleness (now -
+// watermark) for a window poller. Returns nil for a nil input so a collector
+// that persists nothing shows no State block.
+func collectorStateFrom(st *collector.CheckpointState, now time.Time) *CollectorState {
+	if st == nil {
+		return nil
+	}
+	cs := &CollectorState{
+		Kind:         st.Kind,
+		SeenIDs:      st.SeenIDs,
+		InFlightJob:  st.InFlightJob,
+		ByteOffset:   st.ByteOffset,
+		BlobsTracked: st.BlobsTracked,
+		NewestBlob:   st.NewestBlob,
+	}
+	if !st.Watermark.IsZero() {
+		cs.Watermark = st.Watermark.UTC().Format(time.RFC3339)
+		staleness := now.Sub(st.Watermark)
+		if staleness < 0 { // guard a backward wall-clock jump (NTP)
+			staleness = 0
+		}
+		cs.StalenessSec = int64(staleness / time.Second)
+		cs.Staleness = staleness.Round(time.Second).String()
+	}
+	return cs
+}
+
 // conflicter is the subset of collectors.ConflictsWith the admin page needs to
 // pair an off collector with the registered twin that covers it. Declared here
 // (structurally) so admin does not import internal/collectors just to read one
@@ -210,6 +262,10 @@ func buildTenantStatuses(sources []CollectorSource, skipReasons map[SkipKey]stri
 			registered[name] = true
 			row := collectorStatusFor(name, e.Interval, runs, hist, now)
 			row.Transport = string(collector.TransportOf(e.Collector))
+			// Read the collector's durable checkpoint (watermark/byte offset/job id)
+			// read-only at render time, so the page shows progress, not just
+			// registration (#178 Part B). Nil for a collector that persists no cursor.
+			row.State = collectorStateFrom(collector.CheckpointStateOf(e.Collector), now)
 			rows = append(rows, row)
 			if cw, ok := e.Collector.(conflicter); ok {
 				for _, peer := range cw.ConflictsWith() {

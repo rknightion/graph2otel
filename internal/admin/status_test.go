@@ -154,6 +154,108 @@ func TestBuildTenantStatuses_CoveredBySkipRendersNotAGap(t *testing.T) {
 	}
 }
 
+// fakeStateful is a registered collector that reports a durable checkpoint
+// state — the shape of an engine collector (logpipeline/blobpipeline), used to
+// exercise the State derivation (#178 Part B).
+type fakeStateful struct {
+	name  string
+	state *collector.CheckpointState
+}
+
+func (f *fakeStateful) Name() string                                     { return f.name }
+func (f *fakeStateful) DefaultInterval() time.Duration                   { return time.Hour }
+func (f *fakeStateful) Collect(context.Context, telemetry.Emitter) error { return nil }
+func (f *fakeStateful) CheckpointState() *collector.CheckpointState      { return f.state }
+
+func TestBuildTenantStatuses_CheckpointStateSurfaced(t *testing.T) {
+	now := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
+	wm := now.Add(-5 * time.Minute)
+
+	reg := collector.NewRegistry()
+	reg.Register(&fakeStateful{name: "entra.signins", state: &collector.CheckpointState{
+		Kind: collector.CheckpointKindWindow, Watermark: wm, SeenIDs: 4, InFlightJob: "job-1",
+	}}, time.Hour)
+	reg.Register(&fakeStateful{name: "entra.signins.blob", state: &collector.CheckpointState{
+		Kind: collector.CheckpointKindBlob, ByteOffset: 4096, BlobsTracked: 2, NewestBlob: "h=05/x.json",
+	}}, time.Hour)
+	// A collector that persists no cursor (not a CheckpointReporter) -> nil State.
+	reg.Register(&fakeCollector{name: "devices.plain"}, time.Hour)
+
+	tenants := buildTenantStatuses([]CollectorSource{
+		{TenantID: "t", Registry: reg, Status: collector.NewStatusTracker()},
+	}, map[SkipKey]string{
+		{TenantID: "t", Collector: "off.one"}: "disabled by config",
+	}, now)
+
+	byName := map[string]CollectorStatus{}
+	for _, c := range tenants[0].Collectors {
+		byName[c.Name] = c
+	}
+
+	win := byName["entra.signins"].State
+	if win == nil {
+		t.Fatalf("entra.signins State = nil, want a window checkpoint")
+	}
+	if win.Kind != collector.CheckpointKindWindow {
+		t.Errorf("window Kind = %q, want %q", win.Kind, collector.CheckpointKindWindow)
+	}
+	if win.Watermark != wm.UTC().Format(time.RFC3339) {
+		t.Errorf("window Watermark = %q, want %q", win.Watermark, wm.UTC().Format(time.RFC3339))
+	}
+	if win.StalenessSec != 300 || win.Staleness != "5m0s" {
+		t.Errorf("window staleness = {%d, %q}, want {300, 5m0s}", win.StalenessSec, win.Staleness)
+	}
+	if win.SeenIDs != 4 {
+		t.Errorf("window SeenIDs = %d, want 4", win.SeenIDs)
+	}
+	if win.InFlightJob != "job-1" {
+		t.Errorf("window InFlightJob = %q, want job-1", win.InFlightJob)
+	}
+
+	blob := byName["entra.signins.blob"].State
+	if blob == nil {
+		t.Fatalf("entra.signins.blob State = nil, want a blob cursor")
+	}
+	if blob.Kind != collector.CheckpointKindBlob {
+		t.Errorf("blob Kind = %q, want %q", blob.Kind, collector.CheckpointKindBlob)
+	}
+	if blob.ByteOffset != 4096 || blob.BlobsTracked != 2 || blob.NewestBlob != "h=05/x.json" {
+		t.Errorf("blob state = %+v, want offset 4096 / 2 blobs / newest h=05/x.json", blob)
+	}
+	if blob.Watermark != "" || blob.Staleness != "" {
+		t.Errorf("blob state carries a watermark %+v, want none", blob)
+	}
+
+	// A non-reporter collector and a skipped row both carry no State.
+	if got := byName["devices.plain"].State; got != nil {
+		t.Errorf("plain collector State = %+v, want nil", got)
+	}
+	if got := byName["off.one"].State; got != nil {
+		t.Errorf("skipped collector State = %+v, want nil", got)
+	}
+}
+
+// A zero (cold-start) watermark surfaces no watermark/staleness, so the page can
+// say "cold start" rather than print a 1970 timestamp with a decades-long lag.
+func TestBuildTenantStatuses_ColdStartWatermarkOmitted(t *testing.T) {
+	reg := collector.NewRegistry()
+	reg.Register(&fakeStateful{name: "entra.signins", state: &collector.CheckpointState{
+		Kind: collector.CheckpointKindWindow, SeenIDs: 0,
+	}}, time.Hour)
+
+	tenants := buildTenantStatuses([]CollectorSource{
+		{TenantID: "t", Registry: reg, Status: collector.NewStatusTracker()},
+	}, nil, time.Now())
+
+	st := tenants[0].Collectors[0].State
+	if st == nil {
+		t.Fatalf("State = nil, want a (cold) window checkpoint")
+	}
+	if st.Watermark != "" || st.Staleness != "" || st.StalenessSec != 0 {
+		t.Errorf("cold-start state = %+v, want empty watermark/staleness", st)
+	}
+}
+
 func TestBuildTenantStatuses_RegisteredCollectorReflectsRun(t *testing.T) {
 	tr, reg := runOnceAndTrack(t, "devices", nil)
 

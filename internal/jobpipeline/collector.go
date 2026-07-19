@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
+	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -62,6 +63,27 @@ func (c *JobCollector) DefaultInterval() time.Duration { return c.Interval }
 // records agree by construction.
 func (c *JobCollector) IngestTransport() telemetry.Transport {
 	return telemetry.TransportAuditQuery
+}
+
+// CheckpointState reports this async-query poller's durable progress for the
+// admin status page (#178 Part B): its watermark, overlap-dedupe set size, and
+// the id of any in-flight audit-query job it has adopted (#118). Read read-only
+// from the same checkpoint the tick persists; a read failure returns nil rather
+// than erroring the page.
+func (c *JobCollector) CheckpointState() *collector.CheckpointState {
+	cp, err := c.Store.Load(c.TenantID, c.Config.withDefaults().checkpointKey())
+	if err != nil {
+		return nil
+	}
+	st := &collector.CheckpointState{
+		Kind:      collector.CheckpointKindWindow,
+		Watermark: cp.Watermark,
+		SeenIDs:   len(cp.SeenIDs),
+	}
+	if cp.InFlight != nil {
+		st.InFlightJob = cp.InFlight.ID
+	}
+	return st
 }
 
 // Lag implements collector.WindowCollector.

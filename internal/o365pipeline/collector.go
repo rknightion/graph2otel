@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
+	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/o365activityclient"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -78,6 +79,27 @@ func (c *ActivityCollector) DefaultInterval() time.Duration { return c.Interval 
 // records agree by construction.
 func (c *ActivityCollector) IngestTransport() telemetry.Transport {
 	return telemetry.TransportO365Activity
+}
+
+// CheckpointState reports this content-feed poller's durable progress for the
+// admin status page (#178 Part B): its watermark and seen-id set size, read
+// read-only from the embedded engine's checkpoint. A read failure returns nil
+// rather than erroring the page. The engine's watermark — not the scheduler's
+// cosmetic high-water mark — is this feed's real cursor (see CollectWindow).
+func (c *ActivityCollector) CheckpointState() *collector.CheckpointState {
+	cp, err := c.store.Load(c.client.TenantID, c.cfg.CheckpointKey)
+	if err != nil {
+		return nil
+	}
+	st := &collector.CheckpointState{
+		Kind:      collector.CheckpointKindWindow,
+		Watermark: cp.Watermark,
+		SeenIDs:   len(cp.SeenIDs),
+	}
+	if cp.InFlight != nil {
+		st.InFlightJob = cp.InFlight.ID
+	}
+	return st
 }
 
 // Lag implements collector.WindowCollector.

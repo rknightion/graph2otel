@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
+	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/mdcaclient"
 	"github.com/rknightion/graph2otel/internal/semconv"
@@ -271,6 +272,26 @@ func TestLastSuccessAgeGaugeClimbsWhenSilent(t *testing.T) {
 	// transactions gauge persists across the quiet tick.
 	if tx := gaugeValue(t, rec2, metricTransactions, "stream-1"); tx != 100 {
 		t.Errorf("tick2 transactions gauge = %v, want 100 (persisted, not flapped to 0)", tx)
+	}
+}
+
+func TestCheckpointStateReportsWatermark(t *testing.T) {
+	// After a tick advances the watermark, CheckpointState surfaces it read-only
+	// for the admin status page (#178 Part B).
+	ts := fixedNow.Add(-15 * time.Minute)
+	gs := &govServer{responses: []string{govBody(t, record("a", ts.UnixMilli(), ts.UnixMilli(), successStatus(1, 1)))}}
+	c, _ := newTestCollector(t, gs)
+	runCollect(t, c)
+
+	st := c.CheckpointState()
+	if st == nil {
+		t.Fatal("CheckpointState = nil after a tick, want the persisted watermark")
+	}
+	if st.Kind != collector.CheckpointKindWindow {
+		t.Errorf("Kind = %q, want window", st.Kind)
+	}
+	if !st.Watermark.Equal(ts) {
+		t.Errorf("Watermark = %v, want %v (the max record timestamp seen)", st.Watermark, ts)
 	}
 }
 

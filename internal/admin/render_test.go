@@ -132,6 +132,48 @@ func TestRender_TransportAndCoverage(t *testing.T) {
 	}
 }
 
+// A registered collector's durable checkpoint state renders inline under its
+// name: a window poller shows watermark + staleness (+ seen/job); a blob
+// consumer shows byte offset + blobs + newest hour (#178 Part B).
+func TestRender_CheckpointState(t *testing.T) {
+	s := Status{
+		Service: ServiceInfo{Version: "0.1.0", GoVersion: "go1.24"},
+		Health:  healthHealthy,
+		Tenants: []TenantStatus{{
+			TenantID: "t", EnabledCount: 2,
+			Collectors: []CollectorStatus{
+				{Name: "entra.signins", Enabled: true, HasRun: true, LastSuccess: true, IntervalSec: 300, Runs: 3,
+					Transport: "graph", State: &CollectorState{
+						Kind: "window", Watermark: "2026-07-19T12:00:00Z", StalenessSec: 300, Staleness: "5m0s",
+						SeenIDs: 4, InFlightJob: "job-1",
+					}},
+				{Name: "entra.signins.blob", Enabled: true, HasRun: true, LastSuccess: true, IntervalSec: 300, Runs: 3,
+					Transport: "blob", State: &CollectorState{
+						Kind: "blob", ByteOffset: 4096, BlobsTracked: 2, NewestBlob: "h=05/x.json",
+					}},
+			},
+		}},
+		GeneratedAt: "2026-07-19T12:00:00Z",
+	}
+	body := renderString(t, s)
+
+	wants := []string{
+		"watermark 2026-07-19T12:00:00Z", // window watermark
+		"5m0s behind",                    // window staleness
+		"4 seen",                         // window seen-ids
+		"job-1",                          // in-flight job id
+		"cursor 4096B",                   // blob byte offset
+		"2 blobs",                        // blob count
+		"newest",                         // newest-hour label
+		"h=05/x.json",                    // newest blob name
+	}
+	for _, want := range wants {
+		if !strings.Contains(body, want) {
+			t.Errorf("body missing %q", want)
+		}
+	}
+}
+
 func TestRender_OverdueBadge(t *testing.T) {
 	s := Status{
 		Service: ServiceInfo{Version: "0.1.0", GoVersion: "go1.24"},
