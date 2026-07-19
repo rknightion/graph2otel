@@ -172,3 +172,42 @@ const (
 	AttrWifiMacAddress                   = "wifi_mac_address"
 	AttrWorkFromAnywhereScore            = "work_from_anywhere_score"
 )
+
+// Attribute keys for the Intune reports-export collectors added in the #192–#195
+// reporting build-out: device boot-security (WindowsDeviceHealthAttestationReport,
+// #195), Autopilot device-prep deployment (AutopilotV2DeploymentStatus, #193), and
+// Endpoint Privilege Management elevations (EpmAggregationReportByApplication,
+// #193). AttrCompanyName / AttrFileName are reused from attrs_defender.go (one key,
+// one const — enforced by the registry gate). Every value here is live-captured
+// from the export CSV header, not a doc placeholder.
+const (
+	AttrAikKey                       = "aik_key"
+	AttrAttestationError             = "attestation_error"
+	AttrBitlockerStatus              = "bitlocker_status"
+	AttrBootDebuggingStatus          = "boot_debugging_status"
+	AttrCodeIntegrityStatus          = "code_integrity_status"
+	AttrCurrentProvisioningPhase     = "current_provisioning_phase"
+	AttrDepPolicy                    = "dep_policy"
+	AttrDeploymentStatus             = "deployment_status"
+	AttrElamDriverLoadedStatus       = "elam_driver_loaded_status"
+	AttrElevationCount               = "elevation_count"
+	AttrElevationType                = "elevation_type"
+	AttrEnrollmentTime               = "enrollment_time"
+	AttrFileHash                     = "file_hash"
+	AttrFileVersion                  = "file_version"
+	AttrFirmwareProtectionStatus     = "firmware_protection_status"
+	AttrHealthCertIssuedDate         = "health_cert_issued_date"
+	AttrInternalName                 = "internal_name"
+	AttrIsBackgroundProcess          = "is_background_process"
+	AttrMemoryAccessProtectionStatus = "memory_access_protection_status"
+	AttrMemoryIntegrityProtection    = "memory_integrity_protection_status"
+	AttrOsKernelDebuggingStatus      = "os_kernel_debugging_status"
+	AttrPosture                      = "posture"
+	AttrResultCode                   = "result_code"
+	AttrSafeModeStatus               = "safe_mode_status"
+	AttrSecureBootStatus             = "secure_boot_status"
+	AttrSecuredCorePcStatus          = "secured_core_pc_status"
+	AttrSystemManagementMode         = "system_management_mode"
+	AttrVsmStatus                    = "vsm_status"
+	AttrWinpeStatus                  = "winpe_status"
+)

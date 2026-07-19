@@ -360,6 +360,21 @@ var annotations = map[string]Annotation{
 		Source:   "`POST /deviceManagement/reports/exportJobs`",
 		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
 	},
+	"intune.device_boot_security": {
+		Collects: "Per-device Windows boot-security posture (BitLocker, Secure Boot, Code Integrity, VBS, firmware protection, memory integrity, Secured-Core, System Management Mode, TPM), via the Reports Export API. Uses the `WindowsDeviceHealthAttestationReport` report — the deeper posture behind `intune.device_attestation`'s summary; the `deviceHealthAttestationState` managedDevice property is null tenant-wide, so the export is the working path",
+		Source:   "`POST /deviceManagement/reports/exportJobs`",
+		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
+	},
+	"intune.autopilot_deployment": {
+		Collects: "Per-device Windows Autopilot device-preparation (V2) deployment outcome (provisioning phase, deployment status, duration, result code), via the Reports Export API. Uses the `AutopilotV2DeploymentStatus` report — V1 returns zero rows on a device-prep tenant. Raw Microsoft status/result codes are emitted verbatim, not decoded",
+		Source:   "`POST /deviceManagement/reports/exportJobs`",
+		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
+	},
+	"intune.epm_elevations": {
+		Collects: "Endpoint Privilege Management application elevations — which applications ran elevated, how often, and whether the elevation was policy-governed (unmanaged elevations are a security signal), via the Reports Export API. Uses the `EpmAggregationReportByApplication` report",
+		Source:   "`POST /deviceManagement/reports/exportJobs`",
+		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
+	},
 
 	// ---- Intune — window collectors ----
 	"intune.audit_events": {

@@ -1,0 +1,28 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.autopilot_deployment.deployments",
+      "AttrKeys": [
+        "deployment_status"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.autopilot_deployment",
+      "AttrKeys": [
+        "current_provisioning_phase",
+        "deployment_duration_seconds",
+        "deployment_status",
+        "device_id",
+        "device_name",
+        "enrollment_time",
+        "ingest_transport",
+        "phase",
+        "result_code",
+        "serial_number",
+        "upn"
+      ]
+    }
+  ]
+}

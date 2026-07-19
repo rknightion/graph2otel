@@ -1,0 +1,40 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.device_boot_security.devices",
+      "AttrKeys": [
+        "os",
+        "posture",
+        "status"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.device_boot_security",
+      "AttrKeys": [
+        "aik_key",
+        "attestation_error",
+        "bitlocker_status",
+        "boot_debugging_status",
+        "code_integrity_status",
+        "dep_policy",
+        "device_id",
+        "device_name",
+        "elam_driver_loaded_status",
+        "firmware_protection_status",
+        "health_cert_issued_date",
+        "ingest_transport",
+        "intune_user_id",
+        "os",
+        "os_kernel_debugging_status",
+        "safe_mode_status",
+        "secure_boot_status",
+        "tpm_version",
+        "upn",
+        "vsm_status",
+        "winpe_status"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.epm_elevations.count",
+      "AttrKeys": [
+        "elevation_type"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.epm_elevations",
+      "AttrKeys": [
+        "company_name",
+        "elevation_count",
+        "elevation_type",
+        "file_hash",
+        "file_name",
+        "file_version",
+        "ingest_transport",
+        "internal_name",
+        "is_background_process"
+      ]
+    }
+  ]
+}
