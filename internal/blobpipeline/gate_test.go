@@ -90,3 +90,54 @@ func TestPoll_NoDeriveIsLogOnly(t *testing.T) {
 		}
 	}
 }
+
+// Re-reading a blob that grew must count only the NEW record, never re-count the
+// bytes already past the cursor — the single most likely metric bug (#128 q1).
+func TestPoll_ReReadNoDoubleCount(t *testing.T) {
+	name := "tenantId=t1/h=00/b"
+	a := tsRec(5*time.Minute, "a")
+	src := &fakeSource{blobs: map[string]string{name: a}}
+	r := telemetrytest.New()
+	cur := newCursor()
+	cfg := gatedConfig(20 * time.Minute)
+
+	if err := Poll(context.Background(), cfg, cur, src, r.Emitter(), discardLogger(), nil); err != nil {
+		t.Fatalf("Poll 1: %v", err)
+	}
+	src.blobs[name] = a + tsRec(5*time.Minute, "b") // Azure appends a second record
+	if err := Poll(context.Background(), cfg, cur, src, r.Emitter(), discardLogger(), nil); err != nil {
+		t.Fatalf("Poll 2: %v", err)
+	}
+
+	if got := metricSum(r, "entra.test.count"); got != 2 {
+		t.Fatalf("counter = %v across a re-read, want exactly 2 (record 'a' must not be re-counted)", got)
+	}
+}
+
+// A restart mid-blob (persisted byte offset, fresh emitter) must not re-count the
+// records the previous run already emitted (#128 q2). The cursor offset survives;
+// the counter's cumulative value resets — each record must still be counted once
+// across the two emitters.
+func TestPoll_RestartNoDoubleCount(t *testing.T) {
+	name := "tenantId=t1/h=00/b"
+	a, b := tsRec(5*time.Minute, "a"), tsRec(5*time.Minute, "b")
+	src := &fakeSource{blobs: map[string]string{name: a + b}}
+	cfg := gatedConfig(20 * time.Minute)
+	cfg.MaxBytesPerTick = int64(len(a)) + 5 // consume only record 'a' this tick
+
+	cur := newCursor() // the persisted cursor; the same offsets survive the "restart"
+
+	before := telemetrytest.New()
+	if err := Poll(context.Background(), cfg, cur, src, before.Emitter(), discardLogger(), nil); err != nil {
+		t.Fatalf("Poll before restart: %v", err)
+	}
+	after := telemetrytest.New() // fresh process: new meter, counter resets to 0
+	if err := Poll(context.Background(), cfg, cur, src, after.Emitter(), discardLogger(), nil); err != nil {
+		t.Fatalf("Poll after restart: %v", err)
+	}
+
+	total := metricSum(before, "entra.test.count") + metricSum(after, "entra.test.count")
+	if total != 2 {
+		t.Fatalf("counter total across restart = %v, want exactly 2 (no record counted twice)", total)
+	}
+}
