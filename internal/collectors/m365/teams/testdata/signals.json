@@ -1,0 +1,39 @@
+{
+  "Metrics": [
+    {
+      "Name": "m365.teams.membership.total",
+      "AttrKeys": [
+        "role"
+      ]
+    },
+    {
+      "Name": "m365.teams.ownerless.total",
+      "AttrKeys": []
+    },
+    {
+      "Name": "m365.teams.total",
+      "AttrKeys": [
+        "visibility"
+      ]
+    },
+    {
+      "Name": "m365.teams.with_guests.total",
+      "AttrKeys": []
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.team",
+      "AttrKeys": [
+        "description",
+        "display_name",
+        "guests_count",
+        "id",
+        "is_archived",
+        "members_count",
+        "owners_count",
+        "visibility"
+      ]
+    }
+  ]
+}

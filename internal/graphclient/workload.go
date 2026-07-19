@@ -86,6 +86,11 @@ var classifyRules = []workloadMatch{
 	{"/applications", WorkloadDirectory},
 	{"/devices", WorkloadDirectory},
 	{"/directoryRoles", WorkloadDirectory},
+	// /teams and /teams/{id} back the m365.teams inventory fan-out (#121). Teams
+	// are directory-backed groups, so they share the directory throttle bucket;
+	// without this entry the per-team summary fan-out would classify as
+	// WorkloadUnknown and bypass the limiter entirely.
+	{"/teams", WorkloadDirectory},
 }
 
 // ClassifyWorkload maps a request's URL path to the Graph throttling workload

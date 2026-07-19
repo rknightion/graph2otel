@@ -369,6 +369,10 @@ var annotations = map[string]Annotation{
 	},
 
 	// ---- M365 — snapshot collectors ----
+	"m365.teams": {
+		Collects: "Microsoft Teams inventory governance: teams by visibility, the OWNERLESS count (zero owners = an unmanageable orphan holding files — the headline signal, excluding archived teams, which are a desired end-state), the WITH-GUESTS count (external-guest exposure = a data-egress surface), and tenant-wide membership by role. Plus one `m365.team` log twin per team (id, name, visibility, owner/member/guest counts, is_archived), Warn severity on an ownerless team. Two calls: `GET /teams` lists teams but populates only id/displayName/description/visibility (a documented Graph limitation — summary/isArchived are null on the list), so each team's membership summary comes from a per-team `GET /teams/{id}?$select=summary,isArchived` fan-out, paced through the directory throttle bucket. Long default interval (governance signal, not sub-hour); degrades to a skip-and-log 403 when the read scopes are not yet granted",
+		Source:   "`/teams`, `/teams/{id}?$select=summary,isArchived`",
+	},
 	"m365.servicehealth": {
 		Collects: "M365 service health, so \"is this us or Microsoft?\" is answerable in-band. From ONE `?$expand=issues` fetch: service count by health status, a numeric status enum per service (mapping in `docs/signals.md`), open-issue count by classification+status, and a log twin (`m365.service_health_issue`) per UNRESOLVED issue carrying id/title/impactDescription/service/timestamps — resolved history is covered by the aggregate counts, not re-twinned every cycle. Snapshot, not a window collector (no delta/time filter); `endDateTime` is null while open, so no duration is derived",
 		Source:   "`/admin/serviceAnnouncement/healthOverviews?$expand=issues`",

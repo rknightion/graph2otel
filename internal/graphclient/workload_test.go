@@ -30,6 +30,8 @@ func TestClassifyWorkload(t *testing.T) {
 		{"/applications", WorkloadDirectory},
 		{"/devices", WorkloadDirectory},
 		{"/directoryRoles", WorkloadDirectory},
+		{"/teams", WorkloadDirectory},
+		{"/teams/00000000-0000-0000-0000-000000000000", WorkloadDirectory},
 		{"/something/entirely/unrelated", WorkloadUnknown},
 	}
 	for _, tt := range tests {

@@ -113,6 +113,18 @@ authenticates with a **static portal token** in an `Authorization: Token <secret
 - The collector is `Experimental` (opt-in): the portal API is a legacy surface with no Graph
   successor. Setting `mdca.portal_url` is the whole opt-in.
 
+## 4d. Teams inventory uses an app-wide scope, not the narrower RSC one (gotcha #6)
+
+`m365.teams` (#121) declares `Team.ReadBasic.All` (for `GET /teams`) and
+`TeamSettings.Read.All` (for the per-team `GET /teams/{id}?$select=summary`). The
+documented *least-privilege* scope for the summary is `TeamSettings.Read.Group`, but that
+is **resource-specific consent (RSC)** — granted per team by installing a Teams app with an
+RSC manifest into each team — which cannot serve a tenant-wide poller that must enumerate
+every team it has never been installed in. `TeamSettings.Read.All` is the workable
+application scope for a tenant-wide inventory, and is the deliberate (documented) deviation
+from narrowest-scope here. The collector degrades to a skip-and-log if these are not granted,
+so a 403 is a "not granted yet", not a crash.
+
 ## 5. Verify with `graph2otel check`
 
 The `check` subcommand (landed as part of M1, tracked in
