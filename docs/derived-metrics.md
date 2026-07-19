@@ -135,6 +135,38 @@ reasoning #128 applies to the native counters' at-least-once behavior); if a use
 ever needs exact counts, dedupe on the twin's identity key before counting rather than
 building that into the recording rule.
 
+## Worked example: `intune.enrollment_event`
+
+`intune.enrollment_event` is the **Graph-only** enrollment-troubleshooting log source (a
+`WindowCollector` over `GET /deviceManagement/troubleshootingEvents`, not a blob signal). It
+therefore cannot take the blob `Derive` seam at all, and per [#131] Graph WindowCollectors
+emit zero metrics — so a natively-emitted `intune.enrollment_event.count` is not available
+by construction (this is why #189 could not be built as a `Derive` wiring job). A recording
+rule over its log twin is the way to get an enrollment-failure-rate metric without touching
+the collector engine:
+
+```yaml
+groups:
+  - name: graph2otel-derived-metrics
+    interval: 1h
+    rules:
+      - record: intune_enrollment_failure_count
+        expr: |
+          sum by (enrollment_type, operating_system, failure_category) (
+            count_over_time(
+              {service_name="graph2otel"}
+                | event_name=`intune.enrollment_event`
+              [1h]
+            )
+          )
+```
+
+The twin emits one record **per failed enrollment** (it is failures-only — there is no
+success record), so the count is already an enrollment-failure count; `enrollment_type`,
+`operating_system`, and `failure_category` are bounded structured-metadata attributes on it.
+Enrollment-failure-rate alerts read straight off the recorded series. The at-least-once and
+`interval`-matching caveats above apply unchanged.
+
 ## Open deliverable: ship manifests, or document as examples?
 
 Not yet decided whether to ship recording-rule manifests in-repo (e.g. via `gcx` /
