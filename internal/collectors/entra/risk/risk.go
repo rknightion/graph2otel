@@ -45,6 +45,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/graphclient"
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
@@ -224,16 +225,44 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		c.logger.Info("skipping risky users: capability not present", "collector", collectorName, "requires", license.CapEntraP2)
 	}
 
-	if c.caps.Has(license.CapWorkloadIdentitiesPremium) {
-		if err := c.collectHalf(ctx, e, spsHalf, nil); err != nil {
+	// Risky service principals: attempt UNCONDITIONALLY — NOT gated on the detected
+	// CapWorkloadIdentitiesPremium. That capability is a false negative on at least
+	// one live tenant (m7kni, live-measured 2026-07-19, #133): WIP is not detected,
+	// yet /identityProtection/riskyServicePrincipals returns 200 with real risky
+	// SPs. Gating on it hid this gauge on exactly the tenant where it works — so the
+	// gate is driven by the endpoint's real reachability, not a capability flag. A
+	// tenant that genuinely lacks the feature returns 403, which is a graceful skip
+	// (info, not a failure or a 15-min WARN loop), the same way the log collectors
+	// treat a missing scope.
+	if err := c.collectHalf(ctx, e, spsHalf, nil); err != nil {
+		if isForbidden(err) {
+			c.logger.Info("skipping risky service principals: endpoint returned 403 (likely no Workload Identities Premium on this tenant)",
+				"collector", collectorName, "error", graphclient.FormatODataError(err))
+		} else {
 			c.logger.Warn("risky service principals collection failed", "collector", collectorName, "error", err)
 			errs = append(errs, fmt.Errorf("risky service principals: %w", err))
 		}
-	} else {
-		c.logger.Info("skipping risky service principals: capability not present", "collector", collectorName, "requires", license.CapWorkloadIdentitiesPremium)
 	}
 
 	return errors.Join(errs...)
+}
+
+// isForbidden reports whether err is a Graph 403 — the signal that this tenant
+// may not use the endpoint (no Workload Identities Premium), which is a graceful
+// skip rather than a collection failure. The raw-REST path embeds the status in
+// the error string ("status 403"); the typed SDK path surfaces an OData error
+// coded "Authorization_RequestDenied".
+func isForbidden(err error) bool {
+	if err == nil {
+		return false
+	}
+	if strings.Contains(err.Error(), "status 403") {
+		return true
+	}
+	if code, _, ok := graphclient.UnwrapODataError(err); ok {
+		return code == "Authorization_RequestDenied"
+	}
+	return false
 }
 
 // collectHalf pages one of the two current-risk endpoints and emits BOTH sides

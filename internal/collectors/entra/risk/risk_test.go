@@ -503,64 +503,95 @@ func TestLogTwinOmitsAbsentAttrs(t *testing.T) {
 	t.Fatal("no log for sparse risky user u2")
 }
 
-// TestUnlicensedHalfEmitsNoLogTwin asserts the license gate short-circuits the
-// log twin too — an unlicensed half must emit nothing, not empty logs.
-func TestUnlicensedHalfEmitsNoLogTwin(t *testing.T) {
+// spForbiddenFixture serves live users but a 403 on the risky-SP endpoint — the
+// tenant that genuinely lacks Workload Identities Premium (the endpoint rejects
+// the call). The error string carries "status 403" as the raw-REST path renders it.
+func spForbiddenFixture() *fakeGraph {
+	return &fakeGraph{
+		bodies: map[string]string{usersURL: liveUsersBody, deletedUsersURL: `{"value":[]}`},
+		errs:   map[string]error{spsURL: errors.New("graphclient: GET " + spsURL + ": status 403: Authorization_RequestDenied")},
+	}
+}
+
+// TestServicePrincipalsEmitWithoutWIPCapability is the #133 fix: the risky-SP half
+// is NOT gated on the detected CapWorkloadIdentitiesPremium (a false negative on
+// m7kni). With no WIP capability but a reachable endpoint, the SP gauge + twin are
+// emitted — the whole point, so the gauge is not hidden where it works.
+func TestServicePrincipalsEmitWithoutWIPCapability(t *testing.T) {
+	rec := telemetrytest.New()
+	caps := license.Capabilities{license.CapEntraP2: true} // NO WorkloadIdentitiesPremium
+	if err := New(fullFixture(), caps, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if pts := rec.MetricPoints(metricRiskyServicePrincipals); len(pts) == 0 {
+		t.Error("risky-SP series should emit without the WIP capability when the endpoint returns data (#133)")
+	}
+	if got := logsNamed(rec.LogRecords(), eventRiskySP); len(got) == 0 {
+		t.Error("risky-SP log twin should emit without the WIP capability when the endpoint returns data (#133)")
+	}
+}
+
+// TestServicePrincipalHalf403IsGracefulSkip: a tenant that truly lacks the feature
+// 403s on the SP endpoint. That is a graceful skip — no SP series, no error
+// returned — not a collection failure or a 15-min WARN loop.
+func TestServicePrincipalHalf403IsGracefulSkip(t *testing.T) {
+	rec := telemetrytest.New()
+	err := New(spForbiddenFixture(), bothCaps(), nil).Collect(context.Background(), rec.Emitter())
+	if err != nil {
+		t.Fatalf("Collect returned %v, want nil (a 403 on the SP half is a graceful skip)", err)
+	}
+	if pts := rec.MetricPoints(metricRiskyServicePrincipals); len(pts) != 0 {
+		t.Errorf("expected no risky-SP series on a 403, got %v", pts)
+	}
+	if got := logsNamed(rec.LogRecords(), eventRiskySP); len(got) != 0 {
+		t.Errorf("expected no risky-SP twin on a 403, got %d", len(got))
+	}
+	// The users half still emits — the SP 403 does not sink it.
+	if pts := rec.MetricPoints(metricRiskyUsers); len(pts) == 0 {
+		t.Error("risky-user series should still emit when only the SP half 403s")
+	}
+}
+
+func TestCollectOnlyP2StillEmitsUsers(t *testing.T) {
+	rec := telemetrytest.New()
+	caps := license.Capabilities{license.CapEntraP2: true}
+	if err := New(spForbiddenFixture(), caps, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if pts := rec.MetricPoints(metricRiskyUsers); len(pts) == 0 {
+		t.Error("expected risky-user series under CapEntraP2")
+	}
+	// SP endpoint 403s here, so no SP series — but that is the endpoint's doing,
+	// not a capability gate.
+	if pts := rec.MetricPoints(metricRiskyServicePrincipals); len(pts) != 0 {
+		t.Errorf("expected no risky-SP series when the endpoint 403s, got %v", pts)
+	}
+}
+
+func TestCollectOnlyP2WithReachableSPEndpointEmitsBoth(t *testing.T) {
 	rec := telemetrytest.New()
 	caps := license.Capabilities{license.CapEntraP2: true}
 	if err := New(fullFixture(), caps, nil).Collect(context.Background(), rec.Emitter()); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
-
-	if got := logsNamed(rec.LogRecords(), eventRiskySP); len(got) != 0 {
-		t.Errorf("unlicensed workload-identity half emitted %d logs, want 0", len(got))
-	}
-	if got := logsNamed(rec.LogRecords(), eventRiskyUser); len(got) != 3 {
-		t.Errorf("licensed half emitted %d logs, want 3", len(got))
-	}
-}
-
-func TestCollectOnlyP2EmitsUsersSkipsServicePrincipals(t *testing.T) {
-	g := fullFixture()
-	rec := telemetrytest.New()
-
-	caps := license.Capabilities{license.CapEntraP2: true}
-	if err := New(g, caps, nil).Collect(context.Background(), rec.Emitter()); err != nil {
-		t.Fatalf("Collect: %v", err)
-	}
-
+	// Users gated on P2 (present); SP not gated → both emit when reachable.
 	if pts := rec.MetricPoints(metricRiskyUsers); len(pts) == 0 {
-		t.Error("expected risky-user series to be emitted under CapEntraP2")
+		t.Error("expected risky-user series under CapEntraP2")
 	}
-	if pts := rec.MetricPoints(metricRiskyServicePrincipals); len(pts) != 0 {
-		t.Errorf("expected risky-SP series to be skipped without CapWorkloadIdentitiesPremium, got %v", pts)
-	}
-}
-
-func TestCollectOnlyWorkloadIDEmitsServicePrincipalsSkipsUsers(t *testing.T) {
-	g := fullFixture()
-	rec := telemetrytest.New()
-
-	caps := license.Capabilities{license.CapWorkloadIdentitiesPremium: true}
-	if err := New(g, caps, nil).Collect(context.Background(), rec.Emitter()); err != nil {
-		t.Fatalf("Collect: %v", err)
-	}
-
 	if pts := rec.MetricPoints(metricRiskyServicePrincipals); len(pts) == 0 {
-		t.Error("expected risky-SP series to be emitted under CapWorkloadIdentitiesPremium")
-	}
-	if pts := rec.MetricPoints(metricRiskyUsers); len(pts) != 0 {
-		t.Errorf("expected risky-user series to be skipped without CapEntraP2, got %v", pts)
+		t.Error("expected risky-SP series (SP half is not capability-gated)")
 	}
 }
 
 func TestCollectNeitherLicenseSkipsBothWithoutError(t *testing.T) {
-	g := fullFixture()
+	// No P2 (users gated off) and a 403 on the SP endpoint (the tenant lacks the
+	// feature): both halves quiet, no error. The SP half is no longer
+	// capability-gated, so "skips both" here means P2-off + SP-403, not two caps.
 	rec := telemetrytest.New()
 
-	err := New(g, license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter())
+	err := New(spForbiddenFixture(), license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter())
 	if err != nil {
-		t.Fatalf("Collect: %v, want nil (both halves gated off, not an error)", err)
+		t.Fatalf("Collect: %v, want nil (users gated off, SP 403 graceful-skipped)", err)
 	}
 	if pts := rec.MetricPoints(metricRiskyUsers); len(pts) != 0 {
 		t.Errorf("expected no risky-user series, got %v", pts)
@@ -571,12 +602,12 @@ func TestCollectNeitherLicenseSkipsBothWithoutError(t *testing.T) {
 }
 
 func TestCollectNilCapabilitiesSkipsBothWithoutError(t *testing.T) {
-	g := fullFixture()
 	rec := telemetrytest.New()
 
-	// A nil Capabilities map (Has is documented safe on nil) must behave
-	// exactly like the empty set: both halves skipped, no panic, no error.
-	err := New(g, nil, nil).Collect(context.Background(), rec.Emitter())
+	// A nil Capabilities map (Has is documented safe on nil) must behave like the
+	// empty set: users half skipped, SP half graceful-skipped on its 403, no panic,
+	// no error.
+	err := New(spForbiddenFixture(), nil, nil).Collect(context.Background(), rec.Emitter())
 	if err != nil {
 		t.Fatalf("Collect: %v, want nil", err)
 	}
