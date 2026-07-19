@@ -93,39 +93,44 @@ A `{event_name="intune.compliance_alert"}` stream selector would match zero rows
 silently — the label-filter-after-selector form above is required, exactly as documented
 for every other graph2otel log query.
 
-### Recording rule definition (Loki ruler)
+### Recording rule definition (Grafana-managed)
 
-Loki's ruler evaluates a LogQL query on a schedule and remote-writes the result to Mimir
-as a regular Prometheus series — the same mechanism as a Mimir/Prometheus recording rule,
-just with a LogQL expression instead of PromQL. Shape:
+Use a **Grafana-managed recording rule** — created through the Grafana Alerting provisioning
+API (`POST /api/v1/provisioning/alert-rules`, with a `record` block) — **not** a Loki/Mimir
+*data-source-managed* ruler rule. The distinction matters: a Grafana-managed recording rule
+runs a query against *any* datasource (here the Loki logs datasource) on Grafana's own
+evaluation schedule and writes the result into the Prometheus datasource, so one rule type
+covers every graph2otel derived metric regardless of which datasource the twin lives in. A
+Loki-ruler rule would be confined to Loki-side evaluation and remote-write config that
+graph2otel does not own.
 
-```yaml
-groups:
-  - name: graph2otel-derived-metrics
-    interval: 1h
-    rules:
-      - record: intune_compliance_alert_count
-        expr: |
-          sum by (alert_type, operating_system, scenario_name) (
-            count_over_time(
-              {service_name="graph2otel"}
-                | event_name=`intune.compliance_alert`
-              [1h]
-            )
-          )
+The manifests are shipped as code in [`recording-rules/`](../recording-rules/) and applied with
+`gcx`:
+
+```sh
+gcx api /api/v1/provisioning/alert-rules -X POST -d @recording-rules/intune-compliance-alert-count.json
 ```
 
-- `interval: 1h` matches the `[1h]` range in the query — evaluate no more often than the
-  window you're counting over, or the materialized series double-counts overlapping
-  windows.
-- `record:` follows the Prometheus recording-rule naming convention
-  (`<namespace>_<metric>_<unit or _count>`), not graph2otel's own OTLP dot-notation — this
-  series never passes through graph2otel or OTLP, so graph2otel's naming/normalization
-  rules ([Signals](signals.md#otlp--prometheus-name-normalization)) don't apply to it; it
-  is named directly as it will appear in Mimir.
-- The ruler remote-writes the result into Mimir like any other recording rule; once
-  materialized it queries and dashboards exactly like a native metric, with none of the
-  cost graph2otel would have paid to emit it natively.
+Key fields (see the JSON for the full shape):
+
+- `record.metric` — the output Prometheus metric (`intune_compliance_alert_count`). It is named
+  in Prometheus recording-rule convention (`<domain>_<name>_count`), **not** graph2otel's OTLP
+  dot-notation, because the series never passes through graph2otel or OTLP — it is materialized
+  entirely inside Grafana, so the OTLP→Prometheus normalization rules
+  ([Signals](signals.md#otlp--prometheus-name-normalization)) do not apply.
+- `record.targetDatasourceUid` — the Prometheus datasource the result is written to
+  (`grafanacloud-prom`); `data[0].datasourceUid` is the Loki datasource the LogQL runs against
+  (`grafanacloud-logs`).
+- The **rule-group interval** (set to `3600`s, matching the `[1h]` range) is what paces
+  evaluation — evaluate no more often than the window you count over, or overlapping windows
+  double-count. Set it with
+  `PUT /api/v1/provisioning/folder/<folderUID>/rule-groups/blob-derived`.
+- `noDataState: OK` — a healthy tenant emits zero of these events (the twin is empty), so an
+  empty query result records nothing and stays green rather than firing a no-data error. This
+  is the expected steady state; the rule exists to capture the metric *when* an event occurs.
+
+Once materialized the recorded series queries and dashboards exactly like a native metric,
+with none of the active-series cost graph2otel would have paid to emit it natively.
 
 Deduplication: the underlying log twin is at-least-once (~2.7-4% duplicate rate,
 [Signals](signals.md#deduplicating-blob-sourced-records--azure-delivers-at-least-once)).
@@ -143,23 +148,20 @@ therefore cannot take the blob `Derive` seam at all, and per [#131] Graph Window
 emit zero metrics — so a natively-emitted `intune.enrollment_event.count` is not available
 by construction (this is why #189 could not be built as a `Derive` wiring job). A recording
 rule over its log twin is the way to get an enrollment-failure-rate metric without touching
-the collector engine:
+the collector engine. Same Grafana-managed shape as the compliance rule above; the LogQL is:
 
-```yaml
-groups:
-  - name: graph2otel-derived-metrics
-    interval: 1h
-    rules:
-      - record: intune_enrollment_failure_count
-        expr: |
-          sum by (enrollment_type, operating_system, failure_category) (
-            count_over_time(
-              {service_name="graph2otel"}
-                | event_name=`intune.enrollment_event`
-              [1h]
-            )
-          )
+```logql
+sum by (enrollment_type, operating_system, failure_category) (
+  count_over_time(
+    {service_name="graph2otel"}
+      | event_name=`intune.enrollment_event`
+    [1h]
+  )
+)
 ```
+
+Shipped as [`recording-rules/intune-enrollment-failure-count.json`](../recording-rules/intune-enrollment-failure-count.json)
+(metric `intune_enrollment_failure_count`).
 
 The twin emits one record **per failed enrollment** (it is failures-only — there is no
 success record), so the count is already an enrollment-failure count; `enrollment_type`,
@@ -167,13 +169,11 @@ success record), so the count is already an enrollment-failure count; `enrollmen
 Enrollment-failure-rate alerts read straight off the recorded series. The at-least-once and
 `interval`-matching caveats above apply unchanged.
 
-## Open deliverable: ship manifests, or document as examples?
+## Shipped as manifests
 
-Not yet decided whether to ship recording-rule manifests in-repo (e.g. via `gcx` /
-rules-as-code, alongside the shipped [dashboards](https://github.com/rknightion/graph2otel/tree/main/dashboards))
-or keep them as documented examples an operator adapts by hand. **Default: documented
-examples, as above** — graph2otel does not currently own or deploy any Loki ruler
-configuration, and shipping manifests would be a new deployment surface (ruler config
-format, remote-write target, per-tenant `service_name`/label substitution) with its own
-maintenance cost. Revisit if a second or third recording-rule candidate (directory
-audits, provisioning) makes copy-paste-and-edit painful enough to justify templating.
+Resolved: the recording-rule manifests are shipped in-repo as rules-as-code in
+[`recording-rules/`](../recording-rules/) (Grafana-managed provisioning payloads), alongside the
+[dashboards](https://github.com/rknightion/graph2otel/tree/main/dashboards), and applied with
+`gcx api`. See [`recording-rules/README.md`](../recording-rules/README.md) for the apply/verify
+commands. A new candidate (directory audits, provisioning) is a copy-edit of one of the two
+existing files: change the `event_name`, the `sum by (...)` labels, and the `record.metric` name.
