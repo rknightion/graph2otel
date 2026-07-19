@@ -1,0 +1,26 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.deleted_items.count",
+      "AttrKeys": [
+        "near_purge",
+        "object_type"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "entra.deleted_item",
+      "AttrKeys": [
+        "app_id",
+        "deleted_date_time",
+        "device_id",
+        "display_name",
+        "id",
+        "near_purge",
+        "object_type",
+        "user_principal_name"
+      ]
+    }
+  ]
+}

@@ -42,6 +42,10 @@ var annotations = map[string]Annotation{
 		Collects: "App + service principal credential (secret/certificate) expiry buckets",
 		Source:   "`/applications`, `/servicePrincipals` (`$select=keyCredentials,passwordCredentials`)",
 	},
+	"entra.deleted_items": {
+		Collects: "Recycle-bin census: recoverable soft-deleted directory objects by type + near-purge state, log twin per object",
+		Source:   "`/directory/deletedItems/microsoft.graph.{user,group,application,servicePrincipal,device}`",
+	},
 	"entra.devices": {
 		Collects: "Directory device inventory: trust type, compliance, managed state, OS, staleness",
 		Source:   "`/devices`, `/devices/$count`",

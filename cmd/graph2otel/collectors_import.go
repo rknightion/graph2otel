@@ -27,6 +27,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/conditionalaccess"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/consent"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/credentialexpiry"
+	_ "github.com/rknightion/graph2otel/internal/collectors/entra/deleteditems"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/devices"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/directoryaudits"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/directorycounts"

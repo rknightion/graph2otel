@@ -83,6 +83,7 @@ const (
 	AttrMfaCapable                        = "mfa_capable"
 	AttrMfaRegistered                     = "mfa_registered"
 	AttrMitreTechniques                   = "mitre_techniques"
+	AttrNearPurge                         = "near_purge"
 	AttrObjectType                        = "object_type"
 	AttrOccurredDateTime                  = "occurred_date_time"
 	AttrOperationId                       = "operation_id"
