@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
@@ -632,7 +633,7 @@ func TestNewWiresFleetFetcherWithWidenedSelect(t *testing.T) {
 	if !ok {
 		t.Fatalf("fleet fetcher = %T, want *collectors.DirectFleetFetcher", c.fleet)
 	}
-	for _, field := range []string{"id", "deviceName", "serialNumber", "userPrincipalName", "complianceState", "operatingSystem", "isEncrypted", "lastSyncDateTime", "model", "manufacturer", "wiFiMacAddress", "partnerReportedThreatState"} {
+	for _, field := range []string{"id", "deviceName", "serialNumber", "userPrincipalName", "complianceState", "operatingSystem", "isEncrypted", "lastSyncDateTime", "model", "manufacturer", "wiFiMacAddress", "partnerReportedThreatState", "complianceGracePeriodExpirationDateTime"} {
 		if !strings.Contains(df.URL, field) {
 			t.Errorf("fleet fetcher URL = %q, missing field %q required for the intune.managed_device log twin", df.URL, field)
 		}
@@ -949,5 +950,36 @@ func TestNameIntervalAndPermissions(t *testing.T) {
 	perms := c.RequiredPermissions()
 	if len(perms) != 1 || perms[0] != "DeviceManagementManagedDevices.Read.All" {
 		t.Errorf("RequiredPermissions = %v, want [DeviceManagementManagedDevices.Read.All]", perms)
+	}
+}
+
+// TestLogTwinGraceExpiryFiltersSentinels pins the #193 sentinel handling: a real
+// grace deadline is emitted, but Microsoft's two "no active deadline" sentinels
+// (max-date 9999-12-31 for compliant devices, zero-date 0001-01-01 for
+// unknown-state ones) and a nil are omitted rather than emitted as a misleading
+// far-future or zero timestamp (live-measured 2026-07-19).
+func TestLogTwinGraceExpiryFiltersSentinels(t *testing.T) {
+	real := time.Date(2026, 7, 19, 21, 4, 22, 0, time.UTC)
+	sentinelMax := time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC)
+	sentinelZero := time.Time{}
+	cases := []struct {
+		name string
+		in   *time.Time
+		want string
+	}{
+		{"real deadline emits", &real, real.Format(time.RFC3339)},
+		{"9999 max-date sentinel omitted", &sentinelMax, ""},
+		{"0001 zero-date sentinel omitted", &sentinelZero, ""},
+		{"nil omitted", nil, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := managedDevice{ID: "x", ComplianceGracePeriodExpiration: tc.in}
+			ev := deviceLogTwin(d, "compliant", "fresh")
+			got, _ := ev.Attrs[semconv.AttrComplianceGracePeriodExpiration].(string)
+			if got != tc.want {
+				t.Errorf("grace attr = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }

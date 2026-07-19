@@ -120,6 +120,16 @@ func mapBlobDevice(rec map[string]any) (telemetry.Event, bool) {
 			d.LastSyncDateTime = &t
 		}
 	}
+	// Blob-twin parity for the grace-expiry deadline (#193): the Devices category
+	// carries it as `InGracePeriodUntil` (no-timezone, variable-fraction, same two
+	// sentinels as the Graph field — live-measured 2026-07-19). Parse it into the
+	// same managedDevice field; deviceLogTwin's graceExpiry drops the sentinels, so
+	// both transports emit the identical attribute.
+	if g := blobStr(props, "InGracePeriodUntil"); g != "" {
+		if t, err := time.Parse(lastContactLayout, g); err == nil {
+			d.ComplianceGracePeriodExpiration = &t
+		}
+	}
 
 	compliance := complianceBucketFor(d.ComplianceState)
 	stale := stalenessBucketFor(snapshotTime, d.LastSyncDateTime)

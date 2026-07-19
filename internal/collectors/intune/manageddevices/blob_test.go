@@ -130,3 +130,27 @@ func TestDeviceTwinSuppressedKeepsGauges(t *testing.T) {
 		}
 	}
 }
+
+// TestMapBlobDeviceGraceExpiryParity pins #193 blob-twin parity: the Devices
+// category's `InGracePeriodUntil` (no-timezone, variable-fraction; the same two
+// sentinels as the Graph field, live-measured 2026-07-19) maps onto the same
+// twin attribute a real deadline emits, both sentinels omit.
+func TestMapBlobDeviceGraceExpiryParity(t *testing.T) {
+	rec := func(grace string) map[string]any {
+		return decodeDev(t, `{"time":"2026-07-18T00:44:52.4221000Z","category":"Devices","properties":{"DeviceId":"d","DeviceName":"dev","CompliantState":"InGracePeriod","OS":"Windows","InGracePeriodUntil":"`+grace+`"}}`)
+	}
+	// Real deadline → emitted, normalized to RFC3339.
+	ev, ok := mapBlobDevice(rec("2026-07-14T14:31:08.4122"))
+	if !ok {
+		t.Fatal("mapBlobDevice dropped a valid record")
+	}
+	want := time.Date(2026, 7, 14, 14, 31, 8, 412200000, time.UTC).Format(time.RFC3339)
+	if got := ev.Attrs[semconv.AttrComplianceGracePeriodExpiration]; got != want {
+		t.Errorf("grace attr = %q, want %q", got, want)
+	}
+	// The 9999 max-date sentinel → omitted.
+	ev, _ = mapBlobDevice(rec("9999-12-31T23:59:59.9999999"))
+	if _, present := ev.Attrs[semconv.AttrComplianceGracePeriodExpiration]; present {
+		t.Error("the 9999 max-date sentinel must be omitted from the blob twin")
+	}
+}

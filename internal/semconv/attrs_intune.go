@@ -31,6 +31,7 @@ const (
 	AttrCertProfileName                  = "cert_profile_name"
 	AttrCertificateProfileName           = "certificate_profile_name"
 	AttrCertificateStatus                = "certificate_status"
+	AttrComplianceGracePeriodExpiration  = "compliance_grace_period_expiration"
 	AttrComplianceState                  = "compliance_state"
 	AttrComplianceStatus                 = "compliance_status"
 	AttrComponentName                    = "component_name"

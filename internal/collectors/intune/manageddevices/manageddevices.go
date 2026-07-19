@@ -102,7 +102,7 @@ const eventManagedDevice = "intune.managed_device"
 // deliberate: every field here rides along on a full-fleet page walk (see the
 // package/issue notes on why full-fleet paging is the accepted exception for
 // this endpoint).
-const managedDevicesSelect = "?$select=id,complianceState,operatingSystem,isEncrypted,lastSyncDateTime,deviceName,serialNumber,userPrincipalName,osVersion,model,manufacturer,wiFiMacAddress,partnerReportedThreatState"
+const managedDevicesSelect = "?$select=id,complianceState,operatingSystem,isEncrypted,lastSyncDateTime,deviceName,serialNumber,userPrincipalName,osVersion,model,manufacturer,wiFiMacAddress,partnerReportedThreatState,complianceGracePeriodExpirationDateTime"
 
 // complianceBuckets maps every documented managedDevice complianceState
 // value (https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-manageddevice)
@@ -261,6 +261,7 @@ func deviceLogTwin(d managedDevice, complianceBucket, stalenessBucket string) te
 	telemetry.SetStr(attrs, semconv.AttrManufacturer, d.Manufacturer)
 	telemetry.SetStr(attrs, semconv.AttrWifiMacAddress, d.WifiMacAddress)
 	telemetry.SetStr(attrs, semconv.AttrPartnerReportedThreatState, d.PartnerReportedThreatState)
+	telemetry.SetStr(attrs, semconv.AttrComplianceGracePeriodExpiration, graceExpiry(d.ComplianceGracePeriodExpiration))
 	if d.LastSyncDateTime != nil && !d.LastSyncDateTime.IsZero() {
 		attrs[semconv.AttrLastSyncDateTime] = d.LastSyncDateTime.Format(time.RFC3339)
 	}
@@ -282,6 +283,20 @@ func deviceLogTwin(d managedDevice, complianceBucket, stalenessBucket string) te
 		Severity: deviceLogSeverity(complianceBucket, d.IsEncrypted, stalenessBucket),
 		Attrs:    attrs,
 	}
+}
+
+// graceExpiry returns the RFC3339 compliance grace-period deadline to emit, or ""
+// to omit. Microsoft uses two sentinels for "no active grace deadline" that must
+// NOT be emitted as a real timestamp: the max date 9999-12-31 (a compliant device
+// with no deadline) and the zero date 0001-01-01 (state unknown). Both the polled
+// managedDevice field and the blob Devices `InGracePeriodUntil` carry them
+// identically (live-measured 2026-07-19, #193), so filtering here keeps the two
+// transports byte-identical through deviceLogTwin.
+func graceExpiry(t *time.Time) string {
+	if t == nil || t.IsZero() || t.Year() >= 9999 {
+		return ""
+	}
+	return t.Format(time.RFC3339)
 }
 
 // managedDevice is the subset of the managedDevice resource this collector
@@ -314,6 +329,14 @@ type managedDevice struct {
 	Manufacturer               string `json:"manufacturer"`
 	WifiMacAddress             string `json:"wiFiMacAddress"`
 	PartnerReportedThreatState string `json:"partnerReportedThreatState"`
+
+	// ComplianceGracePeriodExpiration is when an in-grace device's grace window
+	// closes (#193) — the one field DeviceNonCompliance offered that intune.devices
+	// lacked (the in_grace_period bucket had the STATE but not the deadline). Graph
+	// returns two "no active deadline" sentinels that must NOT be emitted: the max
+	// date 9999-12-31 (compliant, no deadline) and the zero date 0001-01-01 (state
+	// unknown) — see graceExpiry (live-measured 2026-07-19, #193).
+	ComplianceGracePeriodExpiration *time.Time `json:"complianceGracePeriodExpirationDateTime"`
 }
 
 // managedDeviceOverview is the managedDeviceOverview singleton
