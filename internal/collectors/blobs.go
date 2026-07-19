@@ -2,6 +2,7 @@ package collectors
 
 import (
 	"log/slog"
+	"time"
 
 	"github.com/rknightion/graph2otel/internal/blobpipeline"
 	"github.com/rknightion/graph2otel/internal/checkpoint"
@@ -43,6 +44,12 @@ type BlobDeps struct {
 	// identity. Empty means "self is unknown" and the filter no-ops even when
 	// ExcludeSelf is true.
 	SelfClientID string
+	// MetricRecencyWindow is the tenant's blob_ingest.metric_recency_window (#128):
+	// a factory that derives metrics copies it into ContainerConfig.RecencyWindow,
+	// so a record older than the window takes the log path only and never a
+	// counter. Zero here means "unset" — but the composition root sources it from
+	// Config.BlobMetricRecencyWindow, which never returns zero (defaults to 20m).
+	MetricRecencyWindow time.Duration
 }
 
 // BlobFactory constructs one blob-sourced collector for a tenant. Registered

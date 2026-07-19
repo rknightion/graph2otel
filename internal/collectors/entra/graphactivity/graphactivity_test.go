@@ -406,3 +406,93 @@ func TestCollectorEmitsLiveRecordEndToEnd(t *testing.T) {
 		}
 	}
 }
+
+// deriveActivity must carry ONLY bounded, tenant-shaped labels (#112): method,
+// status code, caller identity type, replay flag. Any per-entity field (appId,
+// URI, IP, ids) leaking into a metric label is the exact bug the cardinality
+// rule forbids. Tested against the pinned live record, not a hand-authored map.
+func TestDeriveActivity_BoundedLabelsOnly(t *testing.T) {
+	pts := deriveActivity(decode(t, realRecord), telemetry.Event{})
+	if len(pts) != 1 {
+		t.Fatalf("got %d points, want 1", len(pts))
+	}
+	p := pts[0]
+	if p.Name != "entra.graph_activity.requests" || p.Kind != blobpipeline.MetricCounter || p.Value != 1 {
+		t.Fatalf("bad point: %+v", p)
+	}
+	want := map[string]any{
+		"request_method":       "POST",
+		"response_status_code": 200,
+		"identity_type":        "app",
+		"is_replay":            false,
+	}
+	if len(p.Attrs) != len(want) {
+		t.Fatalf("attrs = %v, want exactly the 4 bounded labels %v", p.Attrs, want)
+	}
+	for k, w := range want {
+		if p.Attrs[k] != w {
+			t.Errorf("attr %q = %#v, want %#v", k, p.Attrs[k], w)
+		}
+	}
+}
+
+// freshRecord clones realRecord with a within-window event time, so a driven
+// record is not gated and the derived counter reaches the emitter.
+func freshRecord(t *testing.T, at time.Time) string {
+	t.Helper()
+	rec := decode(t, realRecord)
+	ts := at.UTC().Format(time.RFC3339Nano)
+	rec["time"] = ts
+	if props, ok := rec["properties"].(map[string]any); ok {
+		props["timeGenerated"] = ts
+	}
+	b, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatalf("marshal fresh record: %v", err)
+	}
+	return string(b)
+}
+
+// A fresh record drives the derived counter all the way to the emitter, so the
+// signal gate (#112 enforcement) actually sees its labels — the pinned 2026-07-16
+// realRecord is always gated and never would (M3).
+func TestCollectorDerivesRequestCounterForFreshRecord(t *testing.T) {
+	const tenant = "4b8c18bd-2f9f-4227-af55-9f1061cf9c32"
+	src := &staticSource{
+		name: "tenantId=" + tenant + "/y=2026/m=07/d=19/h=10/m=00/PT1H.json",
+		data: []byte(freshRecord(t, time.Now().Add(-5*time.Minute)) + "\r\n"),
+	}
+	rec := telemetrytest.New()
+	c := newCollector(collectors.BlobDeps{
+		TenantID:            tenant,
+		Source:              src,
+		Store:               checkpoint.NewStore(t.TempDir()),
+		Logger:              slog.New(slog.DiscardHandler),
+		MetricRecencyWindow: 20 * time.Minute,
+	})
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	pts := rec.MetricPoints("entra.graph_activity.requests")
+	if len(pts) != 1 || pts[0].Value != 1 {
+		t.Fatalf("entra.graph_activity.requests = %+v, want a single point value 1", pts)
+	}
+	got := pts[0].Attrs
+	want := map[string]bool{"request_method": true, "response_status_code": true, "identity_type": true, "is_replay": true}
+	for k := range got {
+		if !want[k] {
+			t.Errorf("per-entity label leaked into metric: %q", k)
+		}
+	}
+	for k := range want {
+		if _, ok := got[k]; !ok {
+			t.Errorf("missing bounded label %q", k)
+		}
+	}
+	for _, forbidden := range []string{"app_id", "request_uri", "caller_ip_address", "user_id", "request_id", "service_principal_id"} {
+		if _, present := got[forbidden]; present {
+			t.Errorf("forbidden per-entity label on metric: %q", forbidden)
+		}
+	}
+}

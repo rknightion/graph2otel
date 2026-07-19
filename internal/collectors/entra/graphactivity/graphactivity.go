@@ -75,8 +75,39 @@ func newCollector(d collectors.BlobDeps) collector.SnapshotCollector {
 		ExcludeSelf:  d.ExcludeSelf,
 		SelfClientID: d.SelfClientID,
 		SelfAppID:    callerAppID,
+		// Derive the bounded request counter (#128), gated so a backfilled call
+		// is never credited to now. RecencyWindow comes from the tenant's config
+		// (default 20m); the gate lives in the pipeline, not here.
+		Derive:        deriveActivity,
+		RecencyWindow: d.MetricRecencyWindow,
 	}
 	return blobpipeline.NewBlobCollector(collectorName, interval, d.TenantID, cfg, d.Source, d.Store, d.Logger)
+}
+
+// deriveActivity emits the bounded request counter for one MGAL record. Only
+// bounded, tenant-shaped labels (#112) — method, response status, caller
+// identity type, replay flag. Per-entity fields (appId, URI, IP, ids) stay
+// log-only in mapActivity and never appear here.
+func deriveActivity(rec map[string]any, _ telemetry.Event) []blobpipeline.MetricPoint {
+	props := nested(rec, "properties")
+	if props == nil {
+		return nil
+	}
+	attrs := telemetry.Attrs{}
+	telemetry.SetStr(attrs, semconv.AttrRequestMethod, str(props, "requestMethod"))
+	telemetry.SetStr(attrs, semconv.AttrIdentityType, str(props, "C_Idtyp"))
+	status, _ := intOf(props, "responseStatusCode")
+	attrs[semconv.AttrResponseStatusCode] = status
+	replay, _ := props["isReplay"].(bool)
+	attrs[semconv.AttrIsReplay] = replay // always present -> stable series shape
+	return []blobpipeline.MetricPoint{{
+		Name:  "entra.graph_activity.requests",
+		Kind:  blobpipeline.MetricCounter,
+		Unit:  "{request}",
+		Desc:  "Microsoft Graph API calls against the tenant, by method, response status, caller identity type, and replay flag (#128).",
+		Value: 1,
+		Attrs: attrs,
+	}}
 }
 
 // callerAppID returns the appId of the app that made this Graph call, read from

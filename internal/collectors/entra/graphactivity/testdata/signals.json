@@ -1,5 +1,33 @@
 {
-  "Metrics": null,
+  "Metrics": [
+    {
+      "Name": "entra.graph_activity.requests",
+      "AttrKeys": [
+        "identity_type",
+        "is_replay",
+        "request_method",
+        "response_status_code"
+      ]
+    },
+    {
+      "Name": "graph2otel.blob.event_age",
+      "AttrKeys": [
+        "collector"
+      ]
+    },
+    {
+      "Name": "graph2otel.blob.metric_emitted",
+      "AttrKeys": [
+        "collector"
+      ]
+    },
+    {
+      "Name": "graph2otel.blob.metric_gated",
+      "AttrKeys": [
+        "collector"
+      ]
+    }
+  ],
   "Logs": [
     {
       "EventName": "entra.graph_activity",
