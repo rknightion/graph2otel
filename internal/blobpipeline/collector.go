@@ -72,6 +72,12 @@ func (c *BlobCollector) Name() string { return c.NameField }
 // DefaultInterval implements collector.Collector.
 func (c *BlobCollector) DefaultInterval() time.Duration { return c.Interval }
 
+// IngestTransport reports the transport this collector ingests over — the same
+// telemetry.Transport that Collect stamps onto every record via
+// telemetry.WithTransport (#141), so the admin status page (#178) and the log
+// records agree by construction.
+func (c *BlobCollector) IngestTransport() telemetry.Transport { return telemetry.TransportBlob }
+
 // Collect implements collector.SnapshotCollector: it loads this container's
 // cursor, drains whatever is new, and persists as each blob advances.
 //

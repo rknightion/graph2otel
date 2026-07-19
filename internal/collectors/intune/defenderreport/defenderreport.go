@@ -369,6 +369,11 @@ func New(export exportjob.Runner, logger *slog.Logger) *Collector {
 // Name implements collector.SnapshotCollector.
 func (c *Collector) Name() string { return collectorName }
 
+// IngestTransport reports the transport this collector ingests over — the same
+// telemetry.Transport Collect stamps onto every record via telemetry.WithTransport
+// (#141), so the admin status page (#178) and the log records agree by construction.
+func (c *Collector) IngestTransport() telemetry.Transport { return telemetry.TransportReportExport }
+
 // DefaultInterval implements collector.SnapshotCollector. Export jobs are
 // expensive (create + poll + download, sharing the 48-req/min-per-app
 // export budget with every other export-based collector on this tenant),

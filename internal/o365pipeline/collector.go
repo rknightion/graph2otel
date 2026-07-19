@@ -72,6 +72,14 @@ func (c *ActivityCollector) Name() string { return c.NameField }
 // DefaultInterval implements collector.Collector.
 func (c *ActivityCollector) DefaultInterval() time.Duration { return c.Interval }
 
+// IngestTransport reports the transport this collector ingests over — the same
+// telemetry.Transport the underlying Collector stamps onto every record via
+// telemetry.WithTransport (#141), so the admin status page (#178) and the log
+// records agree by construction.
+func (c *ActivityCollector) IngestTransport() telemetry.Transport {
+	return telemetry.TransportO365Activity
+}
+
 // Lag implements collector.WindowCollector.
 func (c *ActivityCollector) Lag() time.Duration { return c.LagValue }
 

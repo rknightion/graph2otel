@@ -56,6 +56,12 @@ func (c *LogCollector) Name() string { return c.NameField }
 // DefaultInterval implements collector.Collector.
 func (c *LogCollector) DefaultInterval() time.Duration { return c.Interval }
 
+// IngestTransport reports the transport this collector ingests over — the same
+// telemetry.Transport that CollectWindow stamps onto every record via
+// telemetry.WithTransport (#141), so the admin status page (#178) and the log
+// records agree by construction.
+func (c *LogCollector) IngestTransport() telemetry.Transport { return telemetry.TransportGraph }
+
 // Lag implements collector.WindowCollector.
 func (c *LogCollector) Lag() time.Duration { return c.LagValue }
 

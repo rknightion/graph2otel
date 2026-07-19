@@ -71,6 +71,89 @@ func runOnceAndTrack(t *testing.T, name string, err error) (*collector.StatusTra
 	return tr, reg
 }
 
+// fakeTwin is a registered collector that ingests over a non-graph transport and
+// (optionally) declares the polled peer it covers via ConflictsWith — the shape of
+// a blob/o365 twin, used to exercise the Transport + CoveredBy derivation (#178).
+type fakeTwin struct {
+	name      string
+	transport telemetry.Transport
+	conflicts []string
+}
+
+func (f *fakeTwin) Name() string                                     { return f.name }
+func (f *fakeTwin) DefaultInterval() time.Duration                   { return time.Hour }
+func (f *fakeTwin) Collect(context.Context, telemetry.Emitter) error { return nil }
+func (f *fakeTwin) IngestTransport() telemetry.Transport             { return f.transport }
+func (f *fakeTwin) ConflictsWith() []string                          { return f.conflicts }
+
+func TestBuildTenantStatuses_TransportReflectsEngine(t *testing.T) {
+	// A plain fakeCollector polls Graph inline (no engine) -> graph.
+	trGraph, regGraph := runOnceAndTrack(t, "entra.risk", nil)
+
+	// A registered blob twin declares blob transport.
+	regBlob := collector.NewRegistry()
+	regBlob.Register(&fakeTwin{name: "entra.signins.non_interactive.blob", transport: telemetry.TransportBlob}, time.Hour)
+
+	tenants := buildTenantStatuses([]CollectorSource{
+		{TenantID: "graph-t", Registry: regGraph, Status: trGraph},
+		{TenantID: "blob-t", Registry: regBlob, Status: collector.NewStatusTracker()},
+	}, nil, time.Now())
+
+	if got := tenants[0].Collectors[0].Transport; got != string(telemetry.TransportGraph) {
+		t.Errorf("graph collector Transport = %q, want %q", got, telemetry.TransportGraph)
+	}
+	if got := tenants[1].Collectors[0].Transport; got != string(telemetry.TransportBlob) {
+		t.Errorf("blob twin Transport = %q, want %q", got, telemetry.TransportBlob)
+	}
+}
+
+func TestBuildTenantStatuses_CoveredBySkipRendersNotAGap(t *testing.T) {
+	// A blob twin is REGISTERED and names the polled peer it covers; that peer is
+	// SKIPPED (beta, off by default). The skipped row must report CoveredBy so the
+	// page shows the signal is collected over blob, not missing.
+	reg := collector.NewRegistry()
+	reg.Register(&fakeTwin{
+		name:      "entra.signins.non_interactive.blob",
+		transport: telemetry.TransportBlob,
+		conflicts: []string{"entra.signins.non_interactive"},
+	}, time.Hour)
+
+	tenants := buildTenantStatuses([]CollectorSource{
+		{TenantID: "t", Registry: reg, Status: collector.NewStatusTracker()},
+	}, map[SkipKey]string{
+		{TenantID: "t", Collector: "entra.signins.non_interactive"}: "beta; enable explicitly to opt in",
+		// A genuinely-off collector with no covering twin: stays an honest gap.
+		{TenantID: "t", Collector: "entra.identityprotection"}: "requires entra_p2",
+	}, time.Now())
+
+	byName := map[string]CollectorStatus{}
+	for _, c := range tenants[0].Collectors {
+		byName[c.Name] = c
+	}
+
+	covered := byName["entra.signins.non_interactive"]
+	if covered.CoveredBy == nil {
+		t.Fatalf("entra.signins.non_interactive CoveredBy = nil, want the blob twin")
+	}
+	if covered.CoveredBy.Collector != "entra.signins.non_interactive.blob" {
+		t.Errorf("CoveredBy.Collector = %q, want the blob twin", covered.CoveredBy.Collector)
+	}
+	if covered.CoveredBy.Transport != string(telemetry.TransportBlob) {
+		t.Errorf("CoveredBy.Transport = %q, want %q", covered.CoveredBy.Transport, telemetry.TransportBlob)
+	}
+
+	// The uncovered skip must NOT be dressed up as covered.
+	if got := byName["entra.identityprotection"].CoveredBy; got != nil {
+		t.Errorf("uncovered skip CoveredBy = %+v, want nil (honest gap)", got)
+	}
+
+	// The header roll-up must count the covered collector apart from the real
+	// skip, so it is never tallied as a gap (#178).
+	if ten := tenants[0]; ten.CoveredCount != 1 || ten.SkippedCount != 1 {
+		t.Errorf("counts = {covered %d, skipped %d}, want {1, 1}", ten.CoveredCount, ten.SkippedCount)
+	}
+}
+
 func TestBuildTenantStatuses_RegisteredCollectorReflectsRun(t *testing.T) {
 	tr, reg := runOnceAndTrack(t, "devices", nil)
 

@@ -92,7 +92,10 @@ type ServiceInfo struct {
 // TenantStatus is one tenant's collector table plus a small roll-up used by the
 // page's per-tenant header. The counts are derived from Collectors: EnabledCount
 // is registered collectors, FailingCount those whose last run failed, PendingCount
-// those that have not run yet, and SkippedCount the skip-reason rows.
+// those that have not run yet, SkippedCount the genuinely-off rows, and
+// CoveredCount the off rows whose records a registered twin still ships (#178).
+// Covered rows are deliberately NOT in SkippedCount — a covered signal is not a
+// gap, and the header must not tally it as one.
 type TenantStatus struct {
 	TenantID     string            `json:"tenant_id"`
 	Collectors   []CollectorStatus `json:"collectors"`
@@ -100,6 +103,7 @@ type TenantStatus struct {
 	FailingCount int               `json:"failing_count"`
 	PendingCount int               `json:"pending_count"`
 	SkippedCount int               `json:"skipped_count"`
+	CoveredCount int               `json:"covered_count"`
 }
 
 // CollectorStatus is one row of a tenant's collector table: either a
@@ -115,6 +119,21 @@ type CollectorStatus struct {
 	SkipReason   string `json:"skip_reason,omitempty"`
 	SkipCategory string `json:"skip_category,omitempty"`
 	IntervalSec  int64  `json:"interval_seconds,omitempty"`
+
+	// Transport names the ingest path a REGISTERED collector runs over — the
+	// same taxonomy as the ingest_transport log attribute (#141), derived from
+	// collector.TransportOf. For a source-switchable collector (#135 group D)
+	// this is the ACTIVE source: a directory_audits running source=blob reports
+	// "blob", because the collector registered under that name is the blob one.
+	// Empty on a skipped row (nothing is running to have a transport).
+	Transport string `json:"transport,omitempty"`
+	// CoveredBy is set on a collector that is OFF but whose records are shipped
+	// by a registered twin over another transport (a beta polled form covered by
+	// its GA blob twin, or m365.unified_audit covered by m365.activity). It names
+	// that twin and its transport so the page states "collected via X" rather
+	// than a bare "disabled" — a covered signal is not a gap (#178). Nil when the
+	// collector is genuinely uncollected anywhere (the only real gap).
+	CoveredBy *Coverage `json:"covered_by,omitempty"`
 
 	HasRun         bool   `json:"has_run"`
 	Runs           int64  `json:"runs"`
@@ -148,6 +167,21 @@ type CollectorStatus struct {
 	OutcomeSeries    []bool  `json:"outcome_series,omitempty"`
 }
 
+// Coverage names the registered twin that ships an off collector's records, and
+// the transport it uses. It is the payload of CollectorStatus.CoveredBy (#178).
+type Coverage struct {
+	Collector string `json:"collector"`
+	Transport string `json:"transport"`
+}
+
+// conflicter is the subset of collectors.ConflictsWith the admin page needs to
+// pair an off collector with the registered twin that covers it. Declared here
+// (structurally) so admin does not import internal/collectors just to read one
+// method — a blob/o365 twin already names its polled peer via ConflictsWith().
+type conflicter interface {
+	ConflictsWith() []string
+}
+
 // buildTenantStatuses renders sources into one TenantStatus per source: a row
 // per registered collector (from Registry.Entries(), reflecting the matching
 // StatusTracker snapshot) plus a row per skip reason that names a collector
@@ -166,10 +200,22 @@ func buildTenantStatuses(sources []CollectorSource, skipReasons map[SkipKey]stri
 		}
 		registered := make(map[string]bool, len(entries))
 		rows := make([]CollectorStatus, 0, len(entries))
+		// coveredBy pairs a polled peer name with the REGISTERED twin that ships
+		// its records. Built from the live registry (not a hand list), so a new
+		// twin is recognized the day it lands — the same robustness the conflict
+		// check (checkRegistryConflicts) relies on.
+		coveredBy := map[string]Coverage{}
 		for _, e := range entries {
 			name := e.Collector.Name()
 			registered[name] = true
-			rows = append(rows, collectorStatusFor(name, e.Interval, runs, hist, now))
+			row := collectorStatusFor(name, e.Interval, runs, hist, now)
+			row.Transport = string(collector.TransportOf(e.Collector))
+			rows = append(rows, row)
+			if cw, ok := e.Collector.(conflicter); ok {
+				for _, peer := range cw.ConflictsWith() {
+					coveredBy[peer] = Coverage{Collector: name, Transport: row.Transport}
+				}
+			}
 		}
 
 		var skipNames []string
@@ -182,19 +228,32 @@ func buildTenantStatuses(sources []CollectorSource, skipReasons map[SkipKey]stri
 		sort.Strings(skipNames)
 		for _, name := range skipNames {
 			reason := skipReasons[SkipKey{TenantID: src.TenantID, Collector: name}]
-			rows = append(rows, CollectorStatus{
+			row := CollectorStatus{
 				Name:         name,
 				Enabled:      false,
 				SkipReason:   reason,
 				SkipCategory: skipCategory(reason),
-			})
+			}
+			// If a registered twin ships this off collector's records, it is not a
+			// gap — name the twin + transport so the page says "collected via X".
+			if cov, ok := coveredBy[name]; ok {
+				c := cov
+				row.CoveredBy = &c
+			}
+			rows = append(rows, row)
 		}
 
 		ten := TenantStatus{TenantID: src.TenantID, Collectors: rows}
 		for _, c := range rows {
 			switch {
 			case !c.Enabled:
-				ten.SkippedCount++
+				// A covered collector is not a gap — count it apart from real skips
+				// so the header roll-up never tallies a collected signal as missing.
+				if c.CoveredBy != nil {
+					ten.CoveredCount++
+				} else {
+					ten.SkippedCount++
+				}
 			default:
 				ten.EnabledCount++
 				switch {

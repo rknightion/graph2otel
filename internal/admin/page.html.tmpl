@@ -75,7 +75,7 @@
   {{range .Tenants}}
   <section>
     <h2>Tenant <code>{{.TenantID}}</code>
-      <span class="tsum">{{.EnabledCount}} active{{if .FailingCount}} &middot; {{.FailingCount}} failing{{end}}{{if .PendingCount}} &middot; {{.PendingCount}} starting{{end}}{{if .SkippedCount}} &middot; {{.SkippedCount}} skipped{{end}}</span>
+      <span class="tsum">{{.EnabledCount}} active{{if .FailingCount}} &middot; {{.FailingCount}} failing{{end}}{{if .PendingCount}} &middot; {{.PendingCount}} starting{{end}}{{if .CoveredCount}} &middot; {{.CoveredCount}} covered{{end}}{{if .SkippedCount}} &middot; {{.SkippedCount}} skipped{{end}}</span>
     </h2>
     <table>
       <thead><tr>
@@ -89,7 +89,7 @@
         {{if .Enabled}}
         <tr{{if and .HasRun (not .LastSuccess)}} class="bad"{{end}}>
           <td><code>{{.Name}}</code></td>
-          <td>{{if not .HasRun}}<span class="badge pending">starting</span>{{else if .LastSuccess}}<span class="badge ok">ok</span>{{else}}<span class="badge err">failing</span>{{end}}</td>
+          <td>{{if not .HasRun}}<span class="badge pending">starting</span>{{else if .LastSuccess}}<span class="badge ok">ok</span>{{else}}<span class="badge err">failing</span>{{end}}{{if .Transport}} <span class="muted mono" title="ingest transport">via {{.Transport}}</span>{{end}}</td>
           <td class="num">{{.IntervalSec}}s</td>
           <td class="num">{{if .HasRun}}{{printf "%.0f" .SuccessRatePct}}%{{else}}<span class="muted">&mdash;</span>{{end}}</td>
           <td class="num">{{.Runs}}</td>
@@ -99,6 +99,12 @@
           <td>{{sparkline .DurationMsSeries}}{{outcomeStrip .OutcomeSeries}}</td>
           <td class="num">{{if .HasRun}}{{.Staleness}}{{else}}<span class="muted">&mdash;</span>{{end}}</td>
           <td class="mono">{{if .LastError}}{{.LastError}}{{else}}<span class="muted">&mdash;</span>{{end}}</td>
+        </tr>
+        {{else if .CoveredBy}}
+        <tr>
+          <td><code>{{.Name}}</code></td>
+          <td><span class="badge info">covered</span></td>
+          <td class="mono muted" colspan="9">collected via <code>{{.CoveredBy.Collector}}</code> ({{.CoveredBy.Transport}}) &middot; polled form off by design</td>
         </tr>
         {{else}}
         <tr class="skip">

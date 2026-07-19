@@ -87,6 +87,51 @@ func TestRender_MultiTenantWithSkipReasons(t *testing.T) {
 	}
 }
 
+// A covered-but-off collector must render as "collected via <twin>", never as a
+// bare "disabled"/gap; a genuinely-off collector still reads "skipped"; and an
+// enabled collector shows its ingest transport (#178 Part A).
+func TestRender_TransportAndCoverage(t *testing.T) {
+	s := Status{
+		Service: ServiceInfo{Version: "0.1.0", GoVersion: "go1.24"},
+		Health:  healthHealthy,
+		Tenants: []TenantStatus{{
+			TenantID: "t", EnabledCount: 1, SkippedCount: 2,
+			Collectors: []CollectorStatus{
+				// enabled, ingesting over blob (a source=blob collector).
+				{Name: "entra.directory_audits", Enabled: true, HasRun: true, LastSuccess: true,
+					IntervalSec: 300, Runs: 3, Transport: "blob"},
+				// off, but covered by a registered blob twin -> not a gap.
+				{Name: "entra.signins.non_interactive", Enabled: false,
+					SkipReason: "beta; enable explicitly to opt in", SkipCategory: skipCatExperimental,
+					CoveredBy: &Coverage{Collector: "entra.signins.non_interactive.blob", Transport: "blob"}},
+				// off, no covering twin -> honest gap.
+				{Name: "entra.identityprotection", Enabled: false,
+					SkipReason: "requires entra_p2", SkipCategory: skipCatLicense},
+			},
+		}},
+		GeneratedAt: "2026-07-16T12:00:00Z",
+	}
+	body := renderString(t, s)
+
+	wants := []string{
+		"via blob",                           // enabled row transport chip
+		"collected via",                      // covered row copy
+		"entra.signins.non_interactive.blob", // named twin
+		"polled form off by design",          // covered secondary note
+		"covered",                            // covered badge
+		"skipped &mdash; requires entra_p2",  // genuine gap still reads "skipped"
+	}
+	for _, want := range wants {
+		if !strings.Contains(body, want) {
+			t.Errorf("body missing %q", want)
+		}
+	}
+	// The covered collector must NOT be dressed as a plain skip.
+	if strings.Contains(body, "skipped &mdash; beta; enable explicitly to opt in") {
+		t.Errorf("covered collector rendered as a bare skip; should read 'collected via'")
+	}
+}
+
 func TestRender_OverdueBadge(t *testing.T) {
 	s := Status{
 		Service: ServiceInfo{Version: "0.1.0", GoVersion: "go1.24"},
