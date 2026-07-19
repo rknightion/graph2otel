@@ -125,6 +125,11 @@ re-fetching everything or silently dropping events that arrived out of order.
   time, that every enabled collector's declared Microsoft Graph application permissions
   are both granted on the app registration and admin-consented, so a missing scope is
   reported once up front instead of surfacing later as a runtime 403.
+- **`internal/profiling`** — optional Grafana Pyroscope continuous profiling (`profiling.
+  pyroscope.enabled`, off by default), wired at start-up in `cmd/graph2otel/main.go`. It is
+  **push-only** — profiles are shipped to Pyroscope; graph2otel exposes no HTTP `pprof`
+  endpoint of its own, so there is no debug surface to gate or secure. Start also applies
+  the runtime mutex/block sampling rates; a failure to reach Pyroscope is non-fatal.
 
 ## Single-instance, no HA in v1
 

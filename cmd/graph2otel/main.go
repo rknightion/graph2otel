@@ -154,7 +154,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	// canceling would leave them polling Graph while the process exits.
 	tenantCtx, cancelTenants := context.WithCancel(ctx)
 	defer cancelTenants()
-	sources, skips, waitTenants, err := startTenants(tenantCtx, cfg, provider, logger)
+	sources, skips, limiter, waitTenants, err := startTenants(tenantCtx, cfg, provider, logger)
 	if err != nil {
 		// A collector config that must not run (#144). Fatal on purpose: this
 		// state ships every record twice while every collector reports healthy,
@@ -190,7 +190,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	// Admin/health endpoint, fed the live per-tenant status sources and skip
 	// reasons. Start blocks until ctx is canceled, then shuts the server down
 	// itself, so run it in the background.
-	adminSrv := admin.New(cfg.Admin, sources, skips)
+	adminSrv := admin.New(cfg.Admin, sources, skips, limiter)
 	go func() {
 		if err := adminSrv.Start(ctx); err != nil {
 			logger.Error("admin server", "error", err)

@@ -10,10 +10,65 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/config"
+	"github.com/rknightion/graph2otel/internal/graphclient"
 )
 
+// fakeLimiter is a stand-in RateLimiter returning a fixed headroom snapshot, so
+// the admin panel wiring is exercised without a live *graphclient.WorkloadLimiter.
+type fakeLimiter struct {
+	headroom []graphclient.WorkloadHeadroom
+}
+
+func (f fakeLimiter) Snapshot(time.Time) []graphclient.WorkloadHeadroom { return f.headroom }
+
+func TestSnapshot_RateLimitsLandOnRightTenant(t *testing.T) {
+	tr, reg := runOnceAndTrack(t, "devices", nil)
+	lim := fakeLimiter{headroom: []graphclient.WorkloadHeadroom{
+		// tenant-a: two buckets, one half-drained, one full.
+		{TenantID: "tenant-a", Workload: graphclient.WorkloadReporting, LimitPerSec: 0.5, Burst: 5, Tokens: 2.5},
+		{TenantID: "tenant-a", Workload: graphclient.WorkloadIPC, LimitPerSec: 1, Burst: 1, Tokens: 1},
+		// A bucket for a tenant the page has no source for: dropped, not attached anywhere.
+		{TenantID: "ghost", Workload: graphclient.WorkloadDirectory, LimitPerSec: 5, Burst: 50, Tokens: 50},
+	}}
+	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, []CollectorSource{
+		{TenantID: "tenant-a", Registry: reg, Status: tr},
+	}, nil, lim)
+
+	snap := s.snapshot()
+	if len(snap.Tenants) != 1 {
+		t.Fatalf("Tenants = %d, want 1", len(snap.Tenants))
+	}
+	rl := snap.Tenants[0].RateLimits
+	if len(rl) != 2 {
+		t.Fatalf("tenant-a RateLimits = %+v, want the 2 tenant-a buckets (ghost dropped)", rl)
+	}
+	byWL := map[string]RateLimitStatus{}
+	for _, r := range rl {
+		byWL[r.Workload] = r
+	}
+	rep := byWL[string(graphclient.WorkloadReporting)]
+	if rep.Burst != 5 || rep.Tokens != 2.5 || rep.HeadroomPct != 50 {
+		t.Errorf("reporting = %+v, want burst 5 / tokens 2.5 / headroom 50", rep)
+	}
+	ipc := byWL[string(graphclient.WorkloadIPC)]
+	if ipc.Burst != 1 || ipc.HeadroomPct != 100 {
+		t.Errorf("ipc = %+v, want burst 1 / headroom 100", ipc)
+	}
+}
+
+func TestSnapshot_NilLimiterNoPanel(t *testing.T) {
+	tr, reg := runOnceAndTrack(t, "devices", nil)
+	// A nil limiter must render no panel and never panic.
+	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, []CollectorSource{
+		{TenantID: "tenant-a", Registry: reg, Status: tr},
+	}, nil, nil)
+	if rl := s.snapshot().Tenants[0].RateLimits; rl != nil {
+		t.Errorf("RateLimits = %+v, want nil with no limiter", rl)
+	}
+}
+
 func TestNew_DisabledReturnsNil(t *testing.T) {
-	s := New(config.AdminConfig{Enabled: false, Addr: ":9090"}, nil, nil)
+	s := New(config.AdminConfig{Enabled: false, Addr: ":9090"}, nil, nil, nil)
 	if s != nil {
 		t.Fatalf("New() with Enabled=false = %v, want nil", s)
 	}
@@ -30,7 +85,7 @@ func TestNew_DisabledServerStartIsNoop(t *testing.T) {
 }
 
 func TestHealthz_ReturnsOK(t *testing.T) {
-	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, nil, nil)
+	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, nil, nil, nil)
 	if s == nil {
 		t.Fatal("New() returned nil for an enabled config")
 	}
@@ -48,7 +103,7 @@ func TestHandleStatusJSON_ReflectsCollectorState(t *testing.T) {
 	tr, reg := runOnceAndTrack(t, "devices", nil)
 	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, []CollectorSource{
 		{TenantID: "tenant-a", Registry: reg, Status: tr},
-	}, nil)
+	}, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/status.json", nil)
 	w := httptest.NewRecorder()
@@ -82,7 +137,7 @@ func TestHandleStatusJSON_SkippedCollectorShowsReason(t *testing.T) {
 		{TenantID: "tenant-a"},
 	}, map[SkipKey]string{
 		{TenantID: "tenant-a", Collector: "identityprotection"}: "requires P2",
-	})
+	}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/status.json", nil)
 	w := httptest.NewRecorder()
@@ -102,7 +157,7 @@ func TestHandleIndex_RendersHTML(t *testing.T) {
 	tr, reg := runOnceAndTrack(t, "devices", nil)
 	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, []CollectorSource{
 		{TenantID: "tenant-a", Registry: reg, Status: tr},
-	}, nil)
+	}, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
@@ -124,7 +179,7 @@ func TestHandleIndex_RendersHTML(t *testing.T) {
 }
 
 func TestServer_StartAndShutdown(t *testing.T) {
-	s := New(config.AdminConfig{Enabled: true, Addr: "127.0.0.1:0"}, nil, nil)
+	s := New(config.AdminConfig{Enabled: true, Addr: "127.0.0.1:0"}, nil, nil, nil)
 	if s == nil {
 		t.Fatal("New() returned nil for an enabled config")
 	}

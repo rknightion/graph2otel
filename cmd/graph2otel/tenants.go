@@ -50,31 +50,32 @@ func startTenants(
 	cfg *config.Config,
 	provider *telemetry.Provider,
 	logger *slog.Logger,
-) (sources []admin.CollectorSource, skips map[admin.SkipKey]string, wait func(), err error) {
+) (sources []admin.CollectorSource, skips map[admin.SkipKey]string, limiter *graphclient.WorkloadLimiter, wait func(), err error) {
 	skips = map[admin.SkipKey]string{}
 	var wg sync.WaitGroup
 
 	// One limiter shared across tenants: its buckets are keyed per tenant
 	// internally, so this correctly isolates each tenant's per-app throttle
-	// budget while keeping a single instance.
-	limiter := graphclient.NewWorkloadLimiter()
+	// budget while keeping a single instance. It is returned so the admin status
+	// page can render its per-tenant throttle-headroom panel (#85).
+	limiter = graphclient.NewWorkloadLimiter()
 
 	auths, err := auth.BuildAll(cfg.Tenants)
 	if err != nil {
 		logger.Error("building tenant credentials", "error", err)
-		return nil, skips, wg.Wait, nil
+		return nil, skips, limiter, wg.Wait, nil
 	}
 
 	for _, ta := range auths {
 		src, launched, ferr := setupTenant(ctx, ta, cfg, provider, logger, limiter, skips, &wg)
 		if ferr != nil {
-			return sources, skips, wg.Wait, ferr
+			return sources, skips, limiter, wg.Wait, ferr
 		}
 		if launched {
 			sources = append(sources, src)
 		}
 	}
-	return sources, skips, wg.Wait, nil
+	return sources, skips, limiter, wg.Wait, nil
 }
 
 // setupTenant wires one tenant end to end.

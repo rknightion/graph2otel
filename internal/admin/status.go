@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collector"
+	"github.com/rknightion/graph2otel/internal/graphclient"
 )
 
 // Health states surfaced on the admin status page.
@@ -104,6 +105,21 @@ type TenantStatus struct {
 	PendingCount int               `json:"pending_count"`
 	SkippedCount int               `json:"skipped_count"`
 	CoveredCount int               `json:"covered_count"`
+	// RateLimits is this tenant's client-side throttle-headroom panel: one row
+	// per (tenant, workload) token bucket that has actually been used since
+	// process start (#85). Empty for a tenant whose buckets are all idle (lazy
+	// creation means an unused pair is simply absent) or when no limiter is
+	// wired at all.
+	RateLimits []RateLimitStatus `json:"rate_limits,omitempty"`
+}
+
+// RateLimitStatus is one throttle bucket on a tenant's headroom panel (#85).
+type RateLimitStatus struct {
+	Workload    string  `json:"workload"`
+	LimitPerSec float64 `json:"limit_per_sec"`
+	Burst       int     `json:"burst"`
+	Tokens      float64 `json:"tokens_available"`
+	HeadroomPct float64 `json:"headroom_pct"` // Tokens/Burst*100, 0 when Burst==0
 }
 
 // CollectorStatus is one row of a tenant's collector table: either a
@@ -323,6 +339,37 @@ func buildTenantStatuses(sources []CollectorSource, skipReasons map[SkipKey]stri
 		tenants = append(tenants, ten)
 	}
 	return tenants
+}
+
+// attachRateLimits groups the flat headroom snapshot by tenant and attaches each
+// tenant's buckets to its already-built TenantStatus (#85). A bucket whose tenant
+// has no status row (e.g. a tenant whose client build failed so it has no source)
+// is dropped — the panel only annotates tenants the page already shows. Buckets
+// arrive pre-sorted by (tenant, workload) from WorkloadLimiter.Snapshot, so each
+// tenant's rows keep that deterministic order.
+func attachRateLimits(tenants []TenantStatus, headroom []graphclient.WorkloadHeadroom) {
+	if len(headroom) == 0 {
+		return
+	}
+	byTenant := make(map[string][]RateLimitStatus, len(tenants))
+	for _, h := range headroom {
+		var pct float64
+		if h.Burst > 0 {
+			pct = h.Tokens / float64(h.Burst) * 100
+		}
+		byTenant[h.TenantID] = append(byTenant[h.TenantID], RateLimitStatus{
+			Workload:    string(h.Workload),
+			LimitPerSec: h.LimitPerSec,
+			Burst:       h.Burst,
+			Tokens:      h.Tokens,
+			HeadroomPct: pct,
+		})
+	}
+	for i := range tenants {
+		if rows, ok := byTenant[tenants[i].TenantID]; ok {
+			tenants[i].RateLimits = rows
+		}
+	}
 }
 
 // collectorStatusFor builds one registered collector's status row from its

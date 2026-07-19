@@ -174,6 +174,39 @@ func TestRender_CheckpointState(t *testing.T) {
 	}
 }
 
+// A tenant with RateLimits renders the throttle-headroom panel; a tenant with
+// none renders no panel at all (#85).
+func TestRender_ThrottleHeadroomPanel(t *testing.T) {
+	s := Status{
+		Service: ServiceInfo{Version: "0.1.0", GoVersion: "go1.24"},
+		Health:  healthHealthy,
+		Tenants: []TenantStatus{
+			{
+				TenantID: "t-a", EnabledCount: 1,
+				Collectors: []CollectorStatus{{Name: "c", Enabled: true, HasRun: true, LastSuccess: true, IntervalSec: 300}},
+				RateLimits: []RateLimitStatus{
+					{Workload: "reporting", LimitPerSec: 0.5, Burst: 5, Tokens: 2.5, HeadroomPct: 50},
+				},
+			},
+			{
+				TenantID: "t-idle", EnabledCount: 1,
+				Collectors: []CollectorStatus{{Name: "c", Enabled: true, HasRun: true, LastSuccess: true, IntervalSec: 300}},
+			},
+		},
+		GeneratedAt: "2026-07-19T12:00:00Z",
+	}
+	body := renderString(t, s)
+	for _, want := range []string{"Throttle headroom", "reporting", "50%"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body missing %q", want)
+		}
+	}
+	// The idle tenant contributes no second panel: exactly one "Throttle headroom".
+	if n := strings.Count(body, "Throttle headroom"); n != 1 {
+		t.Errorf("Throttle headroom panels = %d, want 1 (idle tenant renders none)", n)
+	}
+}
+
 func TestRender_OverdueBadge(t *testing.T) {
 	s := Status{
 		Service: ServiceInfo{Version: "0.1.0", GoVersion: "go1.24"},

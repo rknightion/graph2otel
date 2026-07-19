@@ -55,6 +55,8 @@
   .outcome{display:inline-flex;gap:2px;align-items:center}
   .outcome i{width:4px;height:13px;border-radius:1px;background:var(--ok);display:inline-block}
   .outcome i.f{background:var(--err)}
+  h3.rlh{font-size:12px;font-weight:600;color:var(--muted);margin:16px 0 0}
+  table.rl{max-width:560px}
   footer{max-width:1180px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
 </style>
 </head>
@@ -120,6 +122,26 @@
       {{end}}
       </tbody>
     </table>
+    {{with .RateLimits}}
+    <h3 class="rlh">Throttle headroom</h3>
+    <table class="rl">
+      <thead><tr>
+        <th>Workload</th><th class="num">limit/s</th><th class="num">burst</th>
+        <th class="num">tokens available</th><th class="num">headroom</th>
+      </tr></thead>
+      <tbody>
+      {{range .}}
+        <tr>
+          <td><code>{{.Workload}}</code></td>
+          <td class="num">{{printf "%.3g" .LimitPerSec}}</td>
+          <td class="num">{{.Burst}}</td>
+          <td class="num">{{printf "%.1f" .Tokens}}</td>
+          <td class="num">{{printf "%.0f" .HeadroomPct}}%</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    {{end}}
   </section>
   {{else}}
   <section><p class="muted">No tenants configured.</p></section>

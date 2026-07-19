@@ -18,8 +18,15 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/config"
+	"github.com/rknightion/graph2otel/internal/graphclient"
 	"github.com/rknightion/graph2otel/internal/version"
 )
+
+// RateLimiter snapshots per-(tenant,workload) throttle headroom for the status
+// page. *graphclient.WorkloadLimiter satisfies it. May be nil (no panel).
+type RateLimiter interface {
+	Snapshot(now time.Time) []graphclient.WorkloadHeadroom
+}
 
 // Server is the admin HTTP server. A nil *Server (returned by New when
 // AdminConfig.Enabled is false) is safe to call Start/Shutdown on — both are
@@ -27,6 +34,7 @@ import (
 type Server struct {
 	sources     []CollectorSource
 	skipReasons map[SkipKey]string
+	limiter     RateLimiter
 	startedAt   time.Time
 	now         func() time.Time
 
@@ -45,13 +53,18 @@ type Server struct {
 // registered at all (e.g. "requires P2", "missing permission X") — supplied
 // by the composition root, which owns the license/preflight decisions this
 // package has no dependency on.
-func New(cfg config.AdminConfig, sources []CollectorSource, skipReasons map[SkipKey]string) *Server {
+//
+// limiter, when non-nil, feeds the per-tenant throttle-headroom panel (#85) —
+// *graphclient.WorkloadLimiter from the composition root satisfies it. A nil
+// limiter renders no rate-limit panel and never panics.
+func New(cfg config.AdminConfig, sources []CollectorSource, skipReasons map[SkipKey]string, limiter RateLimiter) *Server {
 	if !cfg.Enabled {
 		return nil
 	}
 	s := &Server{
 		sources:     sources,
 		skipReasons: skipReasons,
+		limiter:     limiter,
 		startedAt:   time.Now(),
 		now:         time.Now,
 	}
@@ -108,6 +121,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 func (s *Server) snapshot() Status {
 	now := s.now()
 	tenants := buildTenantStatuses(s.sources, s.skipReasons, now)
+	if s.limiter != nil {
+		attachRateLimits(tenants, s.limiter.Snapshot(now))
+	}
 	health, reasons := deriveHealth(tenants)
 	uptime := now.Sub(s.startedAt)
 	return Status{

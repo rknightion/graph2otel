@@ -2,6 +2,7 @@ package graphclient
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -71,6 +72,46 @@ func (l *WorkloadLimiter) Wait(ctx context.Context, tenantID string, wl Workload
 		return nil
 	}
 	return lim.Wait(ctx)
+}
+
+// WorkloadHeadroom is one (tenant, workload) token bucket's current state,
+// for the admin throttle-headroom panel (#85).
+type WorkloadHeadroom struct {
+	TenantID    string
+	Workload    Workload
+	LimitPerSec float64 // rate.Limit as events/sec
+	Burst       int
+	Tokens      float64 // tokens available at the snapshot instant
+}
+
+// Snapshot returns the current headroom of every bucket that has actually been
+// used since process start (lazy creation means idle (tenant,workload) pairs
+// are absent — that is correct, not a bug). nil-limiter (WorkloadUnknown)
+// entries are skipped. Ordered deterministically (by tenant, then workload).
+func (l *WorkloadLimiter) Snapshot(now time.Time) []WorkloadHeadroom {
+	l.mu.Lock()
+	out := make([]WorkloadHeadroom, 0, len(l.limiters))
+	for key, lim := range l.limiters {
+		if lim == nil { // WorkloadUnknown / no configured ceiling
+			continue
+		}
+		out = append(out, WorkloadHeadroom{
+			TenantID:    key.tenantID,
+			Workload:    key.workload,
+			LimitPerSec: float64(lim.Limit()),
+			Burst:       lim.Burst(),
+			Tokens:      lim.TokensAt(now),
+		})
+	}
+	l.mu.Unlock()
+
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].TenantID != out[j].TenantID {
+			return out[i].TenantID < out[j].TenantID
+		}
+		return out[i].Workload < out[j].Workload
+	})
+	return out
 }
 
 func (l *WorkloadLimiter) limiterFor(tenantID string, wl Workload) *rate.Limiter {

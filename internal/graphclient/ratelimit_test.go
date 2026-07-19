@@ -66,6 +66,84 @@ func TestWorkloadLimiterUnknownNeverBlocks(t *testing.T) {
 	}
 }
 
+func TestWorkloadLimiterSnapshot(t *testing.T) {
+	l := NewWorkloadLimiter()
+	ctx := context.Background()
+
+	// Exercise two tenants across two workloads so the snapshot has several
+	// buckets to order. WorkloadUnknown is used too — it must never appear.
+	if err := l.Wait(ctx, "tenant-b", WorkloadReporting); err != nil {
+		t.Fatalf("priming tenant-b/reporting: %v", err)
+	}
+	if err := l.Wait(ctx, "tenant-a", WorkloadReporting); err != nil {
+		t.Fatalf("priming tenant-a/reporting: %v", err)
+	}
+	if err := l.Wait(ctx, "tenant-a", WorkloadIPC); err != nil {
+		t.Fatalf("priming tenant-a/ipc: %v", err)
+	}
+	for i := 0; i < 3; i++ {
+		if err := l.Wait(ctx, "tenant-a", WorkloadUnknown); err != nil {
+			t.Fatalf("priming tenant-a/unknown #%d: %v", i, err)
+		}
+	}
+
+	now := time.Now()
+	snap := l.Snapshot(now)
+
+	// Exactly the three real buckets, WorkloadUnknown excluded.
+	if len(snap) != 3 {
+		t.Fatalf("Snapshot len = %d, want 3 (unknown excluded); got %+v", len(snap), snap)
+	}
+	for _, h := range snap {
+		if h.Workload == WorkloadUnknown {
+			t.Errorf("Snapshot contains WorkloadUnknown, want it skipped")
+		}
+		spec, ok := workloadRates[h.Workload]
+		if !ok {
+			t.Fatalf("Snapshot has an unconfigured workload %q", h.Workload)
+		}
+		if h.LimitPerSec != float64(spec.every) {
+			t.Errorf("%s/%s LimitPerSec = %v, want %v", h.TenantID, h.Workload, h.LimitPerSec, float64(spec.every))
+		}
+		if h.Burst != spec.burst {
+			t.Errorf("%s/%s Burst = %d, want %d", h.TenantID, h.Workload, h.Burst, spec.burst)
+		}
+		if h.Tokens < 0 || h.Tokens > float64(h.Burst) {
+			t.Errorf("%s/%s Tokens = %v, want within [0, %d]", h.TenantID, h.Workload, h.Tokens, h.Burst)
+		}
+	}
+
+	// Ordering is deterministic: by tenant, then workload. Two back-to-back
+	// snapshots at the same instant must be identical in order.
+	if !sortedByTenantThenWorkload(snap) {
+		t.Errorf("Snapshot not ordered by (tenant, workload): %+v", snap)
+	}
+	snap2 := l.Snapshot(now)
+	for i := range snap {
+		if snap[i].TenantID != snap2[i].TenantID || snap[i].Workload != snap2[i].Workload {
+			t.Errorf("Snapshot ordering not stable at %d: %v vs %v", i, snap[i], snap2[i])
+		}
+	}
+}
+
+func sortedByTenantThenWorkload(hs []WorkloadHeadroom) bool {
+	for i := 1; i < len(hs); i++ {
+		p, c := hs[i-1], hs[i]
+		if p.TenantID > c.TenantID || (p.TenantID == c.TenantID && p.Workload > c.Workload) {
+			return false
+		}
+	}
+	return true
+}
+
+func TestWorkloadLimiterSnapshotEmpty(t *testing.T) {
+	// A never-used limiter has no buckets, so Snapshot is empty (idle pairs are
+	// absent by design, not a bug).
+	if snap := NewWorkloadLimiter().Snapshot(time.Now()); len(snap) != 0 {
+		t.Errorf("Snapshot of an unused limiter = %+v, want empty", snap)
+	}
+}
+
 func TestWorkloadLimiterCtxCancelled(t *testing.T) {
 	l := NewWorkloadLimiter()
 	ctx, cancel := context.WithCancel(context.Background())

@@ -128,7 +128,44 @@ admin:
 ```
 
 Exposes an operator health/status HTTP endpoint (liveness + per-collector status).
-Disabled by default.
+Disabled by default. When enabled, the status page also renders a per-tenant
+**throttle-headroom** panel — the live client-side rate-limiter state (limit/s, burst,
+tokens available, headroom %) for each Graph workload the tenant has actually hit since
+start-up — so you can see how close a tenant is running to Graph's throttling ceilings.
+
+### `profiling`
+
+```yaml
+profiling:
+  pyroscope:
+    enabled: false
+    server_address: ""            # REQUIRED when enabled, e.g. https://profiles-prod-NNN.grafana.net
+    basic_auth_user: ""           # Grafana Cloud Profiles user/instance ID
+    basic_auth_password: ""       # supply via env, NEVER here — see below
+    tenant_id: ""                 # optional; leave empty for Grafana Cloud
+    upload_rate: 15s              # optional; 0/omit uses the pyroscope default
+    tags: {}                      # optional static labels attached to every profile
+  mutex_profile_fraction: 5       # runtime.SetMutexProfileFraction; 0 = disabled
+  block_profile_rate: 100000      # runtime.SetBlockProfileRate (ns); 0 = disabled
+```
+
+Optional Grafana Pyroscope **continuous profiling**, off by default. graph2otel does not
+expose an HTTP `pprof` endpoint — it only *pushes* profiles to Pyroscope, so nothing is
+served or scrapeable from the process. Enabling it has no effect on the exporter's core
+job, and a failure to reach Pyroscope is non-fatal (logged, then the process carries on).
+
+`pyroscope.server_address` is required when `enabled` is true. `basic_auth_user` /
+`basic_auth_password` authenticate to Grafana Cloud Profiles; on a self-hosted Pyroscope
+they can be left empty. `upload_rate` controls how often profiles are flushed (default
+`15s`); `tags` attaches static labels to every profile.
+
+`mutex_profile_fraction` and `block_profile_rate` turn on the Go runtime's mutex- and
+block-contention sampling that feed the corresponding Pyroscope profiles. Sampling them
+is not free, so leave the defaults unless you are actively investigating contention.
+
+`basic_auth_password` is a secret — set it via `G2O_PROFILING__PYROSCOPE__BASIC_AUTH_PASSWORD`,
+never in committed YAML (see [Secrets](#secrets--what-never-belongs-in-this-file)). Every
+field here also has a `G2O_PROFILING__*` env var — see [Environment variables](env-vars.md).
 
 ### `checkpoint_dir`
 
