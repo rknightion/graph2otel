@@ -82,6 +82,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/enrollment"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/enrollmentevents"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/epmdenied"
+	_ "github.com/rknightion/graph2otel/internal/collectors/intune/epmelevationevents"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/epmelevations"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/featureupdatesummary"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/firewallstatus"

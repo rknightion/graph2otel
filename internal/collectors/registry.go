@@ -14,6 +14,7 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/exportjob"
 	"github.com/rknightion/graph2otel/internal/license"
@@ -62,6 +63,17 @@ type Deps struct {
 	// those collectors use it; every other collector ignores it. The
 	// composition root builds one per tenant.
 	Export exportjob.Runner
+	// Store is the per-tenant checkpoint store — the SAME *checkpoint.Store the
+	// window/blob/job engines use (WindowDeps.Store et al.). It is OPTIONAL and
+	// used by exactly one snapshot collector: intune.epm_elevation_events (#205),
+	// an EVENT-stream export report that must dedupe across polls (watermark +
+	// SeenIDs over the export transport) so it does not re-emit every elevation
+	// on every 6h tick. Every other snapshot collector ignores it. nil (unit
+	// tests) disables checkpointing and the owning collector skips rather than
+	// dup-storming. Its checkpoint namespace never collides with exportjob's
+	// in-flight JobRecord for the same report — jobFileKey prefixes those with
+	// "jobrecord\x00" (internal/checkpoint), a separate file.
+	Store *checkpoint.Store
 	// Fleet is the shared /deviceManagement/managedDevices fetcher (#87). Only
 	// intune.devices + intune.malware use it — both page the same fleet list
 	// every cycle, so the composition root builds one CachingFleetFetcher per

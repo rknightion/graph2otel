@@ -427,6 +427,11 @@ var annotations = map[string]Annotation{
 		Source:   "`POST /deviceManagement/reports/exportJobs`",
 		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
 	},
+	"intune.epm_elevation_events": {
+		Collects: "Per-elevation Endpoint Privilege Management event stream — one log record per privilege elevation on a managed device (which binary ran elevated, by whom, on which device, under what EPM policy, and whether governed), via the Reports Export API. Uses the `EpmElevationReportElevationEvent` report — the per-event detail behind the `intune.epm_elevations` aggregate. Checkpoints a watermark + seen-id set over the export transport so each elevation is emitted exactly once (stamped with its own EventDateTime) rather than re-emitted on every poll; the metric is a bounded counter by elevation type and result, and per-event detail rides the log twin",
+		Source:   "`POST /deviceManagement/reports/exportJobs`",
+		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
+	},
 	"intune.feature_update_summary": {
 		Collects: "Per-policy Windows feature-update deployment rollup (devices in-progress / errored / succeeded, by policy and target version), via the Reports Export API. Uses the `FeatureUpdatePolicyStatusSummary` report — the \"Deployment status per update ring\" Monitor report. Pre-aggregated, so it emits a bounded gauge keyed by policy and no per-device twin",
 		Source:   "`POST /deviceManagement/reports/exportJobs`",

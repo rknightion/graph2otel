@@ -229,6 +229,23 @@ const (
 	AttrWinpeStatus                  = "winpe_status"
 )
 
+// Attribute keys for the intune.epm_elevation_events per-elevation SIEM stream
+// (EpmElevationReportElevationEvent, #205) — the per-event detail behind the
+// EpmAggregationReportByApplication rollup above. Every value is live-captured
+// from the export CSV header (probed as graph2otel-poller 2026-07-20), not a doc
+// placeholder. All are twin-only (per-entity) attributes; the metric carries only
+// the bounded elevation_type/result pair (#112).
+const (
+	AttrElevationId       = "elevation_id"
+	AttrFilePath          = "file_path"
+	AttrIsSystemInitiated = "is_system_initiated"
+	AttrJustification     = "justification"
+	AttrParentProcessName = "parent_process_name"
+	AttrProcessType       = "process_type"
+	AttrProductName       = "product_name"
+	AttrRuleId            = "rule_id"
+)
+
 // Attribute keys for the Endpoint Analytics Work-From-Anywhere per-device Windows
 // 11 upgrade-readiness signal (#194) — the metricDevices navigation under
 // userExperienceAnalyticsWorkFromAnywhereMetrics. Values live-captured from the

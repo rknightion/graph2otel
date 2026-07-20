@@ -142,7 +142,7 @@ func setupTenant(
 	// shorter default interval; widening either interval past 30m (large-tenant
 	// tuning) just reduces the reuse rate, never correctness.
 	fleet := collectors.NewCachingFleetFetcher(gc, "https://graph.microsoft.com/v1.0", 30*time.Minute)
-	deps := collectors.Deps{Graph: gc, TenantID: ta.TenantID, Logger: tlog, Caps: caps, Export: exporter, Fleet: fleet}
+	deps := collectors.Deps{Graph: gc, TenantID: ta.TenantID, Logger: tlog, Caps: caps, Export: exporter, Fleet: fleet, Store: store}
 	// polledNames records the stable name of every graph/window (polled)
 	// collector, gated in or not, so a same-named blob twin can be recognized as
 	// the second TRANSPORT of a polled collector and selected against it by

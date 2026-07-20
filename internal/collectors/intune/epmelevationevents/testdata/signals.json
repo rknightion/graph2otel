@@ -1,0 +1,36 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.epm_elevation_events.count",
+      "AttrKeys": [
+        "elevation_type",
+        "result"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.epm_elevation_events",
+      "AttrKeys": [
+        "company_name",
+        "device_id",
+        "device_name",
+        "elevation_id",
+        "elevation_type",
+        "file_description",
+        "file_hash",
+        "file_path",
+        "file_version",
+        "ingest_transport",
+        "internal_name",
+        "is_system_initiated",
+        "parent_process_name",
+        "process_type",
+        "product_name",
+        "result",
+        "upn",
+        "user_type"
+      ]
+    }
+  ]
+}
