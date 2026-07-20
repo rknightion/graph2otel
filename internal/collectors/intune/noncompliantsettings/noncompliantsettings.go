@@ -72,6 +72,10 @@ const statusUnknown = "unknown"
 // map grows only on live evidence of a new code — never a guess.
 var statusNames = map[string]string{
 	"4": "not_compliant",
+	// LIVE-MEASURED 2026-07-20 (m7kni, #203 deploy): once the export select fix
+	// let this collector actually return rows, WINSRV carried SettingStatus="5"
+	// paired by SettingStatus_loc "Error".
+	"5": "error",
 }
 
 // decodeStatus decodes a raw SettingStatus code to its bounded label value,

@@ -82,6 +82,21 @@ func unknownRow() exportjob.Row {
 		"WinCompliance", "99", "Some future status", "1")
 }
 
+// TestDecodeStatusLiveCodes pins the two live-measured SettingStatus codes: 4 →
+// not_compliant and 5 → error (both observed on m7kni; 5 arrived once the #203
+// select fix let this collector return rows). An unseen code buckets to unknown.
+func TestDecodeStatusLiveCodes(t *testing.T) {
+	for code, want := range map[string]string{"4": "not_compliant", "5": "error"} {
+		got, known := decodeStatus(code)
+		if !known || got != want {
+			t.Errorf("decodeStatus(%q) = (%q, %v), want (%q, true)", code, got, known, want)
+		}
+	}
+	if got, known := decodeStatus("99"); known || got != statusUnknown {
+		t.Errorf("decodeStatus(99) = (%q, %v), want (unknown, false)", got, known)
+	}
+}
+
 // TestCollectCountsRowsByOsAndStatus pins the metric shape: one gauge point per
 // (os, setting_status) whose value is the COUNT of noncompliant device×setting
 // rows in that bucket. The three live rows all bucket to (Windows,
