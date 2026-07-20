@@ -17,7 +17,10 @@ export GOEXPERIMENT
 
 # Pinned tool versions (override via env; majors are load-bearing for the v2 config schema).
 GOLANGCI_LINT_VERSION ?= v2.12.2
-GO_LICENSES_VERSION ?= v2.0.1
+# go-licenses v1.x: `go install github.com/google/go-licenses@vX`. A bump to v2+
+# needs the `/v2` module suffix in the install path below (and a re-check of the
+# `report --template` CLI), so keep this on v1 unless that path is updated too.
+GO_LICENSES_VERSION ?= v1.6.0
 SYFT_VERSION ?= v1.48.0
 HELM_DOCS_VERSION ?= v1.14.2
 
