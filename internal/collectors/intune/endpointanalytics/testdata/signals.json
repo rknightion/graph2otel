@@ -13,6 +13,25 @@
       ]
     },
     {
+      "Name": "intune.uxa.app_health.active_device_count",
+      "AttrKeys": [
+        "os_version"
+      ]
+    },
+    {
+      "Name": "intune.uxa.app_health.mean_time_to_failure_minutes",
+      "AttrKeys": [
+        "os_version"
+      ]
+    },
+    {
+      "Name": "intune.uxa.app_health.os_version_score",
+      "AttrKeys": [
+        "health_state",
+        "os_version"
+      ]
+    },
+    {
       "Name": "intune.uxa.baseline_score",
       "AttrKeys": [
         "baseline_name",

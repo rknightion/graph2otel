@@ -42,7 +42,13 @@ const (
 	baselineURL     = "https://graph.microsoft.com/beta/deviceManagement/userExperienceAnalyticsBaselines"
 	anomalyURL      = "https://graph.microsoft.com/beta/deviceManagement/userExperienceAnalyticsAnomalySeverityOverview"
 	wfaURL          = "https://graph.microsoft.com/beta/deviceManagement/userExperienceAnalyticsWorkFromAnywhereMetrics/allDevices/metricDevices"
+	appHealthOSURL  = "https://graph.microsoft.com/v1.0/deviceManagement/userExperienceAnalyticsAppHealthOSVersionPerformance"
 )
+
+// appHealthOSLiveRow is the VERBATIM userExperienceAnalyticsAppHealthOSVersionPerformance
+// row for m7kni (probed as graph2otel-poller 2026-07-20): one OS version, one active
+// device, the int32-max "no failures" MTTF sentinel, a provisional "TBD" status.
+const appHealthOSLiveRow = `{"id":"16863e1c-7c03-459b-85d8-88f1fe38da56","osVersion":"10.0.26120.3281","osBuildNumber":"10.0.26120","activeDeviceCount":1,"meanTimeToFailureInMinutes":2147483647,"osVersionAppHealthScore":100.0,"osVersionAppHealthStatus":"TBD"}`
 
 // wfaLiveRow is the VERBATIM metricDevices row for LAPHAM (m7kni, probed as
 // graph2otel-poller 2026-07-19): upgraded, every hardware check passed, all
@@ -92,6 +98,7 @@ func allEndpoints(overrides map[string]string) map[string]string {
 		baselineURL:     emptyPage,
 		anomalyURL:      anomalyDefaultBody,
 		wfaURL:          `{"value":[` + wfaLiveRow + `]}`,
+		appHealthOSURL:  `{"value":[` + appHealthOSLiveRow + `]}`,
 	}
 	for k, v := range overrides {
 		m[k] = v
@@ -349,6 +356,65 @@ func TestCollectEmitsBaselineScorePerBaseline(t *testing.T) {
 	}
 	if got["Commercial median"] != 72 || got["Finance fleet baseline"] != 81 {
 		t.Errorf("baseline scores = %v", got)
+	}
+}
+
+// TestCollectEmitsAppHealthOSVersionAsBoundedAggregates pins the #194 OS-version
+// app-health segment: one row per OS version rolls into bounded gauges keyed by
+// os_version (score, active device count, MTTF) with NO log twin (#192 — an
+// OS-version aggregate, not a per-device row), the int32-max "no failures" MTTF
+// sentinel is excluded, and the undocumented wire status "TBD" falls to the
+// bounded "other" health_state rather than being asserted raw.
+func TestCollectEmitsAppHealthOSVersionAsBoundedAggregates(t *testing.T) {
+	body := `{"value":[
+	  ` + appHealthOSLiveRow + `,
+	  {"osVersion":"10.0.22631.1","activeDeviceCount":3,"meanTimeToFailureInMinutes":5000,"osVersionAppHealthScore":72,"osVersionAppHealthStatus":"needsAttention"}
+	]}`
+	g := &fakeGraph{bodies: allEndpoints(map[string]string{appHealthOSURL: body})}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	// score gauge: one point per OS version, TBD -> "other", needsAttention -> "needs_attention".
+	score := map[string]telemetrytest.MetricPoint{}
+	for _, p := range rec.MetricPoints(appHealthOSVersionScoreMetric) {
+		score[p.Attrs["os_version"]] = p
+	}
+	if len(score) != 2 {
+		t.Fatalf("want 2 os_version score points, got %d: %v", len(score), score)
+	}
+	if score["10.0.26120.3281"].Value != 100 || score["10.0.26120.3281"].Attrs["health_state"] != "other" {
+		t.Errorf("live row score point = %+v, want value 100 health_state other", score["10.0.26120.3281"])
+	}
+	if score["10.0.22631.1"].Attrs["health_state"] != "needs_attention" {
+		t.Errorf("needsAttention row health_state = %q, want needs_attention", score["10.0.22631.1"].Attrs["health_state"])
+	}
+
+	// active_device_count gauge: bounded by os_version (1 and 3).
+	count := map[string]float64{}
+	for _, p := range rec.MetricPoints(appHealthOSVersionCountMetric) {
+		count[p.Attrs["os_version"]] = p.Value
+	}
+	if count["10.0.26120.3281"] != 1 || count["10.0.22631.1"] != 3 {
+		t.Errorf("active_device_count by os_version = %v, want 1 and 3", count)
+	}
+
+	// MTTF gauge: ONLY the real 5000-minute row; the int32-max sentinel row is excluded.
+	mttf := rec.MetricPoints(appHealthOSVersionMTTFMetric)
+	if len(mttf) != 1 {
+		t.Fatalf("want 1 MTTF point (sentinel row excluded), got %d: %v", len(mttf), mttf)
+	}
+	if mttf[0].Attrs["os_version"] != "10.0.22631.1" || mttf[0].Value != 5000 {
+		t.Errorf("MTTF point = %+v, want os_version 10.0.22631.1 value 5000", mttf[0])
+	}
+
+	// No log twin from this OS-version aggregate segment.
+	for _, lr := range rec.LogRecords() {
+		if lr.EventName == eventDeviceScore || lr.EventName == eventWorkFromAnywhere {
+			continue // twins from OTHER sub-fetches (device scores / WFA), not this one
+		}
+		t.Errorf("app-health-os-version segment must emit no log twin, got event %q", lr.EventName)
 	}
 }
 

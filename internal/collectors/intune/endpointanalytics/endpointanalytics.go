@@ -74,7 +74,17 @@ const (
 	baselineScoreMetric       = "intune.uxa.baseline_score"
 	anomalyCountMetric        = "intune.uxa.anomaly_count"
 	wfaDeviceCountMetric      = "intune.uxa.work_from_anywhere.device_count"
+
+	appHealthOSVersionScoreMetric = "intune.uxa.app_health.os_version_score"
+	appHealthOSVersionMTTFMetric  = "intune.uxa.app_health.mean_time_to_failure_minutes"
+	appHealthOSVersionCountMetric = "intune.uxa.app_health.active_device_count"
 )
+
+// mttfNoFailuresSentinel is Endpoint Analytics' int32-max "no failures observed"
+// value for meanTimeToFailureInMinutes (live-measured 2026-07-20, #194, on the
+// one OS-version row m7kni reports). It is excluded from the MTTF gauge so it can
+// never masquerade as a real ~4085-year mean time to failure.
+const mttfNoFailuresSentinel = 2147483647
 
 // eventDeviceScore is the EventName of the per-device Endpoint Analytics log
 // twin (#179). It follows the intune.device_* twin convention (cf.
@@ -238,6 +248,26 @@ type appHealthPerformance struct {
 	AppCrashCount int64  `json:"appCrashCount"`
 }
 
+// appHealthOSVersionPerformance is the subset of the v1.0
+// userExperienceAnalyticsAppHealthOSVersionPerformance resource this collector
+// reads (#194). It is an OS-VERSION-level app-reliability aggregate — one row per
+// OS version, bounded by the number of OS versions in the fleet — so it is
+// metric-shaped with NO log twin (the #192 rule: model/OS-level scores are
+// metric-shaped; per-device rows are log-shaped). It survives the 5-device
+// Endpoint Analytics "insufficient data" floor that empties the per-model
+// segments, because it aggregates by OS build rather than by device model
+// (live-measured 2026-07-20, m7kni: 1 row for 10.0.26120). osVersionAppHealthStatus
+// is bucketed through healthStateBucketFor, so an undocumented wire value like the
+// observed "TBD" (a provisional status not in the documented health-state enum)
+// falls to "other" rather than being asserted raw.
+type appHealthOSVersionPerformance struct {
+	OSVersion                  string  `json:"osVersion"`
+	ActiveDeviceCount          int64   `json:"activeDeviceCount"`
+	MeanTimeToFailureInMinutes int64   `json:"meanTimeToFailureInMinutes"`
+	OSVersionAppHealthScore    float64 `json:"osVersionAppHealthScore"`
+	OSVersionAppHealthStatus   string  `json:"osVersionAppHealthStatus"`
+}
+
 // batteryHealthPerformance is the subset of the beta
 // userExperienceAnalyticsBatteryHealthDevicePerformance resource this
 // collector reads. deviceId/deviceName/model/manufacturer are deliberately
@@ -371,6 +401,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		{"baselines", c.collectBaselines},
 		{"anomaly severity overview", c.collectAnomalySeverityOverview},
 		{"work from anywhere readiness", c.collectWorkFromAnywhere},
+		{"app health os version", c.collectAppHealthOSVersion},
 	}
 
 	var errs []error
@@ -701,6 +732,51 @@ func (c *Collector) collectWorkFromAnywhere(ctx context.Context, e telemetry.Emi
 		})
 	}
 	e.GaugeSnapshot(wfaDeviceCountMetric, "{device}", "Intune Endpoint Analytics device count by Windows 11 upgrade eligibility and health state; per-device readiness detail on the intune.device_work_from_anywhere log twin.", points)
+	return nil
+}
+
+// collectAppHealthOSVersion fetches the OS-version-level application health
+// aggregate and emits three bounded gauges keyed by os_version (bounded by the
+// number of OS versions in the fleet): the app-health score, the count of
+// devices actively reporting app health, and the mean time to failure in
+// minutes. No log twin — this is an OS-version aggregate, not a per-device row
+// (#192). The int32-max "no failures" MTTF sentinel is excluded so it never
+// reads as a real ~4085-year mean time to failure.
+func (c *Collector) collectAppHealthOSVersion(ctx context.Context, e telemetry.Emitter) error {
+	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/userExperienceAnalyticsAppHealthOSVersionPerformance", nil)
+	if err != nil {
+		return err
+	}
+	scorePoints := make([]telemetry.GaugePoint, 0, len(raw))
+	countPoints := make([]telemetry.GaugePoint, 0, len(raw))
+	mttfPoints := make([]telemetry.GaugePoint, 0, len(raw))
+	for _, r := range raw {
+		var a appHealthOSVersionPerformance
+		if err := json.Unmarshal(r, &a); err != nil {
+			c.logger.Warn("endpoint_analytics: skipping malformed app health os-version row", "collector", collectorName, "error", err)
+			continue
+		}
+		osv := orUnknown(a.OSVersion)
+		scorePoints = append(scorePoints, telemetry.GaugePoint{
+			Value: a.OSVersionAppHealthScore,
+			Attrs: telemetry.Attrs{semconv.AttrOsVersion: osv, semconv.AttrHealthState: healthStateBucketFor(a.OSVersionAppHealthStatus)},
+		})
+		countPoints = append(countPoints, telemetry.GaugePoint{
+			Value: float64(a.ActiveDeviceCount),
+			Attrs: telemetry.Attrs{semconv.AttrOsVersion: osv},
+		})
+		// The int32-max "no failures observed" sentinel is excluded so it never
+		// lands as a real mean-time-to-failure value.
+		if a.MeanTimeToFailureInMinutes != mttfNoFailuresSentinel {
+			mttfPoints = append(mttfPoints, telemetry.GaugePoint{
+				Value: float64(a.MeanTimeToFailureInMinutes),
+				Attrs: telemetry.Attrs{semconv.AttrOsVersion: osv},
+			})
+		}
+	}
+	e.GaugeSnapshot(appHealthOSVersionScoreMetric, "{score}", "Intune Endpoint Analytics application health score (0-100) per OS version, by app-health state.", scorePoints)
+	e.GaugeSnapshot(appHealthOSVersionCountMetric, "{device}", "Intune Endpoint Analytics count of devices actively reporting application health, by OS version.", countPoints)
+	e.GaugeSnapshot(appHealthOSVersionMTTFMetric, "min", "Intune Endpoint Analytics application mean time to failure (minutes) per OS version; the int32-max 'no failures' sentinel is excluded.", mttfPoints)
 	return nil
 }
 
