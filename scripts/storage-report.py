@@ -240,6 +240,16 @@ def human_signed(n: float) -> str:
     return ("+" if n >= 0 else "-") + human(abs(n))
 
 
+def human_count(n: float) -> str:
+    """Compact op-count formatter: 683000 -> '683.0K', 1_200_000 -> '1.2M'."""
+    n = float(n)
+    for unit in ("", "K", "M", "B"):
+        if abs(n) < 1000:
+            return f"{n:,.0f}{unit}" if unit == "" else f"{n:,.1f}{unit}"
+        n /= 1000
+    return f"{n:,.1f}T"
+
+
 def age(iso: str | None) -> str:
     if not iso:
         return "-"
@@ -317,8 +327,8 @@ def render_terminal(account: str, rows: list[dict], prev: dict | None,
     total_blobs = sum(r["blobs"] for r in rows)
     shown = rows[:top] if top else rows
     biggest = max((r["bytes"] for r in rows), default=1) or 1
-    barw = 18
-    tot_store = tot_write = 0.0
+    barw = 12
+    tot_store = tot_write = tot_appends = 0.0
 
     print()
     print(BOLD(f"  graph2otel storage — {account}"))
@@ -331,7 +341,8 @@ def render_terminal(account: str, rows: list[dict], prev: dict | None,
               (GREEN if d_bytes >= 0 else RED)(human_signed(d_bytes)))
     print()
 
-    hdr = f"  {'CONTAINER':<40}{'SIZE':>10} {'£/MO':>8} {'%':>5}  {'BAR':<{barw}} {'BLOBS':>6} {'AGE':>6} {'Δ/DAY':>10}"
+    hdr = (f"  {'CONTAINER':<30}{'SIZE':>10} {'STORE £':>8} {'WRITE £':>8} {'WR/MO':>7} "
+           f"{'%':>5}  {'BAR':<{barw}} {'AGE':>6} {'Δ/DAY':>10}")
     print(BOLD(hdr))
     print(DIM("  " + "-" * (len(hdr) - 2)))
     for r in shown:
@@ -342,31 +353,39 @@ def render_terminal(account: str, rows: list[dict], prev: dict | None,
         rate_s = "-" if rate is None else human_signed(rate)
         rate_c = DIM(rate_s) if rate is None else (GREEN if rate >= 0 else RED)(rate_s)
         name = r["name"].replace("insights-logs-", "")
-        _, _, cost, _ = cost_row(r["bytes"], effective_scale(name, p), p)
+        scale = effective_scale(name, p)
+        store, write, _, _ = cost_row(r["bytes"], scale, p)
+        appends_mo = append_rate_per_day(r["bytes"], p) * scale * DAYS_PER_MONTH
         big = r["bytes"] >= 20 * 1024**2
-        name_c = (YELLOW if big else CYAN)(f"{name:<40.40}")
-        print(f"  {name_c}{human(r['bytes']):>10} {gbp(cost):>8} {pct:>4.1f}%  {bar:<{barw}} "
-              f"{r['blobs']:>6} {age(r['newest']):>6} {rate_c:>10}")
+        name_c = (YELLOW if big else CYAN)(f"{name:<30.30}")
+        print(f"  {name_c}{human(r['bytes']):>10} {gbp(store):>8} {gbp(write):>8} "
+              f"{human_count(appends_mo):>7} {pct:>4.1f}%  {bar:<{barw}} "
+              f"{age(r['newest']):>6} {rate_c:>10}")
     baseline = 0.0  # measured total (scale=1, model_retention==actual): the "today" number
     for r in rows:  # cost totals over ALL containers, not just the shown top-N
-        s, w, _, _ = cost_row(r["bytes"], effective_scale(r["name"].replace("insights-logs-", ""), p), p)
+        scale = effective_scale(r["name"].replace("insights-logs-", ""), p)
+        s, w, _, _ = cost_row(r["bytes"], scale, p)
         tot_store += s
         tot_write += w
+        tot_appends += append_rate_per_day(r["bytes"], p) * scale * DAYS_PER_MONTH
         bs, bw, _, _ = cost_row(r["bytes"], 1.0, {**p, "model_retention": p["actual_retention"]})
         baseline += bs + bw
     if top and len(rows) > top:
         rest = sum(r["bytes"] for r in rows[top:])
         print(DIM(f"  … {len(rows)-top} more containers, {human(rest)}"))
     print(DIM("  " + "-" * (len(hdr) - 2)))
-    total_label = f"{'TOTAL':<40}"
-    print("  " + BOLD(total_label) + BOLD(f"{human(total):>10}") + BOLD(f" {gbp(tot_store+tot_write):>8}"))
+    total_label = f"{'TOTAL':<30}"
+    print("  " + BOLD(total_label) + BOLD(f"{human(total):>10}")
+          + BOLD(f" {gbp(tot_store):>8}") + BOLD(f" {gbp(tot_write):>8}")
+          + BOLD(f" {human_count(tot_appends):>7}"))
     ret_src = "detected" if retention_detected else "assumed"
     scenario = (p["model_retention"] != p["actual_retention"] or p["volume_scale"] != 1.0 or p["per_container"])
     total_cost = tot_store + tot_write
     print()
     label = "modeled monthly cost" if scenario else "est. monthly cost"
     print(DIM(f"  {label} ≈ {gbp(total_cost)}"
-              f"  (storage {gbp(tot_store)} + write-ops {gbp(tot_write)})"))
+              f"  (storage {gbp(tot_store)} + write-ops {gbp(tot_write)} ≈ "
+              f"{human_count(tot_appends)} appends/mo)"))
     if scenario:
         delta = total_cost - baseline
         arrow = (GREEN if delta <= 0 else RED)(f"{'+' if delta > 0 else ''}{gbp(delta)}")
@@ -387,7 +406,7 @@ def render_html(path: str, account: str, rows: list[dict], prev: dict | None,
                 oldest: dict | None, p: dict) -> None:
     total = sum(r["bytes"] for r in rows) or 1
     biggest = max((r["bytes"] for r in rows), default=1) or 1
-    tot_cost = 0.0
+    tot_store = tot_write = tot_appends = 0.0
     trs = []
     for r in rows:
         pct = 100 * r["bytes"] / total
@@ -395,14 +414,21 @@ def render_html(path: str, account: str, rows: list[dict], prev: dict | None,
         rate = per_day(r["bytes"], oldest, r["name"])
         rate_s = "—" if rate is None else human_signed(rate)
         name = r["name"].replace("insights-logs-", "")
-        _, _, cost, _ = cost_row(r["bytes"], effective_scale(name, p), p)
-        tot_cost += cost
+        scale = effective_scale(name, p)
+        store, write, _, _ = cost_row(r["bytes"], scale, p)
+        appends_mo = append_rate_per_day(r["bytes"], p) * scale * DAYS_PER_MONTH
+        tot_store += store
+        tot_write += write
+        tot_appends += appends_mo
         big = r["bytes"] >= 20 * 1024**2
         trs.append(
             f"<tr><td class='n'>{name}{' <span class=hi>HV</span>' if big else ''}</td>"
-            f"<td class='num'>{human(r['bytes'])}</td><td class='num'>{gbp(cost)}</td><td class='num'>{pct:.1f}%</td>"
+            f"<td class='num'>{human(r['bytes'])}</td><td class='num'>{gbp(store)}</td>"
+            f"<td class='num'>{gbp(write)}</td><td class='num'>{human_count(appends_mo)}</td>"
+            f"<td class='num'>{pct:.1f}%</td>"
             f"<td class='bar'><span style='width:{w:.1f}%'></span></td>"
             f"<td class='num'>{r['blobs']:,}</td><td class='num'>{rate_s}</td></tr>")
+    tot_cost = tot_store + tot_write
     since = ""
     if prev:
         d = sum(r["bytes"] for r in rows) - prev.get("totals", {}).get("bytes", 0)
@@ -424,10 +450,12 @@ def render_html(path: str, account: str, rows: list[dict], prev: dict | None,
 <h1>graph2otel storage — {account}</h1>
 <p class=sub>{len(rows)} containers · {human(total)} total · {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
 {since}
-<table><thead><tr><th>Container</th><th class=num>Size</th><th class=num>£/mo</th><th class=num>%</th>
+<table><thead><tr><th>Container</th><th class=num>Size</th><th class=num>Store £/mo</th>
+<th class=num>Write £/mo</th><th class=num>Writes/mo</th><th class=num>%</th>
 <th>Share</th><th class=num>Blobs</th><th class=num>Δ/day</th></tr></thead>
 <tbody>{''.join(trs)}</tbody>
-<tfoot><tr><td>TOTAL</td><td class=num>{human(total)}</td><td class=num>{gbp(tot_cost)}</td><td colspan=4></td></tr></tfoot></table>
+<tfoot><tr><td>TOTAL</td><td class=num>{human(total)}</td><td class=num>{gbp(tot_store)}</td>
+<td class=num>{gbp(tot_write)}</td><td class=num>{human_count(tot_appends)}</td><td colspan=4></td></tr></tfoot></table>
 <p class=sub>{'Modeled' if (p['model_retention'] != p['actual_retention'] or p['volume_scale'] != 1.0 or p['per_container']) else 'Est.'} monthly cost ≈ <b>{gbp(tot_cost)}</b> (Hot LRS uksouth, actual retention {p['actual_retention']:g}d, model retention {p['model_retention']:g}d, volume ×{p['volume_scale']:g}, write-ops dominated). HV = high-volume (&ge;20&nbsp;MB). Δ/day from the oldest snapshot.</p>
 """
     open(path, "w").write(html)
