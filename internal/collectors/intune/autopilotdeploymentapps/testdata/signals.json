@@ -1,0 +1,24 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.autopilot_deployment_apps.installs",
+      "AttrKeys": [
+        "policy_install_status"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.autopilot_deployment_apps",
+      "AttrKeys": [
+        "app_name",
+        "app_type",
+        "application_id",
+        "device_id",
+        "ingest_transport",
+        "is_admin_selected",
+        "policy_install_status"
+      ]
+    }
+  ]
+}

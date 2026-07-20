@@ -382,6 +382,16 @@ var annotations = map[string]Annotation{
 		Source:   "`POST /deviceManagement/reports/exportJobs`",
 		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
 	},
+	"intune.autopilot_deployment_apps": {
+		Collects: "Per-application install status during a Windows Autopilot device-preparation (V2) deployment — the \"Apps\" tab of the device-deployment-details pane — bucketed by raw `PolicyInstallStatus` code with per-(device, app) detail on the log twin. Uses the `AutopilotV2DeploymentStatusDetailedAppInfo` report. Status codes are emitted verbatim, not decoded; app status is independent of the device deployment outcome",
+		Source:   "`POST /deviceManagement/reports/exportJobs`",
+		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
+	},
+	"intune.autopilot_deployment_scripts": {
+		Collects: "Per-script execution status during a Windows Autopilot device-preparation (V2) deployment — the \"Scripts\" tab of the device-deployment-details pane — bucketed by raw `PolicyInstallStatus` code with per-(device, script) detail on the log twin. Uses the `AutopilotV2DeploymentStatusDetailedScriptInfo` report. Empty is a valid steady state on a tenant with no device-prep scripts; status codes are emitted verbatim, not decoded",
+		Source:   "`POST /deviceManagement/reports/exportJobs`",
+		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
+	},
 	"intune.epm_elevations": {
 		Collects: "Endpoint Privilege Management application elevations — which applications ran elevated, how often, and whether the elevation was policy-governed (unmanaged elevations are a security signal), via the Reports Export API. Uses the `EpmAggregationReportByApplication` report",
 		Source:   "`POST /deviceManagement/reports/exportJobs`",

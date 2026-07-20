@@ -59,6 +59,8 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/auditevents"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/autopilot"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/autopilotdeployment"
+	_ "github.com/rknightion/graph2otel/internal/collectors/intune/autopilotdeploymentapps"
+	_ "github.com/rknightion/graph2otel/internal/collectors/intune/autopilotdeploymentscripts"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/autopilotevents"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/bootsecurity"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/certificates"

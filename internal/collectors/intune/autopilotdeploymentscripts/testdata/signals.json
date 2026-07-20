@@ -1,0 +1,22 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.autopilot_deployment_scripts.executions",
+      "AttrKeys": [
+        "policy_install_status"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.autopilot_deployment_scripts",
+      "AttrKeys": [
+        "device_id",
+        "display_name",
+        "ingest_transport",
+        "policy_id",
+        "policy_install_status"
+      ]
+    }
+  ]
+}
