@@ -102,6 +102,10 @@ type CollectorConfig struct {
 type AdminConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	Addr    string `yaml:"addr"`
+	// RefreshInterval is how often the status page's JS re-polls
+	// /api/status.json to patch the live view. Default 5s (fleet standard). The
+	// page's 1s freshness ticker is independent of this.
+	RefreshInterval time.Duration `yaml:"refresh_interval"`
 }
 
 // CardinalityConfig governs output-side series cardinality (#105). Grafana
@@ -427,8 +431,9 @@ func Default() *Config {
 			Endpoint: "https://otlp-gateway-prod-us-central-0.grafana.net/otlp",
 		},
 		Admin: AdminConfig{
-			Enabled: false,
-			Addr:    ":9090",
+			Enabled:         false,
+			Addr:            ":9090",
+			RefreshInterval: 5 * time.Second,
 		},
 		Profiling: ProfilingConfig{
 			// Contention profiling on by default. It is applied only when the

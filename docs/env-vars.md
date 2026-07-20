@@ -44,6 +44,7 @@ never in committed YAML.
 | `G2O_OTLP__GRAFANA_CLOUD__TOKEN` | `""` | DO NOT set here — use G2O_OTLP__GRAFANA_CLOUD__TOKEN instead |
 | `G2O_ADMIN__ENABLED` | `false` | run the admin/health HTTP endpoint (liveness + per-collector status) |
 | `G2O_ADMIN__ADDR` | `:9090` | bind address for the admin endpoint |
+| `G2O_ADMIN__REFRESH_INTERVAL` | `5s` | how often the status page re-polls /api/status.json (1s freshness ticker is independent) |
 | `G2O_PROFILING__PYROSCOPE__ENABLED` | `false` | run the Pyroscope continuous-profiling push agent |
 | `G2O_PROFILING__PYROSCOPE__SERVER_ADDRESS` | `""` | REQUIRED when enabled, e.g. http://pyroscope:4040 or https://profiles-prod-NNN.grafana.net |
 | `G2O_PROFILING__PYROSCOPE__BASIC_AUTH_USER` | `""` | Grafana Cloud Profiles user/instance ID |

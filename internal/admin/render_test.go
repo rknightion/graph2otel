@@ -15,6 +15,47 @@ func renderString(t *testing.T, s Status) string {
 	return b.String()
 }
 
+// TestRender_RefreshMs asserts the configurable auto-refresh interval is
+// rendered into the page (and consumed by the poll loop).
+func TestRender_RefreshMs(t *testing.T) {
+	body := renderString(t, Status{Service: ServiceInfo{Version: "0.1.0"}, Health: healthHealthy, RefreshMs: 3000})
+	i := strings.Index(body, "__refreshMs")
+	if i < 0 || !strings.Contains(body[i:i+40], "3000") {
+		t.Fatalf("refresh interval 3000 not rendered into page")
+	}
+}
+
+// TestRender_TabbedShellAndLayout locks the fleet-aligned single-page shell:
+// tabs, theme toggle, pause/resume, disconnect banner, freshness ticker, the
+// ~90%-viewport wide collectors table, and throttle-headroom placed ABOVE the
+// collector tables (#206).
+func TestRender_TabbedShellAndLayout(t *testing.T) {
+	s := Status{
+		Service: ServiceInfo{Version: "0.1.0"}, Health: healthHealthy,
+		Tenants: []TenantStatus{{
+			TenantID:     "t-a",
+			EnabledCount: 1,
+			Collectors:   []CollectorStatus{{Name: "devices", Enabled: true, HasRun: true, LastSuccess: true, IntervalSec: 300}},
+			RateLimits:   []RateLimitStatus{{Workload: "graph", LimitPerSec: 10, Burst: 20, Tokens: 15, HeadroomPct: 75}},
+		}},
+	}
+	body := renderString(t, s)
+	for _, want := range []string{
+		`data-tab="overview"`, `data-tab="collectors"`,
+		`id="themeToggle"`, `id="pauseBtn"`, `id="staleBanner"`, `id="tabs"`,
+		"graph2otel-theme", `class="wide"`, "Throttle headroom",
+		"function showTab", "function toggleTheme", "function refresh",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("page missing %q", want)
+		}
+	}
+	// Throttle headroom must appear before the collectors table (top of page).
+	if ti, ci := strings.Index(body, "Throttle headroom"), strings.Index(body, `data-tab="collectors"`); ti < 0 || ci < 0 || ti > ci {
+		t.Errorf("throttle headroom (%d) should precede the collectors tab (%d)", ti, ci)
+	}
+}
+
 func TestRender_ZeroCollectors(t *testing.T) {
 	// A minimal snapshot with no tenants must still render a complete page.
 	s := Status{
@@ -74,7 +115,7 @@ func TestRender_MultiTenantWithSkipReasons(t *testing.T) {
 		"devices", "signins", "riskyusers", "auditbeta", "signins_off",
 		"requires entra_p2", "beta; enable explicitly to opt in", "disabled by config",
 		skipCatLicense, skipCatExperimental, skipCatDisabled, // category badge labels
-		"Why not healthy", "last run failed", // health reasons block
+		"last run failed",                                // health reason rendered in the reasons bar
 		"<svg class=\"spark\"", `<span class="outcome">`, // sparkline + outcome strip
 		"2m0s",     // next-run
 		"failing",  // failing state badge

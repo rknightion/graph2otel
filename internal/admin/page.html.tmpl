@@ -3,62 +3,88 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>graph2otel admin</title>
+<title>graph2otel — status</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%234493f8'/%3E%3C/svg%3E">
 <style>
   :root{
     --bg:#0f1419; --panel:#171c24; --panel2:#1d242e; --line:#2a323d;
     --fg:#e6edf3; --muted:#8b98a5; --accent:#4493f8;
-    --ok:#3fb950; --warn:#d29922; --err:#f85149; --info:#a371f7;
+    --ok:#3fb950; --warn:#d29922; --err:#f85149; --info:#a371f7; --pending:#6e7681;
     --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme]){
+      --bg:#f6f8fa; --panel:#ffffff; --panel2:#f0f3f6; --line:#d0d7de;
+      --fg:#1f2328; --muted:#59636e; --accent:#0969da;
+      --ok:#1a7f37; --warn:#9a6700; --err:#cf222e; --info:#8250df; --pending:#8c959f;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f6f8fa; --panel:#ffffff; --panel2:#f0f3f6; --line:#d0d7de;
+    --fg:#1f2328; --muted:#59636e; --accent:#0969da;
+    --ok:#1a7f37; --warn:#9a6700; --err:#cf222e; --info:#8250df; --pending:#8c959f;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f1419; --panel:#171c24; --panel2:#1d242e; --line:#2a323d;
+    --fg:#e6edf3; --muted:#8b98a5; --accent:#4493f8;
+    --ok:#3fb950; --warn:#d29922; --err:#f85149; --info:#a371f7; --pending:#6e7681;
+  }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--fg);
-    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
-  code{font-family:var(--mono);font-size:12px;background:var(--panel2);
-    padding:1px 5px;border-radius:4px;color:#c9d1d9}
-  header{padding:18px 24px;border-bottom:1px solid var(--line);
-    display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
-  header h1{margin:0;font-size:19px;font-weight:600}
+  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
+  code{font-family:var(--mono);font-size:12px;background:var(--panel2);padding:1px 5px;border-radius:4px}
+  header{padding:20px 24px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  header h1{margin:0;font-size:20px;font-weight:600}
   header .ver{color:var(--muted);font-family:var(--mono);font-size:13px}
   header .spacer{flex:1}
-  main{max-width:1180px;margin:0 auto;padding:18px 24px 60px}
-  section{margin:26px 0}
-  section>h2{font-size:14px;margin:0 0 4px;font-weight:600}
-  section>h2 .tsum{color:var(--muted);font-size:12px;font-weight:400;margin-left:8px}
-  .badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;
-    font-weight:600;line-height:1.6}
+  main{max-width:1180px;margin:0 auto;padding:20px 24px 60px}
+  /* Collectors breaks out of the centered column to ~90% of the viewport. */
+  .wide{width:92vw;max-width:92vw;margin-left:calc(50% - 46vw)}
+  section{margin:0 0 26px}
+  .sub-h{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:26px 0 12px;font-weight:600}
+  .sub-h .tsum{text-transform:none;letter-spacing:0;font-weight:400;margin-left:8px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .card .k{color:var(--muted);font-size:12px;margin-bottom:6px}
+  .card .v{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+  .badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;line-height:1.6;background:rgba(110,118,129,.18);color:var(--muted)}
   .badge.ok{background:rgba(63,185,80,.16);color:var(--ok)}
   .badge.err{background:rgba(248,81,73,.16);color:var(--err)}
   .badge.warn{background:rgba(210,153,34,.16);color:var(--warn)}
   .badge.info{background:rgba(163,113,247,.16);color:var(--info)}
-  .badge.pending{background:rgba(110,118,129,.18);color:var(--muted)}
-  .badge.muted{background:rgba(110,118,129,.18);color:var(--muted)}
-  .reasons{margin:6px 0 0;padding:8px 12px;background:rgba(248,81,73,.08);
-    border:1px solid var(--line);border-radius:8px;color:var(--muted);font-size:12px}
-  .reasons ul{margin:4px 0 0;padding-left:18px}
-  table{width:100%;border-collapse:collapse;background:var(--panel);
-    border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:8px}
-  th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);
-    font-variant-numeric:tabular-nums;vertical-align:middle}
+  .badge.pending,.badge.muted{background:rgba(110,118,129,.18);color:var(--muted)}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:8px}
+  th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;vertical-align:middle}
   th{color:var(--muted);font-size:12px;font-weight:600;background:var(--panel2)}
   tr:last-child td{border-bottom:0}
   td.num{text-align:right;font-family:var(--mono)}
-  tr.bad>td{background:rgba(248,81,73,.07)}
-  tr.skip>td{color:var(--muted)}
-  .mono{font-family:var(--mono);font-size:12px;overflow-wrap:anywhere}
-  .muted{color:var(--muted)}
-  .cursor{display:block;font-size:11px;margin-top:3px;color:var(--muted)}
-  .cursor code{background:transparent;padding:0}
-  svg.spark{width:84px;height:22px;vertical-align:middle;display:inline-block;
-    fill:none;stroke:var(--accent);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round}
+  tr.bad>td{background:rgba(248,81,73,.07)} tr.skip>td{color:var(--muted)}
+  table.rl{max-width:640px}
+  .mono{font-family:var(--mono);font-size:12px;overflow-wrap:anywhere} .muted{color:var(--muted)}
+  .cursor{display:block;font-size:11px;margin-top:3px;color:var(--muted)} .cursor code{background:transparent;padding:0}
+  svg.spark{width:84px;height:22px;vertical-align:middle;display:inline-block;fill:none;stroke:var(--accent);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round}
   .outcome{display:inline-flex;gap:2px;align-items:center}
-  .outcome i{width:4px;height:13px;border-radius:1px;background:var(--ok);display:inline-block}
-  .outcome i.f{background:var(--err)}
-  h3.rlh{font-size:12px;font-weight:600;color:var(--muted);margin:16px 0 0}
-  table.rl{max-width:560px}
+  .outcome i{width:4px;height:13px;border-radius:1px;background:var(--ok);display:inline-block} .outcome i.f{background:var(--err)}
+  .rollup{display:flex;gap:18px;flex-wrap:wrap;align-items:center;padding:12px 16px;background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:18px}
+  .rollup .rc{display:flex;flex-direction:column}
+  .rollup .rc .rv{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+  .rollup .rc .rk{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+  .filter{width:100%;max-width:340px;margin:10px 0;padding:7px 11px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--fg);font-size:13px}
+  .reasons{padding:6px 24px;color:var(--warn);font-size:12px;font-family:var(--mono);border-bottom:1px solid var(--line)}
+  #staleBanner{display:none;padding:8px 24px;background:rgba(210,153,34,.16);color:var(--warn);font-size:13px;border-bottom:1px solid var(--line)}
+  #staleBanner.show{display:block}
+  .controls{display:inline-flex;gap:10px;align-items:center}
+  button.ctl{background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:inherit}
+  button.ctl:hover{border-color:var(--accent)}
   footer{max-width:1180px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  nav.tabs{position:sticky;top:0;z-index:5;display:flex;gap:4px;flex-wrap:wrap;padding:8px 24px 0;background:var(--bg);border-bottom:1px solid var(--line)}
+  .tab-btn{background:transparent;color:var(--muted);border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+  .tab-btn:hover{color:var(--fg)} .tab-btn.active{color:var(--fg);background:var(--panel);border-color:var(--line)}
+  section[data-tab]{display:none} section[data-tab].active{display:block}
 </style>
+<script>(function(){try{var t=localStorage.getItem('graph2otel-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<script>window.__refreshMs = {{if .RefreshMs}}{{.RefreshMs}}{{else}}5000{{end}};</script>
+<noscript><style>section[data-tab]{display:block!important;margin-bottom:34px} nav.tabs{display:none}</style></noscript>
 </head>
 <body>
 <header>
@@ -66,87 +92,238 @@
   <span class="ver">{{.Service.Version}} &middot; {{.Service.GoVersion}}</span>
   <span class="ver">up {{.Service.Uptime}} &middot; started {{.Service.StartedAt}}</span>
   <span class="spacer"></span>
-  <span class="badge {{healthClass .Health}}" title="{{range .HealthReasons}}{{.}}&#10;{{end}}">{{.Health}}</span>
+  <button class="ctl" id="themeToggle" title="Toggle light/dark theme" aria-label="Toggle theme">◐</button>
+  <span class="badge {{healthClass .Health}}" id="healthBadge" title="{{range .HealthReasons}}{{.}}&#10;{{end}}">{{.Health}}</span>
 </header>
+<div class="reasons" id="healthReasons"{{if not .HealthReasons}} style="display:none"{{end}}>{{range .HealthReasons}}{{.}} &middot; {{end}}</div>
+<div id="staleBanner"></div>
+<nav class="tabs" id="tabs">
+  <button class="tab-btn" data-target="overview">Overview</button>
+  <button class="tab-btn" data-target="collectors">Collectors</button>
+</nav>
 <main>
-  {{if .HealthReasons}}
-  <div class="reasons">
-    <strong>Why not healthy:</strong>
-    <ul>{{range .HealthReasons}}<li>{{.}}</li>{{end}}</ul>
-  </div>
-  {{end}}
 
-  {{range .Tenants}}
-  <section>
-    <h2>Tenant <code>{{.TenantID}}</code>
-      <span class="tsum">{{.EnabledCount}} active{{if .FailingCount}} &middot; {{.FailingCount}} failing{{end}}{{if .PendingCount}} &middot; {{.PendingCount}} starting{{end}}{{if .CoveredCount}} &middot; {{.CoveredCount}} covered{{end}}{{if .SkippedCount}} &middot; {{.SkippedCount}} skipped{{end}}</span>
-    </h2>
-    <table>
-      <thead><tr>
-        <th>Collector</th><th>State</th><th class="num">Interval</th>
-        <th class="num">Success</th><th class="num">Runs</th><th class="num">Failures</th>
-        <th class="num">Next run</th><th class="num">Duration</th><th>Recent</th>
-        <th>Staleness</th><th>Last error</th>
-      </tr></thead>
-      <tbody>
-      {{range .Collectors}}
-        {{if .Enabled}}
-        <tr{{if and .HasRun (not .LastSuccess)}} class="bad"{{end}}>
-          <td><code>{{.Name}}</code>{{with .State}}<span class="cursor mono" title="durable checkpoint cursor">{{if eq .Kind "blob"}}cursor {{.ByteOffset}}B &middot; {{.BlobsTracked}} blobs{{if .NewestBlob}} &middot; newest <code>{{.NewestBlob}}</code>{{end}}{{else}}{{if .Watermark}}watermark {{.Watermark}} &middot; {{.Staleness}} behind{{else}}cold start{{end}}{{if .SeenIDs}} &middot; {{.SeenIDs}} seen{{end}}{{if .InFlightJob}} &middot; job <code>{{.InFlightJob}}</code>{{end}}{{end}}</span>{{end}}</td>
-          <td>{{if not .HasRun}}<span class="badge pending">starting</span>{{else if .LastSuccess}}<span class="badge ok">ok</span>{{else}}<span class="badge err">failing</span>{{end}}{{if .Transport}} <span class="muted mono" title="ingest transport">via {{.Transport}}</span>{{end}}</td>
-          <td class="num">{{.IntervalSec}}s</td>
-          <td class="num">{{if .HasRun}}{{printf "%.0f" .SuccessRatePct}}%{{else}}<span class="muted">&mdash;</span>{{end}}</td>
-          <td class="num">{{.Runs}}</td>
-          <td class="num">{{.Failures}}{{if gt .ConsecutiveFailures 0}} <span class="muted">({{.ConsecutiveFailures}}&times;)</span>{{end}}</td>
-          <td class="num">{{if not .HasRun}}<span class="muted">&mdash;</span>{{else if .Overdue}}<span class="badge warn">overdue</span>{{else if le .NextRunInSec 0}}due{{else}}{{.NextRunIn}}{{end}}</td>
-          <td class="num">{{if .HasRun}}{{.LastDurationMs}}ms{{else}}<span class="muted">&mdash;</span>{{end}}</td>
-          <td>{{sparkline .DurationMsSeries}}{{outcomeStrip .OutcomeSeries}}</td>
-          <td class="num">{{if .HasRun}}{{.Staleness}}{{else}}<span class="muted">&mdash;</span>{{end}}</td>
-          <td class="mono">{{if .LastError}}{{.LastError}}{{else}}<span class="muted">&mdash;</span>{{end}}</td>
-        </tr>
-        {{else if .CoveredBy}}
-        <tr>
-          <td><code>{{.Name}}</code></td>
-          <td><span class="badge info">covered</span></td>
-          <td class="mono muted" colspan="9">collected via <code>{{.CoveredBy.Collector}}</code> ({{.CoveredBy.Transport}}) &middot; polled form off by design</td>
-        </tr>
-        {{else}}
-        <tr class="skip">
-          <td><code>{{.Name}}</code></td>
-          <td><span class="badge {{skipBadgeClass .SkipCategory}}">{{if .SkipCategory}}{{.SkipCategory}}{{else}}skipped{{end}}</span></td>
-          <td class="mono muted" colspan="9">skipped &mdash; {{.SkipReason}}</td>
-        </tr>
+  <!-- ═══ OVERVIEW ═══ -->
+  <section data-tab="overview">
+    <div class="rollup" id="rollup">
+      <div class="rc"><span class="rv" id="ruHealth">{{.Health}}</span><span class="rk">health</span></div>
+      <div class="rc"><span class="rv" id="ruTenants">{{len .Tenants}}</span><span class="rk">tenants</span></div>
+      <div class="rc"><span class="rv" id="ruEnabled">—</span><span class="rk">collectors</span></div>
+      <div class="rc"><span class="rv" id="ruFailing">—</span><span class="rk">failing</span></div>
+      <div class="rc"><span class="rv" id="ruPending">—</span><span class="rk">starting</span></div>
+    </div>
+
+    <!-- Throttle headroom lives at the TOP of the page (#206). -->
+    <div class="sub-h">Throttle headroom</div>
+    <div id="throttle">
+    {{range .Tenants}}{{if .RateLimits}}
+      <div class="sub-h" style="margin:14px 0 4px">Tenant <code>{{.TenantID}}</code></div>
+      <table class="rl">
+        <thead><tr><th>Workload</th><th class="num">limit/s</th><th class="num">burst</th><th class="num">tokens</th><th class="num">headroom</th></tr></thead>
+        <tbody>
+        {{range .RateLimits}}
+          <tr><td><code>{{.Workload}}</code></td><td class="num">{{printf "%.3g" .LimitPerSec}}</td><td class="num">{{.Burst}}</td><td class="num">{{printf "%.1f" .Tokens}}</td><td class="num">{{printf "%.0f" .HeadroomPct}}%</td></tr>
         {{end}}
-      {{else}}
-        <tr><td colspan="11" class="muted">No collectors registered or skipped for this tenant.</td></tr>
-      {{end}}
-      </tbody>
-    </table>
-    {{with .RateLimits}}
-    <h3 class="rlh">Throttle headroom</h3>
-    <table class="rl">
-      <thead><tr>
-        <th>Workload</th><th class="num">limit/s</th><th class="num">burst</th>
-        <th class="num">tokens available</th><th class="num">headroom</th>
-      </tr></thead>
-      <tbody>
-      {{range .}}
-        <tr>
-          <td><code>{{.Workload}}</code></td>
-          <td class="num">{{printf "%.3g" .LimitPerSec}}</td>
-          <td class="num">{{.Burst}}</td>
-          <td class="num">{{printf "%.1f" .Tokens}}</td>
-          <td class="num">{{printf "%.0f" .HeadroomPct}}%</td>
-        </tr>
-      {{end}}
-      </tbody>
-    </table>
-    {{end}}
+        </tbody>
+      </table>
+    {{end}}{{else}}{{end}}
+    </div>
+
+    <div class="sub-h">Service</div>
+    <div class="cards">
+      <div class="card"><div class="k">Version</div><div class="v" style="font-size:16px">{{.Service.Version}}</div><div class="k" style="margin-top:6px">{{.Service.GoVersion}}</div></div>
+      <div class="card"><div class="k">Uptime</div><div class="v" id="uptime">{{.Service.Uptime}}</div><div class="k" style="margin-top:6px">since {{.Service.StartedAt}}</div></div>
+      <div class="card"><div class="k">Tenants</div><div class="v">{{len .Tenants}}</div></div>
+    </div>
   </section>
-  {{else}}
-  <section><p class="muted">No tenants configured.</p></section>
-  {{end}}
+
+  <!-- ═══ COLLECTORS ═══ -->
+  <section data-tab="collectors" class="wide">
+    <input class="filter" type="text" placeholder="Filter collectors…" oninput="filterAll(this)">
+    <div id="tenants">
+    {{range .Tenants}}
+      <div class="sub-h">Tenant <code>{{.TenantID}}</code>
+        <span class="tsum">{{.EnabledCount}} active{{if .FailingCount}} &middot; {{.FailingCount}} failing{{end}}{{if .PendingCount}} &middot; {{.PendingCount}} starting{{end}}{{if .CoveredCount}} &middot; {{.CoveredCount}} covered{{end}}{{if .SkippedCount}} &middot; {{.SkippedCount}} skipped{{end}}</span>
+      </div>
+      <table class="ctable">
+        <thead><tr>
+          <th>Collector</th><th>State</th><th class="num">Interval</th><th class="num">Success</th>
+          <th class="num">Runs</th><th class="num">Failures</th><th class="num">Next run</th>
+          <th class="num">Duration</th><th>Recent</th><th>Staleness</th><th>Last error</th>
+        </tr></thead>
+        <tbody>
+        {{range .Collectors}}
+          {{if .Enabled}}
+          <tr{{if and .HasRun (not .LastSuccess)}} class="bad"{{end}}>
+            <td><code>{{.Name}}</code>{{with .State}}<span class="cursor mono" title="durable checkpoint cursor">{{if eq .Kind "blob"}}cursor {{.ByteOffset}}B &middot; {{.BlobsTracked}} blobs{{if .NewestBlob}} &middot; newest <code>{{.NewestBlob}}</code>{{end}}{{else}}{{if .Watermark}}watermark {{.Watermark}} &middot; {{.Staleness}} behind{{else}}cold start{{end}}{{if .SeenIDs}} &middot; {{.SeenIDs}} seen{{end}}{{if .InFlightJob}} &middot; job <code>{{.InFlightJob}}</code>{{end}}{{end}}</span>{{end}}</td>
+            <td>{{if not .HasRun}}<span class="badge pending">starting</span>{{else if .LastSuccess}}<span class="badge ok">ok</span>{{else}}<span class="badge err">failing</span>{{end}}{{if .Transport}} <span class="muted mono" title="ingest transport">via {{.Transport}}</span>{{end}}</td>
+            <td class="num">{{.IntervalSec}}s</td>
+            <td class="num">{{if .HasRun}}{{printf "%.0f" .SuccessRatePct}}%{{else}}<span class="muted">&mdash;</span>{{end}}</td>
+            <td class="num">{{.Runs}}</td>
+            <td class="num">{{.Failures}}{{if gt .ConsecutiveFailures 0}} <span class="muted">({{.ConsecutiveFailures}}&times;)</span>{{end}}</td>
+            <td class="num">{{if not .HasRun}}<span class="muted">&mdash;</span>{{else if .Overdue}}<span class="badge warn">overdue</span>{{else if le .NextRunInSec 0}}due{{else}}{{.NextRunIn}}{{end}}</td>
+            <td class="num">{{if .HasRun}}{{.LastDurationMs}}ms{{else}}<span class="muted">&mdash;</span>{{end}}</td>
+            <td>{{sparkline .DurationMsSeries}}{{outcomeStrip .OutcomeSeries}}</td>
+            <td class="num">{{if .HasRun}}{{.Staleness}}{{else}}<span class="muted">&mdash;</span>{{end}}</td>
+            <td class="mono">{{if .LastError}}{{.LastError}}{{else}}<span class="muted">&mdash;</span>{{end}}</td>
+          </tr>
+          {{else if .CoveredBy}}
+          <tr><td><code>{{.Name}}</code></td><td><span class="badge info">covered</span></td><td class="mono muted" colspan="9">collected via <code>{{.CoveredBy.Collector}}</code> ({{.CoveredBy.Transport}}) &middot; polled form off by design</td></tr>
+          {{else}}
+          <tr class="skip"><td><code>{{.Name}}</code></td><td><span class="badge {{skipBadgeClass .SkipCategory}}">{{if .SkipCategory}}{{.SkipCategory}}{{else}}skipped{{end}}</span></td><td class="mono muted" colspan="9">skipped &mdash; {{.SkipReason}}</td></tr>
+          {{end}}
+        {{else}}
+          <tr><td colspan="11" class="muted">No collectors registered or skipped for this tenant.</td></tr>
+        {{end}}
+        </tbody>
+      </table>
+    {{else}}
+      <p class="muted">No tenants configured.</p>
+    {{end}}
+    </div>
+  </section>
+
 </main>
-<footer>generated {{.GeneratedAt}} &middot; also at <code>/api/status.json</code></footer>
+<footer>
+  Generated at <span id="generatedAt">{{.GeneratedAt}}</span> ·
+  <a href="/api/status.json">JSON</a> ·
+  <span class="controls"><button class="ctl" id="pauseBtn">Pause</button> <a href="#" id="refreshNow">refresh now</a></span> ·
+  updated <span id="updatedAgo">just now</span> ·
+  <noscript>static snapshot (enable JavaScript for live updates)</noscript>
+</footer>
+<script>
+var SVGNS='http://www.w3.org/2000/svg';
+var lastOkMs=Date.now(), pollTimer=null, paused=false;
+
+function showTab(id){
+  var secs=document.querySelectorAll('section[data-tab]'), found=false;
+  for(var i=0;i<secs.length;i++){ var on=secs[i].getAttribute('data-tab')===id; secs[i].classList.toggle('active',on); if(on) found=true; }
+  var btns=document.querySelectorAll('#tabs .tab-btn');
+  for(var j=0;j<btns.length;j++){ btns[j].classList.toggle('active', btns[j].getAttribute('data-target')===id); }
+  if(found && location.hash!=='#'+id){ history.replaceState(null,'','#'+id); }
+}
+function initTabs(){
+  var btns=document.querySelectorAll('#tabs .tab-btn');
+  for(var i=0;i<btns.length;i++){ (function(b){ b.addEventListener('click',function(){ showTab(b.getAttribute('data-target')); }); })(btns[i]); }
+  var initial=(location.hash||'').replace('#','');
+  showTab(document.querySelector('section[data-tab="'+initial+'"]')?initial:'overview');
+}
+function currentTheme(){ var t=document.documentElement.getAttribute('data-theme'); if(t) return t; return (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark'; }
+function toggleTheme(){ var next=currentTheme()==='light'?'dark':'light'; document.documentElement.setAttribute('data-theme',next); try{localStorage.setItem('graph2otel-theme',next);}catch(e){} }
+
+function el(tag,attrs,text){ var e=document.createElement(tag); if(attrs){ for(var k in attrs){ if(attrs.hasOwnProperty(k)) e.setAttribute(k,attrs[k]); } } if(text!=null) e.textContent=text; return e; }
+function setText(id,v){ var e=document.getElementById(id); if(e!=null && v!=null) e.textContent=v; }
+function relMs(ms){ var s=Math.round((Date.now()-ms)/1000); if(s<0)s=0; if(s<60)return s+'s ago'; if(s<3600)return Math.floor(s/60)+'m ago'; if(s<86400)return Math.floor(s/3600)+'h ago'; return Math.floor(s/86400)+'d ago'; }
+function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim()||'#4493f8'; }
+function filterAll(input){ var q=input.value.toLowerCase(); var rows=document.querySelectorAll('#tenants table tbody tr'); for(var i=0;i<rows.length;i++){ rows[i].style.display=rows[i].textContent.toLowerCase().indexOf(q)>-1?'':'none'; } }
+
+function drawSpark(svg,arr){
+  if(!svg) return; while(svg.firstChild) svg.removeChild(svg.firstChild);
+  if(!arr || arr.length<2) return;
+  var W=100,H=24,n=arr.length,mn=arr[0],mx=arr[0],i;
+  for(i=1;i<n;i++){ if(arr[i]<mn)mn=arr[i]; if(arr[i]>mx)mx=arr[i]; }
+  var span=(mx-mn)||1,pts='';
+  for(i=0;i<n;i++){ var x=i*(W)/(n-1); var y=H-(arr[i]-mn)/span*H; pts+=(i?' ':'')+x.toFixed(1)+','+y.toFixed(1); }
+  svg.setAttribute('viewBox','0 0 '+W+' '+H); svg.setAttribute('preserveAspectRatio','none');
+  var pl=document.createElementNS(SVGNS,'polyline'); pl.setAttribute('points',pts); svg.appendChild(pl);
+}
+function newSpark(){ var s=document.createElementNS(SVGNS,'svg'); s.setAttribute('class','spark'); return s; }
+function outcomeStripEl(arr){
+  var span=el('span',{'class':'outcome'}); if(!arr) return span;
+  var start=arr.length>40?arr.length-40:0;
+  for(var i=start;i<arr.length;i++){ var d=el('i'); if(!arr[i]) d.className='f'; span.appendChild(d); }
+  return span;
+}
+
+function collectorRow(c){
+  if(c.enabled){
+    var tr=el('tr'); if(c.has_run && !c.last_success) tr.className='bad';
+    var nameTd=el('td'); nameTd.appendChild(el('code',null,c.name));
+    if(c.state){ var cur=el('span',{'class':'cursor mono'}); if(c.state.kind==='blob'){ cur.textContent='cursor '+(c.state.byte_offset||0)+'B · '+(c.state.blobs_tracked||0)+' blobs'+(c.state.newest_blob?' · newest '+c.state.newest_blob:''); } else { cur.textContent=c.state.watermark?('watermark '+c.state.watermark+' · '+(c.state.staleness||'')+' behind'):'cold start'; } nameTd.appendChild(cur); }
+    tr.appendChild(nameTd);
+    var stTd=el('td'); if(!c.has_run) stTd.appendChild(el('span',{'class':'badge pending'},'starting')); else if(c.last_success) stTd.appendChild(el('span',{'class':'badge ok'},'ok')); else stTd.appendChild(el('span',{'class':'badge err'},'failing')); if(c.transport){ stTd.appendChild(document.createTextNode(' ')); stTd.appendChild(el('span',{'class':'muted mono'},'via '+c.transport)); } tr.appendChild(stTd);
+    tr.appendChild(el('td',{'class':'num'}, (c.interval_seconds||0)+'s'));
+    tr.appendChild(el('td',{'class':'num'}, c.has_run?Math.round(c.success_rate_pct)+'%':'—'));
+    tr.appendChild(el('td',{'class':'num'}, String(c.runs||0)));
+    tr.appendChild(el('td',{'class':'num'}, String(c.failures||0)+(c.consecutive_failures>0?' ('+c.consecutive_failures+'×)':'')));
+    var nrTd=el('td',{'class':'num'}); if(!c.has_run) nrTd.appendChild(el('span',{'class':'muted'},'—')); else if(c.overdue) nrTd.appendChild(el('span',{'class':'badge warn'},'overdue')); else nrTd.textContent=(c.next_run_in_seconds<=0?'due':(c.next_run_in||'due')); tr.appendChild(nrTd);
+    tr.appendChild(el('td',{'class':'num'}, c.has_run?(c.last_duration_ms+'ms'):'—'));
+    var recTd=el('td'); if(c.duration_ms_series && c.duration_ms_series.length>1){ var sp=newSpark(); recTd.appendChild(sp); drawSpark(sp,c.duration_ms_series); } recTd.appendChild(outcomeStripEl(c.outcome_series)); tr.appendChild(recTd);
+    tr.appendChild(el('td',{'class':'num'}, c.has_run?(c.staleness||''):'—'));
+    var erTd=el('td',{'class':'mono'}); if(c.last_error) erTd.textContent=c.last_error; else erTd.appendChild(el('span',{'class':'muted'},'—')); tr.appendChild(erTd);
+    return tr;
+  }
+  if(c.covered_by){
+    var tr2=el('tr'); tr2.appendChild(el('td')).appendChild(el('code',null,c.name)); var cTd=el('td'); cTd.appendChild(el('span',{'class':'badge info'},'covered')); tr2.appendChild(cTd); tr2.appendChild(el('td',{'class':'mono muted','colspan':'9'},'collected via '+c.covered_by.collector+' ('+c.covered_by.transport+') · polled form off by design')); return tr2;
+  }
+  var tr3=el('tr',{'class':'skip'}); tr3.appendChild(el('td')).appendChild(el('code',null,c.name)); var sTd=el('td'); sTd.appendChild(el('span',{'class':'badge '+skipClass(c.skip_category)}, c.skip_category||'skipped')); tr3.appendChild(sTd); tr3.appendChild(el('td',{'class':'mono muted','colspan':'9'},'skipped — '+(c.skip_reason||''))); return tr3;
+}
+function skipClass(cat){ if(cat==='license')return 'warn'; if(cat==='experimental')return 'info'; return 'muted'; }
+
+function tenantSummary(t){
+  var parts=[t.enabled_count+' active'];
+  if(t.failing_count) parts.push(t.failing_count+' failing');
+  if(t.pending_count) parts.push(t.pending_count+' starting');
+  if(t.covered_count) parts.push(t.covered_count+' covered');
+  if(t.skipped_count) parts.push(t.skipped_count+' skipped');
+  return parts.join(' · ');
+}
+function rebuildTenants(tenants){
+  var host=document.getElementById('tenants'); if(!host) return; host.textContent='';
+  if(!tenants || !tenants.length){ host.appendChild(el('p',{'class':'muted'},'No tenants configured.')); return; }
+  tenants.forEach(function(t){
+    var h=el('div',{'class':'sub-h'}); h.appendChild(document.createTextNode('Tenant ')); h.appendChild(el('code',null,t.tenant_id)); h.appendChild(el('span',{'class':'tsum'}, tenantSummary(t))); host.appendChild(h);
+    var table=el('table'); var thead=el('thead'); thead.innerHTML='<tr><th>Collector</th><th>State</th><th class="num">Interval</th><th class="num">Success</th><th class="num">Runs</th><th class="num">Failures</th><th class="num">Next run</th><th class="num">Duration</th><th>Recent</th><th>Staleness</th><th>Last error</th></tr>'; table.appendChild(thead);
+    var tb=el('tbody');
+    var cols=(t.collectors||[]);
+    if(!cols.length){ var tr0=el('tr'); tr0.appendChild(el('td',{'colspan':'11','class':'muted'},'No collectors registered or skipped for this tenant.')); tb.appendChild(tr0); }
+    else cols.forEach(function(c){ tb.appendChild(collectorRow(c)); });
+    table.appendChild(tb); host.appendChild(table);
+  });
+}
+function rebuildThrottle(tenants){
+  var host=document.getElementById('throttle'); if(!host) return; host.textContent='';
+  (tenants||[]).forEach(function(t){
+    if(!t.rate_limits || !t.rate_limits.length) return;
+    var h=el('div',{'class':'sub-h'}); h.style.margin='14px 0 4px'; h.appendChild(document.createTextNode('Tenant ')); h.appendChild(el('code',null,t.tenant_id)); host.appendChild(h);
+    var table=el('table',{'class':'rl'}); var thead=el('thead'); thead.innerHTML='<tr><th>Workload</th><th class="num">limit/s</th><th class="num">burst</th><th class="num">tokens</th><th class="num">headroom</th></tr>'; table.appendChild(thead);
+    var tb=el('tbody');
+    t.rate_limits.forEach(function(r){ var tr=el('tr'); tr.appendChild(el('td')).appendChild(el('code',null,r.workload)); tr.appendChild(el('td',{'class':'num'}, Number(r.limit_per_sec).toPrecision(3))); tr.appendChild(el('td',{'class':'num'}, String(r.burst))); tr.appendChild(el('td',{'class':'num'}, Number(r.tokens_available).toFixed(1))); tr.appendChild(el('td',{'class':'num'}, Math.round(r.headroom_pct)+'%')); tb.appendChild(tr); });
+    table.appendChild(tb); host.appendChild(table);
+  });
+}
+function updateRollup(d){
+  setText('ruHealth', d.health); setText('ruTenants', (d.tenants||[]).length);
+  var enabled=0,failing=0,pending=0;
+  (d.tenants||[]).forEach(function(t){ enabled+=t.enabled_count||0; failing+=t.failing_count||0; pending+=t.pending_count||0; });
+  setText('ruEnabled',enabled); setText('ruFailing',failing); setText('ruPending',pending);
+}
+function setHealth(d){
+  var b=document.getElementById('healthBadge'); if(b){ b.textContent=d.health; b.className='badge '+(d.health==='healthy'?'ok':d.health==='degraded'?'err':'pending'); b.title=(d.health_reasons||[]).join('\n'); }
+  var rb=document.getElementById('healthReasons'); if(rb){ if(d.health_reasons && d.health_reasons.length){ rb.textContent=d.health_reasons.join(' · '); rb.style.display=''; } else { rb.style.display='none'; } }
+}
+function setStale(on){ var b=document.getElementById('staleBanner'); if(!b) return; if(on){ b.className='show'; b.textContent='⚠ disconnected — last successful update '+relMs(lastOkMs); } else { b.className=''; } }
+
+function refresh(){
+  fetch('/api/status.json',{cache:'no-store'}).then(function(r){ if(!r.ok) throw new Error('status '+r.status); return r.json(); }).then(function(d){
+    lastOkMs=Date.now(); setStale(false);
+    setHealth(d); updateRollup(d);
+    if(d.service) setText('uptime', d.service.uptime);
+    setText('generatedAt', d.generated_at);
+    rebuildThrottle(d.tenants); rebuildTenants(d.tenants);
+  }).catch(function(){ setStale(true); });
+}
+function startPolling(){ if(pollTimer) clearInterval(pollTimer); var ms=(window.__refreshMs>0?window.__refreshMs:5000); pollTimer=setInterval(refresh,ms); }
+function togglePause(){ paused=!paused; var btn=document.getElementById('pauseBtn'); if(paused){ if(pollTimer){clearInterval(pollTimer); pollTimer=null;} if(btn) btn.textContent='Resume'; } else { if(btn) btn.textContent='Pause'; refresh(); startPolling(); } }
+function tickFreshness(){ setText('updatedAgo', relMs(lastOkMs)); var b=document.getElementById('staleBanner'); if(b && b.className.indexOf('show')>=0) setStale(true); }
+
+(function init(){
+  initTabs();
+  var tt=document.getElementById('themeToggle'); if(tt) tt.addEventListener('click',toggleTheme);
+  var p=document.getElementById('pauseBtn'); if(p) p.addEventListener('click',togglePause);
+  var rn=document.getElementById('refreshNow'); if(rn) rn.addEventListener('click',function(ev){ ev.preventDefault(); refresh(); });
+  refresh(); startPolling(); setInterval(tickFreshness,1000);
+})();
+</script>
 </body>
 </html>

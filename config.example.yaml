@@ -166,6 +166,7 @@ collectors: {}
 admin:
   enabled: false # run the admin/health HTTP endpoint (liveness + per-collector status)
   addr: ":9090" # bind address for the admin endpoint
+  refresh_interval: 5s # how often the status page re-polls /api/status.json (1s freshness ticker is independent)
 
 # profiling enables optional Grafana Pyroscope continuous profiling (default
 # off). It has no effect on the exporter's core job and a failure to reach

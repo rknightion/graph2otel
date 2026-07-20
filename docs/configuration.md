@@ -25,6 +25,7 @@ name (e.g. `client_id`, `log_level`) is preserved as-is — only level boundarie
 | `otlp.grafana_cloud.token` | `G2O_OTLP__GRAFANA_CLOUD__TOKEN` |
 | `admin.enabled` | `G2O_ADMIN__ENABLED` |
 | `admin.addr` | `G2O_ADMIN__ADDR` |
+| `admin.refresh_interval` | `G2O_ADMIN__REFRESH_INTERVAL` |
 | `checkpoint_dir` | `G2O_CHECKPOINT_DIR` |
 | `backfill.initial_lookback` | `G2O_BACKFILL__INITIAL_LOOKBACK` |
 | `collectors.sign_ins.enabled` | `G2O_COLLECTORS__SIGN_INS__ENABLED` |

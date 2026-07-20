@@ -37,6 +37,7 @@ type Server struct {
 	limiter     RateLimiter
 	startedAt   time.Time
 	now         func() time.Time
+	refreshMs   int
 
 	srv *http.Server
 	mux *http.ServeMux
@@ -61,12 +62,17 @@ func New(cfg config.AdminConfig, sources []CollectorSource, skipReasons map[Skip
 	if !cfg.Enabled {
 		return nil
 	}
+	refreshMs := int(cfg.RefreshInterval / time.Millisecond)
+	if refreshMs <= 0 {
+		refreshMs = 5000
+	}
 	s := &Server{
 		sources:     sources,
 		skipReasons: skipReasons,
 		limiter:     limiter,
 		startedAt:   time.Now(),
 		now:         time.Now,
+		refreshMs:   refreshMs,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealthz)
@@ -138,5 +144,6 @@ func (s *Server) snapshot() Status {
 		HealthReasons: reasons,
 		Tenants:       tenants,
 		GeneratedAt:   now.UTC().Format(time.RFC3339),
+		RefreshMs:     s.refreshMs,
 	}
 }

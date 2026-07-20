@@ -209,6 +209,7 @@ config:
   admin:
     enabled: true
     addr: ":9090"
+    refresh_interval: 5s
 
   # -- Optional Grafana Pyroscope continuous profiling (default off). Has no
   # effect on the exporter's core job and a failure to reach Pyroscope is

@@ -79,6 +79,9 @@ type Status struct {
 	HealthReasons []string       `json:"health_reasons,omitempty"`
 	Tenants       []TenantStatus `json:"tenants"`
 	GeneratedAt   string         `json:"generated_at"`
+	// RefreshMs is the client poll interval in milliseconds (admin.refresh_interval).
+	// The page falls back to 5000 when this is 0. The 1s freshness ticker is independent.
+	RefreshMs int `json:"refresh_ms,omitempty"`
 }
 
 // ServiceInfo is the process identity/liveness header of the page.
