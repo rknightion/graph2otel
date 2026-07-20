@@ -175,8 +175,20 @@ jobs:
 
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
 
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
       - name: helm lint
         run: helm lint charts/graph2otel
+
+      # The chart README is generated from values.yaml annotations (helm-docs). Fail
+      # if it drifts — regenerate with `make helm-docs`.
+      - name: helm-docs README up to date
+        run: |
+          make helm-docs
+          git diff --exit-code charts/graph2otel/README.md
 
       - name: helm template
         run: helm template t charts/graph2otel > /dev/null
@@ -191,6 +203,35 @@ jobs:
             --set existingSecret=my-secret \
             --set config.admin.enabled=false \
             > /dev/null
+
+  # Test coverage -> Codacy. Deliberately NOT in ci-success's `needs`: coverage reporting is
+  # informational, so a Codacy outage — or a fork PR with no secret — must never block merges or
+  # Renovate automerge. The repo-scoped CODACY_PROJECT_TOKEN self-identifies the repo.
+  coverage:
+    name: coverage (Codacy)
+    runs-on: ubuntu-latest
+    env:
+      CODACY_PROJECT_TOKEN: ${{ secrets.CODACY_PROJECT_TOKEN }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Generate coverage profile
+        run: make coverage
+
+      - name: Upload coverage to Codacy
+        if: ${{ env.CODACY_PROJECT_TOKEN != '' }}   # skip on fork PRs (secret unavailable)
+        uses: codacy/codacy-coverage-reporter-action@89d6c85cfafaec52c72b6c5e8b2878d33104c699 # v1.3.0
+        with:
+          project-token: ${{ env.CODACY_PROJECT_TOKEN }}
+          coverage-reports: coverage.out
+          force-coverage-parser: go
 
   # Single required status check for this workflow. Branch protection on `main`
   # requires this, so CI legs can be added or renamed without re-touching

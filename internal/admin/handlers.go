@@ -25,6 +25,27 @@ func (s *Server) handleStatusJSON(w http.ResponseWriter, _ *http.Request) {
 	_ = enc.Encode(s.snapshot())
 }
 
+// handleConfigJSON serves the effective NON-secret configuration as JSON (#211).
+// Like every admin handler it reads only passive in-memory state (the injected
+// config struct) and makes no live tenant call. Secrets are presence-only: the
+// ConfigView carries a bool per credential, never the value.
+func (s *Server) handleConfigJSON(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(s.configView())
+}
+
+// handleCardinalityJSON serves the output-side active-series snapshot as JSON
+// (#215). It reads the existing CardinalityTracker's last completed snapshot (a
+// pure in-memory read) plus the configured metric_limit — no live tenant call.
+func (s *Server) handleCardinalityJSON(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(s.cardinalityView())
+}
+
 // handleIndex renders the HTML status page. Because "/" is the ServeMux
 // catch-all, any unknown path that falls through to here 404s rather than
 // returning the page.
@@ -34,5 +55,5 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_ = render(w, s.snapshot())
+	_ = render(w, s.pageSnapshot())
 }

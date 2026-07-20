@@ -19,6 +19,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/config"
 	"github.com/rknightion/graph2otel/internal/graphclient"
+	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/version"
 )
 
@@ -39,6 +40,16 @@ type Server struct {
 	now         func() time.Time
 	refreshMs   int
 
+	// cfg is the full effective configuration, read PASSIVELY to render the
+	// Config tab (#211) and to source the Cardinality tab's metric_limit (#215).
+	// May be nil (renders an empty Config view). Secrets are never surfaced from
+	// it beyond presence — see configView.
+	cfg *config.Config
+	// card is the output-side cardinality tracker, read passively for the
+	// Cardinality tab (#215). May be nil when self-obs is disabled; all reads go
+	// through Snapshot, which is a pure in-memory, nil-safe call.
+	card *telemetry.CardinalityTracker
+
 	srv *http.Server
 	mux *http.ServeMux
 }
@@ -58,7 +69,12 @@ type Server struct {
 // limiter, when non-nil, feeds the per-tenant throttle-headroom panel (#85) —
 // *graphclient.WorkloadLimiter from the composition root satisfies it. A nil
 // limiter renders no rate-limit panel and never panics.
-func New(cfg config.AdminConfig, sources []CollectorSource, skipReasons map[SkipKey]string, limiter RateLimiter) *Server {
+//
+// fullCfg is the full effective configuration (for the Config tab, #211) and
+// card is the output-side cardinality tracker (for the Cardinality tab, #215).
+// Both are read passively — no live tenant call — and both are nil-safe: a nil
+// fullCfg renders an empty Config view, a nil card an empty Cardinality view.
+func New(cfg config.AdminConfig, sources []CollectorSource, skipReasons map[SkipKey]string, limiter RateLimiter, fullCfg *config.Config, card *telemetry.CardinalityTracker) *Server {
 	if !cfg.Enabled {
 		return nil
 	}
@@ -73,10 +89,14 @@ func New(cfg config.AdminConfig, sources []CollectorSource, skipReasons map[Skip
 		startedAt:   time.Now(),
 		now:         time.Now,
 		refreshMs:   refreshMs,
+		cfg:         fullCfg,
+		card:        card,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealthz)
 	mux.HandleFunc("/api/status.json", s.handleStatusJSON)
+	mux.HandleFunc("/api/config.json", s.handleConfigJSON)
+	mux.HandleFunc("/api/cardinality.json", s.handleCardinalityJSON)
 	mux.HandleFunc("/", s.handleIndex)
 	s.mux = mux
 	s.srv = &http.Server{
@@ -145,5 +165,25 @@ func (s *Server) snapshot() Status {
 		Tenants:       tenants,
 		GeneratedAt:   now.UTC().Format(time.RFC3339),
 		RefreshMs:     s.refreshMs,
+	}
+}
+
+// pageModel is the full render context for the HTML page: the status snapshot
+// (embedded, so every existing {{.Health}}/{{.Tenants}}/… reference still
+// resolves via field promotion) plus the Config (#211) and Cardinality (#215)
+// tab views.
+type pageModel struct {
+	Status
+	Config      ConfigView
+	Cardinality CardinalityView
+}
+
+// pageSnapshot assembles the full HTML page model: the live status snapshot plus
+// the passive Config and Cardinality views. Every part is an in-memory read.
+func (s *Server) pageSnapshot() pageModel {
+	return pageModel{
+		Status:      s.snapshot(),
+		Config:      s.configView(),
+		Cardinality: s.cardinalityView(),
 	}
 }

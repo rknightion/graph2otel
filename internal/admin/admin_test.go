@@ -32,7 +32,7 @@ func TestSnapshot_RateLimitsLandOnRightTenant(t *testing.T) {
 	}}
 	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, []CollectorSource{
 		{TenantID: "tenant-a", Registry: reg, Status: tr},
-	}, nil, lim)
+	}, nil, lim, nil, nil)
 
 	snap := s.snapshot()
 	if len(snap.Tenants) != 1 {
@@ -61,14 +61,14 @@ func TestSnapshot_NilLimiterNoPanel(t *testing.T) {
 	// A nil limiter must render no panel and never panic.
 	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, []CollectorSource{
 		{TenantID: "tenant-a", Registry: reg, Status: tr},
-	}, nil, nil)
+	}, nil, nil, nil, nil)
 	if rl := s.snapshot().Tenants[0].RateLimits; rl != nil {
 		t.Errorf("RateLimits = %+v, want nil with no limiter", rl)
 	}
 }
 
 func TestNew_DisabledReturnsNil(t *testing.T) {
-	s := New(config.AdminConfig{Enabled: false, Addr: ":9090"}, nil, nil, nil)
+	s := New(config.AdminConfig{Enabled: false, Addr: ":9090"}, nil, nil, nil, nil, nil)
 	if s != nil {
 		t.Fatalf("New() with Enabled=false = %v, want nil", s)
 	}
@@ -85,7 +85,7 @@ func TestNew_DisabledServerStartIsNoop(t *testing.T) {
 }
 
 func TestHealthz_ReturnsOK(t *testing.T) {
-	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, nil, nil, nil)
+	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, nil, nil, nil, nil, nil)
 	if s == nil {
 		t.Fatal("New() returned nil for an enabled config")
 	}
@@ -103,7 +103,7 @@ func TestHandleStatusJSON_ReflectsCollectorState(t *testing.T) {
 	tr, reg := runOnceAndTrack(t, "devices", nil)
 	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, []CollectorSource{
 		{TenantID: "tenant-a", Registry: reg, Status: tr},
-	}, nil, nil)
+	}, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/status.json", nil)
 	w := httptest.NewRecorder()
@@ -137,7 +137,7 @@ func TestHandleStatusJSON_SkippedCollectorShowsReason(t *testing.T) {
 		{TenantID: "tenant-a"},
 	}, map[SkipKey]string{
 		{TenantID: "tenant-a", Collector: "identityprotection"}: "requires P2",
-	}, nil)
+	}, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/status.json", nil)
 	w := httptest.NewRecorder()
@@ -157,7 +157,7 @@ func TestHandleIndex_RendersHTML(t *testing.T) {
 	tr, reg := runOnceAndTrack(t, "devices", nil)
 	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, []CollectorSource{
 		{TenantID: "tenant-a", Registry: reg, Status: tr},
-	}, nil, nil)
+	}, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
@@ -179,7 +179,7 @@ func TestHandleIndex_RendersHTML(t *testing.T) {
 }
 
 func TestServer_StartAndShutdown(t *testing.T) {
-	s := New(config.AdminConfig{Enabled: true, Addr: "127.0.0.1:0"}, nil, nil, nil)
+	s := New(config.AdminConfig{Enabled: true, Addr: "127.0.0.1:0"}, nil, nil, nil, nil, nil)
 	if s == nil {
 		t.Fatal("New() returned nil for an enabled config")
 	}

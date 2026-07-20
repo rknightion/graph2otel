@@ -42,6 +42,7 @@ never in committed YAML.
 | `G2O_OTLP__ENDPOINT` | `https://otlp-gateway-prod-us-central-0.grafana.net/otlp` | OTLP base URL (the exporter appends /v1/metrics and /v1/logs itself) |
 | `G2O_OTLP__GRAFANA_CLOUD__INSTANCE_ID` | `""` | Grafana Cloud OTLP instance ID |
 | `G2O_OTLP__GRAFANA_CLOUD__TOKEN` | `""` | DO NOT set here — use G2O_OTLP__GRAFANA_CLOUD__TOKEN instead |
+| `G2O_OTLP__GRAFANA_CLOUD__TOKEN_FILE` | `""` | OR read the token from a file (k8s/Docker secret mount); value XOR token, never both |
 | `G2O_ADMIN__ENABLED` | `false` | run the admin/health HTTP endpoint (liveness + per-collector status) |
 | `G2O_ADMIN__ADDR` | `:9090` | bind address for the admin endpoint |
 | `G2O_ADMIN__REFRESH_INTERVAL` | `5s` | how often the status page re-polls /api/status.json (1s freshness ticker is independent) |
@@ -49,6 +50,7 @@ never in committed YAML.
 | `G2O_PROFILING__PYROSCOPE__SERVER_ADDRESS` | `""` | REQUIRED when enabled, e.g. http://pyroscope:4040 or https://profiles-prod-NNN.grafana.net |
 | `G2O_PROFILING__PYROSCOPE__BASIC_AUTH_USER` | `""` | Grafana Cloud Profiles user/instance ID |
 | `G2O_PROFILING__PYROSCOPE__BASIC_AUTH_PASSWORD` | `""` | DO NOT set here — use the env var above |
+| `G2O_PROFILING__PYROSCOPE__BASIC_AUTH_PASSWORD_FILE` | `""` | OR read the password from a file (k8s/Docker secret mount); value XOR basic_auth_password, never both |
 | `G2O_PROFILING__PYROSCOPE__TENANT_ID` | `""` | optional; leave empty for Grafana Cloud |
 | `G2O_PROFILING__PYROSCOPE__UPLOAD_RATE` | `15s` | optional; 0/omit uses the pyroscope default |
 | `G2O_PROFILING__MUTEX_PROFILE_FRACTION` | `5` | runtime.SetMutexProfileFraction; 0 = disabled |

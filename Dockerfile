@@ -16,11 +16,22 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     -ldflags "-s -w -X main.version=${VERSION}" \
     -o /out/graph2otel ./cmd/graph2otel
 
+# Third-party notices for the linked modules, baked into /licenses/ in the runtime
+# stage below. Runs on the build platform against the module cache populated above
+# (scripts/notices.sh also runs `go mod download`). Keep GO_LICENSES_VERSION in sync
+# with the Makefile. bookworm ships bash, so no extra shell install is needed.
+ARG GO_LICENSES_VERSION=v2.0.1
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    GOBIN=/usr/local/bin go install github.com/google/go-licenses@${GO_LICENSES_VERSION} && \
+    GO_LICENSES=go-licenses OUT=/THIRD_PARTY_NOTICES.md bash scripts/notices.sh
+
 # ---- runtime ----
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:f5b485ea962d9bd1186b2f6b3a061191539b905b82ec395de78cbfae51f20e35
 COPY --from=build /out/graph2otel /usr/local/bin/graph2otel
-# License compliance travels with the image (OCI /licenses convention).
+# License compliance travels with the image (OCI /licenses convention): the AGPL
+# text plus the verbatim third-party module notices generated in the build stage.
 COPY --from=build /src/LICENSE /licenses/LICENSE
+COPY --from=build /THIRD_PARTY_NOTICES.md /licenses/THIRD_PARTY_NOTICES.md
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
 # config.example.yaml is copied for reference only; it is NOT loaded by default.
 # The binary runs from built-in defaults + G2O_* environment variables. To use a

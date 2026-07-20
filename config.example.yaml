@@ -114,6 +114,7 @@ otlp:
   grafana_cloud:
     instance_id: "" # Grafana Cloud OTLP instance ID
     token: "" # DO NOT set here — use G2O_OTLP__GRAFANA_CLOUD__TOKEN instead
+    token_file: "" # OR read the token from a file (k8s/Docker secret mount); value XOR token, never both
 
 # collectors overrides per-collector behavior globally (across all tenants),
 # keyed by collector name. A collector omitted here runs enabled at its
@@ -179,6 +180,7 @@ profiling:
     server_address: "" # REQUIRED when enabled, e.g. http://pyroscope:4040 or https://profiles-prod-NNN.grafana.net
     basic_auth_user: "" # Grafana Cloud Profiles user/instance ID
     basic_auth_password: "" # DO NOT set here — use the env var above
+    basic_auth_password_file: "" # OR read the password from a file (k8s/Docker secret mount); value XOR basic_auth_password, never both
     tenant_id: "" # optional; leave empty for Grafana Cloud
     upload_rate: 15s # optional; 0/omit uses the pyroscope default
     tags: {} # extra static tags; service_version is always set and cannot be overridden

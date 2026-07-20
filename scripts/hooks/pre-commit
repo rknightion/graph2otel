@@ -1,0 +1,7 @@
+#!/bin/sh
+# Fast pre-commit gate for graph2otel. Catches the two cheapest CI failures — vet
+# and lint (formatting included) — without the full `make check` (which also runs
+# the race test suite + govulncheck + build and is too slow for every commit). CI
+# runs the full gate; this is the local fast lane. Install via `make install-hooks`.
+set -e
+make vet lint

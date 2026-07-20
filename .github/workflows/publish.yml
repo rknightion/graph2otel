@@ -44,8 +44,8 @@ jobs:
       helm-chart-path: charts/graph2otel
 
   # go-licenses third-party notices (Go-specific; migrates to the shared binaries
-  # reusable later). Releases only. Generates THIRD_PARTY_NOTICES.md inline since
-  # there is no scripts/notices.sh yet (tracked as a future follow-up issue).
+  # reusable later). Releases only. Runs `make notices` (scripts/notices.sh) — the
+  # same generator the image build bakes into /licenses/ and that runs locally.
   notices:
     if: inputs.release_tag != ''
     runs-on: ubuntu-24.04
@@ -66,12 +66,8 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: Install go-licenses
-        run: go install github.com/google/go-licenses@v1.6.0
       - name: Generate third-party notices
-        run: |
-          go-licenses report ./... --template .github/notices.tpl > THIRD_PARTY_NOTICES.md || \
-          go-licenses csv ./... > THIRD_PARTY_NOTICES.md
+        run: make notices
       - name: Attach third-party notices to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

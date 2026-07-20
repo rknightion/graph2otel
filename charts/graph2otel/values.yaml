@@ -191,6 +191,10 @@ config:
       # in extraEnv sourced from a Secret, since it never belongs in a
       # ConfigMap-rendered config.yaml.
       token: ""
+      # -- Path to a file holding the OTLP token, as an alternative to the env
+      # var — e.g. a mounted k8s Secret. value XOR token, never both. Safe to
+      # render into the ConfigMap since it is only a path, not the credential.
+      token_file: ""
 
   # -- Per-collector overrides, applied globally across all tenants, keyed by
   # collector name. A collector omitted here runs enabled at its built-in
@@ -226,6 +230,8 @@ config:
       basic_auth_user: ""
       # -- DO NOT set here — this key is informational only; provide it via G2O_PROFILING__PYROSCOPE__BASIC_AUTH_PASSWORD from a Secret.
       basic_auth_password: ""
+      # -- Path to a file holding the Pyroscope basic-auth password, as an alternative to the env var (e.g. a mounted k8s Secret). value XOR basic_auth_password, never both.
+      basic_auth_password_file: ""
       # -- X-Scope-OrgID for multi-tenant Pyroscope servers; leave empty for Grafana Cloud.
       tenant_id: ""
       # -- How often profiles are flushed; 0/omit uses the pyroscope default.

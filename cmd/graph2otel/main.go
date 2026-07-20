@@ -190,7 +190,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	// Admin/health endpoint, fed the live per-tenant status sources and skip
 	// reasons. Start blocks until ctx is canceled, then shuts the server down
 	// itself, so run it in the background.
-	adminSrv := admin.New(cfg.Admin, sources, skips, limiter)
+	adminSrv := admin.New(cfg.Admin, sources, skips, limiter, cfg, provider.Cardinality())
 	go func() {
 		if err := adminSrv.Start(ctx); err != nil {
 			logger.Error("admin server", "error", err)

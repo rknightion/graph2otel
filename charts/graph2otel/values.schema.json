@@ -1,0 +1,328 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "image": {
+            "type": "object",
+            "properties": {
+                "repository": {
+                    "type": "string"
+                },
+                "tag": {
+                    "type": "string"
+                },
+                "pullPolicy": {
+                    "type": "string"
+                }
+            }
+        },
+        "imagePullSecrets": {
+            "type": "array"
+        },
+        "replicaCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1
+        },
+        "nameOverride": {
+            "type": "string"
+        },
+        "fullnameOverride": {
+            "type": "string"
+        },
+        "serviceAccount": {
+            "type": "object",
+            "properties": {
+                "create": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "annotations": {
+                    "type": "object"
+                },
+                "automountServiceAccountToken": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "podAnnotations": {
+            "type": "object"
+        },
+        "podLabels": {
+            "type": "object"
+        },
+        "podSecurityContext": {
+            "type": "object",
+            "properties": {
+                "runAsNonRoot": {
+                    "type": "boolean"
+                },
+                "seccompProfile": {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "fsGroup": {
+                    "type": "integer"
+                },
+                "fsGroupChangePolicy": {
+                    "type": "string"
+                }
+            }
+        },
+        "securityContext": {
+            "type": "object",
+            "properties": {
+                "allowPrivilegeEscalation": {
+                    "type": "boolean"
+                },
+                "readOnlyRootFilesystem": {
+                    "type": "boolean"
+                },
+                "runAsUser": {
+                    "type": "integer"
+                },
+                "runAsGroup": {
+                    "type": "integer"
+                },
+                "capabilities": {
+                    "type": "object",
+                    "properties": {
+                        "drop": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "resources": {
+            "type": "object",
+            "properties": {
+                "requests": {
+                    "type": "object",
+                    "properties": {
+                        "cpu": {
+                            "type": "string"
+                        },
+                        "memory": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "limits": {
+                    "type": "object",
+                    "properties": {
+                        "cpu": {
+                            "type": "string"
+                        },
+                        "memory": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "nodeSelector": {
+            "type": "object"
+        },
+        "tolerations": {
+            "type": "array"
+        },
+        "affinity": {
+            "type": "object"
+        },
+        "extraEnv": {
+            "type": "array"
+        },
+        "extraVolumes": {
+            "type": "array"
+        },
+        "extraVolumeMounts": {
+            "type": "array"
+        },
+        "existingSecret": {
+            "type": "string"
+        },
+        "secret": {
+            "type": "object",
+            "properties": {
+                "AZURE_TENANT_ID": {
+                    "type": "string"
+                },
+                "AZURE_CLIENT_ID": {
+                    "type": "string"
+                },
+                "AZURE_CLIENT_SECRET": {
+                    "type": "string"
+                }
+            }
+        },
+        "config": {
+            "type": "object",
+            "properties": {
+                "log_level": {
+                    "type": "string"
+                },
+                "tenants": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "tenant_id": {
+                                "type": "string"
+                            },
+                            "client_id": {
+                                "type": "string"
+                            },
+                            "collectors": {
+                                "type": "object"
+                            },
+                            "blob_ingest": {
+                                "type": "object",
+                                "properties": {
+                                    "account_url": {
+                                        "type": "string"
+                                    }
+                                }
+                            },
+                            "mdca": {
+                                "type": "object",
+                                "properties": {
+                                    "portal_url": {
+                                        "type": "string"
+                                    },
+                                    "token_file": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "otlp": {
+                    "type": "object",
+                    "properties": {
+                        "protocol": {
+                            "type": "string"
+                        },
+                        "endpoint": {
+                            "type": "string"
+                        },
+                        "grafana_cloud": {
+                            "type": "object",
+                            "properties": {
+                                "instance_id": {
+                                    "type": "string"
+                                },
+                                "token": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "collectors": {
+                    "type": "object"
+                },
+                "admin": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "addr": {
+                            "type": "string"
+                        },
+                        "refresh_interval": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "profiling": {
+                    "type": "object",
+                    "properties": {
+                        "pyroscope": {
+                            "type": "object",
+                            "properties": {
+                                "enabled": {
+                                    "type": "boolean"
+                                },
+                                "server_address": {
+                                    "type": "string"
+                                },
+                                "basic_auth_user": {
+                                    "type": "string"
+                                },
+                                "basic_auth_password": {
+                                    "type": "string"
+                                },
+                                "tenant_id": {
+                                    "type": "string"
+                                },
+                                "upload_rate": {
+                                    "type": "string"
+                                },
+                                "tags": {
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "mutex_profile_fraction": {
+                            "type": "integer"
+                        },
+                        "block_profile_rate": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "cardinality": {
+                    "type": "object",
+                    "properties": {
+                        "metric_limit": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "backfill": {
+                    "type": "object",
+                    "properties": {
+                        "initial_lookback": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "checkpoint_dir": {
+                    "type": "string"
+                }
+            }
+        },
+        "persistence": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "storageClass": {
+                    "type": "string"
+                },
+                "accessMode": {
+                    "type": "string"
+                },
+                "size": {
+                    "type": "string"
+                },
+                "existingClaim": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

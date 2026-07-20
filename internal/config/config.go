@@ -169,13 +169,20 @@ type ProfilingConfig struct {
 // supply it via env (G2O_PROFILING__PYROSCOPE__BASIC_AUTH_PASSWORD) like every
 // other credential, never in committed YAML.
 type ProfilingPyroscope struct {
-	Enabled           bool              `yaml:"enabled"`
-	ServerAddress     string            `yaml:"server_address"`
-	BasicAuthUser     string            `yaml:"basic_auth_user"`
-	BasicAuthPassword Secret            `yaml:"basic_auth_password"`
-	TenantID          string            `yaml:"tenant_id"`
-	UploadRate        time.Duration     `yaml:"upload_rate"`
-	Tags              map[string]string `yaml:"tags"`
+	Enabled           bool   `yaml:"enabled"`
+	ServerAddress     string `yaml:"server_address"`
+	BasicAuthUser     string `yaml:"basic_auth_user"`
+	BasicAuthPassword Secret `yaml:"basic_auth_password"`
+	// BasicAuthPasswordFile is an optional path to a file holding the Pyroscope
+	// basic-auth password — the file-based alternative to BasicAuthPassword
+	// (and G2O_PROFILING__PYROSCOPE__BASIC_AUTH_PASSWORD), for k8s/Docker secret
+	// mounts, mirroring mdca.token_file (#212). value XOR file: set the password
+	// OR the _file path, never both. Load reads the file (trimming a trailing
+	// newline) into BasicAuthPassword so it still redacts.
+	BasicAuthPasswordFile string            `yaml:"basic_auth_password_file"`
+	TenantID              string            `yaml:"tenant_id"`
+	UploadRate            time.Duration     `yaml:"upload_rate"`
+	Tags                  map[string]string `yaml:"tags"`
 }
 
 // TenantConfig identifies one Entra tenant to poll. It intentionally carries
@@ -418,6 +425,13 @@ type OTLPConfig struct {
 type GrafanaCloudConfig struct {
 	InstanceID string `yaml:"instance_id"`
 	Token      Secret `yaml:"token"`
+	// TokenFile is an optional path to a file holding the OTLP push token — the
+	// file-based alternative to Token (and G2O_OTLP__GRAFANA_CLOUD__TOKEN),
+	// intended for Kubernetes/Docker secret mounts, and mirroring
+	// mdca.token_file (#145/#212). value XOR file: set token OR token_file,
+	// never both. Load reads the file (trimming a trailing newline) into Token,
+	// so the resolved credential still redacts in every config dump.
+	TokenFile string `yaml:"token_file"`
 }
 
 // Default returns a Config populated with the documented default values. Load
@@ -499,6 +513,13 @@ func Load(path string) (*Config, error) {
 		},
 	}); err != nil {
 		return nil, fmt.Errorf("decode config: %w", err)
+	}
+
+	// Resolve the *_file secret siblings once all layers are merged, so an
+	// inline value from any layer (YAML or the G2O_* environment) participates
+	// in the value-XOR-file check.
+	if err := cfg.resolveSecretFiles(); err != nil {
+		return nil, err
 	}
 
 	return &cfg, nil

@@ -9,7 +9,7 @@ import (
 func renderString(t *testing.T, s Status) string {
 	t.Helper()
 	var b strings.Builder
-	if err := render(&b, s); err != nil {
+	if err := render(&b, pageModel{Status: s}); err != nil {
 		t.Fatalf("render: %v", err)
 	}
 	return b.String()

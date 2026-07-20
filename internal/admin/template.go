@@ -115,7 +115,7 @@ func outcomeStrip(series []bool) template.HTML {
 	return template.HTML(b.String()) //nolint:gosec // G203: fixed markup, no user data
 }
 
-// render writes the HTML status page for s to w.
-func render(w io.Writer, s Status) error {
-	return tmpl.Execute(w, s)
+// render writes the HTML status page for p to w.
+func render(w io.Writer, p pageModel) error {
+	return tmpl.Execute(w, p)
 }
