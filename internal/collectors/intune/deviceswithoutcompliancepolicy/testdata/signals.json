@@ -1,0 +1,25 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.devices_without_compliance_policy.devices",
+      "AttrKeys": [
+        "os"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.devices_without_compliance_policy",
+      "AttrKeys": [
+        "compliance_state",
+        "device_id",
+        "device_name",
+        "ingest_transport",
+        "os",
+        "os_version",
+        "owner_type",
+        "upn"
+      ]
+    }
+  ]
+}

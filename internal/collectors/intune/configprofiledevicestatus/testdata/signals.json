@@ -1,0 +1,26 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.config_profile_device_status.devices",
+      "AttrKeys": [
+        "report_status"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.config_profile_device_status",
+      "AttrKeys": [
+        "device_id",
+        "device_name",
+        "ingest_transport",
+        "policy_id",
+        "policy_name",
+        "policy_status",
+        "report_status",
+        "unified_policy_type",
+        "upn"
+      ]
+    }
+  ]
+}

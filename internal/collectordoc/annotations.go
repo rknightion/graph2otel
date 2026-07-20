@@ -362,6 +362,36 @@ var annotations = map[string]Annotation{
 		Source:   "`POST /deviceManagement/reports/exportJobs`",
 		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
 	},
+	"intune.config_profile_device_status": {
+		Collects: "Per-(device, configuration profile) applied status — `ReportStatus` succeeded/error/**conflict**/noncompliant with the raw `PolicyStatus` code — via the Reports Export API. Uses the `DeviceStatusesByConfigurationProfile` report; metric counts by report_status, per-device detail on the log twin (WARN on error/conflict/noncompliant)",
+		Source:   "`POST /deviceManagement/reports/exportJobs`",
+		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
+	},
+	"intune.config_setting_status": {
+		Collects: "Per-setting configuration-policy device summary — how many assigned devices are compliant, errored, or in **conflict** on each setting — via the Reports Export API. Uses the `PerSettingDeviceSummaryByConfigurationPolicy` report; metric sums compliant/error/conflict device counts (three bounded series), per-(policy, setting) counts on the log twin (WARN on any error or conflict device)",
+		Source:   "`POST /deviceManagement/reports/exportJobs`",
+		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
+	},
+	"intune.devices_without_compliance_policy": {
+		Collects: "Managed devices with no compliance policy assigned — a posture blind-spot — via the Reports Export API. Uses the `DevicesWithoutCompliancePolicy` report; metric counts by OS, per-device detail on the log twin (always WARN). Empty is the healthy steady state",
+		Source:   "`POST /deviceManagement/reports/exportJobs`",
+		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
+	},
+	"intune.driver_update_summary": {
+		Collects: "Windows driver-update policy device counts by deployment state (error/in_progress/success/cancelled), via the Reports Export API. Uses the `DriverUpdatePolicyStatusSummary` report — the driver sibling of the feature/quality update summaries; pre-aggregated gauge, no log twin",
+		Source:   "`POST /deviceManagement/reports/exportJobs`",
+		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
+	},
+	"intune.epm_denied": {
+		Collects: "Endpoint Privilege Management denied elevations — which applications were blocked from elevating, for whom, and how often — via the Reports Export API. Uses the `EpmDeniedReport` report; metric counts by elevation_type, per-denial detail (device, user, file, hash) on the log twin (always WARN). Empty is the steady state on a tenant with no denials",
+		Source:   "`POST /deviceManagement/reports/exportJobs`",
+		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
+	},
+	"intune.firewall_status": {
+		Collects: "Per-device endpoint firewall health (raw `FirewallStatus` code; 0 = Enabled), via the Reports Export API. Uses the `FirewallStatus` report; metric counts by firewall status code, per-device detail on the log twin (WARN when not enabled)",
+		Source:   "`POST /deviceManagement/reports/exportJobs`",
+		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
+	},
 	"intune.noncompliant_settings": {
 		Collects: "Per-device, per-setting compliance failures — which specific setting is noncompliant on which device — via the Reports Export API. Uses the `NoncompliantDevicesAndSettings` report, the detail the summary-only `intune.compliance` gauges cannot answer",
 		Source:   "`POST /deviceManagement/reports/exportJobs`",

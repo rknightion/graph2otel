@@ -1,0 +1,24 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.config_setting_status.devices",
+      "AttrKeys": [
+        "setting_device_status"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.config_setting_status",
+      "AttrKeys": [
+        "compliant_device_count",
+        "conflict_device_count",
+        "error_device_count",
+        "ingest_transport",
+        "policy_id",
+        "setting_id",
+        "setting_name"
+      ]
+    }
+  ]
+}

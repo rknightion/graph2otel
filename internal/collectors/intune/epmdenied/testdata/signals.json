@@ -1,0 +1,27 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.epm_denied.denials",
+      "AttrKeys": [
+        "elevation_type"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.epm_denied",
+      "AttrKeys": [
+        "device_id",
+        "device_name",
+        "elevation_type",
+        "file_description",
+        "file_name",
+        "hash",
+        "ingest_transport",
+        "month_elevation_count",
+        "publisher",
+        "user_name"
+      ]
+    }
+  ]
+}

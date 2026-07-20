@@ -1,0 +1,13 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.driver_update_summary.devices",
+      "AttrKeys": [
+        "policy_id",
+        "policy_name",
+        "update_deployment_state"
+      ]
+    }
+  ],
+  "Logs": null
+}

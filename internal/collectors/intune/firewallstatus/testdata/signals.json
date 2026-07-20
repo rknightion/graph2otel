@@ -1,0 +1,23 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.firewall_status.devices",
+      "AttrKeys": [
+        "firewall_status"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.firewall_status",
+      "AttrKeys": [
+        "device_id",
+        "device_name",
+        "firewall_status",
+        "ingest_transport",
+        "last_reported_date_time",
+        "upn"
+      ]
+    }
+  ]
+}
