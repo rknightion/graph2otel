@@ -92,6 +92,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/mobileapps"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/noncompliantsettings"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/qualityupdatesummary"
+	_ "github.com/rknightion/graph2otel/internal/collectors/intune/remediationrunstates"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/scripts"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/settingscatalog"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/updates"

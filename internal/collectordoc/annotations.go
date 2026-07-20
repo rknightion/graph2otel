@@ -442,6 +442,11 @@ var annotations = map[string]Annotation{
 		Source:   "`POST /deviceManagement/reports/exportJobs`",
 		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
 	},
+	"intune.remediation_run_states": {
+		Collects: "Per-device proactive-remediation health — for each remediation (deviceHealthScript), which devices its detection script passed or FAILED, the detection script's own output message, and whether a remediation ran. Emits a bounded gauge counted by remediation, detection state and remediation state, plus a per-(remediation, device) log twin carrying the device, OS and detection message. Chosen read-only over the `DeviceRunStatesByProactiveRemediation` export report — same data, no write scope and no per-policy export fan-out",
+		Source:   "`GET /deviceManagement/deviceHealthScripts/{id}/deviceRunStates` (beta)",
+		Gating:   "read-only `DeviceManagementConfiguration.Read.All` + `DeviceManagementManagedDevices.Read.All`; beta endpoint, so opt-in via explicit enable",
+	},
 
 	// ---- Intune — window collectors ----
 	"intune.audit_events": {

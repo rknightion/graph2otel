@@ -1,0 +1,33 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.remediation_run_states.devices",
+      "AttrKeys": [
+        "detection_state",
+        "remediation_name",
+        "remediation_state"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.remediation_run_states",
+      "AttrKeys": [
+        "detection_output",
+        "detection_state",
+        "device_id",
+        "device_name",
+        "last_state_update",
+        "last_sync_date_time",
+        "os",
+        "os_version",
+        "ownership",
+        "publisher",
+        "remediation_id",
+        "remediation_name",
+        "remediation_script_error",
+        "remediation_state"
+      ]
+    }
+  ]
+}

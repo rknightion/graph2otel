@@ -246,6 +246,23 @@ const (
 	AttrRuleId            = "rule_id"
 )
 
+// Attribute keys for intune.remediation_run_states (#207) — per-device proactive
+// remediation (deviceHealthScripts) run state, read live from beta
+// /deviceManagement/deviceHealthScripts/{id}/deviceRunStates. detection_state and
+// remediation_state are the two bounded EPM/remediation enums the gauge is keyed
+// by; the rest (the detection script's output message, script errors, timing)
+// ride the log twin only.
+const (
+	AttrDetectionOutput        = "detection_output"
+	AttrDetectionScriptError   = "detection_script_error"
+	AttrDetectionState         = "detection_state"
+	AttrLastStateUpdate        = "last_state_update"
+	AttrRemediationId          = "remediation_id"
+	AttrRemediationName        = "remediation_name"
+	AttrRemediationScriptError = "remediation_script_error"
+	AttrRemediationState       = "remediation_state"
+)
+
 // Attribute keys for the Endpoint Analytics Work-From-Anywhere per-device Windows
 // 11 upgrade-readiness signal (#194) — the metricDevices navigation under
 // userExperienceAnalyticsWorkFromAnywhereMetrics. Values live-captured from the
