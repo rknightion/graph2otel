@@ -59,28 +59,15 @@ const eventName = "intune.config_assignment_status"
 // per (device, configuration-policy) assignment.
 const reportName = "DeviceAssignmentStatusByConfigurationPolicy"
 
-// selectColumns are the export columns this collector requests. Select is
-// required and must be non-empty: Microsoft warns the default column set can
-// change without notice, so every export caller pins its own columns explicitly
-// (see internal/exportjob). Both localized (_loc) and non-localized siblings are
-// requested — the non-localized enum feeds the bounded metric labels, the _loc
-// friendly names feed the log twin.
-var selectColumns = []string{
-	"PolicyId",
-	"PolicyName",
-	"IntuneDeviceId",
-	"DeviceName",
-	"AadDeviceId",
-	"UPN",
-	"AssignmentStatus",
-	"PspdpuLastModifiedTimeUtc",
-	"UnifiedPolicyPlatformType",
-	"UnifiedPolicyPlatformType_loc",
-	"UnifiedPolicyType",
-	"UnifiedPolicyType_loc",
-	"ReportStatus",
-	"ReportStatus_loc",
-}
+// The columns this collector consumes are PolicyId, PolicyName, IntuneDeviceId,
+// DeviceName, AadDeviceId, UPN, AssignmentStatus, PspdpuLastModifiedTimeUtc,
+// UnifiedPolicyPlatformType(+_loc), UnifiedPolicyType(+_loc), ReportStatus(+_loc):
+// the non-localized enums feed the bounded metric labels, the _loc friendlies feed
+// the log twin. They are NOT pinned via an explicit `select`: this report 400s when
+// a localized `_loc` column is named in select (wire-verified 2026-07-20, #203), and
+// those columns exist only in the report's default output. So the export omits
+// `select` and takes the default columns (a superset); each column is read by name
+// and a missing one degrades to empty rather than failing.
 
 // warnStatuses are the ReportStatus values that escalate a row's log twin to
 // WARN: an assignment that errored, conflicts, or left the device noncompliant
@@ -171,8 +158,8 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 
 	rows, err := c.export.Export(ctx, exportjob.Request{
 		ReportName: reportName,
-		Select:     selectColumns,
-		Format:     exportjob.FormatCSV,
+		// Select omitted on purpose — see the selectColumns note above (#203).
+		Format: exportjob.FormatCSV,
 	}, e)
 	if err != nil {
 		logExportFailure(c.logger, err)

@@ -86,23 +86,14 @@ func decodeStatus(raw string) (string, bool) {
 	return statusUnknown, false
 }
 
-// selectColumns are the export columns this collector requests. Select is
-// required and non-empty: Microsoft warns the default column set can change
-// without notice, so every export caller pins its own columns explicitly.
-var selectColumns = []string{
-	"DeviceId",
-	"DeviceName",
-	"UPN",
-	"OS",
-	"OSVersion",
-	"SettingName",
-	"SettingNm",
-	"SettingNm_loc",
-	"PolicyName",
-	"SettingStatus",
-	"SettingStatus_loc",
-	"ErrorCode",
-}
+// The columns this collector consumes are DeviceId, DeviceName, UPN, OS,
+// OSVersion, SettingName, SettingNm, SettingNm_loc, PolicyName, SettingStatus,
+// SettingStatus_loc, ErrorCode. They are NOT pinned via an explicit `select`:
+// this report 400s when the localized SettingNm_loc / SettingStatus_loc columns
+// are named in select (wire-verified 2026-07-20, #203), and those _loc friendlies
+// exist only in the report's default output. So the export omits `select`
+// entirely and takes the default columns (a superset of the above); each column
+// is read by name and a missing one degrades to empty rather than failing.
 
 // Collector polls the NoncompliantDevicesAndSettings export report through the
 // shared export-job subsystem (internal/exportjob, #17).
@@ -184,8 +175,8 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 
 	rows, err := c.export.Export(ctx, exportjob.Request{
 		ReportName: reportName,
-		Select:     selectColumns,
-		Format:     exportjob.FormatCSV,
+		// Select omitted on purpose — see the selectColumns note above (#203).
+		Format: exportjob.FormatCSV,
 	}, e)
 	if err != nil {
 		logExportFailure(c.logger, err)

@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -278,27 +279,47 @@ func TestExportParsesJSONRows(t *testing.T) {
 	}
 }
 
-func TestExportRequiresNonEmptySelect(t *testing.T) {
+// TestExportEmptySelectOmitsSelectKey pins the wire-verified fix (#203): some
+// Intune reports (NoncompliantDevicesAndSettings, DeviceAssignmentStatusByConfigurationPolicy)
+// reject an explicit `select` that names a localized `_loc` column — those columns
+// exist only in the default output and 400 when selected. An empty Select is
+// therefore valid and means "take the report's default columns": the `select` key
+// must be OMITTED from the POST body entirely (an empty array is not the same as an
+// absent key), and Export must proceed rather than reject it as a programming error.
+func TestExportEmptySelectOmitsSelectKey(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	var postedBody []byte
 	poster := &fakePoster{
-		post: func(context.Context, string, []byte, map[string]string) ([]byte, error) {
-			t.Fatal("RawPost called with an empty Select")
-			return nil, nil
+		post: func(_ context.Context, _ string, body []byte, _ map[string]string) ([]byte, error) {
+			postedBody = body
+			return []byte(`{"id":"job1","status":"notStarted"}`), nil
 		},
 		get: func(context.Context, string, map[string]string) ([]byte, error) {
-			t.Fatal("RawGetWithHeaders called with an empty Select")
-			return nil, nil
+			expiry := base.Add(time.Hour).Format(time.RFC3339)
+			return []byte(fmt.Sprintf(`{"id":"job1","status":"completed","url":"https://blob.example/sas","expirationDateTime":%q}`, expiry)), nil
 		},
 	}
-	dl := &fakeDownloader{download: func(context.Context, string) ([]byte, error) {
-		t.Fatal("Download called with an empty Select")
-		return nil, nil
-	}}
+	zipBytes := buildZip(t, "export.csv", []byte("DeviceId\ndev1\n"))
+	dl := &fakeDownloader{download: func(context.Context, string) ([]byte, error) { return zipBytes, nil }}
 
-	c := New(poster, dl, Options{})
+	c := New(poster, dl, Options{Now: stepClock(base)})
 	rec := telemetrytest.New()
-	_, err := c.Export(context.Background(), Request{ReportName: "DeviceInstallStatusByApp"}, rec.Emitter())
-	if err == nil {
-		t.Fatal("Export with empty Select: want an error, got nil")
+	rows, err := c.Export(context.Background(), Request{ReportName: "NoncompliantDevicesAndSettings"}, rec.Emitter())
+	if err != nil {
+		t.Fatalf("Export with empty Select: want success, got %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("got %d rows, want 1", len(rows))
+	}
+	var sent map[string]any
+	if err := json.Unmarshal(postedBody, &sent); err != nil {
+		t.Fatalf("unmarshal posted body: %v", err)
+	}
+	if _, present := sent["select"]; present {
+		t.Errorf("posted body carries a `select` key with empty Select; want it omitted: %s", postedBody)
+	}
+	if sent["reportName"] != "NoncompliantDevicesAndSettings" {
+		t.Errorf("posted reportName = %v", sent["reportName"])
 	}
 }
 

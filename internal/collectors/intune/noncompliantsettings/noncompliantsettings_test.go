@@ -102,14 +102,12 @@ func TestCollectCountsRowsByOsAndStatus(t *testing.T) {
 	if runner.lastReq.ReportName != "NoncompliantDevicesAndSettings" {
 		t.Errorf("ReportName = %q, want NoncompliantDevicesAndSettings", runner.lastReq.ReportName)
 	}
-	wantSelect := []string{"DeviceId", "DeviceName", "UPN", "OS", "OSVersion", "SettingName", "SettingNm", "SettingNm_loc", "PolicyName", "SettingStatus", "SettingStatus_loc", "ErrorCode"}
-	if len(runner.lastReq.Select) != len(wantSelect) {
-		t.Fatalf("Select = %v, want %v", runner.lastReq.Select, wantSelect)
-	}
-	for i, col := range wantSelect {
-		if runner.lastReq.Select[i] != col {
-			t.Errorf("Select[%d] = %q, want %q", i, runner.lastReq.Select[i], col)
-		}
+	// #203: this report 400s when an explicit `select` names its localized
+	// SettingNm_loc / SettingStatus_loc columns (wire-verified 2026-07-20) — yet
+	// the collector needs those _loc friendlies, which appear only in the default
+	// output. So Select is intentionally EMPTY (take default columns).
+	if len(runner.lastReq.Select) != 0 {
+		t.Errorf("Select = %v, want empty (report rejects explicit _loc select; #203)", runner.lastReq.Select)
 	}
 
 	points := rec.MetricPoints(countMetricName)

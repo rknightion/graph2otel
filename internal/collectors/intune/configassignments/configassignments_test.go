@@ -300,10 +300,11 @@ func TestLogTwinSeverity(t *testing.T) {
 	}
 }
 
-// TestSelectColumnsPinned pins the exact export column set — the report's
-// default column set can change without notice, so the collector must request
-// its columns explicitly.
-func TestSelectColumnsPinned(t *testing.T) {
+// TestSelectOmitted pins the wire-verified fix (#203): this report 400s when an
+// explicit `select` names its localized `_loc` columns (UnifiedPolicyPlatformType_loc
+// etc.), which the collector needs for the twin's friendly names and which appear
+// only in the default output. So Select is intentionally EMPTY (take default columns).
+func TestSelectOmitted(t *testing.T) {
 	runner := &fakeRunner{rows: liveFixture()}
 	c := New(runner, nil)
 	rec := telemetrytest.New()
@@ -312,20 +313,8 @@ func TestSelectColumnsPinned(t *testing.T) {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
-	want := []string{
-		"PolicyId", "PolicyName", "IntuneDeviceId", "DeviceName", "AadDeviceId",
-		"UPN", "AssignmentStatus", "PspdpuLastModifiedTimeUtc",
-		"UnifiedPolicyPlatformType", "UnifiedPolicyPlatformType_loc",
-		"UnifiedPolicyType", "UnifiedPolicyType_loc", "ReportStatus", "ReportStatus_loc",
-	}
-	got := runner.lastReq.Select
-	if len(got) != len(want) {
-		t.Fatalf("Select = %v (len %d), want %v (len %d)", got, len(got), want, len(want))
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("Select[%d] = %q, want %q", i, got[i], want[i])
-		}
+	if len(runner.lastReq.Select) != 0 {
+		t.Errorf("Select = %v, want empty (report rejects explicit _loc select; #203)", runner.lastReq.Select)
 	}
 }
 

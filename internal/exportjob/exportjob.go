@@ -74,11 +74,15 @@ type Request struct {
 	// "DeviceInstallStatusByApp". Report-specific; see Microsoft's
 	// available-reports reference.
 	ReportName string
-	// Select is the list of columns to export. REQUIRED and must be
-	// non-empty: Microsoft warns the default column set can change without
-	// notice, so every caller must pin its own columns explicitly. An empty
-	// Select is a programming error, caught by Export before any network
-	// call.
+	// Select is the list of columns to export. Microsoft warns the default
+	// column set can change without notice, so a caller SHOULD pin its own
+	// columns explicitly — EXCEPT where the report rejects an explicit select
+	// (wire-verified #203: NoncompliantDevicesAndSettings and
+	// DeviceAssignmentStatusByConfigurationPolicy 400 when a localized `_loc`
+	// column is named, and those columns exist only in the default output). An
+	// empty Select is therefore valid and means "take the report's default
+	// columns": the `select` key is omitted from the request entirely (an empty
+	// array is not the same as an absent key).
 	Select []string
 	// Filter is a report-specific DSL string, e.g. "(OwnerType eq '1')" —
 	// NOT an OData $filter expression. Optional; only specific columns are
@@ -226,7 +230,7 @@ func New(graph Poster, dl Downloader, opts Options) *Client {
 // exportJobBody is the create request's JSON body.
 type exportJobBody struct {
 	ReportName       string   `json:"reportName"`
-	Select           []string `json:"select"`
+	Select           []string `json:"select,omitempty"`
 	Filter           string   `json:"filter,omitempty"`
 	Format           string   `json:"format"`
 	LocalizationType string   `json:"localizationType,omitempty"`
@@ -250,10 +254,6 @@ type exportJobResponse struct {
 // outcome that a re-poll cannot rescue (completed, failed, expired SAS, unparseable
 // payload) and kept only where it can (a transient poll or download failure).
 func (c *Client) Export(ctx context.Context, req Request, e telemetry.Emitter) ([]Row, error) {
-	if len(req.Select) == 0 {
-		return nil, fmt.Errorf("exportjob: %s: Request.Select must be non-empty (Microsoft: default export columns can change without notice)", req.ReportName)
-	}
-
 	format := req.Format
 	if format == "" {
 		format = FormatCSV
