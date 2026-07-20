@@ -178,6 +178,10 @@ var annotations = map[string]Annotation{
 		Collects: "Non-interactive sign-in events via storage rather than the beta `signInEventTypes` filter. A drop-in equivalent of the polled twin — same event name, same attributes, same `id`. Measured live at TOTAL id overlap with `entra.signins.non_interactive` (18/18), so exactly one of the pair may be enabled; registering both is refused at startup",
 		Category: "NonInteractiveUserSignInLogs",
 	},
+	"entra.signins.managed_identity.blob": {
+		Collects: "Managed-identity sign-in events via storage rather than the beta `signInEventTypes` filter. A drop-in equivalent of the polled twin — same event name, same attributes, same `id`. Measured live at TOTAL id overlap with `entra.signins.managed_identity` (1/1, the tenant's only such sign-in), so exactly one of the pair may be enabled; registering both is refused at startup. On when blob ingest is configured (the polled twin is beta/opt-in)",
+		Category: "ManagedIdentitySignInLogs",
+	},
 
 	// ---- Defender — blob collectors (advanced-hunting tables, #106) ----
 	"defender.device_registry": {
@@ -199,6 +203,14 @@ var annotations = map[string]Annotation{
 	"defender.alert_evidence": {
 		Collects: "One log per evidence row Defender attaches to an alert (`AlertEvidence`, absorbing #93) — the per-entity detail (real UPN/IP/geo/session/file) that `entra.security_alerts` collapses to a bare `evidence_count`. Joins to the alert on `alert_id`. On when blob ingest is configured",
 		Category: "AdvancedHunting-AlertEvidence",
+	},
+	"defender.alert_info": {
+		Collects: "One log per Defender XDR alert header (`AlertInfo`) — the alert's title, category (MITRE tactic), severity, detection/service source, and attack techniques, keyed by `alert_id`. The alert-level companion to `defender.alert_evidence`'s per-entity rows: join the two on `alert_id`. On when blob ingest is configured",
+		Category: "AdvancedHunting-AlertInfo",
+	},
+	"defender.url_click_event": {
+		Collects: "One log per Safe Links URL click Defender for Office 365 records (`UrlClickEvents`) — the clicked URL and its chain, the click verdict/action, whether the user clicked through a block, threat types, and the app/workload context, keyed by `network_message_id`. Zero coverage exists today. On when blob ingest is configured",
+		Category: "AdvancedHunting-UrlClickEvents",
 	},
 	"defender.device_process": {
 		Collects: "One log per process creation Defender for Endpoint observes (`DeviceProcessEvents`) — the process tree (created process + full initiating-process lineage, command lines, hashes, signer) that is the core of endpoint hunting. The largest-volume Defender table; on when blob ingest is configured",
@@ -372,6 +384,16 @@ var annotations = map[string]Annotation{
 	},
 	"intune.epm_elevations": {
 		Collects: "Endpoint Privilege Management application elevations — which applications ran elevated, how often, and whether the elevation was policy-governed (unmanaged elevations are a security signal), via the Reports Export API. Uses the `EpmAggregationReportByApplication` report",
+		Source:   "`POST /deviceManagement/reports/exportJobs`",
+		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
+	},
+	"intune.feature_update_summary": {
+		Collects: "Per-policy Windows feature-update deployment rollup (devices in-progress / errored / succeeded, by policy and target version), via the Reports Export API. Uses the `FeatureUpdatePolicyStatusSummary` report — the \"Deployment status per update ring\" Monitor report. Pre-aggregated, so it emits a bounded gauge keyed by policy and no per-device twin",
+		Source:   "`POST /deviceManagement/reports/exportJobs`",
+		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
+	},
+	"intune.quality_update_summary": {
+		Collects: "Per-policy Windows quality/expedite-update deployment rollup (devices in-progress / errored / succeeded, by policy and expedite release date), via the Reports Export API. Uses the `QualityUpdatePolicyStatusSummary` report — the \"Security update status\" Monitor report. Pre-aggregated, so it emits a bounded gauge keyed by policy and no per-device twin",
 		Source:   "`POST /deviceManagement/reports/exportJobs`",
 		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
 	},

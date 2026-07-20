@@ -1,0 +1,23 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "defender.url_click_event",
+      "AttrKeys": [
+        "account_upn",
+        "action_type",
+        "app_name",
+        "app_version",
+        "ingest_transport",
+        "ip_address",
+        "is_clicked_through",
+        "network_message_id",
+        "report_id",
+        "source_id",
+        "url",
+        "url_chain",
+        "workload"
+      ]
+    }
+  ]
+}

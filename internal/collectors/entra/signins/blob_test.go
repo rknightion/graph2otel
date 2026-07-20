@@ -388,6 +388,164 @@ func compactJSON(t *testing.T, raw string) string {
 	return buf.String()
 }
 
+// realMISignin is a verbatim ManagedIdentitySignInLogs record pulled from the
+// live m7kni storage account on 2026-07-20 (#135) — a synthetic user-assigned
+// managed identity (g2o-misynth) signing in to Azure Resource Manager. It is the
+// live sample that retired the "deliberately absent" note in blob.go: it proves
+// the category's properties object IS the same signIn resource the other three
+// carry (id, appId, servicePrincipalId, status.errorCode, createdDateTime,
+// conditionalAccessStatus), so mapSignIn maps it unchanged. It also carries this
+// file's timestamp trap — envelope time 08:33:45 vs createdDateTime 08:31:21,
+// 144s apart — and has no user (a managed identity is not a person), plus the
+// new agent block (agentType notAgentic) Entra now stamps on every sign-in.
+const realMISignin = `{
+  "time": "2026-07-20T08:33:45.3797573Z",
+  "resourceId": "/tenants/4b8c18bd-2f9f-4227-af55-9f1061cf9c32/providers/Microsoft.aadiam",
+  "operationName": "Sign-in activity",
+  "operationVersion": "1.0",
+  "category": "ManagedIdentitySignInLogs",
+  "tenantId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+  "resultType": "0",
+  "resultSignature": "SUCCESS",
+  "durationMs": 0,
+  "correlationId": "10a78aed-1dd5-4aa3-9fbf-eaa318c99cc4",
+  "level": "4",
+  "properties": {
+    "id": "f7d36837-9f88-41fa-89cd-dc16a7c9aa00",
+    "createdDateTime": "2026-07-20T08:31:21.3310422+00:00",
+    "userDisplayName": "",
+    "userPrincipalName": "",
+    "userId": "",
+    "agent": {"agentType": "notAgentic", "agentSubjectType": "notAgentic"},
+    "appId": "2f39d8ec-e2c9-4e60-b9ac-3aa56f1a3637",
+    "appDisplayName": "g2o-misynth-DELETE-ME",
+    "ipAddress": "",
+    "status": {"errorCode": 0},
+    "clientAppUsed": "Unknown",
+    "deviceDetail": {"deviceId": "", "operatingSystem": "Windows", "browser": "Rich Client 5.2.9.0"},
+    "correlationId": "10a78aed-1dd5-4aa3-9fbf-eaa318c99cc4",
+    "conditionalAccessStatus": "notApplied",
+    "isInteractive": false,
+    "riskLevelDuringSignIn": "none",
+    "riskState": "none",
+    "resourceDisplayName": "Azure Resource Manager",
+    "resourceId": "797f4846-ba00-4fd7-ba43-dac1f8f63013",
+    "resourceTenantId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+    "servicePrincipalName": "g2o-misynth-DELETE-ME",
+    "signInEventTypes": ["managedIdentity"],
+    "servicePrincipalId": "fa179562-7d53-49bc-b38a-c52915cf554c",
+    "userType": "Member",
+    "resourceServicePrincipalId": "18b88eda-e711-4e91-b2ea-400807c1805a",
+    "uniqueTokenIdentifier": "N2jT94if-kGJzdwWp8mqAA",
+    "resourceOwnerTenantId": "f8cdef31-a31e-4b4a-93e4-5f571e91255a"
+  }
+}`
+
+// miSpec returns the managed_identity blob spec by name, so the tests do not
+// pin a slice index that reorders when a category is added.
+func miSpec(t *testing.T) blobSpec {
+	t.Helper()
+	for _, s := range blobSpecs {
+		if s.name == "entra.signins.managed_identity.blob" {
+			return s
+		}
+	}
+	t.Fatal("managed_identity.blob spec not registered")
+	return blobSpec{}
+}
+
+// TestMapBlobManagedIdentitySignIn pins that the fourth category (#135) reuses
+// the shared mapper with no special-casing: same event name, same timestamp
+// rule (createdDateTime, not the 144s-later envelope time), the
+// service-principal identity of the managed identity, and success severity from
+// status.errorCode 0. A managed identity has no user, so no user attribute is
+// emitted.
+func TestMapBlobManagedIdentitySignIn(t *testing.T) {
+	rec := decodeBlobRecord(t, realMISignin)
+
+	ev, ok := mapBlobSignIn(rec)
+	if !ok {
+		t.Fatal("mapBlobSignIn rejected a valid managed-identity record")
+	}
+	if ev.Name != eventName {
+		t.Errorf("event name = %q, want %q", ev.Name, eventName)
+	}
+
+	want := time.Date(2026, 7, 20, 8, 31, 21, 331042200, time.UTC)
+	if !ev.Timestamp.Equal(want) {
+		t.Errorf("timestamp = %s, want %s (properties.createdDateTime, not the envelope time)",
+			ev.Timestamp.Format(time.RFC3339Nano), want.Format(time.RFC3339Nano))
+	}
+
+	wantAttrs := map[string]any{
+		"id":                        "f7d36837-9f88-41fa-89cd-dc16a7c9aa00",
+		"app_id":                    "2f39d8ec-e2c9-4e60-b9ac-3aa56f1a3637",
+		"app_display_name":          "g2o-misynth-DELETE-ME",
+		"service_principal_id":      "fa179562-7d53-49bc-b38a-c52915cf554c",
+		"service_principal_name":    "g2o-misynth-DELETE-ME",
+		"resource_display_name":     "Azure Resource Manager",
+		"conditional_access_status": "notApplied",
+	}
+	for k, v := range wantAttrs {
+		if got := ev.Attrs[k]; got != v {
+			t.Errorf("attrs[%q] = %v, want %v", k, got, v)
+		}
+	}
+
+	if ev.Severity != telemetry.SeverityInfo {
+		t.Errorf("severity = %v, want Info: a managed-identity sign-in with errorCode 0 is a success", ev.Severity)
+	}
+	if _, ok := ev.Attrs["user_principal_name"]; ok {
+		t.Error("user_principal_name is set on a managed-identity sign-in; it has no user, so empty attributes must be omitted")
+	}
+}
+
+// TestManagedIdentityConflictsWithItsPolledTwin pins that the category declares
+// its polled twin: graph2otel DOES poll managed-identity sign-ins (the beta
+// entra.signins.managed_identity stream), and the blob is a second transport for
+// the same records (overlap confirmed live 2026-07-20, 1/1 on the id). So the
+// startup conflict check (#144) must refuse running both at once — unlike
+// MicrosoftServicePrincipalSignInLogs, which has no Graph route and no twin.
+func TestManagedIdentityConflictsWithItsPolledTwin(t *testing.T) {
+	c := newBlobCollector(miSpec(t), collectors.BlobDeps{
+		TenantID: "t1",
+		Store:    checkpoint.NewStore(t.TempDir()),
+	})
+	cw := c.ConflictsWith()
+	if len(cw) != 1 || cw[0] != "entra.signins.managed_identity" {
+		t.Errorf("managed_identity.blob ConflictsWith = %v, want [entra.signins.managed_identity]", cw)
+	}
+}
+
+// TestManagedIdentityBlobCollectorDrainsEndToEnd drives the real MI collector
+// over the pinned live record through its own container prefix, catching a spec
+// wired to the wrong container — which no mapper unit test can see.
+func TestManagedIdentityBlobCollectorDrainsEndToEnd(t *testing.T) {
+	const tenant = "4b8c18bd-2f9f-4227-af55-9f1061cf9c32"
+	src := &staticSource{
+		name: "tenantId=" + tenant + "/y=2026/m=07/d=20/h=08/m=00/PT1H.json",
+		data: []byte(compactJSON(t, realMISignin) + "\r\n"),
+	}
+	rec := telemetrytest.New()
+	c := newBlobCollector(miSpec(t), collectors.BlobDeps{
+		TenantID: tenant,
+		Source:   src,
+		Store:    checkpoint.NewStore(t.TempDir()),
+		Logger:   slog.New(slog.DiscardHandler),
+	})
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	logs := rec.LogRecords()
+	if len(logs) != 1 {
+		t.Fatalf("emitted %d records, want 1 — check the managed_identity container prefix", len(logs))
+	}
+	want := time.Date(2026, 7, 20, 8, 31, 21, 331042200, time.UTC)
+	if !logs[0].Timestamp.Equal(want) {
+		t.Errorf("emitted timestamp = %s, want %s", logs[0].Timestamp.Format(time.RFC3339Nano), want.Format(time.RFC3339Nano))
+	}
+}
+
 // pageFetcherFunc adapts a plain function to logpipeline.PageFetcher, so the
 // equivalence gate below can drive the real polled engine without a Graph client.
 type pageFetcherFunc func(ctx context.Context, pageURL string) ([]map[string]any, string, error)

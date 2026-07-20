@@ -1,0 +1,14 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.feature_update_summary.devices",
+      "AttrKeys": [
+        "feature_update_version",
+        "policy_id",
+        "policy_name",
+        "update_deployment_state"
+      ]
+    }
+  ],
+  "Logs": null
+}

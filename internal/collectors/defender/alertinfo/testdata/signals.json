@@ -1,0 +1,17 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "defender.alert_info",
+      "AttrKeys": [
+        "alert_id",
+        "category",
+        "detection_source",
+        "ingest_transport",
+        "service_source",
+        "severity",
+        "title"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.quality_update_summary.devices",
+      "AttrKeys": [
+        "expedite_release_date",
+        "policy_id",
+        "policy_name",
+        "update_deployment_state"
+      ]
+    }
+  ],
+  "Logs": null
+}

@@ -64,12 +64,27 @@ type blobSpec struct {
 
 // blobSpecs is the set of sign-in categories with a mapper.
 //
-// ManagedIdentitySignInLogs is deliberately ABSENT despite being the obvious
-// fourth: its container does not exist on the verification tenant, so there is
-// no live sample to map against. The shape is very probably identical to these
-// three — and "very probably" against imagination is exactly the reasoning that
-// produced three wrong "permanent gap" verdicts on this project (#109/#100/#130).
-// It lands when a tenant emits one. See #135.
+// ManagedIdentitySignInLogs is the fourth category, added once a tenant actually
+// emitted one (#135): mapped 2026-07-20 against a live m7kni sample (a synthetic
+// user-assigned managed identity signing in to Azure Resource Manager), NOT
+// against the assumption that its shape matches the other three — "very probably
+// identical" against imagination is the reasoning that produced three wrong
+// "permanent gap" verdicts on this project (#109/#100/#130). The live record
+// settled it: properties IS the same signIn resource (id, appId,
+// servicePrincipalId, status.errorCode, createdDateTime, conditionalAccessStatus),
+// so mapSignIn and deriveSignin map it unchanged; signInEventTypes is
+// ["managedIdentity"] and there is no user block.
+//
+// It is a ".blob" category with a conflictsWith, like service_principal.blob and
+// non_interactive.blob — NOT a disjoint one like microsoft_service_principal.
+// graph2otel DOES poll managed-identity sign-ins (the beta signInEventTypes
+// stream entra.signins.managed_identity, signins.go), so this is a second
+// TRANSPORT for the same records. Overlap confirmed live 2026-07-20: the polled
+// beta stream returned the exact sign-in id (f7d36837-…) carried in the blob —
+// 1/1 (the tenant's only managed-identity sign-in). Running both ships every
+// record twice into one stream, so the pair is refused at startup (#144). By
+// default only the blob runs — the polled twin is Experimental/opt-in (the
+// filter is beta-only), the blob is on whenever blob_ingest is configured.
 //
 // Note the conflictsWith column, which is NOT uniform and must not be made so
 // (#144). The two ".blob" categories are a second transport for records their
@@ -96,6 +111,11 @@ var blobSpecs = []blobSpec{
 		name:          "entra.signins.non_interactive.blob",
 		container:     "insights-logs-noninteractiveusersigninlogs",
 		conflictsWith: []string{"entra.signins.non_interactive"},
+	},
+	{
+		name:          "entra.signins.managed_identity.blob",
+		container:     "insights-logs-managedidentitysigninlogs",
+		conflictsWith: []string{"entra.signins.managed_identity"},
 	},
 }
 
