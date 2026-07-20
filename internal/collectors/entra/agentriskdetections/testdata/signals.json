@@ -1,0 +1,23 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "entra.agent_risk_detection",
+      "AttrKeys": [
+        "agent_display_name",
+        "agent_id",
+        "detection_timing_type",
+        "id",
+        "identity_type",
+        "ingest_transport",
+        "mitre_techniques",
+        "risk_detail",
+        "risk_event_type",
+        "risk_evidence",
+        "risk_level",
+        "risk_state",
+        "source"
+      ]
+    }
+  ]
+}

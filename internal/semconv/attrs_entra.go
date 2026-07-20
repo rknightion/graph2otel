@@ -3,6 +3,8 @@ package semconv
 // Attribute keys used only by entra.* collectors.
 const (
 	AttrActivityDisplayName               = "activity_display_name"
+	AttrAgentDisplayName                  = "agent_display_name"
+	AttrAgentId                           = "agent_id"
 	AttrAgreement                         = "agreement"
 	AttrAlertCount                        = "alert_count"
 	AttrAlertIds                          = "alert_ids"
@@ -14,6 +16,7 @@ const (
 	AttrAssignedTo                        = "assigned_to"
 	AttrAssignmentType                    = "assignment_type"
 	AttrAuthenticationType                = "authentication_type"
+	AttrBlueprintId                       = "blueprint_id"
 	AttrCallerIpAddress                   = "caller_ip_address"
 	AttrChangeId                          = "change_id"
 	AttrClassification                    = "classification"
@@ -52,6 +55,7 @@ const (
 	AttrIsAdmin                           = "is_admin"
 	AttrIsAdminManaged                    = "is_admin_managed"
 	AttrIsDefault                         = "is_default"
+	AttrIsEnabled                         = "is_enabled"
 	AttrIsInitial                         = "is_initial"
 	AttrIsProcessing                      = "is_processing"
 	AttrIsReplay                          = "is_replay"
@@ -118,6 +122,7 @@ const (
 	AttrResultStatusCode                  = "result_status_code"
 	AttrRiskDetail                        = "risk_detail"
 	AttrRiskEventType                     = "risk_event_type"
+	AttrRiskEvidence                      = "risk_evidence"
 	AttrRiskLastUpdated                   = "risk_last_updated"
 	AttrRiskLevel                         = "risk_level"
 	AttrRiskLevelDuringSignIn             = "risk_level_during_sign_in"

@@ -1,0 +1,28 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.risky_agents.total",
+      "AttrKeys": [
+        "risk_level",
+        "risk_state"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "entra.risky_agent",
+      "AttrKeys": [
+        "agent_display_name",
+        "id",
+        "identity_type",
+        "is_deleted",
+        "is_enabled",
+        "is_processing",
+        "risk_detail",
+        "risk_last_updated",
+        "risk_level",
+        "risk_state"
+      ]
+    }
+  ]
+}

@@ -22,6 +22,10 @@ package collectordoc
 // directly, by path, before either of those gates runs.
 var annotations = map[string]Annotation{
 	// ---- Entra ID — snapshot collectors ----
+	"entra.agent_risk_detections": {
+		Collects: "Identity Protection Entra Agent ID (AI-agent) risk detection events — the WHY an agent identity was flagged (admin-confirmed compromise, anomalous agent activity, …), one log per detection. The agent analog of `entra.risk_detections` (users) and `entra.service_principal_risk_detections` (workload identities); log-shaped, the agent-risk STATE gauge ships via `entra.risky_agents`. Beta/Experimental, ungated (200/empty or 403 where the feature is absent)",
+		Source:   "`/beta/identityProtection/agentRiskDetections`",
+	},
 	"entra.agreements": {
 		Collects: "Terms of Use agreements + acceptance state",
 		Source:   "`/agreements`, `/agreements/{id}/acceptances`",
@@ -82,6 +86,10 @@ var annotations = map[string]Annotation{
 		Collects: "Current risky-users and risky-service-principals counts, with a log twin per risky entity. The risky-users gauge is reconciled against the directory's deleted-items tombstones so a deleted-but-once-risky user is not counted forever (#155); the twin keeps the entity, marked with a reliable `is_deleted`",
 		Source:   "`/identityProtection/riskyUsers`, `/identityProtection/riskyServicePrincipals`, `/directory/deletedItems/microsoft.graph.user`",
 		Gating:   "risky users need `entra_p2`, risky SPs need `workload_identities_premium` — two INDEPENDENT partial gates checked inside Collect() against the tenant's capabilities, so each half runs and emits only if its own capability is present; neither is declared as a whole-collector requirement",
+	},
+	"entra.risky_agents": {
+		Collects: "Current risky Entra Agent ID (AI-agent) identity counts by risk level and state, with a log twin per risky agent (id, agentDisplayName, riskDetail, the enabled/deleted/processing flags). The STATE feed behind `entra.agent_risk_detections`; the agent analog of `entra.risk`. Beta/Experimental, ungated (polls unconditionally; 200/empty or 403 where the feature is absent — a license gate would hide it on tenants where the endpoint works)",
+		Source:   "`/beta/identityProtection/riskyAgents`",
 	},
 	"entra.risky_users": {
 		Collects: "Blob transport for the risky-USER twin (#135-C): the `RiskyUsers` diagnostic-settings category, emitting the same `entra.risky_user` records the polled `entra.risk` twin would (reuses `logTwin`), bound to `riskLastUpdatedDateTime`. Log-only — a separate collector, NOT a source swap: `entra.risk` keeps polling for its bounded (riskLevel, riskState) gauge, and the composition root suppresses only its per-entity twin while this runs (keep-gauges/suppress-twin, blob twin XOR polled twin). Dodges the Identity Protection 1 req/s per-tenant ceiling for the per-entity stream",
