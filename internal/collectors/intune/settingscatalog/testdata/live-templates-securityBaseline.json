@@ -3,6 +3,71 @@
   "value": [
     {
       "@odata.type": "#microsoft.graph.securityBaselineTemplate",
+      "description": "Windows 365 settings as recommended by Microsoft",
+      "displayName": "Windows 365 Security Baseline",
+      "id": "cef15778-c3b9-4d53-a00a-042929f0aad0",
+      "intentCount": 0,
+      "isDeprecated": false,
+      "platformType": "windows10AndLater",
+      "publishedDateTime": "2021-10-21T00:00:00Z",
+      "templateSubtype": "none",
+      "templateType": "cloudPC",
+      "versionInfo": "November 2021"
+    },
+    {
+      "@odata.type": "#microsoft.graph.securityBaselineTemplate",
+      "description": "Microsoft Defender for Endpoint baseline as recommended by Microsoft",
+      "displayName": "Microsoft Defender for Endpoint baseline",
+      "id": "2209e067-9c8c-462e-9981-5a8c79165dcc",
+      "intentCount": 0,
+      "isDeprecated": false,
+      "platformType": "windows10AndLater",
+      "publishedDateTime": "2020-12-09T00:00:00Z",
+      "templateSubtype": "none",
+      "templateType": "advancedThreatProtectionSecurityBaseline",
+      "versionInfo": "Version 6"
+    },
+    {
+      "@odata.type": "#microsoft.graph.securityBaselineTemplate",
+      "description": "BitLocker Drive Encryption is a data protection feature that integrates with the operating system and addresses the threats of data theft or exposure from lost, stolen, or inappropriately decommissioned computers. Did you know?  You can view the encryption status of all managed devices in the Encryption report (Devices - Monitor - Encryption Report) .   This includes status of encryption on the device, encryption readiness and any prerequisites missing or errors related to encryption on devices. ",
+      "displayName": "BitLocker",
+      "id": "d1174162-1dd2-4976-affc-6667049ab0ae",
+      "intentCount": 0,
+      "isDeprecated": false,
+      "platformType": "windows10AndLater",
+      "publishedDateTime": "2021-06-04T00:00:00Z",
+      "templateSubtype": "diskEncryption",
+      "templateType": "securityTemplate",
+      "versionInfo": "2106"
+    },
+    {
+      "@odata.type": "#microsoft.graph.securityBaselineTemplate",
+      "description": "Microsoft Defender for Endpoint endpoint detection and response capabilities provide advanced attack detections that are near real-time and actionable. Security analysts can prioritize alerts effectively, gain visibility into the full scope of a breach, and take response actions to remediate threats.",
+      "displayName": "Endpoint detection and response",
+      "id": "e44c2ca3-2f9a-400a-a113-6cc88efd773d",
+      "intentCount": 0,
+      "isDeprecated": false,
+      "platformType": "windows10AndLater",
+      "publishedDateTime": "2019-09-20T00:00:00Z",
+      "templateSubtype": "endpointDetectionReponse",
+      "templateType": "securityTemplate",
+      "versionInfo": "2005"
+    },
+    {
+      "@odata.type": "#microsoft.graph.securityBaselineTemplate",
+      "description": "Microsoft recommended settings for Microsoft Edge",
+      "displayName": "Microsoft Edge baseline",
+      "id": "a8d6fa0e-1e66-455b-bb51-8ce0dde1559e",
+      "intentCount": 0,
+      "isDeprecated": false,
+      "platformType": "windows10AndLater",
+      "publishedDateTime": "2020-10-01T00:00:00Z",
+      "templateSubtype": "none",
+      "templateType": "microsoftEdgeSecurityBaseline",
+      "versionInfo": "September 2020 (Edge version 85 and later)"
+    },
+    {
+      "@odata.type": "#microsoft.graph.securityBaselineTemplate",
       "description": "MDM Security Baseline for Windows 10 and later",
       "displayName": "MDM Security Baseline for Windows 10 and later for November 2021",
       "id": "034ccd46-190c-4afc-adf1-ad7cc11262eb",
@@ -13,6 +78,19 @@
       "templateSubtype": "none",
       "templateType": "securityBaseline",
       "versionInfo": "November 2021"
+    },
+    {
+      "@odata.type": "#microsoft.graph.securityBaselineTemplate",
+      "description": "Application control can help mitigate security threats by restricting the applications that users are allowed to run and the code that runs in the System Core (kernel). Application control policies can also block unsigned scripts and MSIs, and restrict Windows PowerShell to run in Constrained Language Mode. ",
+      "displayName": "Application control",
+      "id": "63be6324-e3c9-4c97-948a-e7f4b96f0f20",
+      "intentCount": 0,
+      "isDeprecated": false,
+      "platformType": "windows10AndLater",
+      "publishedDateTime": "2019-09-20T00:00:00Z",
+      "templateSubtype": "attackSurfaceReduction",
+      "templateType": "securityTemplate",
+      "versionInfo": "2005"
     }
   ]
 }

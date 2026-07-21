@@ -67,9 +67,28 @@ const (
 const betaBaseURL = "https://graph.microsoft.com/beta"
 
 // securityBaselineFilter isolates security-baseline templates from the
-// templates collection, which also holds non-baseline template types under
-// the same templateType enum.
-const securityBaselineFilter = "templateType eq 'securityBaseline'"
+// templates collection, which also holds non-baseline template types.
+//
+// It filters on the TYPE, not on templateType (#223). "Security baseline" is
+// not one templateType value — it is an inheritance: seven templates on the
+// reference tenant are securityBaselineTemplate instances, spread across five
+// distinct templateType values (securityBaseline, advancedThreatProtection-
+// SecurityBaseline, microsoftEdgeSecurityBaseline, cloudPC, and three under
+// securityTemplate). The previous `templateType eq 'securityBaseline'` matched
+// exactly ONE of the seven and silently ignored the rest.
+//
+// isof() is also the definition that matches the request being made: the
+// deviceStateSummary sub-fetch casts to microsoft.graph.securityBaselineTemplate,
+// so the set that can answer it IS the set of instances of that type. Filtering
+// on an enumerated list of templateType values would re-rot the moment Microsoft
+// adds a baseline flavor — this cannot.
+//
+// Live-verified 2026-07-21 as graph2otel-poller: the filter returns 200 with 7
+// templates, and every one answers 200 on the cast deviceStateSummary path with
+// the same six-field shape. The collection-level cast
+// (.../templates/microsoft.graph.securityBaselineTemplate) does NOT work —
+// 400 "No OData route exists ... ~/singleton/navigation/cast".
+const securityBaselineFilter = "isof('microsoft.graph.securityBaselineTemplate')"
 
 // Collector polls Settings Catalog configurationPolicies, template-based
 // intents, and security-baseline templates.

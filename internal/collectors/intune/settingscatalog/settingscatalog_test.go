@@ -3,6 +3,7 @@ package settingscatalog
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -43,7 +44,10 @@ const base = "https://graph.microsoft.com/beta"
 const (
 	configPoliciesURL = base + "/deviceManagement/configurationPolicies"
 	intentsURL        = base + "/deviceManagement/intents"
-	baselinesURL      = base + "/deviceManagement/templates?$filter=templateType%20eq%20%27securityBaseline%27"
+	// Filtered by TYPE, not templateType (#223): "security baseline" is an
+	// inheritance spread across five templateType values, and the old
+	// templateType filter matched 1 of the 7 real baselines.
+	baselinesURL = base + "/deviceManagement/templates?$filter=isof%28%27microsoft.graph.securityBaselineTemplate%27%29"
 )
 
 func intentSummaryURL(id string) string {
@@ -392,11 +396,6 @@ var (
 // verbatim page-1 body to drop its nextLink.
 const configPoliciesNextLink = "https://graph.microsoft.com/beta/deviceManagement/configurationPolicies?$skiptoken=%255Bcosmosdb%255D%255B%257B%2522compositeToken%2522%253A%257B%2522token%2522%253Anull%252C%2522range%2522%253A%257B%2522min%2522%253A%2522033E6C6FD4E03029BD670DBC28A0E77A%2522%252C%2522max%2522%253A%252206C46D1EDD04AA76D43667BE6AA13245%2522%257D%257D%252C%2522resumeValues%2522%253A%255B%2522macos%2520defender%2520dlp%2522%255D%252C%2522rid%2522%253A%2522z2oNAPrcMybcKBUAAACAAw%253D%253D%2522%252C%2522skipCount%2522%253A1%257D%255D"
 
-// liveSecurityBaselineTemplateID is the id of the one securityBaseline template
-// the tenant returned ("MDM Security Baseline for Windows 10 and later for
-// November 2021").
-const liveSecurityBaselineTemplateID = "034ccd46-190c-4afc-adf1-ad7cc11262eb"
-
 // TestCollectAgainstLiveCaptures drives the VERBATIM live captures through the
 // real Collect path.
 //
@@ -409,9 +408,7 @@ const liveSecurityBaselineTemplateID = "034ccd46-190c-4afc-adf1-ad7cc11262eb"
 //     the templateReference.templateFamily=="none"/templateId=="" row, which
 //     must land in a "none" family bucket, not crash on the empty templateId;
 //   - the empty intents page emits present-but-empty intent metrics;
-//   - the one securityBaseline template's deviceStateSummary answers HTTP 400
-//     with a not-found-segment body, so its device-state gauge is skipped
-//     (per-item), and Collect still succeeds.
+//   - all SEVEN security-baseline templates emit a full six-state gauge set.
 func TestCollectAgainstLiveCaptures(t *testing.T) {
 	bodies := map[string]string{
 		configPoliciesURL:      liveConfigPolicies,
@@ -419,11 +416,16 @@ func TestCollectAgainstLiveCaptures(t *testing.T) {
 		intentsURL:             liveIntentsEmpty,
 		baselinesURL:           liveTemplatesBaseline,
 	}
-	// The baseline summary answers 200 on the CAST path (#222), re-captured
-	// verbatim 2026-07-21. The uncast path — what this collector used to send —
-	// still 400s, and testdata/live-template-deviceStateSummary-400.json keeps
-	// that response as the pinned evidence of the defect.
-	bodies[baselineSummaryURL(liveSecurityBaselineTemplateID)] = liveTemplateSummary200
+	// Serve every baseline id the live capture lists. All seven answered 200 on
+	// the cast path with a byte-identical body apart from the id (live-probed
+	// 2026-07-21), so the one verbatim capture stands in for each — driving the
+	// ids off the fixture rather than a hand-typed list means this test grows a
+	// baseline whenever the recapture does. The uncast path still 400s, and
+	// testdata/live-template-deviceStateSummary-400.json keeps that response as
+	// pinned evidence of #222.
+	for _, id := range liveBaselineTemplateIDs(t) {
+		bodies[baselineSummaryURL(id)] = liveTemplateSummary200
+	}
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
@@ -467,22 +469,70 @@ func TestCollectAgainstLiveCaptures(t *testing.T) {
 	// #222 hid for so long: a permanent zero from decoding the WRONG field names
 	// is indistinguishable from an honest zero. The assertion is therefore on
 	// the SERIES SET, not the values: six states present, one baseline.
+	// Every baseline emits all six states. Counts are genuinely 0 on this tenant
+	// (nothing is assigned), which is exactly why #222 hid for so long: a
+	// permanent zero from decoding the WRONG field names is indistinguishable
+	// from an honest zero. So the assertion is on the SERIES SET, never values.
+	//
+	// The count is load-bearing for #223: the old templateType filter matched 1
+	// of these 7, so a regression to it drops this from 42 points to 6.
+	ids := liveBaselineTemplateIDs(t)
 	basePts := rec.MetricPoints(baselineDevicesMetricName)
-	if len(basePts) != 6 {
-		t.Fatalf("baseline.devices points = %d, want 6 (one per state), got %+v", len(basePts), basePts)
+	if want := len(ids) * 6; len(basePts) != want {
+		t.Fatalf("baseline.devices points = %d, want %d (%d baselines x 6 states)", len(basePts), want, len(ids))
 	}
-	states := map[string]bool{}
+	perBaseline := map[string]map[string]bool{}
 	for _, p := range basePts {
-		states[p.Attrs["state"]] = true
-		if p.Attrs["baseline_name"] != "MDM Security Baseline for Windows 10 and later for November 2021" {
-			t.Errorf("unexpected baseline_name %q", p.Attrs["baseline_name"])
+		if perBaseline[p.Attrs["baseline_name"]] == nil {
+			perBaseline[p.Attrs["baseline_name"]] = map[string]bool{}
+		}
+		perBaseline[p.Attrs["baseline_name"]][p.Attrs["state"]] = true
+	}
+	if len(perBaseline) != len(ids) {
+		t.Errorf("got %d distinct baselines, want %d: %v", len(perBaseline), len(ids), perBaseline)
+	}
+	// The Defender and Edge baselines carry non-'securityBaseline' templateTypes
+	// and were the ones the old filter silently dropped (#223) — name them so a
+	// regression fails loudly rather than just changing a count.
+	for _, name := range []string{
+		"Microsoft Defender for Endpoint baseline",
+		"Microsoft Edge baseline",
+		"MDM Security Baseline for Windows 10 and later for November 2021",
+	} {
+		if perBaseline[name] == nil {
+			t.Errorf("baseline %q emitted no series (the #223 filter regression)", name)
 		}
 	}
-	for _, want := range []string{"secure", "not_secure", "error", "conflict", "not_applicable", "unknown"} {
-		if !states[want] {
-			t.Errorf("baseline.devices missing state %q; got %v", want, states)
+	for name, states := range perBaseline {
+		for _, want := range []string{"secure", "not_secure", "error", "conflict", "not_applicable", "unknown"} {
+			if !states[want] {
+				t.Errorf("baseline %q missing state %q; got %v", name, want, states)
+			}
 		}
 	}
+}
+
+// liveBaselineTemplateIDs reads the template ids straight out of the verbatim
+// live capture, so the live test covers whatever the recapture actually
+// contains rather than a list that can drift away from it.
+func liveBaselineTemplateIDs(t *testing.T) []string {
+	t.Helper()
+	var page struct {
+		Value []struct {
+			ID string `json:"id"`
+		} `json:"value"`
+	}
+	if err := json.Unmarshal([]byte(liveTemplatesBaseline), &page); err != nil {
+		t.Fatalf("decode live templates capture: %v", err)
+	}
+	ids := make([]string, 0, len(page.Value))
+	for _, v := range page.Value {
+		ids = append(ids, v.ID)
+	}
+	if len(ids) == 0 {
+		t.Fatal("live templates capture contains no templates")
+	}
+	return ids
 }
 
 func TestCollectSkipsSummaryNotFoundSegmentWithoutFailing(t *testing.T) {
