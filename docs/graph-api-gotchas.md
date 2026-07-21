@@ -28,6 +28,36 @@ issue. Do not record correction narratives here — those live on the issues.
   - Identity Protection: **500** `[live, M3]` — `"Invalid page size specified: '1000'"`.
   - `/security/incidents`: **50** `[live 2026-07-16, #109]`.
   Check for a page-size ceiling whenever a paged collector 400s.
+- **Two Endpoint Analytics segments reject `$top` ENTIRELY — there is no ceiling to stay
+  under** `[live-measured 2026-07-21, #199/#225]`. This is a distinct trap from the ceilings
+  above, and the more dangerous one, because the natural fix (lower the page size) never works:
+
+  | segment | bare list | `$top=5` / `50` / `200` | `$count=true` | `$orderby` |
+  | --- | --- | --- | --- | --- |
+  | `userExperienceAnalyticsDeviceStartupProcesses` | **200, rows** | **400** | 400 | 200 |
+  | `userExperienceAnalyticsDeviceStartupHistory` | **200, rows** | **500** | 500 | 500 |
+
+  Note the two answer with **different status codes for the same cause**, so a 500 from
+  `DeviceStartupHistory` is not a transient Graph fault — do not retry it, drop the parameter.
+  No shipped collector is exposed: `collectors.GetAllValues` paginates with the
+  `Prefer: odata.maxpagesize` header and never emits `$top`. Any new collector that reaches
+  for `$top` on a UXA segment would be.
+
+  **This cost a real false verdict.** A probe of `DeviceStartupProcesses` carried `?$top=5`,
+  got the 400, and the segment was recorded on #199 as "400 on a plain list on both versions;
+  needs a device-scoped route that has not been resolved" — a route problem attributed to a
+  tenant that in fact returns rows. Along with #222 and the `hardwareInformation` list-vs-single
+  stub, that is three verdicts in one week where a malformed request degraded into a plausible
+  empty-or-error result and got written down as a fact about the tenant. **Before parking
+  anything as blocked-on-data, vary the request shape first** — bare vs `$select` vs `$top`
+  vs single-entity vs cast segment — and only then attribute the emptiness to the tenant.
+- **`hardwareInformation` is a STUB on a list GET and only materializes on a single-entity
+  GET** `[live-measured 2026-07-21, #199]`. `GET /beta/deviceManagement/managedDevices?$select=hardwareInformation`
+  returns all 40 keys with 6-8 populated; `GET .../managedDevices/{id}?$select=hardwareInformation`
+  returns 16-21. `$expand` is rejected ("Property 'hardwareInformation' … not expandable") and
+  `$filter=id eq '…'` on that collection 400s. **`$batch` is the escape hatch** — 20 sub-requests
+  per POST, every sub-response fully populated — which is what makes `intune.hardware_inventory`
+  affordable. The property does not exist on the v1.0 type at all.
 - **`$select=keyCredentials` on a collection GET is throttled ~150 req/min per tenant**
   `[live, M2]` — tighter than the general directory ceiling. Keep `$select` minimal when
   paging `/applications` + `/servicePrincipals`.
