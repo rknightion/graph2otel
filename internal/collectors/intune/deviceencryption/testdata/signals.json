@@ -28,7 +28,7 @@
         "encryption_state",
         "file_vault_states",
         "os_version",
-        "tpm_version",
+        "tpm_specification_version",
         "user_principal_name"
       ]
     }

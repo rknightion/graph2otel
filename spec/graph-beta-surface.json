@@ -198,6 +198,22 @@
       ]
     },
     {
+      "package": "internal/collectors/intune/hardwareinventory",
+      "collectors": [
+        "intune.hardware_inventory"
+      ],
+      "operations": [
+        {
+          "path": "/deviceManagement/managedDevices",
+          "note": "the id-listing page walk only; hardwareInformation is a near-empty stub on this list form (live-measured 2026-07-21)"
+        },
+        {
+          "path": "/deviceManagement/managedDevices/{id}",
+          "note": "the single-entity GET is the only shape that populates hardwareInformation. It is delivered as a sub-request inside POST /$batch (20 per call); $batch itself is a transport envelope with no EDM binding, so the sub-request path is what the canary watches"
+        }
+      ]
+    },
+    {
       "package": "internal/collectors/intune/endpointanalytics",
       "collectors": [
         "intune.endpoint_analytics"

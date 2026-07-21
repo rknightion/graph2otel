@@ -1,0 +1,65 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.hardware_inventory.device_guard_devices",
+      "AttrKeys": [
+        "credential_guard_state",
+        "vbs_state"
+      ]
+    },
+    {
+      "Name": "intune.hardware_inventory.devices",
+      "AttrKeys": [
+        "manufacturer",
+        "operating_system"
+      ]
+    },
+    {
+      "Name": "intune.hardware_inventory.storage_bytes",
+      "AttrKeys": [
+        "operating_system",
+        "storage_state"
+      ]
+    },
+    {
+      "Name": "intune.hardware_inventory.tpm_devices",
+      "AttrKeys": [
+        "tpm_specification_version"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.device_hardware",
+      "AttrKeys": [
+        "battery_level_percentage",
+        "cellular_technology",
+        "credential_guard_state",
+        "device_guard_hardware_requirement_state",
+        "device_id",
+        "device_licensing_status",
+        "device_name",
+        "esim_identifier",
+        "free_storage_bytes",
+        "imei",
+        "is_shared_device",
+        "is_supervised",
+        "manufacturer",
+        "operating_system",
+        "operating_system_edition",
+        "operating_system_language",
+        "operating_system_product_type",
+        "phone_number",
+        "product_name",
+        "subscriber_carrier",
+        "system_management_bios_version",
+        "total_storage_bytes",
+        "tpm_manufacturer",
+        "tpm_specification_version",
+        "tpm_version",
+        "vbs_state",
+        "wired_ipv4_addresses"
+      ]
+    }
+  ]
+}

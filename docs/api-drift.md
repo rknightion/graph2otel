@@ -23,14 +23,14 @@ tool is beta-specific except the default `metadata_url`.
 
 ## Coverage
 
-17 packages, 19 collectors, 59 beta operations. The authoritative list is
+19 packages, 21 collectors, 62 beta operations. The authoritative list is
 `spec/graph-beta-surface.json`; `TestBetaDriftDocNamesEveryWatchedCollector` fails if a
 collector listed there stops being named below.
 
 | domain | collectors |
 | --- | --- |
 | Entra ID | `entra.agent_risk_detections`, `entra.recommendations`, `entra.risky_agents`, `entra.signin_activity`, `entra.signins.non_interactive`, `entra.signins.service_principal`, `entra.signins.managed_identity` |
-| Intune | `intune.apple_tokens`, `intune.autopilot`, `intune.autopilot_events`, `intune.certificates`, `intune.connectors`, `intune.device_encryption`, `intune.endpoint_analytics`, `intune.gpo_analytics`, `intune.remediation_run_states`, `intune.scripts`, `intune.settings_catalog`, `intune.updates` |
+| Intune | `intune.apple_tokens`, `intune.autopilot`, `intune.autopilot_events`, `intune.certificates`, `intune.connectors`, `intune.device_encryption`, `intune.endpoint_analytics`, `intune.gpo_analytics`, `intune.hardware_inventory`, `intune.remediation_run_states`, `intune.scripts`, `intune.settings_catalog`, `intune.updates` |
 | M365 | `m365.unified_audit` |
 
 Not covered, and not a gap in this canary: `mdca.discovery_parse` reaches the legacy

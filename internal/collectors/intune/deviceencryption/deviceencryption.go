@@ -206,7 +206,14 @@ func twin(st encryptionState) telemetry.Event {
 	telemetry.SetStr(attrs, semconv.AttrUserPrincipalName, st.UserPrincipalName)
 	telemetry.SetStr(attrs, semconv.AttrDeviceType, st.DeviceType)
 	telemetry.SetStr(attrs, semconv.AttrOsVersion, st.OSVersion)
-	telemetry.SetStr(attrs, semconv.AttrTpmVersion, st.TPMSpecificationVersion)
+	// tpm_specification_version, NOT tpm_version: the wire field is
+	// tpmSpecificationVersion (a comma-joined triple like "2.0, 0, 1.16"), and
+	// intune.hardware_inventory carries the chip's own firmware version under
+	// tpm_version. Emitting the spec version under tpm_version here meant one
+	// attribute key held two different things depending on which collector wrote
+	// the record, so a query filtering on it silently matched the wrong shape on
+	// one of them (#225).
+	telemetry.SetStr(attrs, semconv.AttrTpmSpecificationVersion, st.TPMSpecificationVersion)
 	telemetry.SetStr(attrs, semconv.AttrEncryptionState, st.EncryptionState)
 	telemetry.SetStr(attrs, semconv.AttrEncryptionReadinessState, st.EncryptionReadinessState)
 	telemetry.SetStr(attrs, semconv.AttrEncryptionPolicySettingState, st.EncryptionPolicySettingState)

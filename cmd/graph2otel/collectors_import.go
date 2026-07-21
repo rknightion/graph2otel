@@ -92,6 +92,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/featureupdatesummary"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/firewallstatus"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/gpoanalytics"
+	_ "github.com/rknightion/graph2otel/internal/collectors/intune/hardwareinventory"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/malware"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/manageddevices"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/mobileapps"

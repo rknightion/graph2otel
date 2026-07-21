@@ -142,7 +142,7 @@ func TestPerEntityFieldsNeverBecomeMetricLabels(t *testing.T) {
 		semconv.AttrDeviceName:              true,
 		semconv.AttrUserPrincipalName:       true,
 		semconv.AttrOsVersion:               true,
-		semconv.AttrTpmVersion:              true,
+		semconv.AttrTpmSpecificationVersion: true,
 		semconv.AttrAdvancedBitlockerStates: true,
 		semconv.AttrFileVaultStates:         true,
 	}
@@ -188,7 +188,7 @@ func TestUnencryptedDeviceTwinIsWarnAndCarriesBlockers(t *testing.T) {
 		semconv.AttrUserPrincipalName:            "rob@m7kni.io",
 		semconv.AttrOsVersion:                    "10.0.26200.8875",
 		semconv.AttrDeviceType:                   "windowsRT",
-		semconv.AttrTpmVersion:                   "2.0",
+		semconv.AttrTpmSpecificationVersion:      "2.0",
 		semconv.AttrEncryptionState:              "notEncrypted",
 		semconv.AttrEncryptionReadinessState:     "ready",
 		semconv.AttrEncryptionPolicySettingState: "notAssigned",
@@ -212,7 +212,7 @@ func TestEncryptedDeviceTwinIsInfoAndOmitsAbsentFields(t *testing.T) {
 		t.Errorf("device_type = %q, want the verbatim wire enum macMDM (#142)", tw.Attrs[semconv.AttrDeviceType])
 	}
 	// Nulls on the wire must be omitted, never emitted as "".
-	for _, k := range []string{semconv.AttrTpmVersion, semconv.AttrAdvancedBitlockerStates, semconv.AttrFileVaultStates} {
+	for _, k := range []string{semconv.AttrTpmSpecificationVersion, semconv.AttrAdvancedBitlockerStates, semconv.AttrFileVaultStates} {
 		if _, ok := tw.Attrs[k]; ok {
 			t.Errorf("attribute %q present for a null wire value: %q", k, tw.Attrs[k])
 		}

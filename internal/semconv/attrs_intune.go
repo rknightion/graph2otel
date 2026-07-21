@@ -405,3 +405,56 @@ const (
 	AttrResourcePerformanceScore = "resource_performance_score"
 	AttrTotalRamMb               = "total_ram_mb"
 )
+
+// Attribute keys for intune.hardware_inventory (#199) — the per-device
+// `hardwareInformation` complex type, which exists ONLY on the beta managedDevice
+// and only materializes on a SINGLE-ENTITY GET (the list form returns a stub).
+// Every value here is live-captured from the beta wire via $batch (probed as
+// graph2otel-poller 2026-07-21 on m7kni), not a doc placeholder.
+//
+// Only four of these are metric labels — AttrTpmSpecificationVersion,
+// AttrVbsState, AttrCredentialGuardState and AttrStorageState — and each is a
+// bounded wire enum or a per-fleet-constant version triple. Everything else is
+// per-entity (storage bytes, TPM instance version, wired IPs, cellular identity)
+// and rides the intune.device_hardware log twin only (#112/#114).
+//
+// device_id / device_name / operating_system / manufacturer / product_name /
+// tpm_version / tpm_manufacturer are reused from above rather than redeclared —
+// one key, one constant.
+const (
+	AttrBatteryChargeCycles                 = "battery_charge_cycles"
+	AttrBatteryHealthPercentage             = "battery_health_percentage"
+	AttrBatteryLevelPercentage              = "battery_level_percentage"
+	AttrCellularTechnology                  = "cellular_technology"
+	AttrCredentialGuardState                = "credential_guard_state"
+	AttrDeviceGuardHardwareRequirementState = "device_guard_hardware_requirement_state"
+	AttrDeviceLicensingStatus               = "device_licensing_status"
+	AttrEsimIdentifier                      = "esim_identifier"
+	AttrFreeStorageBytes                    = "free_storage_bytes"
+	AttrImei                                = "imei"
+	AttrIsSharedDevice                      = "is_shared_device"
+	AttrIsSupervised                        = "is_supervised"
+	AttrOperatingSystemEdition              = "operating_system_edition"
+	AttrOperatingSystemLanguage             = "operating_system_language"
+	AttrOperatingSystemProductType          = "operating_system_product_type"
+	AttrPhoneNumber                         = "phone_number"
+	AttrStorageState                        = "storage_state"
+	AttrSubscriberCarrier                   = "subscriber_carrier"
+	AttrSystemManagementBiosVersion         = "system_management_bios_version"
+	// AttrTpmSpecificationVersion is DISTINCT from AttrTpmVersion. The wire
+	// carries both, and they are not the same thing: the specification version is
+	// a comma-joined triple ("2.0, 0, 1.64") that is constant across a fleet's TPM
+	// revisions — bounded, so it is the gauge's label — while tpmVersion is the
+	// chip's own firmware version ("8217.4131.22.13878"), per-entity and twin-only.
+	AttrTpmSpecificationVersion = "tpm_specification_version"
+	AttrTotalStorageBytes       = "total_storage_bytes"
+	AttrVbsState                = "vbs_state"
+	AttrWiredIpv4Addresses      = "wired_ipv4_addresses"
+)
+
+// Storage-state values for AttrStorageState: the two series
+// intune.hardware_inventory.storage_bytes emits per operating system.
+const (
+	StorageStateTotal = "total"
+	StorageStateFree  = "free"
+)

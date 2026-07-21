@@ -472,6 +472,12 @@ var annotations = map[string]Annotation{
 		Gating:   "read-only `DeviceManagementManagedDevices.Read.All`; beta endpoint, so opt-in via explicit enable",
 	},
 
+	"intune.hardware_inventory": {
+		Collects: "Per-device HARDWARE inventory — disk capacity and free space, TPM chip identity (specification triple, manufacturer, firmware version), system firmware/BIOS version, Windows Device Guard VBS + Credential Guard state, OS edition/product type/language, device licensing status, battery level, wired IPv4 addresses, and mobile identity (IMEI, eSIM, phone number, carrier). `hardwareInformation` exists only on the BETA managedDevice type and materializes only on a SINGLE-ENTITY GET — the list form returns a near-empty stub and `$expand` is rejected — so the fleet is swept through `POST /$batch` in chunks of 20, costing `1 + ceil(N/20)` requests per cycle (the most expensive fetch shape in graph2otel, which is why the interval is 24h: Intune refreshes hardware inventory on a multi-day cycle). Deliberately does NOT re-emit what `intune.devices` already carries (serial, model, wifi MAC, isEncrypted, UPN) — device id and name ride the twin purely as the join key back to `intune.managed_device`. Wire traps handled explicitly: `batteryHealthPercentage`/`batteryChargeCycles` read 0 on every device including working laptops (0 = \"not reported\", attribute omitted), `totalStorageSpace`=0 on a running Linux host is likewise excluded rather than summed as zero, `deviceGuard*` reports Windows-only values on macOS/iOS/Linux and is emitted verbatim (never a non-Windows security posture), and `tpmSpecificationVersion` is a comma-joined triple (`2.0, 0, 1.64`), not a version number",
+		Source:   "`GET /deviceManagement/managedDevices` for ids, then `POST /$batch` of `GET /deviceManagement/managedDevices/{id}?$select=hardwareInformation` in chunks of 20 (beta — v1.0 has no `hardwareInformation` property)",
+		Gating:   "read-only `DeviceManagementManagedDevices.Read.All`; beta-only property, so opt-in via explicit enable",
+	},
+
 	// ---- Intune — window collectors ----
 	"intune.audit_events": {
 		Collects: "Intune audit events. Emits the NAMES of changed `modifiedProperties` but never their old/new values, which can carry credentials and certificates — the one genuine content exclusion in graph2otel",

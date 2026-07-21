@@ -192,6 +192,16 @@
       "resolution": "model"
     },
     {
+      "path": "/deviceManagement/managedDevices",
+      "type": "microsoft.graph.managedDevice",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/managedDevices/{id}",
+      "type": "microsoft.graph.managedDevice",
+      "resolution": "model"
+    },
+    {
       "path": "/deviceManagement/ndesConnectors",
       "type": "microsoft.graph.ndesConnector",
       "resolution": "model"
@@ -533,6 +543,29 @@
         "years"
       ]
     },
+    "microsoft.graph.chassisType": {
+      "kind": "EnumType",
+      "members": [
+        "desktop",
+        "enterpriseServer",
+        "laptop",
+        "mobileOther",
+        "mobileUnknown",
+        "phone",
+        "tablet",
+        "unknown",
+        "worksWorkstation"
+      ]
+    },
+    "microsoft.graph.chromeOSDeviceProperty": {
+      "kind": "ComplexType",
+      "properties": {
+        "name": "Edm.String",
+        "updatable": "Edm.Boolean",
+        "value": "Edm.String",
+        "valueType": "Edm.String"
+      }
+    },
     "microsoft.graph.clientCredentialType": {
       "kind": "EnumType",
       "members": [
@@ -543,6 +576,31 @@
         "managedIdentity",
         "none",
         "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.cloudPcRemoteActionResult": {
+      "kind": "ComplexType",
+      "properties": {
+        "actionName": "Edm.String",
+        "actionState": "microsoft.graph.actionState",
+        "cloudPcId": "Edm.String",
+        "lastUpdatedDateTime": "Edm.DateTimeOffset",
+        "managedDeviceId": "Edm.String",
+        "startDateTime": "Edm.DateTimeOffset",
+        "statusDetail": "microsoft.graph.cloudPcStatusDetail",
+        "statusDetails": "microsoft.graph.cloudPcStatusDetails"
+      }
+    },
+    "microsoft.graph.complianceState": {
+      "kind": "EnumType",
+      "members": [
+        "compliant",
+        "configManager",
+        "conflict",
+        "error",
+        "inGracePeriod",
+        "noncompliant",
+        "unknown"
       ]
     },
     "microsoft.graph.complianceStatus": {
@@ -566,6 +624,35 @@
         "success",
         "unknownFutureValue"
       ]
+    },
+    "microsoft.graph.configurationManagerClientEnabledFeatures": {
+      "kind": "ComplexType",
+      "properties": {
+        "compliancePolicy": "Edm.Boolean",
+        "deviceConfiguration": "Edm.Boolean",
+        "endpointProtection": "Edm.Boolean",
+        "inventory": "Edm.Boolean",
+        "modernApps": "Edm.Boolean",
+        "officeApps": "Edm.Boolean",
+        "resourceAccess": "Edm.Boolean",
+        "windowsUpdateForBusiness": "Edm.Boolean"
+      }
+    },
+    "microsoft.graph.configurationManagerClientHealthState": {
+      "kind": "ComplexType",
+      "properties": {
+        "errorCode": "Edm.Int32",
+        "lastSyncDateTime": "Edm.DateTimeOffset",
+        "state": "microsoft.graph.configurationManagerClientState"
+      }
+    },
+    "microsoft.graph.configurationManagerClientInformation": {
+      "kind": "ComplexType",
+      "properties": {
+        "clientIdentifier": "Edm.String",
+        "clientVersion": "Edm.String",
+        "isBlocked": "Edm.Boolean"
+      }
     },
     "microsoft.graph.depOnboardingSetting": {
       "kind": "EntityType",
@@ -600,6 +687,15 @@
         "dep",
         "none"
       ]
+    },
+    "microsoft.graph.deviceActionResult": {
+      "kind": "ComplexType",
+      "properties": {
+        "actionName": "Edm.String",
+        "actionState": "microsoft.graph.actionState",
+        "lastUpdatedDateTime": "Edm.DateTimeOffset",
+        "startDateTime": "Edm.DateTimeOffset"
+      }
     },
     "microsoft.graph.deviceAndAppManagementAssignmentSource": {
       "kind": "EnumType",
@@ -651,6 +747,75 @@
         "isManaged": "Edm.Boolean",
         "operatingSystem": "Edm.String",
         "trustType": "Edm.String"
+      }
+    },
+    "microsoft.graph.deviceEnrollmentType": {
+      "kind": "EnumType",
+      "members": [
+        "androidAOSPUserOwnedDeviceEnrollment",
+        "androidAOSPUserlessDeviceEnrollment",
+        "androidEnterpriseCorporateWorkProfile",
+        "androidEnterpriseDedicatedDevice",
+        "androidEnterpriseFullyManaged",
+        "appleAccountDrivenUserEnrollment",
+        "appleBulkWithUser",
+        "appleBulkWithoutUser",
+        "appleUserEnrollment",
+        "appleUserEnrollmentWithServiceAccount",
+        "azureAdJoinUsingAzureVmExtension",
+        "deviceEnrollmentManager",
+        "unknown",
+        "unknownFutureValue",
+        "userEnrollment",
+        "windowsAutoEnrollment",
+        "windowsAzureADJoin",
+        "windowsAzureADJoinUsingDeviceAuth",
+        "windowsBulkAzureDomainJoin",
+        "windowsBulkUserless",
+        "windowsCoManagement"
+      ]
+    },
+    "microsoft.graph.deviceHealthAttestationState": {
+      "kind": "ComplexType",
+      "properties": {
+        "attestationIdentityKey": "Edm.String",
+        "bitLockerStatus": "Edm.String",
+        "bootAppSecurityVersion": "Edm.String",
+        "bootDebugging": "Edm.String",
+        "bootManagerSecurityVersion": "Edm.String",
+        "bootManagerVersion": "Edm.String",
+        "bootRevisionListInfo": "Edm.String",
+        "codeIntegrity": "Edm.String",
+        "codeIntegrityCheckVersion": "Edm.String",
+        "codeIntegrityPolicy": "Edm.String",
+        "contentNamespaceUrl": "Edm.String",
+        "contentVersion": "Edm.String",
+        "dataExcutionPolicy": "Edm.String",
+        "deviceHealthAttestationStatus": "Edm.String",
+        "earlyLaunchAntiMalwareDriverProtection": "Edm.String",
+        "firmwareProtection": "microsoft.graph.firmwareProtectionType",
+        "healthAttestationSupportedStatus": "Edm.String",
+        "healthStatusMismatchInfo": "Edm.String",
+        "issuedDateTime": "Edm.DateTimeOffset",
+        "lastUpdateDateTime": "Edm.String",
+        "memoryAccessProtection": "microsoft.graph.azureAttestationSettingStatus",
+        "memoryIntegrityProtection": "microsoft.graph.azureAttestationSettingStatus",
+        "operatingSystemKernelDebugging": "Edm.String",
+        "operatingSystemRevListInfo": "Edm.String",
+        "pcr0": "Edm.String",
+        "pcrHashAlgorithm": "Edm.String",
+        "resetCount": "Edm.Int64",
+        "restartCount": "Edm.Int64",
+        "safeMode": "Edm.String",
+        "secureBoot": "Edm.String",
+        "secureBootConfigurationPolicyFingerPrint": "Edm.String",
+        "securedCorePC": "microsoft.graph.azureAttestationSettingStatus",
+        "systemManagementMode": "microsoft.graph.systemManagementModeLevel",
+        "testSigning": "Edm.String",
+        "tpmVersion": "Edm.String",
+        "virtualSecureMode": "Edm.String",
+        "virtualizationBasedSecurity": "microsoft.graph.azureAttestationSettingStatus",
+        "windowsPE": "Edm.String"
       }
     },
     "microsoft.graph.deviceHealthScript": {
@@ -867,6 +1032,37 @@
         "windowsOsRecovery"
       ]
     },
+    "microsoft.graph.deviceManagementExchangeAccessState": {
+      "kind": "EnumType",
+      "members": [
+        "allowed",
+        "blocked",
+        "none",
+        "quarantined",
+        "unknown"
+      ]
+    },
+    "microsoft.graph.deviceManagementExchangeAccessStateReason": {
+      "kind": "EnumType",
+      "members": [
+        "azureADBlockDueToAccessPolicy",
+        "compliant",
+        "compromisedPassword",
+        "deviceNotKnownWithManagedApp",
+        "exchangeDeviceRule",
+        "exchangeGlobalRule",
+        "exchangeIndividualRule",
+        "exchangeMailboxPolicy",
+        "exchangeUpgrade",
+        "mfaRequired",
+        "none",
+        "notCompliant",
+        "notEnrolled",
+        "other",
+        "unknown",
+        "unknownLocation"
+      ]
+    },
     "microsoft.graph.deviceManagementIntent": {
       "kind": "EntityType",
       "base_type": "microsoft.graph.entity",
@@ -1012,6 +1208,19 @@
         "windowsPhone81"
       ]
     },
+    "microsoft.graph.deviceRegistrationState": {
+      "kind": "EnumType",
+      "members": [
+        "approvalPending",
+        "certificateReset",
+        "keyConflict",
+        "notRegistered",
+        "notRegisteredPendingEnrollment",
+        "registered",
+        "revoked",
+        "unknown"
+      ]
+    },
     "microsoft.graph.deviceShellScript": {
       "kind": "EntityType",
       "base_type": "microsoft.graph.entity",
@@ -1035,6 +1244,40 @@
         "runSummary": "microsoft.graph.deviceManagementScriptRunSummary",
         "userRunStates": "Collection(microsoft.graph.deviceManagementScriptUserState)"
       }
+    },
+    "microsoft.graph.deviceType": {
+      "kind": "EnumType",
+      "members": [
+        "android",
+        "androidEnterprise",
+        "androidForWork",
+        "androidnGMS",
+        "blackberry",
+        "chromeOS",
+        "cloudPC",
+        "desktop",
+        "holoLens",
+        "iPad",
+        "iPhone",
+        "iPod",
+        "iSocConsumer",
+        "linux",
+        "mac",
+        "macMDM",
+        "nokia",
+        "palm",
+        "surfaceHub",
+        "tvOS",
+        "unix",
+        "unknown",
+        "visionOS",
+        "winCE",
+        "winEmbedded",
+        "winMO6",
+        "windows10x",
+        "windowsPhone",
+        "windowsRT"
+      ]
     },
     "microsoft.graph.deviceTypes": {
       "kind": "EnumType",
@@ -1193,6 +1436,51 @@
         "unsupportedGroupPolicyExtensions": "Collection(microsoft.graph.unsupportedGroupPolicyExtension)"
       }
     },
+    "microsoft.graph.hardwareInformation": {
+      "kind": "ComplexType",
+      "properties": {
+        "batteryChargeCycles": "Edm.Int32",
+        "batteryHealthPercentage": "Edm.Int32",
+        "batteryLevelPercentage": "Edm.Double",
+        "batterySerialNumber": "Edm.String",
+        "cellularTechnology": "Edm.String",
+        "deviceFullQualifiedDomainName": "Edm.String",
+        "deviceGuardLocalSystemAuthorityCredentialGuardState": "microsoft.graph.deviceGuardLocalSystemAuthorityCredentialGuardState",
+        "deviceGuardVirtualizationBasedSecurityHardwareRequirementState": "microsoft.graph.deviceGuardVirtualizationBasedSecurityHardwareRequirementState",
+        "deviceGuardVirtualizationBasedSecurityState": "microsoft.graph.deviceGuardVirtualizationBasedSecurityState",
+        "deviceLicensingLastErrorCode": "Edm.Int32",
+        "deviceLicensingLastErrorDescription": "Edm.String",
+        "deviceLicensingStatus": "microsoft.graph.deviceLicensingStatus",
+        "esimIdentifier": "Edm.String",
+        "freeStorageSpace": "Edm.Int64",
+        "imei": "Edm.String",
+        "ipAddressV4": "Edm.String",
+        "isEncrypted": "Edm.Boolean",
+        "isSharedDevice": "Edm.Boolean",
+        "isSupervised": "Edm.Boolean",
+        "manufacturer": "Edm.String",
+        "meid": "Edm.String",
+        "model": "Edm.String",
+        "operatingSystemEdition": "Edm.String",
+        "operatingSystemLanguage": "Edm.String",
+        "operatingSystemProductType": "Edm.Int32",
+        "osBuildNumber": "Edm.String",
+        "phoneNumber": "Edm.String",
+        "productName": "Edm.String",
+        "residentUsersCount": "Edm.Int32",
+        "serialNumber": "Edm.String",
+        "sharedDeviceCachedUsers": "Collection(microsoft.graph.sharedAppleDeviceUser)",
+        "subnetAddress": "Edm.String",
+        "subscriberCarrier": "Edm.String",
+        "systemManagementBIOSVersion": "Edm.String",
+        "totalStorageSpace": "Edm.Int64",
+        "tpmManufacturer": "Edm.String",
+        "tpmSpecificationVersion": "Edm.String",
+        "tpmVersion": "Edm.String",
+        "wifiMac": "Edm.String",
+        "wiredIPv4Addresses": "Collection(Edm.String)"
+      }
+    },
     "microsoft.graph.incomingTokenType": {
       "kind": "EnumType",
       "members": [
@@ -1203,6 +1491,15 @@
         "saml11",
         "saml20",
         "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.joinType": {
+      "kind": "EnumType",
+      "members": [
+        "azureADJoined",
+        "azureADRegistered",
+        "hybridAzureADJoined",
+        "unknown"
       ]
     },
     "microsoft.graph.keyStorageProviderOption": {
@@ -1227,6 +1524,132 @@
         "key": "Edm.String",
         "value": "Edm.String"
       }
+    },
+    "microsoft.graph.loggedOnUser": {
+      "kind": "ComplexType",
+      "properties": {
+        "lastLogOnDateTime": "Edm.DateTimeOffset",
+        "userId": "Edm.String"
+      }
+    },
+    "microsoft.graph.lostModeState": {
+      "kind": "EnumType",
+      "members": [
+        "disabled",
+        "enabled"
+      ]
+    },
+    "microsoft.graph.managedDevice": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "aadRegistered": "Edm.Boolean",
+        "activationLockBypassCode": "Edm.String",
+        "androidSecurityPatchLevel": "Edm.String",
+        "autopilotEnrolled": "Edm.Boolean",
+        "azureADDeviceId": "Edm.String",
+        "azureADRegistered": "Edm.Boolean",
+        "azureActiveDirectoryDeviceId": "Edm.String",
+        "bootstrapTokenEscrowed": "Edm.Boolean",
+        "chassisType": "microsoft.graph.chassisType",
+        "chromeOSDeviceInfo": "Collection(microsoft.graph.chromeOSDeviceProperty)",
+        "cloudPcRemoteActionResults": "Collection(microsoft.graph.cloudPcRemoteActionResult)",
+        "complianceGracePeriodExpirationDateTime": "Edm.DateTimeOffset",
+        "complianceState": "microsoft.graph.complianceState",
+        "configurationManagerClientEnabledFeatures": "microsoft.graph.configurationManagerClientEnabledFeatures",
+        "configurationManagerClientHealthState": "microsoft.graph.configurationManagerClientHealthState",
+        "configurationManagerClientInformation": "microsoft.graph.configurationManagerClientInformation",
+        "deviceActionResults": "Collection(microsoft.graph.deviceActionResult)",
+        "deviceCategoryDisplayName": "Edm.String",
+        "deviceEnrollmentType": "microsoft.graph.deviceEnrollmentType",
+        "deviceFirmwareConfigurationInterfaceManaged": "Edm.Boolean",
+        "deviceHealthAttestationState": "microsoft.graph.deviceHealthAttestationState",
+        "deviceName": "Edm.String",
+        "deviceRegistrationState": "microsoft.graph.deviceRegistrationState",
+        "deviceType": "microsoft.graph.deviceType",
+        "easActivated": "Edm.Boolean",
+        "easActivationDateTime": "Edm.DateTimeOffset",
+        "easDeviceId": "Edm.String",
+        "emailAddress": "Edm.String",
+        "enrolledByUserPrincipalName": "Edm.String",
+        "enrolledDateTime": "Edm.DateTimeOffset",
+        "enrollmentProfileName": "Edm.String",
+        "ethernetMacAddress": "Edm.String",
+        "exchangeAccessState": "microsoft.graph.deviceManagementExchangeAccessState",
+        "exchangeAccessStateReason": "microsoft.graph.deviceManagementExchangeAccessStateReason",
+        "exchangeLastSuccessfulSyncDateTime": "Edm.DateTimeOffset",
+        "freeStorageSpaceInBytes": "Edm.Int64",
+        "hardwareInformation": "microsoft.graph.hardwareInformation",
+        "iccid": "Edm.String",
+        "imei": "Edm.String",
+        "isEncrypted": "Edm.Boolean",
+        "isSupervised": "Edm.Boolean",
+        "jailBroken": "Edm.String",
+        "joinType": "microsoft.graph.joinType",
+        "lastSyncDateTime": "Edm.DateTimeOffset",
+        "lostModeState": "microsoft.graph.lostModeState",
+        "managedDeviceName": "Edm.String",
+        "managedDeviceOwnerType": "microsoft.graph.managedDeviceOwnerType",
+        "managementAgent": "microsoft.graph.managementAgentType",
+        "managementCertificateExpirationDate": "Edm.DateTimeOffset",
+        "managementFeatures": "microsoft.graph.managedDeviceManagementFeatures",
+        "managementState": "microsoft.graph.managementState",
+        "manufacturer": "Edm.String",
+        "meid": "Edm.String",
+        "model": "Edm.String",
+        "notes": "Edm.String",
+        "operatingSystem": "Edm.String",
+        "osVersion": "Edm.String",
+        "ownerType": "microsoft.graph.ownerType",
+        "partnerReportedThreatState": "microsoft.graph.managedDevicePartnerReportedHealthState",
+        "phoneNumber": "Edm.String",
+        "physicalMemoryInBytes": "Edm.Int64",
+        "preferMdmOverGroupPolicyAppliedDateTime": "Edm.DateTimeOffset",
+        "processorArchitecture": "microsoft.graph.managedDeviceArchitecture",
+        "remoteAssistanceSessionErrorDetails": "Edm.String",
+        "remoteAssistanceSessionUrl": "Edm.String",
+        "requireUserEnrollmentApproval": "Edm.Boolean",
+        "retireAfterDateTime": "Edm.DateTimeOffset",
+        "roleScopeTagIds": "Collection(Edm.String)",
+        "securityPatchLevel": "Edm.String",
+        "serialNumber": "Edm.String",
+        "skuFamily": "Edm.String",
+        "skuNumber": "Edm.Int32",
+        "specificationVersion": "Edm.String",
+        "subscriberCarrier": "Edm.String",
+        "totalStorageSpaceInBytes": "Edm.Int64",
+        "udid": "Edm.String",
+        "userDisplayName": "Edm.String",
+        "userId": "Edm.String",
+        "userPrincipalName": "Edm.String",
+        "usersLoggedOn": "Collection(microsoft.graph.loggedOnUser)",
+        "wiFiMacAddress": "Edm.String",
+        "windowsActiveMalwareCount": "Edm.Int32",
+        "windowsRemediatedMalwareCount": "Edm.Int32"
+      },
+      "navigation_properties": {
+        "assignmentFilterEvaluationStatusDetails": "Collection(microsoft.graph.assignmentFilterEvaluationStatusDetails)",
+        "detectedApps": "Collection(microsoft.graph.detectedApp)",
+        "deviceCategory": "microsoft.graph.deviceCategory",
+        "deviceCompliancePolicyStates": "Collection(microsoft.graph.deviceCompliancePolicyState)",
+        "deviceConfigurationStates": "Collection(microsoft.graph.deviceConfigurationState)",
+        "deviceHealthScriptStates": "Collection(microsoft.graph.deviceHealthScriptPolicyState)",
+        "logCollectionRequests": "Collection(microsoft.graph.deviceLogCollectionResponse)",
+        "managedDeviceMobileAppConfigurationStates": "Collection(microsoft.graph.managedDeviceMobileAppConfigurationState)",
+        "securityBaselineStates": "Collection(microsoft.graph.securityBaselineState)",
+        "users": "Collection(microsoft.graph.user)",
+        "windowsProtectionState": "microsoft.graph.windowsProtectionState"
+      }
+    },
+    "microsoft.graph.managedDeviceArchitecture": {
+      "kind": "EnumType",
+      "members": [
+        "arM64",
+        "arm",
+        "unknown",
+        "x64",
+        "x86"
+      ]
     },
     "microsoft.graph.managedDeviceCertificateState": {
       "kind": "EntityType",
@@ -1275,6 +1698,37 @@
         "userPrincipalName": "Edm.String"
       }
     },
+    "microsoft.graph.managedDeviceManagementFeatures": {
+      "kind": "EnumType",
+      "members": [
+        "microsoftManagedDesktop",
+        "none"
+      ]
+    },
+    "microsoft.graph.managedDeviceOwnerType": {
+      "kind": "EnumType",
+      "members": [
+        "company",
+        "personal",
+        "unknown",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.managedDevicePartnerReportedHealthState": {
+      "kind": "EnumType",
+      "members": [
+        "activated",
+        "compromised",
+        "deactivated",
+        "highSeverity",
+        "lowSeverity",
+        "mediumSeverity",
+        "misconfigured",
+        "secured",
+        "unknown",
+        "unresponsive"
+      ]
+    },
     "microsoft.graph.managedIdentity": {
       "kind": "ComplexType",
       "properties": {
@@ -1283,6 +1737,45 @@
         "federatedTokenIssuer": "Edm.String",
         "msiType": "microsoft.graph.msiType"
       }
+    },
+    "microsoft.graph.managementAgentType": {
+      "kind": "EnumType",
+      "members": [
+        "configurationManagerClient",
+        "configurationManagerClientMdm",
+        "configurationManagerClientMdmEas",
+        "eas",
+        "easIntuneClient",
+        "easMdm",
+        "google",
+        "googleCloudDevicePolicyController",
+        "intuneAosp",
+        "intuneClient",
+        "jamf",
+        "mdm",
+        "microsoft365ManagedMdm",
+        "msSense",
+        "unknown",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.managementState": {
+      "kind": "EnumType",
+      "members": [
+        "deletePending",
+        "discovered",
+        "managed",
+        "retireCanceled",
+        "retireFailed",
+        "retireIssued",
+        "retirePending",
+        "unhealthy",
+        "unknownFutureValue",
+        "wipeCanceled",
+        "wipeFailed",
+        "wipeIssued",
+        "wipePending"
+      ]
     },
     "microsoft.graph.mfaDetail": {
       "kind": "ComplexType",
@@ -1359,6 +1852,14 @@
         "skipKeyboardSelectionPage": "Edm.Boolean",
         "userType": "microsoft.graph.windowsUserType"
       }
+    },
+    "microsoft.graph.ownerType": {
+      "kind": "EnumType",
+      "members": [
+        "company",
+        "personal",
+        "unknown"
+      ]
     },
     "microsoft.graph.policyPlatformType": {
       "kind": "EnumType",
