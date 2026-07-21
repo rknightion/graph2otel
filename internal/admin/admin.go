@@ -49,6 +49,11 @@ type Server struct {
 	// Cardinality tab (#215). May be nil when self-obs is disabled; all reads go
 	// through Snapshot, which is a pure in-memory, nil-safe call.
 	card *telemetry.CardinalityTracker
+	// trend holds the ~10-minute in-process trend rings behind the Overview
+	// tab's charts (#227). It is populated by a background ticker Start
+	// launches; a Server that is never Started renders empty series, which the
+	// page shows as "collecting…".
+	trend *sampler
 
 	srv *http.Server
 	mux *http.ServeMux
@@ -74,7 +79,11 @@ type Server struct {
 // card is the output-side cardinality tracker (for the Cardinality tab, #215).
 // Both are read passively — no live tenant call — and both are nil-safe: a nil
 // fullCfg renders an empty Config view, a nil card an empty Cardinality view.
-func New(cfg config.AdminConfig, sources []CollectorSource, skipReasons map[SkipKey]string, limiter RateLimiter, fullCfg *config.Config, card *telemetry.CardinalityTracker) *Server {
+//
+// tp is the emit-side throughput source for the Overview tab's throughput
+// trend (#227) — *telemetry.Provider satisfies it. Nil leaves that one chart
+// empty and changes nothing else.
+func New(cfg config.AdminConfig, sources []CollectorSource, skipReasons map[SkipKey]string, limiter RateLimiter, fullCfg *config.Config, card *telemetry.CardinalityTracker, tp ThroughputSource) *Server {
 	if !cfg.Enabled {
 		return nil
 	}
@@ -92,6 +101,7 @@ func New(cfg config.AdminConfig, sources []CollectorSource, skipReasons map[Skip
 		cfg:         fullCfg,
 		card:        card,
 	}
+	s.trend = newSampler(samplerHistoryLen, card, tp, sources, limiter, s.now)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealthz)
 	mux.HandleFunc("/api/status.json", s.handleStatusJSON)
@@ -121,6 +131,9 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 	errCh := make(chan error, 1)
 	go func() { errCh <- s.srv.ListenAndServe() }()
+	// The trend sampler lives for as long as the server does: it takes the first
+	// observation immediately, then ticks, and stops when ctx is canceled.
+	go s.trend.run(ctx)
 	select {
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -150,6 +163,7 @@ func (s *Server) snapshot() Status {
 	if s.limiter != nil {
 		attachRateLimits(tenants, s.limiter.Snapshot(now))
 	}
+	attachHeadroomTrends(tenants, s.trend)
 	health, reasons := deriveHealth(tenants)
 	uptime := now.Sub(s.startedAt)
 	return Status{
@@ -165,6 +179,10 @@ func (s *Server) snapshot() Status {
 		Tenants:       tenants,
 		GeneratedAt:   now.UTC().Format(time.RFC3339),
 		RefreshMs:     s.refreshMs,
+		Runtime:       s.trend.runtimeInfo(),
+		Throughput:    s.trend.throughputInfo(),
+		Fleet:         s.trend.fleetInfo(),
+		SeriesTrend:   s.trend.cardinalityTrend(),
 	}
 }
 

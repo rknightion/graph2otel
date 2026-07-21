@@ -82,6 +82,67 @@ type Status struct {
 	// RefreshMs is the client poll interval in milliseconds (admin.refresh_interval).
 	// The page falls back to 5000 when this is 0. The 1s freshness ticker is independent.
 	RefreshMs int `json:"refresh_ms,omitempty"`
+
+	// Runtime, Throughput, Fleet and Cardinality are the ~10-minute in-process
+	// trends behind the Overview tab's charts (#227). They are sampled on a
+	// background ticker, never per request, and are never emitted as OTLP —
+	// the graph2otel.* self-obs metrics already carry what belongs on the wire.
+	// Every series is empty until the sampler has enough observations, which
+	// the page renders as "collecting…".
+	Runtime    RuntimeInfo    `json:"runtime"`
+	Throughput ThroughputInfo `json:"throughput"`
+	Fleet      FleetInfo      `json:"fleet"`
+	// SeriesTrend is deliberately NOT named Cardinality: pageModel already has a
+	// Cardinality field (the tab view), and an embedded Status field of the same
+	// name would be silently shadowed in every template expression.
+	SeriesTrend CardinalityTrend `json:"cardinality"`
+}
+
+// RuntimeInfo is a point-in-time Go runtime snapshot plus its short-term
+// trends. GCRateSeries is differenced from MemStats.NumGC over elapsed wall
+// time, so it is one sample shorter than the value series.
+type RuntimeInfo struct {
+	Goroutines       int       `json:"goroutines"`
+	GOMAXPROCS       int       `json:"gomaxprocs"`
+	HeapAllocBytes   uint64    `json:"heap_alloc_bytes"`
+	HeapAlloc        string    `json:"heap_alloc"` // humanized, e.g. "12M"
+	NumGC            uint32    `json:"num_gc"`
+	GoroutinesSeries []int     `json:"goroutines_series,omitempty"`
+	HeapAllocSeries  []uint64  `json:"heap_alloc_series,omitempty"`
+	GCRateSeries     []float64 `json:"gc_rate_series,omitempty"`
+}
+
+// ThroughputInfo is the emit-side throughput of the telemetry pipeline: metric
+// data points and log records shipped per second, differenced from lifetime
+// totals. The totals count what the Emitter handed to the SDK, which is not
+// the same as what the OTLP backend accepted.
+type ThroughputInfo struct {
+	MetricPointsPerSec float64   `json:"metric_points_per_sec"`
+	LogRecordsPerSec   float64   `json:"log_records_per_sec"`
+	MetricPointsTotal  uint64    `json:"metric_points_total"`
+	LogRecordsTotal    uint64    `json:"log_records_total"`
+	MetricPointsSeries []float64 `json:"metric_points_series,omitempty"`
+	LogRecordsSeries   []float64 `json:"log_records_series,omitempty"`
+}
+
+// FleetInfo is the collector roll-up across every tenant, so a creeping
+// degradation shows as a trend rather than only as a current number. A
+// registered collector that has not run yet is Pending, never Failing.
+type FleetInfo struct {
+	Enabled            int       `json:"enabled"`
+	Failing            int       `json:"failing"`
+	Pending            int       `json:"pending"`
+	MeanDurationMs     float64   `json:"mean_duration_ms"`
+	FailingSeries      []int     `json:"failing_series,omitempty"`
+	MeanDurationSeries []float64 `json:"mean_duration_series,omitempty"`
+}
+
+// CardinalityTrend is the total active-series count and its trend — the number
+// Grafana Cloud bills on. Both are zero when self-observability is off, since
+// no tracker is wired to count series in that case.
+type CardinalityTrend struct {
+	TotalSeries int   `json:"total_series"`
+	Series      []int `json:"series,omitempty"`
 }
 
 // ServiceInfo is the process identity/liveness header of the page.
@@ -123,6 +184,10 @@ type RateLimitStatus struct {
 	Burst       int     `json:"burst"`
 	Tokens      float64 `json:"tokens_available"`
 	HeadroomPct float64 `json:"headroom_pct"` // Tokens/Burst*100, 0 when Burst==0
+	// HeadroomSeries is this bucket's headroom trend over the sampler window
+	// (#227), oldest first. Empty until the sampler has seen the bucket — buckets
+	// are lazily created, so a workload that has never been called has no trend.
+	HeadroomSeries []float64 `json:"headroom_series,omitempty"`
 }
 
 // CollectorStatus is one row of a tenant's collector table: either a
@@ -342,6 +407,21 @@ func buildTenantStatuses(sources []CollectorSource, skipReasons map[SkipKey]stri
 		tenants = append(tenants, ten)
 	}
 	return tenants
+}
+
+// attachHeadroomTrends fills each rendered throttle row's HeadroomSeries from
+// the sampler's per-bucket ring. Rows the sampler has never seen keep an empty
+// series, which the page draws as no sparkline at all.
+func attachHeadroomTrends(tenants []TenantStatus, s *sampler) {
+	if s == nil {
+		return
+	}
+	for ti := range tenants {
+		for ri := range tenants[ti].RateLimits {
+			row := &tenants[ti].RateLimits[ri]
+			row.HeadroomSeries = s.headroomTrend(tenants[ti].TenantID, row.Workload)
+		}
+	}
 }
 
 // attachRateLimits groups the flat headroom snapshot by tenant and attaches each

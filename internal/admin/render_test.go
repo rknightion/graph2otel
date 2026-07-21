@@ -299,3 +299,74 @@ func TestRender_NoTimeDependence(t *testing.T) {
 	}
 	_ = renderString(t, s)
 }
+
+// TestRender_TrendChartsAndCards locks the Overview tab's trend sections
+// (#227): every chart id the JS registers must exist in the markup, or
+// registerChart silently binds to nothing and the chart never draws.
+func TestRender_TrendChartsAndCards(t *testing.T) {
+	s := Status{
+		Service: ServiceInfo{Version: "0.1.0"}, Health: healthHealthy,
+		Runtime: RuntimeInfo{
+			Goroutines: 42, GOMAXPROCS: 8, HeapAlloc: "12M", HeapAllocBytes: 12 << 20, NumGC: 7,
+			GoroutinesSeries: []int{40, 42}, HeapAllocSeries: []uint64{1, 2}, GCRateSeries: []float64{0.5},
+		},
+		Throughput: ThroughputInfo{
+			MetricPointsPerSec: 12.5, LogRecordsPerSec: 3,
+			MetricPointsSeries: []float64{10, 12.5}, LogRecordsSeries: []float64{2, 3},
+		},
+		Fleet:       FleetInfo{Enabled: 58, Failing: 1, Pending: 0, MeanDurationMs: 431.5},
+		SeriesTrend: CardinalityTrend{TotalSeries: 1200, Series: []int{1100, 1200}},
+	}
+	body := renderString(t, s)
+
+	for _, want := range []string{
+		"Runtime trend", "Throughput &amp; fleet trend",
+		`id="chGoroutines"`, `id="chHeap"`, `id="chGC"`,
+		`id="chEmit"`, `id="chCard"`, `id="chFailing"`, `id="chDuration"`,
+		`id="goroutines"`, `id="heapAlloc"`, `id="numGC"`, `id="gcRate"`,
+		`id="metricRate"`, `id="logRate"`, `id="activeSeries"`, `id="fleetFailing"`, `id="meanDuration"`,
+		"function registerChart", "function drawChart", "function redrawCharts",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("page missing %q", want)
+		}
+	}
+
+	// Every chart the JS registers must have a matching element in the markup.
+	for _, id := range []string{"chGoroutines", "chHeap", "chGC", "chEmit", "chCard", "chFailing", "chDuration"} {
+		if !strings.Contains(body, "registerChart('"+id+"'") {
+			t.Errorf("chart %q has markup but is never registered", id)
+		}
+	}
+
+	// The server-rendered (noscript) values must be present, so the page is
+	// meaningful before the first poll completes.
+	for _, want := range []string{">42<", ">12M<", ">58<"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("page missing server-rendered value %q", want)
+		}
+	}
+}
+
+// TestRender_ThrottleHeadroomSparkline asserts each throttle row carries its
+// headroom trend, so a bucket that is draining is visible as a slope and not
+// only as a single instantaneous percentage.
+func TestRender_ThrottleHeadroomSparkline(t *testing.T) {
+	s := Status{
+		Service: ServiceInfo{Version: "0.1.0"}, Health: healthHealthy,
+		Tenants: []TenantStatus{{
+			TenantID: "t-a",
+			RateLimits: []RateLimitStatus{{
+				Workload: "reporting", LimitPerSec: 0.5, Burst: 5, Tokens: 2.5, HeadroomPct: 50,
+				HeadroomSeries: []float64{100, 80, 50},
+			}},
+		}},
+	}
+	body := renderString(t, s)
+	if !strings.Contains(body, ">trend<") {
+		t.Errorf("throttle table missing the trend column header")
+	}
+	if !strings.Contains(body, `class="spark"`) {
+		t.Errorf("throttle row missing its headroom sparkline")
+	}
+}

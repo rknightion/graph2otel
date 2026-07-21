@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -21,6 +22,14 @@ type otelEmitter struct {
 	// graph2otel.series.active self-metric. Nil disables tracking; Observe is
 	// nil-safe so the emit path needs no guard.
 	card *CardinalityTracker
+
+	// metricPoints/logRecords are lifetime totals of everything that has passed
+	// through this emitter, read by the admin status page's throughput sampler
+	// (#227) and never exported as OTLP. They are plain atomics on purpose: the
+	// emit path is hot, and a lock or an allocation here would be paid on every
+	// data point for a number nobody outside the status page reads.
+	metricPoints atomic.Uint64
+	logRecords   atomic.Uint64
 
 	mu          sync.Mutex
 	counters    map[string]metric.Float64Counter
@@ -51,6 +60,28 @@ func newOtelEmitter(meter metric.Meter, logger log.Logger, card *CardinalityTrac
 	}
 }
 
+// Throughput is a lifetime count of what an emitter has shipped: metric data
+// points (one per Counter/Gauge/UpDownCounter/Histogram call, and one per
+// series in a GaugeSnapshot) and log records (one per LogEvent). Both are
+// cumulative and monotonic — reading them never resets them, so a caller
+// differences consecutive reads to get a rate.
+//
+// This is in-process introspection for the admin status page (#227). It is
+// deliberately never emitted as OTLP: the wire already carries the
+// graph2otel.* self-observability metrics.
+type Throughput struct {
+	MetricPoints uint64
+	LogRecords   uint64
+}
+
+// Throughput returns the emitter's cumulative emitted-record counts.
+func (e *otelEmitter) Throughput() Throughput {
+	return Throughput{
+		MetricPoints: e.metricPoints.Load(),
+		LogRecords:   e.logRecords.Load(),
+	}
+}
+
 func (e *otelEmitter) Counter(name, unit, desc string, add float64, attrs Attrs) {
 	e.mu.Lock()
 	c, ok := e.counters[name]
@@ -64,6 +95,7 @@ func (e *otelEmitter) Counter(name, unit, desc string, add float64, attrs Attrs)
 	}
 	e.mu.Unlock()
 	e.card.Observe(name, attrs)
+	e.metricPoints.Add(1)
 	if c != nil {
 		c.Add(context.Background(), add, metric.WithAttributes(buildAttrs(attrs)...))
 	}
@@ -82,6 +114,7 @@ func (e *otelEmitter) Gauge(name, unit, desc string, value float64, attrs Attrs)
 	}
 	e.mu.Unlock()
 	e.card.Observe(name, attrs)
+	e.metricPoints.Add(1)
 	if g != nil {
 		g.Record(context.Background(), value, metric.WithAttributes(buildAttrs(attrs)...))
 	}
@@ -108,6 +141,7 @@ func (e *otelEmitter) GaugeSnapshot(name, unit, desc string, points []GaugePoint
 		e.card.Observe(name, p.Attrs)
 		resolved = append(resolved, obsPoint{value: p.Value, kvs: buildAttrs(p.Attrs)})
 	}
+	e.metricPoints.Add(uint64(len(points)))
 
 	e.mu.Lock()
 	og, ok := e.observables[name]
@@ -153,6 +187,7 @@ func (e *otelEmitter) UpDownCounter(name, unit, desc string, value float64, attr
 	}
 	e.mu.Unlock()
 	e.card.Observe(name, attrs)
+	e.metricPoints.Add(1)
 	if u != nil {
 		u.Add(context.Background(), value, metric.WithAttributes(buildAttrs(attrs)...))
 	}
@@ -177,6 +212,7 @@ func (e *otelEmitter) HistogramCtx(ctx context.Context, name, unit, desc string,
 	}
 	e.mu.Unlock()
 	e.card.Observe(name, attrs)
+	e.metricPoints.Add(1)
 	if h != nil {
 		h.Record(ctx, value, metric.WithAttributes(buildAttrs(attrs)...))
 	}
@@ -197,6 +233,7 @@ func (e *otelEmitter) LogEvent(ev Event) {
 	}
 	r.AddAttributes(toLogKV(ev.Attrs)...)
 	e.logger.Emit(context.Background(), r)
+	e.logRecords.Add(1)
 }
 
 func toLogSeverity(s Severity) log.Severity {

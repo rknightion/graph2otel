@@ -10,6 +10,7 @@
     --bg:#0f1419; --panel:#171c24; --panel2:#1d242e; --line:#2a323d;
     --fg:#e6edf3; --muted:#8b98a5; --accent:#4493f8;
     --ok:#3fb950; --warn:#d29922; --err:#f85149; --info:#a371f7; --pending:#6e7681;
+    --grid:#232a34;
     --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   }
   @media (prefers-color-scheme: light){
@@ -17,17 +18,20 @@
       --bg:#f6f8fa; --panel:#ffffff; --panel2:#f0f3f6; --line:#d0d7de;
       --fg:#1f2328; --muted:#59636e; --accent:#0969da;
       --ok:#1a7f37; --warn:#9a6700; --err:#cf222e; --info:#8250df; --pending:#8c959f;
+      --grid:#e4e8ec;
     }
   }
   :root[data-theme="light"]{
     --bg:#f6f8fa; --panel:#ffffff; --panel2:#f0f3f6; --line:#d0d7de;
     --fg:#1f2328; --muted:#59636e; --accent:#0969da;
     --ok:#1a7f37; --warn:#9a6700; --err:#cf222e; --info:#8250df; --pending:#8c959f;
+    --grid:#e4e8ec;
   }
   :root[data-theme="dark"]{
     --bg:#0f1419; --panel:#171c24; --panel2:#1d242e; --line:#2a323d;
     --fg:#e6edf3; --muted:#8b98a5; --accent:#4493f8;
     --ok:#3fb950; --warn:#d29922; --err:#f85149; --info:#a371f7; --pending:#6e7681;
+    --grid:#232a34;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
@@ -63,6 +67,10 @@
   .mono{font-family:var(--mono);font-size:12px;overflow-wrap:anywhere} .muted{color:var(--muted)}
   .cursor{display:block;font-size:11px;margin-top:3px;color:var(--muted)} .cursor code{background:transparent;padding:0}
   svg.spark{width:84px;height:22px;vertical-align:middle;display:inline-block;fill:none;stroke:var(--accent);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round}
+  .chart-wrap{position:relative;height:120px;margin-top:8px}
+  svg.chart{width:100%;height:100%;display:block;overflow:visible}
+  .chart-tip{position:absolute;pointer-events:none;display:none;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-family:var(--mono);font-size:11px;white-space:nowrap;transform:translate(-50%,-115%);z-index:2}
+  .card .sub{color:var(--muted);font-size:11px;margin-top:5px}
   .outcome{display:inline-flex;gap:2px;align-items:center}
   .outcome i{width:4px;height:13px;border-radius:1px;background:var(--ok);display:inline-block} .outcome i.f{background:var(--err)}
   .rollup{display:flex;gap:18px;flex-wrap:wrap;align-items:center;padding:12px 16px;background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:18px}
@@ -121,10 +129,10 @@
     {{range .Tenants}}{{if .RateLimits}}
       <div class="sub-h" style="margin:14px 0 4px">Tenant <code>{{.TenantID}}</code></div>
       <table class="rl">
-        <thead><tr><th>Workload</th><th class="num">limit/s</th><th class="num">burst</th><th class="num">tokens</th><th class="num">headroom</th></tr></thead>
+        <thead><tr><th>Workload</th><th class="num">limit/s</th><th class="num">burst</th><th class="num">tokens</th><th class="num">headroom</th><th>trend</th></tr></thead>
         <tbody>
         {{range .RateLimits}}
-          <tr><td><code>{{.Workload}}</code></td><td class="num">{{printf "%.3g" .LimitPerSec}}</td><td class="num">{{.Burst}}</td><td class="num">{{printf "%.1f" .Tokens}}</td><td class="num">{{printf "%.0f" .HeadroomPct}}%</td></tr>
+          <tr><td><code>{{.Workload}}</code></td><td class="num">{{printf "%.3g" .LimitPerSec}}</td><td class="num">{{.Burst}}</td><td class="num">{{printf "%.1f" .Tokens}}</td><td class="num">{{printf "%.0f" .HeadroomPct}}%</td><td>{{sparklineF .HeadroomSeries}}</td></tr>
         {{end}}
         </tbody>
       </table>
@@ -136,6 +144,31 @@
       <div class="card"><div class="k">Version</div><div class="v" style="font-size:16px">{{.Service.Version}}</div><div class="k" style="margin-top:6px">{{.Service.GoVersion}}</div></div>
       <div class="card"><div class="k">Uptime</div><div class="v" id="uptime">{{.Service.Uptime}}</div><div class="k" style="margin-top:6px">since {{.Service.StartedAt}}</div></div>
       <div class="card"><div class="k">Tenants</div><div class="v">{{len .Tenants}}</div></div>
+    </div>
+
+    <!-- Runtime, throughput and fleet trends (#227). Every value is
+         server-rendered first so the page is meaningful before the first poll,
+         then updated in place by refresh(). -->
+    <div class="sub-h">Runtime trend (~10 min)</div>
+    <div class="cards">
+      <div class="card"><div class="k">Goroutines</div><div class="v" id="goroutines">{{.Runtime.Goroutines}}</div><div class="sub">GOMAXPROCS <span id="gomaxprocs">{{.Runtime.GOMAXPROCS}}</span></div>
+        <div class="chart-wrap"><svg class="chart" id="chGoroutines"></svg><div class="chart-tip"></div></div></div>
+      <div class="card"><div class="k">Heap in use</div><div class="v" id="heapAlloc">{{.Runtime.HeapAlloc}}</div><div class="sub">GC cycles <span id="numGC">{{.Runtime.NumGC}}</span></div>
+        <div class="chart-wrap"><svg class="chart" id="chHeap"></svg><div class="chart-tip"></div></div></div>
+      <div class="card"><div class="k">GC rate</div><div class="v" id="gcRate">&mdash;</div><div class="sub">cycles/sec</div>
+        <div class="chart-wrap"><svg class="chart" id="chGC"></svg><div class="chart-tip"></div></div></div>
+    </div>
+
+    <div class="sub-h">Throughput &amp; fleet trend (~10 min)</div>
+    <div class="cards">
+      <div class="card"><div class="k">Emitted</div><div class="v" id="metricRate">{{printf "%.1f" .Throughput.MetricPointsPerSec}}</div><div class="sub">metric points/sec &middot; <span id="logRate">{{printf "%.1f" .Throughput.LogRecordsPerSec}}</span> log records/sec</div>
+        <div class="chart-wrap"><svg class="chart" id="chEmit"></svg><div class="chart-tip"></div></div></div>
+      <div class="card"><div class="k">Active series</div><div class="v" id="activeSeries">{{.SeriesTrend.TotalSeries}}</div><div class="sub">distinct series last export</div>
+        <div class="chart-wrap"><svg class="chart" id="chCard"></svg><div class="chart-tip"></div></div></div>
+      <div class="card"><div class="k">Collectors failing</div><div class="v" id="fleetFailing">{{.Fleet.Failing}}</div><div class="sub"><span id="fleetEnabled">{{.Fleet.Enabled}}</span> active &middot; <span id="fleetPending">{{.Fleet.Pending}}</span> starting</div>
+        <div class="chart-wrap"><svg class="chart" id="chFailing"></svg><div class="chart-tip"></div></div></div>
+      <div class="card"><div class="k">Mean run duration</div><div class="v" id="meanDuration">{{printf "%.0f" .Fleet.MeanDurationMs}}ms</div><div class="sub">across every collector</div>
+        <div class="chart-wrap"><svg class="chart" id="chDuration"></svg><div class="chart-tip"></div></div></div>
     </div>
   </section>
 
@@ -307,6 +340,9 @@ function showTab(id){
   var btns=document.querySelectorAll('#tabs .tab-btn');
   for(var j=0;j<btns.length;j++){ btns[j].classList.toggle('active', btns[j].getAttribute('data-target')===id); }
   if(found && location.hash!=='#'+id){ history.replaceState(null,'','#'+id); }
+  // A chart inside a hidden section measures 0 wide, so anything drawn before
+  // its tab was shown is wrong. Redraw whatever just became visible.
+  redrawCharts();
 }
 function initTabs(){
   var btns=document.querySelectorAll('#tabs .tab-btn');
@@ -315,7 +351,7 @@ function initTabs(){
   showTab(document.querySelector('section[data-tab="'+initial+'"]')?initial:'overview');
 }
 function currentTheme(){ var t=document.documentElement.getAttribute('data-theme'); if(t) return t; return (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark'; }
-function toggleTheme(){ var next=currentTheme()==='light'?'dark':'light'; document.documentElement.setAttribute('data-theme',next); try{localStorage.setItem('graph2otel-theme',next);}catch(e){} }
+function toggleTheme(){ var next=currentTheme()==='light'?'dark':'light'; document.documentElement.setAttribute('data-theme',next); try{localStorage.setItem('graph2otel-theme',next);}catch(e){} redrawCharts(); }
 
 function el(tag,attrs,text){ var e=document.createElement(tag); if(attrs){ for(var k in attrs){ if(attrs.hasOwnProperty(k)) e.setAttribute(k,attrs[k]); } } if(text!=null) e.textContent=text; return e; }
 function setText(id,v){ var e=document.getElementById(id); if(e!=null && v!=null) e.textContent=v; }
@@ -334,6 +370,76 @@ function drawSpark(svg,arr){
   var pl=document.createElementNS(SVGNS,'polyline'); pl.setAttribute('points',pts); svg.appendChild(pl);
 }
 function newSpark(){ var s=document.createElementNS(SVGNS,'svg'); s.setAttribute('class','spark'); return s; }
+
+// ── Line charts (zero-dependency: value axis, gridlines, area, hover) ──────
+// CHARTS maps an <svg> id to the function that pulls its series out of the
+// latest status payload, so a refresh, a tab switch and a theme toggle can all
+// redraw every chart from one place.
+var CHARTS={}, lastData=null;
+function registerChart(svgId,seriesFn,fmtFn){ CHARTS[svgId]={seriesFn:seriesFn,fmt:fmtFn||function(v){return String(Math.round(v));}}; }
+function redrawCharts(){ for(var id in CHARTS){ if(CHARTS.hasOwnProperty(id)){ var c=CHARTS[id]; drawChart(id,c.seriesFn(lastData),c.fmt); } } }
+function drawChart(svgId,series,fmt){
+  var svg=document.getElementById(svgId); if(!svg) return;
+  var wrap=svg.parentNode, tip=wrap?wrap.querySelector('.chart-tip'):null;
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  series=(series||[]).filter(function(s){ return s.points && s.points.length; });
+  var rect=svg.getBoundingClientRect();
+  var W=Math.max(rect.width||300,120), H=Math.max(rect.height||120,50);
+  svg.setAttribute('viewBox','0 0 '+W+' '+H); svg.setAttribute('preserveAspectRatio','none');
+  var maxLen=0,mn=Infinity,mx=-Infinity;
+  series.forEach(function(s){ maxLen=Math.max(maxLen,s.points.length); s.points.forEach(function(v){ if(v<mn)mn=v; if(v>mx)mx=v; }); });
+  // Fewer than two points is not a chart yet — say so rather than drawing a dot.
+  if(!series.length || maxLen<2){
+    var t=document.createElementNS(SVGNS,'text'); t.setAttribute('x',8); t.setAttribute('y',H/2);
+    t.setAttribute('fill',cssVar('--muted')); t.setAttribute('font-size','11'); t.textContent='collecting…';
+    svg.appendChild(t); return;
+  }
+  if(mn===mx){ mx=mn+1; }
+  var padL=44,padR=8,padT=8,padB=14, plotW=W-padL-padR, plotH=H-padT-padB;
+  function xAt(i){ return padL+i*plotW/(maxLen-1); }
+  function yAt(v){ return padT+(1-(v-mn)/(mx-mn))*plotH; }
+  [0,0.5,1].forEach(function(f){
+    var val=mn+(mx-mn)*f, y=yAt(val);
+    var ln=document.createElementNS(SVGNS,'line');
+    ln.setAttribute('x1',padL); ln.setAttribute('x2',W-padR); ln.setAttribute('y1',y); ln.setAttribute('y2',y);
+    ln.setAttribute('stroke',cssVar('--grid')); ln.setAttribute('stroke-width','1'); svg.appendChild(ln);
+    var tx=document.createElementNS(SVGNS,'text'); tx.setAttribute('x',4); tx.setAttribute('y',y+3);
+    tx.setAttribute('fill',cssVar('--muted')); tx.setAttribute('font-size','9');
+    tx.setAttribute('font-family','monospace'); tx.textContent=fmt(val); svg.appendChild(tx);
+  });
+  var colors=[cssVar('--accent'),cssVar('--ok'),cssVar('--warn')];
+  series.forEach(function(s,si){
+    var col=s.color||colors[si%colors.length];
+    var pts=s.points.map(function(v,i){ return xAt(i)+','+yAt(v); }).join(' ');
+    if(si===0){
+      var area=document.createElementNS(SVGNS,'polygon');
+      area.setAttribute('points',xAt(0)+','+(padT+plotH)+' '+pts+' '+xAt(s.points.length-1)+','+(padT+plotH));
+      area.setAttribute('fill',col); area.setAttribute('opacity','0.10'); svg.appendChild(area);
+    }
+    var pl=document.createElementNS(SVGNS,'polyline');
+    pl.setAttribute('fill','none'); pl.setAttribute('stroke',col); pl.setAttribute('stroke-width','1.5');
+    pl.setAttribute('points',pts); svg.appendChild(pl);
+  });
+  if(tip){
+    var cross=document.createElementNS(SVGNS,'line');
+    cross.setAttribute('stroke',cssVar('--muted')); cross.setAttribute('stroke-width','1');
+    cross.setAttribute('stroke-dasharray','2 2'); cross.setAttribute('y1',padT); cross.setAttribute('y2',padT+plotH);
+    cross.style.display='none'; svg.appendChild(cross);
+    var over=document.createElementNS(SVGNS,'rect');
+    over.setAttribute('x',padL); over.setAttribute('y',padT); over.setAttribute('width',plotW); over.setAttribute('height',plotH);
+    over.setAttribute('fill','transparent'); svg.appendChild(over);
+    over.addEventListener('mousemove',function(ev){
+      var b=svg.getBoundingClientRect();
+      var px=(ev.clientX-b.left)*(W/b.width);
+      var i=Math.round((px-padL)/plotW*(maxLen-1)); if(i<0)i=0; if(i>maxLen-1)i=maxLen-1;
+      cross.setAttribute('x1',xAt(i)); cross.setAttribute('x2',xAt(i)); cross.style.display='';
+      var parts=series.map(function(s){ var v=s.points[Math.min(i,s.points.length-1)]; return s.name+' '+fmt(v); });
+      tip.textContent=parts.join(' · '); tip.style.display='block';
+      tip.style.left=(xAt(i)/W*b.width)+'px'; tip.style.top=(padT/H*b.height)+'px';
+    });
+    over.addEventListener('mouseleave',function(){ cross.style.display='none'; tip.style.display='none'; });
+  }
+}
 function outcomeStripEl(arr){
   var span=el('span',{'class':'outcome'}); if(!arr) return span;
   var start=arr.length>40?arr.length-40:0;
@@ -398,6 +504,24 @@ function rebuildThrottle(tenants){
     table.appendChild(tb); host.appendChild(table);
   });
 }
+function updateTrends(d){
+  if(d.runtime){
+    setText('goroutines',d.runtime.goroutines); setText('gomaxprocs',d.runtime.gomaxprocs);
+    setText('heapAlloc',d.runtime.heap_alloc); setText('numGC',d.runtime.num_gc);
+    var gr=d.runtime.gc_rate_series;
+    setText('gcRate', (gr && gr.length) ? gr[gr.length-1].toFixed(2) : '—');
+  }
+  if(d.throughput){
+    setText('metricRate', (d.throughput.metric_points_per_sec||0).toFixed(1));
+    setText('logRate', (d.throughput.log_records_per_sec||0).toFixed(1));
+  }
+  if(d.cardinality) setText('activeSeries', d.cardinality.total_series);
+  if(d.fleet){
+    setText('fleetFailing',d.fleet.failing); setText('fleetEnabled',d.fleet.enabled);
+    setText('fleetPending',d.fleet.pending);
+    setText('meanDuration', Math.round(d.fleet.mean_duration_ms||0)+'ms');
+  }
+}
 function updateRollup(d){
   setText('ruHealth', d.health); setText('ruTenants', (d.tenants||[]).length);
   var enabled=0,failing=0,pending=0;
@@ -413,7 +537,8 @@ function setStale(on){ var b=document.getElementById('staleBanner'); if(!b) retu
 function refresh(){
   fetch('/api/status.json',{cache:'no-store'}).then(function(r){ if(!r.ok) throw new Error('status '+r.status); return r.json(); }).then(function(d){
     lastOkMs=Date.now(); setStale(false);
-    setHealth(d); updateRollup(d);
+    lastData=d;
+    setHealth(d); updateRollup(d); updateTrends(d); redrawCharts();
     if(d.service) setText('uptime', d.service.uptime);
     setText('generatedAt', d.generated_at);
     rebuildThrottle(d.tenants); rebuildTenants(d.tenants);
@@ -423,12 +548,25 @@ function startPolling(){ if(pollTimer) clearInterval(pollTimer); var ms=(window.
 function togglePause(){ paused=!paused; var btn=document.getElementById('pauseBtn'); if(paused){ if(pollTimer){clearInterval(pollTimer); pollTimer=null;} if(btn) btn.textContent='Resume'; } else { if(btn) btn.textContent='Pause'; refresh(); startPolling(); } }
 function tickFreshness(){ setText('updatedAgo', relMs(lastOkMs)); var b=document.getElementById('staleBanner'); if(b && b.className.indexOf('show')>=0) setStale(true); }
 
+function initCharts(){
+  registerChart('chGoroutines', function(d){ return d&&d.runtime ? [{name:'goroutines', points:d.runtime.goroutines_series||[]}] : []; });
+  registerChart('chHeap', function(d){ return d&&d.runtime ? [{name:'heap', points:(d.runtime.heap_alloc_series||[]).map(function(b){ return b/1048576; })}] : []; }, function(v){ return v.toFixed(0)+'M'; });
+  registerChart('chGC', function(d){ return d&&d.runtime ? [{name:'gc/s', color:cssVar('--warn'), points:d.runtime.gc_rate_series||[]}] : []; }, function(v){ return v.toFixed(1); });
+  registerChart('chEmit', function(d){ return d&&d.throughput ? [
+    {name:'metrics/s', points:d.throughput.metric_points_series||[]},
+    {name:'logs/s', points:d.throughput.log_records_series||[]}] : []; }, function(v){ return v.toFixed(1); });
+  registerChart('chCard', function(d){ return d&&d.cardinality ? [{name:'series', points:d.cardinality.series||[]}] : []; });
+  registerChart('chFailing', function(d){ return d&&d.fleet ? [{name:'failing', color:cssVar('--err'), points:d.fleet.failing_series||[]}] : []; });
+  registerChart('chDuration', function(d){ return d&&d.fleet ? [{name:'mean', points:d.fleet.mean_duration_series||[]}] : []; }, function(v){ return v.toFixed(0)+'ms'; });
+}
+
 (function init(){
-  initTabs();
+  initTabs(); initCharts();
   var tt=document.getElementById('themeToggle'); if(tt) tt.addEventListener('click',toggleTheme);
   var p=document.getElementById('pauseBtn'); if(p) p.addEventListener('click',togglePause);
   var rn=document.getElementById('refreshNow'); if(rn) rn.addEventListener('click',function(ev){ ev.preventDefault(); refresh(); });
   refresh(); startPolling(); setInterval(tickFreshness,1000);
+  window.addEventListener('resize',redrawCharts);
 })();
 </script>
 </body>

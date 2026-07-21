@@ -65,7 +65,7 @@ func serve(t *testing.T, s *Server, path string) (*httptest.ResponseRecorder, st
 // presence ("set"). Non-secret config fields must render.
 func TestConfigTab_SecretsPresenceOnly(t *testing.T) {
 	cfg := cfgWithSecrets()
-	s := New(cfg.Admin, nil, nil, nil, cfg, nil)
+	s := New(cfg.Admin, nil, nil, nil, cfg, nil, nil)
 	if s == nil {
 		t.Fatal("New returned nil for an enabled config")
 	}
@@ -140,7 +140,7 @@ func TestConfigTab_UnsetSecretReadsUnset(t *testing.T) {
 		OTLP:     config.OTLPConfig{Protocol: "http", Endpoint: "https://x"},
 		Admin:    config.AdminConfig{Enabled: true, Addr: ":0"},
 	}
-	s := New(cfg.Admin, nil, nil, nil, cfg, nil)
+	s := New(cfg.Admin, nil, nil, nil, cfg, nil, nil)
 	w, body := serve(t, s, "/api/config.json")
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", w.Code)
@@ -168,7 +168,7 @@ func TestCardinalityTab_RendersFromTracker(t *testing.T) {
 	tr.Report(telemetrytest.New().Emitter()) // snapshots the interval
 
 	cfg := cfgWithSecrets() // MetricLimit 2000
-	s := New(cfg.Admin, nil, nil, nil, cfg, tr)
+	s := New(cfg.Admin, nil, nil, nil, cfg, tr, nil)
 
 	w, body := serve(t, s, "/api/cardinality.json")
 	if w.Code != http.StatusOK {
@@ -209,7 +209,7 @@ func TestCardinalityTab_RendersFromTracker(t *testing.T) {
 // A nil tracker (self-obs off) yields an empty, non-crashing cardinality view.
 func TestCardinalityTab_NilTrackerEmpty(t *testing.T) {
 	cfg := cfgWithSecrets()
-	s := New(cfg.Admin, nil, nil, nil, cfg, nil)
+	s := New(cfg.Admin, nil, nil, nil, cfg, nil, nil)
 	w, body := serve(t, s, "/api/cardinality.json")
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", w.Code)
@@ -238,7 +238,7 @@ func TestConfigAndCardinality_NoLiveTenantCall(t *testing.T) {
 
 	cfg := cfgWithSecrets()
 	// sources = nil, skipReasons = nil, limiter = nil: no live dependency wired.
-	s := New(cfg.Admin, nil, nil, nil, cfg, tr)
+	s := New(cfg.Admin, nil, nil, nil, cfg, tr, nil)
 
 	cw, cbody := serve(t, s, "/api/config.json")
 	if cw.Code != http.StatusOK {

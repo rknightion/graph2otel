@@ -107,9 +107,11 @@ type Options struct {
 // Provider owns the OTEL MeterProvider and LoggerProvider and exposes a single
 // Emitter for collectors. Shutdown flushes and releases both.
 type Provider struct {
-	mp      *sdkmetric.MeterProvider
-	lp      *sdklog.LoggerProvider
-	emitter Emitter
+	mp *sdkmetric.MeterProvider
+	lp *sdklog.LoggerProvider
+	// emitter is held as the concrete *otelEmitter, not the Emitter interface,
+	// so Throughput can read its emit counters without a type assertion.
+	emitter *otelEmitter
 	card    *CardinalityTracker // nil unless self-observability is enabled
 }
 
@@ -211,6 +213,12 @@ func NewProvider(ctx context.Context, opts Options) (*Provider, error) {
 
 // Emitter returns the Emitter collectors should use.
 func (p *Provider) Emitter() Emitter { return p.emitter }
+
+// Throughput returns the cumulative count of metric data points and log
+// records the Emitter has shipped since process start. It is in-process
+// introspection for the admin status page (#227), never exported as OTLP, and
+// never reset by a read — callers difference consecutive reads for a rate.
+func (p *Provider) Throughput() Throughput { return p.emitter.Throughput() }
 
 // Cardinality returns the self-observability cardinality tracker, or nil when
 // self-observability is disabled. The caller drives Report on the export

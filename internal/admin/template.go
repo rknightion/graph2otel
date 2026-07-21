@@ -47,6 +47,10 @@ var funcs = template.FuncMap{
 	// sparkline renders a recent-duration trend as an inline SVG polyline.
 	// Returns "" for fewer than two points (nothing meaningful to draw).
 	"sparkline": sparkline,
+	// sparklineF is sparkline for a float series (throttle headroom, #227).
+	// html/template cannot call a generic function, so each element type needs
+	// its own named entry point.
+	"sparklineF": sparklineF,
 	// outcomeStrip renders recent run outcomes as a row of ok/fail ticks.
 	"outcomeStrip": outcomeStrip,
 }
@@ -59,9 +63,21 @@ func tail[T any](s []T, n int) []T {
 	return s
 }
 
-// sparkline builds an inline SVG polyline (viewBox 0..100 x 0..24) from the
-// most recent durations. A flat line is drawn when every sample is equal.
-func sparkline(series []int64) template.HTML {
+// sparkNumber is the element type a sparkline can be drawn from: run
+// durations in milliseconds (int64) and headroom percentages (float64).
+type sparkNumber interface {
+	~int64 | ~float64
+}
+
+// sparkline builds an inline SVG polyline from a recent-duration series.
+func sparkline(series []int64) template.HTML { return sparklineOf(series) }
+
+// sparklineF builds an inline SVG polyline from a recent float series.
+func sparklineF(series []float64) template.HTML { return sparklineOf(series) }
+
+// sparklineOf builds an inline SVG polyline (viewBox 0..100 x 0..24) from the
+// most recent samples. A flat line is drawn when every sample is equal.
+func sparklineOf[T sparkNumber](series []T) template.HTML {
 	pts := tail(series, sparkMaxPoints)
 	if len(pts) < 2 {
 		return ""
@@ -75,7 +91,7 @@ func sparkline(series []int64) template.HTML {
 			maxV = v
 		}
 	}
-	span := float64(maxV - minV)
+	span := float64(maxV) - float64(minV)
 	const w, h = 100.0, 24.0
 	var b strings.Builder
 	for i, v := range pts {
@@ -83,7 +99,7 @@ func sparkline(series []int64) template.HTML {
 		// y inverted so larger durations sit higher; flat mid-line when span==0.
 		y := h / 2
 		if span > 0 {
-			y = h - (float64(v-minV)/span)*h
+			y = h - ((float64(v)-float64(minV))/span)*h
 		}
 		if i > 0 {
 			b.WriteByte(' ')
