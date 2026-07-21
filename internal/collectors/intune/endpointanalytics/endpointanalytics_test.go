@@ -261,6 +261,143 @@ func TestCollectAggregatesStartupHistoriesIntoBootAndLoginHistograms(t *testing.
 	}
 }
 
+// TestStartupHistoriesExcludeInsufficientDataSentinel pins #224: Endpoint
+// Analytics reports -1 for "not enough data yet" on the startup-history timing
+// fields, exactly as it does on the device scores, and a -1 must never reach a
+// histogram as if it were a measurement.
+//
+// The two rows below are the VERBATIM live m7kni response (live-measured
+// 2026-07-21, #224) and they are the whole point of the case: each row carries a
+// real value in one field and a sentinel in the OTHER, so the sentinel cannot be
+// skipped per-ROW without discarding a genuine measurement. The guard has to be
+// per-FIELD. Before the fix, each histogram took one real and one -1 sample:
+// _sum dragged low, _count overstated how many boots were actually measured, and
+// the -1 landed in the lowest bucket claiming a sub-millisecond boot.
+func TestStartupHistoriesExcludeInsufficientDataSentinel(t *testing.T) {
+	body := `{"value":[
+	  {"coreBootTimeInMs":2989,"groupPolicyBootTimeInMs":0,"featureUpdateBootTimeInMs":33146,
+	   "totalBootTimeInMs":36135,"groupPolicyLoginTimeInMs":-1,"coreLoginTimeInMs":-1,
+	   "responsiveDesktopTimeInMs":-1,"totalLoginTimeInMs":-1,"restartCategory":"update"},
+	  {"coreBootTimeInMs":-1,"groupPolicyBootTimeInMs":-1,"featureUpdateBootTimeInMs":-1,
+	   "totalBootTimeInMs":-1,"groupPolicyLoginTimeInMs":-1,"coreLoginTimeInMs":160762,
+	   "responsiveDesktopTimeInMs":160760,"totalLoginTimeInMs":160761,"restartCategory":"unknown"}
+	]}`
+	g := &fakeGraph{bodies: allEndpoints(map[string]string{startupURL: body})}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	for _, tc := range []struct {
+		metric  string
+		wantSum float64
+		field   string
+	}{
+		{bootTimeMetric, 36135, "totalBootTimeInMs"},
+		{loginTimeMetric, 160761, "totalLoginTimeInMs"},
+	} {
+		var count uint64
+		var sum float64
+		for _, p := range rec.MetricPoints(tc.metric) {
+			count += p.Count
+			sum += p.Value // Value holds the Sum for histograms
+		}
+		if count != 1 {
+			t.Errorf("%s: observation count = %d, want 1 (the -1 %s sentinel must not be recorded)",
+				tc.metric, count, tc.field)
+		}
+		if sum != tc.wantSum {
+			t.Errorf("%s: sum = %v, want %v (a recorded -1 drags the sum below the real measurement)",
+				tc.metric, sum, tc.wantSum)
+		}
+	}
+
+	// A row whose timing fields are ALL sentinel contributes no observation at
+	// all, rather than a zero — a clamped 0ms boot is as wrong as -1, just
+	// harder to spot.
+	allSentinel := `{"value":[{"totalBootTimeInMs":-1,"totalLoginTimeInMs":-1,"restartCategory":"update"}]}`
+	g2 := &fakeGraph{bodies: allEndpoints(map[string]string{startupURL: allSentinel})}
+	rec2 := telemetrytest.New()
+	if err := New(g2, nil).Collect(context.Background(), rec2.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if pts := rec2.MetricPoints(bootTimeMetric); len(pts) != 0 {
+		t.Errorf("all-sentinel row emitted %d boot points, want 0", len(pts))
+	}
+	if pts := rec2.MetricPoints(loginTimeMetric); len(pts) != 0 {
+		t.Errorf("all-sentinel row emitted %d login points, want 0", len(pts))
+	}
+}
+
+// TestScoreSubFetchesExcludeInsufficientDataSentinel completes the #224 sweep.
+// The -1 "not enough data" sentinel is an Endpoint-Analytics-wide convention, not
+// a startup-history quirk: collectDeviceScores has always excluded it, and the
+// battery and resource sub-fetches record the same 0-100 score shape into
+// histograms. A device that is enrolled but not yet scored reports -1 rather
+// than being absent (live-measured 2026-07-21, #224: the Cloud PC and the
+// Parallels VM both report batteryHealthScore -1 on the sibling deviceScores
+// segment while a real laptop reports 63).
+//
+// The device still counts in device_count under its healthStatus — only the
+// score observation is suppressed, so "how many devices are in this state"
+// stays correct while the distribution is not dragged toward zero.
+func TestScoreSubFetchesExcludeInsufficientDataSentinel(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		url         string
+		body        string
+		scoreMetric string
+		countMetric string
+	}{
+		{
+			name:        "battery",
+			url:         batteryURL,
+			body:        `{"value":[{"deviceBatteryHealthScore":63,"healthStatus":"meetingGoals"},{"deviceBatteryHealthScore":-1,"healthStatus":"meetingGoals"}]}`,
+			scoreMetric: batteryScoreMetric,
+			countMetric: batteryDeviceCountMetric,
+		},
+		{
+			name:        "resource",
+			url:         resourcePerfURL,
+			body:        `{"value":[{"deviceResourcePerformanceScore":88,"healthStatus":"meetingGoals"},{"deviceResourcePerformanceScore":-1,"healthStatus":"meetingGoals"}]}`,
+			scoreMetric: resourceScoreMetric,
+			countMetric: resourceDeviceCountMetric,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := &fakeGraph{bodies: allEndpoints(map[string]string{tc.url: tc.body})}
+			rec := telemetrytest.New()
+			if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+				t.Fatalf("Collect: %v", err)
+			}
+
+			var count uint64
+			var sum float64
+			for _, p := range rec.MetricPoints(tc.scoreMetric) {
+				count += p.Count
+				sum += p.Value
+			}
+			if count != 1 {
+				t.Errorf("%s: observation count = %d, want 1 (the -1 sentinel must not be recorded)", tc.scoreMetric, count)
+			}
+			if sum < 0 {
+				t.Errorf("%s: sum = %v, want a non-negative score sum", tc.scoreMetric, sum)
+			}
+
+			// Both devices still count — the sentinel suppresses the score, not
+			// the device.
+			var devices float64
+			for _, p := range rec.MetricPoints(tc.countMetric) {
+				devices += p.Value
+			}
+			if devices != 2 {
+				t.Errorf("%s: device count = %v, want 2 (an unscored device is still a device)", tc.countMetric, devices)
+			}
+		})
+	}
+}
+
 func TestCollectEmitsAppCrashCountForAllowListedAppsOnly(t *testing.T) {
 	body := `{"value":[
 	  {"appName":"outlook.exe","appCrashCount":5},

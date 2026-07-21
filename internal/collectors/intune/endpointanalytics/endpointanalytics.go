@@ -509,8 +509,16 @@ func (c *Collector) collectStartupHistories(ctx context.Context, e telemetry.Emi
 		}
 		bucket := restartCategoryBucketFor(h.RestartCategory)
 		attrs := telemetry.Attrs{semconv.AttrRestartCategory: bucket}
-		e.Histogram(bootTimeMetric, "ms", "Intune Endpoint Analytics device boot time, by restart category.", h.TotalBootTimeInMs, bootTimeBounds, attrs)
-		e.Histogram(loginTimeMetric, "ms", "Intune Endpoint Analytics device login time, by restart category.", h.TotalLoginTimeInMs, bootTimeBounds, attrs)
+		// Per-FIELD sentinel guard, not per-row (#224): a live row routinely
+		// carries a real measurement in one timing field and -1 in the other,
+		// so dropping the whole row would discard genuine data. Omit rather
+		// than clamp — a 0ms boot is as wrong as -1 and harder to notice.
+		if h.TotalBootTimeInMs >= 0 {
+			e.Histogram(bootTimeMetric, "ms", "Intune Endpoint Analytics device boot time, by restart category; the -1 'not enough data' sentinel is excluded.", h.TotalBootTimeInMs, bootTimeBounds, attrs)
+		}
+		if h.TotalLoginTimeInMs >= 0 {
+			e.Histogram(loginTimeMetric, "ms", "Intune Endpoint Analytics device login time, by restart category; the -1 'not enough data' sentinel is excluded.", h.TotalLoginTimeInMs, bootTimeBounds, attrs)
+		}
 	}
 	return nil
 }
@@ -555,8 +563,12 @@ func (c *Collector) collectBatteryHealth(ctx context.Context, e telemetry.Emitte
 		}
 		state := healthStateBucketFor(b.HealthStatus)
 		counts[state]++
-		e.Histogram(batteryScoreMetric, "{score}", "Intune Endpoint Analytics device battery health score (0-100), by health state.",
-			b.DeviceBatteryHealthScore, scoreBounds, telemetry.Attrs{semconv.AttrHealthState: state})
+		// -1 = "not enough data yet" (#224). The device still counts under its
+		// health state; only the score observation is suppressed.
+		if b.DeviceBatteryHealthScore >= 0 {
+			e.Histogram(batteryScoreMetric, "{score}", "Intune Endpoint Analytics device battery health score (0-100), by health state; the -1 'not enough data' sentinel is excluded.",
+				b.DeviceBatteryHealthScore, scoreBounds, telemetry.Attrs{semconv.AttrHealthState: state})
+		}
 	}
 	points := make([]telemetry.GaugePoint, 0, len(counts))
 	for state, n := range counts {
@@ -580,8 +592,11 @@ func (c *Collector) collectResourcePerformance(ctx context.Context, e telemetry.
 		}
 		state := healthStateBucketFor(rp.HealthStatus)
 		counts[state]++
-		e.Histogram(resourceScoreMetric, "{score}", "Intune Endpoint Analytics device resource performance score (0-100), by health state.",
-			rp.DeviceResourcePerformanceScore, scoreBounds, telemetry.Attrs{semconv.AttrHealthState: state})
+		// -1 = "not enough data yet" (#224); see collectBatteryHealth.
+		if rp.DeviceResourcePerformanceScore >= 0 {
+			e.Histogram(resourceScoreMetric, "{score}", "Intune Endpoint Analytics device resource performance score (0-100), by health state; the -1 'not enough data' sentinel is excluded.",
+				rp.DeviceResourcePerformanceScore, scoreBounds, telemetry.Attrs{semconv.AttrHealthState: state})
+		}
 	}
 	points := make([]telemetry.GaugePoint, 0, len(counts))
 	for state, n := range counts {
