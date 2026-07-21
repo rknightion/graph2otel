@@ -1,0 +1,125 @@
+name: Graph beta drift
+
+# Daily canary over the Microsoft Graph *beta* surface graph2otel consumes.
+# tools/graphdrift fetches the live beta CSDL ($metadata — anonymous, no tenant
+# credentials), slices it to the operations in spec/graph-beta-surface.json and
+# diffs that against spec/graph-beta-snapshot.json. Breaking drift (a removed or
+# retyped property, a path that stops resolving) files/updates one tracking
+# issue and fails the run; additive upstream churn is reported but never fires.
+# Graph v1.0 is deliberately out of scope — see docs/api-drift.md.
+
+on:
+  schedule:
+    - cron: "23 6 * * *" # daily 06:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: graph-beta-drift
+  cancel-in-progress: false
+
+jobs:
+  beta-drift:
+    name: consumed beta surface
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # checkout only; the canary never writes to the repo
+      issues: write # file/comment/close the one drift tracking issue
+    env:
+      DRIFT_LABEL: graph-beta-drift
+      DRIFT_TITLE: "Microsoft Graph beta drift on consumed operations"
+      REPORT_PATH: /tmp/graph-beta-drift.md
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      # tools/graphdrift is a standard-library-only module with no go.sum, so
+      # there is nothing to cache and a cache-dependency-path would not resolve.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      # Build, don't `go run`. Live-measured on go1.26.5: `go run` collapses ANY
+      # non-zero exit to 1 and prints "exit status N" to stderr, so the drift
+      # signal (3) and a tool failure (2) become indistinguishable — the canary
+      # would report every clean-vs-broken run identically.
+      - name: Build graphdrift
+        run: go build -C tools/graphdrift -o "${RUNNER_TEMP}/graphdrift" .
+
+      - name: Diff the consumed beta surface against the snapshot
+        id: drift
+        run: |
+          set +e
+          "${RUNNER_TEMP}/graphdrift" \
+            -manifest spec/graph-beta-surface.json \
+            -snapshot spec/graph-beta-snapshot.json \
+            -format md > "$REPORT_PATH" 2>/tmp/graph-beta-drift.err
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Fail on tool error (any non-zero that is not the drift signal '3')
+        if: steps.drift.outputs.code != '0' && steps.drift.outputs.code != '3'
+        env:
+          DRIFT_CODE: ${{ steps.drift.outputs.code }}
+        run: |
+          echo "graphdrift errored (exit ${DRIFT_CODE}) — this is NOT a clean run"
+          cat /tmp/graph-beta-drift.err || true
+          cat "$REPORT_PATH" || true
+          exit 1
+
+      - name: File or update the tracking issue
+        if: steps.drift.outputs.code == '3'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh label create "$DRIFT_LABEL" \
+            --description "Upstream Microsoft Graph beta surface drifted from the committed snapshot" \
+            --color B60205 2>/dev/null || true
+
+          {
+            echo "Breaking drift on the Microsoft Graph **beta** surface graph2otel consumes."
+            echo
+            cat "$REPORT_PATH"
+            echo
+            echo "Source: \`https://graph.microsoft.com/beta/\$metadata\` vs \`spec/graph-beta-snapshot.json\`."
+            echo "Run: ${RUN_URL}"
+            echo
+            echo "Triage: confirm the change against the live endpoint (wire over docs), fix or"
+            echo "re-scope the affected collector, then refresh the snapshot with"
+            echo "\`go run -C tools/graphdrift . -update\`. See docs/api-drift.md."
+          } > /tmp/graph-beta-drift-body.md
+
+          existing=$(gh issue list --label "$DRIFT_LABEL" --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file /tmp/graph-beta-drift-body.md
+            echo "updated issue #${existing}"
+          else
+            gh issue create --title "$DRIFT_TITLE" --label "$DRIFT_LABEL" \
+              --body-file /tmp/graph-beta-drift-body.md
+          fi
+
+      - name: Fail the run on drift
+        if: steps.drift.outputs.code == '3'
+        run: |
+          cat "$REPORT_PATH"
+          exit 1
+
+      - name: Resolve the tracking issue on a clean run
+        if: steps.drift.outputs.code == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cat "$REPORT_PATH"
+          existing=$(gh issue list --label "$DRIFT_LABEL" --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "Clean run — the consumed beta surface now matches \`spec/graph-beta-snapshot.json\`. Closing."
+            gh issue close "$existing"
+          fi

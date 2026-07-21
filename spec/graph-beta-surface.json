@@ -1,0 +1,343 @@
+{
+  "metadata_url": "https://graph.microsoft.com/beta/$metadata",
+  "note": "The Microsoft Graph BETA surface graph2otel consumes. Graph v1.0 is deliberately absent: it is a versioned, contractually stable surface, so drift value concentrates on beta. Paths are written without the /beta prefix, with {id} for key segments. Every package listed here builds a beta URL somewhere in its non-test Go source, and TestBetaSurfaceManifestCoversEveryBetaConsumer (internal/collectordoc) fails in both directions if that stops being true. See docs/api-drift.md.",
+  "packages": [
+    {
+      "package": "internal/collectors/entra/agentriskdetections",
+      "collectors": [
+        "entra.agent_risk_detections"
+      ],
+      "operations": [
+        {
+          "path": "/identityProtection/agentRiskDetections"
+        }
+      ]
+    },
+    {
+      "package": "internal/collectors/entra/recommendations",
+      "collectors": [
+        "entra.recommendations"
+      ],
+      "operations": [
+        {
+          "path": "/directory/recommendations"
+        }
+      ]
+    },
+    {
+      "package": "internal/collectors/entra/riskyagents",
+      "collectors": [
+        "entra.risky_agents"
+      ],
+      "operations": [
+        {
+          "path": "/identityProtection/riskyAgents"
+        }
+      ]
+    },
+    {
+      "package": "internal/collectors/entra/signinactivity",
+      "collectors": [
+        "entra.signin_activity"
+      ],
+      "operations": [
+        {
+          "path": "/reports/appCredentialSignInActivities"
+        },
+        {
+          "path": "/reports/servicePrincipalSignInActivities"
+        }
+      ]
+    },
+    {
+      "package": "internal/collectors/entra/signins",
+      "collectors": [
+        "entra.signins.non_interactive",
+        "entra.signins.service_principal",
+        "entra.signins.managed_identity"
+      ],
+      "operations": [
+        {
+          "path": "/auditLogs/signIns",
+          "note": "the interactive stream polls the same path on v1.0; the other three are beta-only because the signInEventTypes filter is beta-only"
+        }
+      ]
+    },
+    {
+      "package": "internal/collectors/intune/appletokens",
+      "collectors": [
+        "intune.apple_tokens"
+      ],
+      "operations": [
+        {
+          "path": "/deviceManagement/depOnboardingSettings"
+        }
+      ]
+    },
+    {
+      "package": "internal/collectors/intune/autopilot",
+      "collectors": [
+        "intune.autopilot"
+      ],
+      "operations": [
+        {
+          "path": "/deviceManagement/windowsAutopilotDeploymentProfiles"
+        },
+        {
+          "path": "/deviceManagement/windowsAutopilotDeploymentProfiles/{id}/assignments"
+        }
+      ]
+    },
+    {
+      "package": "internal/collectors/intune/autopilotevents",
+      "collectors": [
+        "intune.autopilot_events"
+      ],
+      "operations": [
+        {
+          "path": "/deviceManagement/autopilotEvents"
+        }
+      ]
+    },
+    {
+      "package": "internal/collectors/intune/certificates",
+      "collectors": [
+        "intune.certificates"
+      ],
+      "operations": [
+        {
+          "path": "/deviceManagement/deviceConfigurations"
+        },
+        {
+          "path": "/deviceManagement/userPfxCertificates"
+        },
+        {
+          "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.androidDeviceOwnerImportedPFXCertificateProfile/managedDeviceCertificateStates",
+          "note": "one entry per member of the collector's certProfileTypes table \u2014 managedDeviceCertificateStates is declared on each profile type individually, not on a shared base, so losing it from one platform is invisible unless each is watched"
+        },
+        {
+          "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.androidDeviceOwnerPkcsCertificateProfile/managedDeviceCertificateStates"
+        },
+        {
+          "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.androidDeviceOwnerScepCertificateProfile/managedDeviceCertificateStates"
+        },
+        {
+          "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.androidForWorkImportedPFXCertificateProfile/managedDeviceCertificateStates"
+        },
+        {
+          "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.androidForWorkPkcsCertificateProfile/managedDeviceCertificateStates"
+        },
+        {
+          "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.androidForWorkScepCertificateProfile/managedDeviceCertificateStates"
+        },
+        {
+          "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.androidImportedPFXCertificateProfile/managedDeviceCertificateStates"
+        },
+        {
+          "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.androidPkcsCertificateProfile/managedDeviceCertificateStates"
+        },
+        {
+          "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.androidScepCertificateProfile/managedDeviceCertificateStates"
+        },
+        {
+          "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.androidWorkProfilePkcsCertificateProfile/managedDeviceCertificateStates"
+        },
+        {
+          "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.androidWorkProfileScepCertificateProfile/managedDeviceCertificateStates"
+        },
+        {
+          "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.aospDeviceOwnerPkcsCertificateProfile/managedDeviceCertificateStates"
+        },
+        {
+          "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.aospDeviceOwnerScepCertificateProfile/managedDeviceCertificateStates"
+        },
+        {
+          "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.iosImportedPFXCertificateProfile/managedDeviceCertificateStates"
+        },
+        {
+          "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.iosPkcsCertificateProfile/managedDeviceCertificateStates"
+        },
+        {
+          "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.iosScepCertificateProfile/managedDeviceCertificateStates"
+        },
+        {
+          "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.macOSImportedPFXCertificateProfile/managedDeviceCertificateStates"
+        },
+        {
+          "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.macOSPkcsCertificateProfile/managedDeviceCertificateStates"
+        },
+        {
+          "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.macOSScepCertificateProfile/managedDeviceCertificateStates"
+        },
+        {
+          "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.windowsPhone81SCEPCertificateProfile/managedDeviceCertificateStates"
+        }
+      ]
+    },
+    {
+      "package": "internal/collectors/intune/connectors",
+      "collectors": [
+        "intune.connectors"
+      ],
+      "operations": [
+        {
+          "path": "/deviceManagement/ndesConnectors",
+          "note": "the exchange and mobile-threat-defense connectors on this collector are v1.0; only NDES is beta-only"
+        }
+      ]
+    },
+    {
+      "package": "internal/collectors/intune/deviceencryption",
+      "collectors": [
+        "intune.device_encryption"
+      ],
+      "operations": [
+        {
+          "path": "/deviceManagement/managedDeviceEncryptionStates"
+        }
+      ]
+    },
+    {
+      "package": "internal/collectors/intune/endpointanalytics",
+      "collectors": [
+        "intune.endpoint_analytics"
+      ],
+      "operations": [
+        {
+          "path": "/deviceManagement/userExperienceAnalyticsBaselines"
+        },
+        {
+          "path": "/deviceManagement/userExperienceAnalyticsBatteryHealthDevicePerformance"
+        },
+        {
+          "path": "/deviceManagement/userExperienceAnalyticsResourcePerformance"
+        },
+        {
+          "path": "/deviceManagement/userExperienceAnalyticsAnomalySeverityOverview",
+          "unmodeled": true,
+          "type": "microsoft.graph.userExperienceAnalyticsAnomalySeverityOverview",
+          "note": "live-measured: the endpoint returns 200 with this shape, but the beta EDM declares userExperienceAnalyticsAnomalySeverityOverview only as a ComplexType with no container or navigation binding, so there is nothing to walk. The type itself is still watched."
+        },
+        {
+          "path": "/deviceManagement/userExperienceAnalyticsWorkFromAnywhereMetrics/allDevices/metricDevices",
+          "resolve_as": "/deviceManagement/userExperienceAnalyticsWorkFromAnywhereMetrics/{id}/metricDevices",
+          "note": "\"allDevices\" is a literal key, not a navigation segment \u2014 the only metric id this resource exposes"
+        }
+      ]
+    },
+    {
+      "package": "internal/collectors/intune/gpoanalytics",
+      "collectors": [
+        "intune.gpo_analytics"
+      ],
+      "operations": [
+        {
+          "path": "/deviceManagement/groupPolicyConfigurations"
+        },
+        {
+          "path": "/deviceManagement/groupPolicyMigrationReports"
+        }
+      ]
+    },
+    {
+      "package": "internal/collectors/intune/remediationrunstates",
+      "collectors": [
+        "intune.remediation_run_states"
+      ],
+      "operations": [
+        {
+          "path": "/deviceManagement/deviceHealthScripts/{id}/deviceRunStates"
+        }
+      ]
+    },
+    {
+      "package": "internal/collectors/intune/scripts",
+      "collectors": [
+        "intune.scripts"
+      ],
+      "operations": [
+        {
+          "path": "/deviceManagement/deviceHealthScripts"
+        },
+        {
+          "path": "/deviceManagement/deviceHealthScripts/getRemediationSummary"
+        },
+        {
+          "path": "/deviceManagement/deviceHealthScripts/{id}/runSummary"
+        },
+        {
+          "path": "/deviceManagement/deviceManagementScripts"
+        },
+        {
+          "path": "/deviceManagement/deviceManagementScripts/{id}/runSummary"
+        },
+        {
+          "path": "/deviceManagement/deviceShellScripts"
+        },
+        {
+          "path": "/deviceManagement/deviceShellScripts/{id}/runSummary"
+        }
+      ]
+    },
+    {
+      "package": "internal/collectors/intune/settingscatalog",
+      "collectors": [
+        "intune.settings_catalog"
+      ],
+      "operations": [
+        {
+          "path": "/deviceManagement/configurationPolicies"
+        },
+        {
+          "path": "/deviceManagement/intents"
+        },
+        {
+          "path": "/deviceManagement/intents/{id}/deviceStateSummary"
+        },
+        {
+          "path": "/deviceManagement/templates"
+        },
+        {
+          "path": "/deviceManagement/templates/{id}/deviceStateSummary",
+          "resolve_as": "/deviceManagement/templates/{id}/microsoft.graph.securityBaselineTemplate/deviceStateSummary",
+          "note": "the collector omits the derived-type cast; Graph resolves it against the instance, which is always a securityBaselineTemplate here because the list call filters on the security-baseline template family"
+        }
+      ]
+    },
+    {
+      "package": "internal/collectors/intune/updates",
+      "collectors": [
+        "intune.updates"
+      ],
+      "operations": [
+        {
+          "path": "/deviceManagement/windowsDriverUpdateProfiles"
+        },
+        {
+          "path": "/deviceManagement/windowsFeatureUpdateProfiles"
+        },
+        {
+          "path": "/deviceManagement/windowsQualityUpdatePolicies"
+        },
+        {
+          "path": "/deviceManagement/windowsQualityUpdateProfiles"
+        }
+      ]
+    },
+    {
+      "package": "internal/collectors/m365/unifiedaudit",
+      "collectors": [
+        "m365.unified_audit"
+      ],
+      "operations": [
+        {
+          "path": "/security/auditLog/queries",
+          "note": "POST creates the query; the status poll is GET on the same resource by id, so it lands on the same type"
+        },
+        {
+          "path": "/security/auditLog/queries/{id}/records"
+        }
+      ]
+    }
+  ]
+}

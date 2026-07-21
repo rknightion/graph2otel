@@ -18,6 +18,7 @@ nav = [
     ] },
   { Operations = [
       { Security = "security.md" },
+      { "API Drift Canary" = "api-drift.md" },
       { "Scale & Soak Validation" = "scale-validation.md" },
       { "PII & Cardinality Audit" = "pii-cardinality-audit.md" },
       { "Deploying Observability" = "deploying-observability.md" }

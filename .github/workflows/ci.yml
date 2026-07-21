@@ -35,6 +35,12 @@ jobs:
       - name: go test -race
         run: go test -race ./...
 
+      # tools/ holds separate CI-only modules (graphdrift, the Graph beta drift
+      # canary), so the root `./...` above does not see them. graphdrift is
+      # standard-library-only — no module downloads, a few seconds.
+      - name: vet + test the tools modules
+        run: make tools-check
+
   lint:
     name: golangci-lint
     runs-on: ubuntu-latest

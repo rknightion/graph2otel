@@ -29,7 +29,8 @@ export PATH := $(TOOLS_DIR):$(PATH)
 
 .PHONY: build test lint fmt vet govulncheck docker check regen tools \
         coverage notices sbom tools-licensing tools-sbom install-hooks \
-        helm-docs tools-helm-docs
+        helm-docs tools-helm-docs tools-check tools-graphdrift \
+        graphdrift graphdrift-update
 
 build:
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/$(BINARY)
@@ -56,8 +57,33 @@ docker:
 # generated-doc drift gate (docs/env-vars.md vs config.example.yaml) rides the
 # `test` target as an ordinary `go test` (TestEnvReferenceDocInSync), so a stale
 # doc fails `check` with no extra step.
-check: vet test lint govulncheck
+check: vet test lint govulncheck tools-check
 	$(GO) build ./...
+
+# tools/ holds separate CI-only modules, so `./...` from the repo root does not
+# see them — vet and test them explicitly or they rot uncaught. graphdrift is
+# standard-library-only, so this needs no module downloads and costs a few
+# seconds. CI runs the same step in the build-test job.
+tools-check:
+	$(GO) vet -C tools/graphdrift ./...
+	$(GO) test -C tools/graphdrift ./...
+
+# Microsoft Graph beta drift canary (#220) — see docs/api-drift.md.
+# graphdrift diffs the live beta $metadata against spec/graph-beta-snapshot.json;
+# graphdrift-update refreshes that snapshot. Both need network access.
+#
+# Built, not `go run`: live-measured on go1.26.5, `go run` collapses ANY non-zero
+# exit to 1, which would erase the difference between the drift signal (3) and a
+# tool failure (2). CI builds it for the same reason.
+tools-graphdrift:
+	@mkdir -p $(TOOLS_DIR)
+	$(GO) build -C tools/graphdrift -o $(TOOLS_DIR)/graphdrift .
+
+graphdrift: tools-graphdrift
+	$(TOOLS_DIR)/graphdrift -manifest spec/graph-beta-surface.json -snapshot spec/graph-beta-snapshot.json
+
+graphdrift-update: tools-graphdrift
+	$(TOOLS_DIR)/graphdrift -manifest spec/graph-beta-surface.json -snapshot spec/graph-beta-snapshot.json -update
 
 # Regenerate committed generated artifacts (docs/env-vars.md) from their sources.
 # The drift gate is enforced by `make test`; this is the "regenerate it for me"

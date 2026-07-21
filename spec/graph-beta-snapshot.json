@@ -1,0 +1,2801 @@
+{
+  "source": "https://graph.microsoft.com/beta/$metadata",
+  "operations": [
+    {
+      "path": "/auditLogs/signIns",
+      "type": "microsoft.graph.signIn",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/autopilotEvents",
+      "type": "microsoft.graph.deviceManagementAutopilotEvent",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/configurationPolicies",
+      "type": "microsoft.graph.deviceManagementConfigurationPolicy",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/depOnboardingSettings",
+      "type": "microsoft.graph.depOnboardingSetting",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceConfigurations",
+      "type": "microsoft.graph.deviceConfiguration",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.androidDeviceOwnerImportedPFXCertificateProfile/managedDeviceCertificateStates",
+      "type": "microsoft.graph.managedDeviceCertificateState",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.androidDeviceOwnerPkcsCertificateProfile/managedDeviceCertificateStates",
+      "type": "microsoft.graph.managedDeviceCertificateState",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.androidDeviceOwnerScepCertificateProfile/managedDeviceCertificateStates",
+      "type": "microsoft.graph.managedDeviceCertificateState",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.androidForWorkImportedPFXCertificateProfile/managedDeviceCertificateStates",
+      "type": "microsoft.graph.managedDeviceCertificateState",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.androidForWorkPkcsCertificateProfile/managedDeviceCertificateStates",
+      "type": "microsoft.graph.managedDeviceCertificateState",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.androidForWorkScepCertificateProfile/managedDeviceCertificateStates",
+      "type": "microsoft.graph.managedDeviceCertificateState",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.androidImportedPFXCertificateProfile/managedDeviceCertificateStates",
+      "type": "microsoft.graph.managedDeviceCertificateState",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.androidPkcsCertificateProfile/managedDeviceCertificateStates",
+      "type": "microsoft.graph.managedDeviceCertificateState",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.androidScepCertificateProfile/managedDeviceCertificateStates",
+      "type": "microsoft.graph.managedDeviceCertificateState",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.androidWorkProfilePkcsCertificateProfile/managedDeviceCertificateStates",
+      "type": "microsoft.graph.managedDeviceCertificateState",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.androidWorkProfileScepCertificateProfile/managedDeviceCertificateStates",
+      "type": "microsoft.graph.managedDeviceCertificateState",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.aospDeviceOwnerPkcsCertificateProfile/managedDeviceCertificateStates",
+      "type": "microsoft.graph.managedDeviceCertificateState",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.aospDeviceOwnerScepCertificateProfile/managedDeviceCertificateStates",
+      "type": "microsoft.graph.managedDeviceCertificateState",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.iosImportedPFXCertificateProfile/managedDeviceCertificateStates",
+      "type": "microsoft.graph.managedDeviceCertificateState",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.iosPkcsCertificateProfile/managedDeviceCertificateStates",
+      "type": "microsoft.graph.managedDeviceCertificateState",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.iosScepCertificateProfile/managedDeviceCertificateStates",
+      "type": "microsoft.graph.managedDeviceCertificateState",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.macOSImportedPFXCertificateProfile/managedDeviceCertificateStates",
+      "type": "microsoft.graph.managedDeviceCertificateState",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.macOSPkcsCertificateProfile/managedDeviceCertificateStates",
+      "type": "microsoft.graph.managedDeviceCertificateState",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.macOSScepCertificateProfile/managedDeviceCertificateStates",
+      "type": "microsoft.graph.managedDeviceCertificateState",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceConfigurations/{id}/microsoft.graph.windowsPhone81SCEPCertificateProfile/managedDeviceCertificateStates",
+      "type": "microsoft.graph.managedDeviceCertificateState",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceHealthScripts",
+      "type": "microsoft.graph.deviceHealthScript",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceHealthScripts/getRemediationSummary",
+      "type": "microsoft.graph.deviceHealthScriptRemediationSummary",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceHealthScripts/{id}/deviceRunStates",
+      "type": "microsoft.graph.deviceHealthScriptDeviceState",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceHealthScripts/{id}/runSummary",
+      "type": "microsoft.graph.deviceHealthScriptRunSummary",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceManagementScripts",
+      "type": "microsoft.graph.deviceManagementScript",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceManagementScripts/{id}/runSummary",
+      "type": "microsoft.graph.deviceManagementScriptRunSummary",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceShellScripts",
+      "type": "microsoft.graph.deviceShellScript",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/deviceShellScripts/{id}/runSummary",
+      "type": "microsoft.graph.deviceManagementScriptRunSummary",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/groupPolicyConfigurations",
+      "type": "microsoft.graph.groupPolicyConfiguration",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/groupPolicyMigrationReports",
+      "type": "microsoft.graph.groupPolicyMigrationReport",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/intents",
+      "type": "microsoft.graph.deviceManagementIntent",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/intents/{id}/deviceStateSummary",
+      "type": "microsoft.graph.deviceManagementIntentDeviceStateSummary",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/managedDeviceEncryptionStates",
+      "type": "microsoft.graph.managedDeviceEncryptionState",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/ndesConnectors",
+      "type": "microsoft.graph.ndesConnector",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/templates",
+      "type": "microsoft.graph.deviceManagementTemplate",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/templates/{id}/deviceStateSummary",
+      "type": "microsoft.graph.securityBaselineStateSummary",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/userExperienceAnalyticsAnomalySeverityOverview",
+      "type": "microsoft.graph.userExperienceAnalyticsAnomalySeverityOverview",
+      "resolution": "unmodeled"
+    },
+    {
+      "path": "/deviceManagement/userExperienceAnalyticsBaselines",
+      "type": "microsoft.graph.userExperienceAnalyticsBaseline",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/userExperienceAnalyticsBatteryHealthDevicePerformance",
+      "type": "microsoft.graph.userExperienceAnalyticsBatteryHealthDevicePerformance",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/userExperienceAnalyticsResourcePerformance",
+      "type": "microsoft.graph.userExperienceAnalyticsResourcePerformance",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/userExperienceAnalyticsWorkFromAnywhereMetrics/allDevices/metricDevices",
+      "type": "microsoft.graph.userExperienceAnalyticsWorkFromAnywhereDevice",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/userPfxCertificates",
+      "type": "microsoft.graph.userPFXCertificate",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/windowsAutopilotDeploymentProfiles",
+      "type": "microsoft.graph.windowsAutopilotDeploymentProfile",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/windowsAutopilotDeploymentProfiles/{id}/assignments",
+      "type": "microsoft.graph.windowsAutopilotDeploymentProfileAssignment",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/windowsDriverUpdateProfiles",
+      "type": "microsoft.graph.windowsDriverUpdateProfile",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/windowsFeatureUpdateProfiles",
+      "type": "microsoft.graph.windowsFeatureUpdateProfile",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/windowsQualityUpdatePolicies",
+      "type": "microsoft.graph.windowsQualityUpdatePolicy",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/windowsQualityUpdateProfiles",
+      "type": "microsoft.graph.windowsQualityUpdateProfile",
+      "resolution": "model"
+    },
+    {
+      "path": "/directory/recommendations",
+      "type": "microsoft.graph.recommendation",
+      "resolution": "model"
+    },
+    {
+      "path": "/identityProtection/agentRiskDetections",
+      "type": "microsoft.graph.agentRiskDetection",
+      "resolution": "model"
+    },
+    {
+      "path": "/identityProtection/riskyAgents",
+      "type": "microsoft.graph.riskyAgent",
+      "resolution": "model"
+    },
+    {
+      "path": "/reports/appCredentialSignInActivities",
+      "type": "microsoft.graph.appCredentialSignInActivity",
+      "resolution": "model"
+    },
+    {
+      "path": "/reports/servicePrincipalSignInActivities",
+      "type": "microsoft.graph.servicePrincipalSignInActivity",
+      "resolution": "model"
+    },
+    {
+      "path": "/security/auditLog/queries",
+      "type": "microsoft.graph.security.auditLogQuery",
+      "resolution": "model"
+    },
+    {
+      "path": "/security/auditLog/queries/{id}/records",
+      "type": "microsoft.graph.security.auditLogRecord",
+      "resolution": "model"
+    }
+  ],
+  "types": {
+    "microsoft.graph.actionStep": {
+      "kind": "ComplexType",
+      "properties": {
+        "actionUrl": "microsoft.graph.actionUrl",
+        "stepNumber": "Edm.Int64",
+        "text": "Edm.String"
+      }
+    },
+    "microsoft.graph.advancedBitLockerState": {
+      "kind": "EnumType",
+      "members": [
+        "fixedDriveEncryptionMethodMismatch",
+        "fixedDriveNotEncrypted",
+        "loggedOnUserNonAdmin",
+        "networkError",
+        "noUserConsent",
+        "osVolumeEncryptionMethodMismatch",
+        "osVolumeTpmOnlyRequired",
+        "osVolumeTpmPinRequired",
+        "osVolumeTpmPinStartupKeyRequired",
+        "osVolumeTpmRequired",
+        "osVolumeTpmStartupKeyRequired",
+        "osVolumeUnprotected",
+        "recoveryKeyBackupFailed",
+        "success",
+        "tpmNotAvailable",
+        "tpmNotReady",
+        "windowsRecoveryEnvironmentNotConfigured"
+      ]
+    },
+    "microsoft.graph.agentIdentityType": {
+      "kind": "EnumType",
+      "members": [
+        "agentIdentity",
+        "agentIdentityBlueprintPrincipal",
+        "agentUser",
+        "unknownFutureValue",
+        "user"
+      ]
+    },
+    "microsoft.graph.agentRiskDetection": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "activityDateTime": "Edm.DateTimeOffset",
+        "additionalInfo": "Edm.String",
+        "agentDisplayName": "Edm.String",
+        "agentId": "Edm.String",
+        "blueprintId": "Edm.String",
+        "clientSessionId": "Edm.String",
+        "detectedDateTime": "Edm.DateTimeOffset",
+        "detectionTimingType": "microsoft.graph.riskDetectionTimingType",
+        "displayName": "Edm.String",
+        "identityId": "Edm.String",
+        "identityType": "microsoft.graph.agentIdentityType",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "riskDetail": "microsoft.graph.riskDetail",
+        "riskEventType": "Edm.String",
+        "riskEvidence": "Edm.String",
+        "riskLevel": "microsoft.graph.riskLevel",
+        "riskState": "microsoft.graph.riskState",
+        "signInClientDisplayName": "Edm.String",
+        "signInCorrelationId": "Edm.String",
+        "signInRequestId": "Edm.String",
+        "source": "Edm.String"
+      }
+    },
+    "microsoft.graph.agentic.agentSignIn": {
+      "kind": "ComplexType",
+      "properties": {
+        "agentSubjectParentId": "Edm.String",
+        "agentSubjectType": "microsoft.graph.agentic.agentType",
+        "agentType": "microsoft.graph.agentic.agentType",
+        "parentAppId": "Edm.String"
+      }
+    },
+    "microsoft.graph.appCredentialSignInActivity": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "appId": "Edm.String",
+        "appObjectId": "Edm.String",
+        "createdDateTime": "Edm.DateTimeOffset",
+        "credentialOrigin": "microsoft.graph.applicationKeyOrigin",
+        "expirationDateTime": "Edm.DateTimeOffset",
+        "keyId": "Edm.String",
+        "keyType": "microsoft.graph.applicationKeyType",
+        "keyUsage": "microsoft.graph.applicationKeyUsage",
+        "resourceId": "Edm.String",
+        "servicePrincipalObjectId": "Edm.String",
+        "signInActivity": "microsoft.graph.signInActivity"
+      }
+    },
+    "microsoft.graph.applicationKeyOrigin": {
+      "kind": "EnumType",
+      "members": [
+        "application",
+        "servicePrincipal",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.applicationKeyType": {
+      "kind": "EnumType",
+      "members": [
+        "certificate",
+        "clientSecret",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.applicationKeyUsage": {
+      "kind": "EnumType",
+      "members": [
+        "sign",
+        "unknownFutureValue",
+        "verify"
+      ]
+    },
+    "microsoft.graph.appliedAuthenticationEventListener": {
+      "kind": "ComplexType",
+      "properties": {
+        "eventType": "microsoft.graph.authenticationEventType",
+        "executedListenerId": "Edm.String",
+        "handlerResult": "microsoft.graph.authenticationEventHandlerResult"
+      }
+    },
+    "microsoft.graph.appliedConditionalAccessPolicy": {
+      "kind": "ComplexType",
+      "properties": {
+        "authenticationStrength": "microsoft.graph.authenticationStrength",
+        "conditionsNotSatisfied": "microsoft.graph.conditionalAccessConditions",
+        "conditionsSatisfied": "microsoft.graph.conditionalAccessConditions",
+        "displayName": "Edm.String",
+        "enforcedGrantControls": "Collection(Edm.String)",
+        "enforcedSessionControls": "Collection(Edm.String)",
+        "excludeRulesSatisfied": "Collection(microsoft.graph.conditionalAccessRuleSatisfied)",
+        "id": "Edm.String",
+        "includeRulesSatisfied": "Collection(microsoft.graph.conditionalAccessRuleSatisfied)",
+        "result": "microsoft.graph.appliedConditionalAccessPolicyResult",
+        "sessionControlsNotSatisfied": "Collection(Edm.String)"
+      }
+    },
+    "microsoft.graph.authenticationAppDeviceDetails": {
+      "kind": "ComplexType",
+      "properties": {
+        "appVersion": "Edm.String",
+        "clientApp": "Edm.String",
+        "deviceId": "Edm.String",
+        "operatingSystem": "Edm.String"
+      }
+    },
+    "microsoft.graph.authenticationAppPolicyDetails": {
+      "kind": "ComplexType",
+      "properties": {
+        "adminConfiguration": "microsoft.graph.authenticationAppAdminConfiguration",
+        "authenticationEvaluation": "microsoft.graph.authenticationAppEvaluation",
+        "policyName": "Edm.String",
+        "status": "microsoft.graph.authenticationAppPolicyStatus"
+      }
+    },
+    "microsoft.graph.authenticationContext": {
+      "kind": "ComplexType",
+      "properties": {
+        "detail": "microsoft.graph.authenticationContextDetail",
+        "id": "Edm.String"
+      }
+    },
+    "microsoft.graph.authenticationDetail": {
+      "kind": "ComplexType",
+      "properties": {
+        "authenticationMethod": "Edm.String",
+        "authenticationMethodDetail": "Edm.String",
+        "authenticationStepDateTime": "Edm.DateTimeOffset",
+        "authenticationStepRequirement": "Edm.String",
+        "authenticationStepResultDetail": "Edm.String",
+        "succeeded": "Edm.Boolean"
+      }
+    },
+    "microsoft.graph.authenticationRequirementPolicy": {
+      "kind": "ComplexType",
+      "properties": {
+        "detail": "Edm.String",
+        "requirementProvider": "microsoft.graph.requirementProvider"
+      }
+    },
+    "microsoft.graph.certificateIssuanceStates": {
+      "kind": "EnumType",
+      "members": [
+        "challengeIssueFailed",
+        "challengeIssued",
+        "challengeValidationFailed",
+        "challengeValidationSucceeded",
+        "deleteFailed",
+        "deleted",
+        "enrollmentNotNeeded",
+        "enrollmentSucceeded",
+        "installFailed",
+        "installed",
+        "issueFailed",
+        "issuePending",
+        "issued",
+        "removedFromCollection",
+        "renewVerified",
+        "renewalRequested",
+        "requestCreationFailed",
+        "requestSubmitFailed",
+        "requested",
+        "responsePending",
+        "responseProcessingFailed",
+        "revoked",
+        "unknown"
+      ]
+    },
+    "microsoft.graph.certificateRevocationStatus": {
+      "kind": "EnumType",
+      "members": [
+        "failed",
+        "issued",
+        "none",
+        "pending",
+        "revoked"
+      ]
+    },
+    "microsoft.graph.certificateValidityPeriodScale": {
+      "kind": "EnumType",
+      "members": [
+        "days",
+        "months",
+        "years"
+      ]
+    },
+    "microsoft.graph.clientCredentialType": {
+      "kind": "EnumType",
+      "members": [
+        "certificate",
+        "clientAssertion",
+        "clientSecret",
+        "federatedIdentityCredential",
+        "managedIdentity",
+        "none",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.complianceStatus": {
+      "kind": "EnumType",
+      "members": [
+        "compliant",
+        "conflict",
+        "error",
+        "nonCompliant",
+        "notApplicable",
+        "notAssigned",
+        "remediated",
+        "unknown"
+      ]
+    },
+    "microsoft.graph.conditionalAccessStatus": {
+      "kind": "EnumType",
+      "members": [
+        "failure",
+        "notApplied",
+        "success",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.depOnboardingSetting": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "appleIdentifier": "Edm.String",
+        "dataSharingConsentGranted": "Edm.Boolean",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "lastSuccessfulSyncDateTime": "Edm.DateTimeOffset",
+        "lastSyncErrorCode": "Edm.Int32",
+        "lastSyncTriggeredDateTime": "Edm.DateTimeOffset",
+        "roleScopeTagIds": "Collection(Edm.String)",
+        "shareTokenWithSchoolDataSyncService": "Edm.Boolean",
+        "syncedDeviceCount": "Edm.Int32",
+        "tokenExpirationDateTime": "Edm.DateTimeOffset",
+        "tokenName": "Edm.String",
+        "tokenType": "microsoft.graph.depTokenType"
+      },
+      "navigation_properties": {
+        "defaultIosEnrollmentProfile": "microsoft.graph.depIOSEnrollmentProfile",
+        "defaultMacOsEnrollmentProfile": "microsoft.graph.depMacOSEnrollmentProfile",
+        "defaultTvOSEnrollmentProfile": "microsoft.graph.depTvOSEnrollmentProfile",
+        "defaultVisionOSEnrollmentProfile": "microsoft.graph.depVisionOSEnrollmentProfile",
+        "enrollmentProfiles": "Collection(microsoft.graph.enrollmentProfile)",
+        "importedAppleDeviceIdentities": "Collection(microsoft.graph.importedAppleDeviceIdentity)"
+      }
+    },
+    "microsoft.graph.depTokenType": {
+      "kind": "EnumType",
+      "members": [
+        "appleSchoolManager",
+        "dep",
+        "none"
+      ]
+    },
+    "microsoft.graph.deviceAndAppManagementAssignmentSource": {
+      "kind": "EnumType",
+      "members": [
+        "direct",
+        "policySets"
+      ]
+    },
+    "microsoft.graph.deviceAndAppManagementAssignmentTarget": {
+      "kind": "ComplexType",
+      "properties": {
+        "deviceAndAppManagementAssignmentFilterId": "Edm.String",
+        "deviceAndAppManagementAssignmentFilterType": "microsoft.graph.deviceAndAppManagementAssignmentFilterType"
+      }
+    },
+    "microsoft.graph.deviceConfiguration": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "createdDateTime": "Edm.DateTimeOffset",
+        "description": "Edm.String",
+        "deviceManagementApplicabilityRuleDeviceMode": "microsoft.graph.deviceManagementApplicabilityRuleDeviceMode",
+        "deviceManagementApplicabilityRuleOsEdition": "microsoft.graph.deviceManagementApplicabilityRuleOsEdition",
+        "deviceManagementApplicabilityRuleOsVersion": "microsoft.graph.deviceManagementApplicabilityRuleOsVersion",
+        "displayName": "Edm.String",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "roleScopeTagIds": "Collection(Edm.String)",
+        "supportsScopeTags": "Edm.Boolean",
+        "version": "Edm.Int32"
+      },
+      "navigation_properties": {
+        "assignments": "Collection(microsoft.graph.deviceConfigurationAssignment)",
+        "deviceSettingStateSummaries": "Collection(microsoft.graph.settingStateDeviceSummary)",
+        "deviceStatusOverview": "microsoft.graph.deviceConfigurationDeviceOverview",
+        "deviceStatuses": "Collection(microsoft.graph.deviceConfigurationDeviceStatus)",
+        "groupAssignments": "Collection(microsoft.graph.deviceConfigurationGroupAssignment)",
+        "userStatusOverview": "microsoft.graph.deviceConfigurationUserOverview",
+        "userStatuses": "Collection(microsoft.graph.deviceConfigurationUserStatus)"
+      }
+    },
+    "microsoft.graph.deviceDetail": {
+      "kind": "ComplexType",
+      "properties": {
+        "browser": "Edm.String",
+        "browserId": "Edm.String",
+        "deviceId": "Edm.String",
+        "displayName": "Edm.String",
+        "isCompliant": "Edm.Boolean",
+        "isManaged": "Edm.Boolean",
+        "operatingSystem": "Edm.String",
+        "trustType": "Edm.String"
+      }
+    },
+    "microsoft.graph.deviceHealthScript": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "createdDateTime": "Edm.DateTimeOffset",
+        "description": "Edm.String",
+        "detectionScriptContent": "Edm.Binary",
+        "detectionScriptParameters": "Collection(microsoft.graph.deviceHealthScriptParameter)",
+        "deviceHealthScriptType": "microsoft.graph.deviceHealthScriptType",
+        "displayName": "Edm.String",
+        "enforceSignatureCheck": "Edm.Boolean",
+        "highestAvailableVersion": "Edm.String",
+        "isGlobalScript": "Edm.Boolean",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "publisher": "Edm.String",
+        "remediationScriptContent": "Edm.Binary",
+        "remediationScriptParameters": "Collection(microsoft.graph.deviceHealthScriptParameter)",
+        "roleScopeTagIds": "Collection(Edm.String)",
+        "runAs32Bit": "Edm.Boolean",
+        "runAsAccount": "microsoft.graph.runAsAccountType",
+        "version": "Edm.String"
+      },
+      "navigation_properties": {
+        "assignments": "Collection(microsoft.graph.deviceHealthScriptAssignment)",
+        "deviceRunStates": "Collection(microsoft.graph.deviceHealthScriptDeviceState)",
+        "runSummary": "microsoft.graph.deviceHealthScriptRunSummary"
+      }
+    },
+    "microsoft.graph.deviceHealthScriptDeviceState": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "assignmentFilterIds": "Collection(Edm.String)",
+        "detectionState": "microsoft.graph.runState",
+        "expectedStateUpdateDateTime": "Edm.DateTimeOffset",
+        "lastStateUpdateDateTime": "Edm.DateTimeOffset",
+        "lastSyncDateTime": "Edm.DateTimeOffset",
+        "postRemediationDetectionScriptError": "Edm.String",
+        "postRemediationDetectionScriptOutput": "Edm.String",
+        "preRemediationDetectionScriptError": "Edm.String",
+        "preRemediationDetectionScriptOutput": "Edm.String",
+        "remediationScriptError": "Edm.String",
+        "remediationState": "microsoft.graph.remediationState"
+      },
+      "navigation_properties": {
+        "managedDevice": "microsoft.graph.managedDevice"
+      }
+    },
+    "microsoft.graph.deviceHealthScriptParameter": {
+      "kind": "ComplexType",
+      "properties": {
+        "applyDefaultValueWhenNotAssigned": "Edm.Boolean",
+        "description": "Edm.String",
+        "isRequired": "Edm.Boolean",
+        "name": "Edm.String"
+      }
+    },
+    "microsoft.graph.deviceHealthScriptRemediationSummary": {
+      "kind": "ComplexType",
+      "properties": {
+        "remediatedDeviceCount": "Edm.Int32",
+        "scriptCount": "Edm.Int32"
+      }
+    },
+    "microsoft.graph.deviceHealthScriptRunSummary": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "detectionScriptErrorDeviceCount": "Edm.Int32",
+        "detectionScriptNotApplicableDeviceCount": "Edm.Int32",
+        "detectionScriptPendingDeviceCount": "Edm.Int32",
+        "issueDetectedDeviceCount": "Edm.Int32",
+        "issueRemediatedCumulativeDeviceCount": "Edm.Int32",
+        "issueRemediatedDeviceCount": "Edm.Int32",
+        "issueReoccurredDeviceCount": "Edm.Int32",
+        "lastScriptRunDateTime": "Edm.DateTimeOffset",
+        "noIssueDetectedDeviceCount": "Edm.Int32",
+        "remediationScriptErrorDeviceCount": "Edm.Int32",
+        "remediationSkippedDeviceCount": "Edm.Int32"
+      }
+    },
+    "microsoft.graph.deviceHealthScriptType": {
+      "kind": "EnumType",
+      "members": [
+        "deviceHealthScript",
+        "managedInstallerScript"
+      ]
+    },
+    "microsoft.graph.deviceManagementApplicabilityRuleDeviceMode": {
+      "kind": "ComplexType",
+      "properties": {
+        "deviceMode": "microsoft.graph.windows10DeviceModeType",
+        "name": "Edm.String",
+        "ruleType": "microsoft.graph.deviceManagementApplicabilityRuleType"
+      }
+    },
+    "microsoft.graph.deviceManagementApplicabilityRuleOsEdition": {
+      "kind": "ComplexType",
+      "properties": {
+        "name": "Edm.String",
+        "osEditionTypes": "Collection(microsoft.graph.windows10EditionType)",
+        "ruleType": "microsoft.graph.deviceManagementApplicabilityRuleType"
+      }
+    },
+    "microsoft.graph.deviceManagementApplicabilityRuleOsVersion": {
+      "kind": "ComplexType",
+      "properties": {
+        "maxOSVersion": "Edm.String",
+        "minOSVersion": "Edm.String",
+        "name": "Edm.String",
+        "ruleType": "microsoft.graph.deviceManagementApplicabilityRuleType"
+      }
+    },
+    "microsoft.graph.deviceManagementAutopilotEvent": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "accountSetupDuration": "Edm.Duration",
+        "accountSetupStatus": "microsoft.graph.windowsAutopilotDeploymentState",
+        "deploymentDuration": "Edm.Duration",
+        "deploymentEndDateTime": "Edm.DateTimeOffset",
+        "deploymentStartDateTime": "Edm.DateTimeOffset",
+        "deploymentState": "microsoft.graph.windowsAutopilotDeploymentState",
+        "deploymentTotalDuration": "Edm.Duration",
+        "deviceId": "Edm.String",
+        "deviceRegisteredDateTime": "Edm.DateTimeOffset",
+        "deviceSerialNumber": "Edm.String",
+        "deviceSetupDuration": "Edm.Duration",
+        "deviceSetupStatus": "microsoft.graph.windowsAutopilotDeploymentState",
+        "enrollmentFailureDetails": "Edm.String",
+        "enrollmentStartDateTime": "Edm.DateTimeOffset",
+        "enrollmentState": "microsoft.graph.enrollmentState",
+        "enrollmentType": "microsoft.graph.windowsAutopilotEnrollmentType",
+        "eventDateTime": "Edm.DateTimeOffset",
+        "managedDeviceName": "Edm.String",
+        "osVersion": "Edm.String",
+        "userId": "Edm.String",
+        "userPrincipalName": "Edm.String",
+        "windows10EnrollmentCompletionPageConfigurationDisplayName": "Edm.String",
+        "windows10EnrollmentCompletionPageConfigurationId": "Edm.String",
+        "windowsAutopilotDeploymentProfileDisplayName": "Edm.String"
+      }
+    },
+    "microsoft.graph.deviceManagementConfigurationPlatforms": {
+      "kind": "EnumType",
+      "members": [
+        "android",
+        "androidEnterprise",
+        "aosp",
+        "iOS",
+        "linux",
+        "macOS",
+        "none",
+        "tvOS",
+        "unknownFutureValue",
+        "visionOS",
+        "windows10",
+        "windows10X"
+      ]
+    },
+    "microsoft.graph.deviceManagementConfigurationPolicy": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "createdDateTime": "Edm.DateTimeOffset",
+        "creationSource": "Edm.String",
+        "description": "Edm.String",
+        "disableEntraGroupPolicyAssignment": "Edm.Boolean",
+        "isAssigned": "Edm.Boolean",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "name": "Edm.String",
+        "platforms": "microsoft.graph.deviceManagementConfigurationPlatforms",
+        "priorityMetaData": "microsoft.graph.deviceManagementPriorityMetaData",
+        "roleScopeTagIds": "Collection(Edm.String)",
+        "settingCount": "Edm.Int32",
+        "technologies": "microsoft.graph.deviceManagementConfigurationTechnologies",
+        "templateReference": "microsoft.graph.deviceManagementConfigurationPolicyTemplateReference"
+      },
+      "navigation_properties": {
+        "assignments": "Collection(microsoft.graph.deviceManagementConfigurationPolicyAssignment)",
+        "settings": "Collection(microsoft.graph.deviceManagementConfigurationSetting)"
+      }
+    },
+    "microsoft.graph.deviceManagementConfigurationPolicyTemplateReference": {
+      "kind": "ComplexType",
+      "properties": {
+        "templateDisplayName": "Edm.String",
+        "templateDisplayVersion": "Edm.String",
+        "templateFamily": "microsoft.graph.deviceManagementConfigurationTemplateFamily",
+        "templateId": "Edm.String"
+      }
+    },
+    "microsoft.graph.deviceManagementConfigurationTechnologies": {
+      "kind": "EnumType",
+      "members": [
+        "android",
+        "appleRemoteManagement",
+        "configManager",
+        "documentGateway",
+        "endpointPrivilegeManagement",
+        "enrollment",
+        "exchangeOnline",
+        "intuneManagementExtension",
+        "linuxMdm",
+        "mdm",
+        "microsoftSense",
+        "mobileApplicationManagement",
+        "none",
+        "thirdParty",
+        "unknownFutureValue",
+        "windows10XManagement",
+        "windowsOsRecovery"
+      ]
+    },
+    "microsoft.graph.deviceManagementIntent": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "description": "Edm.String",
+        "displayName": "Edm.String",
+        "isAssigned": "Edm.Boolean",
+        "isMigratingToConfigurationPolicy": "Edm.Boolean",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "roleScopeTagIds": "Collection(Edm.String)",
+        "templateId": "Edm.String"
+      },
+      "navigation_properties": {
+        "assignments": "Collection(microsoft.graph.deviceManagementIntentAssignment)",
+        "categories": "Collection(microsoft.graph.deviceManagementIntentSettingCategory)",
+        "deviceSettingStateSummaries": "Collection(microsoft.graph.deviceManagementIntentDeviceSettingStateSummary)",
+        "deviceStateSummary": "microsoft.graph.deviceManagementIntentDeviceStateSummary",
+        "deviceStates": "Collection(microsoft.graph.deviceManagementIntentDeviceState)",
+        "settings": "Collection(microsoft.graph.deviceManagementSettingInstance)",
+        "userStateSummary": "microsoft.graph.deviceManagementIntentUserStateSummary",
+        "userStates": "Collection(microsoft.graph.deviceManagementIntentUserState)"
+      }
+    },
+    "microsoft.graph.deviceManagementIntentDeviceStateSummary": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "conflictCount": "Edm.Int32",
+        "errorCount": "Edm.Int32",
+        "failedCount": "Edm.Int32",
+        "notApplicableCount": "Edm.Int32",
+        "notApplicablePlatformCount": "Edm.Int32",
+        "successCount": "Edm.Int32"
+      }
+    },
+    "microsoft.graph.deviceManagementPriorityMetaData": {
+      "kind": "ComplexType",
+      "properties": {
+        "priority": "Edm.Int32"
+      }
+    },
+    "microsoft.graph.deviceManagementScript": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "createdDateTime": "Edm.DateTimeOffset",
+        "description": "Edm.String",
+        "displayName": "Edm.String",
+        "enforceSignatureCheck": "Edm.Boolean",
+        "fileName": "Edm.String",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "roleScopeTagIds": "Collection(Edm.String)",
+        "runAs32Bit": "Edm.Boolean",
+        "runAsAccount": "microsoft.graph.runAsAccountType",
+        "scriptContent": "Edm.Binary"
+      },
+      "navigation_properties": {
+        "assignments": "Collection(microsoft.graph.deviceManagementScriptAssignment)",
+        "deviceRunStates": "Collection(microsoft.graph.deviceManagementScriptDeviceState)",
+        "groupAssignments": "Collection(microsoft.graph.deviceManagementScriptGroupAssignment)",
+        "runSummary": "microsoft.graph.deviceManagementScriptRunSummary",
+        "userRunStates": "Collection(microsoft.graph.deviceManagementScriptUserState)"
+      }
+    },
+    "microsoft.graph.deviceManagementScriptRunSummary": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "errorDeviceCount": "Edm.Int32",
+        "errorUserCount": "Edm.Int32",
+        "successDeviceCount": "Edm.Int32",
+        "successUserCount": "Edm.Int32"
+      }
+    },
+    "microsoft.graph.deviceManagementTemplate": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "description": "Edm.String",
+        "displayName": "Edm.String",
+        "intentCount": "Edm.Int32",
+        "isDeprecated": "Edm.Boolean",
+        "platformType": "microsoft.graph.policyPlatformType",
+        "publishedDateTime": "Edm.DateTimeOffset",
+        "templateSubtype": "microsoft.graph.deviceManagementTemplateSubtype",
+        "templateType": "microsoft.graph.deviceManagementTemplateType",
+        "versionInfo": "Edm.String"
+      },
+      "navigation_properties": {
+        "categories": "Collection(microsoft.graph.deviceManagementTemplateSettingCategory)",
+        "migratableTo": "Collection(microsoft.graph.deviceManagementTemplate)",
+        "settings": "Collection(microsoft.graph.deviceManagementSettingInstance)"
+      }
+    },
+    "microsoft.graph.deviceManagementTemplateSubtype": {
+      "kind": "EnumType",
+      "members": [
+        "accountProtection",
+        "antivirus",
+        "attackSurfaceReduction",
+        "diskEncryption",
+        "endpointDetectionReponse",
+        "firewall",
+        "firewallSharedAppList",
+        "firewallSharedIpList",
+        "firewallSharedPortlist",
+        "none"
+      ]
+    },
+    "microsoft.graph.deviceManagementTemplateType": {
+      "kind": "EnumType",
+      "members": [
+        "advancedThreatProtectionSecurityBaseline",
+        "cloudPC",
+        "custom",
+        "deviceCompliance",
+        "deviceConfiguration",
+        "deviceConfigurationForOffice365",
+        "firewallSharedSettings",
+        "microsoftEdgeSecurityBaseline",
+        "microsoftOffice365ProPlusSecurityBaseline",
+        "securityBaseline",
+        "securityTemplate",
+        "specializedDevices"
+      ]
+    },
+    "microsoft.graph.devicePlatformType": {
+      "kind": "EnumType",
+      "members": [
+        "android",
+        "androidAOSP",
+        "androidForWork",
+        "androidMobileApplicationManagement",
+        "androidWorkProfile",
+        "iOS",
+        "iOSMobileApplicationManagement",
+        "macOS",
+        "unknown",
+        "unknownFutureValue",
+        "windows10AndLater",
+        "windows81AndLater",
+        "windowsMobileApplicationManagement",
+        "windowsPhone81"
+      ]
+    },
+    "microsoft.graph.deviceShellScript": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "blockExecutionNotifications": "Edm.Boolean",
+        "createdDateTime": "Edm.DateTimeOffset",
+        "description": "Edm.String",
+        "displayName": "Edm.String",
+        "executionFrequency": "Edm.Duration",
+        "fileName": "Edm.String",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "retryCount": "Edm.Int32",
+        "roleScopeTagIds": "Collection(Edm.String)",
+        "runAsAccount": "microsoft.graph.runAsAccountType",
+        "scriptContent": "Edm.Binary"
+      },
+      "navigation_properties": {
+        "assignments": "Collection(microsoft.graph.deviceManagementScriptAssignment)",
+        "deviceRunStates": "Collection(microsoft.graph.deviceManagementScriptDeviceState)",
+        "groupAssignments": "Collection(microsoft.graph.deviceManagementScriptGroupAssignment)",
+        "runSummary": "microsoft.graph.deviceManagementScriptRunSummary",
+        "userRunStates": "Collection(microsoft.graph.deviceManagementScriptUserState)"
+      }
+    },
+    "microsoft.graph.deviceTypes": {
+      "kind": "EnumType",
+      "members": [
+        "android",
+        "androidEnterprise",
+        "androidForWork",
+        "blackberry",
+        "desktop",
+        "holoLens",
+        "iPad",
+        "iPhone",
+        "iPod",
+        "iSocConsumer",
+        "mac",
+        "macMDM",
+        "nokia",
+        "palm",
+        "surfaceHub",
+        "unix",
+        "unknown",
+        "winCE",
+        "winEmbedded",
+        "winMO6",
+        "windowsPhone",
+        "windowsRT"
+      ]
+    },
+    "microsoft.graph.diskType": {
+      "kind": "EnumType",
+      "members": [
+        "hdd",
+        "ssd",
+        "unknown",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.driverUpdateProfileApprovalType": {
+      "kind": "EnumType",
+      "members": [
+        "automatic",
+        "manual"
+      ]
+    },
+    "microsoft.graph.encryptionReadinessState": {
+      "kind": "EnumType",
+      "members": [
+        "notReady",
+        "ready"
+      ]
+    },
+    "microsoft.graph.encryptionReportPolicyDetails": {
+      "kind": "ComplexType",
+      "properties": {
+        "policyId": "Edm.String",
+        "policyName": "Edm.String"
+      }
+    },
+    "microsoft.graph.encryptionState": {
+      "kind": "EnumType",
+      "members": [
+        "encrypted",
+        "notEncrypted"
+      ]
+    },
+    "microsoft.graph.enrollmentState": {
+      "kind": "EnumType",
+      "members": [
+        "blocked",
+        "enrolled",
+        "failed",
+        "notContacted",
+        "pendingReset",
+        "unknown"
+      ]
+    },
+    "microsoft.graph.entity": {
+      "kind": "EntityType",
+      "properties": {
+        "id": "Edm.String"
+      }
+    },
+    "microsoft.graph.expeditedWindowsQualityUpdateSettings": {
+      "kind": "ComplexType",
+      "properties": {
+        "daysUntilForcedReboot": "Edm.Int32",
+        "qualityUpdateCatalogItemId": "Edm.String",
+        "qualityUpdateRelease": "Edm.String"
+      }
+    },
+    "microsoft.graph.fileVaultState": {
+      "kind": "EnumType",
+      "members": [
+        "driveEncryptedByUser",
+        "escrowNotEnabled",
+        "success",
+        "userDeferredEncryption"
+      ]
+    },
+    "microsoft.graph.groupPolicyConfiguration": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "createdDateTime": "Edm.DateTimeOffset",
+        "description": "Edm.String",
+        "displayName": "Edm.String",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "policyConfigurationIngestionType": "microsoft.graph.groupPolicyConfigurationIngestionType",
+        "roleScopeTagIds": "Collection(Edm.String)"
+      },
+      "navigation_properties": {
+        "assignments": "Collection(microsoft.graph.groupPolicyConfigurationAssignment)",
+        "definitionValues": "Collection(microsoft.graph.groupPolicyDefinitionValue)"
+      }
+    },
+    "microsoft.graph.groupPolicyConfigurationIngestionType": {
+      "kind": "EnumType",
+      "members": [
+        "builtIn",
+        "custom",
+        "mixed",
+        "unknown",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.groupPolicyMigrationReadiness": {
+      "kind": "EnumType",
+      "members": [
+        "complete",
+        "error",
+        "none",
+        "notApplicable",
+        "partial"
+      ]
+    },
+    "microsoft.graph.groupPolicyMigrationReport": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "createdDateTime": "Edm.DateTimeOffset",
+        "displayName": "Edm.String",
+        "groupPolicyCreatedDateTime": "Edm.DateTimeOffset",
+        "groupPolicyLastModifiedDateTime": "Edm.DateTimeOffset",
+        "groupPolicyObjectId": "Edm.Guid",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "migrationReadiness": "microsoft.graph.groupPolicyMigrationReadiness",
+        "ouDistinguishedName": "Edm.String",
+        "roleScopeTagIds": "Collection(Edm.String)",
+        "supportedSettingsCount": "Edm.Int32",
+        "supportedSettingsPercent": "Edm.Int32",
+        "targetedInActiveDirectory": "Edm.Boolean",
+        "totalSettingsCount": "Edm.Int32"
+      },
+      "navigation_properties": {
+        "groupPolicySettingMappings": "Collection(microsoft.graph.groupPolicySettingMapping)",
+        "unsupportedGroupPolicyExtensions": "Collection(microsoft.graph.unsupportedGroupPolicyExtension)"
+      }
+    },
+    "microsoft.graph.incomingTokenType": {
+      "kind": "EnumType",
+      "members": [
+        "none",
+        "primaryRefreshToken",
+        "refreshToken",
+        "remoteDesktopToken",
+        "saml11",
+        "saml20",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.keyStorageProviderOption": {
+      "kind": "EnumType",
+      "members": [
+        "usePassportForWorkKspOtherwiseFail",
+        "useSoftwareKsp",
+        "useTpmKspOtherwiseFail",
+        "useTpmKspOtherwiseUseSoftwareKsp"
+      ]
+    },
+    "microsoft.graph.keyUsages": {
+      "kind": "EnumType",
+      "members": [
+        "digitalSignature",
+        "keyEncipherment"
+      ]
+    },
+    "microsoft.graph.keyValue": {
+      "kind": "ComplexType",
+      "properties": {
+        "key": "Edm.String",
+        "value": "Edm.String"
+      }
+    },
+    "microsoft.graph.managedDeviceCertificateState": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "certificateEnhancedKeyUsage": "Edm.String",
+        "certificateErrorCode": "Edm.Int32",
+        "certificateExpirationDateTime": "Edm.DateTimeOffset",
+        "certificateIssuanceDateTime": "Edm.DateTimeOffset",
+        "certificateIssuanceState": "microsoft.graph.certificateIssuanceStates",
+        "certificateIssuer": "Edm.String",
+        "certificateKeyLength": "Edm.Int32",
+        "certificateKeyStorageProvider": "microsoft.graph.keyStorageProviderOption",
+        "certificateKeyUsage": "microsoft.graph.keyUsages",
+        "certificateLastIssuanceStateChangedDateTime": "Edm.DateTimeOffset",
+        "certificateProfileDisplayName": "Edm.String",
+        "certificateRevokeStatus": "microsoft.graph.certificateRevocationStatus",
+        "certificateSerialNumber": "Edm.String",
+        "certificateSubjectAlternativeNameFormat": "microsoft.graph.subjectAlternativeNameType",
+        "certificateSubjectAlternativeNameFormatString": "Edm.String",
+        "certificateSubjectNameFormat": "microsoft.graph.subjectNameFormat",
+        "certificateSubjectNameFormatString": "Edm.String",
+        "certificateThumbprint": "Edm.String",
+        "certificateValidityPeriod": "Edm.Int32",
+        "certificateValidityPeriodUnits": "microsoft.graph.certificateValidityPeriodScale",
+        "deviceDisplayName": "Edm.String",
+        "devicePlatform": "microsoft.graph.devicePlatformType",
+        "lastCertificateStateChangeDateTime": "Edm.DateTimeOffset",
+        "userDisplayName": "Edm.String"
+      }
+    },
+    "microsoft.graph.managedDeviceEncryptionState": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "advancedBitLockerStates": "microsoft.graph.advancedBitLockerState",
+        "deviceName": "Edm.String",
+        "deviceType": "microsoft.graph.deviceTypes",
+        "encryptionPolicySettingState": "microsoft.graph.complianceStatus",
+        "encryptionReadinessState": "microsoft.graph.encryptionReadinessState",
+        "encryptionState": "microsoft.graph.encryptionState",
+        "fileVaultStates": "microsoft.graph.fileVaultState",
+        "osVersion": "Edm.String",
+        "policyDetails": "Collection(microsoft.graph.encryptionReportPolicyDetails)",
+        "tpmSpecificationVersion": "Edm.String",
+        "userPrincipalName": "Edm.String"
+      }
+    },
+    "microsoft.graph.managedIdentity": {
+      "kind": "ComplexType",
+      "properties": {
+        "associatedResourceId": "Edm.String",
+        "federatedTokenId": "Edm.String",
+        "federatedTokenIssuer": "Edm.String",
+        "msiType": "microsoft.graph.msiType"
+      }
+    },
+    "microsoft.graph.mfaDetail": {
+      "kind": "ComplexType",
+      "properties": {
+        "authDetail": "Edm.String",
+        "authMethod": "Edm.String"
+      }
+    },
+    "microsoft.graph.ndesConnector": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "connectorVersion": "Edm.String",
+        "displayName": "Edm.String",
+        "enrolledDateTime": "Edm.DateTimeOffset",
+        "lastConnectionDateTime": "Edm.DateTimeOffset",
+        "machineName": "Edm.String",
+        "roleScopeTagIds": "Collection(Edm.String)",
+        "state": "microsoft.graph.ndesConnectorState"
+      }
+    },
+    "microsoft.graph.ndesConnectorState": {
+      "kind": "EnumType",
+      "members": [
+        "active",
+        "inactive",
+        "none"
+      ]
+    },
+    "microsoft.graph.networkLocationDetail": {
+      "kind": "ComplexType",
+      "properties": {
+        "networkNames": "Collection(Edm.String)",
+        "networkType": "microsoft.graph.networkType"
+      }
+    },
+    "microsoft.graph.operatingSystemUpgradeEligibility": {
+      "kind": "EnumType",
+      "members": [
+        "capable",
+        "notCapable",
+        "unknown",
+        "unknownFutureValue",
+        "upgraded"
+      ]
+    },
+    "microsoft.graph.originalTransferMethods": {
+      "kind": "EnumType",
+      "members": [
+        "authenticationTransfer",
+        "deviceCodeFlow",
+        "none",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.outOfBoxExperienceSetting": {
+      "kind": "ComplexType",
+      "properties": {
+        "deviceUsageType": "microsoft.graph.windowsDeviceUsageType",
+        "escapeLinkHidden": "Edm.Boolean",
+        "eulaHidden": "Edm.Boolean",
+        "keyboardSelectionPageSkipped": "Edm.Boolean",
+        "privacySettingsHidden": "Edm.Boolean",
+        "userType": "microsoft.graph.windowsUserType"
+      }
+    },
+    "microsoft.graph.outOfBoxExperienceSettings": {
+      "kind": "ComplexType",
+      "properties": {
+        "deviceUsageType": "microsoft.graph.windowsDeviceUsageType",
+        "hideEULA": "Edm.Boolean",
+        "hideEscapeLink": "Edm.Boolean",
+        "hidePrivacySettings": "Edm.Boolean",
+        "skipKeyboardSelectionPage": "Edm.Boolean",
+        "userType": "microsoft.graph.windowsUserType"
+      }
+    },
+    "microsoft.graph.policyPlatformType": {
+      "kind": "EnumType",
+      "members": [
+        "all",
+        "android",
+        "androidAOSP",
+        "androidForWork",
+        "androidWorkProfile",
+        "iOS",
+        "macOS",
+        "windows10AndLater",
+        "windows10XProfile",
+        "windows81AndLater",
+        "windowsPhone81"
+      ]
+    },
+    "microsoft.graph.privateLinkDetails": {
+      "kind": "ComplexType",
+      "properties": {
+        "policyId": "Edm.String",
+        "policyName": "Edm.String",
+        "policyTenantId": "Edm.String",
+        "resourceId": "Edm.String"
+      }
+    },
+    "microsoft.graph.protocolType": {
+      "kind": "EnumType",
+      "members": [
+        "authenticationTransfer",
+        "authorizationCodeWithPkce",
+        "authorizationCodeWithoutPkce",
+        "clientCredentials",
+        "deviceCode",
+        "directUserGrant",
+        "encryptedAuthorizeResponse",
+        "implicitAccessTokenAndGetResponseMode",
+        "implicitAccessTokenAndPostResponseMode",
+        "implicitIdTokenAndGetResponseMode",
+        "implicitIdTokenAndPostResponseMode",
+        "kerberos",
+        "nativeAuth",
+        "none",
+        "oAuth2",
+        "officeS2S",
+        "onBehalfOf",
+        "prtBrokerBased",
+        "prtGrant",
+        "prtNonBrokerBased",
+        "refreshTokenGrant",
+        "ropc",
+        "saml20",
+        "samlOnBehalfOf",
+        "seamlessSso",
+        "unknownFutureValue",
+        "wsFederation",
+        "wsTrust"
+      ]
+    },
+    "microsoft.graph.recommendation": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.recommendationBase"
+    },
+    "microsoft.graph.recommendationBase": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "actionSteps": "Collection(microsoft.graph.actionStep)",
+        "benefits": "Edm.String",
+        "category": "microsoft.graph.recommendationCategory",
+        "createdDateTime": "Edm.DateTimeOffset",
+        "currentScore": "Edm.Double",
+        "displayName": "Edm.String",
+        "featureAreas": "Collection(microsoft.graph.recommendationFeatureAreas)",
+        "impactStartDateTime": "Edm.DateTimeOffset",
+        "impactType": "Edm.String",
+        "insights": "Edm.String",
+        "lastCheckedDateTime": "Edm.DateTimeOffset",
+        "lastModifiedBy": "Edm.String",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "maxScore": "Edm.Double",
+        "postponeUntilDateTime": "Edm.DateTimeOffset",
+        "priority": "microsoft.graph.recommendationPriority",
+        "recommendationType": "microsoft.graph.recommendationType",
+        "releaseType": "Edm.String",
+        "remediationImpact": "Edm.String",
+        "requiredLicenses": "microsoft.graph.requiredLicenses",
+        "status": "microsoft.graph.recommendationStatus"
+      },
+      "navigation_properties": {
+        "impactedResources": "Collection(microsoft.graph.impactedResource)"
+      }
+    },
+    "microsoft.graph.recommendationCategory": {
+      "kind": "EnumType",
+      "members": [
+        "identityBestPractice",
+        "identitySecureScore",
+        "mdiSecureScore",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.recommendationFeatureAreas": {
+      "kind": "EnumType",
+      "members": [
+        "accessReviews",
+        "applications",
+        "conditionalAccess",
+        "devices",
+        "governance",
+        "groups",
+        "unknownFutureValue",
+        "users"
+      ]
+    },
+    "microsoft.graph.recommendationPriority": {
+      "kind": "EnumType",
+      "members": [
+        "high",
+        "low",
+        "medium"
+      ]
+    },
+    "microsoft.graph.recommendationStatus": {
+      "kind": "EnumType",
+      "members": [
+        "active",
+        "alternateMitigation",
+        "completedBySystem",
+        "completedByUser",
+        "dismissed",
+        "planned",
+        "postponed",
+        "riskAccepted",
+        "thirdParty",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.recommendationType": {
+      "kind": "EnumType",
+      "members": [
+        "aadConnectDeprecated",
+        "aadGraphDeprecationApplication",
+        "aadGraphDeprecationServicePrincipal",
+        "adalToMsalMigration",
+        "adfsAppsMigration",
+        "adminMFAV2",
+        "appRoleAssignmentsGroups",
+        "appRoleAssignmentsUsers",
+        "applicationCredentialExpiry",
+        "blockLegacyAuthentication",
+        "enableDesktopSSO",
+        "enablePHS",
+        "enableProvisioning",
+        "inactiveGuests",
+        "integratedApps",
+        "longLivedCredentials",
+        "managedIdentity",
+        "mfaRegistrationV2",
+        "mfaServerDeprecation",
+        "oneAdmin",
+        "overprivilegedApps",
+        "ownerlessApps",
+        "passwordHashSync",
+        "privateLinkForAAD",
+        "pwagePolicyNew",
+        "roleOverlap",
+        "selfServicePasswordReset",
+        "servicePrincipalKeyExpiry",
+        "signinRiskPolicy",
+        "staleAppCreds",
+        "staleApps",
+        "switchFromPerUserMFA",
+        "tenantMFA",
+        "thirdPartyApps",
+        "turnOffPerUserMFA",
+        "unknownFutureValue",
+        "useAuthenticatorApp",
+        "useMyApps",
+        "userRiskPolicy",
+        "verifyAppPublisher"
+      ]
+    },
+    "microsoft.graph.remediationState": {
+      "kind": "EnumType",
+      "members": [
+        "remediationFailed",
+        "scriptError",
+        "skipped",
+        "success",
+        "unknown",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.requiredLicenses": {
+      "kind": "EnumType",
+      "members": [
+        "aatp",
+        "microsoftEntraIdFree",
+        "microsoftEntraIdGovernance",
+        "microsoftEntraIdP1",
+        "microsoftEntraIdP2",
+        "microsoftEntraWorkloadId",
+        "notApplicable",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.riskDetail": {
+      "kind": "EnumType",
+      "members": [
+        "adminConfirmedAccountSafe",
+        "adminConfirmedAgentCompromised",
+        "adminConfirmedAgentSafe",
+        "adminConfirmedServicePrincipalCompromised",
+        "adminConfirmedSigninCompromised",
+        "adminConfirmedSigninSafe",
+        "adminConfirmedUserCompromised",
+        "adminDismissedAllRiskForServicePrincipal",
+        "adminDismissedAllRiskForUser",
+        "adminDismissedRiskForAgent",
+        "adminDismissedRiskForSignIn",
+        "adminGeneratedTemporaryPassword",
+        "aiConfirmedSigninSafe",
+        "hidden",
+        "m365DAdminDismissedDetection",
+        "microsoftRevokedSessions",
+        "none",
+        "unknownFutureValue",
+        "userChangedPasswordOnPremises",
+        "userPassedMFADrivenByRiskBasedPolicy",
+        "userPerformedSecuredPasswordChange",
+        "userPerformedSecuredPasswordReset"
+      ]
+    },
+    "microsoft.graph.riskDetectionTimingType": {
+      "kind": "EnumType",
+      "members": [
+        "nearRealtime",
+        "notDefined",
+        "offline",
+        "realtime",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.riskLevel": {
+      "kind": "EnumType",
+      "members": [
+        "hidden",
+        "high",
+        "low",
+        "medium",
+        "none",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.riskState": {
+      "kind": "EnumType",
+      "members": [
+        "atRisk",
+        "confirmedCompromised",
+        "confirmedSafe",
+        "dismissed",
+        "none",
+        "remediated",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.riskyAgent": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "agentDisplayName": "Edm.String",
+        "blueprintId": "Edm.String",
+        "identityType": "microsoft.graph.agentIdentityType",
+        "isDeleted": "Edm.Boolean",
+        "isEnabled": "Edm.Boolean",
+        "isProcessing": "Edm.Boolean",
+        "riskDetail": "microsoft.graph.riskDetail",
+        "riskLastModifiedDateTime": "Edm.DateTimeOffset",
+        "riskLevel": "microsoft.graph.riskLevel",
+        "riskState": "microsoft.graph.riskState"
+      }
+    },
+    "microsoft.graph.runAsAccountType": {
+      "kind": "EnumType",
+      "members": [
+        "system",
+        "user"
+      ]
+    },
+    "microsoft.graph.runState": {
+      "kind": "EnumType",
+      "members": [
+        "fail",
+        "notApplicable",
+        "pending",
+        "scriptError",
+        "success",
+        "unknown"
+      ]
+    },
+    "microsoft.graph.security.auditData": {
+      "kind": "ComplexType",
+      "properties": {
+        "dynamicProperties": "microsoft.graph.security.auditRecordTypeDictionary"
+      }
+    },
+    "microsoft.graph.security.auditLogQuery": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "administrativeUnitIdFilters": "Collection(Edm.String)",
+        "displayName": "Edm.String",
+        "filterEndDateTime": "Edm.DateTimeOffset",
+        "filterStartDateTime": "Edm.DateTimeOffset",
+        "ipAddressFilters": "Collection(Edm.String)",
+        "keywordFilter": "Edm.String",
+        "objectIdFilters": "Collection(Edm.String)",
+        "operationFilters": "Collection(Edm.String)",
+        "recordTypeFilters": "Collection(microsoft.graph.security.auditLogRecordType)",
+        "serviceFilters": "Collection(Edm.String)",
+        "status": "microsoft.graph.security.auditLogQueryStatus",
+        "userPrincipalNameFilters": "Collection(Edm.String)"
+      },
+      "navigation_properties": {
+        "records": "Collection(microsoft.graph.security.auditLogRecord)"
+      }
+    },
+    "microsoft.graph.security.auditLogQueryStatus": {
+      "kind": "EnumType",
+      "members": [
+        "cancelled",
+        "failed",
+        "notStarted",
+        "running",
+        "succeeded",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.security.auditLogRecord": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "administrativeUnits": "Collection(Edm.String)",
+        "auditData": "microsoft.graph.security.auditData",
+        "auditLogRecordType": "microsoft.graph.security.auditLogRecordType",
+        "clientIp": "Edm.String",
+        "createdDateTime": "Edm.DateTimeOffset",
+        "objectId": "Edm.String",
+        "operation": "Edm.String",
+        "organizationId": "Edm.String",
+        "service": "Edm.String",
+        "userId": "Edm.String",
+        "userPrincipalName": "Edm.String",
+        "userType": "microsoft.graph.security.auditLogUserType"
+      }
+    },
+    "microsoft.graph.security.auditLogRecordType": {
+      "kind": "EnumType",
+      "members": [
+        "A365AIExecuteTool",
+        "A365AIInferenceCall",
+        "A365AIInvokeAgent",
+        "A365AIRunSummary",
+        "A365SpanOutputs",
+        "AIAppInteraction",
+        "AIExecuteTool",
+        "AIInferenceCall",
+        "AIInteractionsChangeNotification",
+        "AIInteractionsExport",
+        "AIInteractionsSubscription",
+        "AIInvokeAgent",
+        "AISpanOutputs",
+        "AZFWApplicationRuleAggregation",
+        "AZFWDnsQuery",
+        "AZFWNetworkRule",
+        "AadRiskDetection",
+        "AeD",
+        "AgentAdminActivity",
+        "AgentSettingsAdminActivity",
+        "AipDiscover",
+        "AipFileDeleted",
+        "AipHeartBeat",
+        "AipProtectionAction",
+        "AipScannerDiscoverEvent",
+        "AipSensitivityLabelAction",
+        "AirAdminActionInvestigation",
+        "AirInvestigation",
+        "AirManualInvestigation",
+        "Alert",
+        "AlertIncident",
+        "AlertStatus",
+        "AlertSubmission",
+        "AlertSubmissionResultDetail",
+        "AppAdminActivity",
+        "AppSettingsAdminActivity",
+        "ApplicationAudit",
+        "AttackSim",
+        "AttackSimAdmin",
+        "AuditConfig",
+        "AuditRetentionPolicy",
+        "AuditSearch",
+        "AzureAISearchAudit",
+        "AzureActiveDirectory",
+        "AzureActiveDirectoryAccountLogon",
+        "AzureActiveDirectoryStsLogon",
+        "CCRAIPolicyViolation",
+        "CDPClassificationDocument",
+        "CDPClassificationMailItem",
+        "CDPCompliancePolicyExecution",
+        "CDPCompliancePolicyUserFeedback",
+        "CDPDLMAIInteractionInsights",
+        "CDPEdgeBlockedMessage",
+        "CDPEmailFeatures",
+        "CDPHygieneAttachmentInfo",
+        "CDPHygieneSummary",
+        "CDPHygieneUrlInfo",
+        "CDPMlInferencingResult",
+        "CDPPackageManagerHygieneEvent",
+        "CDPPostMailDeliveryAction",
+        "CDPPredictiveCodingLabel",
+        "CDPUnifiedFeedback",
+        "CDPUrlClick",
+        "CMImprovementActionChange",
+        "CPSOperation",
+        "CRM",
+        "CallActivityEvent",
+        "Campaign",
+        "Case",
+        "CaseInvestigation",
+        "CdpClassifierHealthRecord",
+        "CdpColdCrawlStatus",
+        "CdpComplianceDLPExchangeClassification",
+        "CdpComplianceDLPSharePointClassification",
+        "CdpConsumptionResource",
+        "CdpContentExplorerAggregateRecord",
+        "CdpDlpSensitive",
+        "CdpOcrBillingRecord",
+        "CdpOcrCostEstimatorRecord",
+        "CdpResourceScopeChangeEvent",
+        "CloudUpdateDeviceConfig",
+        "CloudUpdateProfileConfig",
+        "CloudUpdateTenantConfig",
+        "ComplianceCCExchangeExecutionResult",
+        "ComplianceConnector",
+        "ComplianceDLMExchange",
+        "ComplianceDLMSharePoint",
+        "ComplianceDLPApplications",
+        "ComplianceDLPApplicationsClassification",
+        "ComplianceDLPEndpoint",
+        "ComplianceDLPEndpointDiscovery",
+        "ComplianceDLPEnforcement",
+        "ComplianceDLPExchange",
+        "ComplianceDLPExchangeClassification",
+        "ComplianceDLPExchangeDiscovery",
+        "ComplianceDLPSharePoint",
+        "ComplianceDLPSharePointClassification",
+        "ComplianceDLPSharePointClassificationExtended",
+        "CompliancePolicyGradingSharePoint",
+        "ComplianceSettingsChange",
+        "ComplianceSitGradingSharePoint",
+        "ComplianceSupervisionExchange",
+        "ConnectedAIAppInteraction",
+        "ConsumptionResource",
+        "ContentStoreMetadata",
+        "CopilotActions",
+        "CopilotAgentManagement",
+        "CopilotForSecurityLogging",
+        "CopilotForSecurityTrigger",
+        "CopilotInteraction",
+        "CopilotSessionSharing",
+        "CoreReportingSettings",
+        "CortanaBriefing",
+        "CreateCopilotPlugin",
+        "CreateCopilotPromptBook",
+        "CreateCopilotWorkspace",
+        "CriticalAssetManagementClassification",
+        "CrossTenantAccessPolicy",
+        "CustomerKeyServiceEncryption",
+        "DLPEndpoint",
+        "DataCatalogAccessRequests",
+        "DataCenterSecurityCmdlet",
+        "DataGovernance",
+        "DataInsightsRestApiAudit",
+        "DataSecurityInvestigation",
+        "DataShareOperation",
+        "DefenderCaseManagement",
+        "DefenderExpertsforXDRAdmin",
+        "DefenderPreviewFeatures",
+        "DefenderSecurityForAIConfiguration",
+        "DeleteCopilotPlugin",
+        "DeleteCopilotPromptBook",
+        "DeleteCopilotWorkspace",
+        "DeployFeatureActivity",
+        "DeviceDiscoverySettings",
+        "DeviceDiscoverySettingsAuthenticatedScans",
+        "DeviceDiscoverySettingsExclusion",
+        "DisableCopilotPlugin",
+        "DisableCopilotPromptBook",
+        "DisableCopilotWorkspace",
+        "Discovery",
+        "DlpImportResult",
+        "DlpSensitiveInformationType",
+        "DragonCopilotAccess",
+        "DragonCopilotAdmin",
+        "DragonCopilotClinicalData",
+        "DragonCopilotSession",
+        "Dynamics365BusinessCentral",
+        "EHRConnector",
+        "EduDataLakeDownloadOperation",
+        "EnableCopilotPlugin",
+        "EnableCopilotPromptBook",
+        "EnableCopilotWorkspace",
+        "EopSubmissionFeedEntity",
+        "ExchangeAdmin",
+        "ExchangeAggregatedOperation",
+        "ExchangeItem",
+        "ExchangeItemAggregated",
+        "ExchangeItemGroup",
+        "ExchangeSearch",
+        "FabricAudit",
+        "FabricPolicy",
+        "FilteringAtpDetonationInfo",
+        "FilteringAttachmentInfo",
+        "FilteringBulkSenderInsightData",
+        "FilteringBulkThresholdInsightData",
+        "FilteringDelistingMetadata",
+        "FilteringDocMetadata",
+        "FilteringDocScan",
+        "FilteringEmailContentFeatures",
+        "FilteringEmailFeatures",
+        "FilteringEntityEvent",
+        "FilteringMailGradingResult",
+        "FilteringMailMetadata",
+        "FilteringMailMetadataExtended",
+        "FilteringMailSubmission",
+        "FilteringPostMailDeliveryAction",
+        "FilteringRuleHits",
+        "FilteringRuntimeInfo",
+        "FilteringTeamsMetadata",
+        "FilteringTeamsPostDeliveryAction",
+        "FilteringTeamsUrlInfo",
+        "FilteringTimeTravelDocMetadata",
+        "FilteringUrlClick",
+        "FilteringUrlInfo",
+        "FilteringUrlPostClickAction",
+        "HRSignal",
+        "HealthcareSignal",
+        "HostedRpa",
+        "HygieneEvent",
+        "IRMActivityAuditTrail",
+        "IRMSecurityAlert",
+        "IncidentStatus",
+        "InformationBarrierPolicyApplication",
+        "InformationWorkerProtection",
+        "InsiderRiskScopedUserInsights",
+        "InsiderRiskScopedUsers",
+        "IrmUserDefinedDetectionSignal",
+        "Kaizala",
+        "LabelAnalyticsAggregate",
+        "LabelContentExplorer",
+        "LabelExplorer",
+        "LargeContentMetadata",
+        "M365ComplianceConnector",
+        "M365DAAD",
+        "M365ODSPAssetMetadata",
+        "M365SearchSections",
+        "MAPGAlerts",
+        "MAPGOnboard",
+        "MAPGPolicy",
+        "MAPGRemediation",
+        "MCASAlerts",
+        "MDAAudit",
+        "MDADataSecuritySignal",
+        "MDASH",
+        "MDATPAudit",
+        "MDCAssessments",
+        "MDCConfigurationEvent",
+        "MDCRegulatoryComplianceAssessments",
+        "MDCRegulatoryComplianceControls",
+        "MDCRegulatoryComplianceStandards",
+        "MDCSecurityConnectors",
+        "MDCUsageEvent",
+        "MIPLabel",
+        "MS365DCustomDetection",
+        "MS365DIncident",
+        "MS365DSuppressionRule",
+        "MSDECustomCollection",
+        "MSDEGeneralSettings",
+        "MSDEIndicatorsSettings",
+        "MSDEResponseActions",
+        "MSDERolesSettings",
+        "MSPVectorSearchContentMetadata",
+        "MSTIC",
+        "MailSubmission",
+        "ManagedTenants",
+        "MeshWorlds",
+        "Microsoft365BackupBackupItem",
+        "Microsoft365BackupBackupPolicy",
+        "Microsoft365BackupGranularBrowseTask",
+        "Microsoft365BackupRestoreItem",
+        "Microsoft365BackupRestoreTask",
+        "Microsoft365CopilotScheduledPrompt",
+        "Microsoft365Group",
+        "MicrosoftDefenderForIdentityAudit",
+        "MicrosoftFlow",
+        "MicrosoftForms",
+        "MicrosoftGraphDataConnectConsent",
+        "MicrosoftGraphDataConnectOperation",
+        "MicrosoftManagedServicePlatform",
+        "MicrosoftPurview",
+        "MicrosoftStream",
+        "MicrosoftTeams",
+        "MicrosoftTeamsAdmin",
+        "MicrosoftTeamsAnalytics",
+        "MicrosoftTeamsDevice",
+        "MicrosoftTeamsRetentionLabelAction",
+        "MicrosoftTeamsSensitivityLabelAction",
+        "MicrosoftTeamsShifts",
+        "MicrosoftTeamsUserConcern",
+        "MicrosoftTodoAudit",
+        "MipAutoLabelExchangeItem",
+        "MipAutoLabelProgressFeedback",
+        "MipAutoLabelSharePointItem",
+        "MipAutoLabelSharePointPolicyLocation",
+        "MipAutoLabelSimulationCompletion",
+        "MipAutoLabelSimulationProgress",
+        "MipAutoLabelSimulationStatistics",
+        "MipExactDataMatch",
+        "MipLabelAnalyticsAuditRecord",
+        "MosAgentInfoRecord",
+        "MosAgentInfoRecordV2",
+        "MultiStageDisposition",
+        "MyAnalyticsSettings",
+        "NoisyAlertPolicy",
+        "OMEPortal",
+        "OWAAuth",
+        "OfficeClientRestrictedModeAction",
+        "OfficeNative",
+        "OfficeRestrictedModeAction",
+        "OfficeScriptsRunAction",
+        "OnDemandSharePointClassification",
+        "OnPremisesFileShareScannerDlp",
+        "OnPremisesSharePointScannerDlp",
+        "OneDrive",
+        "OpticalCharacterRecognition",
+        "OrganizationalDataInM365",
+        "OutlookCopilotAutomation",
+        "P4AIAssessmentCategoryRecord",
+        "P4AIAssessmentFabricScannerRecord",
+        "P4AIAssessmentLocationResultRecord",
+        "P4AIAssessmentRecord",
+        "P4AIRiskScoreRecord",
+        "PeopleAdminSettings",
+        "PhysicalBadgingSignal",
+        "PlacesDirectory",
+        "PlannerChatMessage",
+        "PlannerChatMessageList",
+        "PlannerCopyPlan",
+        "PlannerGoal",
+        "PlannerGoalList",
+        "PlannerPlan",
+        "PlannerPlanList",
+        "PlannerPlanSensitivityLabel",
+        "PlannerRoster",
+        "PlannerRosterSensitivityLabel",
+        "PlannerTask",
+        "PlannerTaskList",
+        "PlannerTenantSettings",
+        "PowerAppsApp",
+        "PowerAppsPlan",
+        "PowerAppsResource",
+        "PowerBIAudit",
+        "PowerBIDlp",
+        "PowerPagesSite",
+        "PowerPlatformAdminDlp",
+        "PowerPlatformAdminEnvironment",
+        "PowerPlatformAdministratorActivity",
+        "PowerPlatformLockboxResourceAccessRequest",
+        "PowerPlatformLockboxResourceCommand",
+        "PowerPlatformServiceActivity",
+        "PowerPlatformTenantIsolation",
+        "PrivaPrivacyAssessmentOperation",
+        "PrivaPrivacyConsentOperation",
+        "PrivacyDataMatch",
+        "PrivacyDataMinimization",
+        "PrivacyDigestEmail",
+        "PrivacyOpenAccess",
+        "PrivacyPortal",
+        "PrivacyRemediation",
+        "PrivacyRemediationAction",
+        "PrivacyTenantAuditHistoryRecord",
+        "Project",
+        "ProjectForTheWebAssignedToMeSettings",
+        "ProjectForTheWebProject",
+        "ProjectForTheWebProjectSettings",
+        "ProjectForTheWebRoadmap",
+        "ProjectForTheWebRoadmapItem",
+        "ProjectForTheWebRoadmapSettings",
+        "ProjectForTheWebTask",
+        "PublicFolder",
+        "PurviewDataMapOperation",
+        "PurviewInsiderRiskAlerts",
+        "PurviewInsiderRiskCases",
+        "PurviewMCRecommendation",
+        "PurviewMetadataPolicyOperation",
+        "PurviewPolicyOperation",
+        "PurviewPostureAgent",
+        "Quarantine",
+        "QuarantineMetadata",
+        "RTIOperationsAgent",
+        "RecordsManagement",
+        "SCPConfigurationEvent",
+        "SCPUsageEvent",
+        "ScorePlatformGenericAuditRecord",
+        "Search",
+        "SecureScore",
+        "SecurityComplianceAlerts",
+        "SecurityComplianceCenterEOPCmdlet",
+        "SecurityComplianceInsights",
+        "SecurityComplianceRBAC",
+        "SecurityComplianceUserChange",
+        "SecurityCopilotAgentIdentityManagement",
+        "SecurityDevelopmentLifecycleAILog",
+        "SensitiveInfoRemediationAgentData",
+        "SensitivityLabelAction",
+        "SensitivityLabelPolicyMatch",
+        "SensitivityLabeledFileAction",
+        "SentinelAITool",
+        "SentinelGraph",
+        "SentinelJob",
+        "SentinelKQLOnLake",
+        "SentinelLakeDataOnboarding",
+        "SentinelLakeEncryption",
+        "SentinelLakeOnboarding",
+        "SentinelNotebookOnLake",
+        "SentinelPackage",
+        "SharePoint",
+        "SharePointAppPermissionOperation",
+        "SharePointCommentOperation",
+        "SharePointContentSecurityPolicy",
+        "SharePointContentTypeOperation",
+        "SharePointESignature",
+        "SharePointFieldOperation",
+        "SharePointFileOperation",
+        "SharePointListItemOperation",
+        "SharePointListOperation",
+        "SharePointSearch",
+        "SharePointSharingOperation",
+        "SkypeForBusinessCmdlets",
+        "SkypeForBusinessPSTNUsage",
+        "SkypeForBusinessUsersBlocked",
+        "SonarDetonationContentMetadata",
+        "SonarDetonationEntity",
+        "SonarFileDetonationEntity",
+        "SonarSubmissionEntity",
+        "SonarUrlDetonationEntity",
+        "SparkCoreCustomLivePool",
+        "SubmissionAgenticGradingResult",
+        "SubmissionEntity",
+        "SupervisoryReviewDayXInsight",
+        "Sway",
+        "SyntheticProbe",
+        "TeamCopilotInteraction",
+        "TeamsEasyApprovals",
+        "TeamsEvalDataHubAdminOperation",
+        "TeamsEvalDataHubDataAccess",
+        "TeamsEvalDataHubPermissionChange",
+        "TeamsHealthcare",
+        "TeamsQuarantineMetadata",
+        "TeamsUpdates",
+        "TenantAllowBlockList",
+        "ThreatFinder",
+        "ThreatIntelligence",
+        "ThreatIntelligenceAtpContent",
+        "ThreatIntelligenceExport",
+        "ThreatIntelligenceObject",
+        "ThreatIntelligenceUrl",
+        "TimeTravelFilteringDocMetadata",
+        "TimeTravelFilteringDocScan",
+        "TrainableClassifier",
+        "UAMOperation",
+        "URBACAssignment",
+        "URBACEnableState",
+        "URBACRole",
+        "USXWorkspaceOnboarding",
+        "UnifiedCatalogConceptAction",
+        "UnifiedSimulationMatchedItem",
+        "UnifiedSimulationSummary",
+        "UniversalPrintManagement",
+        "UniversalPrintPrintJob",
+        "UpdateCopilotPlugin",
+        "UpdateCopilotPromptBook",
+        "UpdateCopilotSettings",
+        "UpdateCopilotWorkspace",
+        "UpdateQuarantineMetadata",
+        "UserTraining",
+        "VfamCreatePolicy",
+        "VfamDeletePolicy",
+        "VfamUpdatePolicy",
+        "VivaAmplifyOutlookSensitivityLabel",
+        "VivaEngageEvents",
+        "VivaEngageNetworkAssociation",
+        "VivaEngageSegment",
+        "VivaGlintAdvancedConfiguration",
+        "VivaGlintAgenticCampaign",
+        "VivaGlintFeedbackProgram",
+        "VivaGlintOrganizationalData",
+        "VivaGlintPulseProgram",
+        "VivaGlintPulseProgramRespondentRate",
+        "VivaGlintQuestion",
+        "VivaGlintRole",
+        "VivaGlintRubicon",
+        "VivaGlintSupportAccess",
+        "VivaGlintSystem",
+        "VivaGlintUser",
+        "VivaGlintUserGroup",
+        "VivaGoals",
+        "VivaLearning",
+        "VivaLearningAdmin",
+        "VivaPulseAdmin",
+        "VivaPulseOrganizer",
+        "VivaPulseReport",
+        "VivaPulseResponse",
+        "WDATPAlerts",
+        "WebContentFiltering",
+        "WebpageActivityEndpoint",
+        "Windows365CustomerLockbox",
+        "WorkplaceAnalytics",
+        "Yammer",
+        "YammerUserHiding",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.security.auditLogUserType": {
+      "kind": "EnumType",
+      "members": [
+        "Admin",
+        "Application",
+        "CustomPolicy",
+        "DcAdmin",
+        "Guest",
+        "PartnerTechnician",
+        "Regular",
+        "Reserved",
+        "ServicePrincipal",
+        "System",
+        "SystemPolicy",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.securityBaselineStateSummary": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "conflictCount": "Edm.Int32",
+        "errorCount": "Edm.Int32",
+        "notApplicableCount": "Edm.Int32",
+        "notSecureCount": "Edm.Int32",
+        "secureCount": "Edm.Int32",
+        "unknownCount": "Edm.Int32"
+      }
+    },
+    "microsoft.graph.servicePrincipalSignInActivity": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "appId": "Edm.String",
+        "applicationAuthenticationClientSignInActivity": "microsoft.graph.signInActivity",
+        "applicationAuthenticationResourceSignInActivity": "microsoft.graph.signInActivity",
+        "delegatedClientSignInActivity": "microsoft.graph.signInActivity",
+        "delegatedResourceSignInActivity": "microsoft.graph.signInActivity",
+        "lastSignInActivity": "microsoft.graph.signInActivity"
+      }
+    },
+    "microsoft.graph.sessionLifetimePolicy": {
+      "kind": "ComplexType",
+      "properties": {
+        "detail": "Edm.String",
+        "expirationRequirement": "microsoft.graph.expirationRequirement"
+      }
+    },
+    "microsoft.graph.signIn": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "agent": "microsoft.graph.agentic.agentSignIn",
+        "appDisplayName": "Edm.String",
+        "appId": "Edm.String",
+        "appOwnerTenantId": "Edm.String",
+        "appTokenProtectionStatus": "microsoft.graph.tokenProtectionStatus",
+        "appliedConditionalAccessPolicies": "Collection(microsoft.graph.appliedConditionalAccessPolicy)",
+        "appliedEventListeners": "Collection(microsoft.graph.appliedAuthenticationEventListener)",
+        "authenticationAppDeviceDetails": "microsoft.graph.authenticationAppDeviceDetails",
+        "authenticationAppPolicyEvaluationDetails": "Collection(microsoft.graph.authenticationAppPolicyDetails)",
+        "authenticationContextClassReferences": "Collection(microsoft.graph.authenticationContext)",
+        "authenticationDetails": "Collection(microsoft.graph.authenticationDetail)",
+        "authenticationMethodsUsed": "Collection(Edm.String)",
+        "authenticationProcessingDetails": "Collection(microsoft.graph.keyValue)",
+        "authenticationProtocol": "microsoft.graph.protocolType",
+        "authenticationRequirement": "Edm.String",
+        "authenticationRequirementPolicies": "Collection(microsoft.graph.authenticationRequirementPolicy)",
+        "autonomousSystemNumber": "Edm.Int32",
+        "azureResourceId": "Edm.String",
+        "clientAppUsed": "Edm.String",
+        "clientCredentialType": "microsoft.graph.clientCredentialType",
+        "clientSessionId": "Edm.String",
+        "conditionalAccessAudiences": "Collection(Edm.String)",
+        "conditionalAccessStatus": "microsoft.graph.conditionalAccessStatus",
+        "correlationId": "Edm.String",
+        "createdDateTime": "Edm.DateTimeOffset",
+        "crossTenantAccessType": "microsoft.graph.signInAccessType",
+        "deviceDetail": "microsoft.graph.deviceDetail",
+        "federatedCredentialId": "Edm.String",
+        "flaggedForReview": "Edm.Boolean",
+        "globalSecureAccessIpAddress": "Edm.String",
+        "homeTenantId": "Edm.String",
+        "homeTenantName": "Edm.String",
+        "incomingTokenType": "microsoft.graph.incomingTokenType",
+        "ipAddress": "Edm.String",
+        "ipAddressFromResourceProvider": "Edm.String",
+        "isInteractive": "Edm.Boolean",
+        "isTenantRestricted": "Edm.Boolean",
+        "isThroughGlobalSecureAccess": "Edm.Boolean",
+        "location": "microsoft.graph.signInLocation",
+        "managedServiceIdentity": "microsoft.graph.managedIdentity",
+        "mfaDetail": "microsoft.graph.mfaDetail",
+        "networkLocationDetails": "Collection(microsoft.graph.networkLocationDetail)",
+        "originalRequestId": "Edm.String",
+        "originalTransferMethod": "microsoft.graph.originalTransferMethods",
+        "privateLinkDetails": "microsoft.graph.privateLinkDetails",
+        "processingTimeInMilliseconds": "Edm.Int32",
+        "resourceDisplayName": "Edm.String",
+        "resourceId": "Edm.String",
+        "resourceOwnerTenantId": "Edm.String",
+        "resourceServicePrincipalId": "Edm.String",
+        "resourceTenantId": "Edm.String",
+        "riskDetail": "microsoft.graph.riskDetail",
+        "riskEventTypes_v2": "Collection(Edm.String)",
+        "riskLevelAggregated": "microsoft.graph.riskLevel",
+        "riskLevelDuringSignIn": "microsoft.graph.riskLevel",
+        "riskState": "microsoft.graph.riskState",
+        "servicePrincipalCredentialKeyId": "Edm.String",
+        "servicePrincipalCredentialThumbprint": "Edm.String",
+        "servicePrincipalId": "Edm.String",
+        "servicePrincipalName": "Edm.String",
+        "sessionId": "Edm.String",
+        "sessionLifetimePolicies": "Collection(microsoft.graph.sessionLifetimePolicy)",
+        "signInEventTypes": "Collection(Edm.String)",
+        "signInIdentifier": "Edm.String",
+        "signInIdentifierType": "microsoft.graph.signInIdentifierType",
+        "signInTokenProtectionStatus": "microsoft.graph.tokenProtectionStatus",
+        "status": "microsoft.graph.signInStatus",
+        "tokenIssuerName": "Edm.String",
+        "tokenIssuerType": "microsoft.graph.tokenIssuerType",
+        "tokenProtectionStatusDetails": "microsoft.graph.tokenProtectionStatusDetails",
+        "uniqueTokenIdentifier": "Edm.String",
+        "userAgent": "Edm.String",
+        "userDisplayName": "Edm.String",
+        "userId": "Edm.String",
+        "userPrincipalName": "Edm.String",
+        "userType": "microsoft.graph.signInUserType"
+      }
+    },
+    "microsoft.graph.signInAccessType": {
+      "kind": "EnumType",
+      "members": [
+        "b2bCollaboration",
+        "b2bDirectConnect",
+        "microsoftSupport",
+        "none",
+        "passthrough",
+        "serviceProvider",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.signInActivity": {
+      "kind": "ComplexType",
+      "properties": {
+        "lastNonInteractiveSignInDateTime": "Edm.DateTimeOffset",
+        "lastNonInteractiveSignInRequestId": "Edm.String",
+        "lastSignInDateTime": "Edm.DateTimeOffset",
+        "lastSignInRequestId": "Edm.String",
+        "lastSuccessfulSignInDateTime": "Edm.DateTimeOffset",
+        "lastSuccessfulSignInRequestId": "Edm.String"
+      }
+    },
+    "microsoft.graph.signInIdentifierType": {
+      "kind": "EnumType",
+      "members": [
+        "onPremisesUserPrincipalName",
+        "phoneNumber",
+        "proxyAddress",
+        "qrCode",
+        "unknownFutureValue",
+        "userPrincipalName"
+      ]
+    },
+    "microsoft.graph.signInLocation": {
+      "kind": "ComplexType",
+      "properties": {
+        "city": "Edm.String",
+        "countryOrRegion": "Edm.String",
+        "geoCoordinates": "microsoft.graph.geoCoordinates",
+        "state": "Edm.String"
+      }
+    },
+    "microsoft.graph.signInStatus": {
+      "kind": "ComplexType",
+      "properties": {
+        "additionalDetails": "Edm.String",
+        "errorCode": "Edm.Int32",
+        "failureReason": "Edm.String"
+      }
+    },
+    "microsoft.graph.signInUserType": {
+      "kind": "EnumType",
+      "members": [
+        "guest",
+        "member",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.subjectAlternativeNameType": {
+      "kind": "EnumType",
+      "members": [
+        "customAzureADAttribute",
+        "domainNameService",
+        "emailAddress",
+        "none",
+        "universalResourceIdentifier",
+        "userPrincipalName"
+      ]
+    },
+    "microsoft.graph.subjectNameFormat": {
+      "kind": "EnumType",
+      "members": [
+        "commonName",
+        "commonNameAsAadDeviceId",
+        "commonNameAsDurableDeviceId",
+        "commonNameAsEmail",
+        "commonNameAsIMEI",
+        "commonNameAsIntuneDeviceId",
+        "commonNameAsSerialNumber",
+        "commonNameIncludingEmail",
+        "custom"
+      ]
+    },
+    "microsoft.graph.tokenIssuerType": {
+      "kind": "EnumType",
+      "members": [
+        "ADFederationServices",
+        "ADFederationServicesMFAAdapter",
+        "AzureAD",
+        "AzureADBackupAuth",
+        "NPSExtension",
+        "UnknownFutureValue"
+      ]
+    },
+    "microsoft.graph.tokenProtectionStatus": {
+      "kind": "EnumType",
+      "members": [
+        "bound",
+        "none",
+        "unbound",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.tokenProtectionStatusDetails": {
+      "kind": "ComplexType",
+      "properties": {
+        "signInSessionStatus": "microsoft.graph.tokenProtectionStatus",
+        "signInSessionStatusCode": "Edm.Int32"
+      }
+    },
+    "microsoft.graph.userExperienceAnalyticsAnomalySeverityOverview": {
+      "kind": "ComplexType",
+      "properties": {
+        "highSeverityAnomalyCount": "Edm.Int32",
+        "informationalSeverityAnomalyCount": "Edm.Int32",
+        "lowSeverityAnomalyCount": "Edm.Int32",
+        "mediumSeverityAnomalyCount": "Edm.Int32"
+      }
+    },
+    "microsoft.graph.userExperienceAnalyticsBaseline": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "createdDateTime": "Edm.DateTimeOffset",
+        "displayName": "Edm.String",
+        "isBuiltIn": "Edm.Boolean"
+      },
+      "navigation_properties": {
+        "appHealthMetrics": "microsoft.graph.userExperienceAnalyticsCategory",
+        "batteryHealthMetrics": "microsoft.graph.userExperienceAnalyticsCategory",
+        "bestPracticesMetrics": "microsoft.graph.userExperienceAnalyticsCategory",
+        "deviceBootPerformanceMetrics": "microsoft.graph.userExperienceAnalyticsCategory",
+        "rebootAnalyticsMetrics": "microsoft.graph.userExperienceAnalyticsCategory",
+        "resourcePerformanceMetrics": "microsoft.graph.userExperienceAnalyticsCategory",
+        "workFromAnywhereMetrics": "microsoft.graph.userExperienceAnalyticsCategory"
+      }
+    },
+    "microsoft.graph.userExperienceAnalyticsBatteryHealthDevicePerformance": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "batteryAgeInDays": "Edm.Int32",
+        "deviceBatteriesDetails": "Collection(microsoft.graph.userExperienceAnalyticsDeviceBatteryDetail)",
+        "deviceBatteryCount": "Edm.Int32",
+        "deviceBatteryHealthScore": "Edm.Int32",
+        "deviceBatteryTags": "Collection(Edm.String)",
+        "deviceId": "Edm.String",
+        "deviceManufacturerName": "Edm.String",
+        "deviceModelName": "Edm.String",
+        "deviceName": "Edm.String",
+        "estimatedRuntimeInMinutes": "Edm.Int32",
+        "fullBatteryDrainCount": "Edm.Int32",
+        "healthStatus": "microsoft.graph.userExperienceAnalyticsHealthState",
+        "manufacturer": "Edm.String",
+        "maxCapacityPercentage": "Edm.Int32",
+        "model": "Edm.String"
+      }
+    },
+    "microsoft.graph.userExperienceAnalyticsDeviceBatteryDetail": {
+      "kind": "ComplexType",
+      "properties": {
+        "batteryId": "Edm.String",
+        "fullBatteryDrainCount": "Edm.Int32",
+        "maxCapacityPercentage": "Edm.Int32"
+      }
+    },
+    "microsoft.graph.userExperienceAnalyticsHealthState": {
+      "kind": "EnumType",
+      "members": [
+        "insufficientData",
+        "meetingGoals",
+        "needsAttention",
+        "unknown",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.userExperienceAnalyticsMachineType": {
+      "kind": "EnumType",
+      "members": [
+        "physical",
+        "unknown",
+        "unknownFutureValue",
+        "virtual"
+      ]
+    },
+    "microsoft.graph.userExperienceAnalyticsResourcePerformance": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "averageSpikeTimeScore": "Edm.Int32",
+        "cpuClockSpeedInMHz": "Edm.Double",
+        "cpuDisplayName": "Edm.String",
+        "cpuSpikeTimePercentage": "Edm.Double",
+        "cpuSpikeTimePercentageThreshold": "Edm.Double",
+        "cpuSpikeTimeScore": "Edm.Int32",
+        "deviceCount": "Edm.Int64",
+        "deviceId": "Edm.String",
+        "deviceName": "Edm.String",
+        "deviceResourcePerformanceScore": "Edm.Int32",
+        "diskType": "microsoft.graph.diskType",
+        "healthStatus": "microsoft.graph.userExperienceAnalyticsHealthState",
+        "machineType": "microsoft.graph.userExperienceAnalyticsMachineType",
+        "manufacturer": "Edm.String",
+        "model": "Edm.String",
+        "ramSpikeTimePercentage": "Edm.Double",
+        "ramSpikeTimePercentageThreshold": "Edm.Double",
+        "ramSpikeTimeScore": "Edm.Int32",
+        "totalProcessorCoreCount": "Edm.Int32",
+        "totalRamInMB": "Edm.Double"
+      }
+    },
+    "microsoft.graph.userExperienceAnalyticsWorkFromAnywhereDevice": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "autoPilotProfileAssigned": "Edm.Boolean",
+        "autoPilotRegistered": "Edm.Boolean",
+        "azureAdDeviceId": "Edm.String",
+        "azureAdJoinType": "Edm.String",
+        "azureAdRegistered": "Edm.Boolean",
+        "cloudIdentityScore": "Edm.Double",
+        "cloudManagementScore": "Edm.Double",
+        "cloudProvisioningScore": "Edm.Double",
+        "compliancePolicySetToIntune": "Edm.Boolean",
+        "deviceId": "Edm.String",
+        "deviceName": "Edm.String",
+        "healthStatus": "microsoft.graph.userExperienceAnalyticsHealthState",
+        "isCloudManagedGatewayEnabled": "Edm.Boolean",
+        "managedBy": "Edm.String",
+        "manufacturer": "Edm.String",
+        "model": "Edm.String",
+        "osCheckFailed": "Edm.Boolean",
+        "osDescription": "Edm.String",
+        "osVersion": "Edm.String",
+        "otherWorkloadsSetToIntune": "Edm.Boolean",
+        "ownership": "Edm.String",
+        "processor64BitCheckFailed": "Edm.Boolean",
+        "processorCoreCountCheckFailed": "Edm.Boolean",
+        "processorFamilyCheckFailed": "Edm.Boolean",
+        "processorSpeedCheckFailed": "Edm.Boolean",
+        "ramCheckFailed": "Edm.Boolean",
+        "secureBootCheckFailed": "Edm.Boolean",
+        "serialNumber": "Edm.String",
+        "storageCheckFailed": "Edm.Boolean",
+        "tenantAttached": "Edm.Boolean",
+        "tpmCheckFailed": "Edm.Boolean",
+        "upgradeEligibility": "microsoft.graph.operatingSystemUpgradeEligibility",
+        "windowsScore": "Edm.Double",
+        "workFromAnywhereScore": "Edm.Double"
+      }
+    },
+    "microsoft.graph.userPFXCertificate": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "createdDateTime": "Edm.DateTimeOffset",
+        "encryptedPfxBlob": "Edm.Binary",
+        "encryptedPfxPassword": "Edm.String",
+        "expirationDateTime": "Edm.DateTimeOffset",
+        "intendedPurpose": "microsoft.graph.userPfxIntendedPurpose",
+        "keyName": "Edm.String",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "paddingScheme": "microsoft.graph.userPfxPaddingScheme",
+        "providerName": "Edm.String",
+        "startDateTime": "Edm.DateTimeOffset",
+        "thumbprint": "Edm.String",
+        "userPrincipalName": "Edm.String"
+      }
+    },
+    "microsoft.graph.userPfxIntendedPurpose": {
+      "kind": "EnumType",
+      "members": [
+        "smimeEncryption",
+        "smimeSigning",
+        "unassigned",
+        "vpn",
+        "wifi"
+      ]
+    },
+    "microsoft.graph.userPfxPaddingScheme": {
+      "kind": "EnumType",
+      "members": [
+        "none",
+        "oaepSha1",
+        "oaepSha256",
+        "oaepSha384",
+        "oaepSha512",
+        "pkcs1"
+      ]
+    },
+    "microsoft.graph.windowsAutopilotDeploymentProfile": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "createdDateTime": "Edm.DateTimeOffset",
+        "description": "Edm.String",
+        "deviceNameTemplate": "Edm.String",
+        "deviceType": "microsoft.graph.windowsAutopilotDeviceType",
+        "displayName": "Edm.String",
+        "enableWhiteGlove": "Edm.Boolean",
+        "enrollmentStatusScreenSettings": "microsoft.graph.windowsEnrollmentStatusScreenSettings",
+        "extractHardwareHash": "Edm.Boolean",
+        "hardwareHashExtractionEnabled": "Edm.Boolean",
+        "language": "Edm.String",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "locale": "Edm.String",
+        "managementServiceAppId": "Edm.String",
+        "outOfBoxExperienceSetting": "microsoft.graph.outOfBoxExperienceSetting",
+        "outOfBoxExperienceSettings": "microsoft.graph.outOfBoxExperienceSettings",
+        "preprovisioningAllowed": "Edm.Boolean",
+        "roleScopeTagIds": "Collection(Edm.String)"
+      },
+      "navigation_properties": {
+        "assignedDevices": "Collection(microsoft.graph.windowsAutopilotDeviceIdentity)",
+        "assignments": "Collection(microsoft.graph.windowsAutopilotDeploymentProfileAssignment)"
+      }
+    },
+    "microsoft.graph.windowsAutopilotDeploymentProfileAssignment": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "source": "microsoft.graph.deviceAndAppManagementAssignmentSource",
+        "sourceId": "Edm.String",
+        "target": "microsoft.graph.deviceAndAppManagementAssignmentTarget"
+      }
+    },
+    "microsoft.graph.windowsAutopilotDeploymentState": {
+      "kind": "EnumType",
+      "members": [
+        "disabled",
+        "failure",
+        "inProgress",
+        "notAttempted",
+        "success",
+        "successOnRetry",
+        "successWithTimeout",
+        "unknown"
+      ]
+    },
+    "microsoft.graph.windowsAutopilotDeviceType": {
+      "kind": "EnumType",
+      "members": [
+        "holoLens",
+        "surfaceHub2",
+        "surfaceHub2S",
+        "unknownFutureValue",
+        "virtualMachine",
+        "windowsPc"
+      ]
+    },
+    "microsoft.graph.windowsAutopilotEnrollmentType": {
+      "kind": "EnumType",
+      "members": [
+        "azureADJoinedUsingDeviceAuthWithAutopilotProfile",
+        "azureADJoinedUsingDeviceAuthWithoutAutopilotProfile",
+        "azureADJoinedWithAutopilotProfile",
+        "azureADJoinedWithOfflineAutopilotProfile",
+        "azureADJoinedWithWhiteGlove",
+        "offlineDomainJoined",
+        "offlineDomainJoinedWithOfflineAutopilotProfile",
+        "offlineDomainJoinedWithWhiteGlove",
+        "unknown"
+      ]
+    },
+    "microsoft.graph.windowsDriverUpdateProfile": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "approvalType": "microsoft.graph.driverUpdateProfileApprovalType",
+        "createdDateTime": "Edm.DateTimeOffset",
+        "deploymentDeferralInDays": "Edm.Int32",
+        "description": "Edm.String",
+        "deviceReporting": "Edm.Int32",
+        "displayName": "Edm.String",
+        "inventorySyncStatus": "microsoft.graph.windowsDriverUpdateProfileInventorySyncStatus",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "newUpdates": "Edm.Int32",
+        "roleScopeTagIds": "Collection(Edm.String)"
+      },
+      "navigation_properties": {
+        "assignments": "Collection(microsoft.graph.windowsDriverUpdateProfileAssignment)",
+        "driverInventories": "Collection(microsoft.graph.windowsDriverUpdateInventory)"
+      }
+    },
+    "microsoft.graph.windowsDriverUpdateProfileInventorySyncStatus": {
+      "kind": "ComplexType",
+      "properties": {
+        "driverInventorySyncState": "microsoft.graph.windowsDriverUpdateProfileInventorySyncState",
+        "lastSuccessfulSyncDateTime": "Edm.DateTimeOffset"
+      }
+    },
+    "microsoft.graph.windowsEnrollmentStatusScreenSettings": {
+      "kind": "ComplexType",
+      "properties": {
+        "allowDeviceUseBeforeProfileAndAppInstallComplete": "Edm.Boolean",
+        "allowDeviceUseOnInstallFailure": "Edm.Boolean",
+        "allowLogCollectionOnInstallFailure": "Edm.Boolean",
+        "blockDeviceSetupRetryByUser": "Edm.Boolean",
+        "customErrorMessage": "Edm.String",
+        "hideInstallationProgress": "Edm.Boolean",
+        "installProgressTimeoutInMinutes": "Edm.Int32"
+      }
+    },
+    "microsoft.graph.windowsFeatureUpdateProfile": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "createdDateTime": "Edm.DateTimeOffset",
+        "deployableContentDisplayName": "Edm.String",
+        "description": "Edm.String",
+        "displayName": "Edm.String",
+        "endOfSupportDate": "Edm.DateTimeOffset",
+        "featureUpdateVersion": "Edm.String",
+        "installFeatureUpdatesOptional": "Edm.Boolean",
+        "installLatestWindows10OnWindows11IneligibleDevice": "Edm.Boolean",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "roleScopeTagIds": "Collection(Edm.String)",
+        "rolloutSettings": "microsoft.graph.windowsUpdateRolloutSettings"
+      },
+      "navigation_properties": {
+        "assignments": "Collection(microsoft.graph.windowsFeatureUpdateProfileAssignment)"
+      }
+    },
+    "microsoft.graph.windowsQualityUpdateApprovalSetting": {
+      "kind": "ComplexType",
+      "properties": {
+        "approvalMethodType": "microsoft.graph.windowsQualityUpdatePolicyApprovalMethodType",
+        "deferredDeploymentInDay": "Edm.Int32",
+        "windowsQualityUpdateCadence": "microsoft.graph.windowsQualityUpdateCadence",
+        "windowsQualityUpdateCategory": "microsoft.graph.windowsQualityUpdateCategory"
+      }
+    },
+    "microsoft.graph.windowsQualityUpdatePolicy": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "approvalSettings": "Collection(microsoft.graph.windowsQualityUpdateApprovalSetting)",
+        "createdDateTime": "Edm.DateTimeOffset",
+        "description": "Edm.String",
+        "displayName": "Edm.String",
+        "hotpatchEnabled": "Edm.Boolean",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "roleScopeTagIds": "Collection(Edm.String)"
+      },
+      "navigation_properties": {
+        "assignments": "Collection(microsoft.graph.windowsQualityUpdatePolicyAssignment)"
+      }
+    },
+    "microsoft.graph.windowsQualityUpdateProfile": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "createdDateTime": "Edm.DateTimeOffset",
+        "deployableContentDisplayName": "Edm.String",
+        "description": "Edm.String",
+        "displayName": "Edm.String",
+        "expeditedUpdateSettings": "microsoft.graph.expeditedWindowsQualityUpdateSettings",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "releaseDateDisplayName": "Edm.String",
+        "roleScopeTagIds": "Collection(Edm.String)"
+      },
+      "navigation_properties": {
+        "assignments": "Collection(microsoft.graph.windowsQualityUpdateProfileAssignment)"
+      }
+    },
+    "microsoft.graph.windowsUpdateRolloutSettings": {
+      "kind": "ComplexType",
+      "properties": {
+        "offerEndDateTimeInUTC": "Edm.DateTimeOffset",
+        "offerIntervalInDays": "Edm.Int32",
+        "offerStartDateTimeInUTC": "Edm.DateTimeOffset"
+      }
+    }
+  }
+}
