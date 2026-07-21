@@ -1,0 +1,21 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.epm_elevations_by_publisher.count",
+      "AttrKeys": [
+        "elevation_type"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.epm_elevations_by_publisher",
+      "AttrKeys": [
+        "company_name",
+        "elevation_count",
+        "elevation_type",
+        "ingest_transport"
+      ]
+    }
+  ]
+}

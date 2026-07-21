@@ -435,6 +435,16 @@ var annotations = map[string]Annotation{
 		Source:   "`POST /deviceManagement/reports/exportJobs`",
 		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
 	},
+	"intune.epm_elevations_by_publisher": {
+		Collects: "Endpoint Privilege Management elevations attributed to the signing PUBLISHER — whose software is being run elevated on managed devices, how often, and whether the elevation was policy-governed — via the Reports Export API. Uses the `EpmAggregationReportByPublisher` report, the publisher cut of the `intune.epm_elevations` application rollup. Metric sums `ElevationCount` by elevation type (wire enum verbatim), per-publisher detail on the log twin (WARN on an unmanaged elevation)",
+		Source:   "`POST /deviceManagement/reports/exportJobs`",
+		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
+	},
+	"intune.epm_elevations_by_user": {
+		Collects: "Endpoint Privilege Management elevations attributed to the USER — who is elevating, how often, and how much of it is governed by an EPM policy — via the Reports Export API. Uses the `EpmAggregationReportByUser` report, the user cut of the `intune.epm_elevations` application rollup. Metric sums the per-user managed/unmanaged counts into exactly two bounded series (both always emitted, even at zero); the user's UPN and its three counts ride the log twin (WARN when the user has any unmanaged elevation). The `Upn` column is emitted verbatim — it is not always a real UPN (a down-level `AzureAD\\user` logon name is live-observed)",
+		Source:   "`POST /deviceManagement/reports/exportJobs`",
+		Gating:   "the ReadWrite scope creates the export JOB and nothing else; graph2otel never writes Intune configuration or device state",
+	},
 	"intune.epm_elevation_events": {
 		Collects: "Per-elevation Endpoint Privilege Management event stream — one log record per privilege elevation on a managed device (which binary ran elevated, by whom, on which device, under what EPM policy, and whether governed), via the Reports Export API. Uses the `EpmElevationReportElevationEvent` report — the per-event detail behind the `intune.epm_elevations` aggregate. Checkpoints a watermark + seen-id set over the export transport so each elevation is emitted exactly once (stamped with its own EventDateTime) rather than re-emitted on every poll; the metric is a bounded counter by elevation type and result, and per-event detail rides the log twin",
 		Source:   "`POST /deviceManagement/reports/exportJobs`",
@@ -454,6 +464,12 @@ var annotations = map[string]Annotation{
 		Collects: "Per-device proactive-remediation health — for each remediation (deviceHealthScript), which devices its detection script passed or FAILED, the detection script's own output message, and whether a remediation ran. Emits a bounded gauge counted by remediation, detection state and remediation state, plus a per-(remediation, device) log twin carrying the device, OS and detection message. Chosen read-only over the `DeviceRunStatesByProactiveRemediation` export report — same data, no write scope and no per-policy export fan-out",
 		Source:   "`GET /deviceManagement/deviceHealthScripts/{id}/deviceRunStates` (beta)",
 		Gating:   "read-only `DeviceManagementConfiguration.Read.All` + `DeviceManagementManagedDevices.Read.All`; beta endpoint, so opt-in via explicit enable",
+	},
+
+	"intune.device_encryption": {
+		Collects: "Per-device disk-encryption posture: whether the disk is actually encrypted, whether the device is even READY to be encrypted, whether an encryption policy reached it, and — for Windows — the specific BitLocker blockers (`osVolumeUnprotected`, `tpmNotReady`, `osVolumeEncryptionMethodMismatch`, …). The complementary \"why is it not encrypted\" detail behind `intune.devices`' coarse `isEncrypted` boolean, which exists on no other surface. Two bounded gauges (encryption state × readiness × device type, and policy setting state) plus a per-device log twin; `deviceType` is emitted as the verbatim Intune wire enum (`windowsRT`, `macMDM`), and the comma-joined `advancedBitLockerStates` flag list rides the twin only — its combinations are unbounded",
+		Source:   "`GET /deviceManagement/managedDeviceEncryptionStates` (beta — v1.0 has no such segment)",
+		Gating:   "read-only `DeviceManagementManagedDevices.Read.All`; beta endpoint, so opt-in via explicit enable",
 	},
 
 	// ---- Intune — window collectors ----

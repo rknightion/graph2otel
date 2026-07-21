@@ -33,3 +33,6 @@ site/
 # Python bytecode from scripts/
 __pycache__/
 *.pyc
+
+# Agent scratch worktrees (transient checkouts of this repo, never content)
+.claude/worktrees/

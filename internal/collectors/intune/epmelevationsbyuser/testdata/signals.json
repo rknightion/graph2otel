@@ -1,0 +1,22 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.epm_elevations_by_user.count",
+      "AttrKeys": [
+        "elevation_governance"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.epm_elevations_by_user",
+      "AttrKeys": [
+        "ingest_transport",
+        "managed_count",
+        "total_count",
+        "unmanaged_count",
+        "upn"
+      ]
+    }
+  ]
+}

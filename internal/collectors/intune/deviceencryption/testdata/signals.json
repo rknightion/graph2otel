@@ -1,0 +1,36 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.device_encryption.devices",
+      "AttrKeys": [
+        "device_type",
+        "encryption_readiness_state",
+        "encryption_state"
+      ]
+    },
+    {
+      "Name": "intune.device_encryption.policy_state",
+      "AttrKeys": [
+        "encryption_policy_setting_state"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.device_encryption",
+      "AttrKeys": [
+        "advanced_bitlocker_states",
+        "device_id",
+        "device_name",
+        "device_type",
+        "encryption_policy_setting_state",
+        "encryption_readiness_state",
+        "encryption_state",
+        "file_vault_states",
+        "os_version",
+        "tpm_version",
+        "user_principal_name"
+      ]
+    }
+  ]
+}

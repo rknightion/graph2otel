@@ -171,10 +171,11 @@ redaction.
 ## Permission scopes — PASS (one inconsistency fixed)
 
 Every collector requests a **read-only** Graph scope matched to its own signal,
-with exactly one documented exception: the six Intune **export-report**
-collectors (`intune.app_install_status`, `intune.cert_inventory`,
-`intune.defender_agents`, `intune.config_assignment_status`,
-`intune.noncompliant_settings`, `intune.device_attestation`) each require **one write-level scope**,
+with exactly one documented exception: the Intune **export-report** collectors
+(six at audit time, **22** as the set stands today — the current list is every
+row in [`collectors.md`](./collectors.md) declaring the scope, which is generated
+from the registry and cannot go stale the way an enumeration here did) each
+require **one write-level scope**,
 `DeviceManagementManagedDevices.ReadWrite.All`, solely to *create* an export job
 (`POST /deviceManagement/reports/exportJobs`) — a documented Microsoft Graph
 requirement, not a graph2otel design choice. graph2otel only reads the exported

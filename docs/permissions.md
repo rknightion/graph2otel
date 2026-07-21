@@ -65,10 +65,14 @@ failure mode. Its own help text calls this limitation out explicitly.
 
 ## 4. The export-job ReadWrite caveat (gotcha #3)
 
-Six opt-in Intune collectors — `intune.app_install_status`, `intune.cert_inventory`,
-`intune.defender_agents`, `intune.config_assignment_status`, `intune.noncompliant_settings`, and
-`intune.device_attestation` — read their data via the **Intune Reports Export API**
-(`POST /deviceManagement/reports/exportJobs`, then poll and download the result). That API requires
+A group of opt-in Intune collectors — **22** as of this writing, `intune.app_install_status`,
+`intune.cert_inventory` and `intune.defender_agents` among them — read their data via the **Intune
+Reports Export API** (`POST /deviceManagement/reports/exportJobs`, then poll and download the
+result). The authoritative, always-current list is the generated table in
+[`collectors.md`](./collectors.md): it is every row whose permissions column reads
+`DeviceManagementManagedDevices.ReadWrite.All`. (A hand-kept enumeration lived here and went stale
+twice — three collectors, then six — so the list now lives only where it is generated.) That API
+requires
 **`DeviceManagementManagedDevices.ReadWrite.All`**, a write-level scope, purely to **create** the
 export job. This is documented Microsoft Graph behavior, not a graph2otel design choice.
 
@@ -176,6 +180,7 @@ follow-up rather than assuming per-collector enforcement is live today.
 - Never grant `DeviceManagementManagedDevices.PrivilegedOperations.All` — graph2otel has no use for
   destructive device actions and never requests it.
 - The one legitimate write-level exception is `DeviceManagementManagedDevices.ReadWrite.All`, and
-  only if you enable one of the six export-report collectors.
+  only if you enable one of the export-report collectors (see gotcha #3 above; the current set is
+  every `collectors.md` row declaring that scope).
 - See `SECURITY.md` for the full data-handling and cardinality posture this permission model
   supports.

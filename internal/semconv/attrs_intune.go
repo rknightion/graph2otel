@@ -263,6 +263,23 @@ const (
 	AttrRemediationState       = "remediation_state"
 )
 
+// Attribute keys for intune.device_encryption (#199) — per-device disk-encryption
+// posture from beta /deviceManagement/managedDeviceEncryptionStates (v1.0 has no
+// such segment). encryption_state / encryption_readiness_state /
+// encryption_policy_setting_state are the three bounded wire enums the gauges are
+// keyed by (alongside the existing device_type); advanced_bitlocker_states is a
+// comma-joined flag list whose COMBINATIONS are unbounded and file_vault_states is
+// its Apple counterpart — both are twin-only, never a metric label (#112/#114).
+// Every value is live-captured from the beta wire (probed as graph2otel-poller
+// 2026-07-21), not a doc placeholder.
+const (
+	AttrAdvancedBitlockerStates      = "advanced_bitlocker_states"
+	AttrEncryptionPolicySettingState = "encryption_policy_setting_state"
+	AttrEncryptionReadinessState     = "encryption_readiness_state"
+	AttrEncryptionState              = "encryption_state"
+	AttrFileVaultStates              = "file_vault_states"
+)
+
 // Attribute keys for the Endpoint Analytics Work-From-Anywhere per-device Windows
 // 11 upgrade-readiness signal (#194) — the metricDevices navigation under
 // userExperienceAnalyticsWorkFromAnywhereMetrics. Values live-captured from the
@@ -282,4 +299,36 @@ const (
 	AttrTpmCheckFailed                = "tpm_check_failed"
 	AttrUpgradeEligibility            = "upgrade_eligibility"
 	AttrWindowsScore                  = "windows_score"
+)
+
+// Attribute keys for the two Endpoint Privilege Management attribution cuts added
+// in #201 — intune.epm_elevations_by_user (EpmAggregationReportByUser) and
+// intune.epm_elevations_by_publisher (EpmAggregationReportByPublisher). Both are
+// siblings of intune.epm_elevations (EpmAggregationReportByApplication), so
+// elevation_type / elevation_count / company_name are reused above rather than
+// redeclared. Every value here is live-captured from the export CSV header
+// (probed as graph2otel-poller 2026-07-21 on m7kni), not a doc placeholder.
+//
+// AttrElevationGovernance is the by-user gauge's ONLY label: the report gives a
+// managed/unmanaged split per user, and the two counts are summed into exactly two
+// bounded series. The Upn column rides the log twin only — it identifies a user, so
+// it can never be a metric label (#112), and it is emitted VERBATIM: one live row
+// carried the down-level logon name `AzureAD\RobKnight` rather than a real UPN, so
+// nothing here parses or validates it.
+const (
+	// Bare snake_case, not a dotted key: every domain attribute in this repo is
+	// bare, and this one is a METRIC label, so a dot would survive to the wire
+	// but reach PromQL normalized to an underscore (#82) — the golden, the docs
+	// and the query surface would then disagree about the label's own name.
+	AttrElevationGovernance = "elevation_governance"
+	AttrManagedCount        = "managed_count"
+	AttrTotalCount          = "total_count"
+	AttrUnmanagedCount      = "unmanaged_count"
+)
+
+// Elevation-governance values for AttrElevationGovernance: the two bounded series
+// intune.epm_elevations_by_user's gauge emits, always both, even at zero.
+const (
+	ElevationGovernanceManaged   = "managed"
+	ElevationGovernanceUnmanaged = "unmanaged"
 )
