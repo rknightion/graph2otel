@@ -43,6 +43,8 @@ const (
 	anomalyURL      = "https://graph.microsoft.com/beta/deviceManagement/userExperienceAnalyticsAnomalySeverityOverview"
 	wfaURL          = "https://graph.microsoft.com/beta/deviceManagement/userExperienceAnalyticsWorkFromAnywhereMetrics/allDevices/metricDevices"
 	appHealthOSURL  = "https://graph.microsoft.com/v1.0/deviceManagement/userExperienceAnalyticsAppHealthOSVersionPerformance"
+	appHealthDevURL = "https://graph.microsoft.com/beta/deviceManagement/userExperienceAnalyticsAppHealthDevicePerformance"
+	startupProcURL  = "https://graph.microsoft.com/beta/deviceManagement/userExperienceAnalyticsDeviceStartupProcesses"
 )
 
 // appHealthOSLiveRow is the VERBATIM userExperienceAnalyticsAppHealthOSVersionPerformance
@@ -99,6 +101,8 @@ func allEndpoints(overrides map[string]string) map[string]string {
 		anomalyURL:      anomalyDefaultBody,
 		wfaURL:          `{"value":[` + wfaLiveRow + `]}`,
 		appHealthOSURL:  `{"value":[` + appHealthOSLiveRow + `]}`,
+		appHealthDevURL: emptyPage,
+		startupProcURL:  emptyPage,
 	}
 	for k, v := range overrides {
 		m[k] = v
@@ -395,6 +399,226 @@ func TestScoreSubFetchesExcludeInsufficientDataSentinel(t *testing.T) {
 				t.Errorf("%s: device count = %v, want 2 (an unscored device is still a device)", tc.countMetric, devices)
 			}
 		})
+	}
+}
+
+// logsNamed filters recorded log records down to those with EventName == name.
+func logsNamed(rec *telemetrytest.Recorder, name string) []telemetrytest.LogRecord {
+	var out []telemetrytest.LogRecord
+	for _, r := range rec.LogRecords() {
+		if r.EventName == name {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// allPoints returns every recorded metric data point across every metric, for
+// the standing cardinality guards.
+func allPoints(rec *telemetrytest.Recorder) []telemetrytest.MetricPoint {
+	var out []telemetrytest.MetricPoint
+	for _, n := range rec.MetricNames() {
+		out = append(out, rec.MetricPoints(n)...)
+	}
+	return out
+}
+
+// liveBatteryRow is the VERBATIM userExperienceAnalyticsBatteryHealthDevicePerformance
+// row for LAPHAM (m7kni, probed as graph2otel-poller 2026-07-21, #225). Note
+// fullBatteryDrainCount is -1 on this real device — the "not enough data"
+// sentinel — while deviceBatteriesDetails carries a real per-cell battery id.
+const liveBatteryRow = `{"id":"b740c02b-b0bf-4f9a-8e4d-c4c9d3278675","deviceId":"d5900d67-e50c-44ef-9d5c-6a2f891099c6","deviceName":"LAPHAM","model":"Standard","manufacturer":"PCSpecialist","deviceModelName":"Standard","deviceManufacturerName":"PCSpecialist","maxCapacityPercentage":100,"estimatedRuntimeInMinutes":80,"batteryAgeInDays":179,"fullBatteryDrainCount":-1,"deviceBatteryCount":1,"deviceBatteryTags":[],"deviceBatteryHealthScore":63,"healthStatus":"meetingGoals","deviceBatteriesDetails":[{"batteryId":"LiON;52245;OEM;0","maxCapacityPercentage":100,"fullBatteryDrainCount":0}]}`
+
+// TestBatteryHealthEmitsPerDeviceTwin pins the #225 decision to override the
+// #114 no-twin exception for this sub-fetch. The point of the twin is that the
+// bounded score histogram can say "a device scores 63" but never "LAPHAM's
+// battery is 179 days old at 100% max capacity" — which is the difference
+// between noticing and acting.
+func TestBatteryHealthEmitsPerDeviceTwin(t *testing.T) {
+	g := &fakeGraph{bodies: allEndpoints(map[string]string{batteryURL: `{"value":[` + liveBatteryRow + `]}`})}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	recs := logsNamed(rec, eventBatteryHealth)
+	if len(recs) != 1 {
+		t.Fatalf("want 1 %s record, got %d", eventBatteryHealth, len(recs))
+	}
+	got := recs[0].Attrs
+	for k, want := range map[string]string{
+		semconv.AttrDeviceName:              "LAPHAM",
+		semconv.AttrDeviceId:                "d5900d67-e50c-44ef-9d5c-6a2f891099c6",
+		semconv.AttrBatteryAgeDays:          "179",
+		semconv.AttrMaxCapacityPercentage:   "100",
+		semconv.AttrEstimatedRuntimeMinutes: "80",
+		semconv.AttrBatteryHealthScore:      "63",
+		semconv.AttrBatteryCount:            "1",
+		semconv.AttrHealthState:             "meeting_goals",
+	} {
+		if got[k] != want {
+			t.Errorf("twin attr %s = %q, want %q", k, got[k], want)
+		}
+	}
+	// -1 is the sentinel: the attribute must be ABSENT, not "-1".
+	if v, ok := got[semconv.AttrFullBatteryDrainCount]; ok {
+		t.Errorf("full_battery_drain_count present as %q; the live -1 sentinel must be omitted", v)
+	}
+	if got[semconv.AttrBatteryIds] == "" {
+		t.Errorf("battery_ids missing; the per-cell id distinguishes one bad cell from a worn pack")
+	}
+}
+
+// TestStartupHistoryEmitsPerBootTwinStampedWithStartTime pins the two things
+// that make the boot twin different from every other twin in this file: it
+// carries the crash-bucket fields, and it is an EVENT stamped with startTime
+// rather than poll time.
+func TestStartupHistoryEmitsPerBootTwinStampedWithStartTime(t *testing.T) {
+	body := `{"value":[
+	  {"deviceId":"dev-1","startTime":"2026-07-19T21:23:25Z","coreBootTimeInMs":2989,"groupPolicyBootTimeInMs":0,
+	   "featureUpdateBootTimeInMs":33146,"totalBootTimeInMs":36135,"groupPolicyLoginTimeInMs":-1,"coreLoginTimeInMs":-1,
+	   "responsiveDesktopTimeInMs":-1,"totalLoginTimeInMs":-1,"isFirstLogin":false,"isFeatureUpdate":false,
+	   "operatingSystemVersion":"10.0.26200.8037","restartCategory":"update","restartStopCode":"0","restartFaultBucket":""},
+	  {"deviceId":"dev-2","startTime":"2026-07-20T08:00:00Z","totalBootTimeInMs":50000,"totalLoginTimeInMs":9000,
+	   "restartCategory":"blueScreen","restartStopCode":"0x0000009F","restartFaultBucket":"0x9F_3_power"}
+	]}`
+	g := &fakeGraph{bodies: allEndpoints(map[string]string{startupURL: body})}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	recs := logsNamed(rec, eventDeviceStartup)
+	if len(recs) != 2 {
+		t.Fatalf("want 2 %s records, got %d", eventDeviceStartup, len(recs))
+	}
+
+	// Stamped with the boot's own startTime — NOT poll time. Stamping on arrival
+	// would pile every historical restart onto one instant.
+	wantTS := time.Date(2026, 7, 19, 21, 23, 25, 0, time.UTC)
+	if !recs[0].Timestamp.Equal(wantTS) {
+		t.Errorf("boot twin timestamp = %v, want the row's startTime %v", recs[0].Timestamp, wantTS)
+	}
+
+	// Sentinel timing fields are omitted from the twin, not rendered as "-1".
+	if v, ok := recs[0].Attrs[semconv.AttrTotalLoginTimeMs]; ok {
+		t.Errorf("total_login_time_ms present as %q; the -1 sentinel must be omitted", v)
+	}
+	if recs[0].Attrs[semconv.AttrTotalBootTimeMs] != "36135" {
+		t.Errorf("total_boot_time_ms = %q, want 36135", recs[0].Attrs[semconv.AttrTotalBootTimeMs])
+	}
+
+	// The crash-bucket fields are the reason this twin exists.
+	crash := recs[1].Attrs
+	if crash[semconv.AttrRestartStopCode] != "0x0000009F" || crash[semconv.AttrRestartFaultBucket] != "0x9F_3_power" {
+		t.Errorf("crash-bucket fields not carried: stop_code=%q fault_bucket=%q",
+			crash[semconv.AttrRestartStopCode], crash[semconv.AttrRestartFaultBucket])
+	}
+	if recs[1].SeverityText != "WARN" {
+		t.Errorf("a boot with a fault bucket should be WARN, got %q", recs[1].SeverityText)
+	}
+	if recs[0].SeverityText == "WARN" {
+		t.Errorf("a routine restart (stop code 0, no fault bucket) must not be WARN")
+	}
+}
+
+// TestStartupProcessesEmitTwinOnlyNeverAMetric pins the #199 sub-fetch and the
+// cardinality call: the (device, process) pair is unbounded, so it emits a twin
+// and NO metric at all.
+func TestStartupProcessesEmitTwinOnlyNeverAMetric(t *testing.T) {
+	// Verbatim live rows (m7kni, graph2otel-poller 2026-07-21).
+	body := `{"value":[
+	  {"id":"1625d698","managedDeviceId":"1625d698","processName":"MsMpEng","productName":"Windows Defender Antivirus","publisher":"Microsoft Corporation","startupImpactInMs":8038},
+	  {"id":"1625d698","managedDeviceId":"1625d698","processName":"MsSense","productName":"Windows Defender Advanced Threat Protection","publisher":"Microsoft Corporation","startupImpactInMs":4822}
+	]}`
+	g := &fakeGraph{bodies: allEndpoints(map[string]string{startupProcURL: body})}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	recs := logsNamed(rec, eventStartupProcess)
+	if len(recs) != 2 {
+		t.Fatalf("want 2 %s records, got %d", eventStartupProcess, len(recs))
+	}
+	if recs[0].Attrs[semconv.AttrProcessName] != "MsMpEng" || recs[0].Attrs[semconv.AttrStartupImpactMs] != "8038" {
+		t.Errorf("unexpected first startup-process twin: %v", recs[0].Attrs)
+	}
+
+	// Guard: no metric may carry a process name or a device id.
+	for _, p := range allPoints(rec) {
+		for k, v := range p.Attrs {
+			if k == semconv.AttrProcessName || k == semconv.AttrDeviceId {
+				t.Errorf("metric %s carries per-entity label %s=%q — (device, process) is unbounded (#112)", p.Name, k, v)
+			}
+		}
+	}
+}
+
+// TestAppHealthDevicePerformanceEmitsCountsAndTwin pins the #225 sub-fetch that
+// was not collected at all. It is the only live source of appHangCount and
+// meanTimeToFailureInMinutes on a tenant under the 5-device Endpoint Analytics
+// floor, which is why #194 could not build them from the application-level
+// segment.
+func TestAppHealthDevicePerformanceEmitsCountsAndTwin(t *testing.T) {
+	// Verbatim live row (LAPHAM, m7kni, graph2otel-poller 2026-07-21).
+	body := `{"value":[{"id":"6526d4c4","deviceModel":"Standard","deviceManufacturer":"PCSpecialist","appCrashCount":0,` +
+		`"crashedAppCount":0,"appHangCount":0,"processedDateTime":"2026-07-20T03:05:36Z","meanTimeToFailureInMinutes":2147483647,` +
+		`"deviceAppHealthScore":100.0,"deviceAppHealthStatus":"TBD","healthStatus":"meetingGoals",` +
+		`"deviceId":"d5900d67-e50c-44ef-9d5c-6a2f891099c6","deviceDisplayName":"LAPHAM"}]}`
+	g := &fakeGraph{bodies: allEndpoints(map[string]string{appHealthDevURL: body})}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	pts := rec.MetricPoints(appHealthDeviceCountMetric)
+	if len(pts) != 1 || pts[0].Value != 1 || pts[0].Attrs["health_state"] != "meeting_goals" {
+		t.Fatalf("want one device_count point of 1 under meeting_goals, got %+v", pts)
+	}
+
+	recs := logsNamed(rec, eventDeviceAppHealth)
+	if len(recs) != 1 {
+		t.Fatalf("want 1 %s record, got %d", eventDeviceAppHealth, len(recs))
+	}
+	got := recs[0].Attrs
+	if got[semconv.AttrDeviceName] != "LAPHAM" || got[semconv.AttrAppHangCount] != "0" || got[semconv.AttrAppCrashCount] != "0" {
+		t.Errorf("unexpected app-health twin attrs: %v", got)
+	}
+	// int32-max is "no failures observed", not a ~4085-year MTTF.
+	if v, ok := got[semconv.AttrMeanTimeToFailureMinutes]; ok {
+		t.Errorf("mean_time_to_failure_minutes present as %q; the int32-max sentinel must be omitted", v)
+	}
+	if recs[0].SeverityText == "WARN" {
+		t.Errorf("a device with zero crashes and zero hangs must not be WARN")
+	}
+}
+
+// TestEndpointAnalyticsTwinsCarryNoPerEntityMetricLabels is the standing
+// cardinality guard for the whole collector (#112). Every twin added by #225
+// carries device identity; none of it may reach a metric.
+func TestEndpointAnalyticsTwinsCarryNoPerEntityMetricLabels(t *testing.T) {
+	g := &fakeGraph{bodies: allEndpoints(map[string]string{
+		batteryURL:      `{"value":[` + liveBatteryRow + `]}`,
+		startupProcURL:  `{"value":[{"managedDeviceId":"d1","processName":"MsMpEng","publisher":"Microsoft Corporation","startupImpactInMs":8038}]}`,
+		appHealthDevURL: `{"value":[{"deviceId":"d1","deviceDisplayName":"LAPHAM","healthStatus":"meetingGoals"}]}`,
+	})}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	banned := map[string]bool{
+		semconv.AttrDeviceId: true, semconv.AttrDeviceName: true, semconv.AttrProcessName: true,
+		semconv.AttrBatteryIds: true, semconv.AttrBatteryAgeDays: true, semconv.AttrRestartStopCode: true,
+		semconv.AttrRestartFaultBucket: true, semconv.AttrStartupImpactMs: true,
+	}
+	for _, p := range allPoints(rec) {
+		for k := range p.Attrs {
+			if banned[k] {
+				t.Errorf("metric %s carries per-entity label %q — must be twin-only (#112/#114)", p.Name, k)
+			}
+		}
 	}
 }
 

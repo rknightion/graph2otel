@@ -78,6 +78,11 @@ const (
 	appHealthOSVersionScoreMetric = "intune.uxa.app_health.os_version_score"
 	appHealthOSVersionMTTFMetric  = "intune.uxa.app_health.mean_time_to_failure_minutes"
 	appHealthOSVersionCountMetric = "intune.uxa.app_health.active_device_count"
+
+	// appHealthDeviceCountMetric (#225) is the DEVICE-level app-health rollup,
+	// its own metric name rather than a dimension on the OS-version gauge so a
+	// naive sum() over either yields a true device count.
+	appHealthDeviceCountMetric = "intune.uxa.app_health.device_count"
 )
 
 // mttfNoFailuresSentinel is Endpoint Analytics' int32-max "no failures observed"
@@ -97,6 +102,30 @@ const eventDeviceScore = "intune.device_endpoint_analytics"
 // Windows 11 upgrade-readiness twin (#194). Like eventDeviceScore it sits outside
 // the intune.uxa.* metric namespace and follows the intune.device_* convention.
 const eventWorkFromAnywhere = "intune.device_work_from_anywhere"
+
+// The remaining per-entity twins, added in #225 when the maintainer overrode the
+// #114 no-twin exception this collector had carried since the original audit.
+//
+// The exception's rationale was that boot/startup performance is an ops question
+// the Intune console answers better, and that one record per boot per device is a
+// volume a twin does not earn. That reasoning was accepted for two years and is
+// deliberately reversed here: the console shows current state, not history, so it
+// cannot answer "how has this device's battery decayed over six months" or "which
+// devices share this crash bucket" — and those are the questions the aggregate
+// metrics provably cannot answer either. #179 and #194 had already overridden the
+// exception for two sub-fetches without recording why; this completes it and
+// docs/pii-cardinality-audit.md now records the whole decision rather than a
+// stale "no twin" claim.
+//
+// All four follow the intune.device_* convention and sit outside the
+// intune.uxa.* metric namespace so a twin can never collide with a metric name.
+const (
+	eventBatteryHealth       = "intune.device_battery_health"
+	eventDeviceStartup       = "intune.device_startup"
+	eventStartupProcess      = "intune.device_startup_process"
+	eventDeviceAppHealth     = "intune.device_app_health"
+	eventResourcePerformance = "intune.device_resource_performance"
+)
 
 // defaultBaseURL / betaBaseURL: the per-device scores, startup histories,
 // and app health performance are v1.0; battery health, resource performance,
@@ -129,6 +158,10 @@ var healthStateBuckets = map[string]string{
 	"meetingGoals":       "meeting_goals",
 	"unknownFutureValue": "unknown_future_value",
 }
+
+// healthStateMeetingGoals is the bucketed value for a healthy device — the one
+// state that does NOT raise a twin to WARN.
+const healthStateMeetingGoals = "meeting_goals"
 
 func healthStateBucketFor(raw string) string {
 	if b, ok := healthStateBuckets[raw]; ok {
@@ -233,10 +266,77 @@ type deviceScore struct {
 // boots slowly" better than a log stream would, and these rows roll straight
 // into bounded histograms. Reconsider only if boot performance becomes a
 // security signal for someone.
+// startupHistory is one BOOT EVENT, not a device state: each row is a single
+// restart with its own startTime. That distinction drives two decisions below —
+// the twin is stamped with startTime rather than poll time (a state twin like
+// deviceScore deliberately is not), and the timing fields carry the -1
+// "not enough data" sentinel per field (#224).
+//
+// restartStopCode / restartFaultBucket are the Windows crash-bucket identifiers.
+// They are the reason the per-boot twin was worth building: a histogram bucketed
+// by restart_category can say "three blue screens" but never "three blue screens
+// all in fault bucket X", which is the difference between noticing a problem and
+// diagnosing it.
 type startupHistory struct {
-	TotalBootTimeInMs  float64 `json:"totalBootTimeInMs"`
-	TotalLoginTimeInMs float64 `json:"totalLoginTimeInMs"`
-	RestartCategory    string  `json:"restartCategory"`
+	DeviceID                  string  `json:"deviceId"`
+	StartTime                 string  `json:"startTime"`
+	CoreBootTimeInMs          float64 `json:"coreBootTimeInMs"`
+	GroupPolicyBootTimeInMs   float64 `json:"groupPolicyBootTimeInMs"`
+	FeatureUpdateBootTimeInMs float64 `json:"featureUpdateBootTimeInMs"`
+	TotalBootTimeInMs         float64 `json:"totalBootTimeInMs"`
+	CoreLoginTimeInMs         float64 `json:"coreLoginTimeInMs"`
+	GroupPolicyLoginTimeInMs  float64 `json:"groupPolicyLoginTimeInMs"`
+	ResponsiveDesktopTimeInMs float64 `json:"responsiveDesktopTimeInMs"`
+	TotalLoginTimeInMs        float64 `json:"totalLoginTimeInMs"`
+	IsFirstLogin              bool    `json:"isFirstLogin"`
+	IsFeatureUpdate           bool    `json:"isFeatureUpdate"`
+	OperatingSystemVersion    string  `json:"operatingSystemVersion"`
+	RestartCategory           string  `json:"restartCategory"`
+	RestartStopCode           string  `json:"restartStopCode"`
+	RestartFaultBucket        string  `json:"restartFaultBucket"`
+}
+
+// startupProcess is one (device, startup process) pair from the beta
+// userExperienceAnalyticsDeviceStartupProcesses segment (#199).
+//
+// TRAP (live-measured 2026-07-21): this segment REJECTS $top at any value with a
+// 400, and $count with it, while $orderby is accepted and the bare list works.
+// That is the inverse of the usual per-endpoint $top ceiling documented in
+// docs/graph-api-gotchas.md — there is no ceiling to stay under, the parameter is
+// simply unsupported. The sibling DeviceStartupHistory segment has the same
+// trigger but answers 500 instead of 400, so a 5xx here is not a transient fault.
+// collectors.GetAllValues paginates with the Prefer: odata.maxpagesize header and
+// never emits $top, which is why both fetches work.
+//
+// The (device, process) pair is unbounded, so nothing here may be a metric label —
+// this sub-fetch is twin-only, with no metric at all.
+type startupProcess struct {
+	ManagedDeviceID   string  `json:"managedDeviceId"`
+	ProcessName       string  `json:"processName"`
+	ProductName       string  `json:"productName"`
+	Publisher         string  `json:"publisher"`
+	StartupImpactInMs float64 `json:"startupImpactInMs"`
+}
+
+// appHealthDevicePerformance is the DEVICE-level sibling of the application-level
+// app-health segment (#225). It matters because the application-level segment is
+// empty on tenants under the 5-device Endpoint Analytics floor while this one
+// returns rows, so it is the only live source of appHangCount and
+// meanTimeToFailureInMinutes on a small tenant — the fields #194 parked.
+//
+// meanTimeToFailureInMinutes carries the same int32-max "no failures observed"
+// sentinel as the OS-version segment, excluded via mttfNoFailuresSentinel.
+type appHealthDevicePerformance struct {
+	DeviceID                   string  `json:"deviceId"`
+	DeviceDisplayName          string  `json:"deviceDisplayName"`
+	DeviceModel                string  `json:"deviceModel"`
+	DeviceManufacturer         string  `json:"deviceManufacturer"`
+	AppCrashCount              int64   `json:"appCrashCount"`
+	CrashedAppCount            int64   `json:"crashedAppCount"`
+	AppHangCount               int64   `json:"appHangCount"`
+	MeanTimeToFailureInMinutes int64   `json:"meanTimeToFailureInMinutes"`
+	DeviceAppHealthScore       float64 `json:"deviceAppHealthScore"`
+	HealthStatus               string  `json:"healthStatus"`
 }
 
 // appHealthPerformance is the subset of the v1.0
@@ -268,18 +368,58 @@ type appHealthOSVersionPerformance struct {
 	OSVersionAppHealthStatus   string  `json:"osVersionAppHealthStatus"`
 }
 
-// batteryHealthPerformance is the subset of the beta
-// userExperienceAnalyticsBatteryHealthDevicePerformance resource this
-// collector reads. deviceId/deviceName/model/manufacturer are deliberately
-// never read - per-device identifiers, rolled into bounded buckets instead.
+// batteryHealthPerformance is the beta
+// userExperienceAnalyticsBatteryHealthDevicePerformance resource.
+//
+// The fields beyond the score are the ones that make it ACTIONABLE. A bare
+// "63" is not: it cannot distinguish a two-year-old battery at end of life from
+// a new one with a firmware fault. "63, 179 days old, 100% max capacity, 80
+// minutes estimated runtime" can. All of it rides the twin; the metric keeps
+// only the bounded health_state bucket (#112).
+//
+// fullBatteryDrainCount is live-observed as -1 on a real device (2026-07-21) —
+// the same "not enough data" sentinel as the score, omitted rather than emitted
+// as a real drain count of minus one.
 type batteryHealthPerformance struct {
+	DeviceID                  string  `json:"deviceId"`
+	DeviceName                string  `json:"deviceName"`
+	Model                     string  `json:"model"`
+	Manufacturer              string  `json:"manufacturer"`
+	MaxCapacityPercentage     float64 `json:"maxCapacityPercentage"`
+	EstimatedRuntimeInMinutes float64 `json:"estimatedRuntimeInMinutes"`
+	BatteryAgeInDays          float64 `json:"batteryAgeInDays"`
+	FullBatteryDrainCount     float64 `json:"fullBatteryDrainCount"`
+	DeviceBatteryCount        int64   `json:"deviceBatteryCount"`
+	DeviceBatteriesDetails    []struct {
+		BatteryID string `json:"batteryId"`
+	} `json:"deviceBatteriesDetails"`
 	DeviceBatteryHealthScore float64 `json:"deviceBatteryHealthScore"`
 	HealthStatus             string  `json:"healthStatus"`
 }
 
 // resourcePerformance is the subset of the beta
 // userExperienceAnalyticsResourcePerformance resource this collector reads.
+// NOTE ON EVIDENCE: this segment returns 0 rows on m7kni — it sits under the same
+// 5-device Endpoint Analytics floor as the per-model segments (#194) — so unlike
+// every other struct in this file the field names below are taken from the beta
+// $metadata EDM (2026-07-21), NOT from an observed row. That is a weaker evidence
+// class and is recorded as such rather than dressed up as live-measured.
+//
+// The exposure is bounded by construction: every field is emitted only when
+// present, so a name that turns out to be wrong yields an ABSENT twin attribute
+// rather than a wrong value. Nothing here is asserted into a metric label.
 type resourcePerformance struct {
+	DeviceID                       string  `json:"deviceId"`
+	DeviceName                     string  `json:"deviceName"`
+	Model                          string  `json:"model"`
+	Manufacturer                   string  `json:"manufacturer"`
+	CPUDisplayName                 string  `json:"cpuDisplayName"`
+	CPUSpikeTimePercentage         float64 `json:"cpuSpikeTimePercentage"`
+	RAMSpikeTimePercentage         float64 `json:"ramSpikeTimePercentage"`
+	TotalRAMInMB                   float64 `json:"totalRamInMB"`
+	TotalProcessorCoreCount        int64   `json:"totalProcessorCoreCount"`
+	DiskType                       string  `json:"diskType"`
+	MachineType                    string  `json:"machineType"`
 	DeviceResourcePerformanceScore float64 `json:"deviceResourcePerformanceScore"`
 	HealthStatus                   string  `json:"healthStatus"`
 }
@@ -402,6 +542,8 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		{"anomaly severity overview", c.collectAnomalySeverityOverview},
 		{"work from anywhere readiness", c.collectWorkFromAnywhere},
 		{"app health os version", c.collectAppHealthOSVersion},
+		{"app health device performance", c.collectAppHealthDevicePerformance},
+		{"startup processes", c.collectStartupProcesses},
 	}
 
 	var errs []error
@@ -519,8 +661,174 @@ func (c *Collector) collectStartupHistories(ctx context.Context, e telemetry.Emi
 		if h.TotalLoginTimeInMs >= 0 {
 			e.Histogram(loginTimeMetric, "ms", "Intune Endpoint Analytics device login time, by restart category; the -1 'not enough data' sentinel is excluded.", h.TotalLoginTimeInMs, bootTimeBounds, attrs)
 		}
+
+		// The per-boot twin (#225). Every timing field gets the same per-field
+		// sentinel guard as the two histogram fields above, so the twin never
+		// reports a -1 millisecond phase.
+		twin := telemetry.Attrs{semconv.AttrRestartCategory: bucket}
+		telemetry.SetStr(twin, semconv.AttrDeviceId, h.DeviceID)
+		telemetry.SetStr(twin, semconv.AttrOsVersion, h.OperatingSystemVersion)
+		telemetry.SetStr(twin, semconv.AttrRestartStopCode, h.RestartStopCode)
+		telemetry.SetStr(twin, semconv.AttrRestartFaultBucket, h.RestartFaultBucket)
+		telemetry.SetBool(twin, semconv.AttrIsFirstLogin, h.IsFirstLogin)
+		telemetry.SetBool(twin, semconv.AttrIsFeatureUpdate, h.IsFeatureUpdate)
+		for _, f := range []struct {
+			attr  string
+			value float64
+		}{
+			{semconv.AttrCoreBootTimeMs, h.CoreBootTimeInMs},
+			{semconv.AttrGroupPolicyBootTimeMs, h.GroupPolicyBootTimeInMs},
+			{semconv.AttrFeatureUpdateBootTimeMs, h.FeatureUpdateBootTimeInMs},
+			{semconv.AttrTotalBootTimeMs, h.TotalBootTimeInMs},
+			{semconv.AttrCoreLoginTimeMs, h.CoreLoginTimeInMs},
+			{semconv.AttrGroupPolicyLoginTimeMs, h.GroupPolicyLoginTimeInMs},
+			{semconv.AttrResponsiveDesktopTimeMs, h.ResponsiveDesktopTimeInMs},
+			{semconv.AttrTotalLoginTimeMs, h.TotalLoginTimeInMs},
+		} {
+			if f.value >= 0 {
+				twin[f.attr] = strconv.FormatFloat(f.value, 'f', -1, 64)
+			}
+		}
+		// Unlike the state twins in this file, a boot is an EVENT: it happened at
+		// startTime and stamping it with poll time would pile every historical
+		// restart onto one instant. An unparseable startTime leaves the timestamp
+		// zero, which the emitter treats as "no event time" — per CLAUDE.md a
+		// record must never be stamped on arrival, because that would silently
+		// claim the boot happened now.
+		ev := telemetry.Event{
+			Name:     eventDeviceStartup,
+			Body:     fmt.Sprintf("device startup: category=%s total_boot=%s", orUnknown(h.RestartCategory), msOrUnknown(h.TotalBootTimeInMs)),
+			Severity: startupSeverity(h),
+			Attrs:    twin,
+		}
+		if ts, err := time.Parse(time.RFC3339, h.StartTime); err == nil {
+			ev.Timestamp = ts
+		}
+		e.LogEvent(ev)
 	}
 	return nil
+}
+
+// startupSeverity raises a boot record that carries crash evidence. A stop code
+// or fault bucket means the restart was a failure, not a routine reboot, and that
+// is the whole reason these fields are worth carrying.
+func startupSeverity(h startupHistory) telemetry.Severity {
+	if h.RestartFaultBucket != "" || h.RestartStopCode != "" && h.RestartStopCode != "0" {
+		return telemetry.SeverityWarn
+	}
+	return telemetry.SeverityInfo
+}
+
+// msOrUnknown renders a timing field for a log body, collapsing the -1
+// "not enough data" sentinel to "unknown" rather than printing "-1".
+func msOrUnknown(v float64) string {
+	if v < 0 {
+		return "unknown"
+	}
+	return strconv.FormatFloat(v, 'f', -1, 64) + "ms"
+}
+
+// collectStartupProcesses fetches the per-(device, process) startup impact
+// (#199). It is TWIN-ONLY and emits no metric: the pair is unbounded, so every
+// aggregation shape would either grow with the fleet or need an arbitrary
+// allow-list. A LogQL topk over startup_impact_ms answers the same question.
+func (c *Collector) collectStartupProcesses(ctx context.Context, e telemetry.Emitter) error {
+	raw, err := collectors.GetAllValues(ctx, c.g, c.beta+"/deviceManagement/userExperienceAnalyticsDeviceStartupProcesses", nil)
+	if err != nil {
+		return err
+	}
+	for _, r := range raw {
+		var p startupProcess
+		if err := json.Unmarshal(r, &p); err != nil {
+			c.logger.Warn("endpoint_analytics: skipping malformed startup process row", "collector", collectorName, "error", err)
+			continue
+		}
+		attrs := telemetry.Attrs{}
+		telemetry.SetStr(attrs, semconv.AttrDeviceId, p.ManagedDeviceID)
+		telemetry.SetStr(attrs, semconv.AttrProcessName, p.ProcessName)
+		telemetry.SetStr(attrs, semconv.AttrProductName, p.ProductName)
+		telemetry.SetStr(attrs, semconv.AttrPublisher, p.Publisher)
+		if p.StartupImpactInMs >= 0 {
+			attrs[semconv.AttrStartupImpactMs] = strconv.FormatFloat(p.StartupImpactInMs, 'f', -1, 64)
+		}
+		e.LogEvent(telemetry.Event{
+			Name:     eventStartupProcess,
+			Body:     fmt.Sprintf("startup process %s: impact=%s", orUnknown(p.ProcessName), msOrUnknown(p.StartupImpactInMs)),
+			Severity: telemetry.SeverityInfo,
+			Attrs:    attrs,
+		})
+	}
+	return nil
+}
+
+// collectAppHealthDevicePerformance fetches the DEVICE-level app-health rows
+// (#225). On a tenant under the 5-device Endpoint Analytics floor this is the
+// only live source of appHangCount and meanTimeToFailureInMinutes, which #194
+// parked because the application-level segment is empty there.
+func (c *Collector) collectAppHealthDevicePerformance(ctx context.Context, e telemetry.Emitter) error {
+	raw, err := collectors.GetAllValues(ctx, c.g, c.beta+"/deviceManagement/userExperienceAnalyticsAppHealthDevicePerformance", nil)
+	if err != nil {
+		return err
+	}
+	counts := map[string]int64{}
+	for _, r := range raw {
+		var a appHealthDevicePerformance
+		if err := json.Unmarshal(r, &a); err != nil {
+			c.logger.Warn("endpoint_analytics: skipping malformed app health device row", "collector", collectorName, "error", err)
+			continue
+		}
+		state := healthStateBucketFor(a.HealthStatus)
+		counts[state]++
+
+		attrs := telemetry.Attrs{semconv.AttrHealthState: state}
+		telemetry.SetStr(attrs, semconv.AttrDeviceId, a.DeviceID)
+		telemetry.SetStr(attrs, semconv.AttrDeviceName, a.DeviceDisplayName)
+		telemetry.SetStr(attrs, semconv.AttrModel, a.DeviceModel)
+		telemetry.SetStr(attrs, semconv.AttrManufacturer, a.DeviceManufacturer)
+		attrs[semconv.AttrAppCrashCount] = strconv.FormatInt(a.AppCrashCount, 10)
+		attrs[semconv.AttrCrashedAppCount] = strconv.FormatInt(a.CrashedAppCount, 10)
+		attrs[semconv.AttrAppHangCount] = strconv.FormatInt(a.AppHangCount, 10)
+		if a.DeviceAppHealthScore >= 0 {
+			attrs[semconv.AttrDeviceAppHealthScore] = strconv.FormatFloat(a.DeviceAppHealthScore, 'f', -1, 64)
+		}
+		// int32-max is "no failures observed", not a ~4085-year MTTF (#194).
+		if a.MeanTimeToFailureInMinutes != mttfNoFailuresSentinel {
+			attrs[semconv.AttrMeanTimeToFailureMinutes] = strconv.FormatInt(a.MeanTimeToFailureInMinutes, 10)
+		}
+		e.LogEvent(telemetry.Event{
+			Name:     eventDeviceAppHealth,
+			Body:     fmt.Sprintf("app health for %s: crashes=%d hangs=%d", orUnknown(a.DeviceDisplayName), a.AppCrashCount, a.AppHangCount),
+			Severity: severityIf(a.AppCrashCount > 0 || a.AppHangCount > 0),
+			Attrs:    attrs,
+		})
+	}
+	points := make([]telemetry.GaugePoint, 0, len(counts))
+	for state, n := range counts {
+		points = append(points, telemetry.GaugePoint{Value: float64(n), Attrs: telemetry.Attrs{semconv.AttrHealthState: state}})
+	}
+	e.GaugeSnapshot(appHealthDeviceCountMetric, "{device}", "Intune Endpoint Analytics device count, by application health state.", points)
+	return nil
+}
+
+// batteryIDs pulls the per-battery identifiers out of deviceBatteriesDetails.
+// A multi-battery laptop reports one entry per cell, so this is what lets a
+// reader tell "one bad cell" from "a worn pack" — the aggregate score cannot.
+func batteryIDs(b batteryHealthPerformance) []string {
+	ids := make([]string, 0, len(b.DeviceBatteriesDetails))
+	for _, d := range b.DeviceBatteriesDetails {
+		if d.BatteryID != "" {
+			ids = append(ids, d.BatteryID)
+		}
+	}
+	return ids
+}
+
+// severityIf raises to WARN when the actionable condition holds.
+func severityIf(warn bool) telemetry.Severity {
+	if warn {
+		return telemetry.SeverityWarn
+	}
+	return telemetry.SeverityInfo
 }
 
 func (c *Collector) collectAppHealth(ctx context.Context, e telemetry.Emitter) error {
@@ -569,6 +877,44 @@ func (c *Collector) collectBatteryHealth(ctx context.Context, e telemetry.Emitte
 			e.Histogram(batteryScoreMetric, "{score}", "Intune Endpoint Analytics device battery health score (0-100), by health state; the -1 'not enough data' sentinel is excluded.",
 				b.DeviceBatteryHealthScore, scoreBounds, telemetry.Attrs{semconv.AttrHealthState: state})
 		}
+
+		// The per-device twin (#225) — the fields that explain the score.
+		attrs := telemetry.Attrs{semconv.AttrHealthState: state}
+		telemetry.SetStr(attrs, semconv.AttrDeviceId, b.DeviceID)
+		telemetry.SetStr(attrs, semconv.AttrDeviceName, b.DeviceName)
+		telemetry.SetStr(attrs, semconv.AttrModel, b.Model)
+		telemetry.SetStr(attrs, semconv.AttrManufacturer, b.Manufacturer)
+		if b.DeviceBatteryCount > 0 { // 0 = not reported, unlike a crash count where 0 is real
+			attrs[semconv.AttrBatteryCount] = strconv.FormatInt(b.DeviceBatteryCount, 10)
+		}
+		for _, f := range []struct {
+			attr  string
+			value float64
+		}{
+			{semconv.AttrBatteryHealthScore, b.DeviceBatteryHealthScore},
+			{semconv.AttrMaxCapacityPercentage, b.MaxCapacityPercentage},
+			{semconv.AttrEstimatedRuntimeMinutes, b.EstimatedRuntimeInMinutes},
+			{semconv.AttrBatteryAgeDays, b.BatteryAgeInDays},
+			// Live-observed as -1 on a real device (2026-07-21): the same
+			// "not enough data" sentinel, omitted rather than emitted as a
+			// drain count of minus one.
+			{semconv.AttrFullBatteryDrainCount, b.FullBatteryDrainCount},
+		} {
+			if f.value >= 0 {
+				attrs[f.attr] = strconv.FormatFloat(f.value, 'f', -1, 64)
+			}
+		}
+		if ids := batteryIDs(b); len(ids) > 0 {
+			telemetry.SetStrs(attrs, semconv.AttrBatteryIds, ids)
+		}
+		// State feed, re-emitted every cycle — timestamp left zero (poll time),
+		// same reasoning as the device-scores twin above.
+		e.LogEvent(telemetry.Event{
+			Name:     eventBatteryHealth,
+			Body:     fmt.Sprintf("battery health for %s: health=%s", orUnknown(b.DeviceName), orUnknown(b.HealthStatus)),
+			Severity: severityIf(state != healthStateMeetingGoals),
+			Attrs:    attrs,
+		})
 	}
 	points := make([]telemetry.GaugePoint, 0, len(counts))
 	for state, n := range counts {
@@ -597,6 +943,41 @@ func (c *Collector) collectResourcePerformance(ctx context.Context, e telemetry.
 			e.Histogram(resourceScoreMetric, "{score}", "Intune Endpoint Analytics device resource performance score (0-100), by health state; the -1 'not enough data' sentinel is excluded.",
 				rp.DeviceResourcePerformanceScore, scoreBounds, telemetry.Attrs{semconv.AttrHealthState: state})
 		}
+
+		// The per-device twin (#225). NOTE: this segment is empty on the only
+		// tenant available, so these mappings are EDM-derived, not live-verified
+		// — see the resourcePerformance struct doc. Everything is emitted only
+		// when present, so a wrong field name yields an absent attribute.
+		attrs := telemetry.Attrs{semconv.AttrHealthState: state}
+		telemetry.SetStr(attrs, semconv.AttrDeviceId, rp.DeviceID)
+		telemetry.SetStr(attrs, semconv.AttrDeviceName, rp.DeviceName)
+		telemetry.SetStr(attrs, semconv.AttrModel, rp.Model)
+		telemetry.SetStr(attrs, semconv.AttrManufacturer, rp.Manufacturer)
+		telemetry.SetStr(attrs, semconv.AttrCpuDisplayName, rp.CPUDisplayName)
+		telemetry.SetStr(attrs, semconv.AttrDiskType, rp.DiskType)
+		telemetry.SetStr(attrs, semconv.AttrMachineType, rp.MachineType)
+		if rp.TotalProcessorCoreCount > 0 { // 0 = not reported
+			attrs[semconv.AttrProcessorCoreCount] = strconv.FormatInt(rp.TotalProcessorCoreCount, 10)
+		}
+		for _, f := range []struct {
+			attr  string
+			value float64
+		}{
+			{semconv.AttrResourcePerformanceScore, rp.DeviceResourcePerformanceScore},
+			{semconv.AttrCpuSpikeTimePercentage, rp.CPUSpikeTimePercentage},
+			{semconv.AttrRamSpikeTimePercentage, rp.RAMSpikeTimePercentage},
+			{semconv.AttrTotalRamMb, rp.TotalRAMInMB},
+		} {
+			if f.value >= 0 {
+				attrs[f.attr] = strconv.FormatFloat(f.value, 'f', -1, 64)
+			}
+		}
+		e.LogEvent(telemetry.Event{
+			Name:     eventResourcePerformance,
+			Body:     fmt.Sprintf("resource performance for %s: health=%s", orUnknown(rp.DeviceName), orUnknown(rp.HealthStatus)),
+			Severity: severityIf(state != healthStateMeetingGoals),
+			Attrs:    attrs,
+		})
 	}
 	points := make([]telemetry.GaugePoint, 0, len(counts))
 	for state, n := range counts {

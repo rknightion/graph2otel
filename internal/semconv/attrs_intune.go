@@ -332,3 +332,76 @@ const (
 	ElevationGovernanceManaged   = "managed"
 	ElevationGovernanceUnmanaged = "unmanaged"
 )
+
+// Attribute keys for the intune.endpoint_analytics per-entity log twins added in
+// #225, when the maintainer overrode the #114 no-twin exception this collector
+// had carried since the original audit. Every key here is TWIN-ONLY: the bounded
+// gauges and histograms keep their existing health_state / restart_category /
+// category labels, and none of the per-device values below may become a metric
+// label (#112) — device identity, boot timings and battery serial detail are all
+// either unbounded or grow with fleet size.
+//
+// Values are live-captured from the beta/v1.0 wire (probed as graph2otel-poller
+// against m7kni, 2026-07-21) except where noted on AttrCpuDisplayName's block,
+// which is EDM-derived because the segment is empty on that tenant.
+const (
+	// Battery detail (userExperienceAnalyticsBatteryHealthDevicePerformance).
+	// These are the fields that EXPLAIN a battery health score: a bare score of
+	// 63 is not actionable, "63, 179 days old, 100% max capacity, 80 minutes
+	// estimated runtime" is.
+	AttrBatteryAgeDays          = "battery_age_days"
+	AttrBatteryCount            = "battery_count"
+	AttrBatteryIds              = "battery_ids"
+	AttrEstimatedRuntimeMinutes = "estimated_runtime_minutes"
+	AttrFullBatteryDrainCount   = "full_battery_drain_count"
+	AttrMaxCapacityPercentage   = "max_capacity_percentage"
+
+	// Boot-event detail (userExperienceAnalyticsDeviceStartupHistory). Unlike the
+	// state twins, a startup history row is an EVENT with its own startTime, so
+	// its twin is stamped with that time rather than poll time.
+	// restart_stop_code / restart_fault_bucket are the Windows crash-bucket
+	// identifiers — the only genuinely diagnostic fields in the set, and the
+	// reason the per-boot twin was worth overriding the exception for.
+	AttrCoreBootTimeMs          = "core_boot_time_ms"
+	AttrCoreLoginTimeMs         = "core_login_time_ms"
+	AttrFeatureUpdateBootTimeMs = "feature_update_boot_time_ms"
+	AttrGroupPolicyBootTimeMs   = "group_policy_boot_time_ms"
+	AttrGroupPolicyLoginTimeMs  = "group_policy_login_time_ms"
+	AttrIsFeatureUpdate         = "is_feature_update"
+	AttrIsFirstLogin            = "is_first_login"
+	AttrResponsiveDesktopTimeMs = "responsive_desktop_time_ms"
+	AttrRestartFaultBucket      = "restart_fault_bucket"
+	AttrRestartStopCode         = "restart_stop_code"
+	AttrTotalBootTimeMs         = "total_boot_time_ms"
+	AttrTotalLoginTimeMs        = "total_login_time_ms"
+
+	// Startup-process detail (userExperienceAnalyticsDeviceStartupProcesses).
+	// process_name is per-process and combines with the device, so the pair is
+	// unbounded — twin only. product_name and publisher are reused from above.
+	AttrProcessName     = "process_name"
+	AttrStartupImpactMs = "startup_impact_ms"
+
+	// Per-device app-health detail (userExperienceAnalyticsAppHealthDevicePerformance),
+	// the device-level sibling of the application-level segment that is empty on
+	// m7kni under the 5-device Endpoint Analytics floor.
+	AttrAppCrashCount            = "app_crash_count"
+	AttrAppHangCount             = "app_hang_count"
+	AttrCrashedAppCount          = "crashed_app_count"
+	AttrDeviceAppHealthScore     = "device_app_health_score"
+	AttrMeanTimeToFailureMinutes = "mean_time_to_failure_minutes"
+
+	// Per-device resource detail (userExperienceAnalyticsResourcePerformance).
+	// This segment returns 0 rows on m7kni (it sits under the same Endpoint
+	// Analytics device-count floor), so these key names are derived from the beta
+	// $metadata EDM rather than an observed row — the one place in this block
+	// that is not live-captured. Values are emitted only when present, so a name
+	// that turns out wrong yields an ABSENT attribute rather than a wrong one.
+	AttrCpuDisplayName           = "cpu_display_name"
+	AttrCpuSpikeTimePercentage   = "cpu_spike_time_percentage"
+	AttrDiskType                 = "disk_type"
+	AttrMachineType              = "machine_type"
+	AttrProcessorCoreCount       = "processor_core_count"
+	AttrRamSpikeTimePercentage   = "ram_spike_time_percentage"
+	AttrResourcePerformanceScore = "resource_performance_score"
+	AttrTotalRamMb               = "total_ram_mb"
+)

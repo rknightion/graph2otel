@@ -19,6 +19,12 @@
       ]
     },
     {
+      "Name": "intune.uxa.app_health.device_count",
+      "AttrKeys": [
+        "health_state"
+      ]
+    },
+    {
       "Name": "intune.uxa.app_health.mean_time_to_failure_minutes",
       "AttrKeys": [
         "os_version"
@@ -96,6 +102,38 @@
   ],
   "Logs": [
     {
+      "EventName": "intune.device_app_health",
+      "AttrKeys": [
+        "app_crash_count",
+        "app_hang_count",
+        "crashed_app_count",
+        "device_app_health_score",
+        "device_id",
+        "device_name",
+        "health_state",
+        "manufacturer",
+        "mean_time_to_failure_minutes",
+        "model"
+      ]
+    },
+    {
+      "EventName": "intune.device_battery_health",
+      "AttrKeys": [
+        "battery_age_days",
+        "battery_count",
+        "battery_health_score",
+        "battery_ids",
+        "device_id",
+        "device_name",
+        "estimated_runtime_minutes",
+        "full_battery_drain_count",
+        "health_state",
+        "manufacturer",
+        "max_capacity_percentage",
+        "model"
+      ]
+    },
+    {
       "EventName": "intune.device_endpoint_analytics",
       "AttrKeys": [
         "app_reliability_score",
@@ -108,6 +146,46 @@
         "model",
         "startup_performance_score",
         "work_from_anywhere_score"
+      ]
+    },
+    {
+      "EventName": "intune.device_resource_performance",
+      "AttrKeys": [
+        "cpu_spike_time_percentage",
+        "health_state",
+        "ram_spike_time_percentage",
+        "resource_performance_score",
+        "total_ram_mb"
+      ]
+    },
+    {
+      "EventName": "intune.device_startup",
+      "AttrKeys": [
+        "core_boot_time_ms",
+        "core_login_time_ms",
+        "device_id",
+        "feature_update_boot_time_ms",
+        "group_policy_boot_time_ms",
+        "group_policy_login_time_ms",
+        "is_feature_update",
+        "is_first_login",
+        "os_version",
+        "responsive_desktop_time_ms",
+        "restart_category",
+        "restart_fault_bucket",
+        "restart_stop_code",
+        "total_boot_time_ms",
+        "total_login_time_ms"
+      ]
+    },
+    {
+      "EventName": "intune.device_startup_process",
+      "AttrKeys": [
+        "device_id",
+        "process_name",
+        "product_name",
+        "publisher",
+        "startup_impact_ms"
       ]
     },
     {

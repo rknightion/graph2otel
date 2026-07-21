@@ -56,13 +56,45 @@ docs rather than `grep LogEvent` on the package would tick it off. **A wrong cla
 an audit doc does not just fail to catch a bug — it actively hides it from the next
 audit.** Check the source, not this file.
 
-**Two are audited, deliberate exceptions with no twin** — recorded here so a future
-sweep does not re-litigate them, and documented in their package docs:
+**Audited, deliberate exceptions** — recorded here so a future sweep does not
+re-litigate them, and documented in their package docs:
 
-- `entra.agreements` — ToU acceptance is a legal/HR/compliance question, not a
-  security signal.
-- `intune.endpointanalytics` — boot/startup performance is an ops question; the
-  Intune console answers it better.
+- `entra.agreements` — no twin. ToU acceptance is a legal/HR/compliance question,
+  not a security signal.
+- ~~`intune.endpointanalytics`~~ — **EXCEPTION WITHDRAWN 2026-07-21 (#225).** This
+  entry read "no twin — boot/startup performance is an ops question; the Intune
+  console answers it better" until that date. Two things were wrong with leaving
+  it there. It had been **factually false since #179**, which added a per-device
+  twin, and #194 added a second — so the document asserted an absence that two
+  shipped collectors contradicted. And the rationale itself did not survive
+  review: the console shows *current state*, not history, so it cannot answer
+  "how has this device's battery decayed over six months" or "which devices share
+  this crash bucket" — the aggregate metrics cannot either, which left those
+  questions unanswerable anywhere.
+
+  Every per-entity sub-fetch now emits a twin:
+
+  | sub-fetch | twin EventName |
+  | --- | --- |
+  | `collectDeviceScores` | `intune.device_endpoint_analytics` (#179) |
+  | `collectWorkFromAnywhere` | `intune.device_work_from_anywhere` (#194) |
+  | `collectBatteryHealth` | `intune.device_battery_health` (#225) |
+  | `collectStartupHistories` | `intune.device_startup` (#225) — stamped with the boot's own `startTime`, not poll time |
+  | `collectStartupProcesses` | `intune.device_startup_process` (#225) — twin-only, no metric: the (device, process) pair is unbounded |
+  | `collectAppHealthDevicePerformance` | `intune.device_app_health` (#225) |
+  | `collectResourcePerformance` | `intune.device_resource_performance` (#225) |
+  | `collectAppHealth`, `collectBaselines`, `collectAnomalySeverityOverview`, `collectAppHealthOSVersion` | none — aggregate shapes, nothing per-entity to twin |
+
+  So `entra.agreements` is now the **only** audited no-twin exception in the
+  codebase.
+
+  **The lesson worth keeping is about this document, not about endpoint
+  analytics.** The entry above was written to stop a future sweep re-litigating a
+  settled decision, and it worked — right up until the decision was quietly
+  reversed twice by later issues that never came back to edit it. A "do not
+  re-open this" note with no mechanism to detect that it has gone stale is a trap
+  for the next reader, which is exactly the failure this file warns about two
+  paragraphs earlier. Check the source, not this file.
 
 **Root cause worth remembering.** These were not accidents. `signinactivity` deferred
 its twin to "M3/M5" *"consistent with the credential-expiry collector's decision"*,

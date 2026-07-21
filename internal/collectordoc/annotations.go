@@ -309,7 +309,7 @@ var annotations = map[string]Annotation{
 		Source:   "`/deviceManagement/detectedApps`",
 	},
 	"intune.endpoint_analytics": {
-		Collects: "UXA per-device scores, boot/login time histograms, app crash counts, battery health, resource performance, anomaly-severity counts, and per-device Windows 11 upgrade-readiness (the Work-From-Anywhere metricDevices navigation — eligibility, failed hardware checks, cloud posture) — the heaviest collector",
+		Collects: "UXA per-device scores, boot/login time histograms, app crash counts, battery health, resource performance, anomaly-severity counts, per-device Windows 11 upgrade-readiness (the Work-From-Anywhere metricDevices navigation — eligibility, failed hardware checks, cloud posture), per-process startup impact, and per-device app health — the heaviest collector. Every per-entity sub-fetch emits a log twin as of #225, which withdrew the #114 no-twin exception this collector used to carry: the bounded metrics answer \"how many devices are in this state\", the twins answer \"which device, and why\" — including the battery age and max-capacity behind a battery score, and the Windows crash-bucket identifiers (`restartStopCode`, `restartFaultBucket`) behind a blue-screen count. The startup twin is stamped with the boot's own `startTime` rather than poll time; startup processes are twin-only, since the (device, process) pair is unbounded",
 		Source:   "`/deviceManagement/userExperienceAnalytics*` (v1.0 + beta)",
 	},
 	"intune.enrollment": {
