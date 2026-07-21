@@ -1,0 +1,10 @@
+{
+  "@odata.context": "https://graph.microsoft.com/beta/$metadata#deviceManagement/templates('034ccd46-190c-4afc-adf1-ad7cc11262eb')/microsoft.graph.securityBaselineTemplate/deviceStateSummary/$entity",
+  "conflictCount": 0,
+  "errorCount": 0,
+  "id": "034ccd46-190c-4afc-adf1-ad7cc11262eb",
+  "notApplicableCount": 0,
+  "notSecureCount": 0,
+  "secureCount": 0,
+  "unknownCount": 0
+}

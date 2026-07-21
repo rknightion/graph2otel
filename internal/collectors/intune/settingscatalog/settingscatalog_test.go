@@ -50,8 +50,13 @@ func intentSummaryURL(id string) string {
 	return base + "/deviceManagement/intents/" + id + "/deviceStateSummary"
 }
 
+// baselineSummaryURL is the WORKING path, live-verified 2026-07-21 as
+// graph2otel-poller: deviceStateSummary is bound on the DERIVED
+// securityBaselineTemplate, so the request needs the cast segment. Without it
+// Graph answers 400 "Resource not found for the segment 'deviceStateSummary'"
+// (#222) — which this collector used to send on every single run.
 func baselineSummaryURL(id string) string {
-	return base + "/deviceManagement/templates/" + id + "/deviceStateSummary"
+	return base + "/deviceManagement/templates/" + id + "/microsoft.graph.securityBaselineTemplate/deviceStateSummary"
 }
 
 // forbidden403 mimics the graphclient error format for an HTTP 403, so
@@ -242,7 +247,11 @@ func TestCollectEmitsSecurityBaselineDevices(t *testing.T) {
 		baselinesURL: `{"value":[
 			{"id":"b1","displayName":"Windows 11 Security Baseline","templateType":"securityBaseline"}
 		]}`,
-		baselineSummaryURL("b1"): `{"secureDeviceCount":40,"notSecureDeviceCount":5,"errorDeviceCount":1,"conflictDeviceCount":0,"notApplicableDeviceCount":2,"unknownDeviceCount":0}`,
+		// Live wire field names (#222): secureCount, NOT secureDeviceCount. The
+		// beta EDM binds this to microsoft.graph.securityBaselineStateSummary,
+		// whose six properties carry no "Device" infix — Microsoft's docs say
+		// otherwise and are wrong. The old names decoded to a permanent zero.
+		baselineSummaryURL("b1"): `{"secureCount":40,"notSecureCount":5,"errorCount":1,"conflictCount":0,"notApplicableCount":2,"unknownCount":0}`,
 	})
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
@@ -353,16 +362,24 @@ func TestCollectConfigurationPoliciesForbiddenIsSkippedNotFailed(t *testing.T) {
 //	live-configurationPolicies.json  GET /beta/deviceManagement/configurationPolicies
 //	live-intents-empty.json          GET /beta/deviceManagement/intents
 //	live-templates-securityBaseline.json  GET /beta/deviceManagement/templates?$filter=templateType eq 'securityBaseline'
-//	live-template-deviceStateSummary-400.json  GET /beta/deviceManagement/templates/{id}/deviceStateSummary (HTTP 400 body)
+//	live-template-deviceStateSummary-400.json  GET /beta/deviceManagement/templates/{id}/deviceStateSummary (HTTP 400 body — the UNCAST path)
+//	live-template-deviceStateSummary-200.json  GET /beta/deviceManagement/templates/{id}/microsoft.graph.securityBaselineTemplate/deviceStateSummary (HTTP 200, captured 2026-07-21)
 //
 // The intents surface is genuinely empty on this tenant — the capture is a real
 // empty page, kept as the pinned empty shape. The configurationPolicies capture
-// is page 1 of 25 (@odata.count=25) and carries a real @odata.nextLink; the
-// template's deviceStateSummary answered HTTP 400 with a not-found-segment body
-// (securityBaselineTemplate exposes no deviceStateSummary navigation property).
+// is page 1 of 25 (@odata.count=25) and carries a real @odata.nextLink.
+//
+// The two deviceStateSummary captures are the before/after of #222: the UNCAST
+// path answers HTTP 400 "Resource not found for the segment 'deviceStateSummary'"
+// — that capture is kept as pinned evidence, and the earlier reading of it, that
+// securityBaselineTemplate simply exposes no such navigation property, was WRONG.
+// It is bound on the DERIVED type, so the cast path answers 200 with the six
+// *Count fields (no "Device" infix).
 var (
 	//go:embed testdata/live-configurationPolicies.json
 	liveConfigPolicies string
+	//go:embed testdata/live-template-deviceStateSummary-200.json
+	liveTemplateSummary200 string
 	//go:embed testdata/live-intents-empty.json
 	liveIntentsEmpty string
 	//go:embed testdata/live-templates-securityBaseline.json
@@ -402,13 +419,12 @@ func TestCollectAgainstLiveCaptures(t *testing.T) {
 		intentsURL:             liveIntentsEmpty,
 		baselinesURL:           liveTemplatesBaseline,
 	}
-	errs := map[string]error{
-		// securityBaselineTemplate exposes no deviceStateSummary segment: live
-		// HTTP 400 with "Resource not found for the segment 'deviceStateSummary'."
-		// (verbatim message in testdata/live-template-deviceStateSummary-400.json).
-		baselineSummaryURL(liveSecurityBaselineTemplateID): summaryNotFound400(baselineSummaryURL(liveSecurityBaselineTemplateID)),
-	}
-	g := &fakeGraph{bodies: bodies, errs: errs}
+	// The baseline summary answers 200 on the CAST path (#222), re-captured
+	// verbatim 2026-07-21. The uncast path — what this collector used to send —
+	// still 400s, and testdata/live-template-deviceStateSummary-400.json keeps
+	// that response as the pinned evidence of the defect.
+	bodies[baselineSummaryURL(liveSecurityBaselineTemplateID)] = liveTemplateSummary200
+	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
 	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
@@ -445,10 +461,27 @@ func TestCollectAgainstLiveCaptures(t *testing.T) {
 		t.Errorf("intent.devices points = %d, want 0, got %+v", len(pts), pts)
 	}
 
-	// The one securityBaseline template is listed, but its deviceStateSummary
-	// 400s with a not-found-segment body → skipped per-item, no device points.
-	if pts := rec.MetricPoints(baselineDevicesMetricName); len(pts) != 0 {
-		t.Errorf("baseline.devices points = %d, want 0 (deviceStateSummary 400 not-found-segment), got %+v", len(pts), pts)
+	// The one securityBaseline template's deviceStateSummary answers 200 on the
+	// cast path, so all six states emit. Every count is genuinely 0 on this
+	// tenant (no devices are assigned to the baseline) — which is exactly why
+	// #222 hid for so long: a permanent zero from decoding the WRONG field names
+	// is indistinguishable from an honest zero. The assertion is therefore on
+	// the SERIES SET, not the values: six states present, one baseline.
+	basePts := rec.MetricPoints(baselineDevicesMetricName)
+	if len(basePts) != 6 {
+		t.Fatalf("baseline.devices points = %d, want 6 (one per state), got %+v", len(basePts), basePts)
+	}
+	states := map[string]bool{}
+	for _, p := range basePts {
+		states[p.Attrs["state"]] = true
+		if p.Attrs["baseline_name"] != "MDM Security Baseline for Windows 10 and later for November 2021" {
+			t.Errorf("unexpected baseline_name %q", p.Attrs["baseline_name"])
+		}
+	}
+	for _, want := range []string{"secure", "not_secure", "error", "conflict", "not_applicable", "unknown"} {
+		if !states[want] {
+			t.Errorf("baseline.devices missing state %q; got %v", want, states)
+		}
 	}
 }
 

@@ -406,30 +406,41 @@ func (c *Collector) listSecurityBaselineTemplates(ctx context.Context) ([]baseli
 	return out, nil
 }
 
-// baselineDeviceStateSummary is the shape of GET .../templates/{id}/deviceStateSummary
-// for a security baseline template (securityBaselineDeviceStateSummary):
-// secure/notSecure rather than compliant/nonCompliant, matching the
-// dedicated baseline compliance vocabulary Microsoft documents for this
-// resource.
+// baselineDeviceStateSummary is the shape of
+// GET .../templates/{id}/microsoft.graph.securityBaselineTemplate/deviceStateSummary
+// — the beta EDM's microsoft.graph.securityBaselineStateSummary. It uses the
+// baseline vocabulary (secure/notSecure) rather than compliant/nonCompliant.
+//
+// The field names carry NO "Device" infix, live-verified on the wire
+// 2026-07-21 as graph2otel-poller (#222):
+//
+//	{"id":"2209e067-…","secureCount":0,"notSecureCount":0,"unknownCount":0,
+//	 "errorCount":0,"conflictCount":0,"notApplicableCount":0}
+//
+// Microsoft's documentation names them secureDeviceCount / notSecureDeviceCount
+// / …, and there is no such type in the EDM at all. This struct decoded those
+// documented names until 2026-07-21, so every one of the six gauges would have
+// reported a confident permanent zero had the request path been working. Wire
+// over docs — do not "restore" the documented names.
 type baselineDeviceStateSummary struct {
-	UnknownDeviceCount       int64 `json:"unknownDeviceCount"`
-	NotApplicableDeviceCount int64 `json:"notApplicableDeviceCount"`
-	SecureDeviceCount        int64 `json:"secureDeviceCount"`
-	NotSecureDeviceCount     int64 `json:"notSecureDeviceCount"`
-	ErrorDeviceCount         int64 `json:"errorDeviceCount"`
-	ConflictDeviceCount      int64 `json:"conflictDeviceCount"`
+	UnknownCount       int64 `json:"unknownCount"`
+	NotApplicableCount int64 `json:"notApplicableCount"`
+	SecureCount        int64 `json:"secureCount"`
+	NotSecureCount     int64 `json:"notSecureCount"`
+	ErrorCount         int64 `json:"errorCount"`
+	ConflictCount      int64 `json:"conflictCount"`
 }
 
 // points renders one baselineDeviceStateSummary into its six bounded
 // (baseline_name, state) gauge points.
 func (s baselineDeviceStateSummary) points(baselineName string) []telemetry.GaugePoint {
 	return []telemetry.GaugePoint{
-		{Value: float64(s.SecureDeviceCount), Attrs: telemetry.Attrs{semconv.AttrBaselineName: baselineName, semconv.AttrState: "secure"}},
-		{Value: float64(s.NotSecureDeviceCount), Attrs: telemetry.Attrs{semconv.AttrBaselineName: baselineName, semconv.AttrState: "not_secure"}},
-		{Value: float64(s.ErrorDeviceCount), Attrs: telemetry.Attrs{semconv.AttrBaselineName: baselineName, semconv.AttrState: "error"}},
-		{Value: float64(s.ConflictDeviceCount), Attrs: telemetry.Attrs{semconv.AttrBaselineName: baselineName, semconv.AttrState: "conflict"}},
-		{Value: float64(s.NotApplicableDeviceCount), Attrs: telemetry.Attrs{semconv.AttrBaselineName: baselineName, semconv.AttrState: "not_applicable"}},
-		{Value: float64(s.UnknownDeviceCount), Attrs: telemetry.Attrs{semconv.AttrBaselineName: baselineName, semconv.AttrState: "unknown"}},
+		{Value: float64(s.SecureCount), Attrs: telemetry.Attrs{semconv.AttrBaselineName: baselineName, semconv.AttrState: "secure"}},
+		{Value: float64(s.NotSecureCount), Attrs: telemetry.Attrs{semconv.AttrBaselineName: baselineName, semconv.AttrState: "not_secure"}},
+		{Value: float64(s.ErrorCount), Attrs: telemetry.Attrs{semconv.AttrBaselineName: baselineName, semconv.AttrState: "error"}},
+		{Value: float64(s.ConflictCount), Attrs: telemetry.Attrs{semconv.AttrBaselineName: baselineName, semconv.AttrState: "conflict"}},
+		{Value: float64(s.NotApplicableCount), Attrs: telemetry.Attrs{semconv.AttrBaselineName: baselineName, semconv.AttrState: "not_applicable"}},
+		{Value: float64(s.UnknownCount), Attrs: telemetry.Attrs{semconv.AttrBaselineName: baselineName, semconv.AttrState: "unknown"}},
 	}
 }
 
@@ -465,7 +476,13 @@ func (c *Collector) emitSecurityBaselineDeviceStates(ctx context.Context, e tele
 // fetchBaselineDeviceStateSummary GETs and decodes one security baseline
 // template's deviceStateSummary singleton.
 func (c *Collector) fetchBaselineDeviceStateSummary(ctx context.Context, id string) (baselineDeviceStateSummary, error) {
-	body, err := c.g.RawGet(ctx, c.baseURL+"/deviceManagement/templates/"+id+"/deviceStateSummary")
+	// The cast segment is load-bearing: deviceStateSummary is bound on the
+	// DERIVED securityBaselineTemplate, not on the templates entity set, so the
+	// uncast path answers 400 "Resource not found for the segment
+	// 'deviceStateSummary'" for every template on every tenant (#222 — it did
+	// exactly that in production until 2026-07-21, silently, because the 400 is
+	// swallowed as an expected "unavailable" condition).
+	body, err := c.g.RawGet(ctx, c.baseURL+"/deviceManagement/templates/"+id+"/microsoft.graph.securityBaselineTemplate/deviceStateSummary")
 	if err != nil {
 		return baselineDeviceStateSummary{}, err
 	}
