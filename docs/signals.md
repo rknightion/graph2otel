@@ -69,66 +69,52 @@ resource attributes) are stream labels. This changes how you write LogQL:
   group) and any dashboard log panel must use — building a Grafana alert on
   `{event_name="…"}` is the single most common way to get a rule that silently never fires.
 
-## Backdated log records: the backend drops them, so graph2otel relocates them
+## Backdated log records: accepted to 7 days, but NOT queryable immediately
 
-Grafana Cloud **silently discards log records timestamped too far in the past**. Not an
-error — the OTLP push returns success, `ForceFlush` returns nil, no partial-success is
-signalled, and nothing reaches the SDK. From inside the exporter the record is delivered.
-It simply never exists in Loki.
+Two separate facts, and confusing them costs a day (#226 was filed on exactly that confusion,
+and then re-made during its own investigation).
 
-**Measured** (2026-07-22, live against the `prod-gb-south-1` OTLP gateway, #226):
+### 1. The accept window is 7 days, and rejection is loud
 
-| backdate | 0 | 15m | 45m | 75m | 90m | 3h | ~4h20m | 6h | 12h | 24h | 48h | 72h |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| lands | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | boundary | ❌ | ❌ | ❌ | ❌ | ❌ |
+The Grafana Cloud OTLP gateway rejects log records timestamped more than **7 days** in the
+past, and states the limit in the rejection body:
 
-Two properties of that cutoff are worth knowing, because both contradict the obvious guess:
-
-- **It is absolute against wall clock, not relative to the stream head.** A virgin stream
-  whose only records were days old behaved identically to the production stream whose head
-  sits at now. So this is *not* Loki's out-of-order rejection, and it cannot be engineered
-  around with different stream labels.
-- **The boundary did not slide smoothly.** Two sweeps three minutes apart both placed it at
-  the same wall-clock instant, which is consistent with the limit stepping on an hour
-  boundary rather than advancing continuously. So the *guaranteed* usable window is shorter
-  than the best-case one — treat **~4h as the ceiling and do not design against 4h20m**.
-
-### What graph2otel does about it
-
-`otlp.log_backdate_horizon` (default **3h**, `0` disables) relocates any log record whose
-event time is older than the horizon to ingestion time, and preserves the truth on the
-record:
-
-| attribute | meaning |
-| --- | --- |
-| `event_time` | the record's **true** event time, RFC3339 — present only when relocated |
-| `event_time_clamped` | `true` — present only when relocated |
-
-So a relocated record is positioned at *arrival* on a time axis while still stating when it
-actually happened. Nothing is lost and nothing is silently misdated; a query that cares
-about occurrence reads `event_time`, and one that cares about ingestion reads the timestamp.
-
-```logql
-# records whose position is arrival rather than occurrence
-{service_name="graph2otel"} | event_time_clamped=`true`
-
-# and how much of that is happening, by signal
-sum by (event_name) (rate({service_name="graph2otel"} | event_time_clamped=`true` [5m]))
+```text
+400 Bad Request: entry for stream '{service_name="graph2otel"}' has timestamp too old:
+2026-07-08T13:05:10Z, oldest acceptable timestamp is: 2026-07-15T13:05:10Z
 ```
 
-The relocation is counted, so it is visible without a log query:
-`graph2otel_logs_backdate_clamped_total{event_name="…"}` (normalized name — see above).
-A sustained non-zero rate means a collector routinely reaches further back than the sink
-accepts; it is the exporter salvaging records, not an error.
+`[live-measured 2026-07-22, #226]` — records backdated 12h, 1d, 2d and 3d all landed; 7d and
+14d were refused. Two properties worth knowing:
 
-**A record with no parseable event time is still dropped, never stamped on arrival** — that
-is the opposite case and the opposite rule. A missing time must not be invented; a *known*
-time that the backend will not accept is preserved rather than thrown away.
+- **Rejection is per-entry, not per-batch.** In the same push, the in-window records were
+  accepted while the two out-of-window ones were refused. One over-old record cannot poison a
+  batch of good ones.
+- **The error reaches the OTel error handler**, so it appears on stderr. A backfill past 7
+  days is not a silent failure.
 
-**Setting the horizon above ~4h on Grafana Cloud is worse than disabling it**: records
-between the horizon and the real cutoff are neither relocated nor accepted, so they vanish
-exactly as before while the setting reads as protection. graph2otel warns at startup if you
-do this.
+`backfill.initial_lookback` beyond this window warns at startup for that reason.
+
+### 2. A backdated record is not visible the moment it is accepted
+
+**This is the trap.** Records timestamped more than a few hours in the past are indexed
+through a late-data path (they carry a `__time_shard__` label) and become queryable
+noticeably later than fresh ones — long enough that a verification query run immediately
+after a poll returns **zero rows for records that were accepted and are now there**.
+
+Nothing distinguishes that from a drop at the moment you look. It produced two wrong
+conclusions on #226: the original report ("the twin never lands in Loki" — it does), and then,
+during the investigation, an entire fabricated "~4h20m horizon" built from sweeps queried
+seconds after each push. Every one of those "dropped" records was present when re-queried
+later.
+
+**So: never conclude a backdated record was dropped from a query run right after emitting
+it.** Wait, re-query, and check for the explicit 400 — that error, not an empty result set,
+is the evidence of rejection.
+
+A related query-side footgun that caused one of those wrong readings: `count_over_time({…}[24h])`
+looks back only 24h, so records timestamped 2–3 days ago are excluded **by the query**, not
+missing from the store. Widen the range before drawing a conclusion.
 
 ## Deduplicating blob-sourced records — Azure delivers at-least-once
 

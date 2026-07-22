@@ -64,32 +64,6 @@ const (
 	// existing metric changes that metric's series identity and would break
 	// dashboards and alerts built on the current names (#82).
 	AttrIngestTransport = "ingest_transport"
-
-	// AttrEventName names the signal a self-observability metric point describes,
-	// e.g. "intune.device_startup". It mirrors the OTLP LogRecord EventName field
-	// that telemetry.Event.Name sets, so a self-obs series joins to the log stream
-	// it is reporting on.
-	//
-	// Bounded by the number of shipped event names (one per collector signal), so
-	// it is metric-label-safe under the cardinality rule (#112).
-	AttrEventName = "event_name"
-
-	// AttrEventTime carries a log record's TRUE event time, in RFC3339, when that
-	// time was too far in the past for the backend to accept and the record's
-	// timestamp had to be relocated to ingestion time (#226).
-	//
-	// It is present only on relocated records. Its absence is the normal case and
-	// means the record's own timestamp is the event time.
-	AttrEventTime = "event_time"
-
-	// AttrEventTimeClamped marks a log record whose timestamp was relocated to
-	// ingestion time because its event time exceeded the backend's accept window
-	// (#226). Always "true" when present; absent otherwise.
-	//
-	// It exists so the relocation is queryable rather than invisible: a record
-	// carrying it is one whose position on a time axis is arrival, not occurrence,
-	// and AttrEventTime holds what actually happened when.
-	AttrEventTimeClamped = "event_time_clamped"
 )
 
 // UCUM units used by the telemetry package's self-observability metrics.

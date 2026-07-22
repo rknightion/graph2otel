@@ -181,12 +181,6 @@ config:
     protocol: http
     # -- OTLP endpoint base URL. For Grafana Cloud use the otlp-gateway URL for YOUR region.
     endpoint: "https://otlp-gateway-prod-us-central-0.grafana.net/otlp"
-    # -- Relocate log records older than this to ingestion time, preserving the
-    # true time on the `event_time` attribute. Grafana Cloud silently DISCARDS
-    # log records backdated beyond ~4h — no error, no partial success (#226) —
-    # so without this they are lost. Set 0 to disable for a sink that accepts
-    # arbitrarily old samples. Do not set it above ~4h on Grafana Cloud.
-    log_backdate_horizon: 3h
     grafana_cloud:
       # -- Grafana Cloud OTLP instance ID. NOT a secret by itself, but set
       # alongside the token below; kept out of values.yaml defaults on
