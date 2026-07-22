@@ -26,9 +26,13 @@ USAGE
     scripts/storage-report.py --json                # machine-readable snapshot to stdout
 
 COST MODELLING (what-if scenarios — all overridable, none change what's measured)
-    Each container's cost is derived from its live bytes: bytes -> AppendBlock rate
-    (via the ACTUAL retention window) -> priced over a month. The scenario knobs let
-    you re-price that same measured rate under different assumptions:
+    The billable AppendBlock count is READ FROM AZURE MONITOR, not guessed: the
+    `Transactions` metric filtered to `ApiName eq 'AppendBlock'` is an exact count of
+    billable append operations (an append blob supports no other write). `Ingress` over
+    the same window calibrates the mean append size (Ingress / AppendBlock) instead of
+    assuming one. The account-wide op count is then allocated across containers by byte
+    share, and the scenario knobs re-price that measured rate under different
+    assumptions:
 
     --retention-days D          actual lifecycle delete age (measurement anchor;
                                 default: auto-detected from the account policy)
@@ -39,24 +43,26 @@ COST MODELLING (what-if scenarios — all overridable, none change what's measur
                                 e.g. --scale graphactivity=0.5 models halving
                                 graph2otel's own Graph poll frequency (MGAL is ~60%
                                 graph2otel's own calls, so this is a real lever)
-    --price-storage-gb-mo / --price-write-10k / --avg-append-bytes   meter overrides
+    --metrics-days N            days of Azure Monitor history to average the measured
+                                op rate over (default 3; whole UTC days only, today
+                                excluded — a part-day drags the average down)
+    --no-metrics                skip Azure Monitor and fall back to the modelled
+                                estimate (see ACCURACY below)
+    --price-storage-gb-mo / --price-write-10k / --price-read-10k /
+    --avg-append-bytes          meter overrides
 
     When any knob is set the report switches to "modelled" mode and prints the new
     total, the delta vs measured-today, and which knobs are active. With no knobs
     (or model_retention==actual and scale==1) it reproduces the measured number
     exactly.
 
-    Worked examples (numbers from the m7kni account, ~£11.90/mo measured today):
+    Worked examples (shape, not current figures — rerun for live numbers):
       # model 7-day retention + halve graph2otel's own poll frequency
       scripts/storage-report.py --model-retention-days 7 --scale graphactivity=0.5
-        -> ~£10.66 (-£1.24). Storage barely moves (£0.02 -> £0.05 even at 3.5x the
-           retention); the whole saving is write-ops from the poll reduction.
       # model turning cloudappevents off and dropping to 1-day retention
       scripts/storage-report.py --scale cloudappevents=0 --model-retention-days 1
-        -> ~£10.25 (-£1.66)
       # model doubling all activity
-      scripts/storage-report.py --volume-scale 2
-        -> ~£23.81 (+£11.91), near-linear because writes dominate
+      scripts/storage-report.py --volume-scale 2   (near-linear: writes dominate)
 
     The honest lesson the model makes visible: RETENTION IS NEARLY FREE, VOLUME IS
     THE BILL. Resident storage is pennies; the cost is AppendBlock write-ops, which
@@ -64,12 +70,30 @@ COST MODELLING (what-if scenarios — all overridable, none change what's measur
     graph2otel's own poll frequency. So the real levers are "which high-churn tables
     do I stream" and "how often do I poll", not "how long do I keep the data".
 
-    Caveat on --avg-append-bytes: the 7300 B/append mean was measured on the Entra
-    categories (MGAL / sign-ins); the Defender tables may batch differently, so tune
-    it with --avg-append-bytes once you have a real Defender reading. The write-op
-    count is exactly measurable from the `append_blob_committed_block_count` metric
-    (an append blob supports no other write), if you ever want to replace the
-    bytes/avg_append estimate with a hard number.
+ACCURACY (what is measured vs what is allocated) — #228
+    MEASURED, exactly: the account-wide AppendBlock / ListBlobs / PutBlob / GetBlob
+    counts and the ingress bytes, straight off the Azure Monitor meters that Cost
+    Management bills from. The mean append size is derived from those, never assumed.
+
+    ALLOCATED, approximately: the split of those account-wide op counts across
+    containers, by resident-byte share. The `Transactions` metric has NO container
+    dimension, so a per-container op count is not obtainable. Byte-share allocation
+    UNDER-attributes containers that write small records (the Entra categories, ~7 KB
+    per append) and OVER-attributes ones that batch large (the Defender advanced-hunting
+    tables). Account totals are right; per-row splits are indicative.
+
+    FALLBACK: with --no-metrics, or when the Monitor call is denied (needs `Monitoring
+    Reader` on the account) or returns no data, the old model runs instead —
+    bytes / (avg_append * actual_retention) — and the report says MODELLED in red.
+    That path is only as good as --avg-append-bytes, and the historic 7300 B default
+    (measured on Entra categories alone, #137) came out 4.9x low once the Defender
+    tables started streaming, over-stating the bill ~4.7x. Treat the fallback as an
+    order-of-magnitude sanity check, not a cost estimate.
+
+    NOT MODELLED: the Azure free-account 12-month grant. At real volume it is worth
+    ~£0.35/month (10K free writes, 20K free list, 20K free reads, 5 GB stored, 15 GB
+    egress) against a bill dominated by millions of writes — under 3%, and every
+    meter that matters is already past its allowance. [live-measured 2026-07-22, #228]
 
     Growth appears automatically once there are >=2 snapshots in the history file
     (default ~/.local/state/graph2otel/storage-history.jsonl). Run it on a cron/launchd
@@ -80,7 +104,7 @@ Depends only on: python3 stdlib + the Azure CLI (`az`) on PATH.
 from __future__ import annotations
 import argparse, json, os, subprocess, sys, time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 DEFAULT_ACCOUNT = os.environ.get("G2O_STORAGE_ACCOUNT", "graph2otelm7kni")
 DEFAULT_HISTORY = os.environ.get(
@@ -95,12 +119,24 @@ DEFAULT_HISTORY = os.environ.get(
 # account type/region. The bill is dominated by WRITE operations (AppendBlock),
 # not resident storage — one endpoint's diagnostic stream is ~pennies of storage
 # but pounds of append-op charges — so both are estimated and shown.
+#
+# The write price is confirmed against the live bill: Cost Management billed
+# 32.7743 units of the "Hot LRS Write Operations" meter at £1.4650, i.e. exactly
+# £0.0447 per 10K. [live-measured 2026-07-22, #228]
 PRICE_STORAGE_GB_MONTH = 0.0145   # £/GiB-month, Hot LRS
-PRICE_WRITE_PER_10K = 0.0447      # £/10k write ops (AppendBlock; listing bills at this rate too)
-AVG_APPEND_BYTES = 7300           # live-measured mean AppendBlock size (#137)
+PRICE_WRITE_PER_10K = 0.0447      # £/10k write ops (AppendBlock, PutBlob; listing bills at this rate too)
+PRICE_READ_PER_10K = 0.0036       # £/10k read ops (GetBlob) — an order of magnitude cheaper
+AVG_APPEND_BYTES = 7300           # FALLBACK ONLY — see ACCURACY above. Normally calibrated live.
 DEFAULT_RETENTION_DAYS = 2        # lifecycle delete age; auto-detected when possible
+DEFAULT_METRIC_DAYS = 3           # whole UTC days of Monitor history to average the op rate over
 DAYS_PER_MONTH = 30.44
 GIB = 1024 ** 3
+
+# Azure Monitor `Transactions` ApiName values, bucketed by how each one bills.
+# DeleteBlob is deliberately absent: blob deletes are not a billable operation.
+WRITE_API_NAMES = ("PutBlob", "PutBlock", "PutBlockList", "SetBlobProperties", "SetBlobMetadata")
+LIST_API_NAMES = ("ListBlobs", "ListContainers", "CreateContainer")
+READ_API_NAMES = ("GetBlob", "GetBlobProperties", "GetBlobMetadata")
 
 # ----- terminal colour (auto-off when not a tty or NO_COLOR set) -------------
 _TTY = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
@@ -146,11 +182,24 @@ def auth_flags(account: str, use_key: bool) -> tuple[list[str], str]:
     return ["--account-key", key, "--auth-mode", "key"], "account key (fallback)"
 
 
-def detect_retention_days(account: str) -> int | None:
+def account_ids(account: str) -> tuple[str | None, str | None]:
+    """(resourceGroup, full resource id) for the storage account, or (None, None)."""
+    r = az(["storage", "account", "show", "--name", account,
+            "--query", "{rg:resourceGroup,id:id}", "-o", "json"])
+    if r.returncode != 0 or not r.stdout.strip():
+        return None, None
+    try:
+        d = json.loads(r.stdout)
+    except json.JSONDecodeError:
+        return None, None
+    return d.get("rg"), d.get("id")
+
+
+def detect_retention_days(account: str, rg: str | None) -> int | None:
     """Read the lifecycle delete age (daysAfterModificationGreaterThan) from the
-    account's management policy, so the write-op estimate uses the real retention
-    window. Returns None if there is no policy or it can't be read."""
-    rg = az(["storage", "account", "show", "--name", account, "--query", "resourceGroup", "-o", "tsv"]).stdout.strip()
+    account's management policy. With the measured path this only anchors the
+    STORAGE side of the model (the op count is read off the meter, not inferred);
+    on the fallback path it still drives the whole estimate. None if unreadable."""
     if not rg:
         return None
     r = az(["storage", "account", "management-policy", "show", "--account-name", account, "-g", rg,
@@ -164,12 +213,155 @@ def detect_retention_days(account: str) -> int | None:
     return min(days) if days else None
 
 
+# ----- measured op rates (Azure Monitor) --------------------------------------
+def metric_window(days: int, now_epoch: float | None = None) -> tuple[str, str]:
+    """(start, end) ISO-Z bounds covering the last `days` WHOLE UTC days, ending at
+    the most recent UTC midnight. Today is excluded on purpose — a part-day is
+    reported as a full bucket by `az monitor metrics list` and would drag the
+    averaged op rate down in proportion to how early in the day you run this."""
+    now = datetime.fromtimestamp(now_epoch if now_epoch is not None else time.time(), timezone.utc)
+    end = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start = end - timedelta(days=days)
+    fmt = "%Y-%m-%dT%H:%M:%SZ"
+    return start.strftime(fmt), end.strftime(fmt)
+
+
+def parse_transactions(envelope: dict) -> dict[str, float]:
+    """Sum an `az monitor metrics list --filter "ApiName eq '*'"` envelope into
+    {ApiName: total ops}. Buckets with no `total` key are gaps, not zeroes, and are
+    skipped so they cannot dilute an average."""
+    out: dict[str, float] = {}
+    for metric in envelope.get("value") or []:
+        for ts in metric.get("timeseries") or []:
+            api = None
+            for md in ts.get("metadatavalues") or []:
+                name = md.get("name")
+                key = name.get("value") if isinstance(name, dict) else name
+                if key == "apiname":
+                    api = md.get("value")
+            if api is None:
+                continue
+            for point in ts.get("data") or []:
+                if point.get("total") is not None:
+                    out[api] = out.get(api, 0.0) + float(point["total"])
+    return out
+
+
+def last_bucket(envelope: dict, api: str) -> float | None:
+    """The most recent whole-day total for one ApiName. Compared against the window
+    average this detects a RAMP — an account whose volume is still climbing reads
+    low when averaged, so the report has to say the number is a trailing one."""
+    best_ts, best_val = "", None
+    for metric in envelope.get("value") or []:
+        for ts in metric.get("timeseries") or []:
+            names = []
+            for md in ts.get("metadatavalues") or []:
+                name = md.get("name")
+                key = name.get("value") if isinstance(name, dict) else name
+                if key == "apiname":
+                    names.append(md.get("value"))
+            if api not in names:
+                continue
+            for point in ts.get("data") or []:
+                if point.get("total") is not None and point.get("timeStamp", "") >= best_ts:
+                    best_ts, best_val = point["timeStamp"], float(point["total"])
+    return best_val
+
+
+def parse_scalar_total(envelope: dict) -> float:
+    """Sum an undimensioned metric envelope (e.g. Ingress) to a single total."""
+    total = 0.0
+    for metric in envelope.get("value") or []:
+        for ts in metric.get("timeseries") or []:
+            for point in ts.get("data") or []:
+                if point.get("total") is not None:
+                    total += float(point["total"])
+    return total
+
+
+def calibrated_avg_append(ingress_bytes: float, append_ops: float) -> float | None:
+    """Mean bytes per AppendBlock, measured. None when either side is absent —
+    a calibration off zero observations is worse than the documented default."""
+    if append_ops <= 0 or ingress_bytes <= 0:
+        return None
+    return ingress_bytes / append_ops
+
+
+def fetch_metrics(resource_id: str, days: int) -> dict | None:
+    """Read the billable op counts and ingress bytes off Azure Monitor.
+
+    Returns per-day rates plus the calibrated mean append size, or None when the
+    metrics are unreachable (needs `Monitoring Reader`) or the window is empty —
+    callers fall back to the modelled estimate and must say so."""
+    start, end = metric_window(days)
+    base = ["monitor", "metrics", "list", "--resource", f"{resource_id}/blobServices/default",
+            "--interval", "P1D", "--start-time", start, "--end-time", end,
+            "--aggregation", "Total", "-o", "json"]
+    tx = az([*base, "--metric", "Transactions", "--filter", "ApiName eq '*'"])
+    if tx.returncode != 0:
+        return None
+    try:
+        envelope = json.loads(tx.stdout or "{}")
+    except json.JSONDecodeError:
+        return None
+    ops = parse_transactions(envelope)
+    appends = ops.get("AppendBlock", 0.0)
+    if appends <= 0:
+        return None  # nothing streaming, or no visibility — don't pretend either way
+
+    ingress = 0.0
+    ing = az([*base, "--metric", "Ingress"])
+    if ing.returncode == 0:
+        try:
+            ingress = parse_scalar_total(json.loads(ing.stdout or "{}"))
+        except json.JSONDecodeError:
+            ingress = 0.0
+
+    def bucket(names: tuple[str, ...]) -> float:
+        return sum(ops.get(n, 0.0) for n in names)
+
+    latest = last_bucket(envelope, "AppendBlock")
+    return {
+        "append_ops_per_day": appends / days,
+        "latest_day_appends": latest,
+        "trend_ratio": (latest / (appends / days)) if (latest and appends) else None,
+        "write_other_ops_per_day": bucket(WRITE_API_NAMES) / days,
+        "list_ops_per_day": bucket(LIST_API_NAMES) / days,
+        "read_ops_per_day": bucket(READ_API_NAMES) / days,
+        "ingress_bytes_per_day": ingress / days,
+        "avg_append": calibrated_avg_append(ingress, appends),
+        "window": f"{start[:10]}..{end[:10]}",
+        "days": days,
+    }
+
+
+def other_ops_cost(m: dict | None, p: dict) -> float:
+    """£/month for the account-wide operations that aren't AppendBlock. Listing is
+    billed at the WRITE rate (meter: "LRS List and Create Container Operations"),
+    which is why excluding it as "small" understated the bill by ~10%."""
+    if not m:
+        return 0.0
+    per_mo = lambda n: n * DAYS_PER_MONTH / 10_000
+    writes = per_mo(m.get("list_ops_per_day", 0.0) + m.get("write_other_ops_per_day", 0.0))
+    reads = per_mo(m.get("read_ops_per_day", 0.0))
+    return writes * p["write_10k"] + reads * p["read_10k"]
+
+
 def append_rate_per_day(nbytes: int, p: dict) -> float:
-    """Back out the container's AppendBlock rate (ops/day) from its measured
-    resident bytes. At steady state the resident bytes are the append rate times
-    avg_append_bytes times the ACTUAL retention window, so rate = bytes /
-    (avg_append * actual_retention). This rate is what drives the write bill and
-    is independent of the retention you later choose to model."""
+    """The container's AppendBlock rate (ops/day) — the thing that drives the bill.
+
+    MEASURED path (default): the account-wide count came off Azure Monitor, so all
+    this does is allocate it by resident-byte share. Approximate per container,
+    exact in total — see ACCURACY in the module docstring.
+
+    FALLBACK path: back-solve from resident bytes. At steady state resident bytes
+    are the append rate times avg_append_bytes times the ACTUAL retention window,
+    so rate = bytes / (avg_append * actual_retention). Only as good as avg_append,
+    which is exactly how #228 happened."""
+    m = p.get("measured")
+    if m:
+        total = p.get("total_bytes") or 0
+        return m["append_ops_per_day"] * (nbytes / total) if total else 0.0
     avg, aret = p["avg_append"], p["actual_retention"]
     return nbytes / (avg * aret) if (avg and aret) else 0.0
 
@@ -380,12 +572,17 @@ def render_terminal(account: str, rows: list[dict], prev: dict | None,
           + BOLD(f" {human_count(tot_appends):>7}"))
     ret_src = "detected" if retention_detected else "assumed"
     scenario = (p["model_retention"] != p["actual_retention"] or p["volume_scale"] != 1.0 or p["per_container"])
-    total_cost = tot_store + tot_write
+    m = p.get("measured")
+    # Non-append ops are account-wide (no container dimension), so they sit outside
+    # the per-row totals but very much inside the bill — listing alone is ~10% of it.
+    other = other_ops_cost(m, p) * (p["volume_scale"] if scenario else 1.0)
+    baseline += other_ops_cost(m, p)
+    total_cost = tot_store + tot_write + other
     print()
     label = "modeled monthly cost" if scenario else "est. monthly cost"
-    print(DIM(f"  {label} ≈ {gbp(total_cost)}"
-              f"  (storage {gbp(tot_store)} + write-ops {gbp(tot_write)} ≈ "
-              f"{human_count(tot_appends)} appends/mo)"))
+    print(DIM(f"  {label} ≈ ") + BOLD(gbp(total_cost)) +
+          DIM(f"  (storage {gbp(tot_store)} + write-ops {gbp(tot_write)} ≈ "
+              f"{human_count(tot_appends)} appends/mo + other ops {gbp(other)})"))
     if scenario:
         delta = total_cost - baseline
         arrow = (GREEN if delta <= 0 else RED)(f"{'+' if delta > 0 else ''}{gbp(delta)}")
@@ -396,9 +593,40 @@ def render_terminal(account: str, rows: list[dict], prev: dict | None,
         for k, v in p["per_container"].items():
             knobs.append(f"{k} ×{v:g}")
         print(DIM("  scenario: " + " · ".join(knobs)))
+    print()
+    if m:
+        print(GREEN("  MEASURED") + DIM(
+            f" — op counts read from Azure Monitor over {m['window']} ({m['days']}d): "
+            f"{human_count(m['append_ops_per_day'])} appends/day, "
+            f"{human_count(m['list_ops_per_day'])} lists/day, "
+            f"{human_count(m['read_ops_per_day'])} reads/day, "
+            f"{human(m['ingress_bytes_per_day'])}/day ingress."))
+        print(DIM(f"  mean append size calibrated live at {p['avg_append']:,.0f} B "
+                  f"(default {AVG_APPEND_BYTES:,} B is Entra-only and unreliable here)."))
+        ratio = m.get("trend_ratio")
+        if m["days"] > 1 and ratio and (ratio >= 1.25 or ratio <= 0.8):
+            direction = "RAMPING UP" if ratio > 1 else "FALLING"
+            print(YELLOW(f"  {direction}") + DIM(
+                f" — the last full day ran at {human_count(m['latest_day_appends'])} appends "
+                f"({ratio:.2f}x the {m['days']}-day average), so this total is a TRAILING figure. "
+                f"Rerun with --metrics-days 1 for the current run-rate."))
+        print(DIM("  per-container £ are the account-wide op count allocated by BYTE SHARE — the "
+                  "Transactions"))
+        print(DIM("  metric has no container dimension, so rows under-state small-record streams "
+                  "(Entra) and"))
+        print(DIM("  over-state large-batch ones (Defender). Account totals are exact; row splits "
+                  "are indicative."))
+    else:
+        print(RED("  MODELLED — no Azure Monitor data") + DIM(
+            f"; appends inferred from resident bytes ÷ ({p['avg_append']:,} B × "
+            f"{p['actual_retention']:g}d)."))
+        print(DIM("  This path is only as good as --avg-append-bytes and has been 4.9x wrong "
+                  "before (#228)."))
+        print(DIM("  Grant 'Monitoring Reader' on the account, or drop --no-metrics, for real "
+                  "numbers."))
     print(DIM(f"  anchor: Hot LRS uksouth · storage £{p['storage']}/GiB-mo · "
-              f"write £{p['write_10k']}/10k · {p['avg_append']}B/append · "
-              f"actual retention {p['actual_retention']:g}d ({ret_src})"))
+              f"write £{p['write_10k']}/10k · read £{p['read_10k']}/10k · "
+              f"{p['avg_append']:,.0f}B/append · retention {p['actual_retention']:g}d ({ret_src})"))
     print(DIM("  write-ops dominate the bill and scale with fleet/collector activity, not resident size.\n"))
 
 
@@ -428,12 +656,27 @@ def render_html(path: str, account: str, rows: list[dict], prev: dict | None,
             f"<td class='num'>{pct:.1f}%</td>"
             f"<td class='bar'><span style='width:{w:.1f}%'></span></td>"
             f"<td class='num'>{r['blobs']:,}</td><td class='num'>{rate_s}</td></tr>")
-    tot_cost = tot_store + tot_write
+    other = other_ops_cost(p.get("measured"), p)
+    tot_cost = tot_store + tot_write + other
     since = ""
     if prev:
         d = sum(r["bytes"] for r in rows) - prev.get("totals", {}).get("bytes", 0)
         dt_h = (time.time() - prev.get("epoch", 0)) / 3600
         since = f"<p class='sub'>Since last snapshot ({dt_h:.1f}h ago): <b>{human_signed(d)}</b></p>"
+    m = p.get("measured")
+    provenance = (
+        f"<b>Measured</b> — op counts from Azure Monitor over {m['window']} ({m['days']}d): "
+        f"{human_count(m['append_ops_per_day'])} appends/day, {human_count(m['list_ops_per_day'])} "
+        f"lists/day, {human(m['ingress_bytes_per_day'])}/day ingress; mean append size calibrated "
+        f"at {p['avg_append']:,.0f}&nbsp;B. Per-container £ allocate the account-wide op count by "
+        "byte share (the Transactions metric has no container dimension), so rows under-state "
+        "small-record streams and over-state large-batch ones — account totals are exact, row "
+        "splits indicative."
+        if m else
+        f"<b>Modelled, not measured</b> — no Azure Monitor data; appends inferred from resident "
+        f"bytes &divide; ({p['avg_append']:,.0f}&nbsp;B &times; {p['actual_retention']:g}d). This "
+        "path has been 4.9&times; wrong before (#228); grant 'Monitoring Reader' for real numbers."
+    )
     html = f"""<!doctype html><meta charset=utf-8><title>graph2otel storage — {account}</title>
 <style>
  body{{font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;margin:2rem;background:#0d1117;color:#e6edf3}}
@@ -456,7 +699,8 @@ def render_html(path: str, account: str, rows: list[dict], prev: dict | None,
 <tbody>{''.join(trs)}</tbody>
 <tfoot><tr><td>TOTAL</td><td class=num>{human(total)}</td><td class=num>{gbp(tot_store)}</td>
 <td class=num>{gbp(tot_write)}</td><td class=num>{human_count(tot_appends)}</td><td colspan=4></td></tr></tfoot></table>
-<p class=sub>{'Modeled' if (p['model_retention'] != p['actual_retention'] or p['volume_scale'] != 1.0 or p['per_container']) else 'Est.'} monthly cost ≈ <b>{gbp(tot_cost)}</b> (Hot LRS uksouth, actual retention {p['actual_retention']:g}d, model retention {p['model_retention']:g}d, volume ×{p['volume_scale']:g}, write-ops dominated). HV = high-volume (&ge;20&nbsp;MB). Δ/day from the oldest snapshot.</p>
+<p class=sub>{'Modeled' if (p['model_retention'] != p['actual_retention'] or p['volume_scale'] != 1.0 or p['per_container']) else 'Est.'} monthly cost ≈ <b>{gbp(tot_cost)}</b> — appends {gbp(tot_write)} + storage {gbp(tot_store)} + other ops {gbp(other)} (Hot LRS uksouth, actual retention {p['actual_retention']:g}d, model retention {p['model_retention']:g}d, volume ×{p['volume_scale']:g}, write-ops dominated). HV = high-volume (&ge;20&nbsp;MB). Δ/day from the oldest snapshot.</p>
+<p class=sub>{provenance}</p>
 """
     open(path, "w").write(html)
 
@@ -485,10 +729,22 @@ def main() -> None:
                     help="scale one container's activity: NAME is a substring of the container name, "
                          "X the factor. Repeatable. E.g. --scale graphactivity=0.5 models halving "
                          "graph2otel's own poll frequency.")
+    ap.add_argument("--metrics-days", type=int, default=DEFAULT_METRIC_DAYS, metavar="N",
+                    help="whole UTC days of Azure Monitor history to average the measured op rate "
+                         f"over (default {DEFAULT_METRIC_DAYS}; today is always excluded)")
+    ap.add_argument("--no-metrics", action="store_true",
+                    help="skip Azure Monitor and use the modelled bytes/avg_append estimate. Only "
+                         "an order-of-magnitude check — it has been 4.9x wrong (#228).")
     ap.add_argument("--price-storage-gb-mo", type=float, default=PRICE_STORAGE_GB_MONTH, help="£/GiB-month storage price")
     ap.add_argument("--price-write-10k", type=float, default=PRICE_WRITE_PER_10K, help="£ per 10k write ops")
-    ap.add_argument("--avg-append-bytes", type=int, default=AVG_APPEND_BYTES, help="mean AppendBlock size in bytes")
+    ap.add_argument("--price-read-10k", type=float, default=PRICE_READ_PER_10K, help="£ per 10k read ops")
+    ap.add_argument("--avg-append-bytes", type=int, default=None,
+                    help="override the mean AppendBlock size in bytes (default: calibrated live "
+                         f"from Ingress/AppendBlock, or {AVG_APPEND_BYTES} when metrics are off)")
     args = ap.parse_args()
+
+    if args.metrics_days < 1:
+        sys.exit("--metrics-days must be at least 1 (whole UTC days only).")
 
     require_az()
     flags, auth_label = auth_flags(args.account, args.use_key)
@@ -496,12 +752,23 @@ def main() -> None:
     if not names:
         sys.exit(f"No containers found in '{args.account}'.")
 
+    rg, resource_id = account_ids(args.account)
+
     if args.retention_days is not None:
         actual_retention, retention_detected = args.retention_days, False
     else:
-        detected = detect_retention_days(args.account)
+        detected = detect_retention_days(args.account, rg)
         actual_retention = detected if detected else DEFAULT_RETENTION_DAYS
         retention_detected = detected is not None
+
+    measured = None
+    if not args.no_metrics and resource_id:
+        measured = fetch_metrics(resource_id, args.metrics_days)
+    # Explicit --avg-append-bytes always wins; otherwise prefer the live calibration
+    # and only fall back to the documented Entra-only constant.
+    avg_append = args.avg_append_bytes
+    if avg_append is None:
+        avg_append = (measured or {}).get("avg_append") or AVG_APPEND_BYTES
 
     per_container = {}
     for spec in args.scale:
@@ -516,16 +783,20 @@ def main() -> None:
     pricing = {
         "storage": args.price_storage_gb_mo,
         "write_10k": args.price_write_10k,
-        "avg_append": args.avg_append_bytes,
+        "read_10k": args.price_read_10k,
+        "avg_append": avg_append,
         "actual_retention": actual_retention,
         "model_retention": args.model_retention_days if args.model_retention_days is not None else actual_retention,
         "volume_scale": args.volume_scale,
         "per_container": per_container,
+        "measured": measured,
+        "total_bytes": 0,  # filled in once the containers are sized (byte-share allocation)
     }
 
     with ThreadPoolExecutor(max_workers=12) as ex:
         rows = list(ex.map(lambda n: size_container(args.account, flags, n), names))
     rows.sort(key=lambda r: r["bytes"], reverse=True)
+    pricing["total_bytes"] = sum(r["bytes"] for r in rows)
 
     hist = load_history(args.history)
     prev = prev_for(hist, args.account)
@@ -537,6 +808,10 @@ def main() -> None:
         "account": args.account,
         "totals": {"bytes": sum(r["bytes"] for r in rows), "blobs": sum(r["blobs"] for r in rows)},
         "containers": {r["name"]: {"bytes": r["bytes"], "blobs": r["blobs"]} for r in rows},
+        # Recorded so a history file can show how the op rate and the mean append size
+        # moved, not just how the bytes did — the two diverge (#228).
+        "metrics": measured,
+        "avg_append_bytes": avg_append,
     }
 
     if args.json:

@@ -61,14 +61,52 @@ is enforced in config (#144's `ConflictsWith`). The one genuinely dual-capable s
 
 ## What it costs
 
-**~£3.07/month** on a small tenant, dominated by `MicrosoftGraphActivityLogs` and the
-service-principal sign-in categories. There is **no standing charge** — that was the point.
+**~£12.90/month** on a small tenant with the Entra categories **and** the Defender XDR
+advanced-hunting tables streaming. There is **no standing charge** — that was the point.
 
-The bill is almost entirely **write operations**, not storage: ~5.0 GB/month of data costs
-about 7p resident, while the AppendBlock calls that put it there cost ~£3.05. Measured live
-on a backfill-free window at **935 appends/hour** (~7.3 KB per append), which is ~683,000
-appends/month at the ~£0.0447/10K write rate. Storage is ~£0.0145/GB/mo, reads ~£0.0036/10K,
-and **listing is billed at the write rate**. `[live-measured 2026-07-17, #137]`
+Read straight off the bill rather than modelled: Cost Management billed the account
+**£1.53 month-to-date** for 2026-07-16..21 (the account is new; billing starts on the 16th),
+and the last full day cost **£0.4242** → £12.91/month at that run-rate.
+`[live-measured 2026-07-22, #228]`
+
+| meter | quantity (July MTD) | cost |
+| --- | --- | --- |
+| Hot LRS Write Operations | 32.7743 (10K) | £1.4650 |
+| LRS List and Create Container Operations | 1.3435 (10K) | £0.0601 |
+| Intra Continent Data Transfer Out | 0.0758 GB | £0.0011 |
+| Hot LRS Data Stored | 0.2638 GB-mo | £0.00 (free tier) |
+
+The bill is almost entirely **write operations**, not storage: 3.0 GB resident costs pennies —
+in fact £0.00, it lands inside the free-tier grant — while the AppendBlock calls that put it
+there are ~£11.45/month. **Listing is billed at the write rate** and is not a rounding error:
+~9,400 ListBlobs/day is ~£1.30/month, about 10% of the total. Storage is ~£0.0145/GiB-mo,
+writes £0.0447/10K (confirmed exactly against the bill: 32.7743 × £0.0447 = £1.4650), reads
+~£0.0036/10K, and blob deletes are free.
+
+> **Do not assume a mean append size — measure it.** The **7.3 KB per append** figure this
+> doc used to quote was measured on the **Entra categories alone** (`[live-measured
+> 2026-07-17, #137]`). Once the Defender advanced-hunting tables started streaming, the
+> blended account-wide mean measured **35,590 B** on 2026-07-21 (2,994.5 MB Ingress over
+> 84,139 AppendBlock ops) — **4.9×** higher, and still moving: 10.5 KB on 07-16, 18.2 KB on
+> 07-17, 25.5 KB on 07-18, 35.6 KB on 07-21 as more tables came online. Defender batches far
+> larger records than Entra does. `scripts/storage-report.py` hardcoded the 7.3 KB constant
+> and back-solved the op count from resident bytes, which over-stated the bill **4.7×**
+> (£59.39 modelled vs £12.91 billed) until #228; it now reads the `Transactions` metric
+> filtered to `ApiName eq 'AppendBlock'` — an exact count of billable appends, since an append
+> blob supports no other write — and calibrates the mean from `Ingress / AppendBlock` each run.
+> `[live-measured 2026-07-22, #228]`
+
+> **The previous ~£3.07/month headline was Entra-only scope**, not a wrong measurement:
+> it covered `MicrosoftGraphActivityLogs` plus the service-principal sign-in categories at
+> ~5.0 GB/month, before the Defender XDR tables were switched on. The increase to ~£12.90 is
+> mostly **added scope** (ingress is now ~2.1 GB/day), not drift on the original categories.
+> Compare like for like before reading it as a regression.
+
+> **The Azure free-account 12-month grant is immaterial — do not model it.** It expires
+> 2026-09-11 and every meter that matters is already past its allowance (write ops at 3,377%).
+> Total value at real volume: 10K free writes £0.045 + 20K free list £0.089 + 20K free reads
+> £0.007 + 5 GB stored £0.044 + 15 GB egress ~£0.16 ≈ **£0.35/month**, under 3% of the bill.
+> Expiry moves the number by pennies. `[live-measured 2026-07-22, #228]`
 
 > **Cost scales with graph2otel's own collector count, not just tenant size.** Every Graph
 > call a collector makes writes a `MicrosoftGraphActivityLogs` record, which the blob path
@@ -81,20 +119,24 @@ and **listing is billed at the write rate**. `[live-measured 2026-07-17, #137]`
 > the observer. A second, unrelated concentration distorts the bill the same way: one Defender
 > TVM scan-agent SP is 96.4% of `ServicePrincipalSignInLogs`.
 
-> **The £0.85/month figure previously here was measured 2026-07-16 mid-backfill**, before those
-> volume drivers were fully in play — honest when taken, ~3.6× low at steady state. The append
-> count is exactly measurable rather than modelled: `append_blob_committed_block_count` is a
-> direct count of billable AppendBlock operations, because an append blob supports no other
-> write. Don't guess at the batching; read the counter.
+> **Earlier headline figures here were each honest when taken and each superseded.** £0.85/month
+> (2026-07-16) was measured mid-backfill, before the volume drivers above were in play; £3.07
+> (2026-07-17) was Entra-only scope. Both were *modelled* op counts. The current £12.90 is read
+> off Cost Management. The lesson that keeps recurring: **don't guess at the batching; read the
+> counter.** `Transactions` filtered to `ApiName eq 'AppendBlock'` is a direct count of billable
+> append operations, because an append blob supports no other write.
 
-Log Analytics and Event Hub were both evaluated against this and closed (#89). The 3.6×
-correction does not reopen either — re-ranked at the measured volume against #89's live-queried
-uksouth prices, the margin **widens**: blob **£3.07** < Event Hub **£8.32** < Log Analytics
-**£10.88**. Blob is priced on write operations and LA on GB ingested, so a volume underestimate
-hurts LA harder, not blob. Event Hub's entire measured advantage was **12 seconds** of latency,
-and the ~4-minute delay is Entra-side — upstream of where the transport forks — so a faster
-destination cannot buy back time already spent. Full evaluation: #89.
-`[live-measured volume × docs-priced meters, 2026-07-17, #137]`
+Log Analytics and Event Hub were both evaluated against this and closed (#89). Neither correction
+reopens either — the blob figure rose because **scope and volume grew**, and both alternatives are
+priced on that same volume. At Entra-only scope #89 ranked blob **£3.07** < Event Hub **£8.32** <
+Log Analytics **£10.88** against live-queried uksouth prices. Blob is priced on write *operations*
+while LA is priced on *GB ingested*, so growing the volume hurts LA strictly harder: scaling #89's
+LA per-GB price to today's ~63 GB/month of ingress puts LA in the low **hundreds** of £/month
+against blob's £12.90. Event Hub's entire measured advantage was **12 seconds** of latency, and the
+~4-minute delay is Entra-side — upstream of where the transport forks — so a faster destination
+cannot buy back time already spent. Full evaluation: #89.
+`[blob live-measured 2026-07-22 (#228); LA/EH re-rank is #89's docs-priced meters scaled by
+measured volume, NOT re-quoted live — re-quote before citing a specific LA number]`
 
 ### Excluding graph2otel's own exhaust (`exclude_self`)
 
