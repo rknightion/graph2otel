@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"time"
 
+	"go.opentelemetry.io/otel"
+
 	"github.com/rknightion/graph2otel/internal/admin"
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collector"
@@ -21,6 +23,14 @@ import (
 	"github.com/rknightion/graph2otel/internal/profiling"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
+
+// otelErrorHandler adapts the OTEL SDK's error channel onto a slog logger. See
+// the call site for why this is wired at all.
+func otelErrorHandler(logger *slog.Logger) otel.ErrorHandler {
+	return otel.ErrorHandlerFunc(func(err error) {
+		logger.Error("otel sdk error", "error", err)
+	})
+}
 
 // version is overridden at build time via -ldflags "-X main.version=...".
 var version = "dev"
@@ -89,6 +99,19 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	for _, w := range cfg.Warnings() {
 		logger.Warn("config advisory", "detail", w)
 	}
+
+	// Route the OTEL SDK's own errors into this logger. Without this they go to
+	// the global default handler, which writes to Go's standard log package —
+	// unstructured, unlevelled, and outside every filter an operator has set up
+	// for graph2otel's output.
+	//
+	// This is the channel that carries EXPORT REJECTIONS, which is why it
+	// matters (#226). The OTLP gateway refuses a log record timestamped beyond
+	// its 7-day accept window with a 400 naming both the offending timestamp and
+	// the limit — genuinely actionable, and previously arriving in a different
+	// format from every other line the process emits. A rejection is a data-loss
+	// event, so it is logged at ERROR.
+	otel.SetErrorHandler(otelErrorHandler(logger))
 
 	// Telemetry provider: the single OTLP metrics+logs pipeline everything emits
 	// through. Built here so the process fails fast on a bad exporter config.

@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -125,5 +127,26 @@ func TestRun_AdminEnabledBootsAndShutsDown(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "stopped") {
 		t.Errorf("stderr = %q, want a shutdown log line", stderr.String())
+	}
+}
+
+// TestOtelErrorHandlerLogsThroughTheAppLogger asserts SDK errors reach
+// graph2otel's own structured logger at ERROR rather than Go's default log
+// package. This channel carries OTLP export rejections — the backend refuses a
+// log record older than its 7-day accept window with a 400 naming the limit
+// (#226) — so it has to be visible to whatever an operator filters on, and a
+// dropped record has to read as an error rather than a note.
+func TestOtelErrorHandlerLogsThroughTheAppLogger(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+	otelErrorHandler(logger).Handle(errors.New("has timestamp too old: 2026-07-08T13:05:10Z"))
+
+	out := buf.String()
+	if !strings.Contains(out, "level=ERROR") {
+		t.Errorf("output %q, want it logged at ERROR — a rejected record is data loss", out)
+	}
+	if !strings.Contains(out, "has timestamp too old") {
+		t.Errorf("output %q, want the underlying error text preserved", out)
 	}
 }
