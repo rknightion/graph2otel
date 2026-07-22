@@ -21,7 +21,8 @@ go test -race ./...         # unit + integration tests (race detector on)
 go vet ./...
 golangci-lint run           # lint (v2 config, .golangci.yml)
 golangci-lint fmt           # apply gofmt + goimports
-make check                  # vet + test + lint + govulncheck + build — the green bar
+make tidy                   # go mod tidy across BOTH modules (root + tools/graphdrift)
+make check                  # vet + test + lint + govulncheck + tidy + build — the green bar
 ```
 
 `make check` is the full gate; run it before every commit. CI runs the same steps.

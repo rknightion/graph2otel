@@ -26,6 +26,13 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # `-mod=readonly` only catches a go.mod missing a requirement, not stale
+      # indirect/direct markers or leftover unused ones — `go mod tidy -diff`
+      # reports those and exits non-zero without writing. Covers both modules;
+      # fix locally with `make tidy`.
+      - name: go.mod tidy check
+        run: make tidy-check
+
       - name: go vet
         run: go vet ./...
 

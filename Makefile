@@ -30,7 +30,7 @@ export PATH := $(TOOLS_DIR):$(PATH)
 .PHONY: build test lint fmt vet govulncheck docker check regen tools \
         coverage notices sbom tools-licensing tools-sbom install-hooks \
         helm-docs tools-helm-docs tools-check tools-graphdrift \
-        graphdrift graphdrift-update
+        graphdrift graphdrift-update tidy tidy-check
 
 build:
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/$(BINARY)
@@ -57,8 +57,25 @@ docker:
 # generated-doc drift gate (docs/env-vars.md vs config.example.yaml) rides the
 # `test` target as an ordinary `go test` (TestEnvReferenceDocInSync), so a stale
 # doc fails `check` with no extra step.
-check: vet test lint govulncheck tools-check
+check: vet test lint govulncheck tidy-check tools-check
 	$(GO) build ./...
+
+# Both modules must be tidy. `-mod=readonly` above only catches a go.mod that is
+# MISSING a requirement — it says nothing about stale indirect/direct markers or
+# leftover unused requirements, which is how storage/azblob sat marked `// indirect`
+# while internal/blobpipeline imported it directly, with every gate green.
+#
+# `go mod tidy -diff` reports the drift and exits non-zero WITHOUT writing, so this
+# is safe in CI. Deliberately not in the pre-commit hook: that is the fast local
+# lane and this needs a populated module cache.
+tidy-check:
+	$(GO) mod tidy -diff
+	$(GO) -C tools/graphdrift mod tidy -diff
+
+# Fix what tidy-check reports, across every module.
+tidy:
+	$(GO) mod tidy
+	$(GO) -C tools/graphdrift mod tidy
 
 # tools/ holds separate CI-only modules, so `./...` from the repo root does not
 # see them — vet and test them explicitly or they rot uncaught. graphdrift is
