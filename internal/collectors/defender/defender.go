@@ -16,9 +16,15 @@
 //     the tenant-wide advanced-hunting CPU quota a poller would (#106).
 //   - LOG-ONLY — an advanced-hunting row is an event, so it maps to exactly one
 //     OTLP log record and no metric. Nothing here calls GaugeSnapshot/Histogram.
-//   - EXPERIMENTAL + off by default — this is the highest-volume surface
-//     graph2otel touches, so each table is opted in explicitly per #106 (the
-//     subpackage's wrapper returns Experimental() == true).
+//   - NOT Experimental, and gated as a group rather than per table. #106 shipped
+//     these as Experimental + individually opted in; #183 reversed that, because
+//     Experimental is reserved for genuine Graph BETA APIs and read-only Storage
+//     ingest is not one. No subpackage implements Experimental(). The whole set
+//     registers off a single switch — blob_ingest.account_url — so an operator
+//     who has wired the Azure export gets every table, and one who has not gets
+//     none. This is still the highest-volume surface graph2otel touches; the
+//     volume control is the export's own diagnostic-settings category list, not
+//     a per-collector flag.
 //
 // Event time is bound to properties.Timestamp on every table — the moment the
 // sensor observed the event — never the envelope `time` or `_TimeReceivedBySvc`,
@@ -60,9 +66,10 @@ func Prefix(tenantID string) string {
 }
 
 // New builds the generic BlobCollector for a Defender table. A subpackage wraps
-// the returned value in its own named type (so collectordoc can recover the
-// subpackage by reflection) and adds Experimental(); this constructor owns the
-// ContainerConfig assembly every table shares.
+// the returned value in its own named type, purely so collectordoc can recover
+// the subpackage by reflection — it adds no behavior (it used to add
+// Experimental(); #183 removed that). This constructor owns the ContainerConfig
+// assembly every table shares.
 func New(name, table string, mapFn func(map[string]any) (telemetry.Event, bool), d collectors.BlobDeps) *blobpipeline.BlobCollector {
 	cfg := blobpipeline.ContainerConfig{
 		Container:     Container(table),

@@ -11,7 +11,10 @@ convention.
 - **`purview.*`** — Purview compliance signals (retention / sensitivity labels).
 - **`defender.*`** — Microsoft Defender XDR advanced-hunting tables (endpoint EDR,
   email/MDO, identity, alert evidence), ingested over the streaming API → Storage
-  blob path. Log-only, Experimental, off by default (#106).
+  blob path. Log-only. **Not Experimental** — read-only Azure Storage ingest is not a
+  beta Graph surface, and `Experimental` is reserved for genuine Graph beta APIs
+  (#183). Setting `blob_ingest.account_url` is the entire opt-in: with it set every
+  `defender.*` table registers, with it unset none do.
 - **`m365.service_health.status{service}` enum** (#119) — the gauge encodes
   Microsoft's `microsoftServiceHealthStatus` as a numeric severity ladder:
   `0` = `serviceOperational` / `falsePositive`; `1` = resolved states
@@ -265,6 +268,57 @@ counter-example worth knowing:
   deleted accounts is Identity Protection still flagging". `is_deleted` is emitted only when the
   reconciliation ran (the polled `entra.risk` collector); the blob-sourced `entra.risky_users`
   twin and the service-principal twin omit it.
+
+## Security alerts: the two transports emit different VALUES for the same attributes
+
+A Microsoft security alert reaches graph2otel twice — once as `entra.security_alert` (polled from
+Graph `/security/alerts_v2`) and once as `defender.alert_info` (the Defender XDR `AlertInfo`
+advanced-hunting table over the blob path). The attribute *names* match. The attribute *values* do
+not, because Graph `alerts_v2` sends camelCase enums and the advanced-hunting table sends display
+strings. Both collectors emit the wire verbatim, so the split is permanent and by design:
+
+| source | `entra.security_alert` | `defender.alert_info` |
+| --- | --- | --- |
+| Defender for Endpoint | `microsoftDefenderForEndpoint` | `Microsoft Defender for Endpoint` |
+| Defender for Cloud Apps | `microsoftDefenderForCloudApps` | `Microsoft Defender for Cloud Apps` |
+| Entra ID Protection | `azureAdIdentityProtection` | `AAD Identity Protection` |
+| `severity` | `medium` / `high` / `informational` | `Medium` / `High` / `Informational` |
+
+`[live-measured 2026-07-22, #232 — every record on both streams over a 7d window, not a sample]`
+
+**A filter written against one transport's vocabulary matches exactly zero rows on the other**, and
+matches them silently — same failure mode as putting an attribute in the stream selector.
+
+**`(?i)` is not a sufficient fix.** It rescues the `severity` row and the two `Defender for …` rows,
+which differ only in case and spacing. It does nothing for Identity Protection:
+`azureAdIdentityProtection` and `AAD Identity Protection` share no substring. A rule that must span
+both transports has to match the alternation explicitly, or — better — not filter on
+`service_source` at all.
+
+**Do not scope an alert rule to a single `service_source`.** Three sources appear on a live tenant
+and the set is Microsoft's to extend; a rule naming one of them silently covers a fraction of the
+alert stream and looks healthy while doing it. Gate on `severity` and `status` instead:
+
+```logql
+sum(count_over_time({service_name="graph2otel"}
+  | event_name=`entra.security_alert`
+  | severity=~`(?i)(high|medium)`
+  | status=~`(?i)(new|inProgress)` [5m])) or vector(0)
+```
+
+Excluding already-`resolved` alerts loses nothing: dedupe is on alert id, so each alert is emitted
+once carrying its poll-time status and is never re-emitted when it later resolves. An alert that
+arrives already `resolved` was auto-resolved before graph2otel first saw it.
+
+**Expect ~20 minutes from alert creation to a page on the Graph path.** `entra.security_alerts`
+polls a 10m interval behind a 15m safety lag, so the delay is the schedule, not a fault to debug.
+The blob twin is faster (~10 min, measured on the same alert) because it is not lag-gated — but it
+covers only the Defender XDR tables, so it is not a drop-in replacement for the Graph stream.
+
+`entra.security_incidents` is the correlation layer above the alerts: one incident groups related
+alerts and carries a `display_name` and `priority_score` the individual alert does not. Its
+`status` vocabulary is different again — `active` / `resolved` / `redirected`, not `new`. Treat
+`redirected` as a duplicate: it means the incident was merged into another one.
 
 ## SharePoint/OneDrive storage: derived quota state + report concealment
 
