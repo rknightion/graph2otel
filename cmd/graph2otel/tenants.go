@@ -278,9 +278,19 @@ func setupTenant(
 	// self-obs labels and checkpoint namespacing. Self-obs metrics reach the
 	// decorator already stamped by selfObsAttrs with the identical value, and the
 	// first stamp wins, so they are unchanged.
+	//
+	// WithBackdateClamp (#226) wraps outside both, for two reasons. It must see a
+	// record's timestamp before the backend does, and every log record reaches the
+	// Scheduler's emitter — including through a collector's own WithTransport,
+	// which wraps whatever the Scheduler was given and therefore sits outside
+	// this. And its own self-obs counter is emitted through the wrapped chain, so
+	// wrapping outside WithTenant is what gets that counter stamped with the
+	// tenant like every other signal (#143).
 	sched := collector.NewScheduler(
-		telemetry.WithTenant(
-			telemetry.WithTransport(emitter, telemetry.TransportGraph), ta.TenantID),
+		telemetry.WithBackdateClamp(
+			telemetry.WithTenant(
+				telemetry.WithTransport(emitter, telemetry.TransportGraph), ta.TenantID),
+			cfg.OTLP.LogBackdateHorizon),
 		collector.NewMemoryStore(),
 		collector.WithTenant(ta.TenantID),
 		collector.WithStatusTracker(status),

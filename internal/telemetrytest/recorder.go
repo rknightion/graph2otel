@@ -10,6 +10,8 @@ package telemetrytest
 import (
 	"context"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -283,11 +285,43 @@ func attrMap(set attribute.Set) map[string]string {
 	return out
 }
 
+// logValueString renders a log attribute value of ANY kind as a string.
+//
+// log.Value.AsString() returns "" for every kind except KindString — it does not
+// convert, it asserts — so calling it directly captured bool, int64 and float64
+// attributes as empty. Tests could then only assert that a numeric attribute was
+// PRESENT, never that it was right, and an assertion against its value would
+// have been comparing "" to "": vacuously true. Numeric log attributes are a
+// large share of the signal surface (startup_impact_ms, battery_age_days, every
+// score and count), so this was a hole under the whole log-twin test estate.
+func logValueString(v log.Value) string {
+	switch v.Kind() {
+	case log.KindString:
+		return v.AsString()
+	case log.KindBool:
+		return strconv.FormatBool(v.AsBool())
+	case log.KindInt64:
+		return strconv.FormatInt(v.AsInt64(), 10)
+	case log.KindFloat64:
+		return strconv.FormatFloat(v.AsFloat64(), 'g', -1, 64)
+	case log.KindBytes:
+		return string(v.AsBytes())
+	case log.KindSlice:
+		parts := make([]string, 0, len(v.AsSlice()))
+		for _, e := range v.AsSlice() {
+			parts = append(parts, logValueString(e))
+		}
+		return strings.Join(parts, ",")
+	default:
+		return v.String()
+	}
+}
+
 // flattenLogRecord converts a captured sdklog.Record to a LogRecord.
 func flattenLogRecord(rec sdklog.Record) LogRecord {
 	attrs := map[string]string{}
 	rec.WalkAttributes(func(kv log.KeyValue) bool {
-		attrs[kv.Key] = kv.Value.AsString()
+		attrs[kv.Key] = logValueString(kv.Value)
 		return true
 	})
 	return LogRecord{

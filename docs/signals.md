@@ -69,6 +69,67 @@ resource attributes) are stream labels. This changes how you write LogQL:
   group) and any dashboard log panel must use — building a Grafana alert on
   `{event_name="…"}` is the single most common way to get a rule that silently never fires.
 
+## Backdated log records: the backend drops them, so graph2otel relocates them
+
+Grafana Cloud **silently discards log records timestamped too far in the past**. Not an
+error — the OTLP push returns success, `ForceFlush` returns nil, no partial-success is
+signalled, and nothing reaches the SDK. From inside the exporter the record is delivered.
+It simply never exists in Loki.
+
+**Measured** (2026-07-22, live against the `prod-gb-south-1` OTLP gateway, #226):
+
+| backdate | 0 | 15m | 45m | 75m | 90m | 3h | ~4h20m | 6h | 12h | 24h | 48h | 72h |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| lands | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | boundary | ❌ | ❌ | ❌ | ❌ | ❌ |
+
+Two properties of that cutoff are worth knowing, because both contradict the obvious guess:
+
+- **It is absolute against wall clock, not relative to the stream head.** A virgin stream
+  whose only records were days old behaved identically to the production stream whose head
+  sits at now. So this is *not* Loki's out-of-order rejection, and it cannot be engineered
+  around with different stream labels.
+- **The boundary did not slide smoothly.** Two sweeps three minutes apart both placed it at
+  the same wall-clock instant, which is consistent with the limit stepping on an hour
+  boundary rather than advancing continuously. So the *guaranteed* usable window is shorter
+  than the best-case one — treat **~4h as the ceiling and do not design against 4h20m**.
+
+### What graph2otel does about it
+
+`otlp.log_backdate_horizon` (default **3h**, `0` disables) relocates any log record whose
+event time is older than the horizon to ingestion time, and preserves the truth on the
+record:
+
+| attribute | meaning |
+| --- | --- |
+| `event_time` | the record's **true** event time, RFC3339 — present only when relocated |
+| `event_time_clamped` | `true` — present only when relocated |
+
+So a relocated record is positioned at *arrival* on a time axis while still stating when it
+actually happened. Nothing is lost and nothing is silently misdated; a query that cares
+about occurrence reads `event_time`, and one that cares about ingestion reads the timestamp.
+
+```logql
+# records whose position is arrival rather than occurrence
+{service_name="graph2otel"} | event_time_clamped=`true`
+
+# and how much of that is happening, by signal
+sum by (event_name) (rate({service_name="graph2otel"} | event_time_clamped=`true` [5m]))
+```
+
+The relocation is counted, so it is visible without a log query:
+`graph2otel_logs_backdate_clamped_total{event_name="…"}` (normalized name — see above).
+A sustained non-zero rate means a collector routinely reaches further back than the sink
+accepts; it is the exporter salvaging records, not an error.
+
+**A record with no parseable event time is still dropped, never stamped on arrival** — that
+is the opposite case and the opposite rule. A missing time must not be invented; a *known*
+time that the backend will not accept is preserved rather than thrown away.
+
+**Setting the horizon above ~4h on Grafana Cloud is worse than disabling it**: records
+between the horizon and the real cutoff are neither relocated nor accepted, so they vanish
+exactly as before while the setting reads as protection. graph2otel warns at startup if you
+do this.
+
 ## Deduplicating blob-sourced records — Azure delivers at-least-once
 
 Records ingested over the blob transport (`ingest_transport="blob"`) can arrive **more than

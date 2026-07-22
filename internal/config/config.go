@@ -418,6 +418,23 @@ type OTLPConfig struct {
 	Protocol string `yaml:"protocol"`
 	Endpoint string `yaml:"endpoint"`
 
+	// LogBackdateHorizon is how old a log record's event time may be before its
+	// timestamp is relocated to ingestion time, with the true time preserved on
+	// the record as event_time (#226). 0 disables the behavior.
+	//
+	// This exists because the backend silently DISCARDS log records timestamped
+	// too far in the past — no OTLP error, no partial-success, nothing the SDK
+	// can see (measured 2026-07-22 against Grafana Cloud: accepted to ~4h,
+	// dropped beyond, all reported as successful pushes). Relocating keeps the
+	// record; the alternative is losing it and never knowing.
+	//
+	// The default is deliberately below the measured limit, because the failure
+	// is asymmetric: relocating a record that would have been accepted costs its
+	// position on the time axis and nothing else, while not relocating one that
+	// is rejected costs the whole record, silently. Raise it for a sink that
+	// accepts more, or set 0 for one that accepts anything.
+	LogBackdateHorizon time.Duration `yaml:"log_backdate_horizon"`
+
 	GrafanaCloud GrafanaCloudConfig `yaml:"grafana_cloud"`
 }
 
@@ -441,8 +458,9 @@ func Default() *Config {
 	return &Config{
 		LogLevel: "info",
 		OTLP: OTLPConfig{
-			Protocol: "http",
-			Endpoint: "https://otlp-gateway-prod-us-central-0.grafana.net/otlp",
+			Protocol:           "http",
+			Endpoint:           "https://otlp-gateway-prod-us-central-0.grafana.net/otlp",
+			LogBackdateHorizon: defaultLogBackdateHorizon,
 		},
 		Admin: AdminConfig{
 			Enabled:         false,
@@ -605,18 +623,37 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// backendAcceptWindow is how far back the OTLP backend is ASSUMED to accept log
-// samples. Grafana Cloud's Loki rejects samples older than its
-// reject_old_samples_max_age, which the maintainer puts at ~13 days (#118, #89 —
-// which sets its blob lifecycle to 7 days for the same reason).
+// backendAcceptWindow is how far back the OTLP backend accepts log samples.
 //
-// It is deliberately a warning threshold and NOT a clamp. graph2otel cannot know
-// every backend's retention policy: a self-hosted Loki may be configured wider,
-// and a non-Loki OTLP sink has entirely different rules. Clamping would silently
-// break a correctly-configured deployment, which is the same class of mistake as
-// the failure it guards against. So the value takes effect as written and the
-// operator is told what to expect.
-const backendAcceptWindow = 13 * 24 * time.Hour
+// MEASURED, not assumed (#226, live against the Grafana Cloud OTLP gateway
+// 2026-07-22): records backdated up to ~4h were accepted and everything beyond
+// was silently discarded — no OTLP error, no partial-success, ForceFlush nil on
+// every one. The cutoff is absolute against wall clock, NOT Loki's out-of-order
+// rejection relative to the stream head: a virgin stream containing only old
+// records behaved identically to the production stream.
+//
+// This constant previously read 13 days, attributed to a maintainer estimate.
+// That was WRONG by a factor of ~72 and it made the warning below decorative —
+// it could only fire for a lookback beyond 13 days while real loss began at 4h.
+// The value is now live-measured; treat a change to it the same way.
+//
+// It remains a warning threshold and NOT a clamp: graph2otel cannot know every
+// sink's policy, and a self-hosted Loki may accept far more. The clamp that DOES
+// act on this is otlp.log_backdate_horizon, which is per-deployment
+// configurable and relocates rather than drops.
+const backendAcceptWindow = 4 * time.Hour
+
+// defaultLogBackdateHorizon is the default for otlp.log_backdate_horizon: how
+// old a log record may be before its timestamp is relocated to ingestion time.
+//
+// Set below the measured backendAcceptWindow on purpose. The margin absorbs
+// batch-export lag (a record is timestamped when mapped and pushed seconds to
+// minutes later), clock skew between graph2otel and the backend, and the fact
+// that the observed boundary did not advance smoothly — two sweeps three minutes
+// apart both put it at the same wall-clock instant, consistent with the limit
+// stepping on an hour boundary rather than sliding, which makes the worst-case
+// usable window shorter than the best-case one.
+const defaultLogBackdateHorizon = 3 * time.Hour
 
 // Warnings returns non-fatal configuration advisories: settings that are valid,
 // take effect exactly as written, and are still very likely not what the operator
@@ -625,20 +662,34 @@ const backendAcceptWindow = 13 * 24 * time.Hour
 func (c *Config) Warnings() []string {
 	var out []string
 
-	// A lookback beyond the backend's accept window is NOT a longer recovery — it
-	// is a guaranteed silent drop at ingest, and that is worse than a short
-	// lookback precisely because it looks like it is working: graph2otel pages
-	// Graph for the history, maps it, ships it, reports no error, and Loki drops
-	// everything past its window on arrival. The operator sees Graph calls being
-	// made, a clean log, and no data in Grafana. This warning is the only thing
-	// connecting that symptom to this setting.
-	if c.Backfill.InitialLookback > backendAcceptWindow {
+	// A horizon above the measured accept window leaves a band of records that are
+	// too old for the backend but not old enough to be relocated — so they are
+	// still silently discarded, by the very setting meant to prevent it. This is
+	// the most dangerous shape of misconfiguration here because it reads as
+	// protection.
+	if c.OTLP.LogBackdateHorizon > backendAcceptWindow {
 		out = append(out, fmt.Sprintf(
-			"backfill.initial_lookback is %v, beyond the ~%v that Grafana Cloud's Loki accepts old samples within "+
-				"(reject_old_samples_max_age). graph2otel will poll Graph for that history, map it and ship it, and the "+
-				"backend will silently REJECT every record older than its accept window — no error here, no data in Grafana. "+
-				"This is not clamped, because a self-hosted Loki or a non-Loki OTLP sink may accept more: if yours does, "+
-				"ignore this. Otherwise reduce it to %v or less",
+			"otlp.log_backdate_horizon is %v, above the ~%v that Grafana Cloud's OTLP ingestion was measured to accept "+
+				"(#226). Log records aged between %v and %v will be neither relocated nor accepted — they will be "+
+				"silently DISCARDED with no error anywhere. Set it below %v unless your sink is known to accept more",
+			c.OTLP.LogBackdateHorizon, backendAcceptWindow, backendAcceptWindow,
+			c.OTLP.LogBackdateHorizon, backendAcceptWindow))
+	}
+
+	// A lookback beyond the accept window with clamping OFF is a guaranteed silent
+	// drop at ingest, and that is worse than a short lookback precisely because it
+	// looks like it is working: graph2otel pages Graph for the history, maps it,
+	// ships it, reports no error, and the backend drops everything past its window
+	// on arrival. The operator sees Graph calls being made, a clean log, and no
+	// data in Grafana. This warning is the only thing connecting that symptom to
+	// this setting.
+	if c.Backfill.InitialLookback > backendAcceptWindow && c.OTLP.LogBackdateHorizon <= 0 {
+		out = append(out, fmt.Sprintf(
+			"backfill.initial_lookback is %v, beyond the ~%v that Grafana Cloud's OTLP ingestion accepts old log "+
+				"samples within, and otlp.log_backdate_horizon is disabled. graph2otel will poll Graph for that history, "+
+				"map it and ship it, and the backend will silently REJECT every record older than its accept window — no "+
+				"error here, no data in Grafana. Enable the horizon to relocate those records instead, or reduce the "+
+				"lookback to %v or less",
 			c.Backfill.InitialLookback, backendAcceptWindow, backendAcceptWindow))
 	}
 

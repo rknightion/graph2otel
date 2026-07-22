@@ -132,3 +132,41 @@ func TestEmitterLogEvent(t *testing.T) {
 		t.Errorf("attrs = %+v, want user.id=u1", r.Attrs)
 	}
 }
+
+// TestEmitterLogEventCapturesEveryAttributeKind asserts that log attributes of
+// every supported type survive the round trip to the recorder with their VALUE
+// intact, not merely their key.
+//
+// Regression guard: the recorder used to stringify with log.Value.AsString(),
+// which asserts a kind rather than converting one, so bool/int64/float64
+// attributes were captured as "". Numeric log attributes are a large part of
+// the twin surface (impact times, ages, scores, counts), and while their keys
+// were gated by the goldens, their values could not be asserted by any test —
+// an assertion against one would have compared "" to "" and passed.
+func TestEmitterLogEventCapturesEveryAttributeKind(t *testing.T) {
+	rec := telemetrytest.New()
+	rec.Emitter().LogEvent(telemetry.Event{
+		Name: "intune.device_startup",
+		Attrs: telemetry.Attrs{
+			"process_name":      "MsMpEng",
+			"is_first_login":    true,
+			"startup_impact_ms": int64(8038),
+			"battery_score":     63.5,
+			"battery_ids":       []string{"cell-1", "cell-2"},
+		},
+	})
+
+	want := map[string]string{
+		"process_name":      "MsMpEng",
+		"is_first_login":    "true",
+		"startup_impact_ms": "8038",
+		"battery_score":     "63.5",
+		"battery_ids":       "cell-1,cell-2",
+	}
+	got := rec.LogRecords()[0].Attrs
+	for k, w := range want {
+		if got[k] != w {
+			t.Errorf("attr %q = %q, want %q (full set: %+v)", k, got[k], w, got)
+		}
+	}
+}

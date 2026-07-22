@@ -40,6 +40,7 @@ never in committed YAML.
 | `G2O_LOG_LEVEL` | `info` | debug \| info \| warn \| error |
 | `G2O_OTLP__PROTOCOL` | `http` | grpc \| http \| stdout (stdout = print signals to the console for local debug, no backend) |
 | `G2O_OTLP__ENDPOINT` | `https://otlp-gateway-prod-us-central-0.grafana.net/otlp` | OTLP base URL (the exporter appends /v1/metrics and /v1/logs itself) |
+| `G2O_OTLP__LOG_BACKDATE_HORIZON` | `3h` | relocate log records older than this to ingestion time, keeping the true time on event_time; 0 disables. Grafana Cloud silently drops records older than ~4h (#226) |
 | `G2O_OTLP__GRAFANA_CLOUD__INSTANCE_ID` | `""` | Grafana Cloud OTLP instance ID |
 | `G2O_OTLP__GRAFANA_CLOUD__TOKEN` | `""` | DO NOT set here — use G2O_OTLP__GRAFANA_CLOUD__TOKEN instead |
 | `G2O_OTLP__GRAFANA_CLOUD__TOKEN_FILE` | `""` | OR read the token from a file (k8s/Docker secret mount); value XOR token, never both |
@@ -56,7 +57,7 @@ never in committed YAML.
 | `G2O_PROFILING__MUTEX_PROFILE_FRACTION` | `5` | runtime.SetMutexProfileFraction; 0 = disabled |
 | `G2O_PROFILING__BLOCK_PROFILE_RATE` | `100000` | runtime.SetBlockProfileRate (ns, 100µs); 0 = disabled |
 | `G2O_CARDINALITY__METRIC_LIMIT` | `2000` | hard per-instrument active-series cap; beyond it the SDK collapses extras into otel.metric.overflow (0 = unlimited) |
-| `G2O_BACKFILL__INITIAL_LOOKBACK` | `0s` | cold-start backfill window; 0 = each collector's own built-in lookback. Warns past ~13d (Loki's accept window) |
+| `G2O_BACKFILL__INITIAL_LOOKBACK` | `0s` | cold-start backfill window; 0 = each collector's own built-in lookback. Past ~4h the backend drops log records unless otlp.log_backdate_horizon relocates them (#226) |
 | `G2O_CHECKPOINT_DIR` | `./checkpoints` | root dir for the file-based CheckpointStore |
 
 **File-only** — these take structured values (a map or a list of objects) and must be set in the YAML config, not via an environment variable: `tenants`, `collectors`, `profiling.pyroscope.tags`.

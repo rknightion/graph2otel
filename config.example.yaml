@@ -111,6 +111,7 @@ tenants:
 otlp:
   protocol: http # grpc | http | stdout (stdout = print signals to the console for local debug, no backend)
   endpoint: "https://otlp-gateway-prod-us-central-0.grafana.net/otlp" # OTLP base URL (the exporter appends /v1/metrics and /v1/logs itself)
+  log_backdate_horizon: 3h # relocate log records older than this to ingestion time, keeping the true time on event_time; 0 disables. Grafana Cloud silently drops records older than ~4h (#226)
   grafana_cloud:
     instance_id: "" # Grafana Cloud OTLP instance ID
     token: "" # DO NOT set here — use G2O_OTLP__GRAFANA_CLOUD__TOKEN instead
@@ -222,7 +223,7 @@ cardinality:
 # because a self-hosted Loki or a non-Loki sink may legitimately accept more.
 # Env: G2O_BACKFILL__INITIAL_LOOKBACK.
 backfill:
-  initial_lookback: 0s # cold-start backfill window; 0 = each collector's own built-in lookback. Warns past ~13d (Loki's accept window)
+  initial_lookback: 0s # cold-start backfill window; 0 = each collector's own built-in lookback. Past ~4h the backend drops log records unless otlp.log_backdate_horizon relocates them (#226)
 
 # checkpoint_dir is where window-log collectors persist their per-(tenant,
 # endpoint) watermarks so a restart resumes rather than re-fetching or dropping.
