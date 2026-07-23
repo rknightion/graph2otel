@@ -2,18 +2,24 @@
   "Metrics": [
     {
       "Name": "entra.mfa.registration.admin_mfa_capable.total",
+      "Unit": "{user}",
+      "Kind": "gauge",
       "AttrKeys": [
         "is_admin"
       ]
     },
     {
       "Name": "entra.mfa.registration.methods.total",
+      "Unit": "{user}",
+      "Kind": "gauge",
       "AttrKeys": [
         "method"
       ]
     },
     {
       "Name": "entra.mfa.registration.users.total",
+      "Unit": "{user}",
+      "Kind": "gauge",
       "AttrKeys": [
         "status",
         "user_type"

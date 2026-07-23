@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.app_protection.flagged_registrations",
+      "Unit": "{registration}",
+      "Kind": "gauge",
       "AttrKeys": [
         "flagged_reason",
         "platform"
@@ -9,6 +11,8 @@
     },
     {
       "Name": "intune.app_protection.policy.count",
+      "Unit": "{policy}",
+      "Kind": "gauge",
       "AttrKeys": [
         "assigned",
         "platform"
@@ -16,6 +20,8 @@
     },
     {
       "Name": "intune.wip.policy.count",
+      "Unit": "{policy}",
+      "Kind": "gauge",
       "AttrKeys": [
         "assigned"
       ]

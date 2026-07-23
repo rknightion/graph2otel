@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "entra.license.capability_status",
+      "Unit": "{sku}",
+      "Kind": "gauge",
       "AttrKeys": [
         "sku",
         "status"
@@ -9,22 +11,30 @@
     },
     {
       "Name": "entra.license.consumed",
+      "Unit": "{unit}",
+      "Kind": "gauge",
       "AttrKeys": [
         "sku"
       ]
     },
     {
       "Name": "entra.license.enabled",
+      "Unit": "{unit}",
+      "Kind": "gauge",
       "AttrKeys": [
         "sku"
       ]
     },
     {
       "Name": "entra.license.groups_with_errors.total",
+      "Unit": "{group}",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "entra.license.units",
+      "Unit": "{unit}",
+      "Kind": "gauge",
       "AttrKeys": [
         "sku",
         "state"

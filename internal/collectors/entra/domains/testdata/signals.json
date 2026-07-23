@@ -2,10 +2,14 @@
   "Metrics": [
     {
       "Name": "entra.domains.federated.total",
+      "Unit": "{domain}",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "entra.domains.total",
+      "Unit": "{domain}",
+      "Kind": "gauge",
       "AttrKeys": [
         "authentication_type",
         "is_verified"

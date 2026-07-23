@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.noncompliant_settings.count",
+      "Unit": "{setting}",
+      "Kind": "gauge",
       "AttrKeys": [
         "os",
         "setting_status"

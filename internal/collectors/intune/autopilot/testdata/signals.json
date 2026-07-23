@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.autopilot.devices",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "enrollment_state",
         "group_tag"
@@ -9,12 +11,16 @@
     },
     {
       "Name": "intune.autopilot.profile.assignments",
+      "Unit": "{assignment}",
+      "Kind": "gauge",
       "AttrKeys": [
         "profile_name"
       ]
     },
     {
       "Name": "intune.autopilot.profile.count",
+      "Unit": "{profile}",
+      "Kind": "gauge",
       "AttrKeys": [
         "device_type",
         "preprovisioning_allowed"
@@ -22,12 +28,16 @@
     },
     {
       "Name": "intune.autopilot.profile.esp_timeout_minutes",
+      "Unit": "min",
+      "Kind": "gauge",
       "AttrKeys": [
         "profile_name"
       ]
     },
     {
       "Name": "intune.autopilot.profile.setting",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": [
         "profile_name",
         "setting"
@@ -35,6 +45,8 @@
     },
     {
       "Name": "intune.autopilot.stale_contact.count",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "group_tag"
       ]

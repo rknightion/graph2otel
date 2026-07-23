@@ -72,12 +72,34 @@ import (
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
-// MetricSignal is one metric name and the union of the attribute keys observed
-// on it. Keys only, never values: values are whatever a fixture happened to
+// MetricSignal is one metric name, the union of the attribute keys observed on
+// it, and the unit and aggregation kind it was emitted with. Attribute VALUES
+// are deliberately never captured: they are whatever a fixture happened to
 // contain, so goldening them would churn on every fixture edit while telling us
 // nothing about cardinality. The KEY is what decides series count.
+//
+// # Why unit and kind are here (#235)
+//
+// The keys decide how MANY series a metric has. The unit and the aggregation
+// kind decide what may legally be DONE with them when there are too many.
+// Summing the tail of a device count into an `other` bucket is correct; summing
+// the tail of a health score emits a number that was never real. #235's limiter
+// reads that distinction off the unit, so the unit has to be a gated, visible
+// property of every metric rather than an argument nobody ever looks at.
+//
+// Recording them also makes a unit or kind change a review prompt instead of a
+// silent event — the same thing the attribute-key half has always bought, for
+// the two fields that were missing from it.
 type MetricSignal struct {
-	Name     string
+	Name string
+	// Unit is the UCUM unit as passed to the emitter, e.g. "{device}", "%", "s".
+	// Annotation units ("{thing}") are counts; "1", "%", "s" and friends are not.
+	Unit string
+	// Kind is the SDK's AGGREGATION kind — "sum", "gauge" or "histogram" — not
+	// the instrument kind. That is the right granularity here: additivity is a
+	// property of the aggregation, and a Counter and an UpDownCounter are both
+	// sums that fold identically.
+	Kind     string
 	AttrKeys []string
 }
 
@@ -101,6 +123,18 @@ type Signals struct {
 func Union(recs []*telemetrytest.Recorder) Signals {
 	metrics := map[string]map[string]struct{}{}
 	logs := map[string]map[string]struct{}{}
+	// shapes holds the FIRST unit/kind seen for each metric name. First-seen is
+	// not an arbitrary tie-break: the emitter creates the OTEL instrument on first
+	// use and caches it BY NAME, so a later call site passing a different unit
+	// never reaches the wire at all. The golden records what actually ships.
+	//
+	// That caching is also why a disagreement is invisible from here: by the time
+	// a point reaches the Recorder the SDK has already collapsed it to the cached
+	// instrument's unit, so this capture structurally cannot observe a second unit
+	// for the same name within a package. Cross-package disagreement IS visible —
+	// it is checked by the tree walk over every golden, not here.
+	type metricShape struct{ unit, kind string }
+	shapes := map[string]*metricShape{}
 
 	for _, r := range recs {
 		for _, name := range r.MetricNames() {
@@ -112,6 +146,9 @@ func Union(recs []*telemetrytest.Recorder) Signals {
 			for _, p := range r.MetricPoints(name) {
 				for k := range p.Attrs {
 					keys[k] = struct{}{}
+				}
+				if _, ok := shapes[name]; !ok {
+					shapes[name] = &metricShape{unit: p.Unit, kind: p.Kind}
 				}
 			}
 		}
@@ -129,7 +166,13 @@ func Union(recs []*telemetrytest.Recorder) Signals {
 
 	var s Signals
 	for name, keys := range metrics {
-		s.Metrics = append(s.Metrics, MetricSignal{Name: name, AttrKeys: sortedKeys(keys)})
+		sh := shapes[name]
+		if sh == nil {
+			sh = &metricShape{}
+		}
+		s.Metrics = append(s.Metrics, MetricSignal{
+			Name: name, Unit: sh.unit, Kind: sh.kind, AttrKeys: sortedKeys(keys),
+		})
 	}
 	for name, keys := range logs {
 		s.Logs = append(s.Logs, LogSignal{EventName: name, AttrKeys: sortedKeys(keys)})

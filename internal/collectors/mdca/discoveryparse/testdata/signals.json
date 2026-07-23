@@ -2,18 +2,24 @@
   "Metrics": [
     {
       "Name": "mdca.discovery.parse.cloud_services",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": [
         "input_stream_id"
       ]
     },
     {
       "Name": "mdca.discovery.parse.last_success.age",
+      "Unit": "s",
+      "Kind": "gauge",
       "AttrKeys": [
         "input_stream_id"
       ]
     },
     {
       "Name": "mdca.discovery.parse.tasks",
+      "Unit": "1",
+      "Kind": "sum",
       "AttrKeys": [
         "input_stream_id",
         "is_success",
@@ -22,6 +28,8 @@
     },
     {
       "Name": "mdca.discovery.parse.transactions",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": [
         "input_stream_id"
       ]

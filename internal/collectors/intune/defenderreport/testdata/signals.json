@@ -2,12 +2,16 @@
   "Metrics": [
     {
       "Name": "intune.defender_agents.count",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "signal"
       ]
     },
     {
       "Name": "intune.defender_agents.product_status",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "status"
       ]

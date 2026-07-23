@@ -2,30 +2,40 @@
   "Metrics": [
     {
       "Name": "entra.devices.compliance.total",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "is_compliant"
       ]
     },
     {
       "Name": "entra.devices.managed.total",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "is_managed"
       ]
     },
     {
       "Name": "entra.devices.os.total",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "operating_system"
       ]
     },
     {
       "Name": "entra.devices.stale.total",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "threshold_days"
       ]
     },
     {
       "Name": "entra.devices.total",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "trust_type"
       ]

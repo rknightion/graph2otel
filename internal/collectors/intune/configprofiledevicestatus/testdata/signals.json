@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.config_profile_device_status.devices",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "report_status"
       ]

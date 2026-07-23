@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "entra.pim.assignments.total",
+      "Unit": "{assignment}",
+      "Kind": "gauge",
       "AttrKeys": [
         "assignment_type",
         "role_name"
@@ -9,12 +11,16 @@
     },
     {
       "Name": "entra.pim.permanent_assignments.total",
+      "Unit": "{assignment}",
+      "Kind": "gauge",
       "AttrKeys": [
         "role_name"
       ]
     },
     {
       "Name": "entra.roles.members.total",
+      "Unit": "{member}",
+      "Kind": "gauge",
       "AttrKeys": [
         "role_name"
       ]

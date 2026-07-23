@@ -2,20 +2,28 @@
   "Metrics": [
     {
       "Name": "intune.remediation.overview.remediated_device_count",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "intune.remediation.overview.script_count",
+      "Unit": "{script}",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "intune.remediation.remediated_cumulative_devices",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "script_name"
       ]
     },
     {
       "Name": "intune.remediation.summary",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "phase",
         "script_name",
@@ -24,6 +32,8 @@
     },
     {
       "Name": "intune.script.run_summary",
+      "Unit": "{run}",
+      "Kind": "gauge",
       "AttrKeys": [
         "os",
         "run_state",

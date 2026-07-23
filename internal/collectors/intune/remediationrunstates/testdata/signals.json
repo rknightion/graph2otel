@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.remediation_run_states.devices",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "detection_state",
         "remediation_name",

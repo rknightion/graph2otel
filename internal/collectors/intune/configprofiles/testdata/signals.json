@@ -2,12 +2,16 @@
   "Metrics": [
     {
       "Name": "intune.config_profile.count",
+      "Unit": "{profile}",
+      "Kind": "gauge",
       "AttrKeys": [
         "odata_type"
       ]
     },
     {
       "Name": "intune.config_profile.status",
+      "Unit": "{profile}",
+      "Kind": "gauge",
       "AttrKeys": [
         "profile_name",
         "state"
@@ -15,6 +19,8 @@
     },
     {
       "Name": "intune.config_profile.version",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": [
         "profile_name"
       ]

@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "entra.consent.grants.total",
+      "Unit": "{grant}",
+      "Kind": "gauge",
       "AttrKeys": [
         "consent_type",
         "privilege"

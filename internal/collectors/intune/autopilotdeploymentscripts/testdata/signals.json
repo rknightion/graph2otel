@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.autopilot_deployment_scripts.executions",
+      "Unit": "{script}",
+      "Kind": "gauge",
       "AttrKeys": [
         "policy_install_status"
       ]

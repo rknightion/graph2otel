@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "entra.directory.objects.total",
+      "Unit": "{object}",
+      "Kind": "gauge",
       "AttrKeys": [
         "type"
       ]

@@ -2,26 +2,38 @@
   "Metrics": [
     {
       "Name": "m365.sharepoint.deleted_user_retention_days",
+      "Unit": "d",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "m365.sharepoint.external_resharing_enabled",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "m365.sharepoint.idle_session_signout_enabled",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "m365.sharepoint.legacy_auth_enabled",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "m365.sharepoint.personal_site_storage_limit_mb",
+      "Unit": "MB",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "m365.sharepoint.sharing",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": [
         "sharing_capability",
         "sharing_domain_restriction_mode"
@@ -29,18 +41,26 @@
     },
     {
       "Name": "m365.sharepoint.sharing_allowed_domains",
+      "Unit": "{domain}",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "m365.sharepoint.sharing_blocked_domains",
+      "Unit": "{domain}",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "m365.sharepoint.site_storage_limit_mb",
+      "Unit": "MB",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "m365.sharepoint.unmanaged_sync_restricted",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": []
     }
   ],

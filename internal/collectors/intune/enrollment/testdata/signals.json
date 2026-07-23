@@ -2,12 +2,16 @@
   "Metrics": [
     {
       "Name": "intune.enrollment_config.count",
+      "Unit": "{config}",
+      "Kind": "gauge",
       "AttrKeys": [
         "config_type"
       ]
     },
     {
       "Name": "intune.enrollment_config.priority",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": [
         "config_name",
         "config_type"
@@ -15,6 +19,8 @@
     },
     {
       "Name": "intune.enrollment_config.version",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": [
         "config_name"
       ]

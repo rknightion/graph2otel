@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "purview.labels.count",
+      "Unit": "{label}",
+      "Kind": "gauge",
       "AttrKeys": [
         "applicable_to"
       ]

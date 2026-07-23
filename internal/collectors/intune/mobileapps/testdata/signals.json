@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.mobile_app_config.status",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "policy_name",
         "status"
@@ -9,6 +11,8 @@
     },
     {
       "Name": "intune.mobile_apps.count",
+      "Unit": "{app}",
+      "Kind": "gauge",
       "AttrKeys": [
         "app_type",
         "publishing_state"

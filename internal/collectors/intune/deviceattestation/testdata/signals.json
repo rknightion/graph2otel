@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.device_attestation.devices",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "attestation_status",
         "os"

@@ -2,12 +2,16 @@
   "Metrics": [
     {
       "Name": "intune.intent.count",
+      "Unit": "{intent}",
+      "Kind": "gauge",
       "AttrKeys": [
         "migrating"
       ]
     },
     {
       "Name": "intune.intent.devices",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "compliance_status",
         "intent_name"
@@ -15,6 +19,8 @@
     },
     {
       "Name": "intune.security_baseline.devices",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "baseline_name",
         "state"
@@ -22,6 +28,8 @@
     },
     {
       "Name": "intune.settings_catalog.policy.count",
+      "Unit": "{policy}",
+      "Kind": "gauge",
       "AttrKeys": [
         "platform",
         "technology",

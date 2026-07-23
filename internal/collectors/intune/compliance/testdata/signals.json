@@ -2,12 +2,16 @@
   "Metrics": [
     {
       "Name": "intune.compliance.devices",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "state"
       ]
     },
     {
       "Name": "intune.compliance.policy.devices",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "policy_name",
         "state"
@@ -15,6 +19,8 @@
     },
     {
       "Name": "intune.compliance.policy.users",
+      "Unit": "{user}",
+      "Kind": "gauge",
       "AttrKeys": [
         "policy_name",
         "state"
@@ -22,12 +28,16 @@
     },
     {
       "Name": "intune.compliance.policy.version",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": [
         "policy_name"
       ]
     },
     {
       "Name": "intune.compliance.setting.devices",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "platform",
         "setting_name",

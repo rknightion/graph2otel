@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.app_install_status.installations",
+      "Unit": "{installation}",
+      "Kind": "gauge",
       "AttrKeys": [
         "install_state",
         "platform"

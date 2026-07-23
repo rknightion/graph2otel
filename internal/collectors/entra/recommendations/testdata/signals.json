@@ -2,12 +2,16 @@
   "Metrics": [
     {
       "Name": "entra.recommendations.impacted_resources.total",
+      "Unit": "{resource}",
+      "Kind": "gauge",
       "AttrKeys": [
         "recommendation"
       ]
     },
     {
       "Name": "entra.recommendations.total",
+      "Unit": "{recommendation}",
+      "Kind": "gauge",
       "AttrKeys": [
         "priority",
         "status"

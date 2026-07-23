@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.autopilot_deployment.deployments",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "deployment_status"
       ]

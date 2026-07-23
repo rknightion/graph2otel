@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "entra.risky_service_principals.total",
+      "Unit": "{service_principal}",
+      "Kind": "gauge",
       "AttrKeys": [
         "risk_level",
         "risk_state"
@@ -9,6 +11,8 @@
     },
     {
       "Name": "entra.risky_users.total",
+      "Unit": "{user}",
+      "Kind": "gauge",
       "AttrKeys": [
         "risk_level",
         "risk_state"

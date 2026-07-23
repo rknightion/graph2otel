@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.device_boot_security.devices",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "os",
         "posture",

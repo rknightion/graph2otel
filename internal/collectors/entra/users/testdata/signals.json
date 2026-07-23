@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "entra.users.population",
+      "Unit": "{user}",
+      "Kind": "gauge",
       "AttrKeys": [
         "account_enabled",
         "user_type"
@@ -9,12 +11,16 @@
     },
     {
       "Name": "entra.users.stale.total",
+      "Unit": "{user}",
+      "Kind": "gauge",
       "AttrKeys": [
         "threshold_days"
       ]
     },
     {
       "Name": "entra.users.total",
+      "Unit": "{user}",
+      "Kind": "gauge",
       "AttrKeys": [
         "account_enabled",
         "on_premises_sync_enabled",

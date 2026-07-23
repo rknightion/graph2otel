@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.feature_update_summary.devices",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "feature_update_version",
         "policy_id",

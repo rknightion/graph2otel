@@ -2,36 +2,48 @@
   "Metrics": [
     {
       "Name": "intune.uxa.anomaly_count",
+      "Unit": "{anomaly}",
+      "Kind": "gauge",
       "AttrKeys": [
         "anomaly_severity"
       ]
     },
     {
       "Name": "intune.uxa.app_crash_count",
+      "Unit": "{crash}",
+      "Kind": "gauge",
       "AttrKeys": [
         "app_name"
       ]
     },
     {
       "Name": "intune.uxa.app_health.active_device_count",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "os_version"
       ]
     },
     {
       "Name": "intune.uxa.app_health.device_count",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "health_state"
       ]
     },
     {
       "Name": "intune.uxa.app_health.mean_time_to_failure_minutes",
+      "Unit": "min",
+      "Kind": "gauge",
       "AttrKeys": [
         "os_version"
       ]
     },
     {
       "Name": "intune.uxa.app_health.os_version_score",
+      "Unit": "{score}",
+      "Kind": "gauge",
       "AttrKeys": [
         "health_state",
         "os_version"
@@ -39,6 +51,8 @@
     },
     {
       "Name": "intune.uxa.baseline_score",
+      "Unit": "{score}",
+      "Kind": "gauge",
       "AttrKeys": [
         "baseline_name",
         "is_built_in"
@@ -46,54 +60,72 @@
     },
     {
       "Name": "intune.uxa.battery_health.device_count",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "health_state"
       ]
     },
     {
       "Name": "intune.uxa.battery_health_score",
+      "Unit": "{score}",
+      "Kind": "histogram",
       "AttrKeys": [
         "health_state"
       ]
     },
     {
       "Name": "intune.uxa.boot_time_ms",
+      "Unit": "ms",
+      "Kind": "histogram",
       "AttrKeys": [
         "restart_category"
       ]
     },
     {
       "Name": "intune.uxa.device_count",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "health_state"
       ]
     },
     {
       "Name": "intune.uxa.device_score",
+      "Unit": "{score}",
+      "Kind": "histogram",
       "AttrKeys": [
         "category"
       ]
     },
     {
       "Name": "intune.uxa.login_time_ms",
+      "Unit": "ms",
+      "Kind": "histogram",
       "AttrKeys": [
         "restart_category"
       ]
     },
     {
       "Name": "intune.uxa.resource_performance.device_count",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "health_state"
       ]
     },
     {
       "Name": "intune.uxa.resource_performance_score",
+      "Unit": "{score}",
+      "Kind": "histogram",
       "AttrKeys": [
         "health_state"
       ]
     },
     {
       "Name": "intune.uxa.work_from_anywhere.device_count",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "health_state",
         "upgrade_eligibility"

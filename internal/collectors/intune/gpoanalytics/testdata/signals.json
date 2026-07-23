@@ -2,12 +2,16 @@
   "Metrics": [
     {
       "Name": "intune.gpo.config.count",
+      "Unit": "{config}",
+      "Kind": "gauge",
       "AttrKeys": [
         "ingestion_type"
       ]
     },
     {
       "Name": "intune.gpo.migration_readiness",
+      "Unit": "{report}",
+      "Kind": "gauge",
       "AttrKeys": [
         "readiness",
         "report_name"
@@ -15,6 +19,8 @@
     },
     {
       "Name": "intune.gpo.supported_settings_percent",
+      "Unit": "%",
+      "Kind": "gauge",
       "AttrKeys": [
         "report_name"
       ]

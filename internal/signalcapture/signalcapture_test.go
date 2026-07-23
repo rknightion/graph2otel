@@ -250,3 +250,43 @@ func TestAllowListBoundedAppNameIsNotAViolation(t *testing.T) {
 			"count a compile-time constant. See the perEntityKeys doc.", v)
 	}
 }
+
+// TestUnionCapturesUnitAndAggregationKind pins the two facts a metric golden has
+// never recorded and #235's limiter cannot work without.
+//
+// The golden captured the name and the attribute KEYS, which is what decides
+// series COUNT. It never captured the unit or the aggregation kind, which is what
+// decides what may legally be DONE with a clipped tail: summing the tail of a
+// device count is correct, and summing the tail of a health score invents a
+// number that was never real (#235 fork 2). telemetrytest.MetricPoint has carried
+// both fields all along — Union simply never read them.
+//
+// Recording them in the golden also makes a unit or kind change a review prompt
+// rather than a silent event, which is the same thing the attribute-key half buys.
+func TestUnionCapturesUnitAndAggregationKind(t *testing.T) {
+	r := telemetrytest.New()
+	r.Emitter().Gauge("test.score", "{score}", "d", 1, telemetry.Attrs{"app_name": "a"})
+	r.Emitter().Counter("test.calls", "{request}", "d", 1, telemetry.Attrs{"state": "ok"})
+
+	got := signalcapture.Union([]*telemetrytest.Recorder{r})
+
+	if len(got.Metrics) != 2 {
+		t.Fatalf("got %d metrics, want 2: %+v", len(got.Metrics), got.Metrics)
+	}
+	byName := map[string]signalcapture.MetricSignal{}
+	for _, m := range got.Metrics {
+		byName[m.Name] = m
+	}
+	if u := byName["test.score"].Unit; u != "{score}" {
+		t.Errorf("test.score unit = %q, want {score}", u)
+	}
+	if k := byName["test.score"].Kind; k != "gauge" {
+		t.Errorf("test.score kind = %q, want gauge", k)
+	}
+	if u := byName["test.calls"].Unit; u != "{request}" {
+		t.Errorf("test.calls unit = %q, want {request}", u)
+	}
+	if k := byName["test.calls"].Kind; k != "sum" {
+		t.Errorf("test.calls kind = %q, want sum", k)
+	}
+}

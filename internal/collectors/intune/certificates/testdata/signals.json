@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.certificate.days_until_expiry",
+      "Unit": "{certificate}",
+      "Kind": "gauge",
       "AttrKeys": [
         "cert_profile_name",
         "expiry_bucket",
@@ -10,6 +12,8 @@
     },
     {
       "Name": "intune.certificate.state.count",
+      "Unit": "{certificate}",
+      "Kind": "gauge",
       "AttrKeys": [
         "state"
       ]

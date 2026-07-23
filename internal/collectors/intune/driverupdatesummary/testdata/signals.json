@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.driver_update_summary.devices",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "policy_id",
         "policy_name",

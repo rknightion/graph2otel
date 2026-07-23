@@ -2,26 +2,36 @@
   "Metrics": [
     {
       "Name": "entra.secure_score.control_profiles.by_category",
+      "Unit": "{control}",
+      "Kind": "gauge",
       "AttrKeys": [
         "category"
       ]
     },
     {
       "Name": "entra.secure_score.control_profiles.by_status",
+      "Unit": "{control}",
+      "Kind": "gauge",
       "AttrKeys": [
         "status"
       ]
     },
     {
       "Name": "entra.secure_score.current",
+      "Unit": "{score}",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "entra.secure_score.max",
+      "Unit": "{score}",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "entra.secure_score.percentage",
+      "Unit": "%",
+      "Kind": "gauge",
       "AttrKeys": []
     }
   ],

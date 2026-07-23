@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "entra.directory.sync.errors.total",
+      "Unit": "{object}",
+      "Kind": "gauge",
       "AttrKeys": [
         "category",
         "object_type",

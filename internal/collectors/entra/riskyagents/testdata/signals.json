@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "entra.risky_agents.total",
+      "Unit": "{agent}",
+      "Kind": "gauge",
       "AttrKeys": [
         "risk_level",
         "risk_state"

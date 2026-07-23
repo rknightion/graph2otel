@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.device_encryption.devices",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "device_type",
         "encryption_readiness_state",
@@ -10,6 +12,8 @@
     },
     {
       "Name": "intune.device_encryption.policy_state",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "encryption_policy_setting_state"
       ]

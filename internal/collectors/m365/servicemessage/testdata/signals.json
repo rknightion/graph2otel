@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "m365.service_messages.total",
+      "Unit": "{message}",
+      "Kind": "gauge",
       "AttrKeys": [
         "category",
         "severity"

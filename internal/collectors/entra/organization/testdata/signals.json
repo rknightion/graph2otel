@@ -2,24 +2,34 @@
   "Metrics": [
     {
       "Name": "entra.directory.sync.last_sync_age_seconds",
+      "Unit": "s",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "entra.organization.age_days",
+      "Unit": "d",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "entra.organization.info",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": [
         "tenant_type"
       ]
     },
     {
       "Name": "entra.organization.on_premises_sync_enabled",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "entra.organization.verified_domains.total",
+      "Unit": "{domain}",
+      "Kind": "gauge",
       "AttrKeys": []
     }
   ],

@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.apple_token.days_until_expiry",
+      "Unit": "d",
+      "Kind": "gauge",
       "AttrKeys": [
         "state",
         "token_name",
@@ -10,6 +12,8 @@
     },
     {
       "Name": "intune.apple_token.synced_device_count",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "token_name"
       ]

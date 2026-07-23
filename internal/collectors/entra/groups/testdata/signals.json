@@ -2,10 +2,14 @@
   "Metrics": [
     {
       "Name": "entra.groups.role_assignable.total",
+      "Unit": "{group}",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "entra.groups.total",
+      "Unit": "{group}",
+      "Kind": "gauge",
       "AttrKeys": [
         "group_type",
         "mail_enabled",

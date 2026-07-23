@@ -2,10 +2,14 @@
   "Metrics": [
     {
       "Name": "intune.detected_apps.catalog_size",
+      "Unit": "{app}",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "intune.detected_apps.device_count",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "app_name",
         "platform"

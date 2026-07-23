@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "entra.deleted_items.count",
+      "Unit": "{object}",
+      "Kind": "gauge",
       "AttrKeys": [
         "near_purge",
         "object_type"

@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "purview.ediscovery.cases",
+      "Unit": "{case}",
+      "Kind": "gauge",
       "AttrKeys": [
         "status"
       ]

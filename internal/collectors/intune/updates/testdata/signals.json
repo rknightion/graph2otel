@@ -2,18 +2,24 @@
   "Metrics": [
     {
       "Name": "intune.driver_update.pending_approval",
+      "Unit": "{update}",
+      "Kind": "gauge",
       "AttrKeys": [
         "profile_name"
       ]
     },
     {
       "Name": "intune.driver_update.sync_staleness_seconds",
+      "Unit": "s",
+      "Kind": "gauge",
       "AttrKeys": [
         "profile_name"
       ]
     },
     {
       "Name": "intune.feature_update_profile.eol_target",
+      "Unit": "s",
+      "Kind": "gauge",
       "AttrKeys": [
         "feature_update_version",
         "profile_name"
@@ -21,12 +27,16 @@
     },
     {
       "Name": "intune.quality_update_config.count",
+      "Unit": "{resource}",
+      "Kind": "gauge",
       "AttrKeys": [
         "resource_type"
       ]
     },
     {
       "Name": "intune.update_ring.pause_expiry_seconds",
+      "Unit": "s",
+      "Kind": "gauge",
       "AttrKeys": [
         "ring_name",
         "update_type"
@@ -34,6 +44,8 @@
     },
     {
       "Name": "intune.update_ring.pause_state",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": [
         "ring_name",
         "update_type"
@@ -41,6 +53,8 @@
     },
     {
       "Name": "intune.update_ring.rollback_active",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": [
         "ring_name",
         "update_type"
@@ -48,6 +62,8 @@
     },
     {
       "Name": "intune.update_ring.status",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "ring_name",
         "state"

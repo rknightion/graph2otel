@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.epm_elevations_by_user.count",
+      "Unit": "{elevation}",
+      "Kind": "gauge",
       "AttrKeys": [
         "elevation_governance"
       ]

@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.quality_update_summary.devices",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "expedite_release_date",
         "policy_id",

@@ -2,12 +2,16 @@
   "Metrics": [
     {
       "Name": "intune.connector.heartbeat_age_seconds",
+      "Unit": "s",
+      "Kind": "gauge",
       "AttrKeys": [
         "connector_type"
       ]
     },
     {
       "Name": "intune.connector.mtd_platform.total",
+      "Unit": "{connector}",
+      "Kind": "gauge",
       "AttrKeys": [
         "enabled",
         "platform"
@@ -15,6 +19,8 @@
     },
     {
       "Name": "intune.connector.state",
+      "Unit": "{connector}",
+      "Kind": "gauge",
       "AttrKeys": [
         "connector_type",
         "state"

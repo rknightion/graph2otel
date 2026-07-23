@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "entra.graph_activity.endpoint_requests",
+      "Unit": "{request}",
+      "Kind": "sum",
       "AttrKeys": [
         "normalized_path",
         "request_method",
@@ -10,12 +12,16 @@
     },
     {
       "Name": "entra.graph_activity.request.duration",
+      "Unit": "ms",
+      "Kind": "histogram",
       "AttrKeys": [
         "request_method"
       ]
     },
     {
       "Name": "entra.graph_activity.requests",
+      "Unit": "{request}",
+      "Kind": "sum",
       "AttrKeys": [
         "identity_type",
         "is_replay",
@@ -25,30 +31,40 @@
     },
     {
       "Name": "entra.graph_activity.response.size",
+      "Unit": "By",
+      "Kind": "histogram",
       "AttrKeys": [
         "request_method"
       ]
     },
     {
       "Name": "graph2otel.blob.endpoint_paths",
+      "Unit": "{path}",
+      "Kind": "gauge",
       "AttrKeys": [
         "collector"
       ]
     },
     {
       "Name": "graph2otel.blob.event_age",
+      "Unit": "s",
+      "Kind": "gauge",
       "AttrKeys": [
         "collector"
       ]
     },
     {
       "Name": "graph2otel.blob.metric_emitted",
+      "Unit": "{record}",
+      "Kind": "sum",
       "AttrKeys": [
         "collector"
       ]
     },
     {
       "Name": "graph2otel.blob.metric_gated",
+      "Unit": "{record}",
+      "Kind": "sum",
       "AttrKeys": [
         "collector"
       ]

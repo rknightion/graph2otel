@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.config_assignment_status.assignments",
+      "Unit": "{assignment}",
+      "Kind": "gauge",
       "AttrKeys": [
         "policy_platform",
         "report_status"

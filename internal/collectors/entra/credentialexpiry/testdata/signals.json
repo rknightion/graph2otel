@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "entra.credentials.expiring.total",
+      "Unit": "{credential}",
+      "Kind": "gauge",
       "AttrKeys": [
         "credential_type",
         "expiry_bucket",

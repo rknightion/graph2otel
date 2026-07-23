@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.devices.count",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "compliance_state",
         "operating_system"
@@ -9,12 +11,16 @@
     },
     {
       "Name": "intune.devices.encrypted.count",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "operating_system"
       ]
     },
     {
       "Name": "intune.devices.os_version.count",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "operating_system",
         "os_version"
@@ -22,24 +28,34 @@
     },
     {
       "Name": "intune.devices.overview.dual_enrolled_device_count",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "intune.devices.overview.enrolled_device_count",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "intune.devices.overview.mdm_enrolled_device_count",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "intune.devices.overview.total",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "os"
       ]
     },
     {
       "Name": "intune.devices.sync_staleness_seconds",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "staleness_bucket"
       ]

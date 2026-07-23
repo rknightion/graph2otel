@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "entra.agreements.acceptances.total",
+      "Unit": "{acceptance}",
+      "Kind": "gauge",
       "AttrKeys": [
         "agreement",
         "state"
@@ -9,6 +11,8 @@
     },
     {
       "Name": "entra.agreements.total",
+      "Unit": "{agreement}",
+      "Kind": "gauge",
       "AttrKeys": []
     }
   ],

@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.devices_without_compliance_policy.devices",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "os"
       ]

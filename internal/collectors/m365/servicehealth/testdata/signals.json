@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "m365.service_health.issues.total",
+      "Unit": "{issue}",
+      "Kind": "gauge",
       "AttrKeys": [
         "classification",
         "status"
@@ -9,12 +11,16 @@
     },
     {
       "Name": "m365.service_health.services.total",
+      "Unit": "{service}",
+      "Kind": "gauge",
       "AttrKeys": [
         "status"
       ]
     },
     {
       "Name": "m365.service_health.status",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": [
         "service"
       ]

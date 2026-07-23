@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "entra.signin.count",
+      "Unit": "{signin}",
+      "Kind": "sum",
       "AttrKeys": [
         "client_app_used",
         "conditional_access_status",
@@ -11,24 +13,32 @@
     },
     {
       "Name": "graph2otel.blob.event_age",
+      "Unit": "s",
+      "Kind": "gauge",
       "AttrKeys": [
         "collector"
       ]
     },
     {
       "Name": "graph2otel.blob.metric_emitted",
+      "Unit": "{record}",
+      "Kind": "sum",
       "AttrKeys": [
         "collector"
       ]
     },
     {
       "Name": "graph2otel.blob.metric_gated",
+      "Unit": "{record}",
+      "Kind": "sum",
       "AttrKeys": [
         "collector"
       ]
     },
     {
       "Name": "graph2otel.logpipeline.self_excluded",
+      "Unit": "{record}",
+      "Kind": "sum",
       "AttrKeys": [
         "collector"
       ]

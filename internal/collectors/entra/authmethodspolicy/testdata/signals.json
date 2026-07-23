@@ -2,10 +2,14 @@
   "Metrics": [
     {
       "Name": "entra.auth_methods_policy.legacy_enabled.total",
+      "Unit": "{method}",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "entra.auth_methods_policy.method.enabled",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": [
         "method"
       ]

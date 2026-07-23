@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.epm_elevation_events.count",
+      "Unit": "{event}",
+      "Kind": "sum",
       "AttrKeys": [
         "elevation_type",
         "result"

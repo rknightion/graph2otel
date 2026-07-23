@@ -2,18 +2,24 @@
   "Metrics": [
     {
       "Name": "entra.app.credential.signin.stale.total",
+      "Unit": "{credential}",
+      "Kind": "gauge",
       "AttrKeys": [
         "threshold_days"
       ]
     },
     {
       "Name": "entra.app.signin.summary.total",
+      "Unit": "{signin}",
+      "Kind": "gauge",
       "AttrKeys": [
         "result"
       ]
     },
     {
       "Name": "entra.serviceprincipal.signin.stale.total",
+      "Unit": "{service_principal}",
+      "Kind": "gauge",
       "AttrKeys": [
         "threshold_days"
       ]

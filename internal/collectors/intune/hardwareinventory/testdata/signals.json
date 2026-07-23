@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "intune.hardware_inventory.device_guard_devices",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "credential_guard_state",
         "vbs_state"
@@ -9,6 +11,8 @@
     },
     {
       "Name": "intune.hardware_inventory.devices",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "manufacturer",
         "operating_system"
@@ -16,6 +20,8 @@
     },
     {
       "Name": "intune.hardware_inventory.storage_bytes",
+      "Unit": "By",
+      "Kind": "gauge",
       "AttrKeys": [
         "operating_system",
         "storage_state"
@@ -23,6 +29,8 @@
     },
     {
       "Name": "intune.hardware_inventory.tpm_devices",
+      "Unit": "{device}",
+      "Kind": "gauge",
       "AttrKeys": [
         "tpm_specification_version"
       ]

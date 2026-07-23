@@ -2,22 +2,30 @@
   "Metrics": [
     {
       "Name": "m365.teams.membership.total",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": [
         "role"
       ]
     },
     {
       "Name": "m365.teams.ownerless.total",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": []
     },
     {
       "Name": "m365.teams.total",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": [
         "visibility"
       ]
     },
     {
       "Name": "m365.teams.with_guests.total",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": []
     }
   ],

@@ -2,6 +2,8 @@
   "Metrics": [
     {
       "Name": "defender.quarantine.held_messages.total",
+      "Unit": "1",
+      "Kind": "gauge",
       "AttrKeys": [
         "direction",
         "entity_type",
@@ -10,6 +12,8 @@
     },
     {
       "Name": "graph2otel.api.unexpected",
+      "Unit": "1",
+      "Kind": "sum",
       "AttrKeys": [
         "collector",
         "field",

@@ -2,12 +2,16 @@
   "Metrics": [
     {
       "Name": "entra.ca.policies.total",
+      "Unit": "{policy}",
+      "Kind": "gauge",
       "AttrKeys": [
         "state"
       ]
     },
     {
       "Name": "entra.named_locations.total",
+      "Unit": "{location}",
+      "Kind": "gauge",
       "AttrKeys": [
         "is_trusted",
         "type"
