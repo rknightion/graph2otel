@@ -72,14 +72,18 @@ where none exists. These are named so you do not run the procedure hoping:
   granted and in the token `[live 2026-07-16, #109/#126]`. Microsoft's permission table says
   **Application: Not supported** `[docs-only]`. This is a product gap, not a registration gap.
   Retention label *definitions* being Graph-exposed does not change the app-only verdict.
-- **DLP policy enumeration** — the Purview APIs evaluate content *against* policy; they never
-  enumerate policy `[live, #99]`. `protectionScopes/compute` evaluates what would apply to
-  synthetic input; it is not a list. There is no endpoint to authorize.
-- **Retention policy location bindings** — same shape: S&C PowerShell only
+- **Retention policy location bindings** — S&C PowerShell only
   (`Get-RetentionCompliancePolicy`), no Graph list equivalent `[live, #99]`.
 
+> **Correction (`live-measured 2026-07-23, #237`):** an earlier version of this list said
+> "DLP policy enumeration — the Purview APIs evaluate content *against* policy; they never
+> enumerate policy." That generalization was true of the #99 Purview Ecosystem roles and is
+> **false of Graph**: `GET /beta/security/dataSecurityAndGovernance/policyFiles` returns the
+> full DLP policy set app-only, on scopes the poller already holds — no data-plane registration
+> needed. #246 builds it. Only retention policy *bindings* remain a genuine gap.
+
 The distinction that matters: this procedure only helps where **a Graph endpoint exists and
-the data plane behind it refuses you**. DLP policy state and retention bindings *are*
+the data plane behind it refuses you**. Retention bindings *are*
 reachable from S&C PowerShell — but graph2otel speaks Graph at runtime, never PowerShell, so
 a reachable-only-from-PowerShell surface is out of reach regardless of what you register.
 

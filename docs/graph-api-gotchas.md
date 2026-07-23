@@ -266,16 +266,25 @@ path is Exchange's own segment, **not** a Graph beta surface, so the
   **`displayName` is present but ALWAYS null — bind `name`.** Label encryption activation
   is readable via `hasProtection` per label; the residual gap is protection *template*
   detail (rights, expiry) only.
-- **Retention labels are app-only-blocked** `[live 2026-07-16, #109/#126]`:
-  `/security/labels/retentionLabels` → 500 `DataInsightsRequestError` + "Forbidden" on
-  v1.0 and beta with `RecordsManagement.Read.All` granted (documented Application: Not
-  supported). `purview/retentionlabels.isRetentionUnavailable` must match that
-  **specific** signature — a generic 500 must still surface, and a sensitivity-label 403
-  must fail the collector (#126 residual).
-- **Purview/M365 policy *configuration* is S&C-PowerShell-only** `[live, #99]`: DLP
-  policy state, retention policy bindings. The Purview Ecosystem API's app-only roles all
-  evaluate content against policy — they never enumerate policy. Retention label
-  *definitions* and sensitivity labels ARE Graph-exposed.
+- **Retention labels are app-only-blocked, but `security/labels` blocking is per-COLLECTION,
+  not per-root** `[live 2026-07-16 #109/#126; re-measured 2026-07-23 #237]`: on
+  `RecordsManagement.Read.All`, `authorities` (3 rows), `categories` (13), `citations` (5),
+  and `filePlanReferences` (0) all return **200**; only `/security/labels/retentionLabels`
+  and `/security/labels/departments` 500 `DataInsightsRequestError` + "Forbidden" (documented
+  Application: Not supported). `purview/retentionlabels.isRetentionUnavailable` must match that
+  **specific** signature — a generic 500 must still surface, and a sensitivity-label 403 must
+  fail the collector (#126 residual).
+- **DLP policy state IS readable app-only** `[live-measured 2026-07-23, #237]` — this was
+  previously (wrongly) recorded as having no API.
+  `GET /beta/security/dataSecurityAndGovernance/policyFiles` returns the full DLP policy set on
+  scopes the poller already holds (no grant, no data-plane registration): id `DlpPolicy` with
+  `content` = base64 of **UTF-16LE** XML (6 policies / 8 rules; per-policy `mode`
+  Enforce/AuditAndNotify; per-policy workload bindings; per-rule actions). v1.0 400s
+  (`policyFiles` is not a segment there); beta only. #246 builds it. The earlier "the Purview
+  Ecosystem API's app-only roles evaluate content against policy, never enumerate it" was true
+  of the #99 Ecosystem roles and is **false of Graph's `dataSecurityAndGovernance`**.
+- **Retention policy *bindings* remain S&C-PowerShell-only** `[live, #99]` — only DLP fell,
+  not the pair. Retention label and sensitivity-label *definitions* ARE Graph-exposed.
 - **eDiscovery is the counter-example to "403 = missing scope"** `[live-measured
   2026-07-17, #102/#148]`: `eDiscovery.Read.All` granted and in the token still 401'd.
   No Graph scope fixes it — the data plane simply did not know the principal. Registering
@@ -286,14 +295,34 @@ path is Exchange's own segment, **not** a Graph beta surface, so the
   failure from the 403 above, and the reason to verify rather than infer. The procedure
   is [`data-plane-registration.md`](data-plane-registration.md).
 
+### Four app-only refusal signatures on the Purview/security surface — they mean different things
+
+Observed in one session on this surface `[live-measured 2026-07-23, #237]` and routinely
+conflated. The status code alone is not the verdict; the body is:
+
+| signature | meaning |
+| --- | --- |
+| `500 DataInsightsRequestError` / "FAILED - Forbidden" | Purview DataInsights backend refuses app-only for that collection. No scope or shape moves it — this is a genuine per-collection gap |
+| `403 InsufficientGraphPermissions` (JSON) | Graph gateway; normally grantable — but check the app role actually exists first |
+| `403` HTML from `Microsoft-Azure-Application-Gateway/v2` | not a Graph error; the delegated-only signature. A JSON-only client fails to decode it (and see the intermittent-`UnknownError` gotcha — an HTML 403 also arrives wrapped in `{"code":"UnknownError"}`; retry before recording a verdict) |
+| `401 ServiceFabricGraphAuthenticationMiddleware.ValidateToken` | data-plane registration missing (#102) — can appear on a sub-resource of a case whose parent is served fine |
+
+Two that are **not** refusals: `500 HostNotFound` and `404 TenantDeploymentNotFound` mean the
+backend service is not provisioned for the tenant. Do not record those as gaps.
+
 ## Permanent gaps and the fallback path
 
 Signals with **no API anywhere** (re-audited against the non-Graph first-party surface,
 `[live 2026-07-16, #130 audit]`): `EnrichedOffice365AuditLogs` (Sentinel-side synthesis),
 `ADFSSignInLogs`, Intune `OperationalLogs` (fired-alert stream; Graph has only the
 templates; the dedicated Intune API `0000000a-…` exposes **zero app-only roles** and
-`api.manage.microsoft.com` is NXDOMAIN — no grant can ever unblock it), DLP policy
-enumeration, retention policy bindings.
+`api.manage.microsoft.com` is NXDOMAIN — no grant can ever unblock it), retention policy
+bindings.
+
+> **Correction (`live-measured 2026-07-23, #237`):** "DLP policy enumeration" was previously
+> listed here as having no API. It is readable app-only via
+> `GET /beta/security/dataSecurityAndGovernance/policyFiles` (see the Purview / labels section
+> above); #246 builds it. Only retention policy *bindings* remain a genuine gap.
 
 Intune `OperationalLogs` is a **Graph** gap only: its diagnostic-settings blob container
 `insights-logs-operationallogs` now carries a live fired-alert sample on the verification
