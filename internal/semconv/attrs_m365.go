@@ -62,6 +62,13 @@ const (
 // accepted domains by the bounded enabled x status tuple only, so none of these
 // keys is ever a metric label.
 const (
+	AttrAdminAuditLogAgeLimit           = "admin_audit_log_age_limit"
+	AttrAdminAuditLogEnabled            = "admin_audit_log_enabled"
+	AttrLogLevel                        = "log_level"
+	AttrTestCmdletLoggingEnabled        = "test_cmdlet_logging_enabled"
+	AttrUnifiedAuditLogFirstOptInDate   = "unified_audit_log_first_opt_in_date"
+	AttrUnifiedAuditLogIngestionEnabled = "unified_audit_log_ingestion_enabled"
+
 	AttrAlgorithm              = "algorithm"
 	AttrBodyCanonicalization   = "body_canonicalization"
 	AttrDomain                 = "domain"

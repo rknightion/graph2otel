@@ -114,6 +114,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/settingscatalog"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/updates"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/activity"
+	_ "github.com/rknightion/graph2otel/internal/collectors/m365/exchangeauditconfig"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/exchangedkim"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/servicehealth"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/servicemessage"

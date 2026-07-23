@@ -562,6 +562,10 @@ var annotations = map[string]Annotation{
 	},
 
 	// ---- M365 — snapshot collectors ----
+	"m365.exchange_audit_config": {
+		Collects: "Exchange Online admin-audit-log configuration (#250) — corrects #99, which recorded that turning on the unified audit log is outside every API graph2otel touches: the READ half is now reachable. Bounded gauge m365.exchange.audit_config.enabled{setting} is a 0/1 flag per setting (unified_audit_log_ingestion, admin_audit_log); a log twin carries log level, age limit, first opt-in date and test-cmdlet logging. Warn when unified_audit_log_ingestion is OFF — the case that makes m365.activity and m365.unified_audit silently return nothing, indistinguishable from a quiet tenant. graph2otel reports it, never sets it",
+		Source:   "`POST outlook.office365.com/adminapi/beta/{tenant}/InvokeCommand` running Get-AdminAuditLogConfig — read-only, authorized at Security Reader (unlike Get-OrganizationConfig). Same two grants as defender.quarantine. Off unless `exchange_online.enabled` is set",
+	},
 	"m365.exchange_dkim": {
 		Collects: "Exchange Online DKIM signing posture per accepted domain (#250) — the outbound-authentication half `entra.domains` cannot tell (it sees SPF/DMARC records, not the signing config). Bounded gauge m365.exchange.dkim.signing{enabled, status} counts domains by signing enablement and configuration status; one log twin per domain (selectors, key sizes, algorithm, canonicalization, rotation/creation times). Warn when signing is enabled but Status is not Valid — mail is going out unsigned or with a failing selector, the actionable case; a domain with DKIM simply off is Info",
 		Source:   "`POST outlook.office365.com/adminapi/beta/{tenant}/InvokeCommand` running Get-DkimSigningConfig — read-only. Same two grants as defender.quarantine (Exchange.ManageAsApp + Security Reader). Off unless `exchange_online.enabled` is set",

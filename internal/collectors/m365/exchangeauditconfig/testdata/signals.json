@@ -1,0 +1,26 @@
+{
+  "Metrics": [
+    {
+      "Name": "m365.exchange.audit_config.enabled",
+      "Unit": "{setting}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "setting"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.exchange_audit_config",
+      "AttrKeys": [
+        "admin_audit_log_age_limit",
+        "admin_audit_log_enabled",
+        "ingest_transport",
+        "log_level",
+        "test_cmdlet_logging_enabled",
+        "unified_audit_log_first_opt_in_date",
+        "unified_audit_log_ingestion_enabled"
+      ]
+    }
+  ]
+}
