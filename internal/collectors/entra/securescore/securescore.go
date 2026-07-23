@@ -1,11 +1,30 @@
 // Package securescore is the Entra Microsoft Secure Score collector: the
-// tenant's latest daily posture score (current/max/percentage) plus the
-// bounded control-profile catalog counted by control category and by the
-// tenant's stated implementation status for each control. It never emits a
-// per-control gauge — the control catalog is a few dozen entries today but is
-// not a Microsoft-documented bounded contract, so this collector aggregates
-// it into the genuinely bounded dimensions (category, status) instead of
-// risking an unbounded per-control-name series set.
+// tenant's latest daily posture score (current/max/percentage), the per-control
+// state and peer benchmarks the latest score carries, and the control-profile
+// catalog.
+//
+// # Both sides of the cardinality boundary (#243, #114)
+//
+// The latest secureScore already carries a controlScores array (234 entries
+// live) and averageComparativeScores; the control-profile catalog carries a
+// per-control maximum. All of it was fetched every cycle and decoded by nothing
+// — the collector could answer "what is my score" but never "which control is
+// failing and what do I do about it". It now emits, from those same two fetches:
+//
+//   - bounded GAUGES: score summed by control category, the per-category maximum
+//     from the catalog, and peer average by comparison basis — plus the original
+//     profile counts by category and by implementation status;
+//   - LOG TWINS: one entra.secure_score_control per control (its current state,
+//     Warn below 100%) and one entra.secure_score_control_profile per catalog
+//     entry (the worklist metadata — actionUrl, tier, threats).
+//
+// It still never emits a per-control-NAME metric label: per-control identity is
+// log-only, because a series per control grows with the catalog and bills as
+// active series. "Not a metric label" means "log twin", not "dropped" (#114).
+//
+// The two endpoints stay independent: a failure fetching one is surfaced as a
+// non-fatal aggregated error and does not prevent the other from emitting, so
+// the twins are deliberately NOT joined across endpoints.
 package securescore
 
 import (
@@ -34,6 +53,23 @@ const (
 	metricPercentage = "entra.secure_score.percentage"
 	metricByCategory = "entra.secure_score.control_profiles.by_category"
 	metricByStatus   = "entra.secure_score.control_profiles.by_status"
+
+	// #243: the latest score already carries per-control state (controlScores)
+	// and peer benchmarks (averageComparativeScores), and the profile catalog
+	// carries a per-category maximum — all of it fetched every cycle and
+	// previously discarded. These aggregate the newly-decoded data into bounded
+	// dimensions (control category, comparison basis), never per control.
+	metricScoreByCategory    = "entra.secure_score.by_category"
+	metricMaxScoreByCategory = "entra.secure_score.max_by_category"
+	metricPeerAverage        = "entra.secure_score.peer_average"
+)
+
+// The two log twins carrying the per-control detail the bounded gauges cannot
+// (#243, #114). One record per control per cycle; volume is bounded by
+// Microsoft's control catalog (~234 today), not tenant size.
+const (
+	eventControl        = "entra.secure_score_control"
+	eventControlProfile = "entra.secure_score_control_profile"
 )
 
 // defaultBaseURL is the Graph v1.0 root.
@@ -97,6 +133,39 @@ type secureScoresResponse struct {
 type secureScore struct {
 	CurrentScore float64 `json:"currentScore"`
 	MaxScore     float64 `json:"maxScore"`
+	// ControlScores is the tenant's current per-control assessment (#243): 234
+	// entries live, previously decoded by nothing. Aggregated into the bounded
+	// by-category gauge and emitted per control as the eventControl twin.
+	ControlScores []controlScore `json:"controlScores"`
+	// AverageComparativeScores are Microsoft's peer benchmarks by basis
+	// (AllTenants / seat band / industry) — the "how do we compare" number
+	// (#243).
+	AverageComparativeScores []comparativeScore `json:"averageComparativeScores"`
+}
+
+// controlScore is one entry of secureScore.controlScores: the tenant's current
+// state for a single control. ScoreInPercentage is a POINTER so an absent field
+// is distinguishable from a genuine 0% — only a present value below 100 escalates
+// the twin to Warn; a control that simply omits the field stays Info (the
+// risk.IsProcessing pattern). Count/Total arrive as strings on the wire.
+type controlScore struct {
+	ControlCategory      string   `json:"controlCategory"`
+	ControlName          string   `json:"controlName"`
+	Score                float64  `json:"score"`
+	ScoreInPercentage    *float64 `json:"scoreInPercentage"`
+	ImplementationStatus string   `json:"implementationStatus"`
+	Count                string   `json:"count"`
+	Total                string   `json:"total"`
+	LastSynced           string   `json:"lastSynced"`
+}
+
+// comparativeScore is one entry of secureScore.averageComparativeScores: a peer
+// benchmark for one basis. Basis is a small Microsoft-controlled enum
+// (AllTenants, TotalSeats, IndustryTypes, …), so it is a safe bounded gauge
+// label; #235's limiter backstops any future addition.
+type comparativeScore struct {
+	Basis        string  `json:"basis"`
+	AverageScore float64 `json:"averageScore"`
 }
 
 // collectScore fetches the single latest daily secure score ($top=1 asks
@@ -124,14 +193,111 @@ func (c *Collector) collectScore(ctx context.Context, e telemetry.Emitter) error
 		pct := latest.CurrentScore / latest.MaxScore * 100
 		e.Gauge(metricPercentage, "%", "Latest Secure Score expressed as a percentage of the maximum attainable score.", pct, nil)
 	}
+
+	c.emitControlScores(e, latest.ControlScores)
+	c.emitPeerAverages(e, latest.AverageComparativeScores)
 	return nil
 }
 
+// emitControlScores emits BOTH sides of the cardinality boundary from the latest
+// score's controlScores: the bounded per-category gauge (scores summed by
+// control category), and one eventControl log twin per control carrying the
+// per-control detail the gauge cannot (#243, #114). A control below 100%
+// escalates its twin to Warn.
+func (c *Collector) emitControlScores(e telemetry.Emitter, scores []controlScore) {
+	byCategory := map[string]float64{}
+	for _, cs := range scores {
+		byCategory[normalizeCategory(cs.ControlCategory)] += cs.Score
+		e.LogEvent(controlTwin(cs))
+	}
+	if len(byCategory) == 0 {
+		return
+	}
+	points := make([]telemetry.GaugePoint, 0, len(byCategory))
+	for cat, sum := range byCategory {
+		points = append(points, telemetry.GaugePoint{
+			Value: sum,
+			Attrs: telemetry.Attrs{semconv.AttrCategory: cat},
+		})
+	}
+	e.GaugeSnapshot(metricScoreByCategory, "{score}", "Current Secure Score achieved, summed by control category.", points)
+}
+
+// controlTwin renders one controlScore as a log record. Per-control identity
+// (control_name, implementation_status) is log-only — never a metric label. The
+// timestamp is left zero (poll time): this is a state feed re-emitted every
+// cycle, so stamping it with lastSynced would collapse repeats onto one instant.
+func controlTwin(cs controlScore) telemetry.Event {
+	attrs := telemetry.Attrs{}
+	telemetry.SetStr(attrs, semconv.AttrControlName, cs.ControlName)
+	telemetry.SetStr(attrs, semconv.AttrCategory, normalizeCategory(cs.ControlCategory))
+	attrs[semconv.AttrScore] = cs.Score
+	telemetry.SetStr(attrs, semconv.AttrImplementationStatus, cs.ImplementationStatus)
+	telemetry.SetStr(attrs, semconv.AttrControlCount, cs.Count)
+	telemetry.SetStr(attrs, semconv.AttrControlTotal, cs.Total)
+	telemetry.SetStr(attrs, semconv.AttrLastSynced, cs.LastSynced)
+
+	// scoreInPercentage present <100 is the actionable signal; absent (nil) is not
+	// asserted either way — the twin stays Info and omits the attribute.
+	sev := telemetry.SeverityInfo
+	if cs.ScoreInPercentage != nil {
+		attrs[semconv.AttrScoreInPercentage] = *cs.ScoreInPercentage
+		if *cs.ScoreInPercentage < 100 {
+			sev = telemetry.SeverityWarn
+		}
+	}
+
+	name := cs.ControlName
+	if name == "" {
+		name = "unknown"
+	}
+	return telemetry.Event{
+		Name:     eventControl,
+		Body:     fmt.Sprintf("secure score control %s: category=%s score=%g", name, normalizeCategory(cs.ControlCategory), cs.Score),
+		Severity: sev,
+		Attrs:    attrs,
+	}
+}
+
+// emitPeerAverages emits the peer-benchmark gauge from averageComparativeScores:
+// averageScore keyed by basis. Basis is a bounded Microsoft enum (see
+// comparativeScore).
+func (c *Collector) emitPeerAverages(e telemetry.Emitter, cmps []comparativeScore) {
+	points := make([]telemetry.GaugePoint, 0, len(cmps))
+	for _, cmp := range cmps {
+		if cmp.Basis == "" {
+			continue
+		}
+		points = append(points, telemetry.GaugePoint{
+			Value: cmp.AverageScore,
+			Attrs: telemetry.Attrs{semconv.AttrScoreComparisonBasis: cmp.Basis},
+		})
+	}
+	if len(points) == 0 {
+		return
+	}
+	e.GaugeSnapshot(metricPeerAverage, "{score}", "Peer average Secure Score, by comparison basis.", points)
+}
+
 // controlProfile is the subset of secureScoreControlProfile fields this
-// collector aggregates.
+// collector aggregates and twins. The catalog is bounded (a few hundred
+// entries), so the per-profile eventControlProfile twin is safe (#243) — it
+// carries the worklist metadata (actionUrl, tier, threats) the two count gauges
+// collapse away.
 type controlProfile struct {
+	ID                  string               `json:"id"`
 	ControlCategory     string               `json:"controlCategory"`
 	ControlStateUpdates []controlStateUpdate `json:"controlStateUpdates"`
+	MaxScore            float64              `json:"maxScore"`
+	Tier                string               `json:"tier"`
+	Rank                int                  `json:"rank"`
+	Threats             []string             `json:"threats"`
+	Service             string               `json:"service"`
+	ActionType          string               `json:"actionType"`
+	ActionURL           string               `json:"actionUrl"`
+	Deprecated          bool                 `json:"deprecated"`
+	ImplementationCost  string               `json:"implementationCost"`
+	UserImpact          string               `json:"userImpact"`
 }
 
 type controlStateUpdate struct {
@@ -151,13 +317,17 @@ func (c *Collector) collectControlProfiles(ctx context.Context, e telemetry.Emit
 
 	byCategory := map[string]int64{}
 	byStatus := map[string]int64{}
+	maxByCategory := map[string]float64{}
 	for _, raw := range raws {
 		var p controlProfile
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return fmt.Errorf("decode secureScoreControlProfile: %w", err)
 		}
-		byCategory[normalizeCategory(p.ControlCategory)]++
+		cat := normalizeCategory(p.ControlCategory)
+		byCategory[cat]++
 		byStatus[normalizeStatus(latestState(p.ControlStateUpdates))]++
+		maxByCategory[cat] += p.MaxScore
+		e.LogEvent(profileTwin(p))
 	}
 
 	catPoints := make([]telemetry.GaugePoint, 0, len(byCategory))
@@ -169,6 +339,15 @@ func (c *Collector) collectControlProfiles(ctx context.Context, e telemetry.Emit
 	}
 	e.GaugeSnapshot(metricByCategory, "{control}", "Secure Score control profiles, by control category.", catPoints)
 
+	maxPoints := make([]telemetry.GaugePoint, 0, len(maxByCategory))
+	for cat, sum := range maxByCategory {
+		maxPoints = append(maxPoints, telemetry.GaugePoint{
+			Value: sum,
+			Attrs: telemetry.Attrs{semconv.AttrCategory: cat},
+		})
+	}
+	e.GaugeSnapshot(metricMaxScoreByCategory, "{score}", "Maximum attainable Secure Score, summed by control category.", maxPoints)
+
 	statusPoints := make([]telemetry.GaugePoint, 0, len(byStatus))
 	for st, n := range byStatus {
 		statusPoints = append(statusPoints, telemetry.GaugePoint{
@@ -179,6 +358,38 @@ func (c *Collector) collectControlProfiles(ctx context.Context, e telemetry.Emit
 	e.GaugeSnapshot(metricByStatus, "{control}", "Secure Score control profiles, by tenant implementation status.", statusPoints)
 
 	return nil
+}
+
+// profileTwin renders one secureScoreControlProfile as a log record: the
+// bounded catalog metadata the two count gauges discard. Emitted at Info —
+// deprecation is informational, not an alert. Category is normalized to match
+// the gauge; the other fields carry the raw catalog values (tier, service,
+// actionUrl) an operator reads as a remediation worklist.
+func profileTwin(p controlProfile) telemetry.Event {
+	attrs := telemetry.Attrs{}
+	telemetry.SetStr(attrs, semconv.AttrId, p.ID)
+	telemetry.SetStr(attrs, semconv.AttrCategory, normalizeCategory(p.ControlCategory))
+	attrs[semconv.AttrMaxScore] = p.MaxScore
+	attrs[semconv.AttrRank] = p.Rank
+	telemetry.SetStr(attrs, semconv.AttrTier, p.Tier)
+	telemetry.SetStrs(attrs, semconv.AttrThreats, p.Threats)
+	telemetry.SetStr(attrs, semconv.AttrService, p.Service)
+	telemetry.SetStr(attrs, semconv.AttrActionType, p.ActionType)
+	telemetry.SetStr(attrs, semconv.AttrActionUrl, p.ActionURL)
+	telemetry.SetBool(attrs, semconv.AttrDeprecated, p.Deprecated)
+	telemetry.SetStr(attrs, semconv.AttrImplementationCost, p.ImplementationCost)
+	telemetry.SetStr(attrs, semconv.AttrUserImpact, p.UserImpact)
+
+	id := p.ID
+	if id == "" {
+		id = "unknown"
+	}
+	return telemetry.Event{
+		Name:     eventControlProfile,
+		Body:     fmt.Sprintf("secure score control profile %s: category=%s max_score=%g", id, normalizeCategory(p.ControlCategory), p.MaxScore),
+		Severity: telemetry.SeverityInfo,
+		Attrs:    attrs,
+	}
 }
 
 // latestState returns the most recently updated state in a control's history,

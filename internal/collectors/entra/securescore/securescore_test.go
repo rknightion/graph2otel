@@ -427,6 +427,225 @@ const mixedProfiles = `{
 
 const emptyProfiles = `{"value": []}`
 
+// scoresWithFailingControl is SYNTHETIC: the live tenant's controls are all at
+// scoreInPercentage 100, so a real capture cannot exercise the Warn path. This
+// carries one control below 100 (a real posture failure) alongside one at 100,
+// to pin that the per-control twin warns only on the failing one.
+const scoresWithFailingControl = `{
+  "value": [
+    {
+      "currentScore": 10.0, "maxScore": 20.0,
+      "controlScores": [
+        {"controlCategory": "Identity", "controlName": "MFARegistrationV2",
+         "score": 4.5, "scoreInPercentage": 50.0, "count": "2", "total": "4",
+         "implementationStatus": "You have 2 of 4 users not registered.",
+         "lastSynced": "2026-07-15T13:04:06Z", "on": "true"},
+        {"controlCategory": "Data", "controlName": "SharePointSharing",
+         "score": 6.0, "scoreInPercentage": 100.0,
+         "implementationStatus": "Compliant.", "lastSynced": "2026-07-15T13:04:06Z"}
+      ]
+    }
+  ]
+}`
+
+// logsByEvent returns the log records this recorder captured for one event name.
+func logsByEvent(rec *telemetrytest.Recorder, name string) []telemetrytest.LogRecord {
+	var out []telemetrytest.LogRecord
+	for _, r := range rec.LogRecords() {
+		if r.EventName == name {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// TestByCategoryGaugeSumsControlScores pins the new #243 tenant-posture gauge:
+// controlScores[].score summed by control category. All five live controls are
+// Identity, scores 4+8+1+8+9 = 30.
+func TestByCategoryGaugeSumsControlScores(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{scoreURL: liveScores, profilesURL: emptyProfiles}}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	got := map[string]float64{}
+	for _, p := range rec.MetricPoints(metricScoreByCategory) {
+		got[p.Attrs["category"]] = p.Value
+	}
+	if len(got) != 1 || got["identity"] != 30 {
+		t.Errorf("%s = %v, want {identity:30}", metricScoreByCategory, got)
+	}
+}
+
+// TestPeerAverageGaugeFromComparativeScores pins the peer-benchmark gauge from
+// averageComparativeScores[].averageScore, keyed by basis. Live: AllTenants
+// 52.86, TotalSeats 48.1.
+func TestPeerAverageGaugeFromComparativeScores(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{scoreURL: liveScores, profilesURL: emptyProfiles}}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	got := map[string]float64{}
+	for _, p := range rec.MetricPoints(metricPeerAverage) {
+		got[p.Attrs["basis"]] = p.Value
+	}
+	if got["AllTenants"] != 52.86 || got["TotalSeats"] != 48.1 {
+		t.Errorf("%s = %v, want AllTenants=52.86 TotalSeats=48.1", metricPeerAverage, got)
+	}
+}
+
+// TestControlScoresEmitPerControlTwin pins the per-control state twin (#243,
+// #114): one entra.secure_score_control log per controlScores entry, carrying
+// the per-control detail the bounded gauge cannot.
+func TestControlScoresEmitPerControlTwin(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{scoreURL: liveScores, profilesURL: emptyProfiles}}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	logs := logsByEvent(rec, eventControl)
+	if len(logs) != 5 {
+		t.Fatalf("got %d %s twins, want 5 (one per controlScores entry)", len(logs), eventControl)
+	}
+
+	var sspr *telemetrytest.LogRecord
+	for i := range logs {
+		if logs[i].Attrs["control_name"] == "SelfServicePasswordReset" {
+			sspr = &logs[i]
+		}
+	}
+	if sspr == nil {
+		t.Fatal("no twin for SelfServicePasswordReset")
+	}
+	if sspr.Attrs["category"] != "identity" {
+		t.Errorf("category = %q, want identity", sspr.Attrs["category"])
+	}
+	if sspr.Attrs["score"] != "1" {
+		t.Errorf("score = %q, want 1", sspr.Attrs["score"])
+	}
+	if sspr.Attrs["score_in_percentage"] != "100" {
+		t.Errorf("score_in_percentage = %q, want 100", sspr.Attrs["score_in_percentage"])
+	}
+	if sspr.Attrs["control_count"] != "4" || sspr.Attrs["control_total"] != "4" {
+		t.Errorf("count/total = %q/%q, want 4/4", sspr.Attrs["control_count"], sspr.Attrs["control_total"])
+	}
+	if sspr.Attrs["implementation_status"] == "" {
+		t.Error("implementation_status empty, want the live status string")
+	}
+	if sspr.Attrs["last_synced"] == "" {
+		t.Error("last_synced empty")
+	}
+	if sspr.SeverityText != "INFO" {
+		t.Errorf("severity = %q, want INFO (control is at 100%%)", sspr.SeverityText)
+	}
+}
+
+// TestControlTwinWarnsBelow100 pins the Warn condition: the per-control twin
+// escalates to WARN when the control is below 100%, and stays INFO at 100%.
+func TestControlTwinWarnsBelow100(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{scoreURL: scoresWithFailingControl, profilesURL: emptyProfiles}}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	sev := map[string]string{}
+	for _, r := range logsByEvent(rec, eventControl) {
+		sev[r.Attrs["control_name"]] = r.SeverityText
+	}
+	if sev["MFARegistrationV2"] != "WARN" {
+		t.Errorf("MFARegistrationV2 (50%%) severity = %q, want WARN", sev["MFARegistrationV2"])
+	}
+	if sev["SharePointSharing"] != "INFO" {
+		t.Errorf("SharePointSharing (100%%) severity = %q, want INFO", sev["SharePointSharing"])
+	}
+}
+
+// TestMaxByCategoryGaugeFromProfiles pins the per-category ceiling gauge from
+// the control-profile catalogue's maxScore. Live: five Identity profiles,
+// maxScore 7+3+5+5+3 = 23.
+func TestMaxByCategoryGaugeFromProfiles(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		scoreURL:        emptyScores,
+		profilesURL:     liveProfiles,
+		profilesNextURL: emptyProfiles,
+	}}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	got := map[string]float64{}
+	for _, p := range rec.MetricPoints(metricMaxScoreByCategory) {
+		got[p.Attrs["category"]] = p.Value
+	}
+	if len(got) != 1 || got["identity"] != 23 {
+		t.Errorf("%s = %v, want {identity:23}", metricMaxScoreByCategory, got)
+	}
+}
+
+// TestControlProfilesEmitTwin pins the catalog twin (#243): one
+// entra.secure_score_control_profile per profile, carrying the metadata the two
+// existing count gauges collapse away — the worklist fields (action_url, tier,
+// threats) an analyst needs.
+func TestControlProfilesEmitTwin(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		scoreURL:        emptyScores,
+		profilesURL:     liveProfiles,
+		profilesNextURL: emptyProfiles,
+	}}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	logs := logsByEvent(rec, eventControlProfile)
+	if len(logs) != 5 {
+		t.Fatalf("got %d %s twins, want 5", len(logs), eventControlProfile)
+	}
+
+	var google *telemetrytest.LogRecord
+	for i := range logs {
+		if logs[i].Attrs["id"] == "11770.MDA_Google_EnableTwoFactorAuth" {
+			google = &logs[i]
+		}
+	}
+	if google == nil {
+		t.Fatal("no profile twin for 11770.MDA_Google_EnableTwoFactorAuth")
+	}
+	if google.Attrs["category"] != "identity" {
+		t.Errorf("category = %q, want identity", google.Attrs["category"])
+	}
+	if google.Attrs["max_score"] != "7" {
+		t.Errorf("max_score = %q, want 7", google.Attrs["max_score"])
+	}
+	if google.Attrs["tier"] != "Core" {
+		t.Errorf("tier = %q, want Core", google.Attrs["tier"])
+	}
+	if google.Attrs["service"] != "MDA_Google" {
+		t.Errorf("service = %q, want MDA_Google", google.Attrs["service"])
+	}
+	if google.Attrs["action_url"] == "" {
+		t.Error("action_url empty, want the live remediation URL")
+	}
+	if google.Attrs["deprecated"] != "false" {
+		t.Errorf("deprecated = %q, want false", google.Attrs["deprecated"])
+	}
+	if google.Attrs["threats"] == "" {
+		t.Error("threats empty, want the comma-joined live threat list")
+	}
+}
+
 // TestCollectEmitsScoreGaugesFromLiveRecord drives the one real secureScore this
 // project captured end-to-end through Collect into a Recorder, pinning the
 // gauges against the live values (currentScore 815.22 of maxScore 1376).

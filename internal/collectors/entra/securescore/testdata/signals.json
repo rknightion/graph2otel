@@ -1,6 +1,14 @@
 {
   "Metrics": [
     {
+      "Name": "entra.secure_score.by_category",
+      "Unit": "{score}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "category"
+      ]
+    },
+    {
       "Name": "entra.secure_score.control_profiles.by_category",
       "Unit": "{control}",
       "Kind": "gauge",
@@ -29,11 +37,58 @@
       "AttrKeys": []
     },
     {
+      "Name": "entra.secure_score.max_by_category",
+      "Unit": "{score}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "category"
+      ]
+    },
+    {
+      "Name": "entra.secure_score.peer_average",
+      "Unit": "{score}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "basis"
+      ]
+    },
+    {
       "Name": "entra.secure_score.percentage",
       "Unit": "%",
       "Kind": "gauge",
       "AttrKeys": []
     }
   ],
-  "Logs": null
+  "Logs": [
+    {
+      "EventName": "entra.secure_score_control",
+      "AttrKeys": [
+        "category",
+        "control_count",
+        "control_name",
+        "control_total",
+        "implementation_status",
+        "last_synced",
+        "score",
+        "score_in_percentage"
+      ]
+    },
+    {
+      "EventName": "entra.secure_score_control_profile",
+      "AttrKeys": [
+        "action_type",
+        "action_url",
+        "category",
+        "deprecated",
+        "id",
+        "implementation_cost",
+        "max_score",
+        "rank",
+        "service",
+        "threats",
+        "tier",
+        "user_impact"
+      ]
+    }
+  ]
 }

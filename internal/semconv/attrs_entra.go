@@ -180,3 +180,30 @@ const (
 	AttrIsManaged             = "is_managed"
 	AttrOnPremisesSyncEnabled = "on_premises_sync_enabled"
 )
+
+// Attribute keys for the entra.secure_score control twins (#243). The
+// per-control state twin (entra.secure_score_control) carries the tenant's
+// current per-control assessment from controlScores; the catalog twin
+// (entra.secure_score_control_profile) carries the bounded control-profile
+// metadata. Both are LOGS — per-control detail belongs on the twin, never a
+// metric label (#114). control_category reuses AttrCategory; the profile's
+// service/action_type reuse AttrService/AttrActionType; the profile id reuses
+// AttrId.
+const (
+	AttrControlName          = "control_name"
+	AttrScore                = "score"
+	AttrScoreInPercentage    = "score_in_percentage"
+	AttrImplementationStatus = "implementation_status"
+	AttrControlCount         = "control_count"
+	AttrControlTotal         = "control_total"
+	AttrLastSynced           = "last_synced"
+	AttrMaxScore             = "max_score"
+	AttrTier                 = "tier"
+	AttrRank                 = "rank"
+	AttrThreats              = "threats"
+	AttrActionUrl            = "action_url"
+	AttrDeprecated           = "deprecated"
+	AttrImplementationCost   = "implementation_cost"
+	AttrUserImpact           = "user_impact"
+	AttrScoreComparisonBasis = "basis"
+)

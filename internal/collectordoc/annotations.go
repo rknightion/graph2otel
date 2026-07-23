@@ -102,7 +102,7 @@ var annotations = map[string]Annotation{
 		Gating:   "PIM half only needs `entra_p2`, checked inside Collect(): the standing-membership half runs on every tier, and without P2 the PIM assignment counts are skipped rather than zero-emitted",
 	},
 	"entra.secure_score": {
-		Collects: "Latest secure score + control profile catalog (Microsoft publishes at most daily, hence the hourly poll)",
+		Collects: "Latest secure score with per-control state (score by category, peer-average benchmarks) and the control-profile catalog, plus a log twin per control and per profile carrying the remediation worklist — actionUrl, tier, threats — that the counts collapse away (#243). Microsoft publishes at most daily, hence the hourly poll",
 		Source:   "`/security/secureScores`, `/security/secureScoreControlProfiles`",
 	},
 	"entra.signin_activity": {
