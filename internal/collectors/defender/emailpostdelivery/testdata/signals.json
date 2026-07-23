@@ -1,0 +1,21 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "defender.email_post_delivery",
+      "AttrKeys": [
+        "action",
+        "action_result",
+        "action_trigger",
+        "action_type",
+        "delivery_location",
+        "ingest_transport",
+        "internet_message_id",
+        "network_message_id",
+        "recipient_email_address",
+        "report_id",
+        "sender_from_address"
+      ]
+    }
+  ]
+}

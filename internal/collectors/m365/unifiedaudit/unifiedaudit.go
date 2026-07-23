@@ -93,11 +93,24 @@ const (
 // surface as SharePointFileOperation/SharePointSharingOperation with the
 // OneDrive workload).
 //
+// The quarantine group is the exception to the "verified in #98" provenance
+// above: those four were verified ACCEPTED by the API on the live tenant on
+// 2026-07-23 instead — a query carrying all four returned HTTP 201, completed,
+// and returned real records `[live-measured 2026-07-23, #233]`. They earn a
+// place in a curated include-list because quarantine is low-volume and
+// high-signal: it is the audit trail of a message being HELD or RELEASED
+// (plus previewed, deleted, and quarantine-policy changes), not a firehose like
+// the DLPEndpoint traffic excluded below. teamsQuarantineMetadata is the
+// Teams-message quarantine record type, and is the near-term route to Teams
+// quarantine coverage.
+//
 // Deliberately EXCLUDED: DLPEndpoint (3,003 of #98's 3,837 records were
 // endpoint-DLP FileDeleted from one host — high volume, low signal),
 // AzureActiveDirectory / *StsLogon (covered by the sign-in and directory-audit
 // collectors), and the Defender/MDI/MIP/Purview record types (a future Purview
-// collector's concern). Other Exchange record types exist (exchangeItem,
+// collector's concern — note this does NOT extend to the quarantine record
+// types below, which are Exchange Online Protection's own audit trail and are
+// included). Other Exchange record types exist (exchangeItem,
 // exchangeItemGroup); add them here if a tenant needs them.
 var recordTypeFilters = []string{
 	"exchangeAdmin",
@@ -108,6 +121,12 @@ var recordTypeFilters = []string{
 	"sharePointSharingOperation",
 	"microsoftTeams",
 	"microsoftTeamsAdmin",
+	// Quarantine (#233): message held/released/previewed/deleted, and
+	// quarantine-policy changes.
+	"quarantine",
+	"quarantineMetadata",
+	"teamsQuarantineMetadata",
+	"updateQuarantineMetadata",
 }
 
 // collectorImpl is the M365 unified-audit WindowCollector: the generic
@@ -212,6 +231,24 @@ func mapRecord(rec map[string]any) (string, telemetry.Event) {
 		// as a plain nested object, same as Workload/ResultStatus above), so
 		// no second json.Unmarshal is needed to reach it.
 		telemetry.SetStr(attrs, semconv.AttrClientIp, str(data, "ClientIP"))
+		// The quarantine record types' payload (#233), present only on those
+		// records — SetStr/SetNum omit an absent value, so no record-type branch
+		// is needed here (and a `recordType == "Quarantine"` guard would be both
+		// dead weight and wrong: it would miss the other three types).
+		//
+		// network_message_id is the join key. defender.email,
+		// defender.email_post_delivery and defender.email_url all key on the
+		// same id, so it is what ties "this message was released from
+		// quarantine" to the message itself — the whole reason these records are
+		// worth collecting rather than counting.
+		//
+		// RequestType is an UNDOCUMENTED integer enum: Microsoft publishes no
+		// member list for it, so it is emitted as the raw number rather than a
+		// guessed label. Do not invent a mapping — a wrong label is worse than a
+		// number a reader can look up once the enum is known.
+		telemetry.SetStr(attrs, semconv.AttrNetworkMessageId, str(data, "NetworkMessageId"))
+		telemetry.SetStr(attrs, semconv.AttrReleaseTo, str(data, "ReleaseTo"))
+		telemetry.SetNum(attrs, semconv.AttrRequestType, data, "RequestType")
 	}
 
 	return id, telemetry.Event{

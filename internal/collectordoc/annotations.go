@@ -256,6 +256,10 @@ var annotations = map[string]Annotation{
 		Collects: "One log per email attachment (`EmailAttachmentInfo`) — file name/type/extension/size, `sha256` (malware-hash hunting), detection methods and threat verdicts, sender/recipient — joined to `defender.email` on `network_message_id`. On when blob ingest is configured",
 		Category: "AdvancedHunting-EmailAttachmentInfo",
 	},
+	"defender.email_post_delivery": {
+		Collects: "One log per post-delivery action Defender for Office 365 takes on an already-delivered message (`EmailPostDeliveryEvents`) — ZAP, manual and automated remediation, and redelivery — with the action, its trigger and result, and the resulting `delivery_location`; the only signal that shows a message MOVING into or out of quarantine, joined to `defender.email` on `network_message_id`. On when blob ingest is configured",
+		Category: "AdvancedHunting-EmailPostDeliveryEvents",
+	},
 	"defender.identity_logon": {
 		Collects: "One log per identity logon Defender for Identity observes (`IdentityLogonEvents`) — on-prem/hybrid AD + cloud logons Entra sign-in logs never see, with account/target/destination, logon type, IP + geo/ISP, and the raw `additional_fields`. On when blob ingest is configured",
 		Category: "AdvancedHunting-IdentityLogonEvents",
@@ -498,7 +502,7 @@ var annotations = map[string]Annotation{
 
 	// ---- M365 — window collectors ----
 	"m365.unified_audit": {
-		Collects: "The M365 unified audit log, via the async query API: POST a query, poll it, page the result. Its records are not Entra's, so they land under a top-level `m365.audit` event name. The same signal as `m365.activity` over a different transport — NOT superseded by it. The two trade against each other: this one loses on transport (beta-only, a >10-minute async query, and it 429s on rapid query creation) and wins on volume control, because it sends server-side `recordTypeFilters` and can therefore take Teams while excluding the `DLPEndpoint` firehose — which `m365.activity`'s five content-type buckets cannot express. Worth nothing where log storage is free, decisive where it is billed per GB. The uncomfortable part: the cheaper path is the beta one. Exactly one of the two may be enabled; registering both is refused at startup",
+		Collects: "The M365 unified audit log, via the async query API: POST a query, poll it, page the result. Its records are not Entra's, so they land under a top-level `m365.audit` event name. The same signal as `m365.activity` over a different transport — NOT superseded by it. The two trade against each other: this one loses on transport (beta-only, a >10-minute async query, and it 429s on rapid query creation) and wins on volume control, because it sends server-side `recordTypeFilters` and can therefore take Teams while excluding the `DLPEndpoint` firehose — which `m365.activity`'s five content-type buckets cannot express. Worth nothing where log storage is free, decisive where it is billed per GB. The uncomfortable part: the cheaper path is the beta one. The include-list also covers the quarantine record types — a message held, released, previewed or deleted, plus quarantine-policy changes — which is low-volume and high-signal, and carries `network_message_id`, the join key onto `defender.email` / `defender.email_post_delivery` / `defender.email_url`, so a release event resolves to the message it released. Exactly one of the two may be enabled; registering both is refused at startup",
 		Source:   "`POST /security/auditLog/queries` (beta — the documented v1.0 form 404s on a live tenant even under a token carrying the scope)",
 	},
 	"m365.activity": {

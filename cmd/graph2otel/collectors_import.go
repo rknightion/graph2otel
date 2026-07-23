@@ -20,6 +20,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/deviceregistry"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/email"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/emailattachment"
+	_ "github.com/rknightion/graph2otel/internal/collectors/defender/emailpostdelivery"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/emailurlinfo"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/identityinfo"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/identitylogon"

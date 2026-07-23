@@ -733,6 +733,251 @@ func TestMapOmitsAbsentAttrs(t *testing.T) {
 	}
 }
 
+// --- quarantine records (#233) ---
+
+// liveQuarantineReleaseRecord is a VERBATIM row from a POST /security/auditLog/
+// queries result set, read as graph2otel-poller against the m7kni tenant on
+// 2026-07-23 `[live-measured 2026-07-23, #233]`. Nothing is trimmed, renamed or
+// rounded. It is the first fixture in this package of a record type the
+// include-list actually selects (see the "Known limit" note above the 2026-07-17
+// captures — none of those four is an in-scope type).
+//
+// The load-bearing wire fact, and the reason no code here switches on a typed
+// subtype: `auditData.@odata.type` is `#microsoft.graph.security.
+// defaultAuditData` — the GENERIC subtype — even though Graph's beta metadata
+// declares a dedicated `quarantineAuditRecord` type. The typed subtype is NOT
+// what the wire returns, so a mapper that dispatched on it would never fire on a
+// real record. Wire over docs `[live-measured 2026-07-23, #233]`.
+//
+// Second fact worth stating: this record's `userPrincipalName` is the string
+// "System release", not a UPN. That is the same reality the `user_id` attribute
+// comment covers (the classic UserId is UPN-shaped on only ~91% of live
+// records), so nothing below shape-gates it.
+const liveQuarantineReleaseRecord = `{
+  "id": "d63edfc3-4460-4da0-031c-08dee7de0398",
+  "createdDateTime": "2026-07-22T10:43:06Z",
+  "auditLogRecordType": "Quarantine",
+  "operation": "QuarantineReleaseMessage",
+  "organizationId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+  "userType": "System",
+  "userId": "Quarantine",
+  "service": "Quarantine",
+  "objectId": null,
+  "userPrincipalName": "System release",
+  "clientIp": null,
+  "administrativeUnits": [
+    ""
+  ],
+  "auditData": {
+    "@odata.type": "#microsoft.graph.security.defaultAuditData",
+    "CreationTime": "2026-07-22T10:43:06Z",
+    "Id": "d63edfc3-4460-4da0-031c-08dee7de0398",
+    "Operation": "QuarantineReleaseMessage",
+    "OrganizationId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+    "RecordType@odata.type": "#Int64",
+    "RecordType": 65,
+    "ResultStatus": "Successful",
+    "UserKey": "Quarantine",
+    "UserType@odata.type": "#Int64",
+    "UserType": 4,
+    "Version@odata.type": "#Int64",
+    "Version": 1,
+    "Workload": "Quarantine",
+    "UserId": "System release",
+    "NetworkMessageId": "80aa9dda-c565-45a0-6133-08dee7cf4a7a",
+    "ReleaseTo": "rob@m7kni.io",
+    "RequestType@odata.type": "#Int64",
+    "RequestType": 2
+  }
+}`
+
+// TestQuarantineRecordTypesAreIncluded asserts the four quarantine record types
+// are in the curated include-list AND that buildRequest serializes them into the
+// request body — the filter is what makes the records arrive at all, so a
+// constant that never reaches the wire is no coverage.
+//
+// All four were live-verified ACCEPTED by the API on m7kni on 2026-07-23: a
+// query carrying all four in recordTypeFilters returned HTTP 201 and completed,
+// returning real records `[live-measured 2026-07-23, #233]`.
+func TestQuarantineRecordTypesAreIncluded(t *testing.T) {
+	want := []string{"quarantine", "quarantineMetadata", "teamsQuarantineMetadata", "updateQuarantineMetadata"}
+
+	inFilters := make(map[string]bool, len(recordTypeFilters))
+	for _, rt := range recordTypeFilters {
+		inFilters[rt] = true
+	}
+	for _, rt := range want {
+		if !inFilters[rt] {
+			t.Errorf("recordTypeFilters is missing %q — without it the quarantine audit trail (message held/released/previewed/deleted, and quarantine policy changes) is never returned (#233)", rt)
+		}
+	}
+
+	// The include-list is only coverage if it reaches the create body.
+	body, err := buildRequest(time.Date(2026, 7, 22, 10, 0, 0, 0, time.UTC), time.Date(2026, 7, 22, 11, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("buildRequest: %v", err)
+	}
+	var got struct {
+		RecordTypeFilters []string `json:"recordTypeFilters"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("unmarshal body: %v (body=%s)", err, body)
+	}
+	serialized := make(map[string]bool, len(got.RecordTypeFilters))
+	for _, rt := range got.RecordTypeFilters {
+		serialized[rt] = true
+	}
+	for _, rt := range want {
+		if !serialized[rt] {
+			t.Errorf("create body recordTypeFilters is missing %q (got %v)", rt, got.RecordTypeFilters)
+		}
+	}
+}
+
+// TestMapQuarantineRecord maps the pinned live quarantine row and asserts the
+// three quarantine-specific fields the generic mapper used to drop, alongside
+// the generic envelope fields that must keep working on this record type.
+//
+// network_message_id is the point: it is the join key from a quarantine audit
+// record to defender.email / defender.email_post_delivery / defender.email_url,
+// all of which key on the same id. Without it a release event cannot be tied to
+// the message it released.
+func TestMapQuarantineRecord(t *testing.T) {
+	rec := decodeLive(t, liveQuarantineReleaseRecord)
+
+	id, ev := mapRecord(rec)
+	if id != "d63edfc3-4460-4da0-031c-08dee7de0398" {
+		t.Fatalf("dedupe id = %q, want d63edfc3-4460-4da0-031c-08dee7de0398", id)
+	}
+	if ev.Name != eventName {
+		t.Errorf("event name = %q, want %q", ev.Name, eventName)
+	}
+
+	want := map[string]any{
+		// The quarantine payload (#233).
+		"network_message_id": "80aa9dda-c565-45a0-6133-08dee7cf4a7a",
+		"release_to":         "rob@m7kni.io",
+		// RequestType is an UNDOCUMENTED integer enum — Microsoft publishes no
+		// member list — so it is emitted as the raw number, not a guessed label.
+		// telemetry.SetNum stores the JSON number as a float64.
+		"request_type": float64(2),
+		// The generic envelope must keep working on this record type.
+		"id":          "d63edfc3-4460-4da0-031c-08dee7de0398",
+		"operation":   "QuarantineReleaseMessage",
+		"record_type": "Quarantine",
+		"service":     "Quarantine",
+		"user_type":   "System",
+		// Crossed as always: wire userId -> user_key, wire userPrincipalName ->
+		// user_id. Here the classic UserId is "System release", which is not
+		// UPN-shaped and must not be shape-gated.
+		"user_key":      "Quarantine",
+		"user_id":       "System release",
+		"workload":      "Quarantine",
+		"result_status": "Successful",
+	}
+	for k, v := range want {
+		if ev.Attrs[k] != v {
+			t.Errorf("attr %q = %v (%T), want %v (%T)", k, ev.Attrs[k], ev.Attrs[k], v, v)
+		}
+	}
+
+	// objectId is null on this row, and clientIp is null as ever.
+	for _, k := range []string{"object_id", "client_ip"} {
+		if got, present := ev.Attrs[k]; present {
+			t.Errorf("attr %q = %v, want ABSENT on this record", k, got)
+		}
+	}
+}
+
+// TestQuarantineAttrsAbsentOnNonQuarantineRecords asserts the three new
+// attributes are stamped only where the wire carries them: the fields live in
+// auditData on quarantine records and nowhere else, and telemetry.SetStr/SetNum
+// omit an absent value, so no record-type branch is needed in mapRecord.
+//
+// liveUserLoggedInRecord is the sharpest of the four: its auditData DOES contain
+// the string "RequestType" — as the Name of an ExtendedProperties entry, not as
+// a top-level auditData key. A mapper that went looking for the name rather than
+// reading the field would stamp "OAuth2:Authorize" here.
+func TestQuarantineAttrsAbsentOnNonQuarantineRecords(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+	}{
+		{"AAD sign-in (has a RequestType inside ExtendedProperties)", liveUserLoggedInRecord},
+		{"DataInsights search", liveGUIDUserIDRecord},
+		{"AAD sign-in (Not Available user)", liveNotAvailableUserIDRecord},
+		{"AuditSearch", liveNullSentinelUserKeyRecord},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ev := mapRecord(decodeLive(t, tc.raw))
+			for _, k := range []string{"network_message_id", "release_to", "request_type"} {
+				if got, present := ev.Attrs[k]; present {
+					t.Errorf("attr %q = %v, want ABSENT — it is a quarantine-record field and this row carries none", k, got)
+				}
+			}
+		})
+	}
+}
+
+// TestQuarantineFieldsReachEmitterEndToEnd drives the pinned live quarantine row
+// through the real jobpipeline engine into an emitter (create -> poll -> page ->
+// emit), so the three new attribute keys are in what this package's tests EMIT
+// and therefore in testdata/signals.json.
+//
+// Same reason TestCollectorEmitsFullRecordEndToEnd exists (#164): the signal
+// gate records the union of emitted attributes, and a golden that has never seen
+// an attribute cannot notice that attribute drifting. A mapper-only test does
+// not reach the emitter and so contributes nothing to the golden.
+func TestQuarantineFieldsReachEmitterEndToEnd(t *testing.T) {
+	rec := telemetrytest.New()
+	fake := &fakeJobClient{
+		statuses: []string{jobpipeline.StatusSucceeded},
+		records:  []map[string]any{decodeLive(t, liveQuarantineReleaseRecord)},
+	}
+	c := newCollector(deps(t, fake))
+
+	// The window brackets the captured record's real createdDateTime
+	// (2026-07-22T10:43:06Z).
+	from := time.Date(2026, 7, 22, 10, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 7, 22, 11, 0, 0, 0, time.UTC)
+	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter()); err != nil {
+		t.Fatalf("CollectWindow: %v", err)
+	}
+
+	logs := rec.LogRecords()
+	if len(logs) != 1 {
+		t.Fatalf("emitted %d records, want 1", len(logs))
+	}
+	got := logs[0]
+	if got.EventName != eventName {
+		t.Errorf("event name = %q, want %q", got.EventName, eventName)
+	}
+	if got.Attrs["record_type"] != "Quarantine" {
+		t.Fatalf("record_type = %q, want Quarantine — this test exists to prove the quarantine payload on a quarantine record", got.Attrs["record_type"])
+	}
+
+	// LogRecord.Attrs is flattened to strings, so the raw RequestType number
+	// arrives as "2" here rather than float64(2) — the mapper-level assertion in
+	// TestMapQuarantineRecord is the one that pins the type.
+	wantAttrs := map[string]string{
+		"network_message_id": "80aa9dda-c565-45a0-6133-08dee7cf4a7a",
+		"release_to":         "rob@m7kni.io",
+		"request_type":       "2",
+		"operation":          "QuarantineReleaseMessage",
+		"user_key":           "Quarantine",
+		"user_id":            "System release",
+		"workload":           "Quarantine",
+		"result_status":      "Successful",
+	}
+	for k, want := range wantAttrs {
+		if v := got.Attrs[k]; v != want {
+			t.Errorf("emitted attr %q = %q, want %q", k, v, want)
+		}
+	}
+}
+
 // --- factory + end-to-end wiring ---
 
 func deps(t *testing.T, client jobpipeline.JobClient) collectors.WindowDeps {

@@ -34,6 +34,8 @@ const (
 	AttrQuotaState                   = "quota_state"
 	AttrRecordType                   = "record_type"
 	AttrRecordTypeId                 = "record_type_id"
+	AttrReleaseTo                    = "release_to"
+	AttrRequestType                  = "request_type"
 	AttrResultStatus                 = "result_status"
 	AttrRootWebTemplate              = "root_web_template"
 	AttrService                      = "service"
