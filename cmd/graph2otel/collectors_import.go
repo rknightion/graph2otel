@@ -7,6 +7,8 @@ package main
 import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/alertevidence"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/alertinfo"
+	_ "github.com/rknightion/graph2otel/internal/collectors/defender/behaviorentities"
+	_ "github.com/rknightion/graph2otel/internal/collectors/defender/behaviorinfo"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/cloudapp"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/deviceevent"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/devicefile"
@@ -24,6 +26,8 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/emailurlinfo"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/identityinfo"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/identitylogon"
+	_ "github.com/rknightion/graph2otel/internal/collectors/defender/messageevents"
+	_ "github.com/rknightion/graph2otel/internal/collectors/defender/messageurlinfo"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/quarantine"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/urlclickevents"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/agentriskdetections"

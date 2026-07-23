@@ -1,0 +1,23 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "defender.behavior",
+      "AttrKeys": [
+        "account_upn",
+        "action_type",
+        "additional_fields",
+        "attack_techniques",
+        "behavior_id",
+        "categories",
+        "data_sources",
+        "description",
+        "detection_source",
+        "end_time",
+        "ingest_transport",
+        "service_source",
+        "start_time"
+      ]
+    }
+  ]
+}

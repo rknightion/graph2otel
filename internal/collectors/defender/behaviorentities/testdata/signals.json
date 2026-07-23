@@ -1,0 +1,25 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "defender.behavior_entity",
+      "AttrKeys": [
+        "account_domain",
+        "account_name",
+        "account_upn",
+        "action_type",
+        "additional_fields",
+        "application",
+        "application_id",
+        "behavior_id",
+        "categories",
+        "data_sources",
+        "detection_source",
+        "entity_role",
+        "entity_type",
+        "ingest_transport",
+        "service_source"
+      ]
+    }
+  ]
+}

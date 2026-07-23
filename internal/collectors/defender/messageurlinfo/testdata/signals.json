@@ -1,0 +1,15 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "defender.teams_message_url",
+      "AttrKeys": [
+        "ingest_transport",
+        "report_id",
+        "teams_message_id",
+        "url",
+        "url_domain"
+      ]
+    }
+  ]
+}

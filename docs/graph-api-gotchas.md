@@ -124,6 +124,17 @@ Independent ceilings, none of which reliably send `Retry-After` — client-side 
 
 ## Defender for Office 365 (MDO)
 
+- **The "supported streaming event types" doc is WRONG on at least five rows**
+  `[live-measured 2026-07-23, #241]`. Microsoft's
+  [supported-event-types](https://learn.microsoft.com/en-us/defender-xdr/supported-event-types)
+  page lists **`BehaviorInfo` and `BehaviorEntities` as "Not available"** in every cloud — they
+  are streaming to this tenant's storage account right now (`defender.behavior` /
+  `defender.behavior_entity`). The same table **omits `IdentityInfo`, `MessageEvents` and
+  `MessageUrlInfo` entirely**, all three of which are also streaming. Anyone who checks that page
+  before proposing a table will reject buildable ones. This is the wire-over-docs rule landing on
+  a page nobody had checked against the account: **enumerate the storage account's containers, not
+  the doc.** (This also cleared #233's blocker: `MessageEvents` was recorded as having "never held
+  a single row" — the container exists now.)
 - **`security/collaboration/analyzedEmails` SILENTLY IGNORES its date parameters**
   `[live-measured 2026-07-23, #233]`. `startDateTime`/`endDateTime` are accepted, return
   HTTP 200, and change nothing: the response is a **~20-hour rolling window** whatever you

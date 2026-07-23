@@ -227,6 +227,22 @@ var annotations = map[string]Annotation{
 		Collects: "One log per evidence row Defender attaches to an alert (`AlertEvidence`, absorbing #93) — the per-entity detail (real UPN/IP/geo/session/file) that `entra.security_alerts` collapses to a bare `evidence_count`. Joins to the alert on `alert_id`. On when blob ingest is configured",
 		Category: "AdvancedHunting-AlertEvidence",
 	},
+	"defender.behavior": {
+		Collects: "One log per Defender BEHAVIOR — the sub-alert \"suspicious pattern observed and scored\" tier that sits between raw EDR telemetry and a fired alert (`BehaviorInfo`, #241): BehaviorId, ActionType, MITRE Categories/AttackTechniques, ServiceSource, the prose Description, and the involved account/device. Everything else graph2otel ships starts at the fired alert; a SIEM wants both tiers. Joins to `defender.behavior_entity` on `behavior_id`. On when blob ingest is configured (was streaming, billed and deleted unread until #241)",
+		Category: "AdvancedHunting-BehaviorInfo",
+	},
+	"defender.behavior_entity": {
+		Collects: "One log per entity involved in a Defender behavior (`BehaviorEntities`, #241) — the ~37-column per-entity detail (file/SHA, remote IP/URL, account, device, email, process, registry) for a scored behavior, the same shape family as `AlertEvidence`. Joins to `defender.behavior` on `behavior_id`. On when blob ingest is configured (was streaming, billed and deleted unread until #241)",
+		Category: "AdvancedHunting-BehaviorEntities",
+	},
+	"defender.teams_message": {
+		Collects: "One log per Teams message Defender for Office 365 protects (`MessageEvents`, #241) — sender identity/type, thread/group, IsExternalThread, threat verdicts, delivery action/location. graph2otel had zero Teams SECURITY coverage (`m365.teams` is inventory governance only); IsExternalThread + SenderType is the external-collaboration attack surface. Joins to `defender.teams_message_url` on `teams_message_id`. On when blob ingest is configured (was streaming, billed and deleted unread until #241)",
+		Category: "AdvancedHunting-MessageEvents",
+	},
+	"defender.teams_message_url": {
+		Collects: "One log per URL inside a Teams message (`MessageUrlInfo`, #241) — the URL and its domain, keyed by `teams_message_id` (the join into `defender.teams_message`), `report_id`. On when blob ingest is configured (was streaming, billed and deleted unread until #241)",
+		Category: "AdvancedHunting-MessageUrlInfo",
+	},
 	"defender.alert_info": {
 		Collects: "One log per Defender XDR alert header (`AlertInfo`) — the alert's title, category (MITRE tactic), severity, detection/service source, and attack techniques, keyed by `alert_id`. The alert-level companion to `defender.alert_evidence`'s per-entity rows: join the two on `alert_id`. On when blob ingest is configured",
 		Category: "AdvancedHunting-AlertInfo",

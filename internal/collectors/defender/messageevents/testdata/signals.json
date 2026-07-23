@@ -1,0 +1,35 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "defender.teams_message",
+      "AttrKeys": [
+        "delivery_action",
+        "delivery_location",
+        "group_id",
+        "group_name",
+        "ingest_transport",
+        "is_external_thread",
+        "is_owned_thread",
+        "last_edited_time",
+        "message_id",
+        "message_subtype",
+        "message_type",
+        "message_version",
+        "parent_message_id",
+        "recipient_details",
+        "report_id",
+        "sender_display_name",
+        "sender_email_address",
+        "sender_object_id",
+        "sender_type",
+        "subject",
+        "teams_message_id",
+        "thread_id",
+        "thread_name",
+        "thread_sub_type",
+        "thread_type"
+      ]
+    }
+  ]
+}

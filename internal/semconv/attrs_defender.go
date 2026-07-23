@@ -331,4 +331,34 @@ const (
 	AttrUrlLocation                     = "url_location"
 	AttrUserAccountControl              = "user_account_control"
 	AttrUserAgentTags                   = "user_agent_tags"
+
+	// #241 tables: behaviorinfo/behaviorentities (Defender behavior analytics,
+	// the alert-info+evidence shape joined by BehaviorId) and
+	// messageevents/messageurlinfo (Teams message hygiene, the email+emailurl
+	// shape joined by TeamsMessageId).
+	AttrBehaviorId         = "behavior_id"
+	AttrDataSources        = "data_sources"
+	AttrDetailedEntityRole = "detailed_entity_role"
+	AttrEndTime            = "end_time"
+	AttrEntityRole         = "entity_role"
+	AttrGroupId            = "group_id"
+	AttrGroupName          = "group_name"
+	AttrIsExternalThread   = "is_external_thread"
+	AttrIsOwnedThread      = "is_owned_thread"
+	AttrLastEditedTime     = "last_edited_time"
+	AttrMessageId          = "message_id"
+	AttrMessageSubtype     = "message_subtype"
+	AttrMessageType        = "message_type"
+	AttrMessageVersion     = "message_version"
+	AttrParentMessageId    = "parent_message_id"
+	AttrRecipientDetails   = "recipient_details"
+	AttrSafetyTip          = "safety_tip"
+	AttrSenderEmailAddress = "sender_email_address"
+	AttrSenderType         = "sender_type"
+	AttrStartTime          = "start_time"
+	AttrTeamsMessageId     = "teams_message_id"
+	AttrThreadId           = "thread_id"
+	AttrThreadName         = "thread_name"
+	AttrThreadSubType      = "thread_sub_type"
+	AttrThreadType         = "thread_type"
 )
