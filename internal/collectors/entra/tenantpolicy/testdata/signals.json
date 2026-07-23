@@ -1,0 +1,33 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.tenant_policy.scoped_policies",
+      "Unit": "{policy}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "kind"
+      ]
+    },
+    {
+      "Name": "entra.tenant_policy.setting",
+      "Unit": "{setting}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "setting"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "entra.tenant_policy",
+      "AttrKeys": [
+        "admin_consent_request_duration_days",
+        "admin_consent_reviewer_count",
+        "allow_invites_from",
+        "app_password_credentials_restricted",
+        "guest_user_role_id",
+        "permission_grant_policies"
+      ]
+    }
+  ]
+}

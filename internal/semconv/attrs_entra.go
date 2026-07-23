@@ -190,6 +190,15 @@ const (
 // service/action_type reuse AttrService/AttrActionType; the profile id reuses
 // AttrId.
 const (
+	// entra.tenant_policy twin (#245): tenant posture fields the bounded 0/1
+	// setting gauge cannot carry.
+	AttrAllowInvitesFrom            = "allow_invites_from"
+	AttrGuestUserRoleId             = "guest_user_role_id"
+	AttrAdminConsentReviewerCount   = "admin_consent_reviewer_count"
+	AttrAdminConsentRequestDuration = "admin_consent_request_duration_days"
+	AttrPermissionGrantPolicies     = "permission_grant_policies"
+	AttrAppPasswordCredsRestricted  = "app_password_credentials_restricted"
+
 	AttrControlName          = "control_name"
 	AttrScore                = "score"
 	AttrScoreInPercentage    = "score_in_percentage"

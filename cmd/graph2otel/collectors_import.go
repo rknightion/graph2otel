@@ -56,6 +56,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/signins"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/spriskdetections"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/syncerrors"
+	_ "github.com/rknightion/graph2otel/internal/collectors/entra/tenantpolicy"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/users"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/appinstallreport"
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/appletokens"

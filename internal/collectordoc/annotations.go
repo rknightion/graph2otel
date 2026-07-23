@@ -114,6 +114,11 @@ var annotations = map[string]Annotation{
 		Source:   "`/organization` (sync-state probe), `/users` (full page-walk, client-side filtered)",
 		Gating:   "runs on every tier (both endpoints are v1.0 stable, not beta); no-ops without paging when the tenant is cloud-only, i.e. onPremisesSyncEnabled is false or null, so only hybrid-synced tenants pay the full /users sweep",
 	},
+	"entra.tenant_policy": {
+		Collects: "Tenant policy posture (#245): CIS/benchmark switches as a 0/1 gauge by setting (users can create apps/groups/tenants, read other users; guest-invite restricted; MSOL PowerShell blocked; user consent for risky apps; SSPR; email-verified join; admin-consent workflow; app-management policy; app password-credential restriction), scoped-policy counts by kind, plus one log twin carrying the raw posture (guestUserRoleId, allowInvitesFrom, permission-grant policies)",
+		Source:   "`/policies/authorizationPolicy`, `/policies/adminConsentRequestPolicy`, `/policies/defaultAppManagementPolicy`, `/policies/appManagementPolicies`, `/groupLifecyclePolicies`, `/policies/featureRolloutPolicies`",
+		Gating:   "runs on every tier (v1.0, not beta); each singleton fetch is independent and degrades to a non-fatal error; the three scoped-policy collections are empty on m7kni so only their count is emitted (no field mapper written against unseen data)",
+	},
 	"entra.users": {
 		Collects: "User population by account-enabled/user-type/on-prem-sync (marginal + joint user_type×account_enabled), staleness",
 		Source:   "`/users`, `/users/$count` (`GET /users?…&$count=true` for signInActivity-based slices)",
