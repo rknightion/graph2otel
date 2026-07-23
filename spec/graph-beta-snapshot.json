@@ -310,6 +310,16 @@
       "path": "/security/auditLog/queries/{id}/records",
       "type": "microsoft.graph.security.auditLogRecord",
       "resolution": "model"
+    },
+    {
+      "path": "/teams/{id}/channels",
+      "type": "microsoft.graph.channel",
+      "resolution": "model"
+    },
+    {
+      "path": "/teams/{id}/installedApps",
+      "type": "microsoft.graph.teamsAppInstallation",
+      "resolution": "model"
     }
   ],
   "types": {
@@ -542,6 +552,72 @@
         "months",
         "years"
       ]
+    },
+    "microsoft.graph.channel": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "createdDateTime": "Edm.DateTimeOffset",
+        "description": "Edm.String",
+        "displayName": "Edm.String",
+        "email": "Edm.String",
+        "isArchived": "Edm.Boolean",
+        "isFavoriteByDefault": "Edm.Boolean",
+        "layoutType": "microsoft.graph.channelLayoutType",
+        "membershipType": "microsoft.graph.channelMembershipType",
+        "migrationMode": "microsoft.graph.migrationMode",
+        "moderationSettings": "microsoft.graph.channelModerationSettings",
+        "originalCreatedDateTime": "Edm.DateTimeOffset",
+        "summary": "microsoft.graph.channelSummary",
+        "tenantId": "Edm.String",
+        "webUrl": "Edm.String"
+      },
+      "navigation_properties": {
+        "allMembers": "Collection(microsoft.graph.conversationMember)",
+        "enabledApps": "Collection(microsoft.graph.teamsApp)",
+        "filesFolder": "microsoft.graph.driveItem",
+        "joinedUsers": "Collection(microsoft.graph.conversationMember)",
+        "members": "Collection(microsoft.graph.conversationMember)",
+        "messages": "Collection(microsoft.graph.chatMessage)",
+        "planner": "microsoft.graph.teamsChannelPlanner",
+        "sharedWithTeams": "Collection(microsoft.graph.sharedWithChannelTeamInfo)",
+        "tabs": "Collection(microsoft.graph.teamsTab)"
+      }
+    },
+    "microsoft.graph.channelLayoutType": {
+      "kind": "EnumType",
+      "members": [
+        "chat",
+        "post",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.channelMembershipType": {
+      "kind": "EnumType",
+      "members": [
+        "private",
+        "shared",
+        "standard",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.channelModerationSettings": {
+      "kind": "ComplexType",
+      "properties": {
+        "allowNewMessageFromBots": "Edm.Boolean",
+        "allowNewMessageFromConnectors": "Edm.Boolean",
+        "replyRestriction": "microsoft.graph.replyRestriction",
+        "userNewMessageRestriction": "microsoft.graph.userNewMessageRestriction"
+      }
+    },
+    "microsoft.graph.channelSummary": {
+      "kind": "ComplexType",
+      "properties": {
+        "guestsCount": "Edm.Int32",
+        "hasMembersFromOtherTenants": "Edm.Boolean",
+        "membersCount": "Edm.Int32",
+        "ownersCount": "Edm.Int32"
+      }
     },
     "microsoft.graph.chassisType": {
       "kind": "EnumType",
@@ -1784,6 +1860,14 @@
         "authMethod": "Edm.String"
       }
     },
+    "microsoft.graph.migrationMode": {
+      "kind": "EnumType",
+      "members": [
+        "completed",
+        "inProgress",
+        "unknownFutureValue"
+      ]
+    },
     "microsoft.graph.ndesConnector": {
       "kind": "EntityType",
       "base_type": "microsoft.graph.entity",
@@ -2907,6 +2991,30 @@
         "commonNameIncludingEmail",
         "custom"
       ]
+    },
+    "microsoft.graph.teamsAppInstallation": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "consentedPermissionSet": "microsoft.graph.teamsAppPermissionSet",
+        "scopeInfo": "microsoft.graph.teamsAppInstallationScopeInfo"
+      },
+      "navigation_properties": {
+        "teamsApp": "microsoft.graph.teamsApp",
+        "teamsAppDefinition": "microsoft.graph.teamsAppDefinition"
+      }
+    },
+    "microsoft.graph.teamsAppInstallationScopeInfo": {
+      "kind": "ComplexType",
+      "properties": {
+        "scope": "microsoft.graph.teamsAppInstallationScopes"
+      }
+    },
+    "microsoft.graph.teamsAppPermissionSet": {
+      "kind": "ComplexType",
+      "properties": {
+        "resourceSpecificPermissions": "Collection(microsoft.graph.teamsAppResourceSpecificPermission)"
+      }
     },
     "microsoft.graph.tokenIssuerType": {
       "kind": "EnumType",

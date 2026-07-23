@@ -31,7 +31,7 @@ collector listed there stops being named below.
 | --- | --- |
 | Entra ID | `entra.agent_risk_detections`, `entra.recommendations`, `entra.risky_agents`, `entra.signin_activity`, `entra.signins.non_interactive`, `entra.signins.service_principal`, `entra.signins.managed_identity` |
 | Intune | `intune.apple_tokens`, `intune.autopilot`, `intune.autopilot_events`, `intune.certificates`, `intune.connectors`, `intune.device_encryption`, `intune.endpoint_analytics`, `intune.gpo_analytics`, `intune.hardware_inventory`, `intune.remediation_run_states`, `intune.scripts`, `intune.settings_catalog`, `intune.updates` |
-| M365 | `m365.unified_audit` |
+| M365 | `m365.teams`, `m365.unified_audit` |
 
 Not covered, and not a gap in this canary: `mdca.discovery_parse` reaches the legacy
 Defender for Cloud Apps portal API, which publishes no machine-readable schema; the

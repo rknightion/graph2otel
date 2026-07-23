@@ -341,6 +341,21 @@
       ]
     },
     {
+      "package": "internal/collectors/m365/teams",
+      "collectors": [
+        "m365.teams"
+      ],
+      "operations": [
+        {
+          "path": "/teams/{id}/installedApps",
+          "note": "$expand=teamsApp; grantedResourceSpecificApplicationPermissions (RSC) is beta-only. Rejects $top, so paged by @odata.nextLink"
+        },
+        {
+          "path": "/teams/{id}/channels"
+        }
+      ]
+    },
+    {
       "package": "internal/collectors/m365/unifiedaudit",
       "collectors": [
         "m365.unified_audit"

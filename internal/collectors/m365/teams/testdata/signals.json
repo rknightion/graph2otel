@@ -1,6 +1,24 @@
 {
   "Metrics": [
     {
+      "Name": "m365.teams.channels.total",
+      "Unit": "1",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "is_archived",
+        "membership_type"
+      ]
+    },
+    {
+      "Name": "m365.teams.installed_apps.total",
+      "Unit": "1",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "distribution_method",
+        "has_rsc_permissions"
+      ]
+    },
+    {
       "Name": "m365.teams.membership.total",
       "Unit": "1",
       "Kind": "gauge",
@@ -41,6 +59,33 @@
         "members_count",
         "owners_count",
         "visibility"
+      ]
+    },
+    {
+      "EventName": "m365.team_channel",
+      "AttrKeys": [
+        "display_name",
+        "email_address",
+        "files_folder_web_url",
+        "id",
+        "is_archived",
+        "membership_type",
+        "team_display_name",
+        "team_id"
+      ]
+    },
+    {
+      "EventName": "m365.teams_app",
+      "AttrKeys": [
+        "app_display_name",
+        "app_id",
+        "distribution_method",
+        "external_id",
+        "has_rsc_permissions",
+        "rsc_permissions",
+        "scope",
+        "team_display_name",
+        "team_id"
       ]
     }
   ]

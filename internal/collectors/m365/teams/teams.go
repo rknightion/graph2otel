@@ -28,6 +28,49 @@
 // An archived team is the desired end-state of a wound-down team, not an orphan,
 // so it is EXCLUDED from the ownerless count — but it still gets a log twin
 // carrying is_archived=true, so it is never silently dropped.
+//
+// # Installed apps + channel census (#247)
+//
+// Two further signals ride the SAME per-team fan-out (no extra full sweep): for
+// each team we also GET /beta/teams/{id}/installedApps?$expand=teamsApp and
+// GET /beta/teams/{id}/channels. That takes the per-cycle cost from 1 GET/team
+// (the summary) to 3 GETs/team, so a tenant of N teams costs 1 (list) + 3·N
+// requests per cycle (was 1 + N). Both are paced through the same directory
+// rate-limiter bucket, which is why the interval stays long.
+//
+//   - installedApps surfaces two blind spots: SIDELOADED apps
+//     (distributionMethod=sideloaded, an app installed outside the tenant
+//     catalog/store) and RSC — grantedResourceSpecificApplicationPermissions,
+//     resource-specific consent granted PER TEAM (e.g. ChannelMessage.Read.Group).
+//     RSC is invisible to entra.consent, which only sees tenant-wide app-role
+//     consent — this is the whole point of the signal. The endpoint REJECTS the
+//     $top query option ("Query option 'Top' is not allowed"), so it is paged by
+//     the @odata.nextLink walk (GetAllValues), never $top (live-verified against
+//     m7kni, 2026-07-23).
+//   - channels is the per-team channel census: membershipType
+//     (standard/private/shared) and archived state, plus per-channel detail
+//     (email, files-folder URL) on the log twin.
+//
+// Beta, but NOT Experimental. installedApps' RSC field
+// (grantedResourceSpecificApplicationPermissions) is beta-only, so both calls
+// use the /beta base URL. The collector is deliberately NOT marked Experimental
+// (that would hide the valuable v1.0 team inventory behind the beta opt-in, #183)
+// — it issues beta GETs for these two sub-resources only. The beta surface still
+// needs registering in spec/graph-beta-surface.json (the wiring pass owns that).
+// channels' fields all exist in v1.0 too and could be moved there to shrink the
+// beta footprint; it uses beta here only because the single live sample captured
+// was beta (wire-over-docs).
+//
+// # What is unvalidated (n=1 on m7kni, 2026-07-23)
+//
+// The live samples this mapper was written against are thin: all 63 installed
+// apps on the one probed team were distributionMethod=store with ZERO RSC grants,
+// and the team had ONE channel, membershipType=standard. So the sideloaded and
+// RSC-grant SHAPES are mapped from the fields but their DISTRIBUTION is
+// unobservable here, and the private/shared channel membership types were never
+// seen on the wire. The element type of grantedResourceSpecificApplication
+// Permissions is decoded as []string (the documented shape) but is unvalidated —
+// every observed array was empty. These are docs-only / n=1, not live-measured.
 package teams
 
 import (
@@ -51,8 +94,16 @@ const (
 	collectorName = "m365.teams"
 	// eventName is the per-team log twin's OTLP LogRecord EventName.
 	eventName = "m365.team"
+	// eventNameApp is the per-(team,installed-app) log twin EventName (#247).
+	eventNameApp = "m365.teams_app"
+	// eventNameChannel is the per-channel log twin EventName (#247).
+	eventNameChannel = "m365.team_channel"
 	// defaultBaseURL is the Graph v1.0 root.
 	defaultBaseURL = "https://graph.microsoft.com/v1.0"
+	// betaBaseURL is the Graph beta root, used ONLY for the installedApps + channels
+	// sub-resource GETs (#247) — the RSC field is beta-only. The collector stays
+	// non-Experimental; see the package doc.
+	betaBaseURL = "https://graph.microsoft.com/beta"
 	// teamsListPath lists teams. Only id/displayName/description/visibility are
 	// populated on the list (summary/isArchived are null — see the package doc),
 	// so the $select is those four and the rest come from the per-team call.
@@ -68,6 +119,12 @@ const (
 	metricOwnerless  = "m365.teams.ownerless.total"
 	metricWithGuests = "m365.teams.with_guests.total"
 	metricMembership = "m365.teams.membership.total"
+	// metricInstalledApps counts installed apps by distribution_method ×
+	// has_rsc_permissions (both closed sets — bounded). (#247)
+	metricInstalledApps = "m365.teams.installed_apps.total"
+	// metricChannels counts channels by membership_type × is_archived (both
+	// closed sets — bounded). (#247)
+	metricChannels = "m365.teams.channels.total"
 )
 
 // knownVisibilities is the closed set emitted as an explicit grid every cycle
@@ -78,10 +135,24 @@ var knownVisibilities = []string{"public", "private", "hiddenMembership"}
 // membershipRoles is the closed grid for the membership-by-role metric.
 var membershipRoles = []string{"owner", "member", "guest"}
 
+// distributionMethods is the closed distributionMethod enum, seeded as an
+// explicit grid so every bucket reports each cycle for a stable alert baseline.
+var distributionMethods = []string{"store", "organization", "sideloaded"}
+
+// rscStates is the closed has_rsc_permissions grid (a bool rendered as a string).
+var rscStates = []string{"false", "true"}
+
+// membershipTypes is the closed channel membershipType enum.
+var membershipTypes = []string{"standard", "private", "shared"}
+
+// archivedStates is the closed is_archived grid (a bool rendered as a string).
+var archivedStates = []string{"false", "true"}
+
 // Collector is the Teams inventory SnapshotCollector.
 type Collector struct {
 	g       collectors.GraphClient
 	baseURL string
+	betaURL string
 	logger  *slog.Logger
 }
 
@@ -90,7 +161,7 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Collector{g: g, baseURL: defaultBaseURL, logger: logger}
+	return &Collector{g: g, baseURL: defaultBaseURL, betaURL: betaBaseURL, logger: logger}
 }
 
 // Name implements collector.Collector.
@@ -105,9 +176,20 @@ func (c *Collector) DefaultInterval() time.Duration { return defaultInterval }
 // GET /teams/{id}?$select=summary. The narrower documented least-privilege for
 // the summary — TeamSettings.Read.Group — is RESOURCE-SPECIFIC CONSENT (granted
 // per team via a Teams app manifest), which cannot serve a tenant-wide poller,
-// so TeamSettings.Read.All is the workable app-only scope. See docs/permissions.md.
+// so TeamSettings.Read.All is the workable app-only scope.
+//
+// TeamsAppInstallation.Read.All backs GET /teams/{id}/installedApps and
+// Channel.ReadBasic.All backs GET /teams/{id}/channels (#247). Both are the
+// documented app-only least-privilege scopes (docs-only — not yet live-verified
+// against m7kni). A team-scoped GET that 403s because these are ungranted is
+// skipped for the cycle, not fatal. See docs/permissions.md.
 func (c *Collector) RequiredPermissions() []string {
-	return []string{"Team.ReadBasic.All", "TeamSettings.Read.All"}
+	return []string{
+		"Team.ReadBasic.All",
+		"TeamSettings.Read.All",
+		"TeamsAppInstallation.Read.All",
+		"Channel.ReadBasic.All",
+	}
 }
 
 // team is the list-response shape (the four fields /teams actually populates).
@@ -126,6 +208,34 @@ type teamDetail struct {
 		MembersCount int64 `json:"membersCount"`
 		GuestsCount  int64 `json:"guestsCount"`
 	} `json:"summary"`
+}
+
+// installedApp is one entry of GET /beta/teams/{id}/installedApps?$expand=teamsApp
+// (#247). grantedResourceSpecificApplicationPermissions is decoded as []string —
+// the documented RSC-grant value shape (e.g. ChannelMessage.Read.Group); every
+// live sample was empty, so the element type is docs-only/unvalidated.
+type installedApp struct {
+	GrantedRSC []string `json:"grantedResourceSpecificApplicationPermissions"`
+	ScopeInfo  struct {
+		Scope string `json:"scope"`
+	} `json:"scopeInfo"`
+	TeamsApp struct {
+		ID                 string `json:"id"`
+		ExternalID         string `json:"externalId"`
+		DisplayName        string `json:"displayName"`
+		DistributionMethod string `json:"distributionMethod"`
+	} `json:"teamsApp"`
+}
+
+// channel is one entry of GET /beta/teams/{id}/channels (#247). Every decoded
+// field is present on the live m7kni sample (2026-07-23).
+type channel struct {
+	ID                string `json:"id"`
+	DisplayName       string `json:"displayName"`
+	Email             string `json:"email"`
+	FilesFolderWebURL string `json:"filesFolderWebUrl"`
+	MembershipType    string `json:"membershipType"`
+	IsArchived        bool   `json:"isArchived"`
 }
 
 // Collect lists every team, fetches each team's summary, buckets the bounded
@@ -156,6 +266,24 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		membership[r] = 0
 	}
 	var ownerless, withGuests int64
+
+	// #247 grids, seeded to the full cross-product so every bucket reports each
+	// cycle. appsForbidden / channelsForbidden latch on the first 403 so an
+	// ungranted scope neither spams a log per team nor emits a misleading
+	// all-zero grid (a skipped gauge != an observed zero).
+	appsGrid := map[appKey]int64{}
+	for _, dm := range distributionMethods {
+		for _, rsc := range rscStates {
+			appsGrid[appKey{dm, rsc}] = 0
+		}
+	}
+	channelsGrid := map[chanKey]int64{}
+	for _, mt := range membershipTypes {
+		for _, arch := range archivedStates {
+			channelsGrid[chanKey{mt, arch}] = 0
+		}
+	}
+	var appsForbidden, channelsForbidden bool
 
 	for _, raw := range raws {
 		var t team
@@ -192,6 +320,10 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		}
 
 		e.LogEvent(logTwin(t, det))
+
+		// #247: installed apps + channels ride this same per-team fan-out.
+		c.collectInstalledApps(ctx, e, t, appsGrid, &appsForbidden)
+		c.collectChannels(ctx, e, t, channelsGrid, &channelsForbidden)
 	}
 
 	emitVisibilityGauge(e, byVisibility)
@@ -200,7 +332,78 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		"Teams with zero owners (excluding archived) — unmanageable orphans.", float64(ownerless), nil)
 	e.Gauge(metricWithGuests, semconv.UnitDimensionless,
 		"Teams with at least one external guest — a data-egress exposure surface.", float64(withGuests), nil)
+	// Skip a gauge whose scope was never granted — a seeded all-zero grid would
+	// falsely read as "no apps / no channels" rather than "not measured".
+	if !appsForbidden {
+		emitInstalledAppsGauge(e, appsGrid)
+	}
+	if !channelsForbidden {
+		emitChannelsGauge(e, channelsGrid)
+	}
 	return nil
+}
+
+// appKey / chanKey are the bounded composite grid keys for the #247 metrics.
+type appKey struct{ distribution, hasRSC string }
+type chanKey struct{ membership, archived string }
+
+// collectInstalledApps fetches one team's installed apps (beta, $expand=teamsApp),
+// buckets each into the bounded grid, and emits one m365.teams_app twin per app.
+// A 403 latches appsForbidden so the rest of the cycle skips the call; any other
+// error skips this team's apps only.
+func (c *Collector) collectInstalledApps(ctx context.Context, e telemetry.Emitter, t team, grid map[appKey]int64, forbidden *bool) {
+	if *forbidden {
+		return
+	}
+	// installedApps REJECTS $top — page via the nextLink walk, never $top.
+	url := c.betaURL + "/teams/" + t.ID + "/installedApps?$expand=teamsApp"
+	raws, err := collectors.GetAllValues(ctx, c.g, url, nil)
+	if err != nil {
+		if isForbidden(err) {
+			*forbidden = true
+			c.logger.Info("skipping installed-apps: TeamsAppInstallation.Read.All not granted", "collector", collectorName)
+			return
+		}
+		c.logger.Warn("teams: installedApps fetch failed", "collector", collectorName, "team", t.ID, "error", err)
+		return
+	}
+	for _, raw := range raws {
+		var a installedApp
+		if err := json.Unmarshal(raw, &a); err != nil {
+			continue
+		}
+		hasRSC := len(a.GrantedRSC) > 0
+		grid[appKey{a.TeamsApp.DistributionMethod, strconv.FormatBool(hasRSC)}]++
+		e.LogEvent(appTwin(t, a, hasRSC))
+	}
+}
+
+// collectChannels fetches one team's channels (beta), buckets each into the
+// bounded grid, and emits one m365.team_channel twin per channel. Same 403
+// latching / per-team skip discipline as collectInstalledApps.
+func (c *Collector) collectChannels(ctx context.Context, e telemetry.Emitter, t team, grid map[chanKey]int64, forbidden *bool) {
+	if *forbidden {
+		return
+	}
+	url := c.betaURL + "/teams/" + t.ID + "/channels"
+	raws, err := collectors.GetAllValues(ctx, c.g, url, nil)
+	if err != nil {
+		if isForbidden(err) {
+			*forbidden = true
+			c.logger.Info("skipping channels: Channel.ReadBasic.All not granted", "collector", collectorName)
+			return
+		}
+		c.logger.Warn("teams: channels fetch failed", "collector", collectorName, "team", t.ID, "error", err)
+		return
+	}
+	for _, raw := range raws {
+		var ch channel
+		if err := json.Unmarshal(raw, &ch); err != nil || ch.ID == "" {
+			continue
+		}
+		grid[chanKey{ch.MembershipType, strconv.FormatBool(ch.IsArchived)}]++
+		e.LogEvent(channelTwin(t, ch))
+	}
 }
 
 // fetchDetail gets one team's summary + archived state (the fields /teams omits).
@@ -246,6 +449,40 @@ func emitMembershipGauge(e telemetry.Emitter, membership map[string]int64) {
 		"Tenant-wide Teams membership count by role.", points)
 }
 
+// emitInstalledAppsGauge snapshots installed-app counts by distribution_method ×
+// has_rsc_permissions — both closed, bounded sets (#247).
+func emitInstalledAppsGauge(e telemetry.Emitter, grid map[appKey]int64) {
+	points := make([]telemetry.GaugePoint, 0, len(grid))
+	for k, n := range grid {
+		points = append(points, telemetry.GaugePoint{
+			Value: float64(n),
+			Attrs: telemetry.Attrs{
+				semconv.AttrDistributionMethod: k.distribution,
+				semconv.AttrHasRscPermissions:  k.hasRSC,
+			},
+		})
+	}
+	e.GaugeSnapshot(metricInstalledApps, semconv.UnitDimensionless,
+		"Teams installed apps by distribution method and whether they hold RSC grants.", points)
+}
+
+// emitChannelsGauge snapshots channel counts by membership_type × is_archived —
+// both closed, bounded sets (#247).
+func emitChannelsGauge(e telemetry.Emitter, grid map[chanKey]int64) {
+	points := make([]telemetry.GaugePoint, 0, len(grid))
+	for k, n := range grid {
+		points = append(points, telemetry.GaugePoint{
+			Value: float64(n),
+			Attrs: telemetry.Attrs{
+				semconv.AttrMembershipType: k.membership,
+				semconv.AttrIsArchived:     k.archived,
+			},
+		})
+	}
+	e.GaugeSnapshot(metricChannels, semconv.UnitDimensionless,
+		"Teams channels by membership type and archived state.", points)
+}
+
 // logTwin renders one team as its per-entity log event. An ownerless team is
 // Warn severity — the actionable signal — and every count is a string attribute
 // (Loki structured metadata is string-valued; telemetrytest cannot render an
@@ -269,6 +506,51 @@ func logTwin(t team, det teamDetail) telemetry.Event {
 		body = "OWNERLESS " + body
 	}
 	return telemetry.Event{Name: eventName, Body: body, Severity: sev, Attrs: attrs}
+}
+
+// appTwin renders one installed app as its per-entity log event (#247). The RSC
+// grant list and the app/team identity are per-entity → log twin only. Warn is
+// the actionable signal: a SIDELOADED app (installed outside the tenant
+// catalog/store) OR any non-empty RSC grant (a per-team consent entra.consent
+// cannot see).
+func appTwin(t team, a installedApp, hasRSC bool) telemetry.Event {
+	attrs := telemetry.Attrs{}
+	telemetry.SetStr(attrs, semconv.AttrTeamId, t.ID)
+	telemetry.SetStr(attrs, semconv.AttrTeamDisplayName, t.DisplayName)
+	telemetry.SetStr(attrs, semconv.AttrAppId, a.TeamsApp.ID)
+	telemetry.SetStr(attrs, semconv.AttrExternalId, a.TeamsApp.ExternalID)
+	telemetry.SetStr(attrs, semconv.AttrAppDisplayName, a.TeamsApp.DisplayName)
+	telemetry.SetStr(attrs, semconv.AttrDistributionMethod, a.TeamsApp.DistributionMethod)
+	telemetry.SetStr(attrs, semconv.AttrScope, a.ScopeInfo.Scope)
+	telemetry.SetBool(attrs, semconv.AttrHasRscPermissions, hasRSC)
+	telemetry.SetStrs(attrs, semconv.AttrRscPermissions, a.GrantedRSC)
+
+	sev := telemetry.SeverityInfo
+	body := fmt.Sprintf("app %s in team %s: distribution=%s rsc=%v",
+		a.TeamsApp.DisplayName, t.DisplayName, a.TeamsApp.DistributionMethod, a.GrantedRSC)
+	if a.TeamsApp.DistributionMethod == "sideloaded" || hasRSC {
+		sev = telemetry.SeverityWarn
+		body = "REVIEW " + body
+	}
+	return telemetry.Event{Name: eventNameApp, Body: body, Severity: sev, Attrs: attrs}
+}
+
+// channelTwin renders one channel as its per-entity log event (#247). email and
+// filesFolderWebUrl are per-entity → log twin only, never a metric label.
+func channelTwin(t team, ch channel) telemetry.Event {
+	attrs := telemetry.Attrs{}
+	telemetry.SetStr(attrs, semconv.AttrTeamId, t.ID)
+	telemetry.SetStr(attrs, semconv.AttrTeamDisplayName, t.DisplayName)
+	telemetry.SetStr(attrs, semconv.AttrId, ch.ID)
+	telemetry.SetStr(attrs, semconv.AttrDisplayName, ch.DisplayName)
+	telemetry.SetStr(attrs, semconv.AttrMembershipType, ch.MembershipType)
+	telemetry.SetStr(attrs, semconv.AttrEmailAddress, ch.Email)
+	telemetry.SetStr(attrs, semconv.AttrFilesFolderWebUrl, ch.FilesFolderWebURL)
+	telemetry.SetBool(attrs, semconv.AttrIsArchived, ch.IsArchived)
+
+	body := fmt.Sprintf("channel %s in team %s: membership=%s archived=%v",
+		ch.DisplayName, t.DisplayName, ch.MembershipType, ch.IsArchived)
+	return telemetry.Event{Name: eventNameChannel, Body: body, Severity: telemetry.SeverityInfo, Attrs: attrs}
 }
 
 // isForbidden reports whether err is a Graph 403. The graphclient error carries
