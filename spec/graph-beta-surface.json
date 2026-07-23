@@ -341,6 +341,18 @@
       ]
     },
     {
+      "package": "internal/collectors/purview/dlppolicies",
+      "collectors": [
+        "purview.dlp_policies"
+      ],
+      "operations": [
+        {
+          "path": "/security/dataSecurityAndGovernance/policyFiles",
+          "note": "content is base64 of UTF-16LE XML; v1.0 400s (policyFiles is not a segment there), so this is beta-only"
+        }
+      ]
+    },
+    {
       "package": "internal/collectors/m365/teams",
       "collectors": [
         "m365.teams"

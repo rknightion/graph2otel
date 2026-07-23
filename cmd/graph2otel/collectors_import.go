@@ -114,6 +114,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/teams"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/unifiedaudit"
 	_ "github.com/rknightion/graph2otel/internal/collectors/mdca/discoveryparse"
+	_ "github.com/rknightion/graph2otel/internal/collectors/purview/dlppolicies"
 	_ "github.com/rknightion/graph2otel/internal/collectors/purview/ediscoverycases"
 	_ "github.com/rknightion/graph2otel/internal/collectors/purview/retentionlabels"
 	_ "github.com/rknightion/graph2otel/internal/collectors/purview/sensitivitylabels"

@@ -312,6 +312,11 @@
       "resolution": "model"
     },
     {
+      "path": "/security/dataSecurityAndGovernance/policyFiles",
+      "type": "microsoft.graph.policyFile",
+      "resolution": "model"
+    },
+    {
       "path": "/teams/{id}/channels",
       "type": "microsoft.graph.channel",
       "resolution": "model"
@@ -1943,6 +1948,34 @@
         "company",
         "personal",
         "unknown"
+      ]
+    },
+    "microsoft.graph.policyFile": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "content": "Edm.Binary",
+        "fileType": "microsoft.graph.policyFileType",
+        "status": "microsoft.graph.policyFileStatus",
+        "version": "Edm.String"
+      }
+    },
+    "microsoft.graph.policyFileStatus": {
+      "kind": "EnumType",
+      "members": [
+        "modified",
+        "noContent",
+        "notModified",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.policyFileType": {
+      "kind": "EnumType",
+      "members": [
+        "dataCollectionPolicy",
+        "dlpPolicy",
+        "dlpSensitiveInformationType",
+        "unknownFutureValue"
       ]
     },
     "microsoft.graph.policyPlatformType": {

@@ -554,6 +554,11 @@ var annotations = map[string]Annotation{
 	},
 
 	// ---- Purview — snapshot collectors ----
+	"purview.dlp_policies": {
+		Collects: "DLP policy inventory + enforcement mode (#246): which policies exist, what mode each is in (audit vs Enforce — the \"did someone quietly downgrade enforcement\" signal), which workloads/actions each rule covers, when it last changed. Bounded gauges by enforcement_mode / workload×action / workload×binding_type + a single max-age gauge; log twins per policy (Warn when not Enforce) and per rule (SIT ids + confidence/count band). content is base64 of UTF-16LE XML; the version hash drives a parse-skip so the 76KB decode runs only on change. Emits policy DEFINITION only — a rule condition VALUE (matched content) is never emitted, guarded by test",
+		Source:   "`/beta/security/dataSecurityAndGovernance/policyFiles`",
+		Gating:   "beta/Experimental (opt-in); readable on scopes the poller already holds, no data-plane registration. A 403 is a graceful skip",
+	},
 	"purview.ediscovery_cases": {
 		Collects: "eDiscovery (Premium) case inventory: a bounded count of cases by status, plus a log twin per case (id, display name, custodial description, external id, real created/closed times). Opt-in and default-off — v1.0 GA, but a granted `eDiscovery.Read.All` scope is not enough: the app's service principal must also be registered in the Security & Compliance data plane (see `docs/data-plane-registration.md`), so a default deployment would 401 on every poll. The `0001-01-01` .NET-zero createdDateTime on the auto-created default case is dropped, not emitted as a year-0001 timestamp",
 		Source:   "`/security/cases/ediscoveryCases`",
