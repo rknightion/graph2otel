@@ -1021,3 +1021,98 @@ func TestNameIntervalPermissionsExperimental(t *testing.T) {
 		t.Errorf("RequiredPermissions = %v", got)
 	}
 }
+
+// TestAppHealthApplicationEmitsTwinForEveryRow is the #114 guard for the
+// application-level app-health segment. The allow-list is a METRIC cardinality
+// boundary (app names are unbounded, so intune.uxa.app_crash_count must stay
+// keyed by a fixed small set) — it is NOT a license to throw the rows away.
+// Before this, a row outside the allow-list was `continue`d and vanished, so on
+// a tenant whose only app-health row is LogonUI.exe the collector fetched the
+// data, emitted an empty metric, and discarded 100% of it.
+func TestAppHealthApplicationEmitsTwinForEveryRow(t *testing.T) {
+	// First row is the verbatim live m7kni row (graph2otel-poller 2026-07-23) —
+	// note appDisplayName and appPublisher are EMPTY STRINGS on the wire, and
+	// meanTimeToFailureInMinutes is the int32-max no-failures sentinel.
+	body := `{"value":[
+	  {"id":"337c1207","appName":"LogonUI.exe","appDisplayName":"","appPublisher":"","appHealthScore":100.0,
+	   "appHealthStatus":"TBD","appCrashCount":0,"appHangCount":0,"activeDeviceCount":8,
+	   "appUsageDuration":200,"meanTimeToFailureInMinutes":2147483647},
+	  {"appName":"outlook.exe","appDisplayName":"Microsoft Outlook","appPublisher":"Microsoft Corporation",
+	   "appHealthScore":72.5,"appHealthStatus":"needsAttention","appCrashCount":4,"appHangCount":2,
+	   "activeDeviceCount":3,"appUsageDuration":9001,"meanTimeToFailureInMinutes":120}
+	]}`
+	g := &fakeGraph{bodies: allEndpoints(map[string]string{appHealthURL: body})}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	recs := logsNamed(rec, eventAppHealth)
+	if len(recs) != 2 {
+		t.Fatalf("want a twin for EVERY row (2), got %d — an unlisted app must be twinned, never dropped (#114)", len(recs))
+	}
+
+	byApp := map[string]map[string]string{}
+	for _, r := range recs {
+		byApp[r.Attrs[semconv.AttrAppName]] = r.Attrs
+	}
+
+	// The unlisted app — the whole point. It contributes nothing to the metric
+	// but must still be answerable in logs.
+	logon, ok := byApp["LogonUI.exe"]
+	if !ok {
+		t.Fatalf("the unlisted app produced no twin; got apps %v", byApp)
+	}
+	if logon[semconv.AttrActiveDeviceCount] != "8" || logon[semconv.AttrAppUsageDuration] != "200" {
+		t.Errorf("unlisted-app twin lost its detail: %v", logon)
+	}
+	// int32-max is "no failures observed", not a ~4085-year MTTF.
+	if v, ok := logon[semconv.AttrMeanTimeToFailureMinutes]; ok {
+		t.Errorf("mean_time_to_failure_minutes present as %q; the int32-max sentinel must be omitted", v)
+	}
+	// Empty on the wire, so it must be absent rather than an empty-string attr.
+	if v, ok := logon[semconv.AttrAppDisplayName]; ok {
+		t.Errorf("app_display_name present as %q; it is an empty string on the wire", v)
+	}
+	// "TBD" is an undocumented wire status and buckets like every other.
+	if logon[semconv.AttrHealthState] != healthStateBucketFor("TBD") {
+		t.Errorf("health_state = %q, want the bucketed form of TBD", logon[semconv.AttrHealthState])
+	}
+
+	out := byApp["outlook.exe"]
+	if out[semconv.AttrAppCrashCount] != "4" || out[semconv.AttrAppHangCount] != "2" {
+		t.Errorf("crash/hang counts wrong: %v", out)
+	}
+	if out[semconv.AttrMeanTimeToFailureMinutes] != "120" {
+		t.Errorf("a real MTTF must be kept, got %q", out[semconv.AttrMeanTimeToFailureMinutes])
+	}
+	if out[semconv.AttrAppHealthScore] != "72.5" {
+		t.Errorf("app_health_score = %q, want 72.5", out[semconv.AttrAppHealthScore])
+	}
+	if out[semconv.AttrPublisher] != "Microsoft Corporation" {
+		t.Errorf("publisher missing: %v", out)
+	}
+	// A crashing app is the actionable case.
+	if recsByName(recs, "outlook.exe").SeverityText != "WARN" {
+		t.Errorf("an app with crashes and hangs must be WARN")
+	}
+	if recsByName(recs, "LogonUI.exe").SeverityText == "WARN" {
+		t.Errorf("a clean app must not be WARN")
+	}
+
+	// The metric keeps its allow-list boundary: LogonUI.exe must NOT create a series.
+	for _, p := range rec.MetricPoints(appCrashCountMetric) {
+		if p.Attrs[semconv.AttrAppName] == "LogonUI.exe" {
+			t.Errorf("unlisted app reached the metric — the allow-list is the metric cardinality boundary (#112)")
+		}
+	}
+}
+
+func recsByName(recs []telemetrytest.LogRecord, app string) telemetrytest.LogRecord {
+	for _, r := range recs {
+		if r.Attrs[semconv.AttrAppName] == app {
+			return r
+		}
+	}
+	return telemetrytest.LogRecord{}
+}

@@ -125,6 +125,12 @@ const (
 	eventStartupProcess      = "intune.device_startup_process"
 	eventDeviceAppHealth     = "intune.device_app_health"
 	eventResourcePerformance = "intune.device_resource_performance"
+
+	// eventAppHealth is the APPLICATION-level twin, so it deliberately breaks the
+	// intune.device_* convention above — its entity is an application, not a
+	// device. It still sits outside intune.uxa.*, so it cannot collide with a
+	// metric name.
+	eventAppHealth = "intune.app_health"
 )
 
 // defaultBaseURL / betaBaseURL: the per-device scores, startup histories,
@@ -344,8 +350,21 @@ type appHealthDevicePerformance struct {
 // collector reads
 // (https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-userexperienceanalyticsapphealthapplicationperformance).
 type appHealthPerformance struct {
-	AppName       string `json:"appName"`
-	AppCrashCount int64  `json:"appCrashCount"`
+	AppName        string  `json:"appName"`
+	AppDisplayName string  `json:"appDisplayName"`
+	AppPublisher   string  `json:"appPublisher"`
+	AppCrashCount  int64   `json:"appCrashCount"`
+	AppHangCount   int64   `json:"appHangCount"`
+	AppHealthScore float64 `json:"appHealthScore"`
+	// AppHealthStatus is "TBD" on every observed row — an undocumented wire
+	// value, bucketed like any other rather than "corrected" (#142).
+	AppHealthStatus string `json:"appHealthStatus"`
+	// ActiveDeviceCount disagreed with the per-device sibling on m7kni (8 here
+	// vs 1 row from AppHealthDevicePerformance, live 2026-07-23). Recorded, not
+	// reconciled — they are not two views of one set.
+	ActiveDeviceCount          int64 `json:"activeDeviceCount"`
+	AppUsageDuration           int64 `json:"appUsageDuration"`
+	MeanTimeToFailureInMinutes int64 `json:"meanTimeToFailureInMinutes"`
 }
 
 // appHealthOSVersionPerformance is the subset of the v1.0
@@ -843,6 +862,37 @@ func (c *Collector) collectAppHealth(ctx context.Context, e telemetry.Emitter) e
 			c.logger.Warn("endpoint_analytics: skipping malformed app health row", "collector", collectorName, "error", err)
 			continue
 		}
+		// The twin is emitted for EVERY row, before any allow-list gating. The
+		// allow-list below bounds the METRIC (application names are unbounded, so
+		// a series per app would scale with the tenant, #112) — it is not a
+		// judgement that unlisted apps are uninteresting. Dropping them was a
+		// #114 violation: the collector paid for the fetch and could then answer
+		// "how many crashes" for eight executables and nothing at all for the
+		// rest. On m7kni that meant discarding 100% of the data, the only live
+		// row being LogonUI.exe.
+		state := healthStateBucketFor(a.AppHealthStatus)
+		attrs := telemetry.Attrs{semconv.AttrHealthState: state}
+		telemetry.SetStr(attrs, semconv.AttrAppName, a.AppName)
+		telemetry.SetStr(attrs, semconv.AttrAppDisplayName, a.AppDisplayName)
+		telemetry.SetStr(attrs, semconv.AttrPublisher, a.AppPublisher)
+		attrs[semconv.AttrAppCrashCount] = strconv.FormatInt(a.AppCrashCount, 10)
+		attrs[semconv.AttrAppHangCount] = strconv.FormatInt(a.AppHangCount, 10)
+		attrs[semconv.AttrActiveDeviceCount] = strconv.FormatInt(a.ActiveDeviceCount, 10)
+		attrs[semconv.AttrAppUsageDuration] = strconv.FormatInt(a.AppUsageDuration, 10)
+		if a.AppHealthScore >= 0 {
+			attrs[semconv.AttrAppHealthScore] = strconv.FormatFloat(a.AppHealthScore, 'f', -1, 64)
+		}
+		// int32-max is "no failures observed", not a ~4085-year MTTF (#194).
+		if a.MeanTimeToFailureInMinutes != mttfNoFailuresSentinel {
+			attrs[semconv.AttrMeanTimeToFailureMinutes] = strconv.FormatInt(a.MeanTimeToFailureInMinutes, 10)
+		}
+		e.LogEvent(telemetry.Event{
+			Name:     eventAppHealth,
+			Body:     fmt.Sprintf("app health for %s: crashes=%d hangs=%d devices=%d", orUnknown(a.AppName), a.AppCrashCount, a.AppHangCount, a.ActiveDeviceCount),
+			Severity: severityIf(a.AppCrashCount > 0 || a.AppHangCount > 0),
+			Attrs:    attrs,
+		})
+
 		canonical, ok := allowedApp(a.AppName)
 		if !ok {
 			continue

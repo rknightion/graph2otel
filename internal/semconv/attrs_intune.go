@@ -390,6 +390,17 @@ const (
 	AttrDeviceAppHealthScore     = "device_app_health_score"
 	AttrMeanTimeToFailureMinutes = "mean_time_to_failure_minutes"
 
+	// Per-APPLICATION app-health detail
+	// (userExperienceAnalyticsAppHealthApplicationPerformance). Distinct from the
+	// per-device block above: one row per application across the fleet, so the
+	// app name is the entity. These are twin-only — the application set is
+	// unbounded, which is exactly why intune.uxa.app_crash_count keeps a fixed
+	// allow-list as its metric boundary while every row still gets a log record
+	// (#114; the drop was the bug, the allow-list is not).
+	AttrActiveDeviceCount = "active_device_count"
+	AttrAppHealthScore    = "app_health_score"
+	AttrAppUsageDuration  = "app_usage_duration"
+
 	// Per-device resource detail (userExperienceAnalyticsResourcePerformance).
 	// This segment returns 0 rows on m7kni (it sits under the same Endpoint
 	// Analytics device-count floor), so these key names are derived from the beta

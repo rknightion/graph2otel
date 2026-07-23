@@ -102,6 +102,21 @@
   ],
   "Logs": [
     {
+      "EventName": "intune.app_health",
+      "AttrKeys": [
+        "active_device_count",
+        "app_crash_count",
+        "app_display_name",
+        "app_hang_count",
+        "app_health_score",
+        "app_name",
+        "app_usage_duration",
+        "health_state",
+        "mean_time_to_failure_minutes",
+        "publisher"
+      ]
+    },
+    {
       "EventName": "intune.device_app_health",
       "AttrKeys": [
         "app_crash_count",
