@@ -208,10 +208,12 @@ func liveTenant(t *testing.T) []map[string]any {
 	return recordsFrom(t, liveDiscoveryMailbox, liveUserMailbox, liveUserMailbox2)
 }
 
-// TestCollect_AsksForEveryMailbox is the no-silent-truncation guard. The default
-// page returns ONE mailbox plus an @odata.nextLink and a truncation warning, and
-// internal/exoclient neither follows nor surfaces either — so without
-// ResultSize=Unlimited this collector would silently report a tenant of one.
+// TestCollect_AsksForEveryMailbox is the no-silent-truncation guard. A truncated
+// page's @odata.nextLink cannot be followed (its $skiptoken is bound to backend
+// affinity this client cannot reproduce — live-measured 2026-07-23), so the
+// cmdlet's own parameter is the ONLY way to defeat the page. Without
+// ResultSize=Unlimited a tenant larger than one page silently reports a fraction
+// of its mailboxes.
 func TestCollect_AsksForEveryMailbox(t *testing.T) {
 	exo := &fakeEXO{recs: liveTenant(t)}
 	collectWith(t, exo)

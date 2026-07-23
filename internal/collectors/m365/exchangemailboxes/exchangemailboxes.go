@@ -36,13 +36,21 @@
 //
 // # No silent truncation
 //
-// The default page returns ONE mailbox plus an @odata.nextLink and an
-// @adminapi.warnings string saying results were truncated. internal/exoclient
-// neither follows the link nor surfaces the warning — it returns only the value
-// array — so a collector that did not ask for everything would report a tenant
-// of one and look perfectly healthy. ResultSize=Unlimited is therefore
-// load-bearing, not a tuning knob (live-measured 2026-07-23: with it, both the
-// nextLink and the warning disappear).
+// A truncated page arrives with an @odata.nextLink and an @adminapi.warnings
+// string saying results were cut short, and THE NEXTLINK CANNOT BE FOLLOWED:
+// its $skiptoken is bound to a backend mailbox server that a later POST does not
+// land on, so replaying it answers HTTP 400 "Expired or Invalid pagination
+// request" immediately (live-measured 2026-07-23; see internal/exoclient). The
+// cmdlet's own parameter is the only way to defeat the page, which makes
+// ResultSize=Unlimited load-bearing rather than a tuning knob — without it a
+// tenant larger than one page reports a fraction of its mailboxes and looks
+// perfectly healthy doing it.
+//
+// The size of that default page is UNKNOWN, and deliberately not guessed at
+// here: m7kni has three mailboxes and returns all three unparameterized, so the
+// only measurable fact is that the default is at least 3. (An earlier note in
+// this repo claimed the default was ONE — that was a misreading of a probe that
+// had itself passed -ResultSize 1.)
 //
 // # Wire shapes (live-measured 2026-07-23)
 //

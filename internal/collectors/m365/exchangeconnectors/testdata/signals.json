@@ -1,0 +1,50 @@
+{
+  "Metrics": [
+    {
+      "Name": "m365.exchange.connectors",
+      "Unit": "{connector}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "direction",
+        "enabled"
+      ]
+    },
+    {
+      "Name": "m365.exchange.connectors.without_tls",
+      "Unit": "{connector}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "direction"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.exchange_connector",
+      "AttrKeys": [
+        "cloud_services_mail_enabled",
+        "comment",
+        "connector_source",
+        "connector_type",
+        "direction",
+        "enabled",
+        "enhanced_filtering_skip_last_ip",
+        "enhanced_filtering_test_mode",
+        "id",
+        "identity",
+        "ingest_transport",
+        "is_valid",
+        "name",
+        "require_tls",
+        "restrict_domains_to_certificate",
+        "restrict_domains_to_ip_addresses",
+        "sender_domains",
+        "sender_ip_addresses",
+        "tls_sender_certificate_name",
+        "treat_messages_as_internal",
+        "when_changed",
+        "when_created"
+      ]
+    }
+  ]
+}

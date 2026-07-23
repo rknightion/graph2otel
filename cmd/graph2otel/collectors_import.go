@@ -120,6 +120,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/intune/updates"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/activity"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/exchangeauditconfig"
+	_ "github.com/rknightion/graph2otel/internal/collectors/m365/exchangeconnectors"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/exchangedkim"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/exchangemailboxes"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/exchangeorgconfig"

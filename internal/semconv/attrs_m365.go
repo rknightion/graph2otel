@@ -223,3 +223,41 @@ const (
 	AttrOauth2ClientProfileEnabled       = "oauth2_client_profile_enabled"
 	AttrPublicFoldersEnabled             = "public_folders_enabled"
 )
+
+// Exchange Online mail-flow connector attributes (#253,
+// m365.exchange_connectors). Reused where a key already exists: AttrDirection,
+// AttrConnectorType, AttrEnabled, AttrName, AttrId, AttrIsValid, AttrWhenCreated
+// and AttrWhenChanged.
+//
+// AttrConnectorType (reused, "connector_type") is the WIRE field — OnPremises vs
+// Partner — and is a different axis from the inbound/outbound AttrDirection this
+// collector labels with. The two are deliberately not folded together.
+//
+// The Enhanced Filtering fields (the EF* wire prefix) describe skip-listing for
+// connectors that sit behind a third-party mail gateway: which hops Exchange
+// should look past when it evaluates the true sender. They are spelled out here
+// rather than kept as "ef_*" because a two-letter wire prefix is unreadable in a
+// query written six months later.
+const (
+	AttrAdminDisplayName                 = "admin_display_name"
+	AttrAssociatedAcceptedDomains        = "associated_accepted_domains"
+	AttrClientHostNames                  = "client_host_names"
+	AttrCloudServicesMailEnabled         = "cloud_services_mail_enabled"
+	AttrComment                          = "comment"
+	AttrConnectorSource                  = "connector_source"
+	AttrEnhancedFilteringSkipIps         = "enhanced_filtering_skip_ips"
+	AttrEnhancedFilteringSkipLastIp      = "enhanced_filtering_skip_last_ip"
+	AttrEnhancedFilteringSkipMailGateway = "enhanced_filtering_skip_mail_gateway"
+	AttrEnhancedFilteringTestMode        = "enhanced_filtering_test_mode"
+	AttrEnhancedFilteringUsers           = "enhanced_filtering_users"
+	AttrIdentity                         = "identity"
+	AttrRequireTls                       = "require_tls"
+	AttrRestrictDomainsToCertificate     = "restrict_domains_to_certificate"
+	AttrRestrictDomainsToIpAddresses     = "restrict_domains_to_ip_addresses"
+	AttrScanAndDropRecipients            = "scan_and_drop_recipients"
+	AttrSenderDomains                    = "sender_domains"
+	AttrSenderIpAddresses                = "sender_ip_addresses"
+	AttrTlsSenderCertificateName         = "tls_sender_certificate_name"
+	AttrTreatMessagesAsInternal          = "treat_messages_as_internal"
+	AttrTrustedOrganizations             = "trusted_organizations"
+)
