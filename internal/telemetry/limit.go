@@ -245,9 +245,22 @@ func (l *Limiter) announceClipping(st *metricState, metric, mode string, limit, 
 // significance can be read off the values. Every other instrument arrives one
 // point at a time with no set boundary.
 func (e *limiterEmitter) GaugeSnapshot(name, unit, desc string, points []GaugePoint) {
+	e.gaugeSnapshotFor("", name, unit, desc, points)
+}
+
+// gaugeSnapshotFor applies the same policy and carries the tenant scope (#236)
+// through to the base emitter.
+//
+// The LIMIT is still keyed on the tenant stamped on the points, not on the
+// scope, and that is not an oversight: the stamp is what series identity is made
+// of, and this path is only ever reached with points to read it from (an empty
+// snapshot is len(points) <= limit and returns above). So #235's meaning is
+// untouched — the cap remains per (metric, tenant) — and the scope is carried
+// purely so the base emitter knows which partition to replace.
+func (e *limiterEmitter) gaugeSnapshotFor(tenant, name, unit, desc string, points []GaugePoint) {
 	limit := e.lim.limitFor(name)
 	if limit <= 0 || len(points) <= limit {
-		e.Emitter.GaugeSnapshot(name, unit, desc, points)
+		snapshotFor(e.Emitter, tenant, name, unit, desc, points)
 		return
 	}
 
@@ -265,7 +278,7 @@ func (e *limiterEmitter) GaugeSnapshot(name, unit, desc string, points []GaugePo
 		e.lim.noteClipped(name, "dropped", len(tail))
 		e.lim.announceClipping(st, name, "dropped", limit, len(points))
 	}
-	e.Emitter.GaugeSnapshot(name, unit, desc, kept)
+	snapshotFor(e.Emitter, tenant, name, unit, desc, kept)
 }
 
 // rank splits a snapshot into the series that keep their own identity and the

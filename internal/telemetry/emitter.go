@@ -122,10 +122,26 @@ func (e *otelEmitter) Gauge(name, unit, desc string, value float64, attrs Attrs)
 
 // observableGauge holds the mutable snapshot behind one GaugeSnapshot
 // instrument. The registered observable callback ranges points under mu;
-// GaugeSnapshot replaces points under mu.
+// a snapshot replaces one tenant's entry under mu.
+//
+// The point sets are PARTITIONED BY TENANT (#236). There is exactly one
+// otelEmitter for the process and WithTenant merely decorates it, so state keyed
+// by metric name alone meant the second tenant to poll replaced the first
+// tenant's series for that metric — silently, and looking like flapping data
+// rather than a bug. The instrument itself is still registered exactly once per
+// name (registering Float64ObservableGauge twice for one name is its own
+// problem), so the split lives here, inside the state, and the callback ranges
+// every tenant's set.
+//
+// A single-tenant deploy uses the one "" key throughout — WithTenant("") is a
+// passthrough — so its behavior is unchanged.
 type observableGauge struct {
-	mu     sync.Mutex
-	points []obsPoint
+	mu sync.Mutex
+	// points is one complete snapshot per tenant, keyed by the tenant the
+	// WithTenant decorator passed through. Map iteration order in the callback is
+	// unspecified and does not matter: two tenants' attribute sets differ by
+	// tenant_id, so no two entries observe the same series.
+	points map[string][]obsPoint
 }
 
 type obsPoint struct {
@@ -133,7 +149,47 @@ type obsPoint struct {
 	kvs   []attribute.KeyValue
 }
 
+// tenantSnapshotter is the tenant-scoped form of Emitter.GaugeSnapshot (#236).
+//
+// The tenant cannot be recovered from the points: an EMPTY snapshot is the
+// documented way to clear a metric, and it carries no attributes to read a
+// tenant out of. So the tenant travels as an argument from the one decorator
+// that knows it, and every decorator in this package forwards it.
+//
+// The method is deliberately unexported: the only types that can implement it
+// are the ones in this package, which is exactly the set of decorators the
+// composition root wires together. Anything else — a test double, a wrapper in
+// another package — falls back to plain GaugeSnapshot and gets the historical
+// single-bucket behavior rather than a compile error.
+// TestEveryEmitterDecoratorForwardsTheSnapshotTenant is the gate that keeps the
+// in-package set complete.
+type tenantSnapshotter interface {
+	gaugeSnapshotFor(tenant, name, unit, desc string, points []GaugePoint)
+}
+
+// otelEmitter is the end of the chain — the only implementation that actually
+// partitions state — so its conformance is asserted here rather than by the AST
+// gate, which walks the decorators (the types that EMBED Emitter).
+var _ tenantSnapshotter = (*otelEmitter)(nil)
+
+// snapshotFor forwards a tenant-scoped snapshot to the next emitter in the
+// chain, degrading to the unscoped call for an emitter that does not carry the
+// scope.
+func snapshotFor(e Emitter, tenant, name, unit, desc string, points []GaugePoint) {
+	if ts, ok := e.(tenantSnapshotter); ok {
+		ts.gaugeSnapshotFor(tenant, name, unit, desc, points)
+		return
+	}
+	e.GaugeSnapshot(name, unit, desc, points)
+}
+
+// GaugeSnapshot records an unscoped snapshot: the single-tenant shape, where
+// WithTenant is a passthrough and every snapshot shares the one "" partition.
 func (e *otelEmitter) GaugeSnapshot(name, unit, desc string, points []GaugePoint) {
+	e.gaugeSnapshotFor("", name, unit, desc, points)
+}
+
+func (e *otelEmitter) gaugeSnapshotFor(tenant, name, unit, desc string, points []GaugePoint) {
 	// Resolve every point's attributes outside e.mu / the callback so
 	// collection is never blocked on attribute resolution.
 	resolved := make([]obsPoint, 0, len(points))
@@ -146,7 +202,7 @@ func (e *otelEmitter) GaugeSnapshot(name, unit, desc string, points []GaugePoint
 	e.mu.Lock()
 	og, ok := e.observables[name]
 	if !ok {
-		og = &observableGauge{}
+		og = &observableGauge{points: map[string][]obsPoint{}}
 		e.observables[name] = og
 		// Register the observable gauge once. Its callback reports exactly the
 		// current snapshot; under cumulative temporality an observable gauge uses
@@ -158,8 +214,10 @@ func (e *otelEmitter) GaugeSnapshot(name, unit, desc string, points []GaugePoint
 			metric.WithFloat64Callback(func(_ context.Context, o metric.Float64Observer) error {
 				og.mu.Lock()
 				defer og.mu.Unlock()
-				for i := range og.points {
-					o.Observe(og.points[i].value, metric.WithAttributes(og.points[i].kvs...))
+				for _, pts := range og.points {
+					for i := range pts {
+						o.Observe(pts[i].value, metric.WithAttributes(pts[i].kvs...))
+					}
 				}
 				return nil
 			}))
@@ -169,8 +227,11 @@ func (e *otelEmitter) GaugeSnapshot(name, unit, desc string, points []GaugePoint
 	}
 	e.mu.Unlock()
 
+	// Replace only this tenant's partition. An empty snapshot therefore clears
+	// the snapshotting tenant and leaves every other tenant's series standing,
+	// which is the whole point of carrying the tenant as an argument.
 	og.mu.Lock()
-	og.points = resolved
+	og.points[tenant] = resolved
 	og.mu.Unlock()
 }
 

@@ -80,6 +80,12 @@ type Emitter interface {
 	// does not permanently consume a cardinality-limit slot). The caller owns
 	// producing the full current set each interval; a collector that stops
 	// snapshotting leaves the last set in place until it resumes.
+	//
+	// "Replaces the prior snapshot" is scoped PER TENANT (#236): one emitter
+	// serves every configured tenant, and a snapshot through a WithTenant-wrapped
+	// emitter replaces only that tenant's set, leaving the other tenants' series
+	// standing. A single-tenant deploy — where WithTenant is a passthrough — has
+	// one set, so the rule reads exactly as it always did.
 	GaugeSnapshot(name, unit, desc string, points []GaugePoint)
 	// UpDownCounter adds (or subtracts) to a non-monotonic counter.
 	UpDownCounter(name, unit, desc string, value float64, attrs Attrs)

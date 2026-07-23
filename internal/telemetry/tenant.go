@@ -102,15 +102,29 @@ func (e *tenantEmitter) Gauge(name, unit, desc string, value float64, attrs Attr
 	e.Emitter.Gauge(name, unit, desc, value, e.stamp(attrs))
 }
 
-// GaugeSnapshot stamps every point. The points slice is rebuilt rather than
-// written through: each GaugePoint carries its own Attrs map, so mutating in
-// place would reach into the caller's maps even if the slice itself were copied.
+// GaugeSnapshot stamps every point AND carries this decorator's tenant down the
+// chain as a scope (#236). The stamp alone is not enough: the base emitter
+// replaces an observable gauge's whole point set per call, so without the scope
+// two tenants' snapshots of one metric overwrite each other, and an empty
+// snapshot — the documented way to clear a metric — carries no point to read a
+// tenant from at all.
+//
+// The points slice is rebuilt rather than written through: each GaugePoint
+// carries its own Attrs map, so mutating in place would reach into the caller's
+// maps even if the slice itself were copied.
 func (e *tenantEmitter) GaugeSnapshot(name, unit, desc string, points []GaugePoint) {
+	e.gaugeSnapshotFor(e.tenant, name, unit, desc, points)
+}
+
+// gaugeSnapshotFor passes an already-scoped snapshot through unchanged, for the
+// same reason stamp lets the first stamp win: an outer decorator that has
+// already decided the tenant is not second-guessed here.
+func (e *tenantEmitter) gaugeSnapshotFor(tenant, name, unit, desc string, points []GaugePoint) {
 	stamped := make([]GaugePoint, len(points))
 	for i, p := range points {
 		stamped[i] = GaugePoint{Value: p.Value, Attrs: e.stamp(p.Attrs)}
 	}
-	e.Emitter.GaugeSnapshot(name, unit, desc, stamped)
+	snapshotFor(e.Emitter, tenant, name, unit, desc, stamped)
 }
 
 func (e *tenantEmitter) UpDownCounter(name, unit, desc string, value float64, attrs Attrs) {

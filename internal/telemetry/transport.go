@@ -83,6 +83,16 @@ func WithTransport(e Emitter, t Transport) Emitter {
 	return &transportEmitter{Emitter: e, transport: t}
 }
 
+// gaugeSnapshotFor forwards the tenant scope (#236) untouched. Metrics pass
+// through this decorator unchanged, and the scope has to pass through with them:
+// WithTransport sits BETWEEN WithTenant and the base emitter in the production
+// chain (cmd/graph2otel/tenants.go), so swallowing the scope here would put every
+// tenant's observable gauges back in one partition — the bug, restored, in the
+// one decorator that has nothing to do with tenants.
+func (e *transportEmitter) gaugeSnapshotFor(tenant, name, unit, desc string, points []GaugePoint) {
+	snapshotFor(e.Emitter, tenant, name, unit, desc, points)
+}
+
 // LogEvent stamps the transport and delegates. It copies ev.Attrs rather than
 // writing into it — see WithTransport for why that copy is load-bearing.
 //
