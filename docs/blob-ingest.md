@@ -248,6 +248,19 @@ under-privileged identity **lists blobs happily and 403s only on the read**.
 Receiver` the SDK returns **0 events with no error at all** while the hub reports
 hundreds.)
 
+### The poller CAN read the `microsoft.aadiam` diagnostic settings (control plane)
+
+`live-measured 2026-07-23, #238`: `GET https://management.azure.com/providers/microsoft.aadiam/diagnosticSettings?api-version=2017-04-01`
+(ARM-audience token, the poller's own client-assertion cert) → **200**, setting name `graph2otel`,
+26 categories / 21 enabled. So reading the tenant-level `microsoft.aadiam` diagnostic setting is
+authorized by the poller's **Entra roles**, not by Azure RBAC — it needs no extra grant and does
+NOT violate the identity split. Corrects a #134 comment that claimed reading it "would require a
+different identity". The boundary is narrow and real: `providers/microsoft.intune/diagnosticSettings`
+and the storage account resource itself both 403 `AuthorizationFailed` for the same identity —
+so it is specifically `microsoft.aadiam`, not ARM generally. `diagnosticSettingsCategories` 400s;
+the setting object's own `logs[]` array is the only enumerable list. This makes a diagnostic-settings
+census gate possible (enabled-but-unread containers vs registered blob collectors) — tracked on #238.
+
 ### A closed hour's blob keeps growing — and nothing tells you when it stops
 
 Blobs are partitioned by **event time**, and on enablement Azure backfills history into

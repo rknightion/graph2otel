@@ -330,7 +330,15 @@ tenant `[live-measured 2026-07-18, #171]`, so it is buildable via the blob escap
 below even though Graph never exposes it.
 
 Corrected non-gaps: `NetworkAccessTrafficLogs` has a beta endpoint that names its own
-scope (#130 — out of scope until a GSA tenant exists); Purview sensitivity labels (#126).
+scope (#130); Purview sensitivity labels (#126).
+
+> **#130 deferral has FIRED (`live-measured 2026-07-23, #239`).** The condition was "out of
+> scope until a GSA tenant exists" — a GSA tenant now exists: `GET /beta/networkAccess/tenantStatus`
+> → `200 {"onboardingStatus":"onboarded"}`. GSA POSTURE (tenantStatus, forwardingProfiles,
+> filteringPolicies, the two settings objects) is readable on `Policy.Read.All` today, no grant.
+> GSA TRAFFIC LOGS (`/beta/networkAccess/logs/traffic`) still 403 — needs a `NetworkAccess.Read.All`
+> (or `NetworkAccess-Reports.Read.All`) grant; response shape unmeasured, mapper unwritten until the
+> grant lands. Both pieces tracked on #239.
 
 The escape hatch for blob-only categories is diagnostic settings → Azure Storage →
 `internal/blobpipeline` — see [blob-ingest.md](blob-ingest.md).
