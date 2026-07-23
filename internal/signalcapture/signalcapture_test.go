@@ -221,33 +221,38 @@ func TestBareMetricWithNoAttrKeysIsNotThin(t *testing.T) {
 	}
 }
 
-// TestAllowListBoundedAppNameIsNotAViolation pins the finding that shaped this
+// TestLimiterBoundedAppNameIsNotAViolation pins the finding that shaped this
 // denylist, so nobody "helpfully" re-adds app_name to it.
 //
 // app_name was on the first draft of the list, citing #83 (app_name as a metric
 // label: 1,870 series on a six-device tenant). Run against the tree it flagged
 // intune.detected_apps.device_count and intune.uxa.app_crash_count — and both
-// were CORRECT code. Each bounds app_name with a fixed, package-level allow-list
-// and filters at the emit site, so its series count is a compile-time constant:
-// the bounded aggregate #112 asks for.
+// were CORRECT code, because each bounded app_name at the emit site with a fixed
+// package-level allow-list.
+//
+// #235 retired those allow-lists and the conclusion did not change: what bounds
+// those metrics MOVED to the central cardinality limiter, which keeps the top N
+// by value and folds the tail into app_name="other". The series count is now
+// bounded by configuration rather than by a compile-time list — a stronger
+// footing, since no collector has to remember to implement it.
 //
 // The lesson, and the rule for editing perEntityKeys: a key NAME cannot see
-// boundedness. #83's app_name was the unbounded app catalog; theirs is an
-// allow-list. Same key, opposite cardinality, decided by collector logic this
-// gate cannot observe. Adding a key that a collector can legitimately bound
-// makes the gate cry wolf, and a gate people exempt is worse than no gate.
-func TestAllowListBoundedAppNameIsNotAViolation(t *testing.T) {
+// boundedness. #83's app_name was the unbounded app catalog with nothing
+// capping it; these are ranked and folded. Adding a key the limiter can
+// meaningfully bound makes the gate cry wolf, and a gate people exempt is worse
+// than no gate.
+func TestLimiterBoundedAppNameIsNotAViolation(t *testing.T) {
 	r := telemetrytest.New()
-	// The shape intune.detected_apps and intune.uxa actually emit: app_name is
-	// drawn from a fixed package-level allow-list, not from the tenant's catalog.
+	// The shape intune.detected_apps and intune.uxa actually emit: app_name comes
+	// from the tenant's catalog and is bounded downstream by the limiter.
 	r.Emitter().Gauge("intune.detected_apps.device_count", "{device}", "d", 3,
 		telemetry.Attrs{"app_name": "outlook.exe", "platform": "windows"})
 
 	if v := signalcapture.PerEntityViolations(signalcapture.Union([]*telemetrytest.Recorder{r})); len(v) != 0 {
-		t.Errorf("allow-list-bounded app_name flagged: %+v\n"+
-			"app_name must NOT be in perEntityKeys: intune/detectedapps and "+
-			"intune/endpointanalytics bound it with defaultAllowedApps, making the series "+
-			"count a compile-time constant. See the perEntityKeys doc.", v)
+		t.Errorf("limiter-bounded app_name flagged: %+v\n"+
+			"app_name must NOT be in perEntityKeys: the central cardinality limiter ranks and "+
+			"folds it (#235), so the series count is bounded by cardinality.per_metric_limit. "+
+			"See the perEntityKeys doc.", v)
 	}
 }
 

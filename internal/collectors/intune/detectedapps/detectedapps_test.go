@@ -104,7 +104,20 @@ const liveDetectedAppsPage = `{
   ]
 }`
 
-func TestCollectEmitsDeviceCountForAllowListedAppsOnlyGroupedByPlatform(t *testing.T) {
+// TestCollectEmitsDeviceCountForEveryAppGroupedByPlatform is the shape after
+// #235 retired this collector's allow-list.
+//
+// The list was a standing guess about which eight applications mattered, and on
+// a real tenant it answered "none of them" — the live top-of-catalog capture in
+// this package promotes ZERO series, because nobody's catalog leads with Chrome
+// and Slack. Every other row was counted toward catalog_size and otherwise
+// discarded, so the collector could say how many apps existed and never which.
+//
+// The catalog is genuinely unbounded (one row per app/version/platform ever
+// seen), so it still needs a ceiling — it just gets the central one now, which
+// keeps the top N BY DEVICE COUNT and folds the rest into app_name="other"
+// rather than deciding in advance and dropping the evidence.
+func TestCollectEmitsDeviceCountForEveryAppGroupedByPlatform(t *testing.T) {
 	body := `{"value":[
 	  {"id":"1","displayName":"Google Chrome","version":"120.0","deviceCount":50,"platform":"windows"},
 	  {"id":"2","displayName":"google chrome","version":"121.0","deviceCount":25,"platform":"windows"},
@@ -135,19 +148,19 @@ func TestCollectEmitsDeviceCountForAllowListedAppsOnlyGroupedByPlatform(t *testi
 	if got["Slack/windows"] != 7 {
 		t.Errorf("Slack/windows = %v, want 7", got["Slack/windows"])
 	}
-	// The unlisted app must never appear as a series - that's the whole
-	// cardinality guard.
-	for key := range got {
-		if key == "Totally Unlisted Bespoke App/windows" {
-			t.Errorf("unlisted app leaked into device_count series: %v", got)
-		}
+	// The formerly-unlisted app is the point: it is the biggest install in the
+	// tenant at 9,999 devices, and the allow-list threw it away.
+	if got["Totally Unlisted Bespoke App/windows"] != 9999 {
+		t.Errorf("Totally Unlisted Bespoke App/windows = %v, want 9999 — an app absent from "+
+			"the retired allow-list is exactly the data #235 stopped discarding",
+			got["Totally Unlisted Bespoke App/windows"])
 	}
-	if len(got) != 3 {
-		t.Errorf("want exactly 3 allow-listed buckets, got %d: %v", len(got), got)
+	if len(got) != 4 {
+		t.Errorf("want 4 buckets (every distinct app/platform pair), got %d: %v", len(got), got)
 	}
 }
 
-func TestCollectEmitsCatalogSizeForEveryEntryRegardlessOfAllowList(t *testing.T) {
+func TestCollectEmitsCatalogSizeForEveryEntry(t *testing.T) {
 	body := `{"value":[
 	  {"id":"1","displayName":"Google Chrome","deviceCount":50,"platform":"windows"},
 	  {"id":"2","displayName":"Totally Unlisted Bespoke App","deviceCount":9999,"platform":"windows"},
@@ -174,11 +187,13 @@ func TestCollectEmitsCatalogSizeForEveryEntryRegardlessOfAllowList(t *testing.T)
 
 // TestCollectEmitsLiveCatalogEndToEnd drives the one real capture this package
 // has through the full Collect path into a Recorder, rather than a hand-built
-// success body. It pins two live facts: catalog_size reflects every fetched row
-// (the second page is empty here, so 5), and the live top-of-catalog promotes
-// ZERO device_count series because none of its rows are allow-listed — the
-// steady state on a real tenant, and the reason the allow-list assertions above
-// must stay synthetic.
+// success body.
+//
+// It is also the before/after for #235. This exact capture used to promote ZERO
+// device_count series — every row it contains (7-Zip, AMD Software,
+// 50onPaletteServer) was absent from the allow-list, so the collector reported a
+// catalog size and not one thing in it. Now every row becomes a series, and the
+// central limiter is what bounds them.
 func TestCollectEmitsLiveCatalogEndToEnd(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{
 		listURL: liveDetectedAppsPage,
@@ -203,8 +218,10 @@ func TestCollectEmitsLiveCatalogEndToEnd(t *testing.T) {
 		t.Errorf("catalog_size must carry no labels, got %v", catalog[0].Attrs)
 	}
 
-	if pts := rec.MetricPoints(deviceCountMetric); len(pts) != 0 {
-		t.Errorf("device_count = %+v, want no series (no live top-of-catalog row is allow-listed)", pts)
+	if pts := rec.MetricPoints(deviceCountMetric); len(pts) != 5 {
+		t.Errorf("device_count = %d series, want 5 — one per live catalog row. Zero here was "+
+			"the old allow-list behavior: a collector that could say how many apps the tenant "+
+			"had and never which ones.", len(pts))
 	}
 }
 

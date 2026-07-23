@@ -5,16 +5,20 @@
 // The catalog itself is NOT bounded - Intune records one entry per distinct
 // (app, version, platform) tuple ever observed across every enrolled device,
 // which can run to tens of thousands of rows in a large tenant, and the
-// endpoint accepts no server-side `$filter`. Turning that into per-entity
-// metric labels would be a straight cardinality bomb (CLAUDE.md's central
-// M4 rule), so this collector paginates the catalog client-side but only
-// promotes device counts for a small, package-level ALLOW-LIST of common
-// apps (defaultAllowedApps below) into the device_count series, matched by
-// case-insensitive displayName. Every other catalog row is counted toward
-// catalog_size (a single unlabeled scalar) and otherwise dropped. The
-// allow-list is the cardinality boundary: it is fixed and small by design,
-// not tenant- or config-driven in v1, so the device_count series can never
-// grow with the size of the catalog or the tenant.
+// endpoint accepts no server-side `$filter`. So device_count genuinely needs a
+// ceiling, and it gets the CENTRAL one (#235): telemetry's limiter keeps the top
+// N apps BY DEVICE COUNT and folds the rest into app_name="other", preserving
+// the bounded platform breakdown.
+//
+// It used to get a package-level ALLOW-LIST of eight common applications
+// instead, with every other row counted toward catalog_size and otherwise
+// discarded. That bounded the series correctly and answered the wrong question:
+// the list was a standing guess about what mattered, and on a real tenant the
+// answer was "none of it" — this package's live capture promoted ZERO series,
+// because nobody's catalog leads with Chrome and Slack. The collector could
+// report how many applications existed and never which ones. Ranking by device
+// count keeps whatever the tenant actually runs, without anyone having to
+// predict it.
 //
 // Deliberately deferred: detectedApps/{id}/managedDevices (confirming which
 // specific devices run a given detected app) is an N+1-per-app call chain
@@ -50,26 +54,6 @@ const (
 // endpoint, not beta.
 const defaultBaseURL = "https://graph.microsoft.com/v1.0"
 
-// defaultAllowedApps is the fixed, package-level cardinality boundary: only
-// detectedApp rows whose displayName case-insensitively matches one of these
-// are promoted to the device_count series. A handful of common,
-// security/inventory-relevant cross-platform apps, chosen so the series stays
-// small and bounded regardless of tenant size or catalog growth. Vendors
-// occasionally version-suffix a displayName (e.g. "1Password 8" vs
-// "1Password 7"); an exact-match miss here simply means that variant is
-// counted in catalog_size but not broken out by name - a known v1 limitation,
-// not silently wrong data.
-var defaultAllowedApps = []string{
-	"Google Chrome",
-	"Microsoft Edge",
-	"Mozilla Firefox",
-	"Microsoft Teams",
-	"Zoom",
-	"Slack",
-	"1Password",
-	"Adobe Acrobat Reader DC",
-}
-
 // detectedApp is the subset of the Graph detectedApp resource this collector
 // reads. deviceCount is already a scalar on the object (Microsoft aggregates
 // it per catalog row), so no per-device N+1 traversal is needed to populate
@@ -85,11 +69,6 @@ type Collector struct {
 	g       collectors.GraphClient
 	baseURL string
 	logger  *slog.Logger
-	// allowed maps a lowercased displayName to its canonical (as configured)
-	// label value, so the emitted app_name attribute always reads in the
-	// allow-list's own casing regardless of how the tenant's catalog spelled
-	// it.
-	allowed map[string]string
 }
 
 // New builds the detected-apps collector. A nil logger falls back to the
@@ -98,11 +77,7 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	allowed := make(map[string]string, len(defaultAllowedApps))
-	for _, name := range defaultAllowedApps {
-		allowed[strings.ToLower(name)] = name
-	}
-	return &Collector{g: g, baseURL: defaultBaseURL, logger: logger, allowed: allowed}
+	return &Collector{g: g, baseURL: defaultBaseURL, logger: logger}
 }
 
 // Name implements collector.Collector.
@@ -121,11 +96,14 @@ func (c *Collector) RequiredPermissions() []string {
 	return []string{"DeviceManagementManagedDevices.Read.All"}
 }
 
-// Collect pages the full detectedApps catalog once, emitting a bounded
-// device_count gauge (allow-listed app names only, grouped by platform) and
-// an unlabeled catalog_size scalar covering every row. A 403 (Intune
-// unlicensed/unavailable on the tenant) is skipped-and-logged rather than
-// treated as a failure; any other error is surfaced.
+// Collect pages the full detectedApps catalog once, emitting a device_count
+// gauge per app name and platform plus an unlabeled catalog_size scalar. Rows
+// are summed across VERSIONS — the catalog carries one entry per
+// (app, version, platform), and a version dimension would multiply the series
+// count by a number that grows with patch cadence rather than with anything
+// anyone queries. A 403 (Intune unlicensed/unavailable on the tenant) is
+// skipped-and-logged rather than treated as a failure; any other error is
+// surfaced.
 func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/detectedApps", nil)
 	if err != nil {
@@ -137,8 +115,23 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		return err
 	}
 
-	type bucketKey struct{ appName, platform string }
-	buckets := map[bucketKey]int64{}
+	// Keyed on the LOWERCASED name: Intune's catalog carries casing variants of
+	// one application ("Google Chrome" and "google chrome" are both real rows), so
+	// case-sensitive keys would double the series for no information. The retired
+	// allow-list folded case as a side effect of canonicalizing to its own
+	// spelling; doing it explicitly keeps that behavior without the list.
+	//
+	// The emitted label is the FIRST spelling seen in catalog order, which is
+	// deterministic because the catalog is walked as a slice — picking from a map
+	// would make the label depend on Go's map iteration order and flip between
+	// runs, creating and retiring series for nothing.
+	type bucketKey struct{ appNameLower, platform string }
+	type bucket struct {
+		display string
+		count   int64
+	}
+	buckets := map[bucketKey]*bucket{}
+	var order []bucketKey
 
 	for _, r := range raw {
 		var app detectedApp
@@ -146,23 +139,34 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			c.logger.Warn("detected_apps: skipping unparseable catalog entry", "collector", collectorName, "error", err)
 			continue
 		}
-		canonical, ok := c.allowed[strings.ToLower(strings.TrimSpace(app.DisplayName))]
-		if !ok {
+		name := strings.TrimSpace(app.DisplayName)
+		if name == "" {
+			// An unnamed catalog row cannot be attributed to anything; it still
+			// counts toward catalog_size.
 			continue
 		}
-		key := bucketKey{appName: canonical, platform: orUnknown(app.Platform)}
-		buckets[key] += app.DeviceCount
+		key := bucketKey{appNameLower: strings.ToLower(name), platform: orUnknown(app.Platform)}
+		b, ok := buckets[key]
+		if !ok {
+			b = &bucket{display: name}
+			buckets[key] = b
+			order = append(order, key)
+		}
+		b.count += app.DeviceCount
 	}
 
 	points := make([]telemetry.GaugePoint, 0, len(buckets))
-	for key, count := range buckets {
+	for _, key := range order {
+		b := buckets[key]
 		points = append(points, telemetry.GaugePoint{
-			Value: float64(count),
-			Attrs: telemetry.Attrs{semconv.AttrAppName: key.appName, semconv.AttrPlatform: key.platform},
+			Value: float64(b.count),
+			Attrs: telemetry.Attrs{semconv.AttrAppName: b.display, semconv.AttrPlatform: key.platform},
 		})
 	}
 	e.GaugeSnapshot(deviceCountMetric, "{device}",
-		"Devices reporting an allow-listed detected app installed, by app name and platform.", points)
+		"Devices reporting a detected app installed, by app name and platform, summed across versions. "+
+			"Bounded by the central cardinality limiter: past cardinality.per_metric_limit the top apps "+
+			"by device count are kept and the tail folds into app_name=\"other\".", points)
 
 	e.Gauge(catalogSizeMetric, "{app}",
 		"Total distinct app/version/platform rows in the Intune detectedApps catalog.",

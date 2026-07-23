@@ -176,6 +176,20 @@ a trusted sink and scoping its credentials is the actual control. The rule only 
   that fetches per-entity rows, buckets a count, and discards the rest is a bug: it can
   answer "how many" but never "which one". `telemetry.Emitter` exposes `LogEvent`;
   `entra/risk` is the reference shape (bounded gauge + one log per entity, one fetch).
+- **Bounding a metric is CENTRAL now, not per-collector** (#235). `internal/telemetry`'s
+  limiter caps every metric at `cardinality.per_metric_limit` (5000) and the process at
+  `cardinality.global_limit` (100000), keeping the top series by value and folding the
+  tail into a named `other` bucket — additive metrics get the tail summed, non-additive
+  ones (score/ratio/percent/duration, decided from the UNIT) get it dropped and counted,
+  because a fabricated aggregate is worse than the loss. The OTEL SDK's own cap is
+  disabled; ours supersedes it. **Do not write a new per-collector allow-list** — the two
+  that existed were retired here, and both had discarded 100% of the live data on m7kni
+  while reporting healthy. New units must be classified in `internal/semconv/additive.go`
+  or CI fails.
+- **The limiter is NOT permission to label by entity.** With a 5000 cap on a 50k-user
+  tenant, a UPN label buys an arbitrary 5000 series plus a meaningless bucket, at full
+  cost, answering nothing the log twin does not answer better. The two rules above stand
+  unchanged.
 - **The one content exclusion is SECRETS, not PII, and it is exactly one field:**
   `intune/auditevents` emits the *names* of changed `modifiedProperties` but never their
   old/new *values* (for a credential change, the value IS the credential). **Do not

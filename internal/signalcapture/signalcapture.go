@@ -205,23 +205,28 @@ func sortedKeys(m map[string]struct{}) []string {
 // The first draft of this list included app_name, citing #83 (app_name as a
 // metric label: 1,870 series on a six-device tenant). Run against the tree it
 // immediately flagged intune.detected_apps.device_count and
-// intune.uxa.app_crash_count — and BOTH were wrong. Each bounds app_name with a
-// fixed, package-level allow-list (defaultAllowedApps) and filters at the emit
-// site, so their series count is a compile-time constant. That is precisely the
-// bounded aggregate the rule wants.
+// intune.uxa.app_crash_count — and BOTH were wrong, because each bounded
+// app_name at the emit site with a fixed package-level allow-list. Same key,
+// opposite cardinality, decided by collector logic a key-name check cannot see.
+// `[live-measured 2026-07-17, #140]`
 //
-// #83's app_name was the whole detected-app CATALOG (unbounded); theirs is an
-// allow-list (bounded). Same key, opposite cardinality — decided by the
-// collector's own logic, which a key-name check cannot see. So the gate was
-// wrong, not the collectors, and app_name/app_display_name are deliberately NOT
-// listed here. `[live-measured 2026-07-17, #140]`
+// #235 retired both allow-lists, and app_name still does not belong here. What
+// bounds those metrics moved rather than disappeared: the central cardinality
+// limiter keeps the top N by value and folds the tail into app_name="other", so
+// the series count is bounded by configuration instead of by a compile-time
+// list. The conclusion is unchanged and now rests on a stronger footing — the
+// bound is no longer something each collector has to remember to implement.
 //
 // The bar for an entry is therefore stricter than "is often per-entity": a key
-// belongs here only when a BOUNDED use of it is implausible — nobody allow-lists
-// UPNs or serial numbers. Keys a collector could legitimately bound (app_name,
-// issuer_name: a tenant has a handful of issuing CAs) are excluded, because a
-// false positive here trains people to add exemptions, and an exempted gate is
-// worse than none.
+// belongs here only when a BOUNDED use of it is implausible. A key the limiter
+// can meaningfully rank and fold (app_name by device count, issuer_name: a
+// tenant has a handful of issuing CAs) is excluded, because a false positive
+// trains people to add exemptions, and an exempted gate is worse than none.
+//
+// The keys that ARE listed fail that test on a different axis, and the limiter
+// does not rescue them: with a 5000 cap on a 50,000-user tenant, a UPN-keyed
+// metric buys an arbitrary 5000 series plus a meaningless bucket, at full cost,
+// answering nothing the log twin does not answer better. #112/#114 stand.
 var perEntityKeys = map[string]string{
 	"user_principal_name":    "identifies a user; grows with tenant user count",
 	"user_id":                "identifies a user; grows with tenant user count",

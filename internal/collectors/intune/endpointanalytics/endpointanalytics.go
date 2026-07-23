@@ -202,27 +202,6 @@ func restartCategoryBucketFor(raw string) string {
 	return "other"
 }
 
-// defaultAllowedApps is the fixed, package-level cardinality boundary for
-// intune.uxa.app_crash_count: only appHealthApplicationPerformance rows whose
-// appName (a client executable file name, e.g. "outlook.exe") case-
-// insensitively matches one of these are promoted into the series. Every
-// other row is dropped from this metric (still counted only implicitly, via
-// nothing - there is no catalog-size cross-check here since, unlike
-// detectedApps, there is no single cheap scalar to sum it from without
-// walking the whole page set again).
-var defaultAllowedApps = []string{
-	"outlook.exe",
-	"excel.exe",
-	"winword.exe",
-	"powerpnt.exe",
-	"onenote.exe",
-	"teams.exe",
-	"chrome.exe",
-	"msedge.exe",
-	"firefox.exe",
-	"explorer.exe",
-}
-
 // deviceScore is the subset of the v1.0 userExperienceAnalyticsDeviceScores
 // resource this collector reads
 // (https://learn.microsoft.com/en-us/graph/api/resources/intune-devices-userexperienceanalyticsdevicescores).
@@ -893,17 +872,20 @@ func (c *Collector) collectAppHealth(ctx context.Context, e telemetry.Emitter) e
 			Attrs:    attrs,
 		})
 
-		canonical, ok := allowedApp(a.AppName)
-		if !ok {
+		name := strings.ToLower(strings.TrimSpace(a.AppName))
+		if name == "" {
 			continue
 		}
-		crashes[canonical] += a.AppCrashCount
+		crashes[name] += a.AppCrashCount
 	}
 	points := make([]telemetry.GaugePoint, 0, len(crashes))
 	for app, count := range crashes {
 		points = append(points, telemetry.GaugePoint{Value: float64(count), Attrs: telemetry.Attrs{semconv.AttrAppName: app}})
 	}
-	e.GaugeSnapshot(appCrashCountMetric, "{crash}", "Intune Endpoint Analytics app crash count, for an allow-listed set of common executables.", points)
+	e.GaugeSnapshot(appCrashCountMetric, "{crash}",
+		"Intune Endpoint Analytics app crash count by client executable. Bounded by the central "+
+			"cardinality limiter: past cardinality.per_metric_limit the top executables by crash count "+
+			"are kept and the tail folds into app_name=\"other\".", points)
 	return nil
 }
 
@@ -1224,19 +1206,6 @@ func (c *Collector) collectAppHealthOSVersion(ctx context.Context, e telemetry.E
 	e.GaugeSnapshot(appHealthOSVersionCountMetric, "{device}", "Intune Endpoint Analytics count of devices actively reporting application health, by OS version.", countPoints)
 	e.GaugeSnapshot(appHealthOSVersionMTTFMetric, "min", "Intune Endpoint Analytics application mean time to failure (minutes) per OS version; the int32-max 'no failures' sentinel is excluded.", mttfPoints)
 	return nil
-}
-
-// allowedApp reports whether name (a client executable file name, e.g.
-// "outlook.exe") case-insensitively matches the fixed app-name allow-list,
-// returning the allow-list's own canonical casing.
-func allowedApp(name string) (string, bool) {
-	name = strings.ToLower(strings.TrimSpace(name))
-	for _, allowed := range defaultAllowedApps {
-		if strings.ToLower(allowed) == name {
-			return allowed, true
-		}
-	}
-	return "", false
 }
 
 func orUnknown(s string) string {

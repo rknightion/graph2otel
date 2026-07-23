@@ -622,7 +622,17 @@ func TestEndpointAnalyticsTwinsCarryNoPerEntityMetricLabels(t *testing.T) {
 	}
 }
 
-func TestCollectEmitsAppCrashCountForAllowListedAppsOnly(t *testing.T) {
+// TestCollectEmitsAppCrashCountForEveryExecutable is the shape after #235
+// retired this collector's allow-list.
+//
+// The list named ten Microsoft and browser executables. On m7kni it discarded
+// 100% of the live data, because the one row the tenant produces is LogonUI.exe
+// — and a line-of-business application crashing 9,999 times was, by
+// construction, invisible. The executable set is genuinely unbounded, so the
+// metric still needs a ceiling; it now gets the central limiter's, which keeps
+// the top executables BY CRASH COUNT. Ranking by crashes surfaces exactly what a
+// crash metric is for, which a fixed list can only do by luck.
+func TestCollectEmitsAppCrashCountForEveryExecutable(t *testing.T) {
 	body := `{"value":[
 	  {"appName":"outlook.exe","appCrashCount":5},
 	  {"appName":"OUTLOOK.EXE","appCrashCount":3},
@@ -640,14 +650,22 @@ func TestCollectEmitsAppCrashCountForAllowListedAppsOnly(t *testing.T) {
 	for _, p := range rec.MetricPoints(appCrashCountMetric) {
 		got[p.Attrs["app_name"]] = p.Value
 	}
-	if len(got) != 2 {
-		t.Fatalf("want exactly 2 allow-listed app_name buckets, got %d: %v", len(got), got)
+	if len(got) != 3 {
+		t.Fatalf("want 3 app_name buckets (one per distinct executable), got %d: %v", len(got), got)
 	}
 	if got["outlook.exe"] != 8 {
-		t.Errorf("outlook.exe crash count = %v, want 8 (5+3, case-insensitive match)", got["outlook.exe"])
+		t.Errorf("outlook.exe crash count = %v, want 8 (5+3, folded case-insensitively — "+
+			"Intune emits casing variants of one executable and they are not two apps)", got["outlook.exe"])
 	}
 	if got["chrome.exe"] != 2 {
 		t.Errorf("chrome.exe crash count = %v, want 2", got["chrome.exe"])
+	}
+	// The formerly-unlisted executable is the point: 9,999 crashes, and the
+	// allow-list made it invisible.
+	if got["some-bespoke-line-of-business.exe"] != 9999 {
+		t.Errorf("some-bespoke-line-of-business.exe = %v, want 9999 — the worst-crashing app "+
+			"in the tenant, which the retired allow-list discarded outright",
+			got["some-bespoke-line-of-business.exe"])
 	}
 }
 
