@@ -62,7 +62,6 @@ package quarantine
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
 
@@ -70,6 +69,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 const (
@@ -110,21 +110,55 @@ const (
 	interval = 15 * time.Minute
 )
 
+// The wire assumptions this collector watches at runtime (#233).
+//
+// It shipped without ever seeing a non-empty quarantine — the tenant it was
+// built against held zero messages — so several things below were MEASURED once
+// and are then trusted forever. Each would fail silently: the API keeps
+// answering 200 and the gauge keeps looking plausible. internal/wirecheck turns
+// each one into a counter plus a one-shot WARN naming the offending value.
+var (
+	// knownQuarantineTypes is the QuarantineTypes enum, taken from the API's own
+	// error body rather than documentation: an invalid value returns the
+	// complete member list (live-measured 2026-07-23). This field is a METRIC
+	// LABEL, so a member Microsoft adds later silently creates a new series.
+	knownQuarantineTypes = wirecheck.NewEnum(
+		"Spam", "TransportRule", "Bulk", "Phish", "HighConfPhish", "Malware",
+		"SPOMalware", "DataLossPrevention", "FileTypeBlock", "AdminTriggered", "PPI",
+	)
+	// knownEntityTypes is the EntityType set. Only Email has ever been observed
+	// on this transport, because -EntityType is denied at Security Reader — so a
+	// Teams or SharePointOnline row appearing in the unfiltered result set is
+	// genuinely interesting news, not noise. Also a metric label.
+	knownEntityTypes = wirecheck.NewEnum("Email", "Teams", "SharePointOnline", "File")
+	// knownDirections is the Direction set. A metric label.
+	knownDirections = wirecheck.NewEnum("Inbound", "Outbound")
+)
+
+// ruleHeldOnly names the invariant that ReleaseStatus=NOTRELEASED really does
+// filter server-side. It was verified by complementary counts on one tenant at
+// one moment (RELEASED returned 2, NOTRELEASED returned 0). If it ever stops
+// holding, queue depth silently becomes "everything still in retention" — a
+// number that stays elevated for a month after an incident and looks entirely
+// reasonable while doing so.
+const ruleHeldOnly = "held_only_filter"
+
+// rulePageCap names the invariant that the held set fits inside maxPages. The
+// real PageSize ceiling was never confirmed (the test tenant held 2 messages),
+// so this is the one assumption here that is not even measured once.
+const rulePageCap = "page_cap"
+
 // Collector polls Exchange Online for the messages currently held in
 // quarantine.
 type Collector struct {
-	c      collectors.EXOClient
-	logger *slog.Logger
+	c     collectors.EXOClient
+	watch *wirecheck.Reporter
 }
 
 // New builds the quarantine collector. A nil logger falls back to
 // slog.Default().
 func New(d collectors.EXODeps) *Collector {
-	logger := d.Logger
-	if logger == nil {
-		logger = slog.Default()
-	}
-	return &Collector{c: d.Client, logger: logger}
+	return &Collector{c: d.Client, watch: wirecheck.New(collectorName, d.Logger)}
 }
 
 // Name implements collector.Collector.
@@ -195,6 +229,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			return fmt.Errorf("%s page %d: %w", cmdlet, page, err)
 		}
 		for _, r := range recs {
+			c.checkWireAssumptions(e, r)
 			counts[gaugeKey{
 				quarantineType: str(r, "QuarantineTypes"),
 				direction:      str(r, "Direction"),
@@ -208,8 +243,11 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			break
 		}
 		if page == maxPages {
-			c.logger.Warn("quarantine listing hit the page cap; the gauge undercounts",
-				"collector", collectorName, "max_pages", maxPages, "page_size", pageSize)
+			// Hitting the cap means the gauge UNDERCOUNTS, which is a wrong number
+			// rather than a missing one — so it is an invariant break, not a log line
+			// nobody reads.
+			c.watch.Invariant(e, rulePageCap,
+				fmt.Sprintf("stopped paging at %d pages of %d rows; held_messages is a floor, not a count", maxPages, pageSize))
 		}
 	}
 
@@ -228,6 +266,33 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		"Messages currently held in Microsoft Defender for Office 365 quarantine, by quarantine type, direction and entity type.",
 		points)
 	return nil
+}
+
+// checkWireAssumptions reports anything on this row that contradicts what the
+// collector was built against. It never rejects a record: a surprise in one
+// field is not a reason to lose the message, which would turn cosmetic drift
+// into a hole in the data. See the `var` block above for why each check exists.
+func (c *Collector) checkWireAssumptions(e telemetry.Emitter, r map[string]any) {
+	c.watch.Value(e, semconv.AttrQuarantineType, str(r, "QuarantineTypes"), knownQuarantineTypes)
+	c.watch.Value(e, semconv.AttrEntityType, str(r, "EntityType"), knownEntityTypes)
+	c.watch.Value(e, semconv.AttrDirection, str(r, "Direction"), knownDirections)
+
+	// The collector asked for held messages only. A released row here means the
+	// server-side filter is no longer doing what was measured, and every number
+	// this collector emits is then answering a different question.
+	if released, ok := r["Released"].(bool); ok && released {
+		c.watch.Invariant(e, ruleHeldOnly,
+			"a row with Released=true came back from a ReleaseStatus="+heldOnly+
+				" query — held_messages is no longer queue depth")
+	}
+
+	// Identity is the join key onto defender.email, defender.email_post_delivery
+	// and the m365.unified_audit quarantine records. The message still counts
+	// toward the gauge without it; what is lost is the ability to say WHICH
+	// message, which is invisible unless reported.
+	if networkMessageID(str(r, "Identity")) == "" {
+		c.watch.MissingField(e, semconv.AttrNetworkMessageId)
+	}
 }
 
 // quarantineStrFields maps the row's string columns to their attribute keys.

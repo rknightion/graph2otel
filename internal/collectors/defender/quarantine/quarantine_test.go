@@ -11,6 +11,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // liveRecord is a real Get-QuarantineMessage row captured from the m7kni tenant
@@ -384,5 +385,122 @@ func TestRecordsAreStampedWithTheExchangeOnlineTransport(t *testing.T) {
 	// (#82). It is log-only by design.
 	if _, present := rec.MetricPoints(metricHeld)[0].Attrs[semconv.AttrIngestTransport]; present {
 		t.Error("ingest_transport must not be a metric label — it would change series identity")
+	}
+}
+
+// --- wire-assumption watchdog (#233) -------------------------------------
+//
+// These cover the assumptions this collector was shipped on WITHOUT live
+// confirmation, because the tenant's quarantine was empty at build time. Each
+// one is a thing that would otherwise fail silently: the API keeps returning
+// 200 and the gauge keeps being quietly wrong.
+
+func findings(rec *telemetrytest.Recorder) map[string]float64 {
+	out := map[string]float64{}
+	for _, p := range rec.MetricPoints(wirecheck.MetricUnexpected) {
+		out[p.Attrs[semconv.AttrKind]+"/"+p.Attrs[semconv.AttrField]] += p.Value
+	}
+	return out
+}
+
+// A clean live record must produce NO findings — otherwise the watchdog cries
+// wolf on the steady state and nobody reads it.
+func TestCleanRecordReportsNothingUnexpected(t *testing.T) {
+	r := decode(t, liveRecord)
+	r["Released"] = false
+	r["ReleaseStatus"] = "NOTRELEASED"
+	f := &fakeEXO{pages: [][]map[string]any{{r}}}
+	rec := telemetrytest.New()
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if got := findings(rec); len(got) != 0 {
+		t.Errorf("clean record produced findings %v, want none", got)
+	}
+}
+
+// A new Microsoft enum member on a field used as a METRIC LABEL silently
+// creates a new series. This is the case the counter exists for.
+func TestUnknownEnumValuesAreReported(t *testing.T) {
+	for _, tc := range []struct{ src, field, value string }{
+		{"QuarantineTypes", semconv.AttrQuarantineType, "Sponge"},
+		{"EntityType", semconv.AttrEntityType, "Hologram"},
+		{"Direction", semconv.AttrDirection, "Sideways"},
+	} {
+		t.Run(tc.src, func(t *testing.T) {
+			r := decode(t, liveRecord)
+			r["Released"] = false
+			r["ReleaseStatus"] = "NOTRELEASED"
+			r[tc.src] = tc.value
+			f := &fakeEXO{pages: [][]map[string]any{{r}}}
+			rec := telemetrytest.New()
+			if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+				t.Fatalf("Collect: %v", err)
+			}
+			key := wirecheck.KindUnmappedValue + "/" + tc.field
+			if got := findings(rec)[key]; got != 1 {
+				t.Errorf("findings[%s] = %v, want 1; all=%v", key, got, findings(rec))
+			}
+			// The record must still be emitted. A surprise in one field is not a
+			// reason to lose the message — that turns cosmetic drift into a hole.
+			if got := len(rec.LogRecords()); got != 1 {
+				t.Errorf("emitted %d twins, want 1 — an unexpected value must not drop the record", got)
+			}
+		})
+	}
+}
+
+// The held-only filter is MEASURED, not guaranteed. If ReleaseStatus=NOTRELEASED
+// ever stops filtering, queue depth silently becomes "everything in retention" —
+// a number that would look plausible and be wrong for a month after an incident.
+func TestReleasedRowInHeldOnlyQueryIsReportedAsAnInvariantBreak(t *testing.T) {
+	// The pinned fixture is a HELD record, so the released state is set here
+	// explicitly — this is the row the API must never return for this query.
+	r := decode(t, liveRecord)
+	r["Released"] = true
+	r["ReleaseStatus"] = "RELEASED"
+	f := &fakeEXO{pages: [][]map[string]any{{r}}}
+	rec := telemetrytest.New()
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	key := wirecheck.KindInvariant + "/" + ruleHeldOnly
+	if got := findings(rec)[key]; got != 1 {
+		t.Errorf("findings[%s] = %v, want 1; all=%v", key, got, findings(rec))
+	}
+}
+
+// Identity is the join key onto every other quarantine signal. Losing it is not
+// fatal to the count, but it is invisible without this.
+func TestUnparseableIdentityIsReported(t *testing.T) {
+	for name, identity := range map[string]any{
+		"absent":       nil,
+		"no separator": "86bab6ca-b175-4b84-d76c-08dee7cf55a8",
+		"empty":        "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := decode(t, liveRecord)
+			r["Released"] = false
+			r["ReleaseStatus"] = "NOTRELEASED"
+			if identity == nil {
+				delete(r, "Identity")
+			} else {
+				r["Identity"] = identity
+			}
+			f := &fakeEXO{pages: [][]map[string]any{{r}}}
+			rec := telemetrytest.New()
+			if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+				t.Fatalf("Collect: %v", err)
+			}
+			key := wirecheck.KindMissingField + "/" + semconv.AttrNetworkMessageId
+			if got := findings(rec)[key]; got != 1 {
+				t.Errorf("findings[%s] = %v, want 1; all=%v", key, got, findings(rec))
+			}
+			// Still counted: the message occupies quarantine whether or not we can
+			// name it.
+			if pts := rec.MetricPoints(metricHeld); len(pts) != 1 || pts[0].Value != 1 {
+				t.Errorf("gauge = %v, want one point valued 1", pts)
+			}
+		})
 	}
 }

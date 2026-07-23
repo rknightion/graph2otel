@@ -35,7 +35,10 @@ convention.
   table is the mapping. The per-issue detail (title/impact) is in the
   `m365.service_health_issue` log twin, never a metric label.
 - **`graph2otel.*`** — self-observability: collector success/duration/staleness,
-  export-job health, active series counts, build info. Not tenant domain data.
+  export-job health, active series counts, build info, and
+  [`graph2otel.api.unexpected`](#graph2otelapiunexpected--when-microsoft-changes-something-under-us)
+  (a Microsoft API response that no longer matches what a collector was built
+  against). Not tenant domain data.
 
 For the exhaustive, per-collector metric/log/label reference (every gauge, counter, log
 attribute set, and the Graph API permission scope each collector needs), see
@@ -515,6 +518,57 @@ no failed tasks and this gauge keeps climbing), `mdca.discovery.parse.transactio
 `mdca.discovery.parse.tasks` counter by outcome. Query the log as always with the
 `{service_name="graph2otel"} | event_name="mdca.discovery_parse"` form. See
 [alerts/README.md](../alerts/README.md) doc block 5 for the two rules.
+
+## `graph2otel.api.unexpected` — when Microsoft changes something under us
+
+Almost every load-bearing fact this project relies on was established by **measuring a
+live tenant**, because the documentation was wrong about it. That leaves a standing
+exposure: a measurement is true of one tenant at one moment, and Microsoft can add an enum
+member, rename a field, or change what a filter does whenever it likes. Such a change is
+**silent** — the API keeps answering HTTP 200 and the collector keeps emitting numbers that
+are quietly wrong.
+
+`graph2otel.api.unexpected` is the counter that breaks that silence.
+
+```promql
+sum by (collector, field, kind) (increase(graph2otel_api_unexpected_total[1h])) > 0
+```
+
+Labels are `collector`, `field` and `kind` — every one a string from graph2otel's own
+source, so the series count is fixed by this codebase and cannot grow with tenant size or
+with whatever Microsoft invents. **The offending VALUE is deliberately not a label**; it is
+unbounded by definition, so it goes to a `WARN` log line instead. That is this project's
+own cardinality rule applied to its own telemetry.
+
+`kind` is one of:
+
+| kind | means |
+| --- | --- |
+| `unmapped_value` | a field carried a value outside its known set — usually a new Microsoft enum member. Worst where the field is a **metric label**, because a new value silently creates a new series |
+| `missing_field` | a field whose absence actually costs something (a join key, an event time) was not there |
+| `invariant` | a **measured API guarantee stopped holding** — the highest-value finding, because these are exactly the assumptions taken on trust from a single observation |
+
+**Each distinct finding logs once per process; the counter increments every time.** A
+collector polling every 15 minutes would otherwise log the same surprise forever and train
+you to ignore it. The log tells you *what* it is, the counter tells you it is *still
+happening*. A restart re-logs, which is intentional.
+
+**An unexpected value is never an error.** The record is emitted regardless. Dropping data
+because a field grew a new enum member would turn a cosmetic surprise into a hole.
+
+Non-zero does not mean broken — it means an assumption in that collector needs
+re-checking, and the WARN log names the field and the value. Treat it as a prompt to go and
+measure, then update the known set (and the ledger entry in
+[graph-api-gotchas.md](graph-api-gotchas.md)).
+
+**Currently wired into `defender.quarantine` only.** It shipped without ever observing a
+non-empty quarantine, so it carries more single-measurement assumptions than most: the
+`quarantine_type` / `entity_type` / `direction` enums (all three are metric labels), the
+`held_only_filter` invariant that `ReleaseStatus=NOTRELEASED` really does filter
+server-side, the `page_cap` invariant, and a `network_message_id` that must be recoverable
+from the composite `Identity`. A `held_only_filter` finding is the serious one: it means
+`held_messages.total` has stopped being queue depth. Extending this to the other collectors
+that silently bucket unrecognized values to `"unknown"` is tracked separately.
 
 ## License/beta gating
 

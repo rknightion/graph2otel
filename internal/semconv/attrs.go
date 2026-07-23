@@ -19,6 +19,12 @@ const (
 	// AttrCollector names the collector a scrape.* metric point describes
 	// (e.g. "devices", "auditlogs").
 	AttrCollector = "collector"
+	// AttrField names the wire field a graph2otel.api.unexpected point describes.
+	// Bounded: the value is a field name from graph2otel's own source, never data.
+	AttrField = "field"
+	// AttrKind names the class of a graph2otel.api.unexpected finding — see
+	// internal/wirecheck for the bounded value set.
+	AttrKind = "kind"
 	// AttrTenantID identifies which tenant produced a record. It is on EVERY
 	// signal — self-obs and domain, metrics and logs (#143).
 	//

@@ -7,6 +7,14 @@
         "entity_type",
         "quarantine_type"
       ]
+    },
+    {
+      "Name": "graph2otel.api.unexpected",
+      "AttrKeys": [
+        "collector",
+        "field",
+        "kind"
+      ]
     }
   ],
   "Logs": [
