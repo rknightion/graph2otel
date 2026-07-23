@@ -132,6 +132,28 @@ type Experimental interface {
 	Experimental() bool
 }
 
+// HighVolume is optionally implemented by a collector whose signal is a
+// firehose — one record per message, per request, per transaction — rather than
+// a bounded inventory. Such a collector is OPT-IN on exactly the same mechanism
+// as Experimental: the composition root registers it only when config
+// explicitly enables it, so enabling graph2otel can never silently multiply a
+// deployment's log bill.
+//
+// It is deliberately NOT the Experimental interface, even though the gate is
+// identical. #183 reserved Experimental for genuine Graph BETA surfaces, and
+// conflating the two lies in both directions: it would tell an operator that a
+// GA, schema-stable endpoint is beta, and it would hide the one fact they
+// actually need to decide — that the volume scales with mail traffic, not with
+// tenant size. The skip reason differs for the same reason.
+//
+// A collector implementing this MUST state a measured volume figure in its
+// docs/collectors.md annotation. "High volume" with no number is not something
+// an operator can plan capacity against.
+type HighVolume interface {
+	// HighVolume reports true to mark the collector as firehose/opt-in.
+	HighVolume() bool
+}
+
 // registered accumulates every collector factory. Populated only from
 // subpackage init() functions (single-threaded package initialization), so it
 // needs no synchronization.

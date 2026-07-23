@@ -48,6 +48,24 @@ type WindowDeps struct {
 	// SeenIDs) across restarts, namespaced per (tenant, endpoint). Shared by
 	// both engines (logpipeline and jobpipeline use the same checkpoint.Store).
 	Store *checkpoint.Store
+	// EXO is the tenant's Exchange Online cmdlet client, for the window
+	// collectors whose stream lives on the adminapi transport rather than Graph
+	// (m365.message_trace over Get-MessageTraceV2). It is nil for a tenant with
+	// no exchange_online block, and such a factory must then return a zero
+	// RegisteredWindow rather than a collector that fails every cycle.
+	//
+	// This is a THIRD engine reachable from this one Deps, alongside Fetcher
+	// (logpipeline) and JobClient (jobpipeline), and it follows the same
+	// convention: a collector uses exactly one of the three and ignores the
+	// others. It is a field here rather than an eighth registration path
+	// because collector.WindowCollector is engine-agnostic — it is a [from, to]
+	// contract, not a Graph contract — and internal/collectors/mdca already
+	// proved a non-Graph transport can reuse this path. An eighth path would
+	// buy nothing and would cost collectordoc.Rows a signature change.
+	//
+	// It does NOT belong on EXODeps: that path constructs SnapshotCollectors
+	// and carries no checkpoint Store, and a watermark stream needs one.
+	EXO EXOClient
 	// ExcludeSelf mirrors the tenant's exclude_self flag (#176): when true, a
 	// self-excludable window collector drops records authored by this tenant's own
 	// poller (SelfClientID). Default false — no filtering. Only the

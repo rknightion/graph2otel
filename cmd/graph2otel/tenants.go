@@ -196,8 +196,17 @@ func setupTenant(
 	// both transports with one key. A window collector that is not self-excludable
 	// simply ignores these fields.
 	wExcludeSelf, wClientID := tenantExcludeSelf(cfg, ta.TenantID)
+	// The Exchange Online client is built HERE, once, rather than inside
+	// registerEXOCollectors, because two paths now need it: the EXO snapshot
+	// collectors and the window collectors whose stream lives on that transport
+	// (m365.message_trace). Building it twice would give the tenant two
+	// independent client-side rate limiters over one service — that is, no
+	// effective limit at all — so both paths share this instance. It is nil, and
+	// buildErr is nil, for a tenant with no exchange_online block.
+	exoClient, exoBuildErr := tenantEXOClient(cfg, ta, tlog, emitter)
 	wdeps := collectors.WindowDeps{
 		Graph:        gc,
+		EXO:          exoClient,
 		TenantID:     ta.TenantID,
 		Logger:       tlog,
 		Caps:         caps,
@@ -256,7 +265,7 @@ func setupTenant(
 	// (an app role AND an Entra directory role) that graph2otel cannot detect in
 	// advance and that most tenants will not have, so the switch is
 	// exchange_online.enabled rather than the presence of a URL or token.
-	registerEXOCollectors(cfg, ta, caps, tlog, emitter, registry, skips)
+	registerEXOCollectors(cfg, ta, caps, tlog, exoClient, exoBuildErr, registry, skips)
 
 	// Advanced-hunting collectors (#249) — the SEVENTH registration path. The
 	// DeviceTvm* threat-and-vulnerability-management posture, reached over the
@@ -592,6 +601,34 @@ func registerMDCACollectors(
 	}
 }
 
+// tenantEXOClient builds the tenant's single Exchange Online admin API client,
+// or returns (nil, nil) when the tenant configured no exchange_online block.
+//
+// One client per tenant, shared by both consumers — the EXO snapshot path and
+// WindowDeps.EXO — because the client owns the client-side rate limiter for a
+// transport whose real ceiling is unmeasured (see internal/exoclient). Two
+// clients would mean two limiters and twice the permitted rate.
+//
+// The typed-nil trap is why this returns collectors.EXOClient rather than
+// *exoclient.Client: a nil *Client assigned to the interface makes a non-nil
+// interface value, and every "the tenant has no Exchange Online" check
+// downstream is an interface nil check.
+func tenantEXOClient(
+	cfg *config.Config,
+	ta *auth.TenantAuth,
+	tlog *slog.Logger,
+	emitter telemetry.Emitter,
+) (collectors.EXOClient, error) {
+	if !tenantEXOConfig(cfg, ta.TenantID).Enabled {
+		return nil, nil
+	}
+	client, err := exoclient.NewClient(ta, exoclient.Options{Emitter: emitter, Logger: tlog})
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
+}
+
 // registerEXOCollectors wires the tenant's Exchange Online collectors (#233),
 // the sixth registration path.
 //
@@ -611,7 +648,8 @@ func registerEXOCollectors(
 	ta *auth.TenantAuth,
 	caps license.Capabilities,
 	tlog *slog.Logger,
-	emitter telemetry.Emitter,
+	client collectors.EXOClient,
+	buildErr error,
 	registry *collector.Registry,
 	skips map[admin.SkipKey]string,
 ) {
@@ -619,10 +657,9 @@ func registerEXOCollectors(
 		return // opt-out: no exchange_online block, nothing to register or skip.
 	}
 
-	client, err := exoclient.NewClient(ta, exoclient.Options{Emitter: emitter})
-	if err != nil {
-		tlog.Error("exchange online disabled: building the client failed", "error", err)
-		reason := "exchange online unavailable: " + err.Error()
+	if buildErr != nil {
+		tlog.Error("exchange online disabled: building the client failed", "error", buildErr)
+		reason := "exchange online unavailable: " + buildErr.Error()
 		for _, ef := range collectors.EXOAll() {
 			c := ef(collectors.EXODeps{TenantID: ta.TenantID, Logger: tlog})
 			skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] = reason
@@ -850,6 +887,12 @@ func gateCollector(
 		!cfg.CollectorExplicitlyEnabled(ta.TenantID, c.Name()) {
 		tlog.Info("skipping experimental collector (opt-in)", "collector", c.Name())
 		skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] = "beta; enable explicitly to opt in"
+		return 0, false
+	}
+	if hv, ok := c.(collectors.HighVolume); ok && hv.HighVolume() &&
+		!cfg.CollectorExplicitlyEnabled(ta.TenantID, c.Name()) {
+		tlog.Info("skipping high-volume collector (opt-in)", "collector", c.Name())
+		skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] = "high volume; enable explicitly to opt in"
 		return 0, false
 	}
 	return interval, true
