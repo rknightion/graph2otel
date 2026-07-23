@@ -1,0 +1,67 @@
+{
+  "Metrics": [
+    {
+      "Name": "defender.allow_block_list.entries",
+      "Unit": "{entry}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "action",
+        "list_subtype",
+        "list_type"
+      ]
+    },
+    {
+      "Name": "defender.allow_block_list.expiring_soon",
+      "Unit": "{entry}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "action",
+        "list_type"
+      ]
+    },
+    {
+      "Name": "defender.allow_block_list.non_expiring_allow",
+      "Unit": "{entry}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "list_type"
+      ]
+    },
+    {
+      "Name": "defender.allow_block_list.spoof_entries",
+      "Unit": "{entry}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "action",
+        "spoof_type"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "defender.allow_block_list",
+      "AttrKeys": [
+        "action",
+        "created_date_time",
+        "entry_value",
+        "entry_value_hash",
+        "expiration_date_time",
+        "expiry_bucket",
+        "id",
+        "ingest_transport",
+        "last_modified_date_time",
+        "list_subtype",
+        "list_type",
+        "modified_by",
+        "notes",
+        "object_state",
+        "remove_after_days",
+        "sending_infrastructure",
+        "spoof_type",
+        "spoofed_user",
+        "submission_id",
+        "sys_managed"
+      ]
+    }
+  ]
+}

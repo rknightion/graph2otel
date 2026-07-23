@@ -476,3 +476,30 @@ const (
 	AttrPermissionValues      = "permission_values"
 	AttrPermissionsCount      = "permissions_count"
 )
+
+// Tenant Allow/Block List attributes (#250) — defender.allow_block_list, the
+// standing-holes-past-mail-security collector reached over the Exchange Online
+// admin API (EXO registration path). Reused where a key already exists:
+// AttrAction (above), AttrId and AttrExpirationDateTime and AttrExpiryBucket
+// (shared), AttrCreatedDateTime (entra), AttrLastModifiedDateTime (m365). Only
+// list_type, list_subtype and spoof_type are ever metric labels — all three are
+// bounded value sets fixed by the API, not by tenant size. Every other key below
+// is per-entry data and appears on the log twin only (#112). Every value is the
+// snake_case of a column read verbatim off a live record.
+const (
+	AttrEntryError            = "entry_error"
+	AttrEntryValue            = "entry_value"
+	AttrEntryValueHash        = "entry_value_hash"
+	AttrLastUsedDate          = "last_used_date"
+	AttrListSubtype           = "list_subtype"
+	AttrListType              = "list_type"
+	AttrModifiedBy            = "modified_by"
+	AttrNotes                 = "notes"
+	AttrObjectState           = "object_state"
+	AttrRemoveAfterDays       = "remove_after_days"
+	AttrSendingInfrastructure = "sending_infrastructure"
+	AttrSpoofedUser           = "spoofed_user"
+	AttrSpoofType             = "spoof_type"
+	AttrSubmissionId          = "submission_id"
+	AttrSysManaged            = "sys_managed"
+)

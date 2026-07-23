@@ -7,6 +7,7 @@ package main
 import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/alertevidence"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/alertinfo"
+	_ "github.com/rknightion/graph2otel/internal/collectors/defender/allowblocklist"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/behaviorentities"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/behaviorinfo"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/cloudapp"
