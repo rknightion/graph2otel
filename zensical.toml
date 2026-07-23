@@ -35,6 +35,7 @@ copyright = """<a href=\"https://m7kni.io\" target=\"_blank\" rel=\"noopener\">m
 
 [project.theme]
 language = "en"
+custom_dir = "docs/overrides"
 variant = "modern"
 features = [
   "navigation.instant",
@@ -221,6 +222,8 @@ types = [
 ]
 
 [project.extra]
+social_image = "assets/social-card.png"
+social_image_alt = "graph2otel social preview card"
 twitter_site = "@rknightion"
 twitter_creator = "@rknightion"
 theme_color = "#2563eb"
