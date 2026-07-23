@@ -101,6 +101,11 @@ var annotations = map[string]Annotation{
 		Source:   "`/directoryRoles`, `/roleManagement/directory/roleAssignmentScheduleInstances`, `.../roleEligibilityScheduleInstances`",
 		Gating:   "PIM half only needs `entra_p2`, checked inside Collect(): the standing-membership half runs on every tier, and without P2 the PIM assignment counts are skipped rather than zero-emitted",
 	},
+	"entra.pim_role_policies": {
+		Collects: "PIM role-activation policy requirements (#242) — what it takes to activate a role, the class of misconfiguration entra.roles cannot see. Bounded gauge counts policies by (requirement ∈ mfa_on_activation/approval_required/justification_required/auth_context_required/activation_expiry_required/eligibility_expiry_required, enabled, caller ∈ end_user/admin); one log twin per policy (role GUID joined from the policy assignments, enabled-rule list, approval + durations) that Warns when activation needs neither MFA nor approval",
+		Source:   "`/policies/roleManagementPolicies?$expand=rules`, `/policies/roleManagementPolicyAssignments` (directory scope)",
+		Gating:   "Entra ID P2 (PIM) — the PIM half of `entra.roles` is already live on this tenant. Runs on every tier; a 403 where PIM is absent is a graceful skip. The role display name is not resolved (GUID join key only)",
+	},
 	"entra.secure_score": {
 		Collects: "Latest secure score with per-control state (score by category, peer-average benchmarks) and the control-profile catalog, plus a log twin per control and per profile carrying the remediation worklist — actionUrl, tier, threats — that the counts collapse away (#243). Microsoft publishes at most daily, hence the hourly poll",
 		Source:   "`/security/secureScores`, `/security/secureScoreControlProfiles`",

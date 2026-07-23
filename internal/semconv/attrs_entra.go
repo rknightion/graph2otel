@@ -199,6 +199,22 @@ const (
 	AttrPermissionGrantPolicies     = "permission_grant_policies"
 	AttrAppPasswordCredsRestricted  = "app_password_credentials_restricted"
 
+	// entra.pim_role_policy (#242): PIM role-activation policy requirements.
+	AttrRoleDefinitionId          = "role_definition_id"
+	AttrRequirement               = "requirement"
+	AttrCaller                    = "caller"
+	AttrIsOrganizationDefault     = "is_organization_default"
+	AttrApprovalRequired          = "approval_required"
+	AttrApprovalStageTimeoutDays  = "approval_stage_timeout_days"
+	AttrActivationEnabledRules    = "activation_enabled_rules"
+	AttrActivationMaxDuration     = "activation_max_duration"
+	AttrAssignmentExpiryRequired  = "assignment_expiry_required"
+	AttrAssignmentMaxDuration     = "assignment_max_duration"
+	AttrEligibilityExpiryRequired = "eligibility_expiry_required"
+	AttrEligibilityMaxDuration    = "eligibility_max_duration"
+	AttrAuthContextEnabled        = "auth_context_enabled"
+	AttrAuthContextClaim          = "auth_context_claim"
+
 	AttrControlName          = "control_name"
 	AttrScore                = "score"
 	AttrScoreInPercentage    = "score_in_percentage"

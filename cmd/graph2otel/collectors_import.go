@@ -43,6 +43,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/licensing"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/mfaregistration"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/organization"
+	_ "github.com/rknightion/graph2otel/internal/collectors/entra/pimrolepolicies"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/provisioning"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/recommendations"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/risk"

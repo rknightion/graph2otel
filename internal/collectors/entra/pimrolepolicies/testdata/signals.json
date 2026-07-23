@@ -1,0 +1,35 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.pim.role_policy.requirement",
+      "Unit": "{policy}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "caller",
+        "enabled",
+        "requirement"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "entra.pim_role_policy",
+      "AttrKeys": [
+        "activation_enabled_rules",
+        "activation_max_duration",
+        "approval_required",
+        "approval_stage_timeout_days",
+        "assignment_expiry_required",
+        "assignment_max_duration",
+        "auth_context_claim",
+        "auth_context_enabled",
+        "eligibility_expiry_required",
+        "eligibility_max_duration",
+        "is_organization_default",
+        "last_modified_date_time",
+        "policy_id",
+        "role_definition_id"
+      ]
+    }
+  ]
+}
