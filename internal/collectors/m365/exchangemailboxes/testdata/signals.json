@@ -1,0 +1,64 @@
+{
+  "Metrics": [
+    {
+      "Name": "m365.exchange.mailboxes",
+      "Unit": "{mailbox}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "audit_enabled",
+        "forwarding_configured",
+        "recipient_type_details"
+      ]
+    },
+    {
+      "Name": "m365.exchange.mailboxes.setting_enabled",
+      "Unit": "{mailbox}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "setting"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.exchange_mailbox",
+      "AttrKeys": [
+        "account_disabled",
+        "archive_guid",
+        "archive_state",
+        "archive_status",
+        "audit_enabled",
+        "audit_log_age_limit",
+        "compliance_tag_hold_applied",
+        "deliver_to_mailbox_and_forward",
+        "display_name",
+        "email_addresses",
+        "exchange_guid",
+        "external_directory_object_id",
+        "hidden_from_address_lists",
+        "id",
+        "ingest_transport",
+        "is_dir_synced",
+        "is_inactive_mailbox",
+        "is_mailbox_enabled",
+        "is_resource",
+        "is_shared",
+        "issue_warning_quota",
+        "litigation_hold_duration",
+        "litigation_hold_enabled",
+        "mailbox_plan",
+        "message_copy_for_send_on_behalf_enabled",
+        "message_copy_for_sent_as_enabled",
+        "primary_smtp_address",
+        "prohibit_send_quota",
+        "prohibit_send_receive_quota",
+        "recipient_type_details",
+        "retain_deleted_items_for",
+        "retention_hold_enabled",
+        "single_item_recovery_enabled",
+        "user_principal_name",
+        "when_mailbox_created"
+      ]
+    }
+  ]
+}

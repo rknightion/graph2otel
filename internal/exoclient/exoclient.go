@@ -11,13 +11,27 @@
 //   - Different audience. Tokens are issued for
 //     https://outlook.office365.com/.default, NOT Graph's. A Graph token is
 //     rejected. Only the scope differs, so this needs no new auth model.
+//
 //   - Different request shape. This is not a paged REST GET. Every call is one
 //     POST to a single fixed URL, carrying a CmdletInput envelope that names the
 //     cmdlet and its parameters; results come back in a flat "value" array. There
-//     is no @odata.nextLink, no $filter, no $top — paging and filtering are
-//     cmdlet parameters, not URL parameters.
+//     is no $filter and no $top — paging and filtering are cmdlet parameters,
+//     not URL parameters.
+//
+//     CAUTION, and this client does NOT handle it: a row-returning cmdlet CAN
+//     come back truncated, carrying an "@odata.nextLink" and an
+//     "@adminapi.warnings" string saying so (live-measured 2026-07-23 on
+//     Get-Mailbox, whose default page is ONE row). Invoke returns only the value
+//     array — it neither follows the link nor surfaces the warning — so a
+//     collector over such a cmdlet MUST defeat the page with the cmdlet's own
+//     parameter (Get-Mailbox: -ResultSize Unlimited) or it will silently report
+//     a fraction of the tenant and look perfectly healthy. See
+//     internal/collectors/m365/exchangemailboxes. Surfacing truncation through
+//     this seam is unbuilt.
+//
 //   - Different authorization model — see below; this is the single most
 //     confusing thing about the transport.
+//
 //   - Different failure vocabulary. The HTTP status does not discriminate
 //     anything (nearly every failure is 400 or 403) and the useful text is buried
 //     several levels inside the error envelope. See errors.go.

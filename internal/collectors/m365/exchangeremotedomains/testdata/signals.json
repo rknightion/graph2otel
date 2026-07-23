@@ -1,0 +1,44 @@
+{
+  "Metrics": [
+    {
+      "Name": "m365.exchange.remote_domains",
+      "Unit": "{domain}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "auto_forward_enabled"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.exchange_remote_domain",
+      "AttrKeys": [
+        "allowed_oof_type",
+        "auto_forward_enabled",
+        "auto_reply_enabled",
+        "character_set",
+        "content_type",
+        "delivery_report_enabled",
+        "display_sender_name",
+        "domain",
+        "id",
+        "ingest_transport",
+        "is_internal",
+        "is_valid",
+        "line_wrap_size",
+        "meeting_forward_notification_enabled",
+        "name",
+        "ndr_diagnostic_info_enabled",
+        "ndr_enabled",
+        "non_mime_character_set",
+        "target_delivery_domain",
+        "tnef_enabled",
+        "trusted_mail_inbound_enabled",
+        "trusted_mail_outbound_enabled",
+        "use_simple_display_name",
+        "when_changed",
+        "when_created"
+      ]
+    }
+  ]
+}

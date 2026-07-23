@@ -1,0 +1,54 @@
+{
+  "Metrics": [
+    {
+      "Name": "m365.exchange.transport_rules",
+      "Unit": "{rule}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "rule_mode",
+        "state"
+      ]
+    },
+    {
+      "Name": "m365.exchange.transport_rules.redirecting",
+      "Unit": "{rule}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "state"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.exchange_transport_rule",
+      "AttrKeys": [
+        "action_types",
+        "apply_rights_protection_template",
+        "blind_copy_to",
+        "condition_types",
+        "created_by",
+        "delete_message",
+        "description",
+        "from_scope",
+        "id",
+        "ingest_transport",
+        "is_valid",
+        "last_modified_by",
+        "manually_modified",
+        "name",
+        "prepend_subject",
+        "priority",
+        "quarantine",
+        "redirect_message_to",
+        "redirects_mail",
+        "rule_error_action",
+        "rule_mode",
+        "sender_address_location",
+        "set_audit_severity",
+        "state",
+        "stop_rule_processing",
+        "when_changed"
+      ]
+    }
+  ]
+}

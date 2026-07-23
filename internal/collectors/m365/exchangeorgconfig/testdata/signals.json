@@ -1,0 +1,31 @@
+{
+  "Metrics": [
+    {
+      "Name": "m365.exchange.org_config.setting_enabled",
+      "Unit": "{setting}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "setting"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.exchange_org_config",
+      "AttrKeys": [
+        "activity_based_authentication_timeout_interval",
+        "audit_disabled",
+        "customer_lockbox_enabled",
+        "display_name",
+        "ews_enabled",
+        "id",
+        "ingest_transport",
+        "is_dehydrated",
+        "is_mixed_mode",
+        "name",
+        "oauth2_client_profile_enabled",
+        "public_folders_enabled"
+      ]
+    }
+  ]
+}
