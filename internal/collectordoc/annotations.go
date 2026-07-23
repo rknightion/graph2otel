@@ -101,6 +101,11 @@ var annotations = map[string]Annotation{
 		Source:   "`/directoryRoles`, `/roleManagement/directory/roleAssignmentScheduleInstances`, `.../roleEligibilityScheduleInstances`",
 		Gating:   "PIM half only needs `entra_p2`, checked inside Collect(): the standing-membership half runs on every tier, and without P2 the PIM assignment counts are skipped rather than zero-emitted",
 	},
+	"entra.app_ownership": {
+		Collects: "Application/service-principal ownership and federated identity credentials (#244). Bounded gauges: entra.application.ownership{has_owner, sign_in_audience}, entra.service_principal.ownership{has_owner, service_principal_type} (21 of 27 apps ownerless on m7kni — an ownerless app is one nobody can be asked \"is this still needed?\"), and entra.application.federated_credentials{issuer_host}. Log twins: entra.application (Warn on zero owners) and entra.federated_identity_credential (issuer/subject — the trust edge entra.credential_expiry cannot see, because a federated credential has no expiry; always Warn). Owner-UPN detail and the FIC record shape are docs-only until a tenant with an owner or a FIC exercises them (m7kni has neither)",
+		Source:   "`/applications?$expand=owners`, `/servicePrincipals?$expand=owners` (v1.0), `/beta/applications?$expand=federatedIdentityCredentials`",
+		Gating:   "runs on every tier; beta only for the FIC $expand (Graph allows one $expand per query, so FIC is a separate fetch from owners), not marked Experimental so the v1.0 ownership signal is not hidden. No license requirement",
+	},
 	"entra.pim_role_policies": {
 		Collects: "PIM role-activation policy requirements (#242) — what it takes to activate a role, the class of misconfiguration entra.roles cannot see. Bounded gauge counts policies by (requirement ∈ mfa_on_activation/approval_required/justification_required/auth_context_required/activation_expiry_required/eligibility_expiry_required, enabled, caller ∈ end_user/admin); one log twin per policy (role GUID joined from the policy assignments, enabled-rule list, approval + durations) that Warns when activation needs neither MFA nor approval",
 		Source:   "`/policies/roleManagementPolicies?$expand=rules`, `/policies/roleManagementPolicyAssignments` (directory scope)",

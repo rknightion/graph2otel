@@ -2,6 +2,11 @@
   "source": "https://graph.microsoft.com/beta/$metadata",
   "operations": [
     {
+      "path": "/applications",
+      "type": "microsoft.graph.application",
+      "resolution": "model"
+    },
+    {
       "path": "/auditLogs/signIns",
       "type": "microsoft.graph.signIn",
       "resolution": "model"
@@ -404,6 +409,16 @@
         "parentAppId": "Edm.String"
       }
     },
+    "microsoft.graph.apiApplication": {
+      "kind": "ComplexType",
+      "properties": {
+        "acceptMappedClaims": "Edm.Boolean",
+        "knownClientApplications": "Collection(Edm.Guid)",
+        "oauth2PermissionScopes": "Collection(microsoft.graph.permissionScope)",
+        "preAuthorizedApplications": "Collection(microsoft.graph.preAuthorizedApplication)",
+        "requestedAccessTokenVersion": "Edm.Int32"
+      }
+    },
     "microsoft.graph.appCredentialSignInActivity": {
       "kind": "EntityType",
       "base_type": "microsoft.graph.entity",
@@ -419,6 +434,78 @@
         "resourceId": "Edm.String",
         "servicePrincipalObjectId": "Edm.String",
         "signInActivity": "microsoft.graph.signInActivity"
+      }
+    },
+    "microsoft.graph.appRole": {
+      "kind": "ComplexType",
+      "properties": {
+        "allowedMemberTypes": "Collection(Edm.String)",
+        "description": "Edm.String",
+        "displayName": "Edm.String",
+        "id": "Edm.Guid",
+        "isEnabled": "Edm.Boolean",
+        "origin": "Edm.String",
+        "value": "Edm.String"
+      }
+    },
+    "microsoft.graph.application": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.directoryObject",
+      "properties": {
+        "api": "microsoft.graph.apiApplication",
+        "appId": "Edm.String",
+        "appRoles": "Collection(microsoft.graph.appRole)",
+        "authenticationBehaviors": "microsoft.graph.authenticationBehaviors",
+        "certification": "microsoft.graph.certification",
+        "createdByAppId": "Edm.String",
+        "createdDateTime": "Edm.DateTimeOffset",
+        "defaultRedirectUri": "Edm.String",
+        "description": "Edm.String",
+        "disabledByMicrosoftStatus": "Edm.String",
+        "displayName": "Edm.String",
+        "groupMembershipClaims": "Edm.String",
+        "identifierUris": "Collection(Edm.String)",
+        "info": "microsoft.graph.informationalUrl",
+        "isDeviceOnlyAuthSupported": "Edm.Boolean",
+        "isDisabled": "Edm.Boolean",
+        "isFallbackPublicClient": "Edm.Boolean",
+        "keyCredentials": "Collection(microsoft.graph.keyCredential)",
+        "logo": "Edm.Stream",
+        "managerApplications": "Collection(Edm.Guid)",
+        "nativeAuthenticationApisEnabled": "microsoft.graph.nativeAuthenticationApisEnabled",
+        "notes": "Edm.String",
+        "onPremisesPublishing": "microsoft.graph.onPremisesPublishing",
+        "optionalClaims": "microsoft.graph.optionalClaims",
+        "parentalControlSettings": "microsoft.graph.parentalControlSettings",
+        "passwordCredentials": "Collection(microsoft.graph.passwordCredential)",
+        "publicClient": "microsoft.graph.publicClientApplication",
+        "publisherDomain": "Edm.String",
+        "requestSignatureVerification": "microsoft.graph.requestSignatureVerification",
+        "requiredResourceAccess": "Collection(microsoft.graph.requiredResourceAccess)",
+        "samlMetadataUrl": "Edm.String",
+        "serviceManagementReference": "Edm.String",
+        "servicePrincipalLockConfiguration": "microsoft.graph.servicePrincipalLockConfiguration",
+        "signInAudience": "Edm.String",
+        "signInAudienceRestrictions": "microsoft.graph.signInAudienceRestrictionsBase",
+        "spa": "microsoft.graph.spaApplication",
+        "tags": "Collection(Edm.String)",
+        "tokenEncryptionKeyId": "Edm.Guid",
+        "uniqueName": "Edm.String",
+        "verifiedPublisher": "microsoft.graph.verifiedPublisher",
+        "web": "microsoft.graph.webApplication",
+        "windows": "microsoft.graph.windowsApplication"
+      },
+      "navigation_properties": {
+        "appManagementPolicies": "Collection(microsoft.graph.appManagementPolicy)",
+        "connectorGroup": "microsoft.graph.connectorGroup",
+        "createdOnBehalfOf": "microsoft.graph.directoryObject",
+        "extensionProperties": "Collection(microsoft.graph.extensionProperty)",
+        "federatedIdentityCredentials": "Collection(microsoft.graph.federatedIdentityCredential)",
+        "homeRealmDiscoveryPolicies": "Collection(microsoft.graph.homeRealmDiscoveryPolicy)",
+        "owners": "Collection(microsoft.graph.directoryObject)",
+        "synchronization": "microsoft.graph.synchronization",
+        "tokenIssuancePolicies": "Collection(microsoft.graph.tokenIssuancePolicy)",
+        "tokenLifetimePolicies": "Collection(microsoft.graph.tokenLifetimePolicy)"
       }
     },
     "microsoft.graph.applicationKeyOrigin": {
@@ -485,6 +572,14 @@
         "authenticationEvaluation": "microsoft.graph.authenticationAppEvaluation",
         "policyName": "Edm.String",
         "status": "microsoft.graph.authenticationAppPolicyStatus"
+      }
+    },
+    "microsoft.graph.authenticationBehaviors": {
+      "kind": "ComplexType",
+      "properties": {
+        "blockAzureADGraphAccess": "Edm.Boolean",
+        "removeUnverifiedEmailClaim": "Edm.Boolean",
+        "requireClientServicePrincipal": "Edm.Boolean"
       }
     },
     "microsoft.graph.authenticationContext": {
@@ -557,6 +652,16 @@
         "months",
         "years"
       ]
+    },
+    "microsoft.graph.certification": {
+      "kind": "ComplexType",
+      "properties": {
+        "certificationDetailsUrl": "Edm.String",
+        "certificationExpirationDateTime": "Edm.DateTimeOffset",
+        "isCertifiedByMicrosoft": "Edm.Boolean",
+        "isPublisherAttested": "Edm.Boolean",
+        "lastCertificationDateTime": "Edm.DateTimeOffset"
+      }
     },
     "microsoft.graph.channel": {
       "kind": "EntityType",
@@ -1387,6 +1492,13 @@
         "windowsRT"
       ]
     },
+    "microsoft.graph.directoryObject": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "deletedDateTime": "Edm.DateTimeOffset"
+      }
+    },
     "microsoft.graph.diskType": {
       "kind": "EnumType",
       "members": [
@@ -1574,6 +1686,16 @@
         "unknownFutureValue"
       ]
     },
+    "microsoft.graph.informationalUrl": {
+      "kind": "ComplexType",
+      "properties": {
+        "logoUrl": "Edm.String",
+        "marketingUrl": "Edm.String",
+        "privacyStatementUrl": "Edm.String",
+        "supportUrl": "Edm.String",
+        "termsOfServiceUrl": "Edm.String"
+      }
+    },
     "microsoft.graph.joinType": {
       "kind": "EnumType",
       "members": [
@@ -1582,6 +1704,19 @@
         "hybridAzureADJoined",
         "unknown"
       ]
+    },
+    "microsoft.graph.keyCredential": {
+      "kind": "ComplexType",
+      "properties": {
+        "customKeyIdentifier": "Edm.Binary",
+        "displayName": "Edm.String",
+        "endDateTime": "Edm.DateTimeOffset",
+        "key": "Edm.Binary",
+        "keyId": "Edm.Guid",
+        "startDateTime": "Edm.DateTimeOffset",
+        "type": "Edm.String",
+        "usage": "Edm.String"
+      }
     },
     "microsoft.graph.keyStorageProviderOption": {
       "kind": "EnumType",
@@ -1873,6 +2008,14 @@
         "unknownFutureValue"
       ]
     },
+    "microsoft.graph.nativeAuthenticationApisEnabled": {
+      "kind": "EnumType",
+      "members": [
+        "all",
+        "none",
+        "unknownFutureValue"
+      ]
+    },
     "microsoft.graph.ndesConnector": {
       "kind": "EntityType",
       "base_type": "microsoft.graph.entity",
@@ -1901,6 +2044,39 @@
         "networkType": "microsoft.graph.networkType"
       }
     },
+    "microsoft.graph.onPremisesPublishing": {
+      "kind": "ComplexType",
+      "properties": {
+        "alternateUrl": "Edm.String",
+        "applicationServerTimeout": "Edm.String",
+        "applicationType": "Edm.String",
+        "externalAuthenticationType": "microsoft.graph.externalAuthenticationType",
+        "externalUrl": "Edm.String",
+        "internalUrl": "Edm.String",
+        "isAccessibleViaZTNAClient": "Edm.Boolean",
+        "isBackendCertificateValidationEnabled": "Edm.Boolean",
+        "isContinuousAccessEvaluationEnabled": "Edm.Boolean",
+        "isDnsResolutionEnabled": "Edm.Boolean",
+        "isHttpOnlyCookieEnabled": "Edm.Boolean",
+        "isOnPremPublishingEnabled": "Edm.Boolean",
+        "isPersistentCookieEnabled": "Edm.Boolean",
+        "isSecureCookieEnabled": "Edm.Boolean",
+        "isStateSessionEnabled": "Edm.Boolean",
+        "isTranslateHostHeaderEnabled": "Edm.Boolean",
+        "isTranslateLinksInBodyEnabled": "Edm.Boolean",
+        "onPremisesApplicationSegments": "Collection(microsoft.graph.onPremisesApplicationSegment)",
+        "segmentsConfiguration": "microsoft.graph.segmentConfiguration",
+        "singleSignOnSettings": "microsoft.graph.onPremisesPublishingSingleSignOn",
+        "trafficRoutingMethod": "microsoft.graph.trafficRoutingMethod",
+        "useAlternateUrlForTranslationAndRedirect": "Edm.Boolean",
+        "verifiedCustomDomainCertificatesMetadata": "microsoft.graph.verifiedCustomDomainCertificatesMetadata",
+        "verifiedCustomDomainKeyCredential": "microsoft.graph.keyCredential",
+        "verifiedCustomDomainPasswordCredential": "microsoft.graph.passwordCredential",
+        "wafAllowedHeaders": "microsoft.graph.wafAllowedHeadersDictionary",
+        "wafIpRanges": "Collection(microsoft.graph.ipRange)",
+        "wafProvider": "Edm.String"
+      }
+    },
     "microsoft.graph.operatingSystemUpgradeEligibility": {
       "kind": "EnumType",
       "members": [
@@ -1910,6 +2086,14 @@
         "unknownFutureValue",
         "upgraded"
       ]
+    },
+    "microsoft.graph.optionalClaims": {
+      "kind": "ComplexType",
+      "properties": {
+        "accessToken": "Collection(microsoft.graph.optionalClaim)",
+        "idToken": "Collection(microsoft.graph.optionalClaim)",
+        "saml2Token": "Collection(microsoft.graph.optionalClaim)"
+      }
     },
     "microsoft.graph.originalTransferMethods": {
       "kind": "EnumType",
@@ -1949,6 +2133,25 @@
         "personal",
         "unknown"
       ]
+    },
+    "microsoft.graph.parentalControlSettings": {
+      "kind": "ComplexType",
+      "properties": {
+        "countriesBlockedForMinors": "Collection(Edm.String)",
+        "legalAgeGroupRule": "Edm.String"
+      }
+    },
+    "microsoft.graph.passwordCredential": {
+      "kind": "ComplexType",
+      "properties": {
+        "customKeyIdentifier": "Edm.Binary",
+        "displayName": "Edm.String",
+        "endDateTime": "Edm.DateTimeOffset",
+        "hint": "Edm.String",
+        "keyId": "Edm.Guid",
+        "secretText": "Edm.String",
+        "startDateTime": "Edm.DateTimeOffset"
+      }
     },
     "microsoft.graph.policyFile": {
       "kind": "EntityType",
@@ -2035,6 +2238,12 @@
         "wsFederation",
         "wsTrust"
       ]
+    },
+    "microsoft.graph.publicClientApplication": {
+      "kind": "ComplexType",
+      "properties": {
+        "redirectUris": "Collection(Edm.String)"
+      }
     },
     "microsoft.graph.recommendation": {
       "kind": "EntityType",
@@ -2171,6 +2380,13 @@
         "unknownFutureValue"
       ]
     },
+    "microsoft.graph.requestSignatureVerification": {
+      "kind": "ComplexType",
+      "properties": {
+        "allowedWeakAlgorithms": "microsoft.graph.weakAlgorithms",
+        "isSignedRequestRequired": "Edm.Boolean"
+      }
+    },
     "microsoft.graph.requiredLicenses": {
       "kind": "EnumType",
       "members": [
@@ -2183,6 +2399,13 @@
         "notApplicable",
         "unknownFutureValue"
       ]
+    },
+    "microsoft.graph.requiredResourceAccess": {
+      "kind": "ComplexType",
+      "properties": {
+        "resourceAccess": "Collection(microsoft.graph.resourceAccess)",
+        "resourceAppId": "Edm.String"
+      }
     },
     "microsoft.graph.riskDetail": {
       "kind": "EnumType",
@@ -2840,6 +3063,17 @@
         "unknownCount": "Edm.Int32"
       }
     },
+    "microsoft.graph.servicePrincipalLockConfiguration": {
+      "kind": "ComplexType",
+      "properties": {
+        "allProperties": "Edm.Boolean",
+        "credentialsWithUsageSign": "Edm.Boolean",
+        "credentialsWithUsageVerify": "Edm.Boolean",
+        "enforcementScope": "microsoft.graph.servicePrincipalLockScope",
+        "isEnabled": "Edm.Boolean",
+        "tokenEncryptionKeyId": "Edm.Boolean"
+      }
+    },
     "microsoft.graph.servicePrincipalSignInActivity": {
       "kind": "EntityType",
       "base_type": "microsoft.graph.entity",
@@ -2964,6 +3198,12 @@
         "lastSuccessfulSignInRequestId": "Edm.String"
       }
     },
+    "microsoft.graph.signInAudienceRestrictionsBase": {
+      "kind": "ComplexType",
+      "properties": {
+        "kind": "microsoft.graph.kind"
+      }
+    },
     "microsoft.graph.signInIdentifierType": {
       "kind": "EnumType",
       "members": [
@@ -2999,6 +3239,12 @@
         "member",
         "unknownFutureValue"
       ]
+    },
+    "microsoft.graph.spaApplication": {
+      "kind": "ComplexType",
+      "properties": {
+        "redirectUris": "Collection(Edm.String)"
+      }
     },
     "microsoft.graph.subjectAlternativeNameType": {
       "kind": "EnumType",
@@ -3255,6 +3501,32 @@
         "oaepSha512",
         "pkcs1"
       ]
+    },
+    "microsoft.graph.verifiedPublisher": {
+      "kind": "ComplexType",
+      "properties": {
+        "addedDateTime": "Edm.DateTimeOffset",
+        "displayName": "Edm.String",
+        "verifiedPublisherId": "Edm.String"
+      }
+    },
+    "microsoft.graph.webApplication": {
+      "kind": "ComplexType",
+      "properties": {
+        "homePageUrl": "Edm.String",
+        "implicitGrantSettings": "microsoft.graph.implicitGrantSettings",
+        "logoutUrl": "Edm.String",
+        "oauth2AllowImplicitFlow": "Edm.Boolean",
+        "redirectUriSettings": "Collection(microsoft.graph.redirectUriSettings)",
+        "redirectUris": "Collection(Edm.String)"
+      }
+    },
+    "microsoft.graph.windowsApplication": {
+      "kind": "ComplexType",
+      "properties": {
+        "packageSid": "Edm.String",
+        "redirectUris": "Collection(Edm.String)"
+      }
     },
     "microsoft.graph.windowsAutopilotDeploymentProfile": {
       "kind": "EntityType",

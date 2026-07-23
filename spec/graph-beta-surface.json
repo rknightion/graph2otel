@@ -14,6 +14,18 @@
       ]
     },
     {
+      "package": "internal/collectors/entra/appownership",
+      "collectors": [
+        "entra.app_ownership"
+      ],
+      "operations": [
+        {
+          "path": "/applications",
+          "note": "beta only for $expand=federatedIdentityCredentials (the FIC trust edge); ownership uses v1.0 applications/servicePrincipals with $expand=owners"
+        }
+      ]
+    },
+    {
       "package": "internal/collectors/entra/recommendations",
       "collectors": [
         "entra.recommendations"

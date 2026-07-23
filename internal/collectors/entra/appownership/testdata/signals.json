@@ -1,0 +1,54 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.application.federated_credentials",
+      "Unit": "{credential}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "issuer_host"
+      ]
+    },
+    {
+      "Name": "entra.application.ownership",
+      "Unit": "{application}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "has_owner",
+        "sign_in_audience"
+      ]
+    },
+    {
+      "Name": "entra.service_principal.ownership",
+      "Unit": "{service_principal}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "has_owner",
+        "service_principal_type"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "entra.application",
+      "AttrKeys": [
+        "app_id",
+        "created_date_time",
+        "display_name",
+        "owner_count",
+        "owner_principal_names",
+        "sign_in_audience"
+      ]
+    },
+    {
+      "EventName": "entra.federated_identity_credential",
+      "AttrKeys": [
+        "app_id",
+        "audiences",
+        "credential_name",
+        "display_name",
+        "issuer",
+        "subject"
+      ]
+    }
+  ]
+}

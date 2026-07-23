@@ -28,6 +28,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/urlclickevents"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/agentriskdetections"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/agreements"
+	_ "github.com/rknightion/graph2otel/internal/collectors/entra/appownership"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/authmethodspolicy"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/conditionalaccess"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/consent"

@@ -190,6 +190,16 @@ const (
 // service/action_type reuse AttrService/AttrActionType; the profile id reuses
 // AttrId.
 const (
+	// entra.application / federated-identity-credential (#244): app-ownership and
+	// the trust-edge fields credential_expiry cannot see.
+	AttrHasOwner            = "has_owner"
+	AttrSignInAudience      = "sign_in_audience"
+	AttrIssuerHost          = "issuer_host"
+	AttrOwnerCount          = "owner_count"
+	AttrOwnerPrincipalNames = "owner_principal_names"
+	AttrCredentialName      = "credential_name"
+	AttrAudiences           = "audiences"
+
 	// entra.tenant_policy twin (#245): tenant posture fields the bounded 0/1
 	// setting gauge cannot carry.
 	AttrAllowInvitesFrom            = "allow_invites_from"
