@@ -9,7 +9,7 @@ import (
 // Transport names the ingest path that produced a record. It is the value set of
 // the semconv.AttrIngestTransport attribute (#141).
 //
-// The set is closed and bounded (six values), which is what makes the attribute
+// The set is closed and bounded (seven values), which is what makes the attribute
 // safe under the cardinality rule (#112): it never grows with tenant size.
 type Transport string
 
@@ -36,6 +36,18 @@ const (
 	// carry TransportGraph. It is NOT a Graph transport (different host, static
 	// Authorization: Token auth, no azidentity).
 	TransportMDCA Transport = "mdca"
+	// TransportExchangeOnline is the Exchange Online admin API's app-only
+	// PowerShell cmdlet transport (internal/exoclient, #233) — one POST per
+	// cmdlet to outlook.office365.com/adminapi. Like MDCA it has no ingest
+	// engine; the defender.quarantine SnapshotCollector stamps it inline.
+	//
+	// It is NOT Graph and must never be collapsed into TransportGraph: different
+	// host, different audience (a Graph token is rejected), and an authorization
+	// model no Graph collector shares — an app role AND an Entra directory role,
+	// where neither alone grants anything. Quarantine queue depth and MDO policy
+	// state have no Graph API at all, so a record carrying this transport is one
+	// no Graph poll could have produced.
+	TransportExchangeOnline Transport = "exchange_online"
 )
 
 // transportEmitter stamps semconv.AttrIngestTransport onto every log record

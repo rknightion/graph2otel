@@ -313,12 +313,12 @@ func CheckAnnotations(registered []string) error {
 // package has no golden hard-errors here — the same convention blobConfig
 // uses for a missing container: a blank signal cell would be a silently wrong
 // doc, which is what this whole package exists to prevent.
-func Rows(snapshot, window, blob, o365, mdca []any, root string) ([]Row, error) {
+func Rows(snapshot, window, blob, o365, mdca, exo []any, root string) ([]Row, error) {
 	var rows []Row
 	for _, group := range []struct {
 		kind Kind
 		cs   []any
-	}{{KindSnapshot, snapshot}, {KindWindow, window}, {KindBlob, blob}, {KindWindow, o365}, {KindWindow, mdca}} {
+	}{{KindSnapshot, snapshot}, {KindWindow, window}, {KindBlob, blob}, {KindWindow, o365}, {KindWindow, mdca}, {KindSnapshot, exo}} {
 		for _, c := range group.cs {
 			facts, ok := c.(collectorFacts)
 			if !ok {
@@ -365,6 +365,12 @@ var sections = []section{
 	{"Purview", KindSnapshot, "Purview — metrics (snapshot collectors)"},
 	{"Purview", KindWindow, "Purview — logs (window collectors)"},
 	{"Defender", KindBlob, "Defender — logs (blob collectors)"},
+	// Defender's only non-blob section (#233). Quarantine queue depth is a
+	// metric-shaped state snapshot reached over the Exchange Online admin API,
+	// not an advanced-hunting table, so it renders with the Graph-shaped columns
+	// rather than the blob ones — its endpoint and role are not a container and
+	// a Storage role.
+	{"Defender", KindSnapshot, "Defender — metrics (snapshot collectors)"},
 	{"Defender for Cloud Apps", KindWindow, "Defender for Cloud Apps — logs (window collectors)"},
 }
 

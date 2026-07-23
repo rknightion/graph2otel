@@ -236,6 +236,44 @@ type TenantConfig struct {
 	// collectors (#145), the one non-Graph, non-poller signal. Off unless
 	// mdca.portal_url is set. See MDCAConfig.
 	MDCA MDCAConfig `yaml:"mdca"`
+	// ExchangeOnline configures the Exchange Online admin API collectors (#233)
+	// — quarantine queue depth, which has no Graph endpoint. Off unless
+	// exchange_online.enabled is true. See ExchangeOnlineConfig.
+	ExchangeOnline ExchangeOnlineConfig `yaml:"exchange_online"`
+}
+
+// ExchangeOnlineConfig enables the Exchange Online admin API collectors for a
+// tenant (#233) — today, defender.quarantine.
+//
+// It carries no credential and no URL, unlike MDCAConfig: the tenant's existing
+// DefaultAzureCredential is reused and only the audience differs
+// (https://outlook.office365.com/.default). So the whole block is one switch.
+//
+// It is a switch rather than default-on because the transport needs TWO grants
+// that a default deployment will not have, and that graph2otel cannot detect in
+// advance:
+//
+//   - the app role Exchange.ManageAsApp on the Office 365 Exchange Online
+//     service principal — without it the API answers 401;
+//   - an Entra DIRECTORY role on the service principal, Security Reader being
+//     the least-privileged sufficient one — without it the API answers 403.
+//
+// Neither alone grants anything (live-measured 2026-07-23, #233: 401 with
+// neither, 403 with the app role only, 200 with both). The second is the
+// unusual one — assigning a directory role to a service principal is a
+// deliberate act an operator takes in the Entra portal, not something a scope
+// consent grants — so defaulting this on would make every unprepared deployment
+// log an authorization failure on every tick with no way to act on it.
+//
+// The 403 is also indistinguishable from a missing-cmdlet 403 and arrives with
+// a body that is not JSON (see internal/exoclient), so "it is misconfigured" is
+// genuinely hard to tell from "it is broken" — another reason the operator opts
+// in explicitly rather than discovering this by reading error logs.
+type ExchangeOnlineConfig struct {
+	// Enabled turns on the Exchange Online collectors for this tenant. false
+	// (the default) registers none of them, exactly as an unset
+	// blob_ingest.account_url registers no blob collectors.
+	Enabled bool `yaml:"enabled"`
 }
 
 // O365ActivityConfig selects which Management Activity API content types the

@@ -34,9 +34,9 @@ var knownConflictPairs = [][2]string{
 // registration path, exactly as registrySnapshot does for the doc gates.
 func registeredCollectors(t *testing.T) []collector.Collector {
 	t.Helper()
-	snapshot, window, blob, o365, mdca := registrySnapshot()
+	snapshot, window, blob, o365, mdca, exo := registrySnapshot()
 	var out []collector.Collector
-	for _, group := range [][]any{snapshot, window, blob, o365, mdca} {
+	for _, group := range [][]any{snapshot, window, blob, o365, mdca, exo} {
 		for _, c := range group {
 			cc, ok := c.(collector.Collector)
 			if !ok {

@@ -16,6 +16,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/config"
+	"github.com/rknightion/graph2otel/internal/exoclient"
 	"github.com/rknightion/graph2otel/internal/exportjob"
 	"github.com/rknightion/graph2otel/internal/graphclient"
 	"github.com/rknightion/graph2otel/internal/jobpipeline"
@@ -235,6 +236,14 @@ func setupTenant(
 	// tenant's mdca.portal_url is the switch, so a tenant with no mdca block
 	// registers none of these.
 	registerMDCACollectors(cfg, ta, caps, store, tlog, emitter, registry, skips)
+
+	// Exchange Online admin API collectors (#233) — the SIXTH registration path
+	// and the fourth first-party API. Opt-in like blob ingest and MDCA, but for
+	// a different reason: the credential needs no new secret, just two grants
+	// (an app role AND an Entra directory role) that graph2otel cannot detect in
+	// advance and that most tenants will not have, so the switch is
+	// exchange_online.enabled rather than the presence of a URL or token.
+	registerEXOCollectors(cfg, ta, caps, tlog, emitter, registry, skips)
 
 	// Transport mutual-exclusion, checked AFTER every registration path above
 	// and before anything is scheduled (#144). Position is load-bearing: run
@@ -558,6 +567,64 @@ func registerMDCACollectors(
 			registry.RegisterWindow(rw.Collector, interval, initialLookback(cfg, rw), rw.MaxWindow)
 		}
 	}
+}
+
+// registerEXOCollectors wires the tenant's Exchange Online collectors (#233),
+// the sixth registration path.
+//
+// Opt-in: a tenant without exchange_online.enabled registers none of these and
+// records no skips (there is nothing to be absent). It carries no secret of its
+// own — the tenant's existing DefaultAzureCredential is reused and only the
+// audience differs — so the only failure mode before the first request is a
+// client-build error, which skips just these collectors with the reason
+// attached. "Silently doing nothing" and "no data yet" must never look alike.
+//
+// The two grants this needs (Exchange.ManageAsApp plus an Entra directory role)
+// cannot be checked here: a token mints fine without either, and the failure
+// surfaces only when a cmdlet runs. That is exactly why the switch is explicit
+// rather than inferred — see config.ExchangeOnlineConfig.
+func registerEXOCollectors(
+	cfg *config.Config,
+	ta *auth.TenantAuth,
+	caps license.Capabilities,
+	tlog *slog.Logger,
+	emitter telemetry.Emitter,
+	registry *collector.Registry,
+	skips map[admin.SkipKey]string,
+) {
+	if !tenantEXOConfig(cfg, ta.TenantID).Enabled {
+		return // opt-out: no exchange_online block, nothing to register or skip.
+	}
+
+	client, err := exoclient.NewClient(ta, exoclient.Options{Emitter: emitter})
+	if err != nil {
+		tlog.Error("exchange online disabled: building the client failed", "error", err)
+		reason := "exchange online unavailable: " + err.Error()
+		for _, ef := range collectors.EXOAll() {
+			c := ef(collectors.EXODeps{TenantID: ta.TenantID, Logger: tlog})
+			skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] = reason
+		}
+		return
+	}
+
+	edeps := collectors.EXODeps{Client: client, TenantID: ta.TenantID, Logger: tlog}
+	for _, ef := range collectors.EXOAll() {
+		c := ef(edeps)
+		if interval, ok := gateCollector(c, ta, cfg, caps, tlog, skips); ok {
+			registry.Register(c, interval)
+		}
+	}
+}
+
+// tenantEXOConfig returns the tenant's Exchange Online block, or a zero
+// (opt-out) value if the tenant is not found.
+func tenantEXOConfig(cfg *config.Config, tenantID string) config.ExchangeOnlineConfig {
+	for _, t := range cfg.Tenants {
+		if t.TenantID == tenantID {
+			return t.ExchangeOnline
+		}
+	}
+	return config.ExchangeOnlineConfig{}
 }
 
 // recordMDCASkips marks every MDCA collector absent-with-a-reason. Constructed

@@ -108,6 +108,17 @@ tenants:
     #   portal_url: "https://<tenant>.<region>.portal.cloudappsecurity.com"
     #   token_file: "/run/secrets/mdca_token"
 
+    # exchange_online enables the Defender quarantine queue-depth collector
+    # (defender.quarantine). No credential of its own — the tenant's existing
+    # DefaultAzureCredential is reused against the Exchange Online audience — but
+    # it needs TWO grants on the service principal, and neither alone works:
+    #   1. the app role Exchange.ManageAsApp on "Office 365 Exchange Online"
+    #   2. an Entra DIRECTORY role, Security Reader being the least-privileged
+    #      sufficient one (assigned in the Entra portal, not via scope consent)
+    # Both are read-only. With only the first, every poll answers 403.
+    # exchange_online:
+    #   enabled: true
+
 otlp:
   protocol: http # grpc | http | stdout (stdout = print signals to the console for local debug, no backend)
   endpoint: "https://otlp-gateway-prod-us-central-0.grafana.net/otlp" # OTLP base URL (the exporter appends /v1/metrics and /v1/logs itself)

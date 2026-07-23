@@ -1,0 +1,50 @@
+{
+  "Metrics": [
+    {
+      "Name": "defender.quarantine.held_messages.total",
+      "AttrKeys": [
+        "direction",
+        "entity_type",
+        "quarantine_type"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "defender.quarantine",
+      "AttrKeys": [
+        "direction",
+        "entity_type",
+        "expires",
+        "ingest_transport",
+        "internet_message_id",
+        "network_message_id",
+        "override_reason",
+        "permission_to_allow_sender",
+        "permission_to_block_sender",
+        "permission_to_delete",
+        "permission_to_download",
+        "permission_to_preview",
+        "permission_to_release",
+        "permission_to_request_release",
+        "permission_to_view_header",
+        "policy_name",
+        "policy_type",
+        "quarantine_type",
+        "received_time",
+        "recipient_address",
+        "recipient_count",
+        "recipient_tag",
+        "release_status",
+        "released",
+        "released_count",
+        "reported",
+        "sender_address",
+        "size",
+        "subject",
+        "system_released",
+        "tag_name"
+      ]
+    }
+  ]
+}
