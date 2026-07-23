@@ -1,0 +1,54 @@
+{
+  "Metrics": [
+    {
+      "Name": "defender.oauth_app.apps",
+      "Unit": "{app}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "admin_consented",
+        "app_origin",
+        "app_status",
+        "privilege_level"
+      ]
+    },
+    {
+      "Name": "defender.oauth_app.consented_users",
+      "Unit": "{user}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "privilege_level"
+      ]
+    },
+    {
+      "Name": "defender.oauth_app.max_risk_score",
+      "Unit": "{score}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "privilege_level"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "defender.oauth_app",
+      "AttrKeys": [
+        "added_on_time",
+        "admin_consented",
+        "app_name",
+        "app_origin",
+        "app_owner_tenant_id",
+        "app_status",
+        "is_verified_publisher",
+        "last_used_time",
+        "oauth_app_id",
+        "permission_values",
+        "permissions_count",
+        "privilege_level",
+        "risk_score",
+        "service_principal_id",
+        "verified_publisher_id",
+        "verified_publisher_name"
+      ]
+    }
+  ]
+}

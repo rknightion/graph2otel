@@ -454,3 +454,25 @@ const (
 	AttrEndOfSupportDate   = "end_of_support_date"
 	AttrProductCodeCpe     = "product_code_cpe"
 )
+
+// OAuthAppInfo attributes (#252) — the Defender for Cloud Apps OAuth-app
+// inventory, reached over the advanced-hunting query API. Reused where a key
+// exists: AttrOauthAppId (above), AttrAppName (intune), AttrServicePrincipalId
+// (entra). Every value is the snake_case of a column read verbatim off a live
+// query result.
+const (
+	AttrPrivilegeLevel        = "privilege_level"
+	AttrAppStatus             = "app_status"
+	AttrAppOrigin             = "app_origin"
+	AttrAdminConsented        = "admin_consented"
+	AttrRiskScore             = "risk_score"
+	AttrConsentedUsersCount   = "consented_users_count"
+	AttrAppOwnerTenantId      = "app_owner_tenant_id"
+	AttrLastUsedTime          = "last_used_time"
+	AttrAddedOnTime           = "added_on_time"
+	AttrVerifiedPublisherName = "verified_publisher_name"
+	AttrVerifiedPublisherId   = "verified_publisher_id"
+	AttrIsVerifiedPublisher   = "is_verified_publisher"
+	AttrPermissionValues      = "permission_values"
+	AttrPermissionsCount      = "permissions_count"
+)

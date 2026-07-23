@@ -29,6 +29,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/mdopolicies"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/messageevents"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/messageurlinfo"
+	_ "github.com/rknightion/graph2otel/internal/collectors/defender/oauthapps"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/quarantine"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/secureconfig"
 	_ "github.com/rknightion/graph2otel/internal/collectors/defender/softwareinventory"
