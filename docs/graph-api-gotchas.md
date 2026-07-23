@@ -103,6 +103,104 @@ Independent ceilings, none of which reliably send `Retry-After` — client-side 
   Activity API (`m365.activity`, default-on) — see
   [o365-management-api.md](o365-management-api.md). The two emit the same `m365.audit`
   ids: **never enable both on one tenant.**
+- **A quarantine record's `auditData` arrives as the GENERIC subtype**
+  `[live-measured 2026-07-23, #233]`. Graph's beta metadata declares a dedicated
+  `quarantineAuditRecord`, but the wire carries
+  `"@odata.type": "#microsoft.graph.security.defaultAuditData"` — so code that switched on
+  the typed subtype would never fire. Read the fields off the generic object.
+  Wire over docs, again.
+- **All four quarantine record-type filters are accepted** `[live-measured 2026-07-23, #233]`:
+  `quarantine`, `quarantineMetadata`, `teamsQuarantineMetadata`, `updateQuarantineMetadata`.
+  A query carrying all four returned 201 and completed with real records.
+  `teamsQuarantineMetadata` is the read-only route to **Teams** quarantine, which the
+  Exchange Online transport cannot reach at `Security Reader` privilege.
+- **`auditData.ExtendedProperties` contains an entry NAMED `RequestType` on ordinary AAD
+  sign-in records** `[live-measured, #233]` (value `OAuth2:Authorize`). It is a list entry,
+  not a top-level `auditData` key, so reading the field is correct — but an implementation
+  that searched `ExtendedProperties` **by name** would stamp `request_type` on every
+  sign-in in the tenant. The quarantine `RequestType` is a top-level integer enum and is
+  **undocumented**: Microsoft publishes no member list, so graph2otel emits the raw number
+  rather than a guessed label.
+
+## Defender for Office 365 (MDO)
+
+- **`security/collaboration/analyzedEmails` SILENTLY IGNORES its date parameters**
+  `[live-measured 2026-07-23, #233]`. `startDateTime`/`endDateTime` are accepted, return
+  HTTP 200, and change nothing: the response is a **~20-hour rolling window** whatever you
+  ask for. `$filter`, `$count` and `$orderby` are all rejected outright. So there is no
+  request that bounds this collection, and no metric can be defined over it with a stated
+  window — which is why the Threat Explorer surface was evaluated for quarantine coverage
+  and **rejected** in favour of `EmailPostDeliveryEvents` (a proper event with an action,
+  trigger and result) plus the Exchange Online transport below. Re-open only if
+  server-side filtering ships. Contrast the EXO section: that API *rejects* what it does
+  not understand, which is a materially better contract to build on.
+- **`EmailPostDeliveryEvents` is the only signal that shows a message MOVING into or out
+  of quarantine.** `EmailEvents.DeliveryLocation` records where a message landed at
+  delivery time and never mentions it again; the post-delivery table records ZAP, manual
+  and automated remediation, and redelivery. Both key on `NetworkMessageId`. See
+  [signals.md](signals.md#quarantine-one-dataset-across-four-transports).
+
+## Exchange Online admin API (quarantine, MDO policy)
+
+Not Graph. A fourth first-party API (`outlook.office365.com/adminapi/beta/{tenant}/InvokeCommand`)
+running PowerShell cmdlets app-only, and the **only** route to quarantine queue depth and MDO
+policy state — neither has any Graph endpoint. Client: `internal/exoclient`. The `beta` in the
+path is Exchange's own segment, **not** a Graph beta surface, so the
+[api-drift.md](api-drift.md) canary does not apply to it.
+
+- **It needs TWO grants and neither alone does anything** `[live-measured 2026-07-23, #233]`.
+  Measured progression: **401** with neither → **403** with the app role only → **200** with
+  both.
+  - App role **`Exchange.ManageAsApp`** (`dc50a0fb-09a3-484d-be87-e023b12c6440`) on the
+    *Office 365 Exchange Online* service principal (`01deb58a-8c47-4d14-888c-84c4a7844905`)
+    — authentication. That SP exposes three near-identical roles
+    (`Exchange.ManageAsApp`, `Exchange.ManageAsAppV2`, `Exchange.AdminAPI.ManageAsApp`);
+    only the first is correct.
+  - An Entra **directory role** on the service principal — authorization. `Security Reader`
+    is the least-privileged sufficient one. This is the unusual half: a directory-role
+    assignment is a portal action, not something scope consent can grant, so no amount of
+    app-role work will move a 403.
+- **A 403 body may not be JSON at all** `[live-measured 2026-07-23, #233]`. An unauthorized
+  or unknown cmdlet answers 403 with a long run of NUL bytes. A JSON-only client panics or
+  reports a decoder error on what is the **single most likely production failure** (a
+  missing directory role). Treat non-JSON as an expected branch.
+- **The useful error text is buried; `error.message` is always `"Invalid Operation"`**
+  `[live-measured]` — on every failure, regardless of cause. Resolve in this order:
+  `error.innererror.internalexception.message` → `error.details[0].message` (strip its
+  leading `|Dotted.Type.Name|` prefix) → `error.message`. The unwrapped text is genuinely
+  good: an invalid enum value returns the complete list of valid members, which is the
+  cheapest way to discover an enum.
+- **PowerShell PREFIX-MATCHES enum values, so a wrong value returns 200 with zero rows**
+  `[live-measured 2026-07-23, #233]`. `QuarantineTypes=File` "worked" only by
+  prefix-matching `FileTypeBlock`. A collector hard-coding a plausible-but-wrong value gets
+  a clean 200 and permanently empty results. **Validate against the enum list, never
+  against a 200.** The authoritative `QuarantineTypes` members, from the error body:
+  `Spam, TransportRule, Bulk, Phish, HighConfPhish, Malware, SPOMalware,
+  DataLossPrevention, FileTypeBlock, AdminTriggered, PPI`. Note `Email`, `TeamsMessage` and
+  `SharePointOnline` are **not** members — those are `EntityType` values, a different
+  parameter.
+- **`PageSize=0` returns HTTP 200 with zero rows** rather than erroring `[live-measured]`.
+  A zero-valued config is therefore permanent silence indistinguishable from an empty
+  result. `PageSize=1001` is *accepted* rather than clamped or rejected; 1000 is the
+  documented maximum and the real ceiling is **`[unmeasured]`** (the test tenant held 2
+  messages). Paging is `Page`/`PageSize`, **1-indexed**, with no total count and no
+  next-link — a short page is the only termination signal.
+- **What it DOES reject, it rejects loudly** `[live-measured]`: an unknown parameter name
+  → 400 `AmbiguousParameterSetException`; an invalid enum value → 400. And unlike
+  `analyzedEmails` above, **`Get-QuarantineMessage`'s `StartReceivedDate`/`EndReceivedDate`
+  genuinely filter server-side** — a future start returns 0 rows, a past end returns 0 rows,
+  and a boundary inside the data splits it correctly.
+- **`-EntityType` is denied to `Security Reader`** `[live-measured 2026-07-23, #233]`:
+  `Teams`/`Email`/`SharePointOnline` → **403** (`File` → 400). The entity-scoped view is
+  the documented route to quarantined **Teams** messages, so those are unreachable at
+  read-only privilege — consistent with their `AdminOnlyAccessPolicy` tag. Do not send the
+  parameter at all; the response carries `EntityType` on each row regardless.
+- **`ReleaseStatus=NOTRELEASED` is the queue-depth query** `[live-measured]` — held only,
+  filtered server-side, so no client-side filtering is needed. `RELEASED` and `NOTRELEASED`
+  returned complementary sets on the test tenant, which is what proves it filters rather
+  than being ignored.
+- **A quarantine row's `Identity` is `<NetworkMessageId>\<recipient-guid>`.** Split on the
+  backslash to recover the join key onto every other quarantine signal.
 
 ## Intune
 

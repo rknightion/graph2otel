@@ -9,12 +9,19 @@ convention.
 - **`intune.*`** — Intune device management and compliance signals.
 - **`m365.*`** — Microsoft 365 service signals (unified audit, activity).
 - **`purview.*`** — Purview compliance signals (retention / sensitivity labels).
-- **`defender.*`** — Microsoft Defender XDR advanced-hunting tables (endpoint EDR,
-  email/MDO, identity, alert evidence), ingested over the streaming API → Storage
-  blob path. Log-only. **Not Experimental** — read-only Azure Storage ingest is not a
-  beta Graph surface, and `Experimental` is reserved for genuine Graph beta APIs
-  (#183). Setting `blob_ingest.account_url` is the entire opt-in: with it set every
-  `defender.*` table registers, with it unset none do.
+- **`defender.*`** — Microsoft Defender signals, from two transports with two
+  independent switches:
+  - the **XDR advanced-hunting tables** (endpoint EDR, email/MDO, identity, alert
+    evidence), ingested over the streaming API → Storage blob path. Log-only.
+    **Not Experimental** — read-only Azure Storage ingest is not a beta Graph
+    surface, and `Experimental` is reserved for genuine Graph beta APIs (#183).
+    Setting `blob_ingest.account_url` is the entire opt-in: with it set every
+    advanced-hunting table registers, with it unset none do.
+  - **`defender.quarantine`** (#233), the one `defender.*` collector that is neither
+    blob-sourced nor log-only: quarantine queue depth over the Exchange Online admin
+    API, emitting a bounded gauge plus a per-message log twin. Its switch is
+    `exchange_online.enabled`, and it needs two grants blob ingest does not — see
+    [Quarantine](#quarantine-one-dataset-across-four-transports) below.
 - **`m365.service_health.status{service}` enum** (#119) — the gauge encodes
   Microsoft's `microsoftServiceHealthStatus` as a numeric severity ladder:
   `0` = `serviceOperational` / `falsePositive`; `1` = resolved states
@@ -320,6 +327,114 @@ alerts and carries a `display_name` and `priority_score` the individual alert do
 `status` vocabulary is different again — `active` / `resolved` / `redirected`, not `new`. Treat
 `redirected` as a duplicate: it means the incident was merged into another one.
 
+## Quarantine: one dataset across four transports
+
+Quarantine is not one signal. "How many messages are held" and "who released that message"
+are different questions with different natural transports, and graph2otel answers each over
+the one that fits (#233). **All four key on `network_message_id`**, which is what makes them
+one dataset rather than four islands.
+
+| question | signal | `ingest_transport` | shape |
+| --- | --- | --- | --- |
+| **state** — held right now | `defender.quarantine` | `exchange_online` | bounded gauge + log twin per held message |
+| **movement** — entering / leaving | `defender.email_post_delivery` | `blob` | log per post-delivery action |
+| **history** — held/released/deleted/previewed, policy changes | `m365.unified_audit` | `audit_query` | log per audit record |
+| **context** — the message itself | `defender.email` | `blob` | log per message, carries `delivery_location` |
+
+### `defender.quarantine.held_messages.total` is queue DEPTH, not flow
+
+This distinction is the one to keep straight, because the two answer opposite questions and
+only one of them is a gauge.
+
+The metric counts messages **currently held** — it is driven by
+`Get-QuarantineMessage -ReleaseStatus NOTRELEASED`, which filters server-side
+`[live-measured 2026-07-23, #233]`. Released messages stay visible to the API for the
+remainder of their 30-day retention and are deliberately **not** counted: counting them
+would leave the number elevated for a month after an incident instead of returning to zero
+when quarantine drains. Labels are `quarantine_type` × `direction` × `entity_type` —
+bounded by Microsoft's enums, never by tenant size or mail volume.
+
+**Flow** — how many messages were quarantined this hour, how many were released, by whom —
+is not this metric and is not any metric. It is a `count_over_time` over the log twins and
+the audit records. That is the cardinality rule working as intended: a rate keyed by
+sender, recipient or policy would be a series per entity, and LogQL answers it for free.
+
+**An empty quarantine emits NO series at all**, not a zero. The gauge is an observable
+snapshot, so a `(type, direction, entity)` combination that stops appearing drops out of the
+export rather than ghosting forever under forced cumulative temporality — the same shape as
+`entra.risky_users.total` on a healthy tenant. **Alert on the series exceeding a threshold,
+never on its absence**; use the collector's own `graph2otel.*` success/staleness signals to
+detect a dead collector.
+
+### Worked LogQL
+
+Remember attributes are structured metadata, not stream labels — always start from
+`{service_name="graph2otel"}` (see [above](#querying-the-logs-in-loki--attributes-are-structured-metadata-not-stream-labels)).
+
+Everything currently held, most recent first:
+
+```logql
+{service_name="graph2otel"} | event_name="defender.quarantine"
+```
+
+Held messages nobody can self-release — the queue that needs an admin, which is usually the
+one that actually backs up:
+
+```logql
+{service_name="graph2otel"} | event_name="defender.quarantine"
+  | permission_to_release="false"
+```
+
+Release events with the message they released, over the audit trail:
+
+```logql
+{service_name="graph2otel"} | event_name="m365.audit"
+  | record_type="Quarantine" | operation="QuarantineReleaseMessage"
+```
+
+Everything that ever happened to one message, across every transport — this is the join, and
+it works because all four stamp the same id:
+
+```logql
+{service_name="graph2otel"}
+  | network_message_id="80aa9dda-c565-45a0-6133-08dee7cf4a7a"
+```
+
+Messages moved into or out of quarantine after delivery (ZAP, remediation, redelivery):
+
+```logql
+{service_name="graph2otel"} | event_name="defender.email_post_delivery"
+  | delivery_location="Quarantine"
+```
+
+Quarantine rate by policy over the last hour — the flow number the gauge deliberately is not:
+
+```logql
+sum by (policy_name) (
+  count_over_time({service_name="graph2otel"} | event_name="defender.quarantine" [1h])
+)
+```
+
+### What is NOT covered, and why
+
+**Quarantined Teams messages have no queue-depth signal.** Reading them requires
+`Get-QuarantineMessage -EntityType Teams`, which returns **403** to a service principal
+holding `Security Reader` `[live-measured 2026-07-23, #233]`. The roles that permit it
+(Quarantine Administrator, Security Administrator) are write-capable, which is a real
+privilege increase over graph2otel's read-only posture for a single number on a surface
+Microsoft made admin-only by design. Teams quarantine is covered through the **audit trail**
+instead — the `teamsQuarantineMetadata` record type on `m365.unified_audit` — which needs no
+new privilege. Records already carry `entity_type`, so the gauge is correctly scoped to what
+it can see rather than silently claiming to cover Teams.
+
+**`defender.quarantine` needs two grants and neither alone works.** The app role
+`Exchange.ManageAsApp` authenticates and an Entra **directory** role (Security Reader is the
+least-privileged sufficient one) authorizes: 401 with neither, 403 with the app role only,
+200 with both `[live-measured 2026-07-23, #233]`. A directory-role assignment is a deliberate
+act in the Entra portal, not something scope consent grants — which is why the collector is
+opt-in behind `exchange_online.enabled` rather than default-on. See
+[graph-api-gotchas.md](graph-api-gotchas.md#exchange-online-admin-api-quarantine-mdo-policy).
+
 ## SharePoint/OneDrive storage: derived quota state + report concealment
 
 `m365.storage` is built on the M365 usage-**reporting** API, not the live per-drive `quota`
@@ -379,8 +494,9 @@ rule](#cardinality-shape) forbids the latter.
 `mdca.discovery_parse` (#145) is the one signal reached over neither Graph, Azure Storage,
 nor the O365 Management API, but the **Microsoft Defender for Cloud Apps legacy portal API**
 (`<tenant>.<region>.portal.cloudappsecurity.com/api/v1/governance/`) — a static
-`Authorization: Token` credential, not the Entra poller. Its records therefore carry a sixth
-`ingest_transport` value, `mdca`, alongside `graph`/`blob`/`o365_activity`/`audit_query`/`report_export`.
+`Authorization: Token` credential, not the Entra poller. Its records carry the
+`ingest_transport` value `mdca`, one of seven:
+`graph`/`blob`/`o365_activity`/`audit_query`/`report_export`/`mdca`/`exchange_online`.
 
 Why the collector exists: a Cloud Discovery upload returns `200 {"success":true}` the moment the
 blob lands and a parse task is **queued** — the parse runs asynchronously and writes its verdict
@@ -408,6 +524,6 @@ collectors depend on a Graph `beta` endpoint with no `v1.0` equivalent (several 
 signals — Settings Catalog, Autopilot profiles, Windows Update rings, certificates,
 scripts, GPO analytics, endpoint-analytics detail — plus the non-interactive/service
 principal/managed identity sign-in log filters). Beta collectors are opt-in, never
-default-on — see [Configuration](configuration.md#experimental-beta-collectors-are-opt-in-not-default-on).
+default-on — see [Configuration](configuration.md#experimental--beta-collectors-are-opt-in-not-default-on).
 A panel or alert reading empty on a lower license tier, or with a beta collector left
 disabled, is expected — not a broken signal.

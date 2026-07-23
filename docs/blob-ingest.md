@@ -375,6 +375,16 @@ Rules that fall out:
   polled record) and for AuditLogs (`properties.id` byte-identical to the polled
   checkpoint's seen ids). **Reuse the polled mapper; never write a second one.** Two
   categories is not a universal rule though — check per category before assuming.
+- **Within the Defender advanced-hunting family the three clocks do not spread
+  consistently per TABLE** `[live-measured 2026-07-23, #233]`. Every Defender table binds
+  to `properties.Timestamp` with no fallback, which stays correct — but do not build a
+  shared *assertion* on how far the envelope clocks trail it. On `EmailEvents`' live
+  record all three differ (`Timestamp` 14:08:56, `_TimeReceivedBySvc` 14:08:56 as
+  serialized but distinct in the record, envelope `time` 14:11:24); on
+  `EmailPostDeliveryEvents`' live record `_TimeReceivedBySvc` is the **same instant** as
+  `properties.Timestamp`, and only the envelope `time` (88s later) differs. A test
+  asserting "the event time differs from both envelope clocks" passes on one table and can
+  only fail on the other. The spread is a per-table property, not a family invariant.
 - Records are JSON Lines with **CRLF** terminators; drop the
   `properties.__UDI_RequiredFields_*` keys (Microsoft-internal plumbing).
 
