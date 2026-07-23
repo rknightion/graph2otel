@@ -1,0 +1,70 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.gsa.filtering_policies",
+      "Unit": "{policy}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "action"
+      ]
+    },
+    {
+      "Name": "entra.gsa.forwarding_profiles",
+      "Unit": "{profile}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "state",
+        "traffic_forwarding_type"
+      ]
+    },
+    {
+      "Name": "entra.gsa.onboarding_status",
+      "Unit": "1",
+      "Kind": "gauge",
+      "AttrKeys": []
+    },
+    {
+      "Name": "entra.gsa.packet_tagging_enabled",
+      "Unit": "{setting}",
+      "Kind": "gauge",
+      "AttrKeys": []
+    },
+    {
+      "Name": "entra.gsa.remote_networks",
+      "Unit": "{network}",
+      "Kind": "gauge",
+      "AttrKeys": []
+    },
+    {
+      "Name": "entra.gsa.signaling_enabled",
+      "Unit": "{setting}",
+      "Kind": "gauge",
+      "AttrKeys": []
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "entra.gsa_filtering_policy",
+      "AttrKeys": [
+        "action",
+        "id",
+        "name",
+        "version"
+      ]
+    },
+    {
+      "EventName": "entra.gsa_forwarding_profile",
+      "AttrKeys": [
+        "association_count",
+        "client_fallback_action",
+        "id",
+        "is_custom_profile",
+        "name",
+        "priority",
+        "state",
+        "traffic_forwarding_type",
+        "version"
+      ]
+    }
+  ]
+}

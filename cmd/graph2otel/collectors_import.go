@@ -45,6 +45,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/graphactivity"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/graphnotifications"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/groups"
+	_ "github.com/rknightion/graph2otel/internal/collectors/entra/gsa"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/licensing"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/mfaregistration"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/organization"

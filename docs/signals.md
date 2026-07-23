@@ -34,6 +34,15 @@ convention.
   `> 3` for a live outage. There is deliberately no companion mapping metric — this
   table is the mapping. The per-issue detail (title/impact) is in the
   `m365.service_health_issue` log twin, never a metric label.
+- **`entra.gsa.onboarding_status` enum** (#239) — the Global Secure Access tenant
+  onboarding state as a numeric ladder, the same shape as `service_health.status`:
+  `0` = `onboarded`; `1` = in-progress (`onboardingInProgress`,
+  `offboardingInProgress`); `2` = `onboardingError` / `offboarded`; `-1` = an
+  unmapped/new Microsoft status. This table is the mapping — there is no companion
+  metric. The per-profile and per-policy detail rides the `entra.gsa_forwarding_profile`
+  and `entra.gsa_filtering_policy` log twins, never a metric label. `entra.gsa` is
+  Experimental (beta `networkAccess`, opt-in) and its traffic-log half is a separate
+  grant-blocked piece not shipped here.
 - **`graph2otel.*`** — self-observability: collector success/duration/staleness,
   export-job health, active series counts, build info, and
   [`graph2otel.api.unexpected`](#graph2otelapiunexpected--when-microsoft-changes-something-under-us)

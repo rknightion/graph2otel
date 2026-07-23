@@ -29,7 +29,7 @@ collector listed there stops being named below.
 
 | domain | collectors |
 | --- | --- |
-| Entra ID | `entra.agent_risk_detections`, `entra.app_ownership`, `entra.recommendations`, `entra.risky_agents`, `entra.signin_activity`, `entra.signins.non_interactive`, `entra.signins.service_principal`, `entra.signins.managed_identity` |
+| Entra ID | `entra.agent_risk_detections`, `entra.app_ownership`, `entra.gsa`, `entra.recommendations`, `entra.risky_agents`, `entra.signin_activity`, `entra.signins.non_interactive`, `entra.signins.service_principal`, `entra.signins.managed_identity` |
 | Intune | `intune.apple_tokens`, `intune.autopilot`, `intune.autopilot_events`, `intune.certificates`, `intune.connectors`, `intune.device_encryption`, `intune.endpoint_analytics`, `intune.gpo_analytics`, `intune.hardware_inventory`, `intune.remediation_run_states`, `intune.scripts`, `intune.settings_catalog`, `intune.updates` |
 | M365 | `m365.teams`, `m365.unified_audit` |
 | Purview | `purview.dlp_policies` |

@@ -26,6 +26,33 @@
       ]
     },
     {
+      "package": "internal/collectors/entra/gsa",
+      "collectors": [
+        "entra.gsa"
+      ],
+      "operations": [
+        {
+          "path": "/networkAccess/tenantStatus"
+        },
+        {
+          "path": "/networkAccess/forwardingProfiles"
+        },
+        {
+          "path": "/networkAccess/filteringPolicies",
+          "note": "the odata context comes back bare as #filteringPolicies, not #networkAccess/filteringPolicies; the resource path is under networkAccess"
+        },
+        {
+          "path": "/networkAccess/settings/conditionalAccess"
+        },
+        {
+          "path": "/networkAccess/settings/crossTenantAccess"
+        },
+        {
+          "path": "/networkAccess/connectivity/remoteNetworks"
+        }
+      ]
+    },
+    {
       "package": "internal/collectors/entra/recommendations",
       "collectors": [
         "entra.recommendations"

@@ -225,6 +225,16 @@ const (
 	AttrAuthContextEnabled        = "auth_context_enabled"
 	AttrAuthContextClaim          = "auth_context_claim"
 
+	// entra.gsa Global Secure Access posture twins (#239). The forwarding-profile
+	// and filtering-policy twins carry per-entity config detail the bounded gauges
+	// cannot. id/name/state/action/version/priority reuse the shared/domain
+	// constants (AttrId, AttrName, AttrState, AttrAction, AttrVersion,
+	// AttrPriority); these four are genuinely new.
+	AttrTrafficForwardingType = "traffic_forwarding_type"
+	AttrIsCustomProfile       = "is_custom_profile"
+	AttrClientFallbackAction  = "client_fallback_action"
+	AttrAssociationCount      = "association_count"
+
 	AttrControlName          = "control_name"
 	AttrScore                = "score"
 	AttrScoreInPercentage    = "score_in_percentage"
