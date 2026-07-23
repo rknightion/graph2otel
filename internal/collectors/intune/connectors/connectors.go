@@ -1,19 +1,38 @@
 // Package connectors is the Intune connector-health collector: connection
-// state and heartbeat/sync staleness for the three connector types Intune
+// state and heartbeat/sync staleness for the four connector types Intune
 // exposes for hybrid integrations — the Exchange Connector (on-premises/
 // hosted Exchange ActiveSync conditional access), the Mobile Threat Defense
-// (MTD) partner connector, and the Network Device Enrollment Service (NDES)
-// certificate connector.
+// (MTD) partner connector, the Network Device Enrollment Service (NDES)
+// certificate connector, and the Managed Google Play / Android managed store
+// account binding (#248).
 //
 // Exchange and MTD are v1.0 endpoints; NDES has no v1.0 mirror
-// (deviceManagement/ndesConnectors is beta-only), so this collector is NOT
-// collectors.Experimental overall — the default-on Exchange/MTD coverage must
-// not depend on a beta surface — but it polls NDES best-effort against
-// /beta with fully isolated error handling: an NDES/beta failure drops only
-// the NDES points from a cycle's snapshots and never fails the Exchange/MTD
+// (deviceManagement/ndesConnectors is beta-only) and the Managed Google Play
+// binding singleton (deviceManagement/androidManagedStoreAccountEnterpriseSettings)
+// is likewise beta-only, so this collector is NOT collectors.Experimental
+// overall — the default-on Exchange/MTD coverage must not depend on a beta
+// surface — but it polls NDES and the Android managed store best-effort against
+// /beta with fully isolated error handling: a beta failure drops only that
+// endpoint's points from a cycle's snapshots and never fails the Exchange/MTD
 // metrics (M4 seam decision, issue #51 / tracker #79 comment). The sibling
 // certificates collector (#63) intentionally excludes ndesConnectors and any
 // NDES metric — this collector owns all NDES connector-health data.
+//
+// # Managed Google Play (android_managed_store, #248)
+//
+// The androidManagedStoreAccountEnterpriseSettings singleton is folded onto the
+// existing state / heartbeat_age_seconds metrics as a fourth connector_type
+// ("android_managed_store"): its bindStatus becomes the state value (matching
+// how the other three connectors map their own enum onto state), its
+// lastAppSyncDateTime drives heartbeat_age_seconds, and one intune.connector log
+// twin carries the per-connector detail (bind status, last app-sync status,
+// enrollment target, owner UPN) the bounded metrics collapse away. A broken bind
+// silently stops ALL Managed Google Play app delivery, so the twin escalates to
+// Warn when the connector is not boundAndValidated or its last app sync did not
+// succeed. On the m7kni tenant this connector is Android-light (bound and
+// validated, but almost no Android devices), so the emitted VALUES are
+// uninteresting — the fields are all populated and mappable, which is what this
+// fold is proven against `[live-measured 2026-07-23, #248]`.
 package connectors
 
 import (
@@ -46,15 +65,25 @@ const (
 	mtdPlatformMetric  = "intune.connector.mtd_platform.total"
 )
 
-// connector_type attribute values. Bounded: exactly these three, regardless
+// connector_type attribute values. Bounded: exactly these four, regardless
 // of tenant size (a tenant can configure multiple instances of a given
 // connector type, e.g. several Exchange connectors, but the type enum itself
-// never grows).
+// never grows). android_managed_store (#248) is a singleton binding, not a
+// list, but shares the same bounded connector_type dimension.
 const (
-	connectorTypeExchange = "exchange"
-	connectorTypeMTD      = "mtd"
-	connectorTypeNDES     = "ndes"
+	connectorTypeExchange            = "exchange"
+	connectorTypeMTD                 = "mtd"
+	connectorTypeNDES                = "ndes"
+	connectorTypeAndroidManagedStore = "android_managed_store"
 )
+
+// eventConnector is the per-connector log twin (#248, #114): the detail the
+// bounded state/heartbeat metrics collapse away. Currently emitted only for the
+// Managed Google Play binding (the one connector shape whose per-connector
+// fields — bind status, last app-sync status, enrollment target, owner UPN —
+// are not expressible as bounded metric labels); connector_type distinguishes it
+// so future connector twins can share the event name.
+const eventConnector = "intune.connector"
 
 // defaultBaseURL is the Graph v1.0 root, used for the Exchange and MTD
 // connector endpoints. betaBaseURL is used only for the NDES connector
@@ -212,6 +241,23 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		}
 	}
 
+	amsPoints, amsAge, err := c.androidManagedStoreSnapshot(ctx, now, e)
+	if err != nil {
+		if isUnavailable(err) {
+			c.logger.Info("connectors: android managed store settings endpoint unavailable on this tenant; skipping managed google play metrics",
+				"collector", collectorName, "error", err)
+		} else {
+			c.logger.Warn("connectors: android managed store settings failed (isolated beta endpoint; other connector metrics unaffected)",
+				"collector", collectorName, "error", err)
+			errs = append(errs, fmt.Errorf("android managed store (beta, isolated): %w", err))
+		}
+	} else {
+		statePoints = append(statePoints, amsPoints...)
+		if amsAge != nil {
+			heartbeatPoints = append(heartbeatPoints, *amsAge)
+		}
+	}
+
 	e.GaugeSnapshot(stateMetric, "{connector}", "Intune connector instances by connector type and state.", statePoints)
 	e.GaugeSnapshot(heartbeatAgeMetric, "s",
 		"Age of the most recent heartbeat/sync across each Intune connector type's instances, in seconds (the most stale instance, not an average).",
@@ -352,6 +398,85 @@ func (c *Collector) ndesSnapshot(ctx context.Context, now time.Time) ([]telemetr
 		})
 	}
 	return points, agePointOrNil(connectorTypeNDES, maxAge, haveAge), nil
+}
+
+// androidManagedStoreSettings is the subset of the beta
+// androidManagedStoreAccountEnterpriseSettings singleton this collector reads
+// (#248). bindStatus is the connector's overall bind health — boundAndValidated
+// is the only fully-working value; anything else silently stops all Managed
+// Google Play app delivery. lastAppSyncStatus/lastAppSyncDateTime describe the
+// most recent app-catalog sync. enrollmentTarget and ownerUserPrincipalName are
+// admin-config context carried on the twin. Field names are pinned to the
+// verbatim wire `[live-measured 2026-07-23, #248]`.
+type androidManagedStoreSettings struct {
+	BindStatus             string    `json:"bindStatus"`
+	LastAppSyncDateTime    time.Time `json:"lastAppSyncDateTime"`
+	LastAppSyncStatus      string    `json:"lastAppSyncStatus"`
+	EnrollmentTarget       string    `json:"enrollmentTarget"`
+	OwnerUserPrincipalName string    `json:"ownerUserPrincipalName"`
+}
+
+// androidManagedStoreSnapshot fetches the Managed Google Play (Android managed
+// store) connector singleton (beta) and returns its state-count point plus the
+// heartbeat-age point (age since lastAppSyncDateTime), matching the shape of the
+// other three connector snapshots so it folds onto the same metrics. Unlike
+// them this is a singleton GET, not a list, so it always yields exactly one
+// state point (count 1). It also emits the one intune.connector log twin (#114)
+// carrying the per-connector detail the bounded metrics collapse away. Errors
+// are returned as-is for Collect to classify (isUnavailable vs. real).
+func (c *Collector) androidManagedStoreSnapshot(ctx context.Context, now time.Time, e telemetry.Emitter) ([]telemetry.GaugePoint, *telemetry.GaugePoint, error) {
+	body, err := c.g.RawGet(ctx, c.betaURL+"/deviceManagement/androidManagedStoreAccountEnterpriseSettings")
+	if err != nil {
+		return nil, nil, err
+	}
+	var s androidManagedStoreSettings
+	if err := json.Unmarshal(body, &s); err != nil {
+		return nil, nil, fmt.Errorf("decode androidManagedStoreAccountEnterpriseSettings: %w", err)
+	}
+
+	points := []telemetry.GaugePoint{{
+		Value: 1,
+		Attrs: telemetry.Attrs{semconv.AttrConnectorType: connectorTypeAndroidManagedStore, semconv.AttrState: orUnknown(s.BindStatus)},
+	}}
+
+	agePoint := agePointOrNil(connectorTypeAndroidManagedStore, now.Sub(s.LastAppSyncDateTime).Seconds(), !s.LastAppSyncDateTime.IsZero())
+
+	e.LogEvent(androidManagedStoreTwin(s))
+	return points, agePoint, nil
+}
+
+// androidManagedStoreTwin renders the Managed Google Play connector singleton as
+// one log record (#114): the per-connector detail the bounded state/heartbeat
+// metrics cannot carry. Warn when the connector is not fully working (a broken
+// bind or a failed last app sync silently stops Android app delivery); Info
+// otherwise. Timestamp left zero (poll time): this is a state feed re-emitted
+// every cycle.
+func androidManagedStoreTwin(s androidManagedStoreSettings) telemetry.Event {
+	attrs := telemetry.Attrs{}
+	telemetry.SetStr(attrs, semconv.AttrConnectorType, connectorTypeAndroidManagedStore)
+	telemetry.SetStr(attrs, semconv.AttrBindStatus, s.BindStatus)
+	telemetry.SetStr(attrs, semconv.AttrLastAppSyncStatus, s.LastAppSyncStatus)
+	telemetry.SetStr(attrs, semconv.AttrEnrollmentTarget, s.EnrollmentTarget)
+	telemetry.SetStr(attrs, semconv.AttrOwnerPrincipalName, s.OwnerUserPrincipalName)
+
+	sev := telemetry.SeverityInfo
+	if !managedStoreHealthy(s) {
+		sev = telemetry.SeverityWarn
+	}
+	return telemetry.Event{
+		Name:     eventConnector,
+		Body:     fmt.Sprintf("managed google play connector: bind_status=%s last_app_sync_status=%s", orUnknown(s.BindStatus), orUnknown(s.LastAppSyncStatus)),
+		Severity: sev,
+		Attrs:    attrs,
+	}
+}
+
+// managedStoreHealthy reports whether the Managed Google Play connector is in
+// its fully-working state: bound and validated, with the most recent app sync
+// having succeeded (an absent lastAppSyncStatus is not asserted to be a
+// failure). Anything else silently degrades Android app delivery.
+func managedStoreHealthy(s androidManagedStoreSettings) bool {
+	return s.BindStatus == "boundAndValidated" && (s.LastAppSyncStatus == "" || s.LastAppSyncStatus == "success")
 }
 
 // bumpPlatform increments the enabled or disabled counter for platform

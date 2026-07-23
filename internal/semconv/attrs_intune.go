@@ -469,3 +469,28 @@ const (
 	StorageStateTotal = "total"
 	StorageStateFree  = "free"
 )
+
+// Attribute keys for the two #248 Intune device-management health folds, both
+// reading a BETA singleton onto an existing collector's fetch cycle:
+//
+//   - intune/connectors — the Managed Google Play (Android managed store)
+//     connector, added as a fourth connector_type on the existing
+//     intune.connector.state / heartbeat_age_seconds metrics plus one
+//     intune.connector log twin. bind_status / last_app_sync_status /
+//     enrollment_target are twin-only; owner UPN reuses AttrOwnerPrincipalName,
+//     connector_type / state / last_sync_date_time are reused from above.
+//   - intune/autopilot — the windowsAutopilotSettings device-registration sync,
+//     added as intune.autopilot.sync_age_seconds / sync_status plus one
+//     intune.autopilot.sync log twin. sync_status is the metric label;
+//     last_manual_sync_trigger_date_time is twin-only; id / last_sync_date_time
+//     are reused from above.
+//
+// Every value here is live-captured from the beta wire (probed as
+// graph2otel-poller against m7kni 2026-07-23), not a doc placeholder.
+const (
+	AttrBindStatus            = "bind_status"
+	AttrEnrollmentTarget      = "enrollment_target"
+	AttrLastAppSyncStatus     = "last_app_sync_status"
+	AttrLastManualSyncTrigger = "last_manual_sync_trigger_date_time"
+	AttrSyncStatus            = "sync_status"
+)

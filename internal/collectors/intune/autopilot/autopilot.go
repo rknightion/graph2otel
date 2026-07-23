@@ -14,6 +14,20 @@
 // Per-device enrollment *events* (`autopilotEvents`, beta) are an event
 // stream and belong in the M5 logs pipeline, not here - this collector covers
 // only the device-identity and profile entity snapshots (issue #57).
+//
+// # Device-registration sync staleness (#248)
+//
+// The windowsAutopilotSettings singleton (beta) records when Intune last pulled
+// Autopilot device registrations from the OEM/partner sync. It is folded onto
+// this collector's existing fetch cycle as two signals: sync_age_seconds
+// (seconds since lastSyncDateTime, no labels) and sync_status (a bounded enum
+// gauge, value 1 for the current bucket). When the last sync was not healthy
+// (syncStatus != completed) one intune.autopilot.sync log twin is emitted at
+// Warn carrying the raw status and timestamps. "Autopilot registrations stopped
+// arriving from the OEM/partner" is otherwise undetectable. On m7kni the sync is
+// `completed` with a fresh lastSyncDateTime `[live-measured 2026-07-23, #248]`,
+// so the twin's unhealthy path is proven by a synthetic status, not the live
+// sample.
 package autopilot
 
 import (
@@ -47,7 +61,17 @@ const (
 	profileSettingMetricName     = "intune.autopilot.profile.setting"
 	profileEspTimeoutMetricName  = "intune.autopilot.profile.esp_timeout_minutes"
 	profileAssignmentsMetricName = "intune.autopilot.profile.assignments"
+	// #248: device-registration sync staleness from the windowsAutopilotSettings
+	// singleton. sync_age_seconds carries no labels (one tenant-wide sync clock);
+	// sync_status is a bounded enum gauge.
+	syncAgeMetricName    = "intune.autopilot.sync_age_seconds"
+	syncStatusMetricName = "intune.autopilot.sync_status"
 )
+
+// eventSync is the device-registration sync log twin (#248, #114): emitted only
+// when the sync is NOT healthy (syncStatus != completed), carrying the raw
+// status and the sync timestamps the bounded gauges collapse away.
+const eventSync = "intune.autopilot.sync"
 
 // defaultBaseURL is the Graph v1.0 root, used for windowsAutopilotDeviceIdentities.
 const defaultBaseURL = "https://graph.microsoft.com/v1.0"
@@ -107,6 +131,27 @@ func deviceTypeBucketFor(raw string) string {
 		return "unknown"
 	}
 	if b, ok := deviceTypeBuckets[raw]; ok {
+		return b
+	}
+	return "other"
+}
+
+// syncStatusBuckets maps every documented windowsAutopilotSyncStatus value to
+// its bounded attribute value; anything unrecognized (or empty) collapses to
+// unknown/other so the sync_status dimension can never grow unbounded. "completed"
+// is the healthy state — any other value is what escalates the twin to Warn.
+var syncStatusBuckets = map[string]string{
+	"unknown":    "unknown",
+	"inProgress": "in_progress",
+	"completed":  "completed",
+	"failed":     "failed",
+}
+
+func syncStatusBucketFor(raw string) string {
+	if raw == "" {
+		return "unknown"
+	}
+	if b, ok := syncStatusBuckets[raw]; ok {
 		return b
 	}
 	return "other"
@@ -304,6 +349,11 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		errs = append(errs, fmt.Errorf("deployment profiles: %w", err))
 	}
 
+	if err := c.collectSyncSettings(ctx, e); err != nil {
+		c.logger.Warn("autopilot: device-registration sync settings failed", "collector", collectorName, "error", err)
+		errs = append(errs, fmt.Errorf("sync settings: %w", err))
+	}
+
 	return errors.Join(errs...)
 }
 
@@ -468,6 +518,87 @@ func (c *Collector) assignmentCount(ctx context.Context, profileID string) (int,
 		return 0, err
 	}
 	return len(raw), nil
+}
+
+// autopilotSyncSettings is the subset of the beta windowsAutopilotSettings
+// singleton this collector reads (#248). lastSyncDateTime is when Intune last
+// pulled device registrations from the OEM/partner sync;
+// lastManualSyncTriggerDateTime is when an admin last forced one; syncStatus is
+// a windowsAutopilotSyncStatus enum (completed is healthy). Field names pinned to
+// the verbatim wire `[live-measured 2026-07-23, #248]`.
+type autopilotSyncSettings struct {
+	ID                            string    `json:"id"`
+	LastSyncDateTime              time.Time `json:"lastSyncDateTime"`
+	LastManualSyncTriggerDateTime time.Time `json:"lastManualSyncTriggerDateTime"`
+	SyncStatus                    string    `json:"syncStatus"`
+}
+
+// collectSyncSettings fetches the windowsAutopilotSettings singleton (beta) and
+// emits the device-registration staleness signals: sync_age_seconds (seconds
+// since lastSyncDateTime, no labels) and the bounded sync_status gauge. When the
+// last sync was not healthy (syncStatus != completed) it emits one
+// intune.autopilot.sync log twin at Warn carrying the raw status and timestamps.
+// A 403/404 (beta endpoint unavailable/unlicensed) is skipped-and-logged like
+// the profiles fetch, never a failure; a non-4xx error is returned for Collect
+// to aggregate, and the other two fetches still emit regardless.
+func (c *Collector) collectSyncSettings(ctx context.Context, e telemetry.Emitter) error {
+	body, err := c.g.RawGet(ctx, c.betaURL+"/deviceManagement/windowsAutopilotSettings")
+	if err != nil {
+		if isUnavailable(err) {
+			c.logger.Info("autopilot: windows autopilot settings endpoint unavailable; skipping sync staleness",
+				"collector", collectorName, "error", err)
+			return nil
+		}
+		return err
+	}
+	var s autopilotSyncSettings
+	if err := json.Unmarshal(body, &s); err != nil {
+		return fmt.Errorf("decode windowsAutopilotSettings: %w", err)
+	}
+
+	if !s.LastSyncDateTime.IsZero() {
+		age := c.now().Sub(s.LastSyncDateTime).Seconds()
+		e.Gauge(syncAgeMetricName, "s",
+			"Seconds since Windows Autopilot last synced device registrations from the OEM/partner (windowsAutopilotSettings.lastSyncDateTime).",
+			age, nil)
+	}
+
+	bucket := syncStatusBucketFor(s.SyncStatus)
+	e.GaugeSnapshot(syncStatusMetricName, "1",
+		"Windows Autopilot device-registration sync status (value 1 for the current bounded status bucket).",
+		[]telemetry.GaugePoint{{Value: 1, Attrs: telemetry.Attrs{semconv.AttrSyncStatus: bucket}}})
+
+	if bucket != "completed" {
+		e.LogEvent(syncTwin(s))
+	}
+	return nil
+}
+
+// syncTwin renders the windowsAutopilotSettings singleton as one log record
+// (#248, #114), emitted only when the sync is unhealthy — hence always Warn. It
+// carries the raw syncStatus and the sync timestamps the bounded gauges collapse
+// away. Timestamp left zero (poll time): this is a state feed re-emitted every
+// cycle, not a point-in-time event.
+func syncTwin(s autopilotSyncSettings) telemetry.Event {
+	status := s.SyncStatus
+	if status == "" {
+		status = "unknown"
+	}
+	attrs := telemetry.Attrs{}
+	telemetry.SetStr(attrs, semconv.AttrId, s.ID)
+	telemetry.SetStr(attrs, semconv.AttrSyncStatus, s.SyncStatus)
+	if !s.LastSyncDateTime.IsZero() {
+		telemetry.SetStr(attrs, semconv.AttrLastSyncDateTime, s.LastSyncDateTime.Format(time.RFC3339Nano))
+	}
+	if !s.LastManualSyncTriggerDateTime.IsZero() {
+		telemetry.SetStr(attrs, semconv.AttrLastManualSyncTrigger, s.LastManualSyncTriggerDateTime.Format(time.RFC3339Nano))
+	}
+	return telemetry.Event{
+		Name:     eventSync,
+		Body:     fmt.Sprintf("windows autopilot device-registration sync status: %s", status),
+		Severity: telemetry.SeverityWarn,
+		Attrs:    attrs,
+	}
 }
 
 // isUnavailable reports whether err is a 4xx from the beta endpoint being

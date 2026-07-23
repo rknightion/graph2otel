@@ -299,8 +299,8 @@ var annotations = map[string]Annotation{
 		Source:   "`/deviceAppManagement/iosManagedAppProtections`, `androidManagedAppProtections`, `targetedManagedAppConfigurations`, `windowsInformationProtectionPolicies`, `mdmWindowsInformationProtectionPolicies`",
 	},
 	"intune.autopilot": {
-		Collects: "Autopilot device registration + deployment profile state",
-		Source:   "`/deviceManagement/windowsAutopilotDeviceIdentities`, deployment profiles",
+		Collects: "Autopilot device registration + deployment profile state, plus device-registration sync staleness (#248): sync_age_seconds (since the last OEM/partner sync) + sync_status, with a Warn twin when the sync is not healthy — so \"registrations stopped arriving\" is detectable",
+		Source:   "`/deviceManagement/windowsAutopilotDeviceIdentities`, deployment profiles, `/beta/deviceManagement/windowsAutopilotSettings` (sync singleton)",
 	},
 	"intune.certificates": {
 		Collects: "Certificate state + days-until-expiry",
@@ -319,9 +319,9 @@ var annotations = map[string]Annotation{
 		Source:   "`/deviceManagement/deviceConfigurations` (fan-out per profile)",
 	},
 	"intune.connectors": {
-		Collects: "Exchange/MTD/NDES connector health",
-		Source:   "`/deviceManagement/exchangeConnectors`, `/deviceManagement/mobileThreatDefenseConnectors`, NDES (beta, isolated)",
-		Gating:   "Exchange/MTD are default-on; the NDES sub-fetch is beta and isolated, so its failure does not gate the collector",
+		Collects: "Exchange/MTD/NDES/Managed-Google-Play connector health. Managed Google Play (#248) folds in as a fourth connector_type on the existing state + heartbeat_age_seconds metrics (no new metric names) with a Warn twin — a broken Android Enterprise bind stops all Android app delivery silently",
+		Source:   "`/deviceManagement/exchangeConnectors`, `/deviceManagement/mobileThreatDefenseConnectors`, NDES (beta, isolated), `/beta/deviceManagement/androidManagedStoreAccountEnterpriseSettings` (beta, isolated)",
+		Gating:   "Exchange/MTD are default-on; the NDES and Managed-Google-Play sub-fetches are beta and isolated, so their failure does not gate the collector",
 	},
 	"intune.detected_apps": {
 		Collects: "Detected-apps software inventory catalog. Every catalog row becomes a `device_count` series, summed across versions and folded case-insensitively (Intune emits casing variants of one application). The fixed eight-app allow-list this collector used to promote from was retired in #235 — the catalog is unbounded, but it is bounded by the central cardinality limiter now (top N by device count, tail into `app_name=\"other\"`) rather than by a standing guess about which applications matter, which on a real tenant promoted zero series",

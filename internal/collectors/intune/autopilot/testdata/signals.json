@@ -50,7 +50,31 @@
       "AttrKeys": [
         "group_tag"
       ]
+    },
+    {
+      "Name": "intune.autopilot.sync_age_seconds",
+      "Unit": "s",
+      "Kind": "gauge",
+      "AttrKeys": []
+    },
+    {
+      "Name": "intune.autopilot.sync_status",
+      "Unit": "1",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "sync_status"
+      ]
     }
   ],
-  "Logs": null
+  "Logs": [
+    {
+      "EventName": "intune.autopilot.sync",
+      "AttrKeys": [
+        "id",
+        "last_manual_sync_trigger_date_time",
+        "last_sync_date_time",
+        "sync_status"
+      ]
+    }
+  ]
 }

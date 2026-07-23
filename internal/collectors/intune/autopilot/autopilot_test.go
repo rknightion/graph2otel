@@ -163,11 +163,40 @@ func newTestCollector(g collectors.GraphClient) *Collector {
 	return c
 }
 
-func devicesURL() string  { return v1Base + "/deviceManagement/windowsAutopilotDeviceIdentities" }
-func profilesURL() string { return betaBase + "/deviceManagement/windowsAutopilotDeploymentProfiles" }
+func devicesURL() string      { return v1Base + "/deviceManagement/windowsAutopilotDeviceIdentities" }
+func profilesURL() string     { return betaBase + "/deviceManagement/windowsAutopilotDeploymentProfiles" }
+func syncSettingsURL() string { return betaBase + "/deviceManagement/windowsAutopilotSettings" }
 func assignmentsURL(id string) string {
 	return betaBase + "/deviceManagement/windowsAutopilotDeploymentProfiles/" + id + "/assignments"
 }
+
+// baseSyncSettingsBody is a healthy (completed) windowsAutopilotSettings
+// singleton dated one hour before fixedNow, wired into baseFixtures so every
+// test's Collect gets a sane device-registration sync clock. The VERBATIM live
+// capture (dated 2026-07-23) is exercised separately in
+// TestCollectEmitsLiveSyncSettingsEndToEnd, and the unhealthy/Warn path in
+// TestCollectEmitsSyncTwinWhenSyncNotCompleted.
+const baseSyncSettingsBody = `{
+  "id": "e933bb26-3dff-49f0-a41a-bd722a92f1fb",
+  "lastSyncDateTime": "2026-07-17T17:00:00Z",
+  "lastManualSyncTriggerDateTime": "2026-07-17T16:59:59Z",
+  "syncStatus": "completed"
+}`
+
+// liveSyncSettingsBody is a VERBATIM GET
+// /beta/deviceManagement/windowsAutopilotSettings read as graph2otel-poller
+// against the m7kni tenant `[live-measured 2026-07-23, #248]`. A singleton (no
+// {value:[]} envelope): the last device-registration sync completed cleanly.
+const liveSyncSettingsBody = `{
+  "@odata.context": "https://graph.microsoft.com/beta/$metadata#deviceManagement/windowsAutopilotSettings/$entity",
+  "id": "e933bb26-3dff-49f0-a41a-bd722a92f1fb",
+  "lastSyncDateTime": "2026-07-23T11:23:15.0768271Z",
+  "lastManualSyncTriggerDateTime": "2026-07-23T11:23:14.5754524Z",
+  "syncStatus": "completed"
+}`
+
+// liveSyncNow is one hour after the live lastSyncDateTime, so sync_age is 3600s.
+var liveSyncNow = time.Date(2026, 7, 23, 12, 23, 15, 76827100, time.UTC)
 
 func page(items ...map[string]any) string {
 	b, err := json.Marshal(map[string]any{"value": items})
@@ -221,6 +250,7 @@ func baseFixtures() map[string]string {
 		devicesURL():                  liveDevicesBody,
 		profilesURL():                 liveProfilesBody,
 		assignmentsURL(liveProfileID): liveAssignmentsBody,
+		syncSettingsURL():             baseSyncSettingsBody,
 	}
 }
 
@@ -629,6 +659,139 @@ func TestNoPerDeviceAttributes(t *testing.T) {
 					t.Errorf("metric %s has a per-device attribute %q - cardinality violation", metric, k)
 				}
 			}
+		}
+	}
+}
+
+// TestCollectEmitsLiveSyncSettingsEndToEnd drives the verbatim live
+// windowsAutopilotSettings singleton (#248) through Collect: a healthy
+// (completed) sync emits sync_age_seconds and the sync_status gauge but NO twin.
+func TestCollectEmitsLiveSyncSettingsEndToEnd(t *testing.T) {
+	bodies := baseFixtures()
+	bodies[syncSettingsURL()] = liveSyncSettingsBody
+	g := &fakeGraph{bodies: bodies}
+	c := New(g, nil)
+	c.now = func() time.Time { return liveSyncNow }
+	rec := telemetrytest.New()
+
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	age := rec.MetricPoints(syncAgeMetricName)
+	if len(age) != 1 || age[0].Value != (1*time.Hour).Seconds() {
+		t.Errorf("sync_age = %+v, want one point value=3600", age)
+	}
+	if len(age) == 1 && len(age[0].Attrs) != 0 {
+		t.Errorf("sync_age carries labels %+v, want none", age[0].Attrs)
+	}
+
+	status := rec.MetricPoints(syncStatusMetricName)
+	if len(status) != 1 || status[0].Value != 1 || status[0].Attrs["sync_status"] != "completed" {
+		t.Errorf("sync_status = %+v, want one completed point value=1", status)
+	}
+
+	for _, r := range rec.LogRecords() {
+		if r.EventName == eventSync {
+			t.Errorf("intune.autopilot.sync twin emitted for a completed sync: %+v", r)
+		}
+	}
+}
+
+// TestCollectEmitsSyncTwinWhenSyncNotCompleted pins the Warn/twin path: a sync
+// whose status is not "completed" emits the bounded sync_status gauge in that
+// bucket AND one intune.autopilot.sync log twin at WARN — the only way
+// "registrations stopped arriving from the OEM/partner" becomes detectable.
+func TestCollectEmitsSyncTwinWhenSyncNotCompleted(t *testing.T) {
+	bodies := baseFixtures()
+	bodies[syncSettingsURL()] = `{"id":"ap-1","lastSyncDateTime":"2026-07-10T00:00:00Z","lastManualSyncTriggerDateTime":"2026-07-10T00:00:00Z","syncStatus":"failed"}`
+	g := &fakeGraph{bodies: bodies}
+	rec := telemetrytest.New()
+
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	status := rec.MetricPoints(syncStatusMetricName)
+	if len(status) != 1 || status[0].Value != 1 || status[0].Attrs["sync_status"] != "failed" {
+		t.Errorf("sync_status = %+v, want one failed point value=1", status)
+	}
+
+	var twins []telemetrytest.LogRecord
+	for _, r := range rec.LogRecords() {
+		if r.EventName == eventSync {
+			twins = append(twins, r)
+		}
+	}
+	if len(twins) != 1 {
+		t.Fatalf("intune.autopilot.sync twins = %d, want 1: %+v", len(twins), twins)
+	}
+	tw := twins[0]
+	if tw.SeverityText != "WARN" {
+		t.Errorf("twin severity = %q, want WARN (sync not completed)", tw.SeverityText)
+	}
+	if tw.Attrs["sync_status"] != "failed" || tw.Attrs["id"] != "ap-1" {
+		t.Errorf("twin attrs = %+v, want sync_status=failed id=ap-1", tw.Attrs)
+	}
+	if tw.Attrs["last_sync_date_time"] == "" {
+		t.Errorf("twin missing last_sync_date_time: %+v", tw.Attrs)
+	}
+}
+
+// TestCollectSkipsUnavailableSyncSettingsEndpoint pins the beta-unavailability
+// graceful-skip: a 403/404 from windowsAutopilotSettings is skipped-and-logged,
+// not a Collect error, and the device/profile signals still emit.
+func TestCollectSkipsUnavailableSyncSettingsEndpoint(t *testing.T) {
+	g := &fakeGraph{
+		bodies: baseFixtures(),
+		errs:   map[string]error{syncSettingsURL(): errors.New("graph request failed: status 404")},
+	}
+	rec := telemetrytest.New()
+
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect should skip-and-log an unavailable beta sync endpoint, got error: %v", err)
+	}
+	if len(rec.MetricPoints(syncAgeMetricName)) != 0 || len(rec.MetricPoints(syncStatusMetricName)) != 0 {
+		t.Error("sync signals should be absent when the endpoint is unavailable")
+	}
+	if len(rec.MetricPoints(devicesMetricName)) == 0 {
+		t.Error("device series should still emit despite the sync endpoint being unavailable")
+	}
+}
+
+// TestCollectIsResilientToSyncSettingsFailure: a real (non-4xx) sync failure is
+// surfaced as an error but does not suppress the device/profile signals.
+func TestCollectIsResilientToSyncSettingsFailure(t *testing.T) {
+	g := &fakeGraph{
+		bodies: baseFixtures(),
+		errs:   map[string]error{syncSettingsURL(): errors.New("throttled")},
+	}
+	rec := telemetrytest.New()
+
+	err := newTestCollector(g).Collect(context.Background(), rec.Emitter())
+	if err == nil {
+		t.Fatal("expected Collect to surface the sync settings failure as an error")
+	}
+	if len(rec.MetricPoints(syncAgeMetricName)) != 0 {
+		t.Error("sync signals should be absent when the sync fetch failed")
+	}
+	if len(rec.MetricPoints(devicesMetricName)) == 0 || len(rec.MetricPoints(profileCountMetricName)) == 0 {
+		t.Error("device and profile series should still emit despite the sync failure")
+	}
+}
+
+func TestSyncStatusBucketFor(t *testing.T) {
+	cases := map[string]string{
+		"completed":    "completed",
+		"inProgress":   "in_progress",
+		"failed":       "failed",
+		"unknown":      "unknown",
+		"":             "unknown",
+		"somethingNew": "other",
+	}
+	for raw, want := range cases {
+		if got := syncStatusBucketFor(raw); got != want {
+			t.Errorf("syncStatusBucketFor(%q) = %q, want %q", raw, got, want)
 		}
 	}
 }

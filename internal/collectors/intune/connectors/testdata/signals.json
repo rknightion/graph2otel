@@ -27,5 +27,16 @@
       ]
     }
   ],
-  "Logs": null
+  "Logs": [
+    {
+      "EventName": "intune.connector",
+      "AttrKeys": [
+        "bind_status",
+        "connector_type",
+        "enrollment_target",
+        "last_app_sync_status",
+        "owner_principal_name"
+      ]
+    }
+  ]
 }

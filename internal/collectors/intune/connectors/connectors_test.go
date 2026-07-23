@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -40,7 +41,43 @@ var (
 	exchangeURL = defaultBaseURL + "/deviceManagement/exchangeConnectors"
 	mtdURL      = defaultBaseURL + "/deviceManagement/mobileThreatDefenseConnectors"
 	ndesURL     = betaBaseURL + "/deviceManagement/ndesConnectors"
+	amsURL      = betaBaseURL + "/deviceManagement/androidManagedStoreAccountEnterpriseSettings"
 )
+
+// amsUnavailableErr is the graceful-skip (404) shape the beta Managed Google
+// Play singleton returns on a tenant that has never bound one. Wired into the
+// exchange/mtd/ndes-focused tests so their assertions stay exactly as they were
+// before the #248 fold — the android_managed_store branch simply emits nothing.
+func amsUnavailableErr() error {
+	return errors.New(`graphclient: GET https://graph.microsoft.com/beta/deviceManagement/androidManagedStoreAccountEnterpriseSettings: status 404: {"error":{"code":"NotFound"}}`)
+}
+
+// liveAndroidManagedStore is a VERBATIM GET
+// /beta/deviceManagement/androidManagedStoreAccountEnterpriseSettings read as
+// graph2otel-poller against the m7kni tenant `[live-measured 2026-07-23, #248]`.
+// It is a singleton (no {value:[]} envelope): boundAndValidated, last app sync
+// succeeded. m7kni is Android-light so the VALUES are uninteresting, but every
+// field the mapper reads is populated exactly as spelled here.
+const liveAndroidManagedStore = `{
+  "@odata.context": "https://graph.microsoft.com/beta/$metadata#deviceManagement/androidManagedStoreAccountEnterpriseSettings/$entity",
+  "id": "androidManagedStoreAccountEnterpriseSettings",
+  "bindStatus": "boundAndValidated",
+  "managedGooglePlayEnterpriseType": "managedGoogleDomain",
+  "lastAppSyncDateTime": "2026-07-23T16:59:33.792783Z",
+  "lastAppSyncStatus": "success",
+  "ownerUserPrincipalName": "rob@rob-knight.com",
+  "ownerOrganizationName": "rob-knight",
+  "lastModifiedDateTime": "2025-09-11T14:43:51.9783652Z",
+  "enrollmentTarget": "targetedAsEnrollmentRestrictions",
+  "targetGroupIds": [],
+  "deviceOwnerManagementEnabled": true,
+  "androidDeviceOwnerFullyManagedEnrollmentEnabled": false,
+  "managedGooglePlayInitialScopeTagIds": ["0"],
+  "companyCodes": []
+}`
+
+// liveAMSNow is one hour after lastAppSyncDateTime, so heartbeat_age is 3600s.
+var liveAMSNow = time.Date(2026, 7, 23, 17, 59, 33, 792783000, time.UTC)
 
 var fixedNow = time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
 
@@ -158,7 +195,7 @@ func TestCollectEmitsStateAndHeartbeatAcrossAllThreeConnectorTypes(t *testing.T)
 		ndesURL: `{"value":[
 			{"state":"active","lastConnectionDateTime":"2026-07-15T11:00:00Z"}
 		]}`,
-	}}
+	}, errs: map[string]error{amsURL: amsUnavailableErr()}}
 	rec := telemetrytest.New()
 
 	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
@@ -225,6 +262,7 @@ func TestCollectEmitsLiveMTDConnectorsEndToEnd(t *testing.T) {
 		errs: map[string]error{
 			// live: exchangeConnectors returned 501 NotSupported, not an empty list.
 			exchangeURL: errors.New(`graphclient: GET https://graph.microsoft.com/v1.0/deviceManagement/exchangeConnectors: status 501: {"error":{"code":"NotSupported"}}`),
+			amsURL:      amsUnavailableErr(),
 		},
 	}
 	c := New(g, nil)
@@ -285,6 +323,7 @@ func TestCollectSkipsExchangeGracefullyOn501AndStillEmitsMTDAndNDES(t *testing.T
 		},
 		errs: map[string]error{
 			exchangeURL: errors.New(`graphclient: GET https://graph.microsoft.com/v1.0/deviceManagement/exchangeConnectors: status 501: {"error":{"code":"NotSupported","message":"..."}}`),
+			amsURL:      amsUnavailableErr(),
 		},
 	}
 	rec := telemetrytest.New()
@@ -313,6 +352,7 @@ func TestCollectSkipsNDESSilentlyOn403AndStillEmitsExchangeAndMTD(t *testing.T) 
 		},
 		errs: map[string]error{
 			ndesURL: errors.New("graphclient: GET https://graph.microsoft.com/beta/deviceManagement/ndesConnectors: status 403: forbidden"),
+			amsURL:  amsUnavailableErr(),
 		},
 	}
 	rec := telemetrytest.New()
@@ -343,6 +383,7 @@ func TestCollectIsolatesNDESRealFailureFromExchangeAndMTD(t *testing.T) {
 		},
 		errs: map[string]error{
 			ndesURL: errors.New("graphclient: GET https://graph.microsoft.com/beta/deviceManagement/ndesConnectors: status 500: boom"),
+			amsURL:  amsUnavailableErr(),
 		},
 	}
 	rec := telemetrytest.New()
@@ -369,6 +410,7 @@ func TestCollectHandlesExchangeFailureIndependentlyOfMTDAndNDES(t *testing.T) {
 		},
 		errs: map[string]error{
 			exchangeURL: errors.New("graphclient: GET .../exchangeConnectors: status 500: boom"),
+			amsURL:      amsUnavailableErr(),
 		},
 	}
 	rec := telemetrytest.New()
@@ -381,6 +423,94 @@ func TestCollectHandlesExchangeFailureIndependentlyOfMTDAndNDES(t *testing.T) {
 	// aborted before reaching (or recording) their empty state.
 	if _, ok := findPoint(rec.MetricPoints(stateMetric), map[string]string{"connector_type": "exchange"}); ok {
 		t.Errorf("exchange state point present despite the list call failing")
+	}
+}
+
+// TestCollectEmitsLiveAndroidManagedStoreEndToEnd drives the verbatim live
+// Managed Google Play singleton (#248) through Collect: the binding folds onto
+// the shared state/heartbeat metrics as connector_type=android_managed_store and
+// emits one intune.connector log twin. Exchange 501s, MTD/NDES are empty — the
+// real m7kni steady state — so only the android_managed_store connector points
+// are present.
+func TestCollectEmitsLiveAndroidManagedStoreEndToEnd(t *testing.T) {
+	g := &fakeGraph{
+		bodies: map[string]string{
+			amsURL:  liveAndroidManagedStore,
+			mtdURL:  `{"value":[]}`,
+			ndesURL: `{"value":[]}`,
+		},
+		errs: map[string]error{
+			exchangeURL: errors.New(`graphclient: GET https://graph.microsoft.com/v1.0/deviceManagement/exchangeConnectors: status 501: {"error":{"code":"NotSupported"}}`),
+		},
+	}
+	c := New(g, nil)
+	c.now = func() time.Time { return liveAMSNow }
+	rec := telemetrytest.New()
+
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v, want nil (live steady state is graceful)", err)
+	}
+
+	states := rec.MetricPoints(stateMetric)
+	if p, ok := findPoint(states, map[string]string{"connector_type": "android_managed_store", "state": "boundAndValidated"}); !ok || p.Value != 1 {
+		t.Errorf("android_managed_store state point = %+v, ok=%v, want boundAndValidated value=1", p, ok)
+	}
+
+	amsAge := pointByAttr(t, rec.MetricPoints(heartbeatAgeMetric), "connector_type", "android_managed_store")
+	if amsAge.Value != (1 * time.Hour).Seconds() {
+		t.Errorf("android_managed_store heartbeat age = %v, want %v", amsAge.Value, (1 * time.Hour).Seconds())
+	}
+
+	// Exactly one intune.connector twin, carrying the per-connector detail the
+	// metrics collapse away. Healthy binding → INFO.
+	var twins []telemetrytest.LogRecord
+	for _, r := range rec.LogRecords() {
+		if r.EventName == eventConnector {
+			twins = append(twins, r)
+		}
+	}
+	if len(twins) != 1 {
+		t.Fatalf("intune.connector twins = %d, want 1: %+v", len(twins), twins)
+	}
+	tw := twins[0]
+	if tw.SeverityText != "INFO" {
+		t.Errorf("twin severity = %q, want INFO (bound and validated, sync succeeded)", tw.SeverityText)
+	}
+	wantAttrs := map[string]string{
+		"connector_type":       "android_managed_store",
+		"bind_status":          "boundAndValidated",
+		"last_app_sync_status": "success",
+		"enrollment_target":    "targetedAsEnrollmentRestrictions",
+		"owner_principal_name": "rob@rob-knight.com",
+	}
+	for k, v := range wantAttrs {
+		if tw.Attrs[k] != v {
+			t.Errorf("twin attr %s = %q, want %q", k, tw.Attrs[k], v)
+		}
+	}
+}
+
+// TestAndroidManagedStoreTwinSeverity pins the Warn condition directly on the
+// mapper (the recorder idiom the LogRecord doc recommends): a broken bind or a
+// failed last app sync escalates to Warn because it silently stops all Android
+// app delivery; the fully-working state stays Info.
+func TestAndroidManagedStoreTwinSeverity(t *testing.T) {
+	cases := []struct {
+		name string
+		s    androidManagedStoreSettings
+		want telemetry.Severity
+	}{
+		{"healthy", androidManagedStoreSettings{BindStatus: "boundAndValidated", LastAppSyncStatus: "success"}, telemetry.SeverityInfo},
+		{"unbound", androidManagedStoreSettings{BindStatus: "notBound", LastAppSyncStatus: "success"}, telemetry.SeverityWarn},
+		{"sync_failed", androidManagedStoreSettings{BindStatus: "boundAndValidated", LastAppSyncStatus: "failed"}, telemetry.SeverityWarn},
+		{"sync_absent_still_info", androidManagedStoreSettings{BindStatus: "boundAndValidated"}, telemetry.SeverityInfo},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := androidManagedStoreTwin(tc.s).Severity; got != tc.want {
+				t.Errorf("severity = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 
