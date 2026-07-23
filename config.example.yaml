@@ -119,6 +119,19 @@ tenants:
     # exchange_online:
     #   enabled: true
 
+    # hunting enables the advanced-hunting collectors (#249) — the DeviceTvm*
+    # threat-and-vulnerability-management posture (device vulnerabilities, secure
+    # configuration assessments, software inventory), reached over the Graph
+    # runHuntingQuery API. No credential of its own — the tenant's existing
+    # DefaultAzureCredential is reused — but it needs the ThreatHunting.Read.All
+    # app role (read-only); without it every query answers 403. Opt-in, and off
+    # by default, because each query draws on a per-tenant CPU budget shared with
+    # humans in the Defender portal, so the collectors poll on a long interval and
+    # an operator turns them on deliberately. A tenant with no Defender-onboarded
+    # devices sees empty results, so enabling it there is harmless but pointless.
+    # hunting:
+    #   enabled: true
+
 otlp:
   protocol: http # grpc | http | stdout (stdout = print signals to the console for local debug, no backend)
   endpoint: "https://otlp-gateway-prod-us-central-0.grafana.net/otlp" # OTLP base URL (the exporter appends /v1/metrics and /v1/logs itself)

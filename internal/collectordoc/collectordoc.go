@@ -314,12 +314,12 @@ func CheckAnnotations(registered []string) error {
 // package has no golden hard-errors here — the same convention blobConfig
 // uses for a missing container: a blank signal cell would be a silently wrong
 // doc, which is what this whole package exists to prevent.
-func Rows(snapshot, window, blob, o365, mdca, exo []any, root string) ([]Row, error) {
+func Rows(snapshot, window, blob, o365, mdca, exo, hunt []any, root string) ([]Row, error) {
 	var rows []Row
 	for _, group := range []struct {
 		kind Kind
 		cs   []any
-	}{{KindSnapshot, snapshot}, {KindWindow, window}, {KindBlob, blob}, {KindWindow, o365}, {KindWindow, mdca}, {KindSnapshot, exo}} {
+	}{{KindSnapshot, snapshot}, {KindWindow, window}, {KindBlob, blob}, {KindWindow, o365}, {KindWindow, mdca}, {KindSnapshot, exo}, {KindSnapshot, hunt}} {
 		for _, c := range group.cs {
 			facts, ok := c.(collectorFacts)
 			if !ok {

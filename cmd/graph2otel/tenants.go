@@ -20,6 +20,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/exoclient"
 	"github.com/rknightion/graph2otel/internal/exportjob"
 	"github.com/rknightion/graph2otel/internal/graphclient"
+	"github.com/rknightion/graph2otel/internal/huntclient"
 	"github.com/rknightion/graph2otel/internal/jobpipeline"
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
@@ -256,6 +257,16 @@ func setupTenant(
 	// advance and that most tenants will not have, so the switch is
 	// exchange_online.enabled rather than the presence of a URL or token.
 	registerEXOCollectors(cfg, ta, caps, tlog, emitter, registry, skips)
+
+	// Advanced-hunting collectors (#249) — the SEVENTH registration path. The
+	// DeviceTvm* threat-and-vulnerability-management posture, reached over the
+	// Graph runHuntingQuery API. Opt-in like Exchange Online (hunting.enabled),
+	// for two reasons graph2otel cannot detect in advance: it needs the
+	// ThreatHunting.Read.All app role (the query 403s at runtime without it), and
+	// every query draws on a per-tenant advanced-hunting CPU budget shared with
+	// humans in the Defender portal (#106), so an operator turns it on
+	// deliberately.
+	registerHuntCollectors(cfg, ta, caps, tlog, emitter, registry, skips)
 
 	// Transport mutual-exclusion, checked AFTER every registration path above
 	// and before anything is scheduled (#144). Position is load-bearing: run
@@ -637,6 +648,63 @@ func tenantEXOConfig(cfg *config.Config, tenantID string) config.ExchangeOnlineC
 		}
 	}
 	return config.ExchangeOnlineConfig{}
+}
+
+// registerHuntCollectors wires the tenant's advanced-hunting collectors (#249),
+// the seventh registration path.
+//
+// Opt-in: a tenant without hunting.enabled registers none of these and records
+// no skips (there is nothing to be absent). Like Exchange Online it carries no
+// secret of its own — the tenant's existing DefaultAzureCredential is reused
+// against the Graph audience — so the only failure mode before the first query
+// is a client-build error, which skips just these collectors with the reason
+// attached.
+//
+// The one grant this needs (ThreatHunting.Read.All) cannot be checked here: a
+// token mints fine without it, and the 403 surfaces only when a query runs. That
+// is why the switch is explicit rather than inferred — see config.HuntingConfig.
+func registerHuntCollectors(
+	cfg *config.Config,
+	ta *auth.TenantAuth,
+	caps license.Capabilities,
+	tlog *slog.Logger,
+	emitter telemetry.Emitter,
+	registry *collector.Registry,
+	skips map[admin.SkipKey]string,
+) {
+	if !tenantHuntingConfig(cfg, ta.TenantID).Enabled {
+		return // opt-out: no hunting block, nothing to register or skip.
+	}
+
+	client, err := huntclient.NewClient(ta, huntclient.Options{Emitter: emitter})
+	if err != nil {
+		tlog.Error("advanced hunting disabled: building the client failed", "error", err)
+		reason := "advanced hunting unavailable: " + err.Error()
+		for _, hf := range collectors.HuntAll() {
+			c := hf(collectors.HuntDeps{TenantID: ta.TenantID, Logger: tlog})
+			skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] = reason
+		}
+		return
+	}
+
+	hdeps := collectors.HuntDeps{Client: client, TenantID: ta.TenantID, Logger: tlog}
+	for _, hf := range collectors.HuntAll() {
+		c := hf(hdeps)
+		if interval, ok := gateCollector(c, ta, cfg, caps, tlog, skips); ok {
+			registry.Register(c, interval)
+		}
+	}
+}
+
+// tenantHuntingConfig returns the tenant's advanced-hunting block, or a zero
+// (opt-out) value if the tenant is not found.
+func tenantHuntingConfig(cfg *config.Config, tenantID string) config.HuntingConfig {
+	for _, t := range cfg.Tenants {
+		if t.TenantID == tenantID {
+			return t.Hunting
+		}
+	}
+	return config.HuntingConfig{}
 }
 
 // recordMDCASkips marks every MDCA collector absent-with-a-reason. Constructed

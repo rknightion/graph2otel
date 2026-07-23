@@ -253,6 +253,10 @@ type TenantConfig struct {
 	// — quarantine queue depth, which has no Graph endpoint. Off unless
 	// exchange_online.enabled is true. See ExchangeOnlineConfig.
 	ExchangeOnline ExchangeOnlineConfig `yaml:"exchange_online"`
+	// Hunting configures the advanced-hunting collectors (#249) — the DeviceTvm*
+	// threat-and-vulnerability-management posture, reached over the Graph
+	// runHuntingQuery API. Off unless hunting.enabled is true. See HuntingConfig.
+	Hunting HuntingConfig `yaml:"hunting"`
 }
 
 // ExchangeOnlineConfig enables the Exchange Online admin API collectors for a
@@ -286,6 +290,34 @@ type ExchangeOnlineConfig struct {
 	// Enabled turns on the Exchange Online collectors for this tenant. false
 	// (the default) registers none of them, exactly as an unset
 	// blob_ingest.account_url registers no blob collectors.
+	Enabled bool `yaml:"enabled"`
+}
+
+// HuntingConfig enables the advanced-hunting collectors for a tenant (#249) —
+// the DeviceTvm* threat-and-vulnerability-management posture (device
+// vulnerabilities, secure-configuration assessments, software inventory).
+//
+// Like ExchangeOnlineConfig it carries no credential of its own — the tenant's
+// existing DefaultAzureCredential is reused against the Graph audience — so the
+// whole block is one switch.
+//
+// It is opt-in rather than default-on for two reasons graph2otel cannot detect
+// in advance:
+//
+//   - It needs the app role ThreatHunting.Read.All. A token mints fine without
+//     it and the failure surfaces only when a query runs (403).
+//   - Every advanced-hunting query draws on a per-tenant CPU budget SHARED with
+//     humans running queries in the Defender portal (#106). The collectors poll
+//     on a deliberately long interval to stay light on it, but an operator
+//     should still consciously turn them on rather than have every deployment
+//     start spending that shared budget by default.
+//
+// A tenant with no Defender-onboarded devices sees empty results, not an error,
+// so enabling it there is harmless — but pointless, which is the third reason it
+// is off by default.
+type HuntingConfig struct {
+	// Enabled turns on the advanced-hunting collectors for this tenant. false
+	// (the default) registers none of them.
 	Enabled bool `yaml:"enabled"`
 }
 
