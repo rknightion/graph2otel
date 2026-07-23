@@ -1,0 +1,71 @@
+{
+  "Metrics": [
+    {
+      "Name": "defender.vulnerability.affected_devices",
+      "Unit": "{device}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "exploit_available",
+        "severity"
+      ]
+    },
+    {
+      "Name": "defender.vulnerability.cves",
+      "Unit": "{cve}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "exploit_available",
+        "severity"
+      ]
+    },
+    {
+      "Name": "defender.vulnerability.instances",
+      "Unit": "{vulnerability}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "exploit_available",
+        "severity"
+      ]
+    },
+    {
+      "Name": "defender.vulnerability.max_cvss",
+      "Unit": "{score}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "exploit_available",
+        "severity"
+      ]
+    },
+    {
+      "Name": "defender.vulnerability.max_epss",
+      "Unit": "1",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "exploit_available",
+        "severity"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "defender.vulnerability",
+      "AttrKeys": [
+        "cve_id",
+        "cvss_score",
+        "cvss_vector",
+        "device_id",
+        "device_name",
+        "epss_score",
+        "exploit_available",
+        "os_platform",
+        "os_version",
+        "published_date",
+        "recommended_security_update",
+        "severity",
+        "software_name",
+        "software_vendor",
+        "software_version"
+      ]
+    }
+  ]
+}

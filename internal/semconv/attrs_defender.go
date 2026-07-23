@@ -421,3 +421,36 @@ const (
 	AttrEnableAtpForSpoTeamsOdb      = "enable_atp_for_spo_teams_odb"
 	AttrHonorDmarcPolicy             = "honor_dmarc_policy"
 )
+
+// Advanced-hunting DeviceTvm* attributes (#249) — the threat-and-vulnerability-
+// management posture reached over the Graph runHuntingQuery API. Reused from
+// other domains where a key already exists: AttrOsPlatform (above), AttrOsVersion
+// and AttrDeviceId/AttrDeviceName (intune), AttrIsCompliant (entra), AttrSeverity
+// (shared). Every value below is the snake_case of a column read verbatim off a
+// live query result, never a docs field.
+const (
+	// defender.vulnerabilities — per-device software-vulnerability rows, joined
+	// server-side to the KB table for CVSS/EPSS/exploit availability.
+	AttrSoftwareVendor            = "software_vendor"
+	AttrSoftwareName              = "software_name"
+	AttrSoftwareVersion           = "software_version"
+	AttrCveId                     = "cve_id"
+	AttrExploitAvailable          = "exploit_available"
+	AttrRecommendedSecurityUpdate = "recommended_security_update"
+	AttrCveMitigationStatus       = "cve_mitigation_status"
+	AttrCvssScore                 = "cvss_score"
+	AttrEpssScore                 = "epss_score"
+	AttrCvssVector                = "cvss_vector"
+	AttrPublishedDate             = "published_date"
+
+	// defender.secure_config — per-device secure-configuration assessment rows.
+	AttrConfigurationCategory    = "configuration_category"
+	AttrConfigurationSubcategory = "configuration_subcategory"
+	AttrConfigurationId          = "configuration_id"
+	AttrConfigurationImpact      = "configuration_impact"
+
+	// defender.software_inventory — per-device installed-software rows.
+	AttrEndOfSupportStatus = "end_of_support_status"
+	AttrEndOfSupportDate   = "end_of_support_date"
+	AttrProductCodeCpe     = "product_code_cpe"
+)

@@ -22,6 +22,20 @@ convention.
     API, emitting a bounded gauge plus a per-message log twin. Its switch is
     `exchange_online.enabled`, and it needs two grants blob ingest does not — see
     [Quarantine](#quarantine-one-dataset-across-four-transports) below.
+  - the **`DeviceTvm*` threat-and-vulnerability-management tables** (#249) —
+    `defender.vulnerabilities`, `defender.secure_config` and
+    `defender.software_inventory`, reached over the Graph advanced-hunting query API
+    (`POST /security/runHuntingQuery`, v1.0, read-only KQL — the one non-GET Graph
+    call). Each emits bounded gauges plus a per-entity log twin (`defender.vulnerability`,
+    `defender.secure_config`, `defender.software`); `ingest_transport` is `graph`.
+    **Not blob** — no `DeviceTvm*` container exists — and **not Experimental** — the
+    endpoint is v1.0, not beta. Its switch is `hunting.enabled` and it needs
+    `ThreatHunting.Read.All`. It polls on a long interval (6h) because the
+    advanced-hunting CPU budget is SHARED with humans in the Defender portal (#106),
+    which is exactly why the high-volume EDR event tables above take the blob path
+    instead; the TVM tables are the exception because they are small current-state
+    snapshots with nothing to tail. Twin fetches partition under the hard
+    100,000-row-per-query cap so a large fleet is never silently truncated.
 - **`m365.service_health.status{service}` enum** (#119) — the gauge encodes
   Microsoft's `microsoftServiceHealthStatus` as a numeric severity ladder:
   `0` = `serviceOperational` / `falsePositive`; `1` = resolved states

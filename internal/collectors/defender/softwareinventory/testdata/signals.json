@@ -1,0 +1,44 @@
+{
+  "Metrics": [
+    {
+      "Name": "defender.software.eos_devices",
+      "Unit": "{device}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "end_of_support_status"
+      ]
+    },
+    {
+      "Name": "defender.software.installs",
+      "Unit": "{install}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "end_of_support_status"
+      ]
+    },
+    {
+      "Name": "defender.software.products",
+      "Unit": "{product}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "end_of_support_status"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "defender.software",
+      "AttrKeys": [
+        "device_id",
+        "device_name",
+        "end_of_support_status",
+        "os_platform",
+        "os_version",
+        "product_code_cpe",
+        "software_name",
+        "software_vendor",
+        "software_version"
+      ]
+    }
+  ]
+}

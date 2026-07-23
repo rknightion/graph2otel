@@ -1,0 +1,43 @@
+{
+  "Metrics": [
+    {
+      "Name": "defender.secure_config.assessments",
+      "Unit": "{assessment}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "configuration_category",
+        "is_compliant"
+      ]
+    },
+    {
+      "Name": "defender.secure_config.impact_at_risk",
+      "Unit": "{impact}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "configuration_category"
+      ]
+    },
+    {
+      "Name": "defender.secure_config.noncompliant_devices",
+      "Unit": "{device}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "configuration_category"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "defender.secure_config",
+      "AttrKeys": [
+        "configuration_category",
+        "configuration_id",
+        "configuration_impact",
+        "device_id",
+        "device_name",
+        "is_compliant",
+        "os_platform"
+      ]
+    }
+  ]
+}
