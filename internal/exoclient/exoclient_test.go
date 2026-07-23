@@ -1,6 +1,7 @@
 package exoclient
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -280,6 +281,247 @@ func TestInvokeEmptyResultIsNotAnError(t *testing.T) {
 				t.Errorf("len = %d, want 0", len(got))
 			}
 		})
+	}
+}
+
+// liveTruncatedBody is the envelope live-captured 2026-07-23 from
+// `Get-Mailbox -ResultSize 1` on the m7kni tenant, verbatim but for the row
+// contents. Both truncation signals are present: an "@odata.nextLink" and a
+// non-empty "@adminapi.warnings" ARRAY. The array shape is the trap — the
+// declared type is #Collection(String), so a client that decodes the warnings
+// as a single string fails to decode the exact response it most needs to
+// understand.
+const liveTruncatedBody = `{
+	"@odata.context": "https://outlook.office365.com/adminapi/beta/tenant/$metadata#Collection(Exchange.GenericHashTable)",
+	"@odata.nextLink": "https://outlook.office365.com/adminapi/beta/tenant/InvokeCommand?%24skiptoken=ADZmViMTYwMGZlOTg5NDUxYTljOTBjMDllODY4MmEwOWVMT0JQMjY1TUI5MjQ5",
+	"adminapi.warnings@odata.type": "#Collection(String)",
+	"@adminapi.warnings": [
+		"There are more results available than are currently displayed. To view them, increase the value for the ResultSize parameter."
+	],
+	"value": [{"Identity":"one","PrimarySmtpAddress":"one@example.com"}]
+}`
+
+// liveCompleteBody is the envelope live-captured 2026-07-23 from `Get-Mailbox`
+// with NO parameters on the same tenant: all three mailboxes, no nextLink, and
+// an "@adminapi.warnings" that is present and EMPTY. Present-and-empty is the
+// normal shape, not an absent key, so "no warnings" must not be inferred from
+// the key being missing.
+const liveCompleteBody = `{
+	"@odata.context": "https://outlook.office365.com/adminapi/beta/tenant/$metadata#Collection(Exchange.GenericHashTable)",
+	"adminapi.warnings@odata.type": "#Collection(String)",
+	"@adminapi.warnings": [],
+	"value": [
+		{"Identity":"one","PrimarySmtpAddress":"one@example.com"},
+		{"Identity":"two","PrimarySmtpAddress":"two@example.com"},
+		{"Identity":"three","PrimarySmtpAddress":"three@example.com"}
+	]
+}`
+
+// TestInvokeFullSurfacesTruncation is the whole point of the InvokeFull seam. A
+// truncated read is silent data loss: the rows that come back are perfectly
+// valid, so a collector that sees only the value array reports a fraction of
+// the tenant and looks healthy doing it. InvokeFull must hand the caller both
+// signals the service attaches.
+func TestInvokeFullSurfacesTruncation(t *testing.T) {
+	srv := jsonServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(liveTruncatedBody))
+	})
+	c, _ := newTestClient(t, srv, nil)
+
+	got, err := c.InvokeFull(context.Background(), "Get-Mailbox", nil)
+	if err != nil {
+		t.Fatalf("InvokeFull: %v", err)
+	}
+	if !got.Truncated {
+		t.Error("Truncated = false, want true — the response carried an @odata.nextLink")
+	}
+	if len(got.Records) != 1 {
+		t.Errorf("len(Records) = %d, want 1 — the rows that DID arrive are still valid", len(got.Records))
+	}
+	if len(got.Warnings) != 1 {
+		t.Fatalf("Warnings = %v, want the one service warning", got.Warnings)
+	}
+	if !strings.Contains(got.Warnings[0], "more results available") {
+		t.Errorf("Warnings[0] = %q, want the service's truncation text verbatim", got.Warnings[0])
+	}
+}
+
+// TestInvokeFullCompleteResponseIsNotTruncated pins the negative case. If a
+// complete response ever reported Truncated, every collector over this
+// transport would warn forever and the signal would be trained out.
+func TestInvokeFullCompleteResponseIsNotTruncated(t *testing.T) {
+	srv := jsonServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(liveCompleteBody))
+	})
+	c, _ := newTestClient(t, srv, nil)
+
+	got, err := c.InvokeFull(context.Background(), "Get-Mailbox", nil)
+	if err != nil {
+		t.Fatalf("InvokeFull: %v", err)
+	}
+	if got.Truncated {
+		t.Error("Truncated = true, want false — the response carried no @odata.nextLink")
+	}
+	if len(got.Records) != 3 {
+		t.Errorf("len(Records) = %d, want 3", len(got.Records))
+	}
+	if got.Warnings == nil {
+		t.Error("Warnings = nil, want an empty non-nil slice, matching the Records contract")
+	}
+	if len(got.Warnings) != 0 {
+		t.Errorf("Warnings = %v, want empty", got.Warnings)
+	}
+}
+
+// TestInvokeFullTreatsEmptyNextLinkAsComplete guards the one way a bool
+// derived from a string goes wrong: a key that is present but empty is not a
+// continuation and must not be reported as truncation.
+func TestInvokeFullTreatsEmptyNextLinkAsComplete(t *testing.T) {
+	srv := jsonServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"@odata.nextLink":"","@adminapi.warnings":[],"value":[]}`))
+	})
+	c, _ := newTestClient(t, srv, nil)
+
+	got, err := c.InvokeFull(context.Background(), "Get-Mailbox", nil)
+	if err != nil {
+		t.Fatalf("InvokeFull: %v", err)
+	}
+	if got.Truncated {
+		t.Error("Truncated = true for an empty @odata.nextLink, want false")
+	}
+}
+
+// TestInvokeFullEmptyResultIsNotAnError carries Invoke's empty-result contract
+// across to the new seam: an absent, null or empty "value" is an empty non-nil
+// slice and a nil error, and neither is a truncation.
+func TestInvokeFullEmptyResultIsNotAnError(t *testing.T) {
+	for name, body := range map[string]string{
+		"absent value": `{}`,
+		"null value":   `{"value":null}`,
+		"empty value":  `{"value":[]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			srv := jsonServer(t, func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(body))
+			})
+			c, _ := newTestClient(t, srv, nil)
+
+			got, err := c.InvokeFull(context.Background(), "Get-QuarantineMessage", nil)
+			if err != nil {
+				t.Fatalf("InvokeFull = %v, want nil error for an empty result", err)
+			}
+			if got.Records == nil {
+				t.Error("Records = nil, want an empty non-nil slice")
+			}
+			if len(got.Records) != 0 {
+				t.Errorf("len(Records) = %d, want 0", len(got.Records))
+			}
+			if got.Warnings == nil {
+				t.Error("Warnings = nil, want an empty non-nil slice")
+			}
+			if got.Truncated {
+				t.Error("Truncated = true for an empty result, want false")
+			}
+		})
+	}
+}
+
+// TestInvokeIsUnaffectedByTruncationEnvelope pins that the older, narrower
+// entry point keeps its exact behavior. Every existing caller passes through
+// InvokeFull now, so a change in the envelope decoding must not leak into the
+// records they receive.
+func TestInvokeIsUnaffectedByTruncationEnvelope(t *testing.T) {
+	srv := jsonServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(liveTruncatedBody))
+	})
+	c, _ := newTestClient(t, srv, nil)
+
+	got, err := c.Invoke(context.Background(), "Get-Mailbox", nil)
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	if got[0]["Identity"] != "one" {
+		t.Errorf("record = %v, want the row verbatim", got[0])
+	}
+}
+
+// TestInvokeFullLogsTruncation checks the warning is not merely returned but
+// LOGGED. A collector author who forgets to read InvokeResult.Truncated is
+// exactly the failure mode this seam exists to catch, so the operator gets told
+// regardless — and the line must name the cmdlet, because the fix is always a
+// change to that cmdlet's own parameters.
+func TestInvokeFullLogsTruncation(t *testing.T) {
+	var buf bytes.Buffer
+	srv := jsonServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(liveTruncatedBody))
+	})
+	c, _ := newTestClient(t, srv, func(o *Options) {
+		o.Logger = slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	})
+
+	if _, err := c.InvokeFull(context.Background(), "Get-Mailbox", nil); err != nil {
+		t.Fatalf("InvokeFull: %v", err)
+	}
+
+	logged := buf.String()
+	if !strings.Contains(logged, "level=WARN") {
+		t.Errorf("log = %q, want a WARN line — truncation is silent data loss", logged)
+	}
+	for _, want := range []string{"Get-Mailbox", "more results available"} {
+		if !strings.Contains(logged, want) {
+			t.Errorf("log = %q, want it to contain %q", logged, want)
+		}
+	}
+}
+
+// TestInvokeFullDoesNotLogOnCompleteResponse is the other half: a per-poll WARN
+// on every healthy read would bury the real one.
+func TestInvokeFullDoesNotLogOnCompleteResponse(t *testing.T) {
+	var buf bytes.Buffer
+	srv := jsonServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(liveCompleteBody))
+	})
+	c, _ := newTestClient(t, srv, func(o *Options) {
+		o.Logger = slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	})
+
+	if _, err := c.InvokeFull(context.Background(), "Get-Mailbox", nil); err != nil {
+		t.Fatalf("InvokeFull: %v", err)
+	}
+	if buf.Len() != 0 {
+		t.Errorf("log = %q, want nothing at WARN for a complete response", buf.String())
+	}
+}
+
+// TestInvokeFullRejectsEmptyCmdlet keeps the guard on the new entry point too —
+// an empty cmdlet name is a programming error, and letting it reach the service
+// buys an opaque 400 instead of a clear one.
+func TestInvokeFullRejectsEmptyCmdlet(t *testing.T) {
+	c, _ := newTestClient(t, okServer(t), nil)
+	if _, err := c.InvokeFull(context.Background(), "", nil); err == nil {
+		t.Error("InvokeFull with an empty cmdlet = nil error, want an error")
+	}
+}
+
+// TestInvokeFullSurfacesCmdletErrors checks the error path is shared: a failure
+// must still arrive as a typed *CmdletError through the new seam.
+func TestInvokeFullSurfacesCmdletErrors(t *testing.T) {
+	srv := jsonServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(liveInvalidEnumBody))
+	})
+	c, _ := newTestClient(t, srv, nil)
+
+	_, err := c.InvokeFull(context.Background(), "Get-QuarantineMessage", nil)
+	var cerr *CmdletError
+	if !errors.As(err, &cerr) {
+		t.Fatalf("errors.As(*CmdletError) = false for %v", err)
+	}
+	if cerr.StatusCode != http.StatusBadRequest {
+		t.Errorf("StatusCode = %d, want 400", cerr.StatusCode)
 	}
 }
 

@@ -18,16 +18,14 @@
 //     is no $filter and no $top — paging and filtering are cmdlet parameters,
 //     not URL parameters.
 //
-//     CAUTION, and this client does NOT handle it: a row-returning cmdlet CAN
-//     come back truncated, carrying an "@odata.nextLink" and an
-//     "@adminapi.warnings" string saying so (live-measured 2026-07-23 on
-//     Get-Mailbox, whose default page is ONE row). Invoke returns only the value
-//     array — it neither follows the link nor surfaces the warning — so a
-//     collector over such a cmdlet MUST defeat the page with the cmdlet's own
-//     parameter (Get-Mailbox: -ResultSize Unlimited) or it will silently report
-//     a fraction of the tenant and look perfectly healthy. See
-//     internal/collectors/m365/exchangemailboxes. Surfacing truncation through
-//     this seam is unbuilt.
+//     CAUTION: a row-returning cmdlet CAN come back truncated, carrying an
+//     "@odata.nextLink" and a non-empty "@adminapi.warnings" saying so. Those
+//     rows are perfectly valid, so a caller that ignores the signals reports a
+//     fraction of the tenant and looks entirely healthy doing it. InvokeFull
+//     surfaces both (InvokeResult.Truncated and .Warnings) and logs a WARN
+//     naming the cmdlet; Invoke keeps the narrower "just the rows" shape and
+//     still gets the log line. See the truncation notes below, and
+//     internal/collectors/m365/exchangemailboxes.
 //
 //   - Different authorization model — see below; this is the single most
 //     confusing thing about the transport.
@@ -35,6 +33,45 @@
 //   - Different failure vocabulary. The HTTP status does not discriminate
 //     anything (nearly every failure is 400 or 403) and the useful text is buried
 //     several levels inside the error envelope. See errors.go.
+//
+// # Truncation, and why there is no paging
+//
+// All live-measured on the m7kni tenant as graph2otel-poller, 2026-07-23.
+//
+// A complete response carries "@adminapi.warnings" PRESENT AND EMPTY and no
+// "@odata.nextLink". A truncated one carries a non-empty warnings array — the
+// text names the cmdlet parameter that would defeat the page — and a nextLink.
+// The warnings member is declared "#Collection(String)" and really is an ARRAY;
+// decoding it as a single string fails on precisely the response that matters.
+//
+// THE NEXTLINK IS NOT A USABLE CONTINUATION AND MUST NEVER BE FOLLOWED.
+// Replaying it four ways — POST with the same body, with empty parameters, with
+// the $skiptoken percent-decoded, and with a cookie jar plus an X-AnchorMailbox
+// header — each answers HTTP 400 with internalexception.message "Expired or
+// Invalid pagination request. Default Expiry time is 00:30:00", immediately and
+// well inside that 30 minutes. The $skiptoken embeds a backend mailbox-server
+// name; each POST to the front door lands on a different backend, so the
+// cursor's server affinity cannot be reproduced by this client at all. That is
+// why InvokeResult exposes a BOOL and not the link: exporting the link would
+// invite the one implementation that cannot work.
+//
+// Truncation is therefore defeated with the CMDLET'S OWN PARAMETERS —
+// Get-Mailbox takes -ResultSize Unlimited, Get-MessageTraceV2 has a keyset —
+// which is a collector's responsibility, not this package's.
+//
+// The default page size is UNKNOWN. Get-Mailbox with NO parameters returns all
+// three m7kni mailboxes with empty warnings and no nextLink, so the default is
+// at least 3 and this tenant is too small to measure the ceiling. (An earlier
+// note here claimed the default was ONE row; that was WRONG — it came from a
+// probe that itself passed -ResultSize 1.) -ResultSize Unlimited remains
+// correct defensive practice on any tenant, since the real default is unknown
+// and a large tenant is where truncation would actually bite.
+//
+// The request header "Prefer: odata.maxpagesize=N" IS honored by the service
+// (verified: N rows plus the truncation warning, with no cmdlet parameters at
+// all). graph2otel deliberately does not set it — a SMALLER page is worthless
+// when the continuation cannot be followed. It is recorded only so a future
+// reader does not rediscover it and mistake it for a paging solution.
 //
 // # Authorization needs BOTH an app role AND a directory role
 //
@@ -247,12 +284,64 @@ type invokeRequest struct {
 
 // invokeResponse is the success envelope. Records are left as raw maps: mapping
 // them to signals is a collector's job, not this package's.
+//
+// The two non-"value" members are the truncation signals, live-captured
+// 2026-07-23:
+//
+//   - NextLink is present only on a truncated response. It is decoded so its
+//     PRESENCE can be reported and for no other reason — see InvokeResult on
+//     why it is never followed and never exported.
+//   - Warnings is declared "#Collection(String)" and is an ARRAY, not a string.
+//     It is present-and-EMPTY on a complete response, so "no warnings" cannot be
+//     inferred from the key being absent, and a client that decodes it as a
+//     single string fails on exactly the response it most needs to read.
 type invokeResponse struct {
-	Value []map[string]any `json:"value"`
+	NextLink string           `json:"@odata.nextLink"`
+	Warnings []string         `json:"@adminapi.warnings"`
+	Value    []map[string]any `json:"value"`
+}
+
+// InvokeResult is the decoded envelope: the records plus the truncation signals
+// the service can attach to them.
+//
+// Truncation is the failure mode this type exists for. The rows on a truncated
+// response are perfectly valid, so a caller that sees only Records reports a
+// fraction of the tenant and looks entirely healthy doing it. Both signals are
+// therefore returned to the caller AND logged by InvokeFull.
+type InvokeResult struct {
+	// Records is the "value" array, verbatim and unmapped. It is an empty
+	// non-nil slice when the response carried no rows.
+	Records []map[string]any
+	// Warnings is the service's "@adminapi.warnings" collection, verbatim. It is
+	// an empty non-nil slice when there were none. On a truncated response it
+	// carries the text naming the cmdlet parameter that would defeat the page
+	// ("...increase the value for the ResultSize parameter"), which is the only
+	// place the fix is ever stated.
+	Warnings []string
+	// Truncated is true iff the response carried a non-empty "@odata.nextLink".
+	//
+	// This is deliberately a BOOL AND NOT THE LINK, because the link is not
+	// usable as a continuation and exposing it would invite exactly the wrong
+	// implementation. Replaying it — POST with the same body, with empty
+	// parameters, with the $skiptoken percent-decoded, with a cookie jar, and
+	// with an X-AnchorMailbox header, all four tried live 2026-07-23 — answers
+	// HTTP 400 "Expired or Invalid pagination request. Default Expiry time is
+	// 00:30:00" immediately, well inside that 30 minutes. The $skiptoken embeds
+	// a backend mailbox-server name and each POST lands on a different backend,
+	// so this client cannot reproduce the cursor's affinity at all.
+	//
+	// Truncation must therefore be defeated with the CMDLET'S OWN PARAMETERS
+	// (Get-Mailbox: -ResultSize Unlimited; Get-MessageTraceV2: its keyset
+	// parameters), never by following the link. Truncated is the signal that a
+	// caller has failed to do so.
+	Truncated bool
 }
 
 // Invoke runs one Exchange Online cmdlet app-only and returns the decoded
-// "value" array. A nil or empty params map sends an empty Parameters object.
+// "value" array. It is InvokeFull without the envelope; every caller that does
+// not need the truncation signals should keep using it.
+//
+// A nil or empty params map sends an empty Parameters object.
 //
 // An absent, null or empty "value" returns an EMPTY SLICE AND A NIL ERROR, never
 // an error. An empty result is the steady state — a healthy tenant has nothing
@@ -261,9 +350,39 @@ type invokeResponse struct {
 // data" rule cuts the other way here: the emptiness is real, and it is the
 // mapper's job to be written against live samples so a mapping bug is not hidden
 // behind it.
+//
+// Truncation is still LOGGED for an Invoke caller, because InvokeFull does the
+// logging — only the machine-readable signals are dropped on this path.
 func (c *Client) Invoke(ctx context.Context, cmdlet string, params map[string]any) ([]map[string]any, error) {
+	res, err := c.InvokeFull(ctx, cmdlet, params)
+	if err != nil {
+		return nil, err
+	}
+	return res.Records, nil
+}
+
+// InvokeFull runs one cmdlet and returns the full envelope.
+//
+// It is the seam that makes a truncated read distinguishable from a complete
+// one. A response carrying an "@odata.nextLink" is reported as Truncated and
+// WARNED about on the client's logger, naming the cmdlet and the service's own
+// warning text — a truncated read is silent data loss, and the whole reason it
+// bites is that nothing about the rows themselves looks wrong. The log line
+// exists so a caller that forgets to read Truncated still cannot lose data
+// invisibly.
+//
+// The nextLink itself is neither exported nor followed; see InvokeResult.
+//
+// Note for a future reader, so this is not rediscovered as a paging solution:
+// the request header "Prefer: odata.maxpagesize=N" IS honored by the service
+// (verified live 2026-07-23 — it returns N rows plus the truncation warning even
+// with no cmdlet parameters at all). graph2otel deliberately does NOT set it.
+// Being able to make the page SMALLER is worthless when the continuation cursor
+// cannot be followed; the only thing it could achieve here is manufacturing the
+// truncation this seam reports.
+func (c *Client) InvokeFull(ctx context.Context, cmdlet string, params map[string]any) (InvokeResult, error) {
 	if cmdlet == "" {
-		return nil, fmt.Errorf("exoclient: tenant %q: empty cmdlet name", c.tenantID)
+		return InvokeResult{}, fmt.Errorf("exoclient: tenant %q: empty cmdlet name", c.tenantID)
 	}
 	if params == nil {
 		params = map[string]any{}
@@ -271,22 +390,42 @@ func (c *Client) Invoke(ctx context.Context, cmdlet string, params map[string]an
 
 	body, err := json.Marshal(invokeRequest{CmdletInput: cmdletInput{CmdletName: cmdlet, Parameters: params}})
 	if err != nil {
-		return nil, fmt.Errorf("exoclient: %s: encode request: %w", cmdlet, err)
+		return InvokeResult{}, fmt.Errorf("exoclient: %s: encode request: %w", cmdlet, err)
 	}
 
 	respBody, err := c.do(ctx, cmdlet, body)
 	if err != nil {
-		return nil, err
+		return InvokeResult{}, err
 	}
 
 	var decoded invokeResponse
 	if err := json.Unmarshal(respBody, &decoded); err != nil {
-		return nil, fmt.Errorf("exoclient: %s: decode response: %w", cmdlet, err)
+		return InvokeResult{}, fmt.Errorf("exoclient: %s: decode response: %w", cmdlet, err)
 	}
-	if decoded.Value == nil {
-		return []map[string]any{}, nil
+
+	// Both slices are normalized to empty-non-nil. An absent key, a null and an
+	// empty array are the same fact to a caller, and all three occur live.
+	res := InvokeResult{
+		Records:   decoded.Value,
+		Warnings:  decoded.Warnings,
+		Truncated: decoded.NextLink != "",
 	}
-	return decoded.Value, nil
+	if res.Records == nil {
+		res.Records = []map[string]any{}
+	}
+	if res.Warnings == nil {
+		res.Warnings = []string{}
+	}
+
+	if res.Truncated {
+		c.logger.Warn("exoclient: cmdlet result was TRUNCATED — the collector is reporting a fraction of the tenant; "+
+			"defeat it with the cmdlet's own parameters (the nextLink is not followable)",
+			"cmdlet", cmdlet,
+			"records", len(res.Records),
+			"warnings", strings.Join(res.Warnings, "; "))
+	}
+
+	return res, nil
 }
 
 // invokeURL is the single endpoint: {base}/adminapi/beta/{tenantID}/InvokeCommand.
