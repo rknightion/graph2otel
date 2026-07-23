@@ -1,0 +1,70 @@
+{
+  "Metrics": [
+    {
+      "Name": "defender.mdo.policies",
+      "Unit": "{policy}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "policy_type"
+      ]
+    },
+    {
+      "Name": "defender.mdo.protection_enabled",
+      "Unit": "{policy}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "policy_type",
+        "protection"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "defender.mdo_policy",
+      "AttrKeys": [
+        "allow_click_through",
+        "allow_safe_docs_open",
+        "authentication_fail_action",
+        "bulk_spam_action",
+        "bulk_threshold",
+        "deliver_message_after_scan",
+        "dmarc_quarantine_action",
+        "dmarc_reject_action",
+        "enable_atp_for_spo_teams_odb",
+        "enable_for_internal_senders",
+        "enable_targeted_domains_protection",
+        "enable_targeted_user_protection",
+        "enabled",
+        "file_filter_enabled",
+        "file_type_action",
+        "high_confidence_phish_action",
+        "high_confidence_spam_action",
+        "honor_dmarc_policy",
+        "ingest_transport",
+        "is_default",
+        "mailbox_intelligence_enabled",
+        "mailbox_intelligence_protection_action",
+        "phish_spam_action",
+        "phish_threshold_level",
+        "phish_zap_enabled",
+        "policy_name",
+        "policy_type",
+        "quarantine_retention_period",
+        "recommended_policy_type",
+        "safe_attachment_action",
+        "safe_attachments_enabled",
+        "safe_docs_enabled",
+        "safe_links_email_enabled",
+        "safe_links_office_enabled",
+        "safe_links_teams_enabled",
+        "scan_urls_enabled",
+        "spam_action",
+        "spam_zap_enabled",
+        "spoof_intelligence_enabled",
+        "targeted_domain_protection_action",
+        "targeted_user_protection_action",
+        "zap_enabled"
+      ]
+    }
+  ]
+}

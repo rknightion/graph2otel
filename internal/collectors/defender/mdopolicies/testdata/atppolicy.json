@@ -1,0 +1,42 @@
+{
+  "@odata.context": "https://outlook.office365.com/adminapi/beta/4b8c18bd-2f9f-4227-af55-9f1061cf9c32/$metadata#Collection(Exchange.GenericHashTable)",
+  "adminapi.warnings@odata.type": "#Collection(String)",
+  "@adminapi.warnings": [],
+  "value": [
+    {
+      "AdminDisplayName": "",
+      "EnableATPForSPOTeamsODB": true,
+      "EnableSafeDocs": true,
+      "AllowSafeDocsOpen": false,
+      "Identity": "Default",
+      "Id": "Default",
+      "IsValid": true,
+      "ExchangeVersion": "0.20 (15.0.0.0)",
+      "Name": "Default",
+      "DistinguishedName": "CN=Default,CN=Atp Policy For O365,CN=Transport Settings,CN=Configuration,CN=m7knio.onmicrosoft.com,CN=ConfigurationUnits,DC=gbrp265a018,DC=prod,DC=outlook,DC=com",
+      "ObjectCategory": "gbrp265a018.prod.outlook.com/Configuration/Schema/ms-Exch-Hosted-Content-Filter-Config",
+      "ObjectClass@odata.type": "#Collection(String)",
+      "ObjectClass": [
+        "top",
+        "msExchHostedContentFilterConfig"
+      ],
+      "WhenChanged@data.type": "System.DateTime",
+      "WhenChanged": "2026-07-15T19:29:27.0000000+00:00",
+      "WhenCreated@data.type": "System.DateTime",
+      "WhenCreated": "2026-07-15T19:29:09.0000000+00:00",
+      "WhenChangedUTC@data.type": "System.DateTime",
+      "WhenChangedUTC": "2026-07-15T19:29:27.0000000Z",
+      "WhenCreatedUTC@data.type": "System.DateTime",
+      "WhenCreatedUTC": "2026-07-15T19:29:09.0000000Z",
+      "ExchangeObjectId@data.type": "System.Guid",
+      "ExchangeObjectId@odata.type": "#Guid",
+      "ExchangeObjectId": "4040d3e8-b20d-48aa-85f2-0273db300b3e",
+      "OrganizationalUnitRoot": "m7knio.onmicrosoft.com",
+      "OrganizationId": "gbrp265a018.prod.outlook.com/Microsoft Exchange Hosted Organizations/m7knio.onmicrosoft.com - gbrp265a018.prod.outlook.com/ConfigurationUnits/m7knio.onmicrosoft.com/Configuration",
+      "Guid@data.type": "System.Guid",
+      "Guid@odata.type": "#Guid",
+      "Guid": "4040d3e8-b20d-48aa-85f2-0273db300b3e",
+      "OriginatingServer": "PR3P265A18DC003.gbrp265a018.prod.outlook.com"
+    }
+  ]
+}

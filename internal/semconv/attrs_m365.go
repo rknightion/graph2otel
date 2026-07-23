@@ -56,3 +56,22 @@ const (
 	AttrVersion                      = "version"
 	AttrWorkload                     = "workload"
 )
+
+// Exchange Online DKIM signing posture (#250, m365.exchange_dkim). Per-domain
+// detail lives on the log twin (m365.exchange_dkim_config); the metric counts
+// accepted domains by the bounded enabled x status tuple only, so none of these
+// keys is ever a metric label.
+const (
+	AttrAlgorithm              = "algorithm"
+	AttrBodyCanonicalization   = "body_canonicalization"
+	AttrDomain                 = "domain"
+	AttrHeaderCanonicalization = "header_canonicalization"
+	AttrIsValid                = "is_valid"
+	AttrKeyCreationTime        = "key_creation_time"
+	AttrLastChecked            = "last_checked"
+	AttrRotateOnDate           = "rotate_on_date"
+	AttrSelector1Cname         = "selector1_cname"
+	AttrSelector1KeySize       = "selector1_key_size"
+	AttrSelector2Cname         = "selector2_cname"
+	AttrSelector2KeySize       = "selector2_key_size"
+)

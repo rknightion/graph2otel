@@ -362,3 +362,62 @@ const (
 	AttrThreadSubType      = "thread_sub_type"
 	AttrThreadType         = "thread_type"
 )
+
+// MDO policy-posture keys (#250) — defender.mdo_policies, the Microsoft Defender
+// for Office 365 policy collector reached over the Exchange Online admin API
+// (EXO registration path). policy_type/policy_name are reused from
+// attrs_intune.go, name from attrs_purview.go, is_default from attrs_entra.go and
+// enabled/action from the other domain files; only the keys below are new. Every
+// key is a semconv.Attr* constant (Gate B) with a value that duplicates no other
+// constant (Gate A).
+const (
+	// AttrProtection is the bounded protection-name label on
+	// defender.mdo.protection_enabled (zap, spam_zap, safe_links_email, ...): a
+	// small closed set, so it is a legal metric label.
+	AttrProtection = "protection"
+
+	// String action/threshold-name fields carried on the defender.mdo_policy twin.
+	AttrRecommendedPolicyType               = "recommended_policy_type"
+	AttrSpamAction                          = "spam_action"
+	AttrHighConfidenceSpamAction            = "high_confidence_spam_action"
+	AttrPhishSpamAction                     = "phish_spam_action"
+	AttrHighConfidencePhishAction           = "high_confidence_phish_action"
+	AttrBulkSpamAction                      = "bulk_spam_action"
+	AttrFileTypeAction                      = "file_type_action"
+	AttrAuthenticationFailAction            = "authentication_fail_action"
+	AttrDmarcRejectAction                   = "dmarc_reject_action"
+	AttrDmarcQuarantineAction               = "dmarc_quarantine_action"
+	AttrMailboxIntelligenceProtectionAction = "mailbox_intelligence_protection_action"
+	AttrTargetedUserProtectionAction        = "targeted_user_protection_action"
+	AttrTargetedDomainProtectionAction      = "targeted_domain_protection_action"
+	AttrSafeAttachmentAction                = "safe_attachment_action"
+
+	// Numeric threshold/retention fields on the defender.mdo_policy twin.
+	AttrBulkThreshold             = "bulk_threshold"
+	AttrPhishThresholdLevel       = "phish_threshold_level"
+	AttrQuarantineRetentionPeriod = "quarantine_retention_period"
+
+	// Boolean posture toggles on the defender.mdo_policy twin. Emitted even when
+	// false (#114): false is the answer an operator filters for (a protection
+	// switched off on a policy that supports it).
+	AttrZapEnabled                   = "zap_enabled"
+	AttrSpamZapEnabled               = "spam_zap_enabled"
+	AttrPhishZapEnabled              = "phish_zap_enabled"
+	AttrFileFilterEnabled            = "file_filter_enabled"
+	AttrSpoofIntelligenceEnabled     = "spoof_intelligence_enabled"
+	AttrMailboxIntelligenceEnabled   = "mailbox_intelligence_enabled"
+	AttrSafeDocsEnabled              = "safe_docs_enabled"
+	AttrSafeLinksEmailEnabled        = "safe_links_email_enabled"
+	AttrSafeLinksTeamsEnabled        = "safe_links_teams_enabled"
+	AttrSafeLinksOfficeEnabled       = "safe_links_office_enabled"
+	AttrSafeAttachmentsEnabled       = "safe_attachments_enabled"
+	AttrScanUrlsEnabled              = "scan_urls_enabled"
+	AttrAllowClickThrough            = "allow_click_through"
+	AttrDeliverMessageAfterScan      = "deliver_message_after_scan"
+	AttrEnableForInternalSenders     = "enable_for_internal_senders"
+	AttrEnableTargetedUserProtection = "enable_targeted_user_protection"
+	AttrEnableTargetedDomainsProt    = "enable_targeted_domains_protection"
+	AttrAllowSafeDocsOpen            = "allow_safe_docs_open"
+	AttrEnableAtpForSpoTeamsOdb      = "enable_atp_for_spo_teams_odb"
+	AttrHonorDmarcPolicy             = "honor_dmarc_policy"
+)

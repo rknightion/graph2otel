@@ -1,0 +1,36 @@
+{
+  "Metrics": [
+    {
+      "Name": "m365.exchange.dkim.signing",
+      "Unit": "{domain}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "enabled",
+        "status"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.exchange_dkim_config",
+      "AttrKeys": [
+        "algorithm",
+        "body_canonicalization",
+        "domain",
+        "enabled",
+        "header_canonicalization",
+        "ingest_transport",
+        "is_default",
+        "is_valid",
+        "key_creation_time",
+        "last_checked",
+        "rotate_on_date",
+        "selector1_cname",
+        "selector1_key_size",
+        "selector2_cname",
+        "selector2_key_size",
+        "status"
+      ]
+    }
+  ]
+}

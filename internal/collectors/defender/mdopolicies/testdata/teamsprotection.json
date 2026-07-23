@@ -1,0 +1,37 @@
+{
+  "@odata.context": "https://outlook.office365.com/adminapi/beta/4b8c18bd-2f9f-4227-af55-9f1061cf9c32/$metadata#Collection(Exchange.GenericHashTable)",
+  "adminapi.warnings@odata.type": "#Collection(String)",
+  "@adminapi.warnings": [],
+  "value": [
+    {
+      "AdminDisplayName": "",
+      "ZapEnabled": true,
+      "MalwareQuarantineTag": "AdminOnlyAccessPolicy",
+      "HighConfidencePhishQuarantineTag": "AdminOnlyAccessPolicy",
+      "Identity": "m7knio.onmicrosoft.com\\Default Teams Protection Policy",
+      "Id": "m7knio.onmicrosoft.com\\Default Teams Protection Policy",
+      "IsValid": true,
+      "ExchangeVersion": "0.20 (15.0.0.0)",
+      "Name": "Default Teams Protection Policy",
+      "DistinguishedName": "CN=Default Teams Protection Policy,CN=ATP Teams Protection,CN=Transport Settings,CN=Configuration,CN=m7knio.onmicrosoft.com,CN=ConfigurationUnits,DC=gbrp265a018,DC=prod,DC=outlook,DC=com",
+      "ObjectCategory": null,
+      "ObjectClass@odata.type": "#Collection(String)",
+      "ObjectClass": [
+        "msExchHostedContentFilterConfig"
+      ],
+      "WhenChanged": null,
+      "WhenCreated": null,
+      "WhenChangedUTC": null,
+      "WhenCreatedUTC": null,
+      "ExchangeObjectId@data.type": "System.Guid",
+      "ExchangeObjectId@odata.type": "#Guid",
+      "ExchangeObjectId": "63c45761-173a-4043-8acb-1777390ddb92",
+      "OrganizationalUnitRoot": "gbrp265a018.prod.outlook.com/Microsoft Exchange Hosted Organizations/m7knio.onmicrosoft.com",
+      "OrganizationId": "gbrp265a018.prod.outlook.com/Microsoft Exchange Hosted Organizations/m7knio.onmicrosoft.com - gbrp265a018.prod.outlook.com/ConfigurationUnits/m7knio.onmicrosoft.com/Configuration",
+      "Guid@data.type": "System.Guid",
+      "Guid@odata.type": "#Guid",
+      "Guid": "00000000-0000-0000-0000-000000000000",
+      "OriginatingServer": ""
+    }
+  ]
+}
