@@ -1,0 +1,24 @@
+{
+  "Metrics": [
+    {
+      "Name": "graph2otel.blob.categories",
+      "Unit": "{category}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "state"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "graph2otel.blob_category",
+      "AttrKeys": [
+        "container",
+        "diagnostic_category",
+        "is_enabled",
+        "is_mapped",
+        "state"
+      ]
+    }
+  ]
+}

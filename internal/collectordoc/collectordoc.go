@@ -124,12 +124,13 @@ type Row struct {
 // name outside this set is an error rather than a default, so a new top-level
 // namespace forces a deliberate decision about where it belongs.
 var domains = map[string]string{
-	"entra":    "Entra ID",
-	"intune":   "Intune",
-	"m365":     "M365",
-	"purview":  "Purview",
-	"defender": "Defender",
-	"mdca":     "Defender for Cloud Apps",
+	"entra":      "Entra ID",
+	"intune":     "Intune",
+	"m365":       "M365",
+	"purview":    "Purview",
+	"defender":   "Defender",
+	"mdca":       "Defender for Cloud Apps",
+	"graph2otel": "Self-observability",
 }
 
 // collectorFacts is the mandatory interface every collector satisfies
@@ -372,6 +373,7 @@ var sections = []section{
 	// a Storage role.
 	{"Defender", KindSnapshot, "Defender — metrics (snapshot collectors)"},
 	{"Defender for Cloud Apps", KindWindow, "Defender for Cloud Apps — logs (window collectors)"},
+	{"Self-observability", KindSnapshot, "Self-observability — metrics (snapshot collectors)"},
 }
 
 // headers is the column set per kind. Blob collectors get their own: they poll

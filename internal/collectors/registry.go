@@ -34,6 +34,17 @@ type GraphClient interface {
 	RawGetWithHeaders(ctx context.Context, url string, headers map[string]string) ([]byte, error)
 }
 
+// ARMReader is the narrow Azure Resource Manager control-plane read seam. It is
+// satisfied by *armclient.Client and used by exactly one collector — the
+// blob-category census (#238), which reads the tenant's microsoft.aadiam
+// diagnostic-settings object. A local interface keeps that collector unit-testable
+// against a fake returning canned JSON.
+type ARMReader interface {
+	// RawGet performs an authenticated GET against an absolute ARM URL (the
+	// management.azure.com audience) and returns the raw response body.
+	RawGet(ctx context.Context, url string) ([]byte, error)
+}
+
 // Deps is everything a Factory needs to construct a collector for one tenant.
 type Deps struct {
 	// Graph is the per-tenant Graph client the collector polls through.
@@ -81,6 +92,19 @@ type Deps struct {
 	// tests), each collector falls back to its own DirectFleetFetcher, so its
 	// behavior is unchanged.
 	Fleet FleetFetcher
+	// ARM is the tenant's ARM control-plane reader (management.azure.com). It is
+	// used by exactly one collector — the blob-category census (#238) — and is
+	// non-nil ONLY when the tenant has blob ingest configured (there is nothing to
+	// census otherwise). Every other collector ignores it; nil disables the census,
+	// which then registers but no-ops. The composition root builds one per
+	// blob-configured tenant over the tenant's own azidentity credential.
+	ARM ARMReader
+	// BlobContainerNames is the set of Azure Storage container names every
+	// registered blob collector reads (#238), for the census to diff against the
+	// enabled diagnostic-settings categories. Non-nil only when blob ingest is
+	// configured (paired with ARM). The composition root fills it via
+	// BlobContainers(); nil means "not applicable", the census no-ops.
+	BlobContainerNames []string
 	// SuppressedTwins names the per-entity log-twin EVENT names this collector
 	// must NOT emit because a blob-sourced twin already owns them (#135-C). A
 	// metric-emitting SnapshotCollector that also emits a per-entity twin (e.g.

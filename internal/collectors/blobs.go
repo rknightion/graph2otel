@@ -2,6 +2,7 @@ package collectors
 
 import (
 	"log/slog"
+	"reflect"
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/blobpipeline"
@@ -77,3 +78,50 @@ func RegisterBlob(f BlobFactory) { registeredBlobs = append(registeredBlobs, f) 
 // order. The composition root calls each one per tenant with blob ingest
 // configured.
 func BlobAll() []BlobFactory { return registeredBlobs }
+
+// BlobContainers returns the Azure Storage container name every registered blob
+// collector reads, by constructing each factory with a minimal BlobDeps (no
+// Source/Store needed — construction reads only the ContainerConfig) and
+// recovering its blobpipeline.BlobCollector. Used by the blob-category census
+// (#238) to diff what graph2otel consumes against the diagnostic-settings
+// categories that are enabled and writing. The tenantID only shapes the listing
+// prefix, which the census does not use; "" is fine but a real value keeps the
+// stub honest. A collector whose container cannot be recovered is skipped — a
+// census that silently mis-reads one container is worse than one that omits it,
+// and the collectordoc gate already fails loudly on that case.
+func BlobContainers(tenantID string, logger *slog.Logger) []string {
+	out := make([]string, 0, len(registeredBlobs))
+	for _, bf := range registeredBlobs {
+		c := bf(BlobDeps{TenantID: tenantID, Logger: logger})
+		if name := blobContainerName(c); name != "" {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// blobContainerName recovers a blob collector's container. A collector either IS
+// a *blobpipeline.BlobCollector or wraps one in a named struct (so collectordoc
+// can recover the subpackage by reflection); this mirrors collectordoc.blobConfig
+// so both read the container the same way.
+func blobContainerName(c any) string {
+	if b, ok := c.(*blobpipeline.BlobCollector); ok && b != nil {
+		return b.Config.Container
+	}
+	v := reflect.ValueOf(c)
+	for v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			return ""
+		}
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return ""
+	}
+	for i := 0; i < v.NumField(); i++ {
+		if b, ok := v.Field(i).Interface().(*blobpipeline.BlobCollector); ok && b != nil {
+			return b.Config.Container
+		}
+	}
+	return ""
+}

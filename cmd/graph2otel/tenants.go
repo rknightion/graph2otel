@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/admin"
+	"github.com/rknightion/graph2otel/internal/armclient"
 	"github.com/rknightion/graph2otel/internal/auth"
 	"github.com/rknightion/graph2otel/internal/blobpipeline"
 	"github.com/rknightion/graph2otel/internal/checkpoint"
@@ -163,6 +164,17 @@ func setupTenant(
 		enabled, _ := cfg.CollectorSettings(ta.TenantID, name)
 		return enabled
 	})
+	// The blob-category census (#238) reads the aadiam diagnostic-settings object
+	// on the ARM control plane (authorized by the poller's Entra roles, not Azure
+	// RBAC) and diffs it against the containers graph2otel's blob collectors read.
+	// Only wired when blob ingest is configured — there is nothing to census
+	// otherwise, and a nil ARM turns the census into a no-op. The container set is
+	// the same one every blob collector declares (BlobContainers introspects the
+	// registry), so a new blob collector is counted the moment it is registered.
+	if blobConfigured {
+		deps.ARM = armclient.NewClient(ta.Cred, armclient.Options{Logger: tlog})
+		deps.BlobContainerNames = collectors.BlobContainers(ta.TenantID, tlog)
+	}
 	for _, factory := range collectors.All() {
 		c := factory(deps)
 		polledNames[c.Name()] = true

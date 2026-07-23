@@ -597,4 +597,11 @@ var annotations = map[string]Annotation{
 		Collects: "Retention label definitions + retention event types, each with a log twin. Blocked app-only on a live tenant — both endpoints 500 with `DataInsightsRequestError`/Forbidden even with the scope granted, because Microsoft documents Application access as not supported — so the collector recognizes that specific pair and reports unavailable rather than failing",
 		Source:   "`/security/labels/retentionLabels`, `/security/triggerTypes/retentionEventTypes`",
 	},
+
+	// ---- Self-observability (snapshot) ----
+	"graph2otel.blob_categories": {
+		Collects: "Blob-category census (#238): diffs the tenant's microsoft.aadiam diagnostic-settings categories against the Azure Storage containers graph2otel's blob collectors read. Bounded gauge graph2otel.blob.categories{state} where state ∈ consumed / enabled_unread (billed but read by no collector — Warn) / mapped_but_disabled (a collector polls a container that is never written — Error) / disabled; one log twin per category. Corrects #134 — the poller reads microsoft.aadiam as itself (Entra roles, not Azure RBAC); the microsoft.intune half needs a different identity and is out of scope",
+		Source:   "`GET providers/microsoft.aadiam/diagnosticSettings` (ARM control plane, management.azure.com audience)",
+		Gating:   "runs only when blob ingest is configured (nil ARM otherwise → no-op); access is the poller's Entra roles, not a Graph scope, so RequiredPermissions is empty like defender.quarantine. Capability semantics — 'mapped' means a blob collector for the container is shipped, not that this tenant enabled it",
+	},
 }
