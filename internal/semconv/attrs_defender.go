@@ -1,7 +1,15 @@
 package semconv
 
-// Attribute keys used only by defender.* collectors — the Microsoft Defender
-// XDR advanced-hunting tables (#106). One key per advanced-hunting column, plus a
+// Attribute keys INTRODUCED by defender.* collectors — the Microsoft Defender
+// XDR advanced-hunting tables (#106). "Introduced by", not "used only by": the
+// mail keys defender.quarantine coined off the Exchange Online admin API
+// (internet_message_id, received_time, sender_address, recipient_address,
+// subject, size) are reused verbatim by m365.message_trace (#254), which is
+// exactly what makes the two joinable in LogQL with no translation table. Do not
+// re-coin one here for another domain — the registry's no-duplicate-values gate
+// would reject it anyway.
+//
+// One key per advanced-hunting column, plus a
 // few derived keys (geo_* promoted from an AlertEvidence Ip entity's Location).
 // Shared keys these tables also emit (id, device_id, device_name, severity, ...
 // failure_reason, ip_address) are reused from the other attrs_*.go files, never

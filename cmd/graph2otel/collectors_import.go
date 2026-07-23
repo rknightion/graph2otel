@@ -126,6 +126,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/exchangeorgconfig"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/exchangeremotedomains"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/exchangetransportrules"
+	_ "github.com/rknightion/graph2otel/internal/collectors/m365/messagetrace"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/servicehealth"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/servicemessage"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/sharepointsettings"

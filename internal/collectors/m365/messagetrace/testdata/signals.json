@@ -1,0 +1,48 @@
+{
+  "Metrics": [
+    {
+      "Name": "graph2otel.api.unexpected",
+      "Unit": "1",
+      "Kind": "sum",
+      "AttrKeys": [
+        "collector",
+        "field",
+        "kind"
+      ]
+    },
+    {
+      "Name": "m365.message_trace.bytes",
+      "Unit": "By",
+      "Kind": "sum",
+      "AttrKeys": [
+        "status"
+      ]
+    },
+    {
+      "Name": "m365.message_trace.messages",
+      "Unit": "{message}",
+      "Kind": "sum",
+      "AttrKeys": [
+        "status"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.message_trace",
+      "AttrKeys": [
+        "from_ip",
+        "ingest_transport",
+        "internet_message_id",
+        "message_trace_id",
+        "received_time",
+        "recipient_address",
+        "sender_address",
+        "size",
+        "status",
+        "subject",
+        "to_ip"
+      ]
+    }
+  ]
+}

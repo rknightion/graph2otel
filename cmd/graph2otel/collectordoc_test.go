@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collectordoc"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/exoclient"
 )
 
 // updateCollectorDoc regenerates the committed docs/collectors.md golden file
@@ -28,6 +31,41 @@ var updateCollectorDoc = flag.Bool("update", false, "rewrite generated golden fi
 // source, no credentials, no network. That is the same thing the compile-time
 // interface checks at the bottom of each collector file do, and it is why this
 // is a plain `go test` and not a tool that needs a tenant.
+//
+// ZERO Deps has ONE exception, and it exists because zero deps turned out to be
+// a second way to go blind (#254). A factory is allowed to DECLINE — to return a
+// zero RegisteredWindow — for a tenant that cannot support it, and the loops
+// below skip a declined factory. A factory that declines on the zero value
+// therefore vanishes from the snapshot, and every gate here goes green over a
+// collector it cannot see: the #100/#139 failure again, arriving through the
+// deps rather than through a missing path. So WindowDeps is given inert non-nil
+// stubs for the seams a factory may condition on, and
+// TestEveryWindowFactoryIsVisibleToTheGate asserts that none of them declines
+// under them. The stubs are never called — nothing here polls anything.
+
+// inertEXO satisfies both collectors.EXOClient and the InvokeFull seam an
+// EXO-transport window collector narrows to, so a factory conditioning on either
+// constructs instead of declining. It is never invoked: the gates below only
+// read a collector's identity and declared signals.
+type inertEXO struct{}
+
+func (inertEXO) Invoke(context.Context, string, map[string]any) ([]map[string]any, error) {
+	return nil, nil
+}
+
+func (inertEXO) InvokeFull(context.Context, string, map[string]any) (exoclient.InvokeResult, error) {
+	return exoclient.InvokeResult{}, nil
+}
+
+// snapshotWindowDeps is WindowDeps with inert non-nil values for the seams a
+// window factory may decline on. Everything else stays zero — the point of the
+// snapshot is still that no collector needs a tenant to be documented.
+func snapshotWindowDeps() collectors.WindowDeps {
+	return collectors.WindowDeps{
+		EXO:   inertEXO{},
+		Store: checkpoint.NewStore(""),
+	}
+}
 
 // registrySnapshot constructs every registered collector exactly as the tenant
 // loop does, minus the dependencies.
@@ -44,7 +82,7 @@ func registrySnapshot() (snapshot, window, blob, o365, mdca, exo, hunt []any) {
 		snapshot = append(snapshot, f(collectors.Deps{}))
 	}
 	for _, f := range collectors.WindowAll() {
-		rw := f(collectors.WindowDeps{})
+		rw := f(snapshotWindowDeps())
 		if rw.Collector == nil {
 			continue
 		}
@@ -199,5 +237,31 @@ func TestRowsHardErrorsWhenACollectorPackageHasNoGolden(t *testing.T) {
 	snapshot, window, blob, o365, mdca, exo, hunt := registrySnapshot()
 	if _, err := collectordoc.Rows(snapshot, window, blob, o365, mdca, exo, hunt, t.TempDir()); err == nil {
 		t.Fatal("Rows accepted a root with no signals.json golden for any collector")
+	}
+}
+
+// TestEveryWindowFactoryIsVisibleToTheGate is the anti-blindness guard for the
+// window path (#254).
+//
+// A window factory may decline — return a zero RegisteredWindow — for a tenant
+// that cannot support it, and registrySnapshot skips a declined factory. That
+// makes declining a way to disappear: the annotation and reference gates would
+// pass over the collector because they never saw it, which is the #100/#139
+// incident again in a new disguise. m365.message_trace hit exactly this,
+// declining on a nil WindowDeps.EXO and vanishing from docs/collectors.md while
+// every gate stayed green.
+//
+// So the snapshot supplies inert stubs (snapshotWindowDeps) and this test fails
+// if any factory still declines under them. A future collector that conditions
+// on a NEW WindowDeps field fails here, loudly, naming the fix — rather than
+// silently shipping undocumented.
+func TestEveryWindowFactoryIsVisibleToTheGate(t *testing.T) {
+	deps := snapshotWindowDeps()
+	for i, f := range collectors.WindowAll() {
+		if rw := f(deps); rw.Collector == nil {
+			t.Errorf("window factory #%d declined under the snapshot deps, so it is INVISIBLE to every "+
+				"collector-doc gate and would ship undocumented. Add whatever seam it conditions on to "+
+				"snapshotWindowDeps() as an inert stub.", i)
+		}
 	}
 }
