@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -16,17 +17,32 @@ type fakeGraph struct {
 	spStorage, odStorage, spDetail, odDetail string
 	reportSettings                           string
 	reportSettingsErr                        error
+	// reportsErr, when set, is returned for ALL four usage-report URLs — the
+	// #240 total-failure condition.
+	reportsErr error
 }
 
 func (f *fakeGraph) RawGet(_ context.Context, url string) ([]byte, error) {
 	switch {
 	case strings.Contains(url, "getSharePointSiteUsageStorage"):
+		if f.reportsErr != nil {
+			return nil, f.reportsErr
+		}
 		return []byte(f.spStorage), nil
 	case strings.Contains(url, "getOneDriveUsageStorage"):
+		if f.reportsErr != nil {
+			return nil, f.reportsErr
+		}
 		return []byte(f.odStorage), nil
 	case strings.Contains(url, "getSharePointSiteUsageDetail"):
+		if f.reportsErr != nil {
+			return nil, f.reportsErr
+		}
 		return []byte(f.spDetail), nil
 	case strings.Contains(url, "getOneDriveUsageAccountDetail"):
+		if f.reportsErr != nil {
+			return nil, f.reportsErr
+		}
 		return []byte(f.odDetail), nil
 	case strings.HasSuffix(url, "/admin/reportSettings"):
 		if f.reportSettingsErr != nil {
@@ -318,3 +334,57 @@ func TestSkipsUnavailableReportWithoutFailing(t *testing.T) {
 		t.Error("SP used should still be emitted when OneDrive reports are unavailable")
 	}
 }
+
+// TestCollectErrorsWhenAllReportsFail pins #240: when every usage report fails
+// to fetch, Collect must surface an error rather than reporting success with an
+// all-zero drive grid ("100% success on zero data").
+func TestCollectErrorsWhenAllReportsFail(t *testing.T) {
+	g := &fakeGraph{reportsErr: errors.New("429 ServiceThrottleThresholdExceeded")}
+	rec := telemetrytest.New()
+
+	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	if err == nil {
+		t.Fatal("Collect returned nil despite all four reports failing (the #240 false-success bug)")
+	}
+	if !strings.Contains(err.Error(), "all storage reports failed") {
+		t.Errorf("error = %q, want it to name the all-reports-failed condition", err.Error())
+	}
+}
+
+// TestCollectSucceedsWhenReportsEmpty pins the other side of #240: reports that
+// succeed but return no rows are a legitimate empty tenant, NOT a failure.
+func TestCollectSucceedsWhenReportsEmpty(t *testing.T) {
+	g := &fakeGraph{} // all report bodies empty, no error
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect errored on legitimately-empty reports, want nil: %v", err)
+	}
+}
+
+// TestCollectSurvivesPartialReportFailure pins that a SINGLE report failing stays
+// best-effort/non-fatal (a sovereign cloud legitimately lacks some reports).
+func TestCollectSurvivesPartialReportFailure(t *testing.T) {
+	// A fake that fails ONLY the OneDrive detail report, others succeed empty.
+	g := &partialFailGraph{}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect errored on a single-report failure, want non-fatal: %v", err)
+	}
+}
+
+// partialFailGraph fails exactly one usage report and serves the rest empty.
+type partialFailGraph struct{}
+
+func (p *partialFailGraph) RawGet(_ context.Context, url string) ([]byte, error) {
+	if strings.Contains(url, "getOneDriveUsageAccountDetail") {
+		return nil, errors.New("404 not found in this cloud")
+	}
+	return nil, nil
+}
+
+func (p *partialFailGraph) RawGetWithHeaders(ctx context.Context, url string, _ map[string]string) ([]byte, error) {
+	return p.RawGet(ctx, url)
+}
+
+var _ collectors.GraphClient = (*partialFailGraph)(nil)

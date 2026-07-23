@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -75,6 +76,13 @@ var (
 	odStorageReport = report{"getOneDriveUsageStorage(period='D7')", driveTypeOneDrive}
 	spDetailReport  = report{"getSharePointSiteUsageDetail(period='D7')", driveTypeSharePoint}
 	odDetailReport  = report{"getOneDriveUsageAccountDetail(period='D7')", driveTypeOneDrive}
+)
+
+// reportCount is the number of usage reports Collect fetches; all of them
+// failing is the #240 total-failure condition.
+const reportCount = 4
+
+var (
 
 	// The full (drive_type, quota_state) grid, so every bucket reports an explicit
 	// count each cycle — healthy states report 0 for stable alert baselines.
@@ -117,10 +125,33 @@ func (c *Collector) RequiredPermissions() []string {
 func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	concealed, settingKnown := c.readConcealment(ctx)
 
-	spUsed, spUsedOK := c.tenantUsed(ctx, spStorageReport)
-	odUsed, odUsedOK := c.tenantUsed(ctx, odStorageReport)
-	spRows := c.fetchDetail(ctx, spDetailReport)
-	odRows := c.fetchDetail(ctx, odDetailReport)
+	// Fetch all four reports, tracking which FAILED (as opposed to being
+	// legitimately empty). #240: when every report fails, the collector must NOT
+	// report success with an all-zero drive grid — that is the "100% success on
+	// zero data" lie. A failure of SOME reports stays best-effort/non-fatal (a
+	// sovereign cloud legitimately lacks some usage reports — see fetch).
+	spStorageRows, spStorageErr := c.fetch(ctx, spStorageReport)
+	odStorageRows, odStorageErr := c.fetch(ctx, odStorageReport)
+	spRows, spDetailErr := c.fetch(ctx, spDetailReport)
+	odRows, odDetailErr := c.fetch(ctx, odDetailReport)
+
+	var fetchErrs []error
+	for _, fe := range []struct {
+		fn  string
+		err error
+	}{
+		{spStorageReport.fn, spStorageErr},
+		{odStorageReport.fn, odStorageErr},
+		{spDetailReport.fn, spDetailErr},
+		{odDetailReport.fn, odDetailErr},
+	} {
+		if fe.err != nil {
+			fetchErrs = append(fetchErrs, fmt.Errorf("%s: %w", fe.fn, fe.err))
+		}
+	}
+
+	spUsed, spUsedOK := latestTenantUsed(spStorageRows)
+	odUsed, odUsedOK := latestTenantUsed(odStorageRows)
 
 	// Heuristic concealment detection when the setting itself is unreadable: if
 	// every detail row has the zeroed Site Id, names are concealed.
@@ -183,6 +214,13 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	e.GaugeSnapshot(metricDrives, "{drive}",
 		"Count of drives per derived quota state (normal <75% used, nearing >=75%, critical >=90%, exceeded >=100%).",
 		points)
+
+	// #240: every report failed — the drive grid above is an all-zero fabrication,
+	// not a healthy tenant. Surface it as a collector failure instead of silently
+	// reporting success. A partial failure is intentionally non-fatal.
+	if len(fetchErrs) == reportCount {
+		return fmt.Errorf("m365.storage: all storage reports failed: %w", errors.Join(fetchErrs...))
+	}
 	return nil
 }
 
@@ -252,11 +290,11 @@ func (c *Collector) readConcealment(ctx context.Context) (bool, bool) {
 	return s.DisplayConcealedNames, true
 }
 
-// tenantUsed reads a storage timeseries report and returns the latest tenant
-// total (Site Type "All", max Report Date). ok is false when the report is
-// unavailable or empty.
-func (c *Collector) tenantUsed(ctx context.Context, r report) (float64, bool) {
-	rows := c.fetch(ctx, r)
+// latestTenantUsed reads a storage timeseries report's rows and returns the
+// latest tenant total (Site Type "All", max Report Date). ok is false when the
+// rows are empty. It is a pure function over already-fetched rows so Collect can
+// track the fetch error separately (#240).
+func latestTenantUsed(rows []map[string]string) (float64, bool) {
 	if len(rows) == 0 {
 		return 0, false
 	}
@@ -276,28 +314,26 @@ func (c *Collector) tenantUsed(ctx context.Context, r report) (float64, bool) {
 	return latestUsed, found
 }
 
-// fetchDetail reads a *Detail report's rows (one per site/account).
-func (c *Collector) fetchDetail(ctx context.Context, r report) []map[string]string {
-	return c.fetch(ctx, r)
-}
-
-// fetch GETs a report (RawGet follows the 302 to the CSV) and parses it. A
-// fetch/parse failure logs a warning and returns nil — the report is skipped,
-// never fatal.
-func (c *Collector) fetch(ctx context.Context, r report) []map[string]string {
+// fetch GETs a report (RawGet follows the 302 to the CSV) and parses it. It
+// returns the parsed rows and any fetch/parse error. A failure is logged and
+// returned: Collect keeps a SINGLE report's failure best-effort (non-fatal), but
+// treats ALL reports failing as a collector failure rather than false success
+// (#240). An empty-but-successful report returns (nil, nil) — that is legitimate
+// steady state on a small tenant, distinct from a failure.
+func (c *Collector) fetch(ctx context.Context, r report) ([]map[string]string, error) {
 	raw, err := c.g.RawGet(ctx, c.baseURL+"/reports/"+r.fn)
 	if err != nil {
 		c.logger.Warn("m365.storage: report unavailable, skipping",
 			"collector", collectorName, "report", r.fn, "error", err)
-		return nil
+		return nil, err
 	}
 	rows, err := parseCSV(raw)
 	if err != nil {
 		c.logger.Warn("m365.storage: report parse failed, skipping",
 			"collector", collectorName, "report", r.fn, "error", err)
-		return nil
+		return nil, err
 	}
-	return rows
+	return rows, nil
 }
 
 // parseCSV parses a usage-report CSV into header-keyed rows. It strips a leading
