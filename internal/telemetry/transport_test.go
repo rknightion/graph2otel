@@ -128,7 +128,7 @@ func TestWithTransportPreservesEveryOtherAttribute(t *testing.T) {
 // emitter (the truthful default for the 15 SnapshotCollectors that poll Graph
 // and emit inline). An ingest engine wraps that emitter AGAIN at its own
 // LogEvent site, so the engine's wrapper is outermost. If the inner Scheduler
-// wrapper overwrote, every blob/o365/job record would be mislabelled "graph" —
+// wrapper overwrote, every blob/o365/job record would be mislabeled "graph" —
 // silently, and in exactly the direction that makes the attribute useless.
 func TestWithTransportOutermostStampWins(t *testing.T) {
 	rec := telemetrytest.New()

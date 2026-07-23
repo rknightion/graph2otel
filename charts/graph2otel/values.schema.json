@@ -286,7 +286,10 @@
                 "cardinality": {
                     "type": "object",
                     "properties": {
-                        "metric_limit": {
+                        "per_metric_limit": {
+                            "type": "integer"
+                        },
+                        "global_limit": {
                             "type": "integer"
                         }
                     }

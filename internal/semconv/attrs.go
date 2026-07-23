@@ -11,6 +11,11 @@ const (
 	// AttrMetricName names the source metric a graph2otel.series.* gauge point
 	// describes (e.g. "entra.signin.count").
 	AttrMetricName = "metric.name"
+	// AttrClipMode says what became of the series graph2otel.series.clipped
+	// counts: "folded" (summed into the `other` bucket, because the metric is
+	// additive) or "dropped" (discarded, because summing it would have emitted a
+	// number that was never measured). Two values, fixed (#235).
+	AttrClipMode = "mode"
 )
 
 // Collector self-observability attribute keys, used by internal/collector's

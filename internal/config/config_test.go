@@ -3,6 +3,7 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -131,34 +132,73 @@ func TestLoadEnvNestedDoubleUnderscore(t *testing.T) {
 	}
 }
 
-// TestCardinalityDefaultAndEnvOverride verifies the metric_limit default and
-// that G2O_CARDINALITY__METRIC_LIMIT overrides it (#105).
-func TestCardinalityDefaultAndEnvOverride(t *testing.T) {
+// TestCardinalityDefaultsAndEnvOverride verifies both limits' defaults and that
+// their G2O_* overrides land (#235).
+func TestCardinalityDefaultsAndEnvOverride(t *testing.T) {
 	cfg, err := config.Load("")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.Cardinality.MetricLimit != 2000 {
-		t.Errorf("default MetricLimit = %d, want 2000", cfg.Cardinality.MetricLimit)
+	if cfg.Cardinality.PerMetricLimit != 5000 {
+		t.Errorf("default PerMetricLimit = %d, want 5000", cfg.Cardinality.PerMetricLimit)
+	}
+	if cfg.Cardinality.GlobalLimit != 100000 {
+		t.Errorf("default GlobalLimit = %d, want 100000", cfg.Cardinality.GlobalLimit)
 	}
 
-	t.Setenv("G2O_CARDINALITY__METRIC_LIMIT", "5000")
+	t.Setenv("G2O_CARDINALITY__PER_METRIC_LIMIT", "250")
+	t.Setenv("G2O_CARDINALITY__GLOBAL_LIMIT", "0")
 	cfg, err = config.Load("")
 	if err != nil {
 		t.Fatalf("Load with env: %v", err)
 	}
-	if cfg.Cardinality.MetricLimit != 5000 {
-		t.Errorf("MetricLimit = %d, want env override 5000", cfg.Cardinality.MetricLimit)
+	if cfg.Cardinality.PerMetricLimit != 250 {
+		t.Errorf("PerMetricLimit = %d, want env override 250", cfg.Cardinality.PerMetricLimit)
+	}
+	if cfg.Cardinality.GlobalLimit != 0 {
+		t.Errorf("GlobalLimit = %d, want env override 0 (unlimited)", cfg.Cardinality.GlobalLimit)
 	}
 }
 
-// TestValidateRejectsNegativeMetricLimit: a negative cap is invalid (0 = unlimited).
-func TestValidateRejectsNegativeMetricLimit(t *testing.T) {
-	cfg := config.Default()
-	cfg.OTLP.Protocol = "stdout"
-	cfg.Cardinality.MetricLimit = -1
-	if err := cfg.Validate(); err == nil {
-		t.Fatal("Validate accepted a negative cardinality.metric_limit")
+// TestValidateRejectsNegativeCardinalityLimits: a negative cap is invalid on
+// either axis (0 = unlimited).
+func TestValidateRejectsNegativeCardinalityLimits(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		apply func(*config.Config)
+	}{
+		{"per_metric", func(c *config.Config) { c.Cardinality.PerMetricLimit = -1 }},
+		{"global", func(c *config.Config) { c.Cardinality.GlobalLimit = -1 }},
+	} {
+		cfg := config.Default()
+		cfg.OTLP.Protocol = "stdout"
+		tc.apply(cfg)
+		if err := cfg.Validate(); err == nil {
+			t.Errorf("Validate accepted a negative cardinality.%s limit", tc.name)
+		}
+	}
+}
+
+// TestRemovedMetricLimitKeyFailsFast is the migration guard.
+//
+// cardinality.metric_limit used to set the OTEL SDK's arrival-ordered
+// per-instrument cap. #235 replaced that mechanism with a significance-ranked
+// limiter and disabled the SDK's cap entirely, so the key does not merely have a
+// new name — it had a different meaning. An operator who set it to 50000 to
+// neuter the old behavior would silently get the new one at its default.
+//
+// koanf ignores keys with no matching struct field, so without this the setting
+// would vanish without a word. Failing to start is the loud option, and the
+// error names the replacement.
+func TestRemovedMetricLimitKeyFailsFast(t *testing.T) {
+	t.Setenv("G2O_CARDINALITY__METRIC_LIMIT", "2000")
+	_, err := config.Load("")
+	if err == nil {
+		t.Fatal("Load accepted the removed cardinality.metric_limit key — it would be " +
+			"silently ignored, leaving the operator with a limit they did not choose")
+	}
+	if !strings.Contains(err.Error(), "per_metric_limit") {
+		t.Errorf("error %q does not name the replacement key", err)
 	}
 }
 

@@ -88,13 +88,18 @@ type Options struct {
 
 	MetricInterval time.Duration // PeriodicReader interval (default 60s)
 
-	// CardinalityLimit is the hard per-instrument limit on the number of distinct
-	// attribute sets collected per cycle; sets beyond it collapse into the SDK's
-	// otel.metric.overflow series. 0 or negative means unlimited (the SDK's own
-	// default of 2000 still applies). Pair with a self-obs CardinalityTracker
-	// (see NewProvider) built with the same value so graph2otel.series.active
-	// pins exactly when a metric reaches the limit.
-	CardinalityLimit int
+	// Limits is the cardinality policy graph2otel enforces itself
+	// (internal/telemetry's Limiter): a per-metric cap that keeps the most
+	// significant series and folds the rest into a named `other` bucket, and a
+	// global cap arbitrated across metrics by max-min fairness.
+	//
+	// The OTEL SDK's own per-instrument cap is DISABLED unconditionally in favor
+	// of it (#235). The SDK's is arrival-ordered — the survivors are whichever
+	// showed up first, and the rest vanish into an opaque otel.metric.overflow
+	// that names nothing — so leaving it underneath would only reimpose an
+	// arbitrary lower ceiling on top of a strictly better mechanism, at a
+	// threshold nothing in the config mentions.
+	Limits Limits
 
 	// SelfObsEnabled turns on the graph2otel.series.active cardinality tracker
 	// (nil Cardinality() otherwise).
@@ -112,6 +117,10 @@ type Provider struct {
 	// emitter is held as the concrete *otelEmitter, not the Emitter interface,
 	// so Throughput can read its emit counters without a type assertion.
 	emitter *otelEmitter
+	// limited is emitter wrapped by the cardinality limiter; it is what
+	// Emitter() hands out, so nothing can reach the SDK unbounded.
+	limited Emitter
+	limiter *Limiter
 	card    *CardinalityTracker // nil unless self-observability is enabled
 }
 
@@ -133,7 +142,7 @@ type Provider struct {
 // high cardinality. Observable (async, i.e. GaugeSnapshot) instruments are
 // already dropped by the SDK under the trace-based filter, so no view is
 // needed for them.
-func metricProviderOptions(res *resource.Resource, cardinalityLimit int) []sdkmetric.Option {
+func metricProviderOptions(res *resource.Resource) []sdkmetric.Option {
 	noopMask := sdkmetric.Stream{ExemplarReservoirProviderSelector: noopExemplarSelector}
 	views := []sdkmetric.View{
 		sdkmetric.NewView(sdkmetric.Instrument{Name: "*", Kind: sdkmetric.InstrumentKindCounter}, noopMask),
@@ -153,8 +162,12 @@ func metricProviderOptions(res *resource.Resource, cardinalityLimit int) []sdkme
 	}
 	return []sdkmetric.Option{
 		sdkmetric.WithResource(res),
-		// Hard per-instrument cardinality limit (0/neg = SDK default of 2000).
-		sdkmetric.WithCardinalityLimit(cardinalityLimit),
+		// The SDK's per-instrument cardinality limit is disabled (0 = no limit,
+		// per its own docs) because graph2otel's Limiter supersedes it — see
+		// Options.Limits. Leaving the SDK default of 2000 in place would silently
+		// truncate at a threshold no config mentions, arrival-ordered, into a
+		// series named otel.metric.overflow that nothing can interpret.
+		sdkmetric.WithCardinalityLimit(0),
 		sdkmetric.WithExemplarFilter(exemplar.TraceBasedFilter),
 		sdkmetric.WithView(views...),
 	}
@@ -187,7 +200,7 @@ func NewProvider(ctx context.Context, opts Options) (*Provider, error) {
 		interval = 60 * time.Second
 	}
 	mpOpts := append(
-		metricProviderOptions(metricRes, opts.CardinalityLimit),
+		metricProviderOptions(metricRes),
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExp, sdkmetric.WithInterval(interval))),
 	)
 	mp := sdkmetric.NewMeterProvider(mpOpts...)
@@ -198,21 +211,46 @@ func NewProvider(ctx context.Context, opts Options) (*Provider, error) {
 
 	var card *CardinalityTracker
 	if opts.SelfObsEnabled {
-		card = NewCardinalityTrackerWithCap(opts.CardinalityLimit)
+		card = NewCardinalityTrackerForLimit(opts.Limits.PerMetric)
 	}
 
 	emitter := newOtelEmitter(mp.Meter(scopeName), lp.Logger(scopeName), card)
+	limiter := NewLimiter(opts.Limits)
 
 	return &Provider{
 		mp:      mp,
 		lp:      lp,
 		emitter: emitter,
 		card:    card,
+		limiter: limiter,
+		// The limiter wraps the base emitter INNERMOST, so WithTenant (#143) and
+		// WithTransport (#141) decorate outside it and their stamps are already
+		// applied by the time a point is ranked. tenant_id is part of series
+		// identity, so a limiter running before that stamp would rank and fold
+		// two tenants' series against each other as if they were one set.
+		limited: limiter.Wrap(emitter),
 	}, nil
 }
 
 // Emitter returns the Emitter collectors should use.
-func (p *Provider) Emitter() Emitter { return p.emitter }
+func (p *Provider) Emitter() Emitter { return p.limited }
+
+// Limiter returns the cardinality limiter this provider's Emitter enforces.
+func (p *Provider) Limiter() *Limiter { return p.limiter }
+
+// ReportSelfObs emits one export interval's cardinality self-observability: the
+// per-metric active-series counts, then what the limiter clipped and the global
+// total. Order matters — the tracker's Report snapshots and resets, and the
+// limiter consumes that same snapshot for its global arbitration rather than
+// counting every series a second time.
+//
+// It reports through the UNDECORATED emitter on purpose. These series are the
+// evidence that clipping is happening; routing them through the limiter would
+// make the report subject to the thing it reports on.
+func (p *Provider) ReportSelfObs() {
+	p.card.Report(p.emitter)
+	p.limiter.Report(p.emitter, p.card.Snapshot())
+}
 
 // Throughput returns the cumulative count of metric data points and log
 // records the Emitter has shipped since process start. It is in-process

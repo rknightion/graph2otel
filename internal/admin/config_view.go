@@ -52,9 +52,10 @@ type ConfigProfilingView struct {
 	BlockProfileRate              int    `json:"block_profile_rate"`
 }
 
-// ConfigCardinalityView carries the configured per-instrument series limit.
+// ConfigCardinalityView carries the configured series limits (#235).
 type ConfigCardinalityView struct {
-	MetricLimit int `json:"metric_limit"`
+	PerMetricLimit int `json:"per_metric_limit"`
+	GlobalLimit    int `json:"global_limit"`
 }
 
 // ConfigTenantView is one tenant's non-secret configuration. TenantConfig
@@ -120,8 +121,11 @@ func (s *Server) configView() ConfigView {
 			MutexProfileFraction:          c.Profiling.MutexProfileFraction,
 			BlockProfileRate:              c.Profiling.BlockProfileRate,
 		},
-		Cardinality: ConfigCardinalityView{MetricLimit: c.Cardinality.MetricLimit},
-		Collectors:  collectorOverrides(c.Collectors),
+		Cardinality: ConfigCardinalityView{
+			PerMetricLimit: c.Cardinality.PerMetricLimit,
+			GlobalLimit:    c.Cardinality.GlobalLimit,
+		},
+		Collectors: collectorOverrides(c.Collectors),
 	}
 	if c.Admin.RefreshInterval > 0 {
 		v.RefreshInterval = c.Admin.RefreshInterval.String()

@@ -108,7 +108,12 @@ func StartCapture() {
 // New returns a Recorder backed by an in-memory metric reader and log exporter.
 func New() *Recorder {
 	reader := sdkmetric.NewManualReader()
-	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	// The SDK's own per-instrument cardinality limit is disabled here for the same
+	// reason it is disabled in production (#235): graph2otel's limiter is the only
+	// thing that bounds series count, and leaving the SDK's arrival-ordered 2000
+	// underneath would silently truncate a test's fixture at a threshold no test
+	// mentions.
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader), sdkmetric.WithCardinalityLimit(0))
 
 	exp := &recordingLogExporter{}
 	lp := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exp)))

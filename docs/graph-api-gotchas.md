@@ -130,7 +130,7 @@ Independent ceilings, none of which reliably send `Retry-After` — client-side 
   ask for. `$filter`, `$count` and `$orderby` are all rejected outright. So there is no
   request that bounds this collection, and no metric can be defined over it with a stated
   window — which is why the Threat Explorer surface was evaluated for quarantine coverage
-  and **rejected** in favour of `EmailPostDeliveryEvents` (a proper event with an action,
+  and **rejected** in favor of `EmailPostDeliveryEvents` (a proper event with an action,
   trigger and result) plus the Exchange Online transport below. Re-open only if
   server-side filtering ships. Contrast the EXO section: that API *rejects* what it does
   not understand, which is a materially better contract to build on.

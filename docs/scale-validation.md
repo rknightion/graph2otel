@@ -59,7 +59,7 @@ throughput): a naive high-water mark with no safety lag silently drops
 out-of-order events. The safety-lag + overlap + id-dedupe model is what prevents
 it, and this test is its regression guard.
 
-## Memory behaviour on large paginated walks
+## Memory behavior on large paginated walks
 
 `internal/logpipeline/scale_test.go` — `BenchmarkPollWindowMemory` and
 `TestScalePollMemoryBoundedByWindowNotBacklog`:

@@ -202,15 +202,21 @@ profiling:
   block_profile_rate: 100000     # runtime.SetBlockProfileRate (ns, 100µs); 0 = disabled
 
 # cardinality governs output-side active-series limits (Grafana Cloud bills on
-# active series). metric_limit is a hard per-instrument cap: distinct attribute
-# sets beyond it collapse into the SDK's otel.metric.overflow series (dropped +
-# counted) instead of growing the bill, and graph2otel.series.active/.limit/
-# .overflowing report where each metric sits against it. graph2otel's metrics are
-# bounded aggregates, so the default 2000 is a blast-radius guard against a
-# mis-scoped label, not a normal constraint. Set 0 for unlimited.
-# Env: G2O_CARDINALITY__METRIC_LIMIT.
+# active series). Both caps are enforced by graph2otel's own limiter, which keeps
+# the most SIGNIFICANT series (top-N by value) and folds the rest into a named
+# `other` bucket — additive metrics get the tail summed, non-additive ones (a
+# score, a ratio, a duration) have it dropped and counted, because a synthetic
+# aggregate would be worse than the loss. The OTEL SDK's own per-instrument cap
+# is disabled in favor of it: that one is arrival-ordered, so the survivors are
+# whichever showed up first and the rest vanish into an opaque
+# otel.metric.overflow. graph2otel.series.active/.clipped/.total/.limit report
+# where each metric sits. The largest metric on a live tenant measures 175
+# series, so these are blast-radius guards, not normal constraints. 0 = unlimited
+# on either axis — the escape hatch for self-hosted Prometheus/Mimir.
+# Env: G2O_CARDINALITY__PER_METRIC_LIMIT, G2O_CARDINALITY__GLOBAL_LIMIT.
 cardinality:
-  metric_limit: 2000 # hard per-instrument active-series cap; beyond it the SDK collapses extras into otel.metric.overflow (0 = unlimited)
+  per_metric_limit: 5000 # per-metric active-series cap; beyond it the top series by value are kept and the tail folds into `other` (0 = unlimited)
+  global_limit: 100000 # total active-series cap across every metric; overage is absorbed by the worst offenders via max-min fairness (0 = unlimited)
 
 # backfill tunes how much history a window (log) collector recovers on a COLD
 # START — no checkpoint yet: a new tenant, a wiped volume, a first deploy. It does

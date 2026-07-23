@@ -137,7 +137,7 @@ func TestCumulativeTemporalitySelectorAlwaysCumulative(t *testing.T) {
 func TestMeterProviderEnablesHistogramExemplars(t *testing.T) {
 	reader := sdkmetric.NewManualReader()
 	mp := sdkmetric.NewMeterProvider(append(
-		metricProviderOptions(resource.Empty(), 10000),
+		metricProviderOptions(resource.Empty()),
 		sdkmetric.WithReader(reader),
 	)...)
 	t.Cleanup(func() { _ = mp.Shutdown(context.Background()) })
@@ -182,7 +182,7 @@ func TestMeterProviderEnablesHistogramExemplars(t *testing.T) {
 func TestMeterProviderMakesListedHistogramsNative(t *testing.T) {
 	reader := sdkmetric.NewManualReader()
 	mp := sdkmetric.NewMeterProvider(append(
-		metricProviderOptions(resource.Empty(), 10000),
+		metricProviderOptions(resource.Empty()),
 		sdkmetric.WithReader(reader),
 	)...)
 	t.Cleanup(func() { _ = mp.Shutdown(context.Background()) })
@@ -235,7 +235,7 @@ func TestMeterProviderMakesListedHistogramsNative(t *testing.T) {
 func TestMeterProviderDropsExemplarsForSyncInstruments(t *testing.T) {
 	reader := sdkmetric.NewManualReader()
 	mp := sdkmetric.NewMeterProvider(append(
-		metricProviderOptions(resource.Empty(), 10000),
+		metricProviderOptions(resource.Empty()),
 		sdkmetric.WithReader(reader),
 	)...)
 	t.Cleanup(func() { _ = mp.Shutdown(context.Background()) })

@@ -108,19 +108,32 @@ type AdminConfig struct {
 	RefreshInterval time.Duration `yaml:"refresh_interval"`
 }
 
-// CardinalityConfig governs output-side series cardinality (#105). Grafana
+// CardinalityConfig governs output-side series cardinality (#105, #235). Grafana
 // Cloud bills on active series, and a mis-scoped metric label (an entity id
-// leaking into a metric dimension) can balloon series unbounded. The limit is a
-// hard per-instrument ceiling: distinct attribute sets beyond it collapse into
-// the SDK's otel.metric.overflow series (dropped + counted) rather than growing
-// the bill, and the graph2otel.series.active/.limit/.overflowing self-obs gauges
-// report where each metric sits against it.
+// leaking into a metric dimension) can balloon series unbounded.
+//
+// Both limits are enforced by graph2otel's own limiter (internal/telemetry), not
+// by the OTEL SDK's per-instrument cap, which is disabled outright in favor of
+// it. The SDK's cap is arrival-ordered: the series that survive are whichever
+// showed up first, and the rest collapse into an opaque otel.metric.overflow
+// that names nothing. graph2otel's keeps the most SIGNIFICANT series and folds
+// the rest into a named `other` bucket, which is strictly better in every case,
+// so running both would only reimpose an arbitrary lower ceiling.
 type CardinalityConfig struct {
-	// MetricLimit is the hard per-instrument cap on distinct active series.
-	// 0 (or negative) means unlimited (the OTEL SDK's own default of 2000 still
-	// applies as a backstop, but no explicit limit or overflow accounting is
-	// enforced by graph2otel). Env: G2O_CARDINALITY__METRIC_LIMIT.
-	MetricLimit int `yaml:"metric_limit"`
+	// PerMetricLimit caps the distinct active series a single metric may emit.
+	// Beyond it the top series by value are kept and the tail is folded into an
+	// `other` bucket (additive metrics) or dropped and counted (non-additive
+	// ones, where a synthetic aggregate would be worse than the loss).
+	// 0 means unlimited. Env: G2O_CARDINALITY__PER_METRIC_LIMIT.
+	PerMetricLimit int `yaml:"per_metric_limit"`
+
+	// GlobalLimit caps the TOTAL active series across every metric, which a
+	// per-metric cap alone cannot do — 200 metrics at 5000 each is a million
+	// series. When the total exceeds it, per-metric limits are reduced by max-min
+	// fairness: a metric under its fair share of the budget is never shrunk to
+	// pay for another metric's overage. 0 means unlimited.
+	// Env: G2O_CARDINALITY__GLOBAL_LIMIT.
+	GlobalLimit int `yaml:"global_limit"`
 }
 
 // BackfillConfig tunes the cold-start backfill window shared by every window
@@ -497,12 +510,15 @@ func Default() *Config {
 			BlockProfileRate:     100_000,
 		},
 		Cardinality: CardinalityConfig{
-			// A generous per-instrument default: graph2otel's metrics are bounded
-			// tenant-shaped aggregates (dozens–low-hundreds of series each), so
-			// 2000 is a blast-radius guard against a mis-scoped label, not a normal
-			// operating constraint. Matches the OTEL SDK's own default so the
-			// series.limit gauge is meaningful out of the box. Set 0 for unlimited.
-			MetricLimit: 2000,
+			// Generous defaults: graph2otel's metrics are bounded tenant-shaped
+			// aggregates, and the largest on a live tenant measures 175 series
+			// (`live-measured 2026-07-23, #235`). These are blast-radius guards
+			// against a mis-scoped label, not normal operating constraints — and
+			// unlike the SDK cap they replace, exceeding one degrades gracefully
+			// into a named `other` bucket rather than dropping series at random,
+			// which is what makes a higher default the safer one. 0 = unlimited.
+			PerMetricLimit: 5000,
+			GlobalLimit:    100_000,
 		},
 		CheckpointDir: "./checkpoints",
 	}
@@ -536,6 +552,21 @@ func Load(path string) (*Config, error) {
 		TransformFunc: envTransform,
 	}), nil); err != nil {
 		return nil, fmt.Errorf("load environment: %w", err)
+	}
+
+	// #235 removed cardinality.metric_limit. koanf silently ignores a key with no
+	// matching struct field, so an operator who had tuned it would lose the
+	// setting without a word — and it is not a pure rename: the old key drove the
+	// OTEL SDK's ARRIVAL-ordered per-instrument cap, which is now disabled
+	// entirely in favor of a significance-ranked limiter. Somebody who set it to
+	// 50000 to neuter the old behavior would silently inherit the new one at its
+	// default. Refusing to start is the loud option.
+	if k.Exists("cardinality" + keyDelim + "metric_limit") {
+		return nil, fmt.Errorf("cardinality.metric_limit was removed in #235: it set the OTEL " +
+			"SDK's arrival-ordered per-instrument cap, which graph2otel now disables in favor " +
+			"of its own significance-ranked limiter. Use cardinality.per_metric_limit " +
+			"(G2O_CARDINALITY__PER_METRIC_LIMIT, default 5000, 0 = unlimited) and " +
+			"cardinality.global_limit (default 100000)")
 	}
 
 	var cfg Config
@@ -627,8 +658,13 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	if c.Cardinality.MetricLimit < 0 {
-		return fmt.Errorf("cardinality.metric_limit %d invalid: must be >= 0 (0 = unlimited)", c.Cardinality.MetricLimit)
+	if c.Cardinality.PerMetricLimit < 0 {
+		return fmt.Errorf("cardinality.per_metric_limit %d invalid: must be >= 0 (0 = unlimited)",
+			c.Cardinality.PerMetricLimit)
+	}
+	if c.Cardinality.GlobalLimit < 0 {
+		return fmt.Errorf("cardinality.global_limit %d invalid: must be >= 0 (0 = unlimited)",
+			c.Cardinality.GlobalLimit)
 	}
 
 	if c.Profiling.Pyroscope.Enabled && c.Profiling.Pyroscope.ServerAddress == "" {

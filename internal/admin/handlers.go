@@ -38,7 +38,7 @@ func (s *Server) handleConfigJSON(w http.ResponseWriter, _ *http.Request) {
 
 // handleCardinalityJSON serves the output-side active-series snapshot as JSON
 // (#215). It reads the existing CardinalityTracker's last completed snapshot (a
-// pure in-memory read) plus the configured metric_limit — no live tenant call.
+// pure in-memory read) plus the configured per_metric_limit — no live tenant call.
 func (s *Server) handleCardinalityJSON(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	enc := json.NewEncoder(w)

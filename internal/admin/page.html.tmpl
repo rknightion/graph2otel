@@ -227,7 +227,7 @@
       <div class="card"><div class="k">Checkpoint dir</div><div class="v mono" style="font-size:13px">{{if .Config.CheckpointDir}}{{.Config.CheckpointDir}}{{else}}<span class="muted">&mdash;</span>{{end}}</div></div>
       {{if .Config.RefreshInterval}}<div class="card"><div class="k">Admin refresh interval</div><div class="v" style="font-size:16px">{{.Config.RefreshInterval}}</div></div>{{end}}
       {{if .Config.BackfillInitialLookback}}<div class="card"><div class="k">Backfill lookback</div><div class="v" style="font-size:16px">{{.Config.BackfillInitialLookback}}</div></div>{{end}}
-      <div class="card"><div class="k">Cardinality metric_limit</div><div class="v">{{if .Config.Cardinality.MetricLimit}}{{.Config.Cardinality.MetricLimit}}{{else}}unlimited{{end}}</div></div>
+      <div class="card"><div class="k">Cardinality per_metric_limit</div><div class="v">{{if .Config.Cardinality.PerMetricLimit}}{{.Config.Cardinality.PerMetricLimit}}{{else}}unlimited{{end}}</div></div>
     </div>
 
     <div class="sub-h">OTLP</div>
@@ -288,10 +288,10 @@
     <div class="rollup">
       <div class="rc"><span class="rv">{{.Cardinality.TotalActiveSeries}}</span><span class="rk">active series</span></div>
       <div class="rc"><span class="rv">{{.Cardinality.MetricCount}}</span><span class="rk">metrics</span></div>
-      <div class="rc"><span class="rv">{{if .Cardinality.MetricLimit}}{{.Cardinality.MetricLimit}}{{else}}&infin;{{end}}</span><span class="rk">metric_limit</span></div>
+      <div class="rc"><span class="rv">{{if .Cardinality.PerMetricLimit}}{{.Cardinality.PerMetricLimit}}{{else}}&infin;{{end}}</span><span class="rk">per_metric_limit</span></div>
       <div class="rc"><span class="rv">{{len .Cardinality.Offenders}}</span><span class="rk">offenders</span></div>
     </div>
-    <p class="muted" style="margin:0 0 8px">Output-side active series (the series graph2otel is about to ship this export interval), counted and capped per metric. Push-based, so this is not a <code>/metrics</code> scrape.</p>
+    <p class="muted" style="margin:0 0 8px">Output-side active series (the series graph2otel is about to ship this export interval), after cardinality limiting — what actually gets billed. Push-based, so this is not a <code>/metrics</code> scrape.</p>
 
     {{if .Cardinality.Offenders}}
     <div class="sub-h">High-cardinality offenders</div>
@@ -299,7 +299,7 @@
       <thead><tr><th>Metric</th><th class="num">Series</th><th class="num">Headroom</th><th>State</th></tr></thead>
       <tbody>
       {{range .Cardinality.Offenders}}
-        <tr class="bad"><td><code>{{.Metric}}</code></td><td class="num">{{.Count}}</td><td class="num">{{if $.Cardinality.MetricLimit}}{{printf "%.0f" .HeadroomPct}}%{{else}}<span class="muted">&mdash;</span>{{end}}</td><td>{{if .Capped}}<span class="badge err">capped</span>{{else}}<span class="badge warn">near limit</span>{{end}}</td></tr>
+        <tr class="bad"><td><code>{{.Metric}}</code></td><td class="num">{{.Count}}</td><td class="num">{{if $.Cardinality.PerMetricLimit}}{{printf "%.0f" .HeadroomPct}}%{{else}}<span class="muted">&mdash;</span>{{end}}</td><td>{{if .Capped}}<span class="badge err">uncounted</span>{{else}}<span class="badge warn">near limit</span>{{end}}</td></tr>
       {{end}}
       </tbody>
     </table>
@@ -311,7 +311,7 @@
       <thead><tr><th>Metric</th><th class="num">Series</th><th class="num">Headroom</th><th>State</th></tr></thead>
       <tbody>
       {{range .Cardinality.Metrics}}
-        <tr><td><code>{{.Metric}}</code></td><td class="num">{{.Count}}</td><td class="num">{{if $.Cardinality.MetricLimit}}{{printf "%.0f" .HeadroomPct}}%{{else}}<span class="muted">&mdash;</span>{{end}}</td><td>{{if .Capped}}<span class="badge err">capped</span>{{else}}<span class="badge ok">ok</span>{{end}}</td></tr>
+        <tr><td><code>{{.Metric}}</code></td><td class="num">{{.Count}}</td><td class="num">{{if $.Cardinality.PerMetricLimit}}{{printf "%.0f" .HeadroomPct}}%{{else}}<span class="muted">&mdash;</span>{{end}}</td><td>{{if .Capped}}<span class="badge err">uncounted</span>{{else}}<span class="badge ok">ok</span>{{end}}</td></tr>
       {{end}}
       </tbody>
     </table>

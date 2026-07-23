@@ -528,6 +528,58 @@ member, rename a field, or change what a filter does whenever it likes. Such a c
 **silent** — the API keeps answering HTTP 200 and the collector keeps emitting numbers that
 are quietly wrong.
 
+## Cardinality limiting: what gets clipped, and how you know
+
+graph2otel caps its own active-series count, because Grafana Cloud bills on active series
+and one mis-scoped label can grow them without bound. Two knobs, both in
+`cardinality:` — `per_metric_limit` (default 5000) and `global_limit` (default 100000).
+`0` on either means unlimited, which is the right setting for a self-hosted
+Prometheus/Mimir where active series are free.
+
+**Clipping is significance-ranked, not arrival-ordered.** Past the limit the top series
+*by value* keep their own identity and the tail is folded into a bucket whose unbounded
+dimension reads `other` — so `intune.detected_apps.device_count{app_name="other",
+platform="windows"}` is the sum of every Windows app outside the top N, and the bounded
+`platform` breakdown survives. The OTEL SDK's own per-instrument cap is disabled in favor
+of this: it keeps whichever series arrived first and collapses the rest into
+`otel.metric.overflow`, a name nothing can interpret.
+
+**A non-additive metric's tail is dropped, not summed.** Folding a device count is
+correct; folding a score, a ratio, a percentage or a duration would emit a number that was
+never measured, under a name that looks legitimate. graph2otel decides from the metric's
+unit and errs toward dropping — a smaller number that says it is smaller beats an invented
+one that does not.
+
+Three self-obs series make it impossible for this to happen quietly:
+
+```promql
+# series actually shipped, per metric — what you are billed for
+graph2otel_series_active
+
+# what was shed, and how
+sum by (metric_name, mode) (graph2otel_series_clipped)
+
+# total across every metric, against cardinality.global_limit
+graph2otel_series_total
+```
+
+`mode` is `folded` (summed into `other`) or `dropped`. Any non-zero value means a metric
+has outgrown its limit — raise `per_metric_limit`, or look at why that metric's dimension
+is unbounded, which is usually the real answer. graph2otel also logs a WARN the first time
+a metric starts clipping, once, not once per interval.
+
+**`graph2otel.series.overflowing` is gone.** It reported the SDK overflow, which no longer
+exists; `graph2otel.series.clipped` replaces it and says how much and in which mode.
+
+**Self-observability is never clipped.** `graph2otel.*` is bounded by collector count and
+tenant count by construction, and dropping health signals under load would remove the
+evidence exactly when it is needed. Those series still count toward `series.total`.
+
+**This is not a license to label metrics by entity.** With a 5000 cap on a 50,000-user
+tenant, labeling by UPN buys an arbitrary 5000 series plus a meaningless bucket, at full
+cost, when the log twin already answers "which one" better and for free. The rule in
+[Cardinality shape](#cardinality-shape) is unchanged.
+
 `graph2otel.api.unexpected` is the counter that breaks that silence.
 
 ```promql

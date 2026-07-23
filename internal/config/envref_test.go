@@ -19,7 +19,7 @@ func TestEnvVarName(t *testing.T) {
 		"otlp.endpoint":                       "G2O_OTLP__ENDPOINT",
 		"otlp.grafana_cloud.instance_id":      "G2O_OTLP__GRAFANA_CLOUD__INSTANCE_ID",
 		"otlp.grafana_cloud.token":            "G2O_OTLP__GRAFANA_CLOUD__TOKEN",
-		"cardinality.metric_limit":            "G2O_CARDINALITY__METRIC_LIMIT",
+		"cardinality.per_metric_limit":        "G2O_CARDINALITY__PER_METRIC_LIMIT",
 		"profiling.pyroscope.basic_auth_user": "G2O_PROFILING__PYROSCOPE__BASIC_AUTH_USER",
 		"profiling.mutex_profile_fraction":    "G2O_PROFILING__MUTEX_PROFILE_FRACTION",
 	}
@@ -37,7 +37,7 @@ func TestEnvVarName(t *testing.T) {
 func TestEnvVarNameRoundTripsEnvKey(t *testing.T) {
 	for _, key := range []string{
 		"log_level", "checkpoint_dir", "otlp.endpoint",
-		"otlp.grafana_cloud.token", "cardinality.metric_limit",
+		"otlp.grafana_cloud.token", "cardinality.per_metric_limit",
 		"profiling.pyroscope.basic_auth_password", "profiling.block_profile_rate",
 	} {
 		if got := envKey(envVarName(key)); got != key {

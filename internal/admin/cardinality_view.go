@@ -7,13 +7,13 @@ import "github.com/rknightion/graph2otel/internal/telemetry"
 // OTLP-push, so "active series" is the set of series it is about to ship during
 // an export interval, already counted and capped by the CardinalityTracker —
 // this view only READS that tracker's last completed snapshot (no new
-// computation) plus the configured metric_limit from config.
+// computation) plus the configured per_metric_limit from config.
 type CardinalityView struct {
 	// TotalActiveSeries is the sum of per-metric distinct series counts.
 	TotalActiveSeries int `json:"total_active_series"`
-	// MetricLimit is the configured per-instrument cap (cardinality.metric_limit);
-	// 0 means unlimited.
-	MetricLimit int `json:"metric_limit"`
+	// PerMetricLimit is the configured per-metric cap
+	// (cardinality.per_metric_limit); 0 means unlimited.
+	PerMetricLimit int `json:"per_metric_limit"`
 	// MetricCount is the number of source metrics that emitted in the last interval.
 	MetricCount int `json:"metric_count"`
 	// Metrics is the per-metric breakdown, highest cardinality first (the order
@@ -28,11 +28,12 @@ type CardinalityView struct {
 type CardinalityMetric struct {
 	Metric string `json:"metric"`
 	Count  int    `json:"count"`
-	// Capped is true when the metric hit the per-metric series cap (its count is
-	// pinned and excess series collapse into otel.metric.overflow).
+	// Capped is true when the metric hit the per-metric series cap, so its count
+	// is pinned and the excess is being clipped into the `other` bucket (or
+	// dropped, for a non-additive metric).
 	Capped bool `json:"capped"`
 	// HeadroomPct is (limit-count)/limit*100, clamped to [0,100]. Meaningful only
-	// when MetricLimit > 0; 0 when unlimited.
+	// when PerMetricLimit > 0; 0 when unlimited.
 	HeadroomPct float64 `json:"headroom_pct,omitempty"`
 }
 
@@ -43,13 +44,13 @@ type CardinalityMetric struct {
 func (s *Server) cardinalityView() CardinalityView {
 	limit := 0
 	if s.cfg != nil {
-		limit = s.cfg.Cardinality.MetricLimit
+		limit = s.cfg.Cardinality.PerMetricLimit
 	}
 	var counts []telemetry.SeriesCount
 	if s.card != nil {
 		counts = s.card.Snapshot()
 	}
-	v := CardinalityView{MetricLimit: limit, MetricCount: len(counts)}
+	v := CardinalityView{PerMetricLimit: limit, MetricCount: len(counts)}
 	metrics := make([]CardinalityMetric, 0, len(counts))
 	total := 0
 	for _, sc := range counts {

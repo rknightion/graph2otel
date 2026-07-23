@@ -18,7 +18,7 @@ replace each `.` with `__` (a single `_` inside a name is preserved):
 
 ```text
 otlp.grafana_cloud.token   ->  G2O_OTLP__GRAFANA_CLOUD__TOKEN
-cardinality.metric_limit   ->  G2O_CARDINALITY__METRIC_LIMIT
+cardinality.global_limit   ->  G2O_CARDINALITY__GLOBAL_LIMIT
 ```
 
 **Secrets and auth.** Tenant credentials are NEVER read from this config surface
@@ -55,7 +55,8 @@ never in committed YAML.
 | `G2O_PROFILING__PYROSCOPE__UPLOAD_RATE` | `15s` | optional; 0/omit uses the pyroscope default |
 | `G2O_PROFILING__MUTEX_PROFILE_FRACTION` | `5` | runtime.SetMutexProfileFraction; 0 = disabled |
 | `G2O_PROFILING__BLOCK_PROFILE_RATE` | `100000` | runtime.SetBlockProfileRate (ns, 100µs); 0 = disabled |
-| `G2O_CARDINALITY__METRIC_LIMIT` | `2000` | hard per-instrument active-series cap; beyond it the SDK collapses extras into otel.metric.overflow (0 = unlimited) |
+| `G2O_CARDINALITY__PER_METRIC_LIMIT` | `5000` | per-metric active-series cap; beyond it the top series by value are kept and the tail folds into `other` (0 = unlimited) |
+| `G2O_CARDINALITY__GLOBAL_LIMIT` | `100000` | total active-series cap across every metric; overage is absorbed by the worst offenders via max-min fairness (0 = unlimited) |
 | `G2O_BACKFILL__INITIAL_LOOKBACK` | `0s` | cold-start backfill window; 0 = each collector's own built-in lookback. Warns past 7d (the measured OTLP accept window, #226) |
 | `G2O_CHECKPOINT_DIR` | `./checkpoints` | root dir for the file-based CheckpointStore |
 

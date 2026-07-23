@@ -116,15 +116,18 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	// Telemetry provider: the single OTLP metrics+logs pipeline everything emits
 	// through. Built here so the process fails fast on a bad exporter config.
 	provider, err := telemetry.NewProvider(ctx, telemetry.Options{
-		ServiceName:      "graph2otel",
-		ServiceVersion:   version,
-		Protocol:         cfg.OTLP.Protocol,
-		Endpoint:         cfg.OTLP.Endpoint,
-		InstanceID:       cfg.OTLP.GrafanaCloud.InstanceID,
-		Token:            cfg.OTLP.GrafanaCloud.Token.Reveal(),
-		SelfObsEnabled:   true,
-		CardinalityLimit: cfg.Cardinality.MetricLimit,
-		StdoutWriter:     stdout,
+		ServiceName:    "graph2otel",
+		ServiceVersion: version,
+		Protocol:       cfg.OTLP.Protocol,
+		Endpoint:       cfg.OTLP.Endpoint,
+		InstanceID:     cfg.OTLP.GrafanaCloud.InstanceID,
+		Token:          cfg.OTLP.GrafanaCloud.Token.Reveal(),
+		SelfObsEnabled: true,
+		Limits: telemetry.Limits{
+			PerMetric: cfg.Cardinality.PerMetricLimit,
+			Global:    cfg.Cardinality.GlobalLimit,
+		},
+		StdoutWriter: stdout,
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "failed to build telemetry provider: %v\n", err)
@@ -137,6 +140,10 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 			logger.Warn("telemetry provider shutdown", "error", err)
 		}
 	}()
+	// The limiter announces the transition into clipping for a metric, once —
+	// clipping is data loss, and a metric quietly shedding its tail while every
+	// dashboard still renders is exactly the failure nobody notices.
+	provider.Limiter().SetLogger(logger)
 	collector.EmitBuildInfo(provider.Emitter())
 
 	// Continuous profiling is opt-in (default off). Start also applies the
@@ -188,13 +195,13 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	// Self-observability cardinality accounting: the emitter Observes every
-	// data point's series into the tracker on the hot path; Report snapshots the
-	// per-metric distinct-series counts and emits graph2otel.series.active/.limit/
-	// .overflowing once per export interval, then resets. Drive it on the metric
-	// export cadence (60s, matching the PeriodicReader default) so series.active
-	// reflects one interval's distinct series. No-op when self-obs is disabled
-	// (Cardinality() is nil).
+	// Self-observability cardinality accounting: the emitter Observes every data
+	// point's series into the tracker on the hot path; ReportSelfObs snapshots the
+	// per-metric distinct-series counts, emits graph2otel.series.active/.limit
+	// plus the limiter's .clipped/.total, and recomputes the global arbitration
+	// for the next interval. Drive it on the metric export cadence (60s, matching
+	// the PeriodicReader default) so series.active reflects one interval's
+	// distinct series. No-op when self-obs is disabled (Cardinality() is nil).
 	if card := provider.Cardinality(); card != nil {
 		go func() {
 			t := time.NewTicker(selfObsReportInterval)
@@ -204,7 +211,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 				case <-ctx.Done():
 					return
 				case <-t.C:
-					card.Report(provider.Emitter())
+					provider.ReportSelfObs()
 				}
 			}
 		}()

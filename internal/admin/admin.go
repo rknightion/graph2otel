@@ -41,7 +41,7 @@ type Server struct {
 	refreshMs   int
 
 	// cfg is the full effective configuration, read PASSIVELY to render the
-	// Config tab (#211) and to source the Cardinality tab's metric_limit (#215).
+	// Config tab (#211) and to source the Cardinality tab's per_metric_limit (#215).
 	// May be nil (renders an empty Config view). Secrets are never surfaced from
 	// it beyond presence — see configView.
 	cfg *config.Config

@@ -244,12 +244,14 @@ config:
     block_profile_rate: 100000
 
   # -- Output-side active-series governance (Grafana Cloud bills on active
-  # series). metric_limit is a hard per-instrument cap: distinct attribute sets
-  # beyond it collapse into the SDK's otel.metric.overflow series instead of
-  # growing the bill. graph2otel's metrics are bounded aggregates, so 2000 is a
-  # blast-radius guard, not a normal constraint. Set 0 for unlimited.
+  # series). Enforced by graph2otel's own limiter, which keeps the most
+  # significant series and folds the rest into a named `other` bucket; the OTEL
+  # SDK's arrival-ordered cap is disabled in favor of it. graph2otel's metrics
+  # are bounded aggregates (largest measured: 175 series), so these are
+  # blast-radius guards, not normal constraints. Set 0 for unlimited.
   cardinality:
-    metric_limit: 2000
+    per_metric_limit: 5000
+    global_limit: 100000
 
   backfill:
     # -- Cold-start backfill window for window (log) collectors — no checkpoint

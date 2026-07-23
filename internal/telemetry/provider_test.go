@@ -98,52 +98,65 @@ func TestProvider_InvalidProtocolErrors(t *testing.T) {
 	}
 }
 
-// TestProvider_AppliesCardinalityLimit asserts the configured per-instrument
-// cardinality limit reaches the MeterProvider: emitting more distinct
-// attribute sets than the limit produces the SDK's otel.metric.overflow
-// series. Without the limit wired through, three series stay well under the
-// SDK default (2000) and no overflow appears, so this fails unless the limit
-// is applied.
-func TestProvider_AppliesCardinalityLimit(t *testing.T) {
+// TestProvider_ClipsToANamedBucketNotTheSDKOverflow asserts the whole #235
+// substitution end-to-end through the real provider: the configured limit is
+// enforced by graph2otel's limiter, and the SDK's own cap is gone.
+//
+// Both halves matter. If Options.Limits were not wired through, four series
+// would sail past unclipped. If the SDK's cap were left in place underneath, it
+// would keep truncating at its own default into otel.metric.overflow — a series
+// that names nothing, chosen by arrival order, at a threshold nothing in the
+// config mentions.
+func TestProvider_ClipsToANamedBucketNotTheSDKOverflow(t *testing.T) {
 	var buf bytes.Buffer
 	ctx := context.Background()
 	p, err := telemetry.NewProvider(ctx, telemetry.Options{
-		ServiceName:      "graph2otel",
-		ServiceVersion:   "test",
-		Protocol:         "stdout",
-		StdoutWriter:     &buf,
-		MetricInterval:   time.Hour,
-		CardinalityLimit: 2,
+		ServiceName:    "graph2otel",
+		ServiceVersion: "test",
+		Protocol:       "stdout",
+		StdoutWriter:   &buf,
+		MetricInterval: time.Hour,
+		Limits:         telemetry.Limits{PerMetric: 2},
 	})
 	if err != nil {
 		t.Fatalf("NewProvider: %v", err)
 	}
-	for _, id := range []string{"a", "b", "c"} {
-		p.Emitter().Counter("entra.test.counter", "1", "", 1, telemetry.Attrs{"id": id})
+	for _, id := range []string{"a", "b", "c", "d"} {
+		p.Emitter().Counter("entra.test.counter", "{request}", "", 1, telemetry.Attrs{"path": id})
 	}
 	if err := p.Shutdown(ctx); err != nil {
 		t.Fatalf("Shutdown: %v", err)
 	}
-	if !strings.Contains(buf.String(), "otel.metric.overflow") {
-		t.Fatalf("expected otel.metric.overflow series with cardinality limit 2; got:\n%s", buf.String())
+	out := buf.String()
+	if strings.Contains(out, "otel.metric.overflow") {
+		t.Errorf("the SDK's otel.metric.overflow appeared — its cap must be disabled in "+
+			"favor of the limiter, or it silently truncates underneath at its own "+
+			"threshold:\n%s", out)
+	}
+	if !strings.Contains(out, `"Value":"other"`) {
+		t.Errorf("no `other` bucket in the export — the tail of an additive counter must fold "+
+			"into a named series a reader can interpret:\n%s", out)
 	}
 }
 
-// TestProvider_SelfObsCardinalityTrackerReflectsLimit drives the same
-// over-the-limit scenario through Provider.Emitter(), then asserts
-// Provider.Cardinality() (enabled via SelfObsEnabled) recorded the true
-// distinct-series count and marked the metric capped — the in-process
-// counterpart to the SDK-level otel.metric.overflow assertion above.
-func TestProvider_SelfObsCardinalityTrackerReflectsLimit(t *testing.T) {
+// TestProvider_SelfObsTracksTheSeriesThatSurviveTheLimiter is the in-process
+// counterpart to the export assertion above.
+//
+// The tracker sits INSIDE the limiter — it counts what actually reaches the SDK,
+// not what collectors offered — so an over-limit metric shows the clipped count,
+// which is the number that costs money. What was clipped is reported separately
+// by graph2otel.series.clipped; conflating the two would make the tracker's
+// number describe neither the bill nor the loss.
+func TestProvider_SelfObsTracksTheSeriesThatSurviveTheLimiter(t *testing.T) {
 	var buf bytes.Buffer
 	ctx := context.Background()
 	p, err := telemetry.NewProvider(ctx, telemetry.Options{
-		ServiceName:      "graph2otel",
-		Protocol:         "stdout",
-		StdoutWriter:     &buf,
-		MetricInterval:   time.Hour,
-		CardinalityLimit: 2,
-		SelfObsEnabled:   true,
+		ServiceName:    "graph2otel",
+		Protocol:       "stdout",
+		StdoutWriter:   &buf,
+		MetricInterval: time.Hour,
+		Limits:         telemetry.Limits{PerMetric: 2},
+		SelfObsEnabled: true,
 	})
 	if err != nil {
 		t.Fatalf("NewProvider: %v", err)
@@ -155,7 +168,7 @@ func TestProvider_SelfObsCardinalityTrackerReflectsLimit(t *testing.T) {
 		t.Fatal("Cardinality() = nil, want a tracker (SelfObsEnabled=true)")
 	}
 	for _, id := range []string{"a", "b", "c"} {
-		p.Emitter().Counter("entra.test.counter", "1", "", 1, telemetry.Attrs{"id": id})
+		p.Emitter().Counter("entra.test.counter", "{request}", "", 1, telemetry.Attrs{"path": id})
 	}
 	snap := tr.Snapshot() // no Report yet: nothing observed until we call it
 	if snap != nil {
@@ -163,8 +176,10 @@ func TestProvider_SelfObsCardinalityTrackerReflectsLimit(t *testing.T) {
 	}
 	tr.Report(p.Emitter())
 	snap = tr.Snapshot()
-	if len(snap) != 1 || snap[0].Metric != "entra.test.counter" || snap[0].Count != 2 || !snap[0].Capped {
-		t.Fatalf("Snapshot() = %+v, want one entry entra.test.counter Count=2 Capped=true", snap)
+	// Two admitted plus the `other` bucket the third folded into.
+	if len(snap) != 1 || snap[0].Metric != "entra.test.counter" || snap[0].Count != 3 {
+		t.Fatalf("Snapshot() = %+v, want one entry entra.test.counter Count=3 "+
+			"(two admitted plus the `other` bucket)", snap)
 	}
 }
 

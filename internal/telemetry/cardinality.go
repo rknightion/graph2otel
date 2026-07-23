@@ -14,10 +14,9 @@ import (
 // the Report -> Gauge -> Observe recursion (Report emits these from inside the
 // emit hot path that calls Observe).
 const (
-	seriesSelfPrefix     = "graph2otel.series."
-	seriesActiveMetric   = seriesSelfPrefix + "active"
-	seriesLimitMetric    = seriesSelfPrefix + "limit"
-	seriesOverflowMetric = seriesSelfPrefix + "overflowing"
+	seriesSelfPrefix   = "graph2otel.series."
+	seriesActiveMetric = seriesSelfPrefix + "active"
+	seriesLimitMetric  = seriesSelfPrefix + "limit"
 )
 
 // defaultSeriesCap bounds the distinct fingerprints tracked per source metric.
@@ -35,8 +34,14 @@ type seriesSet struct {
 }
 
 // SeriesCount is the distinct active-series count for one source metric during
-// the last completed export interval. Capped is true when the per-metric cap was
-// hit, in which case Count is pinned at defaultSeriesCap (or the configured cap).
+// the last completed export interval. Capped is true when the tracker's own
+// MEMORY GUARD was hit, in which case Count is pinned at the guard and the true
+// count is at least that high.
+//
+// Capped is not "this metric is being clipped". The tracker sits INSIDE the
+// cardinality limiter, so it counts the series that actually reach the SDK —
+// what a metric shed is reported by graph2otel.series.clipped, which says how
+// many and whether they were folded or dropped.
 type SeriesCount struct {
 	Metric string
 	Count  int
@@ -66,12 +71,30 @@ func NewCardinalityTracker() *CardinalityTracker {
 	return NewCardinalityTrackerWithCap(defaultSeriesCap)
 }
 
+// NewCardinalityTrackerForLimit returns a tracker that REPORTS the configured
+// per-metric limit (graph2otel.series.limit) while counting well above it.
+//
+// The two numbers have to be separate now (#235). They used to be the same one:
+// the SDK dropped everything past the limit, so the true distinct count WAS the
+// limit and pinning there was accurate. graph2otel's limiter emits up to the
+// limit plus the hysteresis band plus the `other` bucket(s), so a tracker capped
+// AT the limit would under-report by exactly the amount that only appears when a
+// metric is over it — the one moment the number is being read.
+func NewCardinalityTrackerForLimit(limit int) *CardinalityTracker {
+	guard := defaultSeriesCap
+	if 2*limit > guard {
+		guard = 2 * limit
+	}
+	t := NewCardinalityTrackerWithCap(guard)
+	t.configuredLimit = limit
+	return t
+}
+
 // NewCardinalityTrackerWithCap returns an empty tracker that pins each source
-// metric's distinct-series count at seriesCap. Pass the configured OTLP
-// cardinality limit so graph2otel.series.active pins exactly when a metric
-// reaches the limit (and overflows into otel.metric.overflow). A non-positive
-// seriesCap (the "unlimited OTLP limit" case) falls back to defaultSeriesCap as a
-// memory guard so the tracker never grows unboundedly.
+// metric's distinct-series count at seriesCap, and reports seriesCap as the
+// configured limit. A non-positive seriesCap falls back to defaultSeriesCap as a
+// memory guard so the tracker never grows unboundedly, and suppresses
+// graph2otel.series.limit (nothing to report against).
 func NewCardinalityTrackerWithCap(seriesCap int) *CardinalityTracker {
 	configured := seriesCap
 	if seriesCap <= 0 {
@@ -134,25 +157,14 @@ func (t *CardinalityTracker) Report(e Emitter) {
 	t.last = last
 	t.mu.Unlock()
 
-	// A configured limit <=0 means the SDK is unlimited (no real otel.metric.overflow):
-	// suppress series.limit and force overflowing to 0 even if the memory-guard cap was hit.
-	limited := limit > 0
-
 	for _, en := range last {
 		e.Gauge(seriesActiveMetric, semconv.UnitSeries,
-			"Exact distinct active time series emitted for `metric.name` during the last export interval; bounded by a per-metric cap (the value pins at the cap when exceeded).",
+			"Exact distinct active time series emitted for `metric.name` during the last export interval, AFTER cardinality limiting — the series actually billed. What was shed is graph2otel.series.clipped.",
 			float64(en.Count), Attrs{semconv.AttrMetricName: en.Metric})
-		overflowing := 0.0
-		if limited && en.Capped {
-			overflowing = 1
-		}
-		e.Gauge(seriesOverflowMetric, semconv.UnitDimensionless,
-			"1 when `metric.name` reached the per-metric series cap during the last interval (excess series silently dropped into otel.metric.overflow), else 0.",
-			overflowing, Attrs{semconv.AttrMetricName: en.Metric})
 	}
-	if limited {
+	if limit > 0 {
 		e.Gauge(seriesLimitMetric, semconv.UnitSeries,
-			"Effective per-metric active-series cap: the point at which excess series collapse into otel.metric.overflow (silent per-series loss). Emitted only when a positive limit is configured.",
+			"Configured per-metric active-series limit (cardinality.per_metric_limit): past it the top series by value are kept and the tail is folded into an `other` bucket or dropped. Emitted only when a positive limit is configured.",
 			float64(limit), nil)
 	}
 }

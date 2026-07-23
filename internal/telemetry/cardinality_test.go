@@ -82,7 +82,7 @@ func TestCardinalityTrackerConfigurableCap(t *testing.T) {
 // TestCardinalityTrackerNonPositiveCapFallsBackToDefault asserts a
 // non-positive cap (the "unlimited OTLP limit" case) falls back to the
 // package memory-guard default rather than tracking unboundedly, and that the
-// limit/overflowing gauges are suppressed (no positive limit configured).
+// series.limit gauge is suppressed (no positive limit configured).
 func TestCardinalityTrackerNonPositiveCapFallsBackToDefault(t *testing.T) {
 	tr := telemetry.NewCardinalityTrackerWithCap(0)
 	rec := telemetrytest.New()
@@ -96,33 +96,52 @@ func TestCardinalityTrackerNonPositiveCapFallsBackToDefault(t *testing.T) {
 	}
 }
 
-// TestCardinalityTrackerEmitsLimitAndOverflowing asserts that, with a
-// positive configured limit, Report emits a single graph2otel.series.limit
-// point carrying the limit and a per-metric series.overflowing that is 1 for
-// capped metrics and 0 otherwise.
-func TestCardinalityTrackerEmitsLimitAndOverflowing(t *testing.T) {
+// TestCardinalityTrackerEmitsTheConfiguredLimit asserts Report emits a single
+// graph2otel.series.limit point carrying the configured per-metric limit.
+//
+// graph2otel.series.overflowing is deliberately GONE (#235). It meant "this
+// metric reached the SDK's per-instrument cap and the excess vanished into
+// otel.metric.overflow" — a mechanism that no longer exists, since the SDK's cap
+// is disabled in favor of graph2otel's own limiter. Keeping the name pointed at
+// the nearest surviving condition would have made it quietly mean something
+// else. graph2otel.series.clipped replaces it with strictly more: how many
+// series were shed, and whether they were folded into `other` or dropped.
+func TestCardinalityTrackerEmitsTheConfiguredLimit(t *testing.T) {
 	rec := telemetrytest.New()
-	tr := telemetry.NewCardinalityTrackerWithCap(2)
+	tr := telemetry.NewCardinalityTrackerForLimit(2)
 	for s := 0; s < 5; s++ {
 		tr.Observe("entra.hot", telemetry.Attrs{"n": s})
 	}
-	tr.Observe("entra.cool", telemetry.Attrs{"n": 1})
 	tr.Report(rec.Emitter())
 
 	limit := rec.MetricPoints("graph2otel.series.limit")
 	if len(limit) != 1 || limit[0].Value != 2 {
 		t.Fatalf("series.limit = %+v, want one point value=2", limit)
 	}
+	if pts := rec.MetricPoints("graph2otel.series.overflowing"); len(pts) != 0 {
+		t.Errorf("series.overflowing = %+v, want none — it named the SDK overflow, which "+
+			"no longer exists; graph2otel.series.clipped carries this now", pts)
+	}
+}
 
-	over := map[string]float64{}
-	for _, p := range rec.MetricPoints("graph2otel.series.overflowing") {
-		over[p.Attrs[semconv.AttrMetricName]] = p.Value
+// TestCardinalityTrackerCountsAboveTheConfiguredLimit is the reason the memory
+// guard and the reported limit had to stop being the same number.
+//
+// The tracker sits INSIDE the limiter, and the limiter emits up to the limit
+// plus the hysteresis band plus the `other` bucket. A tracker that pinned AT the
+// limit would under-report by exactly the amount that only appears once a metric
+// goes over it — the one moment anybody reads the number.
+func TestCardinalityTrackerCountsAboveTheConfiguredLimit(t *testing.T) {
+	rec := telemetrytest.New()
+	tr := telemetry.NewCardinalityTrackerForLimit(3)
+	for s := 0; s < 7; s++ {
+		tr.Observe("entra.hot", telemetry.Attrs{"n": s})
 	}
-	if over["entra.hot"] != 1 {
-		t.Errorf("overflowing{entra.hot} = %v, want 1", over["entra.hot"])
-	}
-	if over["entra.cool"] != 0 {
-		t.Errorf("overflowing{entra.cool} = %v, want 0", over["entra.cool"])
+	tr.Report(rec.Emitter())
+
+	if got := seriesActivePointsByName(t, rec)["entra.hot"]; got != 7 {
+		t.Errorf("series.active = %v, want 7 — the true count of what reached the SDK, "+
+			"not a value pinned at the configured limit of 3", got)
 	}
 }
 

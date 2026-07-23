@@ -146,7 +146,7 @@ do not branch on its exit code.
 
 ## When it fires
 
-The daily workflow opens (or comments on) a single tracking issue labelled
+The daily workflow opens (or comments on) a single tracking issue labeled
 `graph-beta-drift` and fails the run. Triage:
 
 1. **Confirm against the live endpoint.** Wire over docs — the EDM is Microsoft's own

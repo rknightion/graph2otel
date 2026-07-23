@@ -179,7 +179,7 @@ tenants:
     non-default `Audit.AzureActiveDirectory` had ~1.2%). No `m365.activity` self
     filter is built.
 - **Loud, never silent.** Every dropped record increments a self-obs counter
-  (`_total` on the Prometheus side), labelled `collector`:
+  (`_total` on the Prometheus side), labeled `collector`:
   `graph2otel.blob.self_excluded` on the blob path,
   `graph2otel.logpipeline.self_excluded` on the Graph-polled path — so a quieter
   dashboard is visible and alertable rather than looking like breakage. On the blob

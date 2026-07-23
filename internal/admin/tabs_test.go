@@ -44,7 +44,7 @@ func cfgWithSecrets() *config.Config {
 			MutexProfileFraction: 5,
 			BlockProfileRate:     100000,
 		},
-		Cardinality: config.CardinalityConfig{MetricLimit: 2000},
+		Cardinality: config.CardinalityConfig{PerMetricLimit: 2000},
 		Tenants: []config.TenantConfig{
 			{TenantID: "tenant-a", ClientID: "client-1"},
 		},
@@ -128,8 +128,8 @@ func TestConfigTab_SecretsPresenceOnly(t *testing.T) {
 	if got.CheckpointDir != "/var/lib/g2o/ckpt" || got.TenantCount != 1 {
 		t.Errorf("checkpoint/tenants wrong: dir=%q tenants=%d", got.CheckpointDir, got.TenantCount)
 	}
-	if got.Cardinality.MetricLimit != 2000 {
-		t.Errorf("MetricLimit = %d, want 2000", got.Cardinality.MetricLimit)
+	if got.Cardinality.PerMetricLimit != 2000 {
+		t.Errorf("PerMetricLimit = %d, want 2000", got.Cardinality.PerMetricLimit)
 	}
 }
 
@@ -158,7 +158,7 @@ func TestConfigTab_UnsetSecretReadsUnset(t *testing.T) {
 }
 
 // TestCardinalityTab_RendersFromTracker (#215): the tab and /api/cardinality.json
-// render total active series, per-metric counts and the configured metric_limit,
+// render total active series, per-metric counts and the configured per_metric_limit,
 // read from the existing CardinalityTracker's snapshot.
 func TestCardinalityTab_RendersFromTracker(t *testing.T) {
 	tr := telemetry.NewCardinalityTrackerWithCap(2000)
@@ -167,7 +167,7 @@ func TestCardinalityTab_RendersFromTracker(t *testing.T) {
 	tr.Observe("graph2otel.devices.total", telemetry.Attrs{"tenant": "a"})
 	tr.Report(telemetrytest.New().Emitter()) // snapshots the interval
 
-	cfg := cfgWithSecrets() // MetricLimit 2000
+	cfg := cfgWithSecrets() // PerMetricLimit 2000
 	s := New(cfg.Admin, nil, nil, nil, cfg, tr, nil)
 
 	w, body := serve(t, s, "/api/cardinality.json")
@@ -184,8 +184,8 @@ func TestCardinalityTab_RendersFromTracker(t *testing.T) {
 	if got.MetricCount != 2 {
 		t.Errorf("MetricCount = %d, want 2", got.MetricCount)
 	}
-	if got.MetricLimit != 2000 {
-		t.Errorf("MetricLimit = %d, want 2000 (from cardinality.metric_limit)", got.MetricLimit)
+	if got.PerMetricLimit != 2000 {
+		t.Errorf("PerMetricLimit = %d, want 2000 (from cardinality.per_metric_limit)", got.PerMetricLimit)
 	}
 	byName := map[string]int{}
 	for _, m := range got.Metrics {
@@ -221,8 +221,8 @@ func TestCardinalityTab_NilTrackerEmpty(t *testing.T) {
 	if got.TotalActiveSeries != 0 || got.MetricCount != 0 {
 		t.Errorf("empty tracker view = %+v, want zero counts", got)
 	}
-	if got.MetricLimit != 2000 {
-		t.Errorf("MetricLimit = %d, want 2000 (still from config)", got.MetricLimit)
+	if got.PerMetricLimit != 2000 {
+		t.Errorf("PerMetricLimit = %d, want 2000 (still from config)", got.PerMetricLimit)
 	}
 }
 
