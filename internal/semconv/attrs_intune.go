@@ -390,6 +390,14 @@ const (
 	AttrDeviceAppHealthScore     = "device_app_health_score"
 	AttrMeanTimeToFailureMinutes = "mean_time_to_failure_minutes"
 
+	// AttrMeanResourceSpikeTimeScore is the sixth Endpoint Analytics score
+	// category. It is on the wire of BOTH userExperienceAnalyticsDeviceScores and
+	// userExperienceAnalyticsModelScores and was simply never mapped — the
+	// original deviceScore struct predates it (live-measured 2026-07-24, #194:
+	// 100.0 on wintest, 64.33/64.81/91.73/92.62 on the four load-generating VMs,
+	// and the -1 sentinel on the rest).
+	AttrMeanResourceSpikeTimeScore = "mean_resource_spike_time_score"
+
 	// Per-APPLICATION app-health detail
 	// (userExperienceAnalyticsAppHealthApplicationPerformance). Distinct from the
 	// per-device block above: one row per application across the fleet, so the
@@ -402,19 +410,31 @@ const (
 	AttrAppUsageDuration  = "app_usage_duration"
 
 	// Per-device resource detail (userExperienceAnalyticsResourcePerformance).
-	// This segment returns 0 rows on m7kni (it sits under the same Endpoint
-	// Analytics device-count floor), so these key names are derived from the beta
-	// $metadata EDM rather than an observed row — the one place in this block
-	// that is not live-captured. Values are emitted only when present, so a name
-	// that turns out wrong yields an ABSENT attribute rather than a wrong one.
-	AttrCpuDisplayName           = "cpu_display_name"
-	AttrCpuSpikeTimePercentage   = "cpu_spike_time_percentage"
-	AttrDiskType                 = "disk_type"
-	AttrMachineType              = "machine_type"
-	AttrProcessorCoreCount       = "processor_core_count"
-	AttrRamSpikeTimePercentage   = "ram_spike_time_percentage"
-	AttrResourcePerformanceScore = "resource_performance_score"
-	AttrTotalRamMb               = "total_ram_mb"
+	// These names WERE EDM-derived while the segment was empty on m7kni; that
+	// caveat is withdrawn — the segment returned a row on 2026-07-23 and every
+	// mapped name matched the wire, so the whole block is now
+	// [live-measured 2026-07-23, #194]. Values are still emitted only when
+	// present, which is why a wrong name would have yielded an absent attribute
+	// rather than a wrong one.
+	//
+	// The two *_threshold keys are the TENANT'S OWN policy values, not the
+	// device's readings: they say what CPU/RAM spike percentage Endpoint
+	// Analytics considers bad here (15% / 30% on m7kni), which is what turns a
+	// bare "cpu_spike_time_percentage=12" into a judgement.
+	AttrAverageSpikeTimeScore           = "average_spike_time_score"
+	AttrCpuClockSpeedMhz                = "cpu_clock_speed_mhz"
+	AttrCpuDisplayName                  = "cpu_display_name"
+	AttrCpuSpikeTimePercentage          = "cpu_spike_time_percentage"
+	AttrCpuSpikeTimePercentageThreshold = "cpu_spike_time_percentage_threshold"
+	AttrCpuSpikeTimeScore               = "cpu_spike_time_score"
+	AttrDiskType                        = "disk_type"
+	AttrMachineType                     = "machine_type"
+	AttrProcessorCoreCount              = "processor_core_count"
+	AttrRamSpikeTimePercentage          = "ram_spike_time_percentage"
+	AttrRamSpikeTimePercentageThreshold = "ram_spike_time_percentage_threshold"
+	AttrRamSpikeTimeScore               = "ram_spike_time_score"
+	AttrResourcePerformanceScore        = "resource_performance_score"
+	AttrTotalRamMb                      = "total_ram_mb"
 )
 
 // Attribute keys for intune.hardware_inventory (#199) — the per-device

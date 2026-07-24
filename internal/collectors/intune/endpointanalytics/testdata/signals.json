@@ -107,6 +107,27 @@
       ]
     },
     {
+      "Name": "intune.uxa.model_device_count",
+      "Unit": "{device}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "health_state",
+        "manufacturer",
+        "model"
+      ]
+    },
+    {
+      "Name": "intune.uxa.model_score",
+      "Unit": "{score}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "category",
+        "health_state",
+        "manufacturer",
+        "model"
+      ]
+    },
+    {
       "Name": "intune.uxa.resource_performance.device_count",
       "Unit": "{device}",
       "Kind": "gauge",
@@ -190,6 +211,7 @@
         "health_state",
         "id",
         "manufacturer",
+        "mean_resource_spike_time_score",
         "model",
         "startup_performance_score",
         "work_from_anywhere_score"
@@ -198,11 +220,21 @@
     {
       "EventName": "intune.device_resource_performance",
       "AttrKeys": [
+        "average_spike_time_score",
         "cpu_spike_time_percentage",
+        "cpu_spike_time_percentage_threshold",
+        "cpu_spike_time_score",
+        "device_id",
+        "device_name",
+        "disk_type",
         "health_state",
+        "machine_type",
+        "manufacturer",
+        "model",
         "ram_spike_time_percentage",
-        "resource_performance_score",
-        "total_ram_mb"
+        "ram_spike_time_percentage_threshold",
+        "ram_spike_time_score",
+        "resource_performance_score"
       ]
     },
     {

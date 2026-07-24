@@ -46,6 +46,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"strconv"
 	"strings"
 	"time"
@@ -74,6 +75,12 @@ const (
 	baselineScoreMetric       = "intune.uxa.baseline_score"
 	anomalyCountMetric        = "intune.uxa.anomaly_count"
 	wfaDeviceCountMetric      = "intune.uxa.work_from_anywhere.device_count"
+
+	// The per-MODEL rollup (#194). Two metric names rather than one gauge with a
+	// category dimension carrying the count, so a naive sum() over
+	// model_device_count is the true scored-device count.
+	modelScoreMetric       = "intune.uxa.model_score"
+	modelDeviceCountMetric = "intune.uxa.model_device_count"
 
 	appHealthOSVersionScoreMetric = "intune.uxa.app_health.os_version_score"
 	appHealthOSVersionMTTFMetric  = "intune.uxa.app_health.mean_time_to_failure_minutes"
@@ -235,7 +242,45 @@ type deviceScore struct {
 	AppReliabilityScore     float64 `json:"appReliabilityScore"`
 	WorkFromAnywhereScore   float64 `json:"workFromAnywhereScore"`
 	BatteryHealthScore      float64 `json:"batteryHealthScore"`
-	HealthStatus            string  `json:"healthStatus"`
+	// MeanResourceSpikeTimeScore is the sixth score category. It was on the wire
+	// all along and simply never mapped — this struct predates it — so the
+	// collector was discarding a real, populated score (live-measured 2026-07-24,
+	// #194: 100 on wintest, 64.33–92.62 on the load-generating VMs). Same -1
+	// sentinel handling as its five siblings.
+	MeanResourceSpikeTimeScore float64 `json:"meanResourceSpikeTimeScore"`
+	HealthStatus               string  `json:"healthStatus"`
+}
+
+// modelScore is the v1.0 userExperienceAnalyticsModelScores resource (#194) —
+// Endpoint Analytics' per-MODEL rollup of the same six score categories the
+// per-device segment carries, with the bucket's device count alongside.
+//
+// It is metric-shaped with NO log twin, per the #192 rule that model- and
+// OS-level aggregates are metrics while per-device rows are logs. Cardinality is
+// bounded by the number of distinct (model, manufacturer) pairs in the fleet,
+// which is a tenant-shaped constant, not a per-entity fan-out (#112).
+//
+// GATE, and what is NOT known about it (live-measured 2026-07-24, #194): this
+// segment was empty on m7kni for five days and #194 recorded its unblock
+// condition as "≥5 EA-scored devices sharing one model string". That is WRONG.
+// The first published row has modelDeviceCount 1, while a five-device model
+// bucket that existed on the same day was absent — the exact inverse. Whatever
+// gates publication here is unknown; do not restate a device-count theory, and do
+// not treat an empty collection as a statement about fleet size.
+//
+// id is "<model>_<manufacturer>" on the wire and is not read: the two components
+// are mapped separately as the bounded label pair.
+type modelScore struct {
+	Model                      string  `json:"model"`
+	Manufacturer               string  `json:"manufacturer"`
+	ModelDeviceCount           int64   `json:"modelDeviceCount"`
+	EndpointAnalyticsScore     float64 `json:"endpointAnalyticsScore"`
+	StartupPerformanceScore    float64 `json:"startupPerformanceScore"`
+	AppReliabilityScore        float64 `json:"appReliabilityScore"`
+	WorkFromAnywhereScore      float64 `json:"workFromAnywhereScore"`
+	BatteryHealthScore         float64 `json:"batteryHealthScore"`
+	MeanResourceSpikeTimeScore float64 `json:"meanResourceSpikeTimeScore"`
+	HealthStatus               string  `json:"healthStatus"`
 }
 
 // startupHistory is the subset of the v1.0 userExperienceAnalyticsDeviceStartupHistory
@@ -397,15 +442,24 @@ type batteryHealthPerformance struct {
 
 // resourcePerformance is the subset of the beta
 // userExperienceAnalyticsResourcePerformance resource this collector reads.
-// NOTE ON EVIDENCE: this segment returns 0 rows on m7kni — it sits under the same
-// 5-device Endpoint Analytics floor as the per-model segments (#194) — so unlike
-// every other struct in this file the field names below are taken from the beta
-// $metadata EDM (2026-07-21), NOT from an observed row. That is a weaker evidence
-// class and is recorded as such rather than dressed up as live-measured.
 //
-// The exposure is bounded by construction: every field is emitted only when
-// present, so a name that turns out to be wrong yields an ABSENT twin attribute
-// rather than a wrong value. Nothing here is asserted into a metric label.
+// EVIDENCE (upgraded 2026-07-23/24, #194): this mapping used to carry a caveat
+// that its field names were taken from the beta $metadata EDM rather than an
+// observed row, because the segment was empty on the only tenant available. The
+// segment now returns rows and ALL of the originally-mapped names matched the
+// wire, so the caveat is withdrawn — this block is [live-measured 2026-07-24].
+// Leaving a "not verified" note in place after verification is the same rot the
+// #146 post-mortem is about.
+//
+// Despite the name, the segment is PER-DEVICE, not an aggregate: every row
+// carries deviceId/deviceName/model. Its deviceCount field reads the -1
+// insufficient-data sentinel and is deliberately not mapped — it is the only
+// aggregate-shaped field on a per-device row and has never been observed
+// populated.
+//
+// The two *Threshold fields are the TENANT'S own Endpoint Analytics policy
+// values (15% CPU / 30% RAM on m7kni), not device readings. They are what turn a
+// bare spike percentage into a judgement, which is why they ride the twin.
 type resourcePerformance struct {
 	DeviceID                       string  `json:"deviceId"`
 	DeviceName                     string  `json:"deviceName"`
@@ -414,6 +468,12 @@ type resourcePerformance struct {
 	CPUDisplayName                 string  `json:"cpuDisplayName"`
 	CPUSpikeTimePercentage         float64 `json:"cpuSpikeTimePercentage"`
 	RAMSpikeTimePercentage         float64 `json:"ramSpikeTimePercentage"`
+	CPUSpikeTimeScore              float64 `json:"cpuSpikeTimeScore"`
+	RAMSpikeTimeScore              float64 `json:"ramSpikeTimeScore"`
+	AverageSpikeTimeScore          float64 `json:"averageSpikeTimeScore"`
+	CPUSpikeTimePercentageThresh   float64 `json:"cpuSpikeTimePercentageThreshold"`
+	RAMSpikeTimePercentageThresh   float64 `json:"ramSpikeTimePercentageThreshold"`
+	CPUClockSpeedInMHz             float64 `json:"cpuClockSpeedInMHz"`
 	TotalRAMInMB                   float64 `json:"totalRamInMB"`
 	TotalProcessorCoreCount        int64   `json:"totalProcessorCoreCount"`
 	DiskType                       string  `json:"diskType"`
@@ -532,6 +592,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		fn   func(context.Context, telemetry.Emitter) error
 	}{
 		{"device scores", c.collectDeviceScores},
+		{"model scores", c.collectModelScores},
 		{"startup histories", c.collectStartupHistories},
 		{"app health", c.collectAppHealth},
 		{"battery health", c.collectBatteryHealth},
@@ -606,6 +667,7 @@ func (c *Collector) collectDeviceScores(ctx context.Context, e telemetry.Emitter
 			{"app_reliability", semconv.AttrAppReliabilityScore, d.AppReliabilityScore},
 			{"work_from_anywhere", semconv.AttrWorkFromAnywhereScore, d.WorkFromAnywhereScore},
 			{"battery_health", semconv.AttrBatteryHealthScore, d.BatteryHealthScore},
+			{"mean_resource_spike_time", semconv.AttrMeanResourceSpikeTimeScore, d.MeanResourceSpikeTimeScore},
 		} {
 			if cs.score < 0 {
 				continue // -1 = "not enough data" sentinel: excluded from the histogram AND omitted from the twin
@@ -633,6 +695,60 @@ func (c *Collector) collectDeviceScores(ctx context.Context, e telemetry.Emitter
 		points = append(points, telemetry.GaugePoint{Value: float64(n), Attrs: telemetry.Attrs{semconv.AttrHealthState: state}})
 	}
 	e.GaugeSnapshot(deviceScoreCountMetric, "{device}", "Intune Endpoint Analytics device count, by overall Endpoint Analytics health state.", points)
+	return nil
+}
+
+// collectModelScores fetches the per-MODEL Endpoint Analytics rollup (#194) and
+// emits it as bounded gauges: the six score categories keyed by
+// (model, manufacturer, category), plus the bucket's own device count. No log
+// twin — a model bucket is an aggregate, not an entity (#192). The -1
+// "not enough data" sentinel is excluded per field, exactly as on the per-device
+// sibling: on the first live row four of the six categories carry it.
+func (c *Collector) collectModelScores(ctx context.Context, e telemetry.Emitter) error {
+	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/userExperienceAnalyticsModelScores", nil)
+	if err != nil {
+		return err
+	}
+	counts := make([]telemetry.GaugePoint, 0, len(raw))
+	scores := make([]telemetry.GaugePoint, 0, len(raw)*6)
+	for _, r := range raw {
+		var m modelScore
+		if err := json.Unmarshal(r, &m); err != nil {
+			c.logger.Warn("endpoint_analytics: skipping malformed model score row", "collector", collectorName, "error", err)
+			continue
+		}
+		state := healthStateBucketFor(m.HealthStatus)
+		base := telemetry.Attrs{semconv.AttrHealthState: state}
+		telemetry.SetStr(base, semconv.AttrModel, m.Model)
+		telemetry.SetStr(base, semconv.AttrManufacturer, m.Manufacturer)
+
+		counts = append(counts, telemetry.GaugePoint{Value: float64(m.ModelDeviceCount), Attrs: base})
+		for _, cs := range []struct {
+			category string
+			score    float64
+		}{
+			{"endpoint_analytics", m.EndpointAnalyticsScore},
+			{"startup_performance", m.StartupPerformanceScore},
+			{"app_reliability", m.AppReliabilityScore},
+			{"work_from_anywhere", m.WorkFromAnywhereScore},
+			{"battery_health", m.BatteryHealthScore},
+			{"mean_resource_spike_time", m.MeanResourceSpikeTimeScore},
+		} {
+			if cs.score < 0 {
+				continue // -1 = "not enough data" sentinel, never a real score
+			}
+			attrs := telemetry.Attrs{semconv.AttrCategory: cs.category}
+			maps.Copy(attrs, base)
+			scores = append(scores, telemetry.GaugePoint{Value: cs.score, Attrs: attrs})
+		}
+	}
+	e.GaugeSnapshot(modelScoreMetric, "{score}",
+		"Intune Endpoint Analytics score (0-100) per device model, by score category. Bounded by the "+
+			"number of distinct (model, manufacturer) pairs in the fleet; the -1 'not enough data' "+
+			"sentinel is excluded rather than emitted as a negative score.", scores)
+	e.GaugeSnapshot(modelDeviceCountMetric, "{device}",
+		"Intune Endpoint Analytics scored-device count per device model. Microsoft publishes buckets as "+
+			"small as one device, so this is the real bucket size, not a floor.", counts)
 	return nil
 }
 
@@ -991,6 +1107,13 @@ func (c *Collector) collectResourcePerformance(ctx context.Context, e telemetry.
 		if rp.TotalProcessorCoreCount > 0 { // 0 = not reported
 			attrs[semconv.AttrProcessorCoreCount] = strconv.FormatInt(rp.TotalProcessorCoreCount, 10)
 		}
+		// Two different zeroes, and they must not share a guard (live-measured
+		// 2026-07-24, #194). A 0% spike time is a REAL measurement — the device
+		// never spiked — so the percentages and scores keep the >= 0 guard that
+		// only drops the -1 sentinel. But totalRamInMB and cpuClockSpeedInMHz read
+		// 0 on a VM that demonstrably has RAM and a clock: that is "not reported",
+		// and emitting it as a reading claims the machine has no memory. Same trap
+		// intune.hardware_inventory already handles for totalStorageSpace.
 		for _, f := range []struct {
 			attr  string
 			value float64
@@ -998,9 +1121,24 @@ func (c *Collector) collectResourcePerformance(ctx context.Context, e telemetry.
 			{semconv.AttrResourcePerformanceScore, rp.DeviceResourcePerformanceScore},
 			{semconv.AttrCpuSpikeTimePercentage, rp.CPUSpikeTimePercentage},
 			{semconv.AttrRamSpikeTimePercentage, rp.RAMSpikeTimePercentage},
-			{semconv.AttrTotalRamMb, rp.TotalRAMInMB},
+			{semconv.AttrCpuSpikeTimeScore, rp.CPUSpikeTimeScore},
+			{semconv.AttrRamSpikeTimeScore, rp.RAMSpikeTimeScore},
+			{semconv.AttrAverageSpikeTimeScore, rp.AverageSpikeTimeScore},
+			{semconv.AttrCpuSpikeTimePercentageThreshold, rp.CPUSpikeTimePercentageThresh},
+			{semconv.AttrRamSpikeTimePercentageThreshold, rp.RAMSpikeTimePercentageThresh},
 		} {
 			if f.value >= 0 {
+				attrs[f.attr] = strconv.FormatFloat(f.value, 'f', -1, 64)
+			}
+		}
+		for _, f := range []struct {
+			attr  string
+			value float64
+		}{
+			{semconv.AttrTotalRamMb, rp.TotalRAMInMB},
+			{semconv.AttrCpuClockSpeedMhz, rp.CPUClockSpeedInMHz},
+		} {
+			if f.value > 0 { // 0 = not reported, never a real reading
 				attrs[f.attr] = strconv.FormatFloat(f.value, 'f', -1, 64)
 			}
 		}

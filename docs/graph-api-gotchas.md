@@ -51,6 +51,17 @@ issue. Do not record correction narratives here — those live on the issues.
   empty-or-error result and got written down as a fact about the tenant. **Before parking
   anything as blocked-on-data, vary the request shape first** — bare vs `$select` vs `$top`
   vs single-entity vs cast segment — and only then attribute the emptiness to the tenant.
+- **`$count=true` on `userExperienceAnalyticsModelScores` returns the count and DROPS the
+  rows** `[live-measured 2026-07-24, #194]`. `?$count=true` answers `200` with
+  `@odata.count: 1` and `"value": []`, while the bare list returns the row. The count is
+  right; the collection is silently empty. This matters more than it sounds: `count=0` is
+  the exact wording several UXA segments were parked on as blocked-on-data, and a probe
+  reaching for `$count` to test emptiness gets a zero-length collection from a segment that
+  has data. **Read the rows, not the count**, when deciding whether a segment is populated.
+- **`$orderby=id` returns 500 on `userExperienceAnalyticsAppHealthDeviceModelPerformance`**
+  `[live-measured 2026-07-24, #194]` while the bare list returns `200`. Same family as the
+  `$top` entry above — an OData parameter that looks universally safe, is not, and answers
+  with a 5xx that reads like a transient fault. It is not transient; drop the parameter.
 - **`hardwareInformation` is a STUB on a list GET and only materializes on a single-entity
   GET** `[live-measured 2026-07-21, #199]`. `GET /beta/deviceManagement/managedDevices?$select=hardwareInformation`
   returns all 40 keys with 6-8 populated; `GET .../managedDevices/{id}?$select=hardwareInformation`
@@ -239,6 +250,23 @@ path is Exchange's own segment, **not** a Graph beta surface, so the
   400s). `batteryHealthDevicePerformance` and `resourcePerformance` are **beta-only** (400
   on v1.0). Device scores use **`-1` as a "not enough data" sentinel**, not a real 0-100
   value — exclude it from score aggregates.
+- **What gates a UXA ROLLUP segment being published is UNKNOWN — it is not device count**
+  `[live-measured 2026-07-24, #194/#199]`. Microsoft documents a five-device "insufficient
+  data" floor for Endpoint Analytics scores, and the empty rollup segments were read through
+  that lens for a week: `ModelScores` was recorded as needing "≥5 scored devices sharing one
+  model string", `DeviceStartupProcessPerformance` as needing boot telemetry from more than
+  one device. Both readings are refuted by the same day's wire:
+  - `ModelScores` published a bucket with **`modelDeviceCount: 1`** while a **five**-device
+    model bucket that existed on the same tenant that day was absent — the exact inverse of
+    the theory.
+  - `DeviceStartupProcessPerformance` stayed at 0 rows after boot telemetry went from 3
+    records across 2 devices to 11 across 6, and scored devices from 4 to 10.
+
+  The documented floor is real for the *score* Microsoft computes; it does not explain which
+  rollup rows get published. **Do not attach a device-count unblock condition to an empty UXA
+  rollup** — it will read as testable, pass, and change nothing. The per-device siblings
+  (`DeviceScores`, `DeviceStartupProcesses`, `ResourcePerformance`) return rows on a tiny
+  tenant and are the reliable source; the rollups are opportunistic.
 - **Per-device sub-resources 404 routinely** `[live, M4]` — e.g.
   `windowsProtectionState` for a device that hasn't reported it. Skip-and-count, never
   fail the sweep; emit an empty snapshot (not all-zeros) when zero devices returned data.
@@ -342,6 +370,21 @@ below even though Graph never exposes it.
 
 Corrected non-gaps: `NetworkAccessTrafficLogs` has a beta endpoint that names its own
 scope (#130); Purview sensitivity labels (#126).
+
+**Reachable but never populated on the verification tenant** — a different class from the
+above: the endpoint works, the tenant has nothing to report, and no realistic tenant change
+produces a row. Mapping against zero rows is the blind mapping this project forbids, so these
+are recorded rather than left on an open issue behind an unblock condition that cannot fire
+`[live-measured 2026-07-22 → 2026-07-24, #199]`:
+
+| segment | status | why it stays empty |
+| --- | --- | --- |
+| `userExperienceAnalyticsDevicesWithoutCloudIdentity` | beta `200`, 0 rows (v1.0 `400`) | an **exception list** — empty is the healthy answer |
+| `userExperienceAnalyticsNotAutopilotReadyDevice` | beta `200`, 0 rows (v1.0 `400`) | same, and the tenant has **zero** Autopilot device identities and zero deployment profiles (#201), so it stays empty at any fleet size |
+
+Both were re-probed on three separate days across a fleet that grew 10 → 17 devices, with the
+request shape varied (bare / `$orderby` / `$select`) each time. If a tenant with Autopilot
+registrations ever appears, this entry is the pointer back.
 
 > **#130 deferral has FIRED (`live-measured 2026-07-23, #239`).** The condition was "out of
 > scope until a GSA tenant exists" — a GSA tenant now exists: `GET /beta/networkAccess/tenantStatus`

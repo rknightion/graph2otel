@@ -45,7 +45,23 @@ const (
 	appHealthOSURL  = "https://graph.microsoft.com/v1.0/deviceManagement/userExperienceAnalyticsAppHealthOSVersionPerformance"
 	appHealthDevURL = "https://graph.microsoft.com/beta/deviceManagement/userExperienceAnalyticsAppHealthDevicePerformance"
 	startupProcURL  = "https://graph.microsoft.com/beta/deviceManagement/userExperienceAnalyticsDeviceStartupProcesses"
+	modelScoresURL  = "https://graph.microsoft.com/v1.0/deviceManagement/userExperienceAnalyticsModelScores"
 )
+
+// modelScoresLiveRow is the VERBATIM userExperienceAnalyticsModelScores row m7kni
+// published on 2026-07-24 (probed as graph2otel-poller), the first row that
+// segment has ever returned on the tenant. Note modelDeviceCount:1 — a
+// SINGLE-device model bucket is published, which is what refuted #194's recorded
+// "≥5 devices sharing one model string" unblock condition.
+const modelScoresLiveRow = `{"id":"Virtual Machine_Microsoft Corporation","model":"Virtual Machine","manufacturer":"Microsoft Corporation","modelDeviceCount":1,"endpointAnalyticsScore":100.0,"startupPerformanceScore":-1.0,"appReliabilityScore":-1.0,"workFromAnywhereScore":-1.0,"batteryHealthScore":-1.0,"meanResourceSpikeTimeScore":100.0,"healthStatus":"meetingGoals"}`
+
+// resourcePerfLiveRow is the VERBATIM userExperienceAnalyticsResourcePerformance
+// row for wintest (m7kni, probed as graph2otel-poller 2026-07-24), the row that
+// upgraded this segment's mapping from EDM-derived to live-measured. It carries
+// both zero shapes the twin has to tell apart: totalRamInMB/cpuClockSpeedInMHz
+// are 0 on a VM that plainly has RAM and a clock (not reported), while
+// cpuSpikeTimePercentage 0 is a real measurement of zero spike time.
+const resourcePerfLiveRow = `{"id":"117aea09-6b4c-48e0-8af1-26e89327160a","deviceId":"4ada2149-e9cb-4c34-827a-8df692a9065c","deviceName":"wintest","model":"Virtual Machine","deviceCount":-1,"manufacturer":"Microsoft Corporation","cpuSpikeTimePercentage":0.0,"ramSpikeTimePercentage":0.0,"cpuSpikeTimeScore":100,"cpuSpikeTimePercentageThreshold":15.0,"ramSpikeTimeScore":100,"ramSpikeTimePercentageThreshold":30.0,"deviceResourcePerformanceScore":94,"averageSpikeTimeScore":100,"machineType":"unknown","cpuDisplayName":"","totalProcessorCoreCount":0,"cpuClockSpeedInMHz":0.0,"totalRamInMB":0.0,"diskType":"unknown","healthStatus":"meetingGoals"}`
 
 // appHealthOSLiveRow is the VERBATIM userExperienceAnalyticsAppHealthOSVersionPerformance
 // row for m7kni (probed as graph2otel-poller 2026-07-20): one OS version, one active
@@ -103,6 +119,7 @@ func allEndpoints(overrides map[string]string) map[string]string {
 		appHealthOSURL:  `{"value":[` + appHealthOSLiveRow + `]}`,
 		appHealthDevURL: emptyPage,
 		startupProcURL:  emptyPage,
+		modelScoresURL:  emptyPage,
 	}
 	for k, v := range overrides {
 		m[k] = v
@@ -117,8 +134,8 @@ func allEndpoints(overrides map[string]string) map[string]string {
 // the histogram so it cannot drag the distribution toward zero.
 func TestCollectEmitsDeviceScoresAsBoundedAggregatesExcludingSentinel(t *testing.T) {
 	body := `{"value":[
-	  {"deviceName":"LAPHAM","endpointAnalyticsScore":86.62,"startupPerformanceScore":-1,"appReliabilityScore":100,"workFromAnywhereScore":96.88,"batteryHealthScore":63,"healthStatus":"meetingGoals"},
-	  {"deviceName":"OTHER","endpointAnalyticsScore":40,"startupPerformanceScore":55,"appReliabilityScore":70,"workFromAnywhereScore":80,"batteryHealthScore":30,"healthStatus":"needsAttention"}
+	  {"deviceName":"LAPHAM","endpointAnalyticsScore":86.62,"startupPerformanceScore":-1,"appReliabilityScore":100,"workFromAnywhereScore":96.88,"batteryHealthScore":63,"meanResourceSpikeTimeScore":-1,"healthStatus":"meetingGoals"},
+	  {"deviceName":"OTHER","endpointAnalyticsScore":40,"startupPerformanceScore":55,"appReliabilityScore":70,"workFromAnywhereScore":80,"batteryHealthScore":30,"meanResourceSpikeTimeScore":88,"healthStatus":"needsAttention"}
 	]}`
 	g := &fakeGraph{bodies: allEndpoints(map[string]string{deviceScoresURL: body})}
 	rec := telemetrytest.New()
@@ -136,14 +153,14 @@ func TestCollectEmitsDeviceScoresAsBoundedAggregatesExcludingSentinel(t *testing
 		t.Errorf("device_count by health_state = %v, want meeting_goals=1 needs_attention=1", counts)
 	}
 
-	// Score histogram is bounded by category (5), never per-device. The -1
+	// Score histogram is bounded by category (6), never per-device. The -1
 	// sentinel is excluded: startup_performance saw one real score (55), not two.
 	byCategory := map[string]uint64{}
 	for _, p := range rec.MetricPoints(deviceScoreMetric) {
 		byCategory[p.Attrs["category"]] += p.Count
 	}
-	if len(byCategory) != 5 {
-		t.Fatalf("want 5 bounded score categories, got %d: %v", len(byCategory), byCategory)
+	if len(byCategory) != 6 {
+		t.Fatalf("want 6 bounded score categories, got %d: %v", len(byCategory), byCategory)
 	}
 	if byCategory["startup_performance"] != 1 {
 		t.Errorf("startup_performance observations = %d, want 1 (the -1 sentinel device excluded)", byCategory["startup_performance"])
@@ -207,7 +224,7 @@ func TestDeviceScoresEmitPerDeviceLogTwinOmittingSentinel(t *testing.T) {
 // normal device, never surfaced as a collector error, and contributes zero
 // score-histogram observations.
 func TestCollectTreatsInsufficientDataAsNormalNotError(t *testing.T) {
-	body := `{"value":[{"endpointAnalyticsScore":-1,"startupPerformanceScore":-1,"appReliabilityScore":-1,"workFromAnywhereScore":-1,"batteryHealthScore":-1,"healthStatus":"insufficientData"}]}`
+	body := `{"value":[{"endpointAnalyticsScore":-1,"startupPerformanceScore":-1,"appReliabilityScore":-1,"workFromAnywhereScore":-1,"batteryHealthScore":-1,"meanResourceSpikeTimeScore":-1,"healthStatus":"insufficientData"}]}`
 	g := &fakeGraph{bodies: allEndpoints(map[string]string{deviceScoresURL: body})}
 	rec := telemetrytest.New()
 
@@ -794,6 +811,159 @@ func TestCollectEmitsAppHealthOSVersionAsBoundedAggregates(t *testing.T) {
 			continue // twins from OTHER sub-fetches (device scores / WFA), not this one
 		}
 		t.Errorf("app-health-os-version segment must emit no log twin, got event %q", lr.EventName)
+	}
+}
+
+// TestCollectEmitsModelScoresAsBoundedAggregates pins the #194 per-model segment
+// against the first row m7kni ever published (2026-07-24): a model bucket rolls
+// into bounded gauges keyed by model + manufacturer — the score by category and
+// the bucket's own device count — with NO log twin (#192: model/OS-level scores
+// are metric-shaped, per-device rows are log-shaped), and the -1 "not enough
+// data" sentinel is excluded per field rather than emitted as a negative score.
+func TestCollectEmitsModelScoresAsBoundedAggregates(t *testing.T) {
+	body := `{"value":[
+	  ` + modelScoresLiveRow + `,
+	  {"id":"Latitude 7440_Dell Inc.","model":"Latitude 7440","manufacturer":"Dell Inc.","modelDeviceCount":12,"endpointAnalyticsScore":78.5,"startupPerformanceScore":61,"appReliabilityScore":-1.0,"workFromAnywhereScore":90,"batteryHealthScore":72,"meanResourceSpikeTimeScore":-1.0,"healthStatus":"needsAttention"}
+	]}`
+	g := &fakeGraph{bodies: allEndpoints(map[string]string{modelScoresURL: body})}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	// Score gauge: one point per (model, category) with the sentinel fields gone.
+	// The live row reports exactly two real scores of its six; the Dell row four.
+	type key struct{ model, category string }
+	score := map[key]telemetrytest.MetricPoint{}
+	for _, p := range rec.MetricPoints(modelScoreMetric) {
+		score[key{p.Attrs["model"], p.Attrs["category"]}] = p
+	}
+	if len(score) != 6 {
+		t.Fatalf("want 6 model score points (2 live + 4 Dell, sentinels excluded), got %d: %v", len(score), score)
+	}
+	live := score[key{"Virtual Machine", "endpoint_analytics"}]
+	if live.Value != 100 || live.Attrs["manufacturer"] != "Microsoft Corporation" || live.Attrs["health_state"] != "meeting_goals" {
+		t.Errorf("live endpoint_analytics point = %+v, want value 100 / Microsoft Corporation / meeting_goals", live)
+	}
+	if p := score[key{"Virtual Machine", "mean_resource_spike_time"}]; p.Value != 100 {
+		t.Errorf("mean_resource_spike_time is the sixth category and must be mapped, got %+v", p)
+	}
+	for _, c := range []string{"startup_performance", "app_reliability", "work_from_anywhere", "battery_health"} {
+		if _, ok := score[key{"Virtual Machine", c}]; ok {
+			t.Errorf("category %q carries the -1 sentinel on the live row and must be excluded", c)
+		}
+	}
+	if _, ok := score[key{"Latitude 7440", "app_reliability"}]; ok {
+		t.Error("Dell row's -1 app_reliability must be excluded too")
+	}
+
+	// Device-count gauge: the bucket size, which is what makes a model bucket
+	// self-describing. modelDeviceCount 1 is a REAL published bucket, not a floor.
+	count := map[string]telemetrytest.MetricPoint{}
+	for _, p := range rec.MetricPoints(modelDeviceCountMetric) {
+		count[p.Attrs["model"]] = p
+	}
+	if count["Virtual Machine"].Value != 1 || count["Latitude 7440"].Value != 12 {
+		t.Errorf("model_device_count = %v, want 1 and 12", count)
+	}
+	if count["Latitude 7440"].Attrs["health_state"] != "needs_attention" {
+		t.Errorf("Dell bucket health_state = %q, want needs_attention", count["Latitude 7440"].Attrs["health_state"])
+	}
+
+	// No log twin: this is a model-level aggregate, not a per-entity row.
+	for _, lr := range rec.LogRecords() {
+		if lr.EventName == eventDeviceScore || lr.EventName == eventWorkFromAnywhere {
+			continue // twins from other sub-fetches
+		}
+		t.Errorf("model-scores segment must emit no log twin, got event %q", lr.EventName)
+	}
+}
+
+// TestResourcePerformanceTwinDistinguishesUnreportedZeroFromRealZero pins the
+// live wintest row (#194, 2026-07-24). totalRamInMB and cpuClockSpeedInMHz read 0
+// on a VM that demonstrably has RAM and a clock — that is "not reported", and
+// emitting it as a real reading is the same trap intune.hardware_inventory
+// already handles for totalStorageSpace. cpuSpikeTimePercentage 0 is by contrast
+// a legitimate measurement (0% spike time), so the guard must be per field, not
+// blanket. The six fields the original mapping left on the wire are also pinned
+// here, including the two tenant-policy thresholds that explain the scores.
+func TestResourcePerformanceTwinDistinguishesUnreportedZeroFromRealZero(t *testing.T) {
+	g := &fakeGraph{bodies: allEndpoints(map[string]string{resourcePerfURL: `{"value":[` + resourcePerfLiveRow + `]}`})}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	var attrs map[string]string
+	for _, lr := range rec.LogRecords() {
+		if lr.EventName == eventResourcePerformance {
+			attrs = lr.Attrs
+		}
+	}
+	if attrs == nil {
+		t.Fatal("no resource-performance twin emitted")
+	}
+
+	for _, k := range []string{semconv.AttrTotalRamMb, semconv.AttrCpuClockSpeedMhz, semconv.AttrProcessorCoreCount} {
+		if v, ok := attrs[k]; ok {
+			t.Errorf("%s reads 0 on the wire = not reported; must be omitted, got %q", k, v)
+		}
+	}
+	if attrs[semconv.AttrCpuSpikeTimePercentage] != "0" {
+		t.Errorf("cpu_spike_time_percentage 0 is a REAL measurement and must be emitted, got %q", attrs[semconv.AttrCpuSpikeTimePercentage])
+	}
+	if attrs[semconv.AttrRamSpikeTimePercentage] != "0" {
+		t.Errorf("ram_spike_time_percentage 0 is a REAL measurement and must be emitted, got %q", attrs[semconv.AttrRamSpikeTimePercentage])
+	}
+	for k, want := range map[string]string{
+		semconv.AttrAverageSpikeTimeScore:           "100",
+		semconv.AttrCpuSpikeTimeScore:               "100",
+		semconv.AttrRamSpikeTimeScore:               "100",
+		semconv.AttrCpuSpikeTimePercentageThreshold: "15",
+		semconv.AttrRamSpikeTimePercentageThreshold: "30",
+		semconv.AttrResourcePerformanceScore:        "94",
+		semconv.AttrDeviceName:                      "wintest",
+	} {
+		if attrs[k] != want {
+			t.Errorf("twin[%s] = %q, want %q", k, attrs[k], want)
+		}
+	}
+	// cpuDisplayName is an empty string on the wire, not absent — SetStr must
+	// omit it rather than emit "".
+	if _, ok := attrs[semconv.AttrCpuDisplayName]; ok {
+		t.Error("empty cpu_display_name must be omitted, not emitted as an empty attribute")
+	}
+}
+
+// TestDeviceScoresMapTheSixthScoreCategory pins meanResourceSpikeTimeScore, which
+// is on the userExperienceAnalyticsDeviceScores wire and was never mapped — the
+// deviceScore struct predates it. Live values on m7kni 2026-07-24 range 64.33 to
+// 100 across the load-generating VMs, so it is real data the collector was
+// silently discarding, not a documentation artifact.
+func TestDeviceScoresMapTheSixthScoreCategory(t *testing.T) {
+	body := `{"value":[{"id":"4ada2149","deviceName":"wintest","model":"Virtual Machine","endpointAnalyticsScore":96.88,"startupPerformanceScore":-1.0,"appReliabilityScore":-1.0,"workFromAnywhereScore":93.75,"meanResourceSpikeTimeScore":100.0,"batteryHealthScore":-1.0,"healthStatus":"meetingGoals"}]}`
+	g := &fakeGraph{bodies: allEndpoints(map[string]string{deviceScoresURL: body})}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	var seen bool
+	for _, p := range rec.MetricPoints(deviceScoreMetric) {
+		if p.Attrs["category"] == "mean_resource_spike_time" {
+			seen = true
+		}
+	}
+	if !seen {
+		t.Error("device score histogram is missing the mean_resource_spike_time category")
+	}
+	for _, lr := range rec.LogRecords() {
+		if lr.EventName != eventDeviceScore {
+			continue
+		}
+		if lr.Attrs[semconv.AttrMeanResourceSpikeTimeScore] != "100" {
+			t.Errorf("twin mean_resource_spike_time_score = %q, want 100", lr.Attrs[semconv.AttrMeanResourceSpikeTimeScore])
+		}
 	}
 }
 
