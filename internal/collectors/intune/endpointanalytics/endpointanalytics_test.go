@@ -967,6 +967,58 @@ func TestDeviceScoresMapTheSixthScoreCategory(t *testing.T) {
 	}
 }
 
+// TestScoreFieldsAbsentFromTheWireAreOmittedNotZero pins the bug deploy
+// verification caught on 2026-07-24 (#194). meanResourceSpikeTimeScore was
+// present and 100.0 on the ModelScores row in the morning and had VANISHED from
+// the same row by the afternoon — Endpoint Analytics drops score fields it has
+// nothing to say about rather than sending the -1 sentinel. A plain float64
+// unmarshals an absent field to 0, which sailed through the `>= 0` sentinel
+// guard and published a model scoring ZERO on a category it had simply not been
+// assessed on. Absent is not a score, and unlike -1 there is nothing on the wire
+// to filter on, so the fields have to be pointers.
+func TestScoreFieldsAbsentFromTheWireAreOmittedNotZero(t *testing.T) {
+	// Both rows omit meanResourceSpikeTimeScore entirely — the exact shape m7kni
+	// served that afternoon — while reporting a real endpointAnalyticsScore.
+	models := `{"value":[{"model":"Virtual Machine","manufacturer":"Microsoft Corporation","modelDeviceCount":1,"endpointAnalyticsScore":100.0,"startupPerformanceScore":-1.0,"appReliabilityScore":-1.0,"workFromAnywhereScore":-1.0,"batteryHealthScore":-1.0,"healthStatus":"meetingGoals"}]}`
+	devices := `{"value":[{"deviceName":"wintest","endpointAnalyticsScore":96.88,"startupPerformanceScore":-1.0,"appReliabilityScore":-1.0,"workFromAnywhereScore":93.75,"batteryHealthScore":-1.0,"healthStatus":"meetingGoals"}]}`
+	g := &fakeGraph{bodies: allEndpoints(map[string]string{modelScoresURL: models, deviceScoresURL: devices})}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	for _, p := range rec.MetricPoints(modelScoreMetric) {
+		if p.Attrs["category"] == "mean_resource_spike_time" {
+			t.Errorf("absent model score emitted as a real point: %+v", p)
+		}
+	}
+	for _, p := range rec.MetricPoints(deviceScoreMetric) {
+		if p.Attrs["category"] == "mean_resource_spike_time" {
+			t.Errorf("absent device score emitted as a real histogram observation: %+v", p)
+		}
+	}
+	for _, lr := range rec.LogRecords() {
+		if lr.EventName != eventDeviceScore {
+			continue
+		}
+		if v, ok := lr.Attrs[semconv.AttrMeanResourceSpikeTimeScore]; ok {
+			t.Errorf("absent score reached the twin as %q; absence must stay absent", v)
+		}
+	}
+
+	// The scores that ARE on the wire still land — this must not degrade into
+	// dropping everything.
+	var got bool
+	for _, p := range rec.MetricPoints(modelScoreMetric) {
+		if p.Attrs["category"] == "endpoint_analytics" && p.Value == 100 {
+			got = true
+		}
+	}
+	if !got {
+		t.Error("present scores must still be emitted")
+	}
+}
+
 // TestCollectSkipsUnavailableSubEndpointGracefully asserts a 403 on one
 // sub-fetch (e.g. Intune Endpoint Analytics not licensed on this tenant) is
 // skipped-and-logged, not surfaced as a collector error - while every other

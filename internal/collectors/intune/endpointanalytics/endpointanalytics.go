@@ -233,22 +233,25 @@ func restartCategoryBucketFor(raw string) string {
 // reads -1 as a real score; the device still counts in device_count under its
 // healthStatus.
 type deviceScore struct {
-	ID                      string  `json:"id"`
-	DeviceName              string  `json:"deviceName"`
-	Model                   string  `json:"model"`
-	Manufacturer            string  `json:"manufacturer"`
-	EndpointAnalyticsScore  float64 `json:"endpointAnalyticsScore"`
-	StartupPerformanceScore float64 `json:"startupPerformanceScore"`
-	AppReliabilityScore     float64 `json:"appReliabilityScore"`
-	WorkFromAnywhereScore   float64 `json:"workFromAnywhereScore"`
-	BatteryHealthScore      float64 `json:"batteryHealthScore"`
-	// MeanResourceSpikeTimeScore is the sixth score category. It was on the wire
-	// all along and simply never mapped — this struct predates it — so the
-	// collector was discarding a real, populated score (live-measured 2026-07-24,
-	// #194: 100 on wintest, 64.33–92.62 on the load-generating VMs). Same -1
-	// sentinel handling as its five siblings.
-	MeanResourceSpikeTimeScore float64 `json:"meanResourceSpikeTimeScore"`
-	HealthStatus               string  `json:"healthStatus"`
+	ID           string `json:"id"`
+	DeviceName   string `json:"deviceName"`
+	Model        string `json:"model"`
+	Manufacturer string `json:"manufacturer"`
+	// EVERY score is a POINTER, and that is load-bearing (live-measured
+	// 2026-07-24, #194). Endpoint Analytics has TWO ways of saying "no score":
+	// the -1 sentinel, and simply OMITTING the field. meanResourceSpikeTimeScore
+	// was present and 100.0 on a row in the morning and gone from the same row by
+	// the afternoon. A plain float64 turns that omission into 0, which passes the
+	// sentinel guard and publishes a device scoring ZERO on a category it was
+	// never assessed on — worse than the -1 it was written to catch, because
+	// there is nothing on the wire left to filter. nil = never mentioned, omit.
+	EndpointAnalyticsScore     *float64 `json:"endpointAnalyticsScore"`
+	StartupPerformanceScore    *float64 `json:"startupPerformanceScore"`
+	AppReliabilityScore        *float64 `json:"appReliabilityScore"`
+	WorkFromAnywhereScore      *float64 `json:"workFromAnywhereScore"`
+	BatteryHealthScore         *float64 `json:"batteryHealthScore"`
+	MeanResourceSpikeTimeScore *float64 `json:"meanResourceSpikeTimeScore"`
+	HealthStatus               string   `json:"healthStatus"`
 }
 
 // modelScore is the v1.0 userExperienceAnalyticsModelScores resource (#194) —
@@ -271,16 +274,18 @@ type deviceScore struct {
 // id is "<model>_<manufacturer>" on the wire and is not read: the two components
 // are mapped separately as the bounded label pair.
 type modelScore struct {
-	Model                      string  `json:"model"`
-	Manufacturer               string  `json:"manufacturer"`
-	ModelDeviceCount           int64   `json:"modelDeviceCount"`
-	EndpointAnalyticsScore     float64 `json:"endpointAnalyticsScore"`
-	StartupPerformanceScore    float64 `json:"startupPerformanceScore"`
-	AppReliabilityScore        float64 `json:"appReliabilityScore"`
-	WorkFromAnywhereScore      float64 `json:"workFromAnywhereScore"`
-	BatteryHealthScore         float64 `json:"batteryHealthScore"`
-	MeanResourceSpikeTimeScore float64 `json:"meanResourceSpikeTimeScore"`
-	HealthStatus               string  `json:"healthStatus"`
+	Model            string `json:"model"`
+	Manufacturer     string `json:"manufacturer"`
+	ModelDeviceCount int64  `json:"modelDeviceCount"`
+	// Pointers for the same reason as deviceScore's — an omitted score must not
+	// become a zero. This segment is where the omission was first observed.
+	EndpointAnalyticsScore     *float64 `json:"endpointAnalyticsScore"`
+	StartupPerformanceScore    *float64 `json:"startupPerformanceScore"`
+	AppReliabilityScore        *float64 `json:"appReliabilityScore"`
+	WorkFromAnywhereScore      *float64 `json:"workFromAnywhereScore"`
+	BatteryHealthScore         *float64 `json:"batteryHealthScore"`
+	MeanResourceSpikeTimeScore *float64 `json:"meanResourceSpikeTimeScore"`
+	HealthStatus               string   `json:"healthStatus"`
 }
 
 // startupHistory is the subset of the v1.0 userExperienceAnalyticsDeviceStartupHistory
@@ -660,7 +665,7 @@ func (c *Collector) collectDeviceScores(ctx context.Context, e telemetry.Emitter
 		for _, cs := range []struct {
 			category string
 			attr     string
-			score    float64
+			score    *float64
 		}{
 			{"endpoint_analytics", semconv.AttrEndpointAnalyticsScore, d.EndpointAnalyticsScore},
 			{"startup_performance", semconv.AttrStartupPerformanceScore, d.StartupPerformanceScore},
@@ -669,15 +674,18 @@ func (c *Collector) collectDeviceScores(ctx context.Context, e telemetry.Emitter
 			{"battery_health", semconv.AttrBatteryHealthScore, d.BatteryHealthScore},
 			{"mean_resource_spike_time", semconv.AttrMeanResourceSpikeTimeScore, d.MeanResourceSpikeTimeScore},
 		} {
-			if cs.score < 0 {
-				continue // -1 = "not enough data" sentinel: excluded from the histogram AND omitted from the twin
+			// nil = the field was not on the wire at all; < 0 = the -1
+			// "not enough data" sentinel. Both mean "no score", both are excluded
+			// from the histogram AND omitted from the twin.
+			if cs.score == nil || *cs.score < 0 {
+				continue
 			}
 			e.Histogram(deviceScoreMetric, "{score}", "Intune Endpoint Analytics per-device score distribution (0-100), by score category.",
-				cs.score, scoreBounds, telemetry.Attrs{semconv.AttrCategory: cs.category})
+				*cs.score, scoreBounds, telemetry.Attrs{semconv.AttrCategory: cs.category})
 			// String-valued so it lands as clean Loki structured metadata (a
 			// double would be stringified downstream anyway); FormatFloat(-1)
 			// gives the minimal form ("86.62", "63", not "63.000000").
-			attrs[cs.attr] = strconv.FormatFloat(cs.score, 'f', -1, 64)
+			attrs[cs.attr] = strconv.FormatFloat(*cs.score, 'f', -1, 64)
 		}
 		// Timestamp left zero (poll time): this is a STATE feed re-emitted every
 		// cycle, like entra/risk's twin - stamping the assessment time would pile
@@ -725,7 +733,7 @@ func (c *Collector) collectModelScores(ctx context.Context, e telemetry.Emitter)
 		counts = append(counts, telemetry.GaugePoint{Value: float64(m.ModelDeviceCount), Attrs: base})
 		for _, cs := range []struct {
 			category string
-			score    float64
+			score    *float64
 		}{
 			{"endpoint_analytics", m.EndpointAnalyticsScore},
 			{"startup_performance", m.StartupPerformanceScore},
@@ -734,12 +742,13 @@ func (c *Collector) collectModelScores(ctx context.Context, e telemetry.Emitter)
 			{"battery_health", m.BatteryHealthScore},
 			{"mean_resource_spike_time", m.MeanResourceSpikeTimeScore},
 		} {
-			if cs.score < 0 {
-				continue // -1 = "not enough data" sentinel, never a real score
+			// nil = omitted from the wire, < 0 = the -1 sentinel. Neither is a score.
+			if cs.score == nil || *cs.score < 0 {
+				continue
 			}
 			attrs := telemetry.Attrs{semconv.AttrCategory: cs.category}
 			maps.Copy(attrs, base)
-			scores = append(scores, telemetry.GaugePoint{Value: cs.score, Attrs: attrs})
+			scores = append(scores, telemetry.GaugePoint{Value: *cs.score, Attrs: attrs})
 		}
 	}
 	e.GaugeSnapshot(modelScoreMetric, "{score}",

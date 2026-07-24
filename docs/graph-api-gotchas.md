@@ -250,6 +250,15 @@ path is Exchange's own segment, **not** a Graph beta surface, so the
   400s). `batteryHealthDevicePerformance` and `resourcePerformance` are **beta-only** (400
   on v1.0). Device scores use **`-1` as a "not enough data" sentinel**, not a real 0-100
   value — exclude it from score aggregates.
+- **A UXA score has TWO ways of saying "no score", and only one of them is the `-1` sentinel**
+  `[live-measured 2026-07-24, #194]`. The other is the field simply **not being on the wire**.
+  `meanResourceSpikeTimeScore` was present and `100.0` on a `ModelScores` row in the morning
+  and had vanished from the same row that afternoon, with no other change. In Go a plain
+  `float64` turns that omission into `0`, which sails through a `>= 0` sentinel guard and
+  publishes an entity scoring **zero** on a category it was never assessed on — worse than the
+  `-1` the guard was written to catch, because nothing is left on the wire to filter. **Score
+  fields on these segments must be `*float64`**; `nil` means never mentioned. Caught by
+  deploy-verification against Grafana Cloud, not by any test — the fixture had the field.
 - **What gates a UXA ROLLUP segment being published is UNKNOWN — it is not device count**
   `[live-measured 2026-07-24, #194/#199]`. Microsoft documents a five-device "insufficient
   data" floor for Endpoint Analytics scores, and the empty rollup segments were read through
