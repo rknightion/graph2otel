@@ -636,14 +636,58 @@ re-checking, and the WARN log names the field and the value. Treat it as a promp
 measure, then update the known set (and the ledger entry in
 [graph-api-gotchas.md](graph-api-gotchas.md)).
 
-**Currently wired into `defender.quarantine` only.** It shipped without ever observing a
-non-empty quarantine, so it carries more single-measurement assumptions than most: the
-`quarantine_type` / `entity_type` / `direction` enums (all three are metric labels), the
-`held_only_filter` invariant that `ReleaseStatus=NOTRELEASED` really does filter
-server-side, the `page_cap` invariant, and a `network_message_id` that must be recoverable
-from the composite `Identity`. A `held_only_filter` finding is the serious one: it means
-`held_messages.total` has stopped being queue depth. Extending this to the other collectors
-that silently bucket unrecognized values to `"unknown"` is tracked separately.
+### Which collectors are watched, and which deliberately are not
+
+**11 collectors declare watched value sets** (#233, #254, #234): `defender.quarantine`,
+`m365.message_trace`, `intune.autopilot`, `intune.devices`, `intune.certificates`,
+`intune.cert_inventory`, `intune.app_install_status`, `intune.malware`,
+`entra.secure_score`, `purview.retention_labels` and `purview.sensitivity_labels`.
+
+`defender.quarantine` carries more single-measurement assumptions than most, because it
+shipped without ever observing a non-empty quarantine: the `quarantine_type` /
+`entity_type` / `direction` enums (all three are metric labels), the `held_only_filter`
+invariant that `ReleaseStatus=NOTRELEASED` really does filter server-side, the `page_cap`
+invariant, and a `network_message_id` that must be recoverable from the composite
+`Identity`. A `held_only_filter` finding is the serious one: it means `held_messages.total`
+has stopped being queue depth.
+
+**Roughly a dozen collectors bucket unrecognized values to `"unknown"` and are still
+unwatched on purpose** — among them `m365.sharepoint_settings`, `entra.risk`,
+`intune.detected_apps`, `intune.connectors`, `intune.settings_catalog` and
+`entra.domains`. In each case the legitimate value set could only be taken from Microsoft's
+documentation, and **a watchdog that fires on correct data is worse than none**: it trains
+the reader to ignore the signal, which costs more than the gap it was meant to close. These
+are recorded evidence gaps, not oversights. `intune.devices`' `operating_system` is
+excluded on stronger grounds and should not be revisited — it is free text with no
+Graph-side enum, so no set exists to declare.
+
+### The rule for a new collector
+
+**If your collector assumes a value set, declare it — and derive it from evidence, not
+documentation.** Concretely:
+
+1. **Watch a field whose value keys a METRIC LABEL.** An unmapped member there moves series
+   membership: the number itself becomes wrong, silently. A log-only attribute is far less
+   urgent — an odd string in a log is visible to anyone querying it — so watching those is
+   optional and usually not worth the noise.
+2. **Derive the `Enum` from the map the collector already keys on**, rather than restating
+   the members. Then the watched set is by construction the set you actually map, it cannot
+   drift when someone edits the map, and it can only fire on a hole in the mapping.
+3. **Where no evidence exists — no fixture, no live sample, no constant the code keys on —
+   leave the field unwatched** and say so in the package doc, naming what would close the
+   gap. One observed value is not a value set.
+4. **Report-only, always.** An unexpected value must never drop a record, change a count, or
+   fail a fetch.
+
+### Alerting on it
+
+This is **dashboard-and-log territory, not a paging rule.** A non-zero counter means an
+assumption needs re-checking, which is a next-working-day task, not an incident — and the
+WARN log carries the offending value while the counter deliberately does not. Watch
+`increase(graph2otel_api_unexpected_total[24h]) > 0` on a panel, then read the WARN to find
+out what Microsoft sent. A 1-hour paging rule on a signal whose remedy is "go and measure,
+then update the known set" would fire out of hours for something nobody can action until
+morning.
 
 ## License/beta gating
 
