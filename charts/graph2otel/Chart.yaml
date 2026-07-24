@@ -4,14 +4,8 @@ description: >-
   Poll the Microsoft Graph API (Entra ID + Intune) and export
   OpenTelemetry-native metrics + logs (OTLP). Optimized for Grafana Cloud.
 type: application
-# Chart version — bump on chart-template changes (Deployment/ConfigMap/values
-# shape). NOT release-please-automated: this repo's release-please-config.json
-# has no `extra-files` entry to keep appVersion in lockstep (checked against
-# tailscale2otel's — same config shape, no such entry exists there either,
-# despite issue #26 assuming one). Bump `appVersion` below by hand alongside
-# `version` when cutting a release that should carry a new default image tag.
-version: 0.1.0
-appVersion: "0.1.0"
+version: 1.0.0
+appVersion: 1.0.0
 home: https://github.com/rknightion/graph2otel
 sources:
   - https://github.com/rknightion/graph2otel
