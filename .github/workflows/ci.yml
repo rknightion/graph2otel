@@ -217,6 +217,26 @@ jobs:
             --set config.admin.enabled=false \
             > /dev/null
 
+  # Dashboards-as-code gate (#218). Fails when a metric graph2otel emits is on no
+  # panel and carries no waiver, when a waiver is stale or reasonless, when a
+  # domain with a log-shaped signal ships no log panel (#162), or when
+  # dashboards/*.json has drifted from grafana/boards/*.py.
+  #
+  # The builder is pure-stdlib python3, so there is deliberately no setup-python
+  # step and nothing to install — the ubuntu runner's python3 is enough.
+  # spec/signal-catalog.json's own staleness rides build-test's `go test`
+  # (TestSignalCatalogInSync), so this job needs no Go toolchain either.
+  grafana:
+    name: dashboard coverage + freshness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Verify dashboard metric coverage, log-panel coverage and freshness
+        run: make grafana-check
+
   # Test coverage -> Codacy. Deliberately NOT in ci-success's `needs`: coverage reporting is
   # informational, so a Codacy outage — or a fork PR with no secret — must never block merges or
   # Renovate automerge. The repo-scoped CODACY_PROJECT_TOKEN self-identifies the repo.
@@ -253,7 +273,7 @@ jobs:
     name: ci-success
     runs-on: ubuntu-latest
     if: always()
-    needs: [build-test, lint, govulncheck, goreleaser-snapshot, docker-build, helm]
+    needs: [build-test, lint, govulncheck, goreleaser-snapshot, docker-build, helm, grafana]
     steps:
       - name: Fail if any required job did not pass
         if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}

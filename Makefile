@@ -30,7 +30,7 @@ export PATH := $(TOOLS_DIR):$(PATH)
 .PHONY: build test lint fmt vet govulncheck docker check regen tools \
         coverage notices sbom tools-licensing tools-sbom install-hooks \
         helm-docs tools-helm-docs tools-check tools-graphdrift \
-        graphdrift graphdrift-update tidy tidy-check
+        graphdrift graphdrift-update tidy tidy-check dashboard grafana-check
 
 build:
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/$(BINARY)
@@ -107,6 +107,41 @@ graphdrift-update: tools-graphdrift
 # convenience after editing config.example.yaml.
 regen:
 	./scripts/regen-generated.sh
+
+# Regenerate dashboards/*.json from grafana/boards/*.py (#218). The builder is
+# pure-stdlib python3 — nothing to install, which is why the CI job needs no
+# setup-python step.
+#
+# It exits non-zero when a cataloged metric is off every panel, AFTER writing,
+# so a contributor can iterate on a partially-panelled dashboard while the
+# commit and CI stay blocked until the panel (or a waiver) lands.
+dashboard:
+	cd grafana && python3 build_dashboard.py
+
+# The Grafana gate. Writes NOTHING, so it can never launder a stale artifact into
+# a passing run. Two independent failure modes, each with its own signal:
+#
+#   1. --check   the coverage gate (every catalog metric on a panel or waived),
+#                the waiver-hygiene gates (no stale waiver, no reasonless waiver),
+#                and #162's per-domain log-panel gate.
+#   2. unittest  staleness — TestStructure.test_committed_dashboards_are_not_stale
+#                compares each committed dashboards/*.json against what the builder
+#                produces right now — plus the structural gates (LogQL never uses a
+#                stream selector on an attribute, the PromQL and LogQL corpora stay
+#                disjoint, output is deterministic, panels fit the 24-column grid,
+#                the Python and Go name derivations agree over all 274 metrics).
+#
+# Staleness is checked by comparing file contents rather than by `git diff
+# --exit-code`: a git-based check passes on a dirty tree that has never been
+# committed and fails on a clean one that merely has unrelated local edits, so it
+# answers a question about the index rather than about the artifact.
+#
+# spec/signal-catalog.json's own staleness is NOT gated here: it is a Go golden
+# test (TestSignalCatalogInSync), so `make check` already fails on a stale
+# catalog and this target stays runnable without a Go toolchain.
+grafana-check:
+	cd grafana && python3 build_dashboard.py --check
+	cd grafana && python3 -m unittest discover -s tests -t . -q
 
 # Idempotent tool install into .tools/ (gitignored). Re-installs if the cached
 # binary is missing or doesn't execute on this arch (e.g. a wrong-arch CI cache).

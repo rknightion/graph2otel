@@ -1,0 +1,24 @@
+{
+  "_readme": [
+    "Cataloged metrics that are deliberately NOT on a panel, each with the reason",
+    "somebody chose to write. build_dashboard.py fails on an unpanelled metric that is",
+    "not listed here, on a listed metric the catalog no longer has (a waiver that",
+    "outlives its metric is a comment pretending to be a decision), and on an entry",
+    "whose reason is empty.",
+    "",
+    "The bar for an entry is 'a panel would be actively misleading or structurally",
+    "impossible', not 'I did not get to it'. A metric worth emitting is almost always",
+    "worth a panel: the builder derives the query, the aggregation and the title from",
+    "spec/signal-catalog.json, so adding one is a single line in a boards/*.py",
+    "SECTIONS list. That is why this list is currently empty - not because the gate is",
+    "toothless, but because the cheap thing to do is the correct thing to do.",
+    "",
+    "Two classes that look like they belong here and do NOT:",
+    "  * Histogram base names. They are only ever queried through their _bucket/_sum/",
+    "    _count series, and catalog.metrics_referenced_by() matches those directly,",
+    "    so a histogram on a panel is credited without a waiver.",
+    "  * Opt-in or beta collectors (blob ingest, message trace, MDCA, GSA). An empty",
+    "    panel that names its opt-in is useful; a missing panel is not."
+  ],
+  "metrics": {}
+}

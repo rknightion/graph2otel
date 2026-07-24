@@ -1,0 +1,7068 @@
+{
+  "package_count": 139,
+  "domains": [
+    "defender",
+    "entra",
+    "graph2otel",
+    "intune",
+    "m365",
+    "mdca",
+    "purview"
+  ],
+  "metrics": [
+    {
+      "name": "defender.allow_block_list.entries",
+      "prometheus_name": "defender_allow_block_list_entries",
+      "unit": "{entry}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "action",
+        "list_subtype",
+        "list_type"
+      ],
+      "packages": [
+        "internal/collectors/defender/allowblocklist"
+      ]
+    },
+    {
+      "name": "defender.allow_block_list.expiring_soon",
+      "prometheus_name": "defender_allow_block_list_expiring_soon",
+      "unit": "{entry}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "action",
+        "list_type"
+      ],
+      "packages": [
+        "internal/collectors/defender/allowblocklist"
+      ]
+    },
+    {
+      "name": "defender.allow_block_list.non_expiring_allow",
+      "prometheus_name": "defender_allow_block_list_non_expiring_allow",
+      "unit": "{entry}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "list_type"
+      ],
+      "packages": [
+        "internal/collectors/defender/allowblocklist"
+      ]
+    },
+    {
+      "name": "defender.allow_block_list.spoof_entries",
+      "prometheus_name": "defender_allow_block_list_spoof_entries",
+      "unit": "{entry}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "action",
+        "spoof_type"
+      ],
+      "packages": [
+        "internal/collectors/defender/allowblocklist"
+      ]
+    },
+    {
+      "name": "defender.mdo.policies",
+      "prometheus_name": "defender_mdo_policies",
+      "unit": "{policy}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "policy_type"
+      ],
+      "packages": [
+        "internal/collectors/defender/mdopolicies"
+      ]
+    },
+    {
+      "name": "defender.mdo.protection_enabled",
+      "prometheus_name": "defender_mdo_protection_enabled",
+      "unit": "{policy}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "policy_type",
+        "protection"
+      ],
+      "packages": [
+        "internal/collectors/defender/mdopolicies"
+      ]
+    },
+    {
+      "name": "defender.oauth_app.apps",
+      "prometheus_name": "defender_oauth_app_apps",
+      "unit": "{app}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "admin_consented",
+        "app_origin",
+        "app_status",
+        "privilege_level"
+      ],
+      "packages": [
+        "internal/collectors/defender/oauthapps"
+      ]
+    },
+    {
+      "name": "defender.oauth_app.consented_users",
+      "prometheus_name": "defender_oauth_app_consented_users",
+      "unit": "{user}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "privilege_level"
+      ],
+      "packages": [
+        "internal/collectors/defender/oauthapps"
+      ]
+    },
+    {
+      "name": "defender.oauth_app.max_risk_score",
+      "prometheus_name": "defender_oauth_app_max_risk_score",
+      "unit": "{score}",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "defender",
+      "attr_keys": [
+        "privilege_level"
+      ],
+      "packages": [
+        "internal/collectors/defender/oauthapps"
+      ]
+    },
+    {
+      "name": "defender.quarantine.held_messages.total",
+      "prometheus_name": "defender_quarantine_held_messages_total_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "defender",
+      "attr_keys": [
+        "direction",
+        "entity_type",
+        "quarantine_type"
+      ],
+      "packages": [
+        "internal/collectors/defender/quarantine"
+      ]
+    },
+    {
+      "name": "defender.secure_config.assessments",
+      "prometheus_name": "defender_secure_config_assessments",
+      "unit": "{assessment}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "configuration_category",
+        "is_compliant"
+      ],
+      "packages": [
+        "internal/collectors/defender/secureconfig"
+      ]
+    },
+    {
+      "name": "defender.secure_config.impact_at_risk",
+      "prometheus_name": "defender_secure_config_impact_at_risk",
+      "unit": "{impact}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "configuration_category"
+      ],
+      "packages": [
+        "internal/collectors/defender/secureconfig"
+      ]
+    },
+    {
+      "name": "defender.secure_config.noncompliant_devices",
+      "prometheus_name": "defender_secure_config_noncompliant_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "configuration_category"
+      ],
+      "packages": [
+        "internal/collectors/defender/secureconfig"
+      ]
+    },
+    {
+      "name": "defender.software.eos_devices",
+      "prometheus_name": "defender_software_eos_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "end_of_support_status"
+      ],
+      "packages": [
+        "internal/collectors/defender/softwareinventory"
+      ]
+    },
+    {
+      "name": "defender.software.installs",
+      "prometheus_name": "defender_software_installs",
+      "unit": "{install}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "end_of_support_status"
+      ],
+      "packages": [
+        "internal/collectors/defender/softwareinventory"
+      ]
+    },
+    {
+      "name": "defender.software.products",
+      "prometheus_name": "defender_software_products",
+      "unit": "{product}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "end_of_support_status"
+      ],
+      "packages": [
+        "internal/collectors/defender/softwareinventory"
+      ]
+    },
+    {
+      "name": "defender.vulnerability.affected_devices",
+      "prometheus_name": "defender_vulnerability_affected_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "exploit_available",
+        "severity"
+      ],
+      "packages": [
+        "internal/collectors/defender/vulnerabilities"
+      ]
+    },
+    {
+      "name": "defender.vulnerability.cves",
+      "prometheus_name": "defender_vulnerability_cves",
+      "unit": "{cve}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "exploit_available",
+        "severity"
+      ],
+      "packages": [
+        "internal/collectors/defender/vulnerabilities"
+      ]
+    },
+    {
+      "name": "defender.vulnerability.instances",
+      "prometheus_name": "defender_vulnerability_instances",
+      "unit": "{vulnerability}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "exploit_available",
+        "severity"
+      ],
+      "packages": [
+        "internal/collectors/defender/vulnerabilities"
+      ]
+    },
+    {
+      "name": "defender.vulnerability.max_cvss",
+      "prometheus_name": "defender_vulnerability_max_cvss",
+      "unit": "{score}",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "defender",
+      "attr_keys": [
+        "exploit_available",
+        "severity"
+      ],
+      "packages": [
+        "internal/collectors/defender/vulnerabilities"
+      ]
+    },
+    {
+      "name": "defender.vulnerability.max_epss",
+      "prometheus_name": "defender_vulnerability_max_epss_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "defender",
+      "attr_keys": [
+        "exploit_available",
+        "severity"
+      ],
+      "packages": [
+        "internal/collectors/defender/vulnerabilities"
+      ]
+    },
+    {
+      "name": "entra.access_reviews.total",
+      "prometheus_name": "entra_access_reviews_total",
+      "unit": "{review}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/entra/accessreviews"
+      ]
+    },
+    {
+      "name": "entra.agreements.acceptances.total",
+      "prometheus_name": "entra_agreements_acceptances_total",
+      "unit": "{acceptance}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "agreement",
+        "state"
+      ],
+      "packages": [
+        "internal/collectors/entra/agreements"
+      ]
+    },
+    {
+      "name": "entra.agreements.total",
+      "prometheus_name": "entra_agreements_total",
+      "unit": "{agreement}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/agreements"
+      ]
+    },
+    {
+      "name": "entra.app.credential.signin.stale.total",
+      "prometheus_name": "entra_app_credential_signin_stale_total",
+      "unit": "{credential}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "threshold_days"
+      ],
+      "packages": [
+        "internal/collectors/entra/signinactivity"
+      ]
+    },
+    {
+      "name": "entra.app.signin.summary.total",
+      "prometheus_name": "entra_app_signin_summary_total",
+      "unit": "{signin}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "result"
+      ],
+      "packages": [
+        "internal/collectors/entra/signinactivity"
+      ]
+    },
+    {
+      "name": "entra.application.federated_credentials",
+      "prometheus_name": "entra_application_federated_credentials",
+      "unit": "{credential}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "issuer_host"
+      ],
+      "packages": [
+        "internal/collectors/entra/appownership"
+      ]
+    },
+    {
+      "name": "entra.application.ownership",
+      "prometheus_name": "entra_application_ownership",
+      "unit": "{application}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "has_owner",
+        "sign_in_audience"
+      ],
+      "packages": [
+        "internal/collectors/entra/appownership"
+      ]
+    },
+    {
+      "name": "entra.auth_methods_policy.legacy_enabled.total",
+      "prometheus_name": "entra_auth_methods_policy_legacy_enabled_total",
+      "unit": "{method}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/authmethodspolicy"
+      ]
+    },
+    {
+      "name": "entra.auth_methods_policy.method.enabled",
+      "prometheus_name": "entra_auth_methods_policy_method_enabled_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "entra",
+      "attr_keys": [
+        "method"
+      ],
+      "packages": [
+        "internal/collectors/entra/authmethodspolicy"
+      ]
+    },
+    {
+      "name": "entra.ca.policies.total",
+      "prometheus_name": "entra_ca_policies_total",
+      "unit": "{policy}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "state"
+      ],
+      "packages": [
+        "internal/collectors/entra/conditionalaccess"
+      ]
+    },
+    {
+      "name": "entra.consent.grants.total",
+      "prometheus_name": "entra_consent_grants_total",
+      "unit": "{grant}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "consent_type",
+        "privilege"
+      ],
+      "packages": [
+        "internal/collectors/entra/consent"
+      ]
+    },
+    {
+      "name": "entra.credentials.expiring.total",
+      "prometheus_name": "entra_credentials_expiring_total",
+      "unit": "{credential}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "credential_type",
+        "expiry_bucket",
+        "owner_type"
+      ],
+      "packages": [
+        "internal/collectors/entra/credentialexpiry"
+      ]
+    },
+    {
+      "name": "entra.deleted_items.count",
+      "prometheus_name": "entra_deleted_items_count",
+      "unit": "{object}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "near_purge",
+        "object_type"
+      ],
+      "packages": [
+        "internal/collectors/entra/deleteditems"
+      ]
+    },
+    {
+      "name": "entra.devices.compliance.total",
+      "prometheus_name": "entra_devices_compliance_total",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "is_compliant"
+      ],
+      "packages": [
+        "internal/collectors/entra/devices"
+      ]
+    },
+    {
+      "name": "entra.devices.managed.total",
+      "prometheus_name": "entra_devices_managed_total",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "is_managed"
+      ],
+      "packages": [
+        "internal/collectors/entra/devices"
+      ]
+    },
+    {
+      "name": "entra.devices.os.total",
+      "prometheus_name": "entra_devices_os_total",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "operating_system"
+      ],
+      "packages": [
+        "internal/collectors/entra/devices"
+      ]
+    },
+    {
+      "name": "entra.devices.stale.total",
+      "prometheus_name": "entra_devices_stale_total",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "threshold_days"
+      ],
+      "packages": [
+        "internal/collectors/entra/devices"
+      ]
+    },
+    {
+      "name": "entra.devices.total",
+      "prometheus_name": "entra_devices_total",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "trust_type"
+      ],
+      "packages": [
+        "internal/collectors/entra/devices"
+      ]
+    },
+    {
+      "name": "entra.directory.objects.total",
+      "prometheus_name": "entra_directory_objects_total",
+      "unit": "{object}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "type"
+      ],
+      "packages": [
+        "internal/collectors/entra/directorycounts"
+      ]
+    },
+    {
+      "name": "entra.directory.sync.errors.total",
+      "prometheus_name": "entra_directory_sync_errors_total",
+      "unit": "{object}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "category",
+        "object_type",
+        "property_causing_error"
+      ],
+      "packages": [
+        "internal/collectors/entra/syncerrors"
+      ]
+    },
+    {
+      "name": "entra.directory.sync.last_sync_age_seconds",
+      "prometheus_name": "entra_directory_sync_last_sync_age_seconds",
+      "unit": "s",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/organization"
+      ]
+    },
+    {
+      "name": "entra.domains.federated.total",
+      "prometheus_name": "entra_domains_federated_total",
+      "unit": "{domain}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/domains"
+      ]
+    },
+    {
+      "name": "entra.domains.total",
+      "prometheus_name": "entra_domains_total",
+      "unit": "{domain}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "authentication_type",
+        "is_verified"
+      ],
+      "packages": [
+        "internal/collectors/entra/domains"
+      ]
+    },
+    {
+      "name": "entra.graph_activity.endpoint_requests",
+      "prometheus_name": "entra_graph_activity_endpoint_requests_total",
+      "unit": "{request}",
+      "kind": "sum",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "normalized_path",
+        "request_method",
+        "response_status_class"
+      ],
+      "packages": [
+        "internal/collectors/entra/graphactivity"
+      ]
+    },
+    {
+      "name": "entra.graph_activity.request.duration",
+      "prometheus_name": "entra_graph_activity_request_duration_milliseconds",
+      "unit": "ms",
+      "kind": "histogram",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "request_method"
+      ],
+      "packages": [
+        "internal/collectors/entra/graphactivity"
+      ]
+    },
+    {
+      "name": "entra.graph_activity.requests",
+      "prometheus_name": "entra_graph_activity_requests_total",
+      "unit": "{request}",
+      "kind": "sum",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "identity_type",
+        "is_replay",
+        "request_method",
+        "response_status_code"
+      ],
+      "packages": [
+        "internal/collectors/entra/graphactivity"
+      ]
+    },
+    {
+      "name": "entra.graph_activity.response.size",
+      "prometheus_name": "entra_graph_activity_response_size_bytes",
+      "unit": "By",
+      "kind": "histogram",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "request_method"
+      ],
+      "packages": [
+        "internal/collectors/entra/graphactivity"
+      ]
+    },
+    {
+      "name": "entra.groups.role_assignable.total",
+      "prometheus_name": "entra_groups_role_assignable_total",
+      "unit": "{group}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/groups"
+      ]
+    },
+    {
+      "name": "entra.groups.total",
+      "prometheus_name": "entra_groups_total",
+      "unit": "{group}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "group_type",
+        "mail_enabled",
+        "membership_type",
+        "security_enabled"
+      ],
+      "packages": [
+        "internal/collectors/entra/groups"
+      ]
+    },
+    {
+      "name": "entra.gsa.filtering_policies",
+      "prometheus_name": "entra_gsa_filtering_policies",
+      "unit": "{policy}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "action"
+      ],
+      "packages": [
+        "internal/collectors/entra/gsa"
+      ]
+    },
+    {
+      "name": "entra.gsa.forwarding_profiles",
+      "prometheus_name": "entra_gsa_forwarding_profiles",
+      "unit": "{profile}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "state",
+        "traffic_forwarding_type"
+      ],
+      "packages": [
+        "internal/collectors/entra/gsa"
+      ]
+    },
+    {
+      "name": "entra.gsa.onboarding_status",
+      "prometheus_name": "entra_gsa_onboarding_status_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/gsa"
+      ]
+    },
+    {
+      "name": "entra.gsa.packet_tagging_enabled",
+      "prometheus_name": "entra_gsa_packet_tagging_enabled",
+      "unit": "{setting}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/gsa"
+      ]
+    },
+    {
+      "name": "entra.gsa.remote_networks",
+      "prometheus_name": "entra_gsa_remote_networks",
+      "unit": "{network}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/gsa"
+      ]
+    },
+    {
+      "name": "entra.gsa.signaling_enabled",
+      "prometheus_name": "entra_gsa_signaling_enabled",
+      "unit": "{setting}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/gsa"
+      ]
+    },
+    {
+      "name": "entra.license.capability_status",
+      "prometheus_name": "entra_license_capability_status",
+      "unit": "{sku}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "sku",
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/entra/licensing"
+      ]
+    },
+    {
+      "name": "entra.license.consumed",
+      "prometheus_name": "entra_license_consumed",
+      "unit": "{unit}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "sku"
+      ],
+      "packages": [
+        "internal/collectors/entra/licensing"
+      ]
+    },
+    {
+      "name": "entra.license.enabled",
+      "prometheus_name": "entra_license_enabled",
+      "unit": "{unit}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "sku"
+      ],
+      "packages": [
+        "internal/collectors/entra/licensing"
+      ]
+    },
+    {
+      "name": "entra.license.groups_with_errors.total",
+      "prometheus_name": "entra_license_groups_with_errors_total",
+      "unit": "{group}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/licensing"
+      ]
+    },
+    {
+      "name": "entra.license.units",
+      "prometheus_name": "entra_license_units",
+      "unit": "{unit}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "sku",
+        "state"
+      ],
+      "packages": [
+        "internal/collectors/entra/licensing"
+      ]
+    },
+    {
+      "name": "entra.mfa.registration.admin_mfa_capable.total",
+      "prometheus_name": "entra_mfa_registration_admin_mfa_capable_total",
+      "unit": "{user}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "is_admin"
+      ],
+      "packages": [
+        "internal/collectors/entra/mfaregistration"
+      ]
+    },
+    {
+      "name": "entra.mfa.registration.methods.total",
+      "prometheus_name": "entra_mfa_registration_methods_total",
+      "unit": "{user}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "method"
+      ],
+      "packages": [
+        "internal/collectors/entra/mfaregistration"
+      ]
+    },
+    {
+      "name": "entra.mfa.registration.users.total",
+      "prometheus_name": "entra_mfa_registration_users_total",
+      "unit": "{user}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "status",
+        "user_type"
+      ],
+      "packages": [
+        "internal/collectors/entra/mfaregistration"
+      ]
+    },
+    {
+      "name": "entra.named_locations.total",
+      "prometheus_name": "entra_named_locations_total",
+      "unit": "{location}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "is_trusted",
+        "type"
+      ],
+      "packages": [
+        "internal/collectors/entra/conditionalaccess"
+      ]
+    },
+    {
+      "name": "entra.organization.age_days",
+      "prometheus_name": "entra_organization_age_days",
+      "unit": "d",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/organization"
+      ]
+    },
+    {
+      "name": "entra.organization.info",
+      "prometheus_name": "entra_organization_info_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "entra",
+      "attr_keys": [
+        "tenant_type"
+      ],
+      "packages": [
+        "internal/collectors/entra/organization"
+      ]
+    },
+    {
+      "name": "entra.organization.on_premises_sync_enabled",
+      "prometheus_name": "entra_organization_on_premises_sync_enabled_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/organization"
+      ]
+    },
+    {
+      "name": "entra.organization.verified_domains.total",
+      "prometheus_name": "entra_organization_verified_domains_total",
+      "unit": "{domain}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/organization"
+      ]
+    },
+    {
+      "name": "entra.pim.alert.configurations",
+      "prometheus_name": "entra_pim_alert_configurations",
+      "unit": "{configuration}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "alert_type",
+        "is_enabled"
+      ],
+      "packages": [
+        "internal/collectors/entra/pimalerts"
+      ]
+    },
+    {
+      "name": "entra.pim.alert.count",
+      "prometheus_name": "entra_pim_alert_count",
+      "unit": "{alert}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "alert_type",
+        "is_active",
+        "severity"
+      ],
+      "packages": [
+        "internal/collectors/entra/pimalerts"
+      ]
+    },
+    {
+      "name": "entra.pim.alert.incidents",
+      "prometheus_name": "entra_pim_alert_incidents",
+      "unit": "{incident}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "alert_type",
+        "severity"
+      ],
+      "packages": [
+        "internal/collectors/entra/pimalerts"
+      ]
+    },
+    {
+      "name": "entra.pim.assignments.total",
+      "prometheus_name": "entra_pim_assignments_total",
+      "unit": "{assignment}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "assignment_type",
+        "role_name"
+      ],
+      "packages": [
+        "internal/collectors/entra/roles"
+      ]
+    },
+    {
+      "name": "entra.pim.permanent_assignments.total",
+      "prometheus_name": "entra_pim_permanent_assignments_total",
+      "unit": "{assignment}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "role_name"
+      ],
+      "packages": [
+        "internal/collectors/entra/roles"
+      ]
+    },
+    {
+      "name": "entra.pim.role_policy.requirement",
+      "prometheus_name": "entra_pim_role_policy_requirement",
+      "unit": "{policy}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "caller",
+        "enabled",
+        "requirement"
+      ],
+      "packages": [
+        "internal/collectors/entra/pimrolepolicies"
+      ]
+    },
+    {
+      "name": "entra.recommendations.impacted_resources.total",
+      "prometheus_name": "entra_recommendations_impacted_resources_total",
+      "unit": "{resource}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "recommendation"
+      ],
+      "packages": [
+        "internal/collectors/entra/recommendations"
+      ]
+    },
+    {
+      "name": "entra.recommendations.total",
+      "prometheus_name": "entra_recommendations_total",
+      "unit": "{recommendation}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "priority",
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/entra/recommendations"
+      ]
+    },
+    {
+      "name": "entra.risky_agents.total",
+      "prometheus_name": "entra_risky_agents_total",
+      "unit": "{agent}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "risk_level",
+        "risk_state"
+      ],
+      "packages": [
+        "internal/collectors/entra/riskyagents"
+      ]
+    },
+    {
+      "name": "entra.risky_service_principals.total",
+      "prometheus_name": "entra_risky_service_principals_total",
+      "unit": "{service_principal}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "risk_level",
+        "risk_state"
+      ],
+      "packages": [
+        "internal/collectors/entra/risk"
+      ]
+    },
+    {
+      "name": "entra.risky_users.total",
+      "prometheus_name": "entra_risky_users_total",
+      "unit": "{user}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "risk_level",
+        "risk_state"
+      ],
+      "packages": [
+        "internal/collectors/entra/risk"
+      ]
+    },
+    {
+      "name": "entra.roles.members.total",
+      "prometheus_name": "entra_roles_members_total",
+      "unit": "{member}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "role_name"
+      ],
+      "packages": [
+        "internal/collectors/entra/roles"
+      ]
+    },
+    {
+      "name": "entra.secure_score.by_category",
+      "prometheus_name": "entra_secure_score_by_category",
+      "unit": "{score}",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "entra",
+      "attr_keys": [
+        "category"
+      ],
+      "packages": [
+        "internal/collectors/entra/securescore"
+      ]
+    },
+    {
+      "name": "entra.secure_score.control_profiles.by_category",
+      "prometheus_name": "entra_secure_score_control_profiles_by_category",
+      "unit": "{control}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "category"
+      ],
+      "packages": [
+        "internal/collectors/entra/securescore"
+      ]
+    },
+    {
+      "name": "entra.secure_score.control_profiles.by_status",
+      "prometheus_name": "entra_secure_score_control_profiles_by_status",
+      "unit": "{control}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/entra/securescore"
+      ]
+    },
+    {
+      "name": "entra.secure_score.current",
+      "prometheus_name": "entra_secure_score_current",
+      "unit": "{score}",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/securescore"
+      ]
+    },
+    {
+      "name": "entra.secure_score.max",
+      "prometheus_name": "entra_secure_score_max",
+      "unit": "{score}",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/securescore"
+      ]
+    },
+    {
+      "name": "entra.secure_score.max_by_category",
+      "prometheus_name": "entra_secure_score_max_by_category",
+      "unit": "{score}",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "entra",
+      "attr_keys": [
+        "category"
+      ],
+      "packages": [
+        "internal/collectors/entra/securescore"
+      ]
+    },
+    {
+      "name": "entra.secure_score.peer_average",
+      "prometheus_name": "entra_secure_score_peer_average",
+      "unit": "{score}",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "entra",
+      "attr_keys": [
+        "basis"
+      ],
+      "packages": [
+        "internal/collectors/entra/securescore"
+      ]
+    },
+    {
+      "name": "entra.secure_score.percentage",
+      "prometheus_name": "entra_secure_score_percentage_percent",
+      "unit": "%",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/securescore"
+      ]
+    },
+    {
+      "name": "entra.service_principal.ownership",
+      "prometheus_name": "entra_service_principal_ownership",
+      "unit": "{service_principal}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "has_owner",
+        "service_principal_type"
+      ],
+      "packages": [
+        "internal/collectors/entra/appownership"
+      ]
+    },
+    {
+      "name": "entra.serviceprincipal.signin.stale.total",
+      "prometheus_name": "entra_serviceprincipal_signin_stale_total",
+      "unit": "{service_principal}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "threshold_days"
+      ],
+      "packages": [
+        "internal/collectors/entra/signinactivity"
+      ]
+    },
+    {
+      "name": "entra.signin.count",
+      "prometheus_name": "entra_signin_count_total",
+      "unit": "{signin}",
+      "kind": "sum",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "client_app_used",
+        "conditional_access_status",
+        "result",
+        "risk_level_during_sign_in"
+      ],
+      "packages": [
+        "internal/collectors/entra/signins"
+      ]
+    },
+    {
+      "name": "entra.tenant_policy.scoped_policies",
+      "prometheus_name": "entra_tenant_policy_scoped_policies",
+      "unit": "{policy}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "kind"
+      ],
+      "packages": [
+        "internal/collectors/entra/tenantpolicy"
+      ]
+    },
+    {
+      "name": "entra.tenant_policy.setting",
+      "prometheus_name": "entra_tenant_policy_setting",
+      "unit": "{setting}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "setting"
+      ],
+      "packages": [
+        "internal/collectors/entra/tenantpolicy"
+      ]
+    },
+    {
+      "name": "entra.users.population",
+      "prometheus_name": "entra_users_population",
+      "unit": "{user}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "account_enabled",
+        "user_type"
+      ],
+      "packages": [
+        "internal/collectors/entra/users"
+      ]
+    },
+    {
+      "name": "entra.users.stale.total",
+      "prometheus_name": "entra_users_stale_total",
+      "unit": "{user}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "threshold_days"
+      ],
+      "packages": [
+        "internal/collectors/entra/users"
+      ]
+    },
+    {
+      "name": "entra.users.total",
+      "prometheus_name": "entra_users_total",
+      "unit": "{user}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "account_enabled",
+        "on_premises_sync_enabled",
+        "user_type"
+      ],
+      "packages": [
+        "internal/collectors/entra/users"
+      ]
+    },
+    {
+      "name": "graph2otel.api.unexpected",
+      "prometheus_name": "graph2otel_api_unexpected_total",
+      "unit": "1",
+      "kind": "sum",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector",
+        "field",
+        "kind"
+      ],
+      "packages": [
+        "internal/collectors/defender/emailpostdelivery",
+        "internal/collectors/defender/quarantine",
+        "internal/collectors/entra/accessreviews",
+        "internal/collectors/entra/conditionalaccess",
+        "internal/collectors/entra/securescore",
+        "internal/collectors/intune/appinstallreport",
+        "internal/collectors/intune/autopilot",
+        "internal/collectors/intune/certificates",
+        "internal/collectors/intune/certinventoryreport",
+        "internal/collectors/intune/malware",
+        "internal/collectors/intune/manageddevices",
+        "internal/collectors/m365/messagetrace",
+        "internal/collectors/m365/unifiedaudit",
+        "internal/collectors/purview/retentionlabels",
+        "internal/collectors/purview/sensitivitylabels"
+      ]
+    },
+    {
+      "name": "graph2otel.blob.categories",
+      "prometheus_name": "graph2otel_blob_categories",
+      "unit": "{category}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "state"
+      ],
+      "packages": [
+        "internal/collectors/selfobs/blobcategories"
+      ]
+    },
+    {
+      "name": "graph2otel.blob.endpoint_paths",
+      "prometheus_name": "graph2otel_blob_endpoint_paths",
+      "unit": "{path}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector"
+      ],
+      "packages": [
+        "internal/collectors/entra/graphactivity"
+      ]
+    },
+    {
+      "name": "graph2otel.blob.event_age",
+      "prometheus_name": "graph2otel_blob_event_age_seconds",
+      "unit": "s",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector"
+      ],
+      "packages": [
+        "internal/collectors/entra/graphactivity",
+        "internal/collectors/entra/signins"
+      ]
+    },
+    {
+      "name": "graph2otel.blob.metric_emitted",
+      "prometheus_name": "graph2otel_blob_metric_emitted_total",
+      "unit": "{record}",
+      "kind": "sum",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector"
+      ],
+      "packages": [
+        "internal/collectors/entra/graphactivity",
+        "internal/collectors/entra/signins"
+      ]
+    },
+    {
+      "name": "graph2otel.blob.metric_gated",
+      "prometheus_name": "graph2otel_blob_metric_gated_total",
+      "unit": "{record}",
+      "kind": "sum",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector"
+      ],
+      "packages": [
+        "internal/collectors/entra/graphactivity",
+        "internal/collectors/entra/signins"
+      ]
+    },
+    {
+      "name": "graph2otel.logpipeline.self_excluded",
+      "prometheus_name": "graph2otel_logpipeline_self_excluded_total",
+      "unit": "{record}",
+      "kind": "sum",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector"
+      ],
+      "packages": [
+        "internal/collectors/entra/signins"
+      ]
+    },
+    {
+      "name": "intune.app_install_status.installations",
+      "prometheus_name": "intune_app_install_status_installations",
+      "unit": "{installation}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "install_state",
+        "platform"
+      ],
+      "packages": [
+        "internal/collectors/intune/appinstallreport"
+      ]
+    },
+    {
+      "name": "intune.app_protection.flagged_registrations",
+      "prometheus_name": "intune_app_protection_flagged_registrations",
+      "unit": "{registration}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "flagged_reason",
+        "platform"
+      ],
+      "packages": [
+        "internal/collectors/intune/appprotection"
+      ]
+    },
+    {
+      "name": "intune.app_protection.policy.count",
+      "prometheus_name": "intune_app_protection_policy_count",
+      "unit": "{policy}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "assigned",
+        "platform"
+      ],
+      "packages": [
+        "internal/collectors/intune/appprotection"
+      ]
+    },
+    {
+      "name": "intune.apple_token.days_until_expiry",
+      "prometheus_name": "intune_apple_token_days_until_expiry",
+      "unit": "d",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "intune",
+      "attr_keys": [
+        "state",
+        "token_name",
+        "type"
+      ],
+      "packages": [
+        "internal/collectors/intune/appletokens"
+      ]
+    },
+    {
+      "name": "intune.apple_token.synced_device_count",
+      "prometheus_name": "intune_apple_token_synced_device_count",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "token_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/appletokens"
+      ]
+    },
+    {
+      "name": "intune.autopilot.devices",
+      "prometheus_name": "intune_autopilot_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "enrollment_state",
+        "group_tag"
+      ],
+      "packages": [
+        "internal/collectors/intune/autopilot"
+      ]
+    },
+    {
+      "name": "intune.autopilot.profile.assignments",
+      "prometheus_name": "intune_autopilot_profile_assignments",
+      "unit": "{assignment}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "profile_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/autopilot"
+      ]
+    },
+    {
+      "name": "intune.autopilot.profile.count",
+      "prometheus_name": "intune_autopilot_profile_count",
+      "unit": "{profile}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "device_type",
+        "preprovisioning_allowed"
+      ],
+      "packages": [
+        "internal/collectors/intune/autopilot"
+      ]
+    },
+    {
+      "name": "intune.autopilot.profile.esp_timeout_minutes",
+      "prometheus_name": "intune_autopilot_profile_esp_timeout_minutes",
+      "unit": "min",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "intune",
+      "attr_keys": [
+        "profile_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/autopilot"
+      ]
+    },
+    {
+      "name": "intune.autopilot.profile.setting",
+      "prometheus_name": "intune_autopilot_profile_setting_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "intune",
+      "attr_keys": [
+        "profile_name",
+        "setting"
+      ],
+      "packages": [
+        "internal/collectors/intune/autopilot"
+      ]
+    },
+    {
+      "name": "intune.autopilot.stale_contact.count",
+      "prometheus_name": "intune_autopilot_stale_contact_count",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "group_tag"
+      ],
+      "packages": [
+        "internal/collectors/intune/autopilot"
+      ]
+    },
+    {
+      "name": "intune.autopilot.sync_age_seconds",
+      "prometheus_name": "intune_autopilot_sync_age_seconds",
+      "unit": "s",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "intune",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/intune/autopilot"
+      ]
+    },
+    {
+      "name": "intune.autopilot.sync_status",
+      "prometheus_name": "intune_autopilot_sync_status_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "intune",
+      "attr_keys": [
+        "sync_status"
+      ],
+      "packages": [
+        "internal/collectors/intune/autopilot"
+      ]
+    },
+    {
+      "name": "intune.autopilot_deployment.deployments",
+      "prometheus_name": "intune_autopilot_deployment_deployments",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "deployment_status"
+      ],
+      "packages": [
+        "internal/collectors/intune/autopilotdeployment"
+      ]
+    },
+    {
+      "name": "intune.autopilot_deployment_apps.installs",
+      "prometheus_name": "intune_autopilot_deployment_apps_installs",
+      "unit": "{app}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "policy_install_status"
+      ],
+      "packages": [
+        "internal/collectors/intune/autopilotdeploymentapps"
+      ]
+    },
+    {
+      "name": "intune.autopilot_deployment_scripts.executions",
+      "prometheus_name": "intune_autopilot_deployment_scripts_executions",
+      "unit": "{script}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "policy_install_status"
+      ],
+      "packages": [
+        "internal/collectors/intune/autopilotdeploymentscripts"
+      ]
+    },
+    {
+      "name": "intune.cert_inventory.days_until_expiry",
+      "prometheus_name": "intune_cert_inventory_days_until_expiry",
+      "unit": "{certificate}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "bucket",
+        "issuer"
+      ],
+      "packages": [
+        "internal/collectors/intune/certinventoryreport"
+      ]
+    },
+    {
+      "name": "intune.cert_inventory.state",
+      "prometheus_name": "intune_cert_inventory_state",
+      "unit": "{certificate}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "state"
+      ],
+      "packages": [
+        "internal/collectors/intune/certinventoryreport"
+      ]
+    },
+    {
+      "name": "intune.certificate.days_until_expiry",
+      "prometheus_name": "intune_certificate_days_until_expiry",
+      "unit": "{certificate}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "cert_profile_name",
+        "expiry_bucket",
+        "state"
+      ],
+      "packages": [
+        "internal/collectors/intune/certificates"
+      ]
+    },
+    {
+      "name": "intune.certificate.state.count",
+      "prometheus_name": "intune_certificate_state_count",
+      "unit": "{certificate}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "state"
+      ],
+      "packages": [
+        "internal/collectors/intune/certificates"
+      ]
+    },
+    {
+      "name": "intune.cloud_pki.authorities",
+      "prometheus_name": "intune_cloud_pki_authorities",
+      "unit": "{authority}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "certification_authority_status",
+        "certification_authority_type"
+      ],
+      "packages": [
+        "internal/collectors/intune/cloudpki"
+      ]
+    },
+    {
+      "name": "intune.cloud_pki.days_until_expiry",
+      "prometheus_name": "intune_cloud_pki_days_until_expiry",
+      "unit": "d",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "intune",
+      "attr_keys": [
+        "certification_authority_type",
+        "display_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/cloudpki"
+      ]
+    },
+    {
+      "name": "intune.cloud_pki.leaf_certificates",
+      "prometheus_name": "intune_cloud_pki_leaf_certificates",
+      "unit": "{certificate}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "certificate_status",
+        "display_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/cloudpki"
+      ]
+    },
+    {
+      "name": "intune.compliance.devices",
+      "prometheus_name": "intune_compliance_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "state"
+      ],
+      "packages": [
+        "internal/collectors/intune/compliance"
+      ]
+    },
+    {
+      "name": "intune.compliance.policy.devices",
+      "prometheus_name": "intune_compliance_policy_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "policy_name",
+        "state"
+      ],
+      "packages": [
+        "internal/collectors/intune/compliance"
+      ]
+    },
+    {
+      "name": "intune.compliance.policy.users",
+      "prometheus_name": "intune_compliance_policy_users",
+      "unit": "{user}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "policy_name",
+        "state"
+      ],
+      "packages": [
+        "internal/collectors/intune/compliance"
+      ]
+    },
+    {
+      "name": "intune.compliance.policy.version",
+      "prometheus_name": "intune_compliance_policy_version_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "intune",
+      "attr_keys": [
+        "policy_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/compliance"
+      ]
+    },
+    {
+      "name": "intune.compliance.setting.devices",
+      "prometheus_name": "intune_compliance_setting_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "platform",
+        "setting_name",
+        "state"
+      ],
+      "packages": [
+        "internal/collectors/intune/compliance"
+      ]
+    },
+    {
+      "name": "intune.config_assignment_status.assignments",
+      "prometheus_name": "intune_config_assignment_status_assignments",
+      "unit": "{assignment}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "policy_platform",
+        "report_status"
+      ],
+      "packages": [
+        "internal/collectors/intune/configassignments"
+      ]
+    },
+    {
+      "name": "intune.config_profile.count",
+      "prometheus_name": "intune_config_profile_count",
+      "unit": "{profile}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "odata_type"
+      ],
+      "packages": [
+        "internal/collectors/intune/configprofiles"
+      ]
+    },
+    {
+      "name": "intune.config_profile.status",
+      "prometheus_name": "intune_config_profile_status",
+      "unit": "{profile}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "profile_name",
+        "state"
+      ],
+      "packages": [
+        "internal/collectors/intune/configprofiles"
+      ]
+    },
+    {
+      "name": "intune.config_profile.version",
+      "prometheus_name": "intune_config_profile_version_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "intune",
+      "attr_keys": [
+        "profile_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/configprofiles"
+      ]
+    },
+    {
+      "name": "intune.config_profile_device_status.devices",
+      "prometheus_name": "intune_config_profile_device_status_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "report_status"
+      ],
+      "packages": [
+        "internal/collectors/intune/configprofiledevicestatus"
+      ]
+    },
+    {
+      "name": "intune.config_setting_status.devices",
+      "prometheus_name": "intune_config_setting_status_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "setting_device_status"
+      ],
+      "packages": [
+        "internal/collectors/intune/configsettingstatus"
+      ]
+    },
+    {
+      "name": "intune.connector.heartbeat_age_seconds",
+      "prometheus_name": "intune_connector_heartbeat_age_seconds",
+      "unit": "s",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "intune",
+      "attr_keys": [
+        "connector_type"
+      ],
+      "packages": [
+        "internal/collectors/intune/connectors"
+      ]
+    },
+    {
+      "name": "intune.connector.mtd_platform.total",
+      "prometheus_name": "intune_connector_mtd_platform_total",
+      "unit": "{connector}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "enabled",
+        "platform"
+      ],
+      "packages": [
+        "internal/collectors/intune/connectors"
+      ]
+    },
+    {
+      "name": "intune.connector.state",
+      "prometheus_name": "intune_connector_state",
+      "unit": "{connector}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "connector_type",
+        "state"
+      ],
+      "packages": [
+        "internal/collectors/intune/connectors"
+      ]
+    },
+    {
+      "name": "intune.defender.product_status",
+      "prometheus_name": "intune_defender_product_status",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/intune/malware"
+      ]
+    },
+    {
+      "name": "intune.defender.protection_state",
+      "prometheus_name": "intune_defender_protection_state",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "signal"
+      ],
+      "packages": [
+        "internal/collectors/intune/malware"
+      ]
+    },
+    {
+      "name": "intune.defender_agents.count",
+      "prometheus_name": "intune_defender_agents_count",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "signal"
+      ],
+      "packages": [
+        "internal/collectors/intune/defenderreport"
+      ]
+    },
+    {
+      "name": "intune.defender_agents.product_status",
+      "prometheus_name": "intune_defender_agents_product_status",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/intune/defenderreport"
+      ]
+    },
+    {
+      "name": "intune.detected_apps.catalog_size",
+      "prometheus_name": "intune_detected_apps_catalog_size",
+      "unit": "{app}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/intune/detectedapps"
+      ]
+    },
+    {
+      "name": "intune.detected_apps.device_count",
+      "prometheus_name": "intune_detected_apps_device_count",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "app_name",
+        "platform"
+      ],
+      "packages": [
+        "internal/collectors/intune/detectedapps"
+      ]
+    },
+    {
+      "name": "intune.device_attestation.devices",
+      "prometheus_name": "intune_device_attestation_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "attestation_status",
+        "os"
+      ],
+      "packages": [
+        "internal/collectors/intune/deviceattestation"
+      ]
+    },
+    {
+      "name": "intune.device_boot_security.devices",
+      "prometheus_name": "intune_device_boot_security_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "os",
+        "posture",
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/intune/bootsecurity"
+      ]
+    },
+    {
+      "name": "intune.device_encryption.devices",
+      "prometheus_name": "intune_device_encryption_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "device_type",
+        "encryption_readiness_state",
+        "encryption_state"
+      ],
+      "packages": [
+        "internal/collectors/intune/deviceencryption"
+      ]
+    },
+    {
+      "name": "intune.device_encryption.policy_state",
+      "prometheus_name": "intune_device_encryption_policy_state",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "encryption_policy_setting_state"
+      ],
+      "packages": [
+        "internal/collectors/intune/deviceencryption"
+      ]
+    },
+    {
+      "name": "intune.devices.count",
+      "prometheus_name": "intune_devices_count",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "compliance_state",
+        "operating_system"
+      ],
+      "packages": [
+        "internal/collectors/intune/manageddevices"
+      ]
+    },
+    {
+      "name": "intune.devices.encrypted.count",
+      "prometheus_name": "intune_devices_encrypted_count",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "operating_system"
+      ],
+      "packages": [
+        "internal/collectors/intune/manageddevices"
+      ]
+    },
+    {
+      "name": "intune.devices.os_version.count",
+      "prometheus_name": "intune_devices_os_version_count",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "operating_system",
+        "os_version"
+      ],
+      "packages": [
+        "internal/collectors/intune/manageddevices"
+      ]
+    },
+    {
+      "name": "intune.devices.overview.dual_enrolled_device_count",
+      "prometheus_name": "intune_devices_overview_dual_enrolled_device_count",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/intune/manageddevices"
+      ]
+    },
+    {
+      "name": "intune.devices.overview.enrolled_device_count",
+      "prometheus_name": "intune_devices_overview_enrolled_device_count",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/intune/manageddevices"
+      ]
+    },
+    {
+      "name": "intune.devices.overview.mdm_enrolled_device_count",
+      "prometheus_name": "intune_devices_overview_mdm_enrolled_device_count",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/intune/manageddevices"
+      ]
+    },
+    {
+      "name": "intune.devices.overview.total",
+      "prometheus_name": "intune_devices_overview_total",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "os"
+      ],
+      "packages": [
+        "internal/collectors/intune/manageddevices"
+      ]
+    },
+    {
+      "name": "intune.devices.sync_staleness_seconds",
+      "prometheus_name": "intune_devices_sync_staleness_seconds",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "staleness_bucket"
+      ],
+      "packages": [
+        "internal/collectors/intune/manageddevices"
+      ]
+    },
+    {
+      "name": "intune.devices_without_compliance_policy.devices",
+      "prometheus_name": "intune_devices_without_compliance_policy_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "os"
+      ],
+      "packages": [
+        "internal/collectors/intune/deviceswithoutcompliancepolicy"
+      ]
+    },
+    {
+      "name": "intune.driver_update.pending_approval",
+      "prometheus_name": "intune_driver_update_pending_approval",
+      "unit": "{update}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "profile_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/updates"
+      ]
+    },
+    {
+      "name": "intune.driver_update.sync_staleness_seconds",
+      "prometheus_name": "intune_driver_update_sync_staleness_seconds",
+      "unit": "s",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "intune",
+      "attr_keys": [
+        "profile_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/updates"
+      ]
+    },
+    {
+      "name": "intune.driver_update_summary.devices",
+      "prometheus_name": "intune_driver_update_summary_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "policy_id",
+        "policy_name",
+        "update_deployment_state"
+      ],
+      "packages": [
+        "internal/collectors/intune/driverupdatesummary"
+      ]
+    },
+    {
+      "name": "intune.enrollment_config.count",
+      "prometheus_name": "intune_enrollment_config_count",
+      "unit": "{config}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "config_type"
+      ],
+      "packages": [
+        "internal/collectors/intune/enrollment"
+      ]
+    },
+    {
+      "name": "intune.enrollment_config.priority",
+      "prometheus_name": "intune_enrollment_config_priority_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "intune",
+      "attr_keys": [
+        "config_name",
+        "config_type"
+      ],
+      "packages": [
+        "internal/collectors/intune/enrollment"
+      ]
+    },
+    {
+      "name": "intune.enrollment_config.version",
+      "prometheus_name": "intune_enrollment_config_version_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "intune",
+      "attr_keys": [
+        "config_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/enrollment"
+      ]
+    },
+    {
+      "name": "intune.epm_denied.denials",
+      "prometheus_name": "intune_epm_denied_denials",
+      "unit": "{denial}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "elevation_type"
+      ],
+      "packages": [
+        "internal/collectors/intune/epmdenied"
+      ]
+    },
+    {
+      "name": "intune.epm_elevation_events.count",
+      "prometheus_name": "intune_epm_elevation_events_count_total",
+      "unit": "{event}",
+      "kind": "sum",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "elevation_type",
+        "result"
+      ],
+      "packages": [
+        "internal/collectors/intune/epmelevationevents"
+      ]
+    },
+    {
+      "name": "intune.epm_elevations.count",
+      "prometheus_name": "intune_epm_elevations_count",
+      "unit": "{elevation}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "elevation_type"
+      ],
+      "packages": [
+        "internal/collectors/intune/epmelevations"
+      ]
+    },
+    {
+      "name": "intune.epm_elevations_by_publisher.count",
+      "prometheus_name": "intune_epm_elevations_by_publisher_count",
+      "unit": "{elevation}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "elevation_type"
+      ],
+      "packages": [
+        "internal/collectors/intune/epmelevationsbypublisher"
+      ]
+    },
+    {
+      "name": "intune.epm_elevations_by_user.count",
+      "prometheus_name": "intune_epm_elevations_by_user_count",
+      "unit": "{elevation}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "elevation_governance"
+      ],
+      "packages": [
+        "internal/collectors/intune/epmelevationsbyuser"
+      ]
+    },
+    {
+      "name": "intune.feature_update_profile.eol_target",
+      "prometheus_name": "intune_feature_update_profile_eol_target_seconds",
+      "unit": "s",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "intune",
+      "attr_keys": [
+        "feature_update_version",
+        "profile_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/updates"
+      ]
+    },
+    {
+      "name": "intune.feature_update_summary.devices",
+      "prometheus_name": "intune_feature_update_summary_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "feature_update_version",
+        "policy_id",
+        "policy_name",
+        "update_deployment_state"
+      ],
+      "packages": [
+        "internal/collectors/intune/featureupdatesummary"
+      ]
+    },
+    {
+      "name": "intune.firewall_status.devices",
+      "prometheus_name": "intune_firewall_status_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "firewall_status"
+      ],
+      "packages": [
+        "internal/collectors/intune/firewallstatus"
+      ]
+    },
+    {
+      "name": "intune.gpo.config.count",
+      "prometheus_name": "intune_gpo_config_count",
+      "unit": "{config}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "ingestion_type"
+      ],
+      "packages": [
+        "internal/collectors/intune/gpoanalytics"
+      ]
+    },
+    {
+      "name": "intune.gpo.migration_readiness",
+      "prometheus_name": "intune_gpo_migration_readiness",
+      "unit": "{report}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "readiness",
+        "report_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/gpoanalytics"
+      ]
+    },
+    {
+      "name": "intune.gpo.supported_settings_percent",
+      "prometheus_name": "intune_gpo_supported_settings_percent",
+      "unit": "%",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "intune",
+      "attr_keys": [
+        "report_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/gpoanalytics"
+      ]
+    },
+    {
+      "name": "intune.hardware_inventory.device_guard_devices",
+      "prometheus_name": "intune_hardware_inventory_device_guard_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "credential_guard_state",
+        "vbs_state"
+      ],
+      "packages": [
+        "internal/collectors/intune/hardwareinventory"
+      ]
+    },
+    {
+      "name": "intune.hardware_inventory.devices",
+      "prometheus_name": "intune_hardware_inventory_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "manufacturer",
+        "operating_system"
+      ],
+      "packages": [
+        "internal/collectors/intune/hardwareinventory"
+      ]
+    },
+    {
+      "name": "intune.hardware_inventory.storage_bytes",
+      "prometheus_name": "intune_hardware_inventory_storage_bytes",
+      "unit": "By",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "operating_system",
+        "storage_state"
+      ],
+      "packages": [
+        "internal/collectors/intune/hardwareinventory"
+      ]
+    },
+    {
+      "name": "intune.hardware_inventory.tpm_devices",
+      "prometheus_name": "intune_hardware_inventory_tpm_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "tpm_specification_version"
+      ],
+      "packages": [
+        "internal/collectors/intune/hardwareinventory"
+      ]
+    },
+    {
+      "name": "intune.intent.count",
+      "prometheus_name": "intune_intent_count",
+      "unit": "{intent}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "migrating"
+      ],
+      "packages": [
+        "internal/collectors/intune/settingscatalog"
+      ]
+    },
+    {
+      "name": "intune.intent.devices",
+      "prometheus_name": "intune_intent_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "compliance_status",
+        "intent_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/settingscatalog"
+      ]
+    },
+    {
+      "name": "intune.malware.overview.by_category",
+      "prometheus_name": "intune_malware_overview_by_category",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "category"
+      ],
+      "packages": [
+        "internal/collectors/intune/malware"
+      ]
+    },
+    {
+      "name": "intune.malware.overview.by_severity",
+      "prometheus_name": "intune_malware_overview_by_severity",
+      "unit": "{detection}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "severity"
+      ],
+      "packages": [
+        "internal/collectors/intune/malware"
+      ]
+    },
+    {
+      "name": "intune.malware.overview.detected_devices",
+      "prometheus_name": "intune_malware_overview_detected_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/intune/malware"
+      ]
+    },
+    {
+      "name": "intune.malware.overview.total",
+      "prometheus_name": "intune_malware_overview_total",
+      "unit": "{detection}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/intune/malware"
+      ]
+    },
+    {
+      "name": "intune.mobile_app_config.status",
+      "prometheus_name": "intune_mobile_app_config_status",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "policy_name",
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/intune/mobileapps"
+      ]
+    },
+    {
+      "name": "intune.mobile_apps.count",
+      "prometheus_name": "intune_mobile_apps_count",
+      "unit": "{app}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "app_type",
+        "publishing_state"
+      ],
+      "packages": [
+        "internal/collectors/intune/mobileapps"
+      ]
+    },
+    {
+      "name": "intune.noncompliant_settings.count",
+      "prometheus_name": "intune_noncompliant_settings_count",
+      "unit": "{setting}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "os",
+        "setting_status"
+      ],
+      "packages": [
+        "internal/collectors/intune/noncompliantsettings"
+      ]
+    },
+    {
+      "name": "intune.quality_update_config.count",
+      "prometheus_name": "intune_quality_update_config_count",
+      "unit": "{resource}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "resource_type"
+      ],
+      "packages": [
+        "internal/collectors/intune/updates"
+      ]
+    },
+    {
+      "name": "intune.quality_update_summary.devices",
+      "prometheus_name": "intune_quality_update_summary_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "expedite_release_date",
+        "policy_id",
+        "policy_name",
+        "update_deployment_state"
+      ],
+      "packages": [
+        "internal/collectors/intune/qualityupdatesummary"
+      ]
+    },
+    {
+      "name": "intune.rbac.role_assignments",
+      "prometheus_name": "intune_rbac_role_assignments",
+      "unit": "{assignment}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "is_built_in",
+        "scope_type"
+      ],
+      "packages": [
+        "internal/collectors/intune/rbac"
+      ]
+    },
+    {
+      "name": "intune.rbac.role_definitions",
+      "prometheus_name": "intune_rbac_role_definitions",
+      "unit": "{role}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "is_built_in",
+        "is_built_in_role_definition",
+        "role_definition_type"
+      ],
+      "packages": [
+        "internal/collectors/intune/rbac"
+      ]
+    },
+    {
+      "name": "intune.remediation.overview.remediated_device_count",
+      "prometheus_name": "intune_remediation_overview_remediated_device_count",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/intune/scripts"
+      ]
+    },
+    {
+      "name": "intune.remediation.overview.script_count",
+      "prometheus_name": "intune_remediation_overview_script_count",
+      "unit": "{script}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/intune/scripts"
+      ]
+    },
+    {
+      "name": "intune.remediation.remediated_cumulative_devices",
+      "prometheus_name": "intune_remediation_remediated_cumulative_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "script_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/scripts"
+      ]
+    },
+    {
+      "name": "intune.remediation.summary",
+      "prometheus_name": "intune_remediation_summary",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "phase",
+        "script_name",
+        "state"
+      ],
+      "packages": [
+        "internal/collectors/intune/scripts"
+      ]
+    },
+    {
+      "name": "intune.remediation_run_states.devices",
+      "prometheus_name": "intune_remediation_run_states_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "detection_state",
+        "remediation_name",
+        "remediation_state"
+      ],
+      "packages": [
+        "internal/collectors/intune/remediationrunstates"
+      ]
+    },
+    {
+      "name": "intune.script.run_summary",
+      "prometheus_name": "intune_script_run_summary",
+      "unit": "{run}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "os",
+        "run_state",
+        "script_name",
+        "target"
+      ],
+      "packages": [
+        "internal/collectors/intune/scripts"
+      ]
+    },
+    {
+      "name": "intune.security_baseline.devices",
+      "prometheus_name": "intune_security_baseline_devices",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "baseline_name",
+        "state"
+      ],
+      "packages": [
+        "internal/collectors/intune/settingscatalog"
+      ]
+    },
+    {
+      "name": "intune.settings_catalog.policy.count",
+      "prometheus_name": "intune_settings_catalog_policy_count",
+      "unit": "{policy}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "platform",
+        "technology",
+        "template_family"
+      ],
+      "packages": [
+        "internal/collectors/intune/settingscatalog"
+      ]
+    },
+    {
+      "name": "intune.update_ring.pause_expiry_seconds",
+      "prometheus_name": "intune_update_ring_pause_expiry_seconds",
+      "unit": "s",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "intune",
+      "attr_keys": [
+        "ring_name",
+        "update_type"
+      ],
+      "packages": [
+        "internal/collectors/intune/updates"
+      ]
+    },
+    {
+      "name": "intune.update_ring.pause_state",
+      "prometheus_name": "intune_update_ring_pause_state_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "intune",
+      "attr_keys": [
+        "ring_name",
+        "update_type"
+      ],
+      "packages": [
+        "internal/collectors/intune/updates"
+      ]
+    },
+    {
+      "name": "intune.update_ring.rollback_active",
+      "prometheus_name": "intune_update_ring_rollback_active_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "intune",
+      "attr_keys": [
+        "ring_name",
+        "update_type"
+      ],
+      "packages": [
+        "internal/collectors/intune/updates"
+      ]
+    },
+    {
+      "name": "intune.update_ring.status",
+      "prometheus_name": "intune_update_ring_status",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "ring_name",
+        "state"
+      ],
+      "packages": [
+        "internal/collectors/intune/updates"
+      ]
+    },
+    {
+      "name": "intune.uxa.anomaly_count",
+      "prometheus_name": "intune_uxa_anomaly_count",
+      "unit": "{anomaly}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "anomaly_severity"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "name": "intune.uxa.app_crash_count",
+      "prometheus_name": "intune_uxa_app_crash_count",
+      "unit": "{crash}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "app_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "name": "intune.uxa.app_health.active_device_count",
+      "prometheus_name": "intune_uxa_app_health_active_device_count",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "os_version"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "name": "intune.uxa.app_health.device_count",
+      "prometheus_name": "intune_uxa_app_health_device_count",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "health_state"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "name": "intune.uxa.app_health.mean_time_to_failure_minutes",
+      "prometheus_name": "intune_uxa_app_health_mean_time_to_failure_minutes",
+      "unit": "min",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "intune",
+      "attr_keys": [
+        "os_version"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "name": "intune.uxa.app_health.os_version_score",
+      "prometheus_name": "intune_uxa_app_health_os_version_score",
+      "unit": "{score}",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "intune",
+      "attr_keys": [
+        "health_state",
+        "os_version"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "name": "intune.uxa.baseline_score",
+      "prometheus_name": "intune_uxa_baseline_score",
+      "unit": "{score}",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "intune",
+      "attr_keys": [
+        "baseline_name",
+        "is_built_in"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "name": "intune.uxa.battery_health.device_count",
+      "prometheus_name": "intune_uxa_battery_health_device_count",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "health_state"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "name": "intune.uxa.battery_health_score",
+      "prometheus_name": "intune_uxa_battery_health_score",
+      "unit": "{score}",
+      "kind": "histogram",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "health_state"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "name": "intune.uxa.boot_time_ms",
+      "prometheus_name": "intune_uxa_boot_time_ms_milliseconds",
+      "unit": "ms",
+      "kind": "histogram",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "restart_category"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "name": "intune.uxa.device_count",
+      "prometheus_name": "intune_uxa_device_count",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "health_state"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "name": "intune.uxa.device_score",
+      "prometheus_name": "intune_uxa_device_score",
+      "unit": "{score}",
+      "kind": "histogram",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "category"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "name": "intune.uxa.login_time_ms",
+      "prometheus_name": "intune_uxa_login_time_ms_milliseconds",
+      "unit": "ms",
+      "kind": "histogram",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "restart_category"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "name": "intune.uxa.model_device_count",
+      "prometheus_name": "intune_uxa_model_device_count",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "health_state",
+        "manufacturer",
+        "model"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "name": "intune.uxa.model_score",
+      "prometheus_name": "intune_uxa_model_score",
+      "unit": "{score}",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "intune",
+      "attr_keys": [
+        "category",
+        "health_state",
+        "manufacturer",
+        "model"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "name": "intune.uxa.resource_performance.device_count",
+      "prometheus_name": "intune_uxa_resource_performance_device_count",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "health_state"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "name": "intune.uxa.resource_performance_score",
+      "prometheus_name": "intune_uxa_resource_performance_score",
+      "unit": "{score}",
+      "kind": "histogram",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "health_state"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "name": "intune.uxa.work_from_anywhere.device_count",
+      "prometheus_name": "intune_uxa_work_from_anywhere_device_count",
+      "unit": "{device}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "health_state",
+        "upgrade_eligibility"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "name": "intune.windows_updates.deployments",
+      "prometheus_name": "intune_windows_updates_deployments",
+      "unit": "{deployment}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "catalog_entry_type",
+        "deployment_effective_state",
+        "deployment_requested_state"
+      ],
+      "packages": [
+        "internal/collectors/intune/windowsupdates"
+      ]
+    },
+    {
+      "name": "intune.windows_updates.update_policies",
+      "prometheus_name": "intune_windows_updates_update_policies",
+      "unit": "{policy}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "update_category"
+      ],
+      "packages": [
+        "internal/collectors/intune/windowsupdates"
+      ]
+    },
+    {
+      "name": "intune.wip.policy.count",
+      "prometheus_name": "intune_wip_policy_count",
+      "unit": "{policy}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "assigned"
+      ],
+      "packages": [
+        "internal/collectors/intune/appprotection"
+      ]
+    },
+    {
+      "name": "m365.exchange.audit_config.enabled",
+      "prometheus_name": "m365_exchange_audit_config_enabled",
+      "unit": "{setting}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "setting"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangeauditconfig"
+      ]
+    },
+    {
+      "name": "m365.exchange.connectors",
+      "prometheus_name": "m365_exchange_connectors",
+      "unit": "{connector}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "direction",
+        "enabled"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangeconnectors"
+      ]
+    },
+    {
+      "name": "m365.exchange.connectors.without_tls",
+      "prometheus_name": "m365_exchange_connectors_without_tls",
+      "unit": "{connector}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "direction"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangeconnectors"
+      ]
+    },
+    {
+      "name": "m365.exchange.dkim.signing",
+      "prometheus_name": "m365_exchange_dkim_signing",
+      "unit": "{domain}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "enabled",
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangedkim"
+      ]
+    },
+    {
+      "name": "m365.exchange.mailboxes",
+      "prometheus_name": "m365_exchange_mailboxes",
+      "unit": "{mailbox}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "audit_enabled",
+        "forwarding_configured",
+        "recipient_type_details"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangemailboxes"
+      ]
+    },
+    {
+      "name": "m365.exchange.mailboxes.setting_enabled",
+      "prometheus_name": "m365_exchange_mailboxes_setting_enabled",
+      "unit": "{mailbox}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "setting"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangemailboxes"
+      ]
+    },
+    {
+      "name": "m365.exchange.org_config.setting_enabled",
+      "prometheus_name": "m365_exchange_org_config_setting_enabled",
+      "unit": "{setting}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "setting"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangeorgconfig"
+      ]
+    },
+    {
+      "name": "m365.exchange.remote_domains",
+      "prometheus_name": "m365_exchange_remote_domains",
+      "unit": "{domain}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "auto_forward_enabled"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangeremotedomains"
+      ]
+    },
+    {
+      "name": "m365.exchange.transport_rules",
+      "prometheus_name": "m365_exchange_transport_rules",
+      "unit": "{rule}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "rule_mode",
+        "state"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangetransportrules"
+      ]
+    },
+    {
+      "name": "m365.exchange.transport_rules.redirecting",
+      "prometheus_name": "m365_exchange_transport_rules_redirecting",
+      "unit": "{rule}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "state"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangetransportrules"
+      ]
+    },
+    {
+      "name": "m365.message_trace.bytes",
+      "prometheus_name": "m365_message_trace_bytes_total",
+      "unit": "By",
+      "kind": "sum",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/m365/messagetrace"
+      ]
+    },
+    {
+      "name": "m365.message_trace.messages",
+      "prometheus_name": "m365_message_trace_messages_total",
+      "unit": "{message}",
+      "kind": "sum",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/m365/messagetrace"
+      ]
+    },
+    {
+      "name": "m365.service_health.issues.total",
+      "prometheus_name": "m365_service_health_issues_total",
+      "unit": "{issue}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "classification",
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/m365/servicehealth"
+      ]
+    },
+    {
+      "name": "m365.service_health.services.total",
+      "prometheus_name": "m365_service_health_services_total",
+      "unit": "{service}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/m365/servicehealth"
+      ]
+    },
+    {
+      "name": "m365.service_health.status",
+      "prometheus_name": "m365_service_health_status_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "m365",
+      "attr_keys": [
+        "service"
+      ],
+      "packages": [
+        "internal/collectors/m365/servicehealth"
+      ]
+    },
+    {
+      "name": "m365.service_messages.total",
+      "prometheus_name": "m365_service_messages_total",
+      "unit": "{message}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "category",
+        "severity"
+      ],
+      "packages": [
+        "internal/collectors/m365/servicemessage"
+      ]
+    },
+    {
+      "name": "m365.sharepoint.deleted_user_retention_days",
+      "prometheus_name": "m365_sharepoint_deleted_user_retention_days",
+      "unit": "d",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "m365",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/m365/sharepointsettings"
+      ]
+    },
+    {
+      "name": "m365.sharepoint.external_resharing_enabled",
+      "prometheus_name": "m365_sharepoint_external_resharing_enabled_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "m365",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/m365/sharepointsettings"
+      ]
+    },
+    {
+      "name": "m365.sharepoint.idle_session_signout_enabled",
+      "prometheus_name": "m365_sharepoint_idle_session_signout_enabled_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "m365",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/m365/sharepointsettings"
+      ]
+    },
+    {
+      "name": "m365.sharepoint.legacy_auth_enabled",
+      "prometheus_name": "m365_sharepoint_legacy_auth_enabled_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "m365",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/m365/sharepointsettings"
+      ]
+    },
+    {
+      "name": "m365.sharepoint.personal_site_storage_limit_mb",
+      "prometheus_name": "m365_sharepoint_personal_site_storage_limit_mb",
+      "unit": "MB",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/m365/sharepointsettings"
+      ]
+    },
+    {
+      "name": "m365.sharepoint.sharing",
+      "prometheus_name": "m365_sharepoint_sharing_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "m365",
+      "attr_keys": [
+        "sharing_capability",
+        "sharing_domain_restriction_mode"
+      ],
+      "packages": [
+        "internal/collectors/m365/sharepointsettings"
+      ]
+    },
+    {
+      "name": "m365.sharepoint.sharing_allowed_domains",
+      "prometheus_name": "m365_sharepoint_sharing_allowed_domains",
+      "unit": "{domain}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/m365/sharepointsettings"
+      ]
+    },
+    {
+      "name": "m365.sharepoint.sharing_blocked_domains",
+      "prometheus_name": "m365_sharepoint_sharing_blocked_domains",
+      "unit": "{domain}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/m365/sharepointsettings"
+      ]
+    },
+    {
+      "name": "m365.sharepoint.site_storage_limit_mb",
+      "prometheus_name": "m365_sharepoint_site_storage_limit_mb",
+      "unit": "MB",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/m365/sharepointsettings"
+      ]
+    },
+    {
+      "name": "m365.sharepoint.unmanaged_sync_restricted",
+      "prometheus_name": "m365_sharepoint_unmanaged_sync_restricted_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "m365",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/m365/sharepointsettings"
+      ]
+    },
+    {
+      "name": "m365.storage.drives.total",
+      "prometheus_name": "m365_storage_drives_total",
+      "unit": "{drive}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "drive_type",
+        "quota_state"
+      ],
+      "packages": [
+        "internal/collectors/m365/storage"
+      ]
+    },
+    {
+      "name": "m365.storage.total_bytes",
+      "prometheus_name": "m365_storage_total_bytes",
+      "unit": "By",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "drive_type"
+      ],
+      "packages": [
+        "internal/collectors/m365/storage"
+      ]
+    },
+    {
+      "name": "m365.storage.used_bytes",
+      "prometheus_name": "m365_storage_used_bytes",
+      "unit": "By",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "drive_type"
+      ],
+      "packages": [
+        "internal/collectors/m365/storage"
+      ]
+    },
+    {
+      "name": "m365.teams.channels.total",
+      "prometheus_name": "m365_teams_channels_total_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "m365",
+      "attr_keys": [
+        "is_archived",
+        "membership_type"
+      ],
+      "packages": [
+        "internal/collectors/m365/teams"
+      ]
+    },
+    {
+      "name": "m365.teams.installed_apps.total",
+      "prometheus_name": "m365_teams_installed_apps_total_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "m365",
+      "attr_keys": [
+        "distribution_method",
+        "has_rsc_permissions"
+      ],
+      "packages": [
+        "internal/collectors/m365/teams"
+      ]
+    },
+    {
+      "name": "m365.teams.membership.total",
+      "prometheus_name": "m365_teams_membership_total_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "m365",
+      "attr_keys": [
+        "role"
+      ],
+      "packages": [
+        "internal/collectors/m365/teams"
+      ]
+    },
+    {
+      "name": "m365.teams.ownerless.total",
+      "prometheus_name": "m365_teams_ownerless_total_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "m365",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/m365/teams"
+      ]
+    },
+    {
+      "name": "m365.teams.total",
+      "prometheus_name": "m365_teams_total_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "m365",
+      "attr_keys": [
+        "visibility"
+      ],
+      "packages": [
+        "internal/collectors/m365/teams"
+      ]
+    },
+    {
+      "name": "m365.teams.with_guests.total",
+      "prometheus_name": "m365_teams_with_guests_total_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "m365",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/m365/teams"
+      ]
+    },
+    {
+      "name": "mdca.discovery.parse.cloud_services",
+      "prometheus_name": "mdca_discovery_parse_cloud_services_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "mdca",
+      "attr_keys": [
+        "input_stream_id"
+      ],
+      "packages": [
+        "internal/collectors/mdca/discoveryparse"
+      ]
+    },
+    {
+      "name": "mdca.discovery.parse.last_success.age",
+      "prometheus_name": "mdca_discovery_parse_last_success_age_seconds",
+      "unit": "s",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "mdca",
+      "attr_keys": [
+        "input_stream_id"
+      ],
+      "packages": [
+        "internal/collectors/mdca/discoveryparse"
+      ]
+    },
+    {
+      "name": "mdca.discovery.parse.tasks",
+      "prometheus_name": "mdca_discovery_parse_tasks_total",
+      "unit": "1",
+      "kind": "sum",
+      "additive": true,
+      "domain": "mdca",
+      "attr_keys": [
+        "input_stream_id",
+        "is_success",
+        "template"
+      ],
+      "packages": [
+        "internal/collectors/mdca/discoveryparse"
+      ]
+    },
+    {
+      "name": "mdca.discovery.parse.transactions",
+      "prometheus_name": "mdca_discovery_parse_transactions_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "mdca",
+      "attr_keys": [
+        "input_stream_id"
+      ],
+      "packages": [
+        "internal/collectors/mdca/discoveryparse"
+      ]
+    },
+    {
+      "name": "purview.dlp.policies",
+      "prometheus_name": "purview_dlp_policies",
+      "unit": "{policy}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "purview",
+      "attr_keys": [
+        "enforcement_mode"
+      ],
+      "packages": [
+        "internal/collectors/purview/dlppolicies"
+      ]
+    },
+    {
+      "name": "purview.dlp.policy.last_changed_age",
+      "prometheus_name": "purview_dlp_policy_last_changed_age_seconds",
+      "unit": "s",
+      "kind": "gauge",
+      "additive": false,
+      "domain": "purview",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/purview/dlppolicies"
+      ]
+    },
+    {
+      "name": "purview.dlp.policy_bindings",
+      "prometheus_name": "purview_dlp_policy_bindings",
+      "unit": "{binding}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "purview",
+      "attr_keys": [
+        "binding_type",
+        "workload"
+      ],
+      "packages": [
+        "internal/collectors/purview/dlppolicies"
+      ]
+    },
+    {
+      "name": "purview.dlp.rules",
+      "prometheus_name": "purview_dlp_rules",
+      "unit": "{rule}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "purview",
+      "attr_keys": [
+        "action",
+        "workload"
+      ],
+      "packages": [
+        "internal/collectors/purview/dlppolicies"
+      ]
+    },
+    {
+      "name": "purview.ediscovery.cases",
+      "prometheus_name": "purview_ediscovery_cases",
+      "unit": "{case}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "purview",
+      "attr_keys": [
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/purview/ediscoverycases"
+      ]
+    },
+    {
+      "name": "purview.labels.count",
+      "prometheus_name": "purview_labels_count",
+      "unit": "{label}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "purview",
+      "attr_keys": [
+        "applicable_to"
+      ],
+      "packages": [
+        "internal/collectors/purview/sensitivitylabels"
+      ]
+    },
+    {
+      "name": "purview.retention.event_types.count",
+      "prometheus_name": "purview_retention_event_types_count",
+      "unit": "{event_type}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "purview",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/purview/retentionlabels"
+      ]
+    },
+    {
+      "name": "purview.retention.labels.count",
+      "prometheus_name": "purview_retention_labels_count",
+      "unit": "{label}",
+      "kind": "gauge",
+      "additive": true,
+      "domain": "purview",
+      "attr_keys": [
+        "action_after_retention",
+        "behavior_during_retention",
+        "retention_trigger"
+      ],
+      "packages": [
+        "internal/collectors/purview/retentionlabels"
+      ]
+    }
+  ],
+  "logs": [
+    {
+      "event_name": "defender.alert_evidence",
+      "domain": "defender",
+      "attr_keys": [
+        "additional_fields",
+        "alert_id",
+        "categories",
+        "detection_source",
+        "entity_type",
+        "evidence_role",
+        "geo_asn",
+        "geo_city",
+        "geo_country",
+        "geo_state",
+        "ingest_transport",
+        "remote_ip",
+        "service_source",
+        "severity",
+        "title"
+      ],
+      "packages": [
+        "internal/collectors/defender/alertevidence"
+      ]
+    },
+    {
+      "event_name": "defender.alert_info",
+      "domain": "defender",
+      "attr_keys": [
+        "alert_id",
+        "category",
+        "detection_source",
+        "ingest_transport",
+        "service_source",
+        "severity",
+        "title"
+      ],
+      "packages": [
+        "internal/collectors/defender/alertinfo"
+      ]
+    },
+    {
+      "event_name": "defender.allow_block_list",
+      "domain": "defender",
+      "attr_keys": [
+        "action",
+        "created_date_time",
+        "entry_value",
+        "entry_value_hash",
+        "expiration_date_time",
+        "expiry_bucket",
+        "id",
+        "ingest_transport",
+        "last_modified_date_time",
+        "list_subtype",
+        "list_type",
+        "modified_by",
+        "notes",
+        "object_state",
+        "remove_after_days",
+        "sending_infrastructure",
+        "spoof_type",
+        "spoofed_user",
+        "submission_id",
+        "sys_managed"
+      ],
+      "packages": [
+        "internal/collectors/defender/allowblocklist"
+      ]
+    },
+    {
+      "event_name": "defender.behavior",
+      "domain": "defender",
+      "attr_keys": [
+        "account_upn",
+        "action_type",
+        "additional_fields",
+        "attack_techniques",
+        "behavior_id",
+        "categories",
+        "data_sources",
+        "description",
+        "detection_source",
+        "end_time",
+        "ingest_transport",
+        "service_source",
+        "start_time"
+      ],
+      "packages": [
+        "internal/collectors/defender/behaviorinfo"
+      ]
+    },
+    {
+      "event_name": "defender.behavior_entity",
+      "domain": "defender",
+      "attr_keys": [
+        "account_domain",
+        "account_name",
+        "account_upn",
+        "action_type",
+        "additional_fields",
+        "application",
+        "application_id",
+        "behavior_id",
+        "categories",
+        "data_sources",
+        "detection_source",
+        "entity_role",
+        "entity_type",
+        "ingest_transport",
+        "service_source"
+      ],
+      "packages": [
+        "internal/collectors/defender/behaviorentities"
+      ]
+    },
+    {
+      "event_name": "defender.cloud_app_event",
+      "domain": "defender",
+      "attr_keys": [
+        "account_display_name",
+        "account_id",
+        "account_object_id",
+        "account_type",
+        "action_type",
+        "activity_objects",
+        "activity_type",
+        "additional_fields",
+        "app_instance_id",
+        "application",
+        "application_id",
+        "audit_source",
+        "city",
+        "country_code",
+        "ingest_transport",
+        "ip_address",
+        "ip_category",
+        "ip_tags",
+        "is_admin_operation",
+        "is_anonymous_proxy",
+        "is_external_user",
+        "is_impersonated",
+        "isp",
+        "last_seen_for_user",
+        "raw_event_data",
+        "report_id"
+      ],
+      "packages": [
+        "internal/collectors/defender/cloudapp"
+      ]
+    },
+    {
+      "event_name": "defender.device_event",
+      "domain": "defender",
+      "attr_keys": [
+        "action_type",
+        "additional_fields",
+        "device_id",
+        "device_name",
+        "ingest_transport",
+        "initiating_process_account_domain",
+        "initiating_process_account_name",
+        "initiating_process_account_sid",
+        "initiating_process_command_line",
+        "initiating_process_creation_time",
+        "initiating_process_file_name",
+        "initiating_process_file_size",
+        "initiating_process_folder_path",
+        "initiating_process_id",
+        "initiating_process_logon_id",
+        "initiating_process_md5",
+        "initiating_process_parent_creation_time",
+        "initiating_process_parent_file_name",
+        "initiating_process_parent_id",
+        "initiating_process_sha1",
+        "initiating_process_sha256",
+        "initiating_process_unique_id",
+        "initiating_process_version_info_company_name",
+        "is_initiating_process_remote_session",
+        "is_process_remote_session",
+        "machine_group",
+        "report_id",
+        "sha256"
+      ],
+      "packages": [
+        "internal/collectors/defender/deviceevent"
+      ]
+    },
+    {
+      "event_name": "defender.device_file",
+      "domain": "defender",
+      "attr_keys": [
+        "action_type",
+        "additional_fields",
+        "device_id",
+        "device_name",
+        "file_name",
+        "file_size",
+        "folder_path",
+        "ingest_transport",
+        "initiating_process_account_domain",
+        "initiating_process_account_name",
+        "initiating_process_account_sid",
+        "initiating_process_command_line",
+        "initiating_process_creation_time",
+        "initiating_process_file_name",
+        "initiating_process_file_size",
+        "initiating_process_folder_path",
+        "initiating_process_id",
+        "initiating_process_integrity_level",
+        "initiating_process_md5",
+        "initiating_process_parent_creation_time",
+        "initiating_process_parent_file_name",
+        "initiating_process_parent_id",
+        "initiating_process_session_id",
+        "initiating_process_sha1",
+        "initiating_process_sha256",
+        "initiating_process_token_elevation",
+        "initiating_process_unique_id",
+        "initiating_process_version_info_company_name",
+        "initiating_process_version_info_file_description",
+        "initiating_process_version_info_internal_file_name",
+        "initiating_process_version_info_original_file_name",
+        "initiating_process_version_info_product_name",
+        "initiating_process_version_info_product_version",
+        "is_initiating_process_remote_session",
+        "machine_group",
+        "md5",
+        "report_id",
+        "request_account_domain",
+        "request_account_name",
+        "request_account_sid",
+        "request_protocol",
+        "sha1",
+        "sha256"
+      ],
+      "packages": [
+        "internal/collectors/defender/devicefile"
+      ]
+    },
+    {
+      "event_name": "defender.device_file_certificate",
+      "domain": "defender",
+      "attr_keys": [
+        "certificate_creation_time",
+        "certificate_expiration_time",
+        "certificate_serial_number",
+        "crl_distribution_point_urls",
+        "device_id",
+        "device_name",
+        "ingest_transport",
+        "is_root_signer_microsoft",
+        "is_signed",
+        "is_trusted",
+        "issuer",
+        "issuer_hash",
+        "machine_group",
+        "report_id",
+        "sha1",
+        "signature_type",
+        "signer",
+        "signer_hash"
+      ],
+      "packages": [
+        "internal/collectors/defender/devicefilecert"
+      ]
+    },
+    {
+      "event_name": "defender.device_image_load",
+      "domain": "defender",
+      "attr_keys": [
+        "action_type",
+        "device_id",
+        "device_name",
+        "file_name",
+        "file_size",
+        "folder_path",
+        "ingest_transport",
+        "initiating_process_account_domain",
+        "initiating_process_account_name",
+        "initiating_process_account_sid",
+        "initiating_process_command_line",
+        "initiating_process_creation_time",
+        "initiating_process_file_name",
+        "initiating_process_file_size",
+        "initiating_process_folder_path",
+        "initiating_process_id",
+        "initiating_process_integrity_level",
+        "initiating_process_md5",
+        "initiating_process_parent_creation_time",
+        "initiating_process_parent_file_name",
+        "initiating_process_parent_id",
+        "initiating_process_session_id",
+        "initiating_process_sha1",
+        "initiating_process_sha256",
+        "initiating_process_token_elevation",
+        "initiating_process_unique_id",
+        "initiating_process_version_info_company_name",
+        "initiating_process_version_info_file_description",
+        "initiating_process_version_info_internal_file_name",
+        "initiating_process_version_info_original_file_name",
+        "initiating_process_version_info_product_name",
+        "initiating_process_version_info_product_version",
+        "is_initiating_process_remote_session",
+        "machine_group",
+        "md5",
+        "report_id",
+        "sha1",
+        "sha256"
+      ],
+      "packages": [
+        "internal/collectors/defender/deviceimageload"
+      ]
+    },
+    {
+      "event_name": "defender.device_info",
+      "domain": "defender",
+      "attr_keys": [
+        "aad_device_id",
+        "client_version",
+        "connectivity_type",
+        "device_category",
+        "device_id",
+        "device_name",
+        "device_subtype",
+        "device_type",
+        "exposure_level",
+        "hardware_uuid",
+        "ingest_transport",
+        "is_azure_ad_joined",
+        "is_excluded",
+        "is_transient",
+        "join_type",
+        "logged_on_users",
+        "machine_group",
+        "model",
+        "onboarding_status",
+        "os_architecture",
+        "os_distribution",
+        "os_platform",
+        "os_version",
+        "public_ip",
+        "registry_device_tag",
+        "sensor_health_state",
+        "vendor"
+      ],
+      "packages": [
+        "internal/collectors/defender/deviceinfo"
+      ]
+    },
+    {
+      "event_name": "defender.device_logon",
+      "domain": "defender",
+      "attr_keys": [
+        "account_domain",
+        "account_name",
+        "account_sid",
+        "action_type",
+        "additional_fields",
+        "device_id",
+        "device_name",
+        "ingest_transport",
+        "initiating_process_account_domain",
+        "initiating_process_account_name",
+        "initiating_process_account_sid",
+        "initiating_process_command_line",
+        "initiating_process_creation_time",
+        "initiating_process_file_name",
+        "initiating_process_file_size",
+        "initiating_process_folder_path",
+        "initiating_process_id",
+        "initiating_process_md5",
+        "initiating_process_parent_creation_time",
+        "initiating_process_parent_file_name",
+        "initiating_process_parent_id",
+        "initiating_process_sha1",
+        "initiating_process_sha256",
+        "initiating_process_token_elevation",
+        "initiating_process_unique_id",
+        "is_initiating_process_remote_session",
+        "logon_type",
+        "machine_group",
+        "report_id"
+      ],
+      "packages": [
+        "internal/collectors/defender/devicelogon"
+      ]
+    },
+    {
+      "event_name": "defender.device_network",
+      "domain": "defender",
+      "attr_keys": [
+        "action_type",
+        "additional_fields",
+        "device_id",
+        "device_name",
+        "ingest_transport",
+        "initiating_process_account_domain",
+        "initiating_process_account_name",
+        "initiating_process_account_sid",
+        "initiating_process_account_upn",
+        "initiating_process_command_line",
+        "initiating_process_creation_time",
+        "initiating_process_file_name",
+        "initiating_process_file_size",
+        "initiating_process_folder_path",
+        "initiating_process_id",
+        "initiating_process_md5",
+        "initiating_process_parent_creation_time",
+        "initiating_process_parent_file_name",
+        "initiating_process_parent_id",
+        "initiating_process_sha1",
+        "initiating_process_sha256",
+        "initiating_process_token_elevation",
+        "initiating_process_unique_id",
+        "initiating_process_version_info_company_name",
+        "is_initiating_process_remote_session",
+        "local_ip",
+        "local_ip_type",
+        "local_port",
+        "machine_group",
+        "protocol",
+        "remote_ip",
+        "remote_ip_type",
+        "remote_port",
+        "report_id"
+      ],
+      "packages": [
+        "internal/collectors/defender/devicenetwork"
+      ]
+    },
+    {
+      "event_name": "defender.device_network_info",
+      "domain": "defender",
+      "attr_keys": [
+        "device_id",
+        "device_name",
+        "ingest_transport",
+        "ip_addresses",
+        "mac_address",
+        "machine_group",
+        "network_adapter_name",
+        "network_adapter_status",
+        "network_adapter_type",
+        "tunnel_type"
+      ],
+      "packages": [
+        "internal/collectors/defender/devicenetworkinfo"
+      ]
+    },
+    {
+      "event_name": "defender.device_process",
+      "domain": "defender",
+      "attr_keys": [
+        "account_domain",
+        "account_name",
+        "account_sid",
+        "action_type",
+        "device_id",
+        "device_name",
+        "file_name",
+        "file_size",
+        "folder_path",
+        "ingest_transport",
+        "initiating_process_account_domain",
+        "initiating_process_account_name",
+        "initiating_process_account_sid",
+        "initiating_process_command_line",
+        "initiating_process_creation_time",
+        "initiating_process_file_name",
+        "initiating_process_file_size",
+        "initiating_process_folder_path",
+        "initiating_process_id",
+        "initiating_process_logon_id",
+        "initiating_process_md5",
+        "initiating_process_parent_creation_time",
+        "initiating_process_parent_file_name",
+        "initiating_process_parent_id",
+        "initiating_process_sha1",
+        "initiating_process_sha256",
+        "initiating_process_signature_status",
+        "initiating_process_signer_type",
+        "initiating_process_token_elevation",
+        "initiating_process_unique_id",
+        "initiating_process_version_info_company_name",
+        "is_initiating_process_remote_session",
+        "is_process_remote_session",
+        "logon_id",
+        "machine_group",
+        "md5",
+        "process_command_line",
+        "process_creation_time",
+        "process_id",
+        "process_token_elevation",
+        "process_unique_id",
+        "process_version_info_company_name",
+        "report_id",
+        "sha1",
+        "sha256"
+      ],
+      "packages": [
+        "internal/collectors/defender/deviceprocess"
+      ]
+    },
+    {
+      "event_name": "defender.device_registry",
+      "domain": "defender",
+      "attr_keys": [
+        "action_type",
+        "device_id",
+        "device_name",
+        "ingest_transport",
+        "initiating_process_account_domain",
+        "initiating_process_account_name",
+        "initiating_process_file_name",
+        "initiating_process_file_size",
+        "initiating_process_id",
+        "initiating_process_md5",
+        "initiating_process_parent_file_name",
+        "initiating_process_parent_id",
+        "initiating_process_sha1",
+        "initiating_process_sha256",
+        "is_initiating_process_remote_session",
+        "machine_group",
+        "previous_registry_value_data",
+        "previous_registry_value_name",
+        "registry_key",
+        "registry_value_data",
+        "registry_value_name",
+        "registry_value_type",
+        "report_id"
+      ],
+      "packages": [
+        "internal/collectors/defender/deviceregistry"
+      ]
+    },
+    {
+      "event_name": "defender.email",
+      "domain": "defender",
+      "attr_keys": [
+        "attachment_count",
+        "authentication_details",
+        "delivery_action",
+        "delivery_location",
+        "email_cluster_id",
+        "email_direction",
+        "email_language",
+        "email_size",
+        "ingest_transport",
+        "internet_message_id",
+        "is_first_contact",
+        "network_message_id",
+        "recipient_domain",
+        "recipient_email_address",
+        "recipient_object_id",
+        "report_id",
+        "sender_display_name",
+        "sender_from_address",
+        "sender_from_domain",
+        "sender_ipv4",
+        "sender_mail_from_address",
+        "sender_mail_from_domain",
+        "subject",
+        "to",
+        "url_count"
+      ],
+      "packages": [
+        "internal/collectors/defender/email"
+      ]
+    },
+    {
+      "event_name": "defender.email_attachment",
+      "domain": "defender",
+      "attr_keys": [
+        "file_extension",
+        "file_name",
+        "file_size",
+        "file_type",
+        "ingest_transport",
+        "network_message_id",
+        "recipient_email_address",
+        "report_id",
+        "sender_display_name",
+        "sender_from_address",
+        "sender_object_id",
+        "sha256"
+      ],
+      "packages": [
+        "internal/collectors/defender/emailattachment"
+      ]
+    },
+    {
+      "event_name": "defender.email_post_delivery",
+      "domain": "defender",
+      "attr_keys": [
+        "action",
+        "action_result",
+        "action_trigger",
+        "action_type",
+        "delivery_location",
+        "ingest_transport",
+        "internet_message_id",
+        "network_message_id",
+        "recipient_email_address",
+        "report_id",
+        "sender_from_address"
+      ],
+      "packages": [
+        "internal/collectors/defender/emailpostdelivery"
+      ]
+    },
+    {
+      "event_name": "defender.email_url",
+      "domain": "defender",
+      "attr_keys": [
+        "ingest_transport",
+        "network_message_id",
+        "report_id",
+        "url",
+        "url_chain_position",
+        "url_domain",
+        "url_location"
+      ],
+      "packages": [
+        "internal/collectors/defender/emailurlinfo"
+      ]
+    },
+    {
+      "event_name": "defender.identity_info",
+      "domain": "defender",
+      "attr_keys": [
+        "account_display_name",
+        "account_domain",
+        "account_name",
+        "account_object_id",
+        "account_upn",
+        "change_source",
+        "cloud_sid",
+        "created_date_time",
+        "criticality_level",
+        "identity_environment",
+        "identity_id",
+        "ingest_transport",
+        "is_account_enabled",
+        "report_id",
+        "risk_level",
+        "risk_level_details",
+        "source_provider",
+        "source_providers",
+        "type"
+      ],
+      "packages": [
+        "internal/collectors/defender/identityinfo"
+      ]
+    },
+    {
+      "event_name": "defender.identity_logon",
+      "domain": "defender",
+      "attr_keys": [
+        "account_display_name",
+        "account_domain",
+        "account_name",
+        "account_object_id",
+        "account_upn",
+        "action_type",
+        "additional_fields",
+        "application",
+        "device_type",
+        "ingest_transport",
+        "ip_address",
+        "isp",
+        "last_seen_for_user",
+        "location",
+        "logon_type",
+        "os_platform",
+        "report_id"
+      ],
+      "packages": [
+        "internal/collectors/defender/identitylogon"
+      ]
+    },
+    {
+      "event_name": "defender.mdo_policy",
+      "domain": "defender",
+      "attr_keys": [
+        "allow_click_through",
+        "allow_safe_docs_open",
+        "authentication_fail_action",
+        "bulk_spam_action",
+        "bulk_threshold",
+        "deliver_message_after_scan",
+        "dmarc_quarantine_action",
+        "dmarc_reject_action",
+        "enable_atp_for_spo_teams_odb",
+        "enable_for_internal_senders",
+        "enable_targeted_domains_protection",
+        "enable_targeted_user_protection",
+        "enabled",
+        "file_filter_enabled",
+        "file_type_action",
+        "high_confidence_phish_action",
+        "high_confidence_spam_action",
+        "honor_dmarc_policy",
+        "ingest_transport",
+        "is_default",
+        "mailbox_intelligence_enabled",
+        "mailbox_intelligence_protection_action",
+        "phish_spam_action",
+        "phish_threshold_level",
+        "phish_zap_enabled",
+        "policy_name",
+        "policy_type",
+        "quarantine_retention_period",
+        "recommended_policy_type",
+        "safe_attachment_action",
+        "safe_attachments_enabled",
+        "safe_docs_enabled",
+        "safe_links_email_enabled",
+        "safe_links_office_enabled",
+        "safe_links_teams_enabled",
+        "scan_urls_enabled",
+        "spam_action",
+        "spam_zap_enabled",
+        "spoof_intelligence_enabled",
+        "targeted_domain_protection_action",
+        "targeted_user_protection_action",
+        "zap_enabled"
+      ],
+      "packages": [
+        "internal/collectors/defender/mdopolicies"
+      ]
+    },
+    {
+      "event_name": "defender.oauth_app",
+      "domain": "defender",
+      "attr_keys": [
+        "added_on_time",
+        "admin_consented",
+        "app_name",
+        "app_origin",
+        "app_owner_tenant_id",
+        "app_status",
+        "is_verified_publisher",
+        "last_used_time",
+        "oauth_app_id",
+        "permission_values",
+        "permissions_count",
+        "privilege_level",
+        "risk_score",
+        "service_principal_id",
+        "verified_publisher_id",
+        "verified_publisher_name"
+      ],
+      "packages": [
+        "internal/collectors/defender/oauthapps"
+      ]
+    },
+    {
+      "event_name": "defender.quarantine",
+      "domain": "defender",
+      "attr_keys": [
+        "direction",
+        "entity_type",
+        "expires",
+        "ingest_transport",
+        "internet_message_id",
+        "network_message_id",
+        "override_reason",
+        "permission_to_allow_sender",
+        "permission_to_block_sender",
+        "permission_to_delete",
+        "permission_to_download",
+        "permission_to_preview",
+        "permission_to_release",
+        "permission_to_request_release",
+        "permission_to_view_header",
+        "policy_name",
+        "policy_type",
+        "quarantine_type",
+        "received_time",
+        "recipient_address",
+        "recipient_count",
+        "recipient_tag",
+        "release_status",
+        "released",
+        "released_count",
+        "reported",
+        "sender_address",
+        "size",
+        "subject",
+        "system_released",
+        "tag_name"
+      ],
+      "packages": [
+        "internal/collectors/defender/quarantine"
+      ]
+    },
+    {
+      "event_name": "defender.secure_config",
+      "domain": "defender",
+      "attr_keys": [
+        "configuration_category",
+        "configuration_id",
+        "configuration_impact",
+        "device_id",
+        "device_name",
+        "is_compliant",
+        "os_platform"
+      ],
+      "packages": [
+        "internal/collectors/defender/secureconfig"
+      ]
+    },
+    {
+      "event_name": "defender.software",
+      "domain": "defender",
+      "attr_keys": [
+        "device_id",
+        "device_name",
+        "end_of_support_status",
+        "os_platform",
+        "os_version",
+        "product_code_cpe",
+        "software_name",
+        "software_vendor",
+        "software_version"
+      ],
+      "packages": [
+        "internal/collectors/defender/softwareinventory"
+      ]
+    },
+    {
+      "event_name": "defender.teams_message",
+      "domain": "defender",
+      "attr_keys": [
+        "delivery_action",
+        "delivery_location",
+        "group_id",
+        "group_name",
+        "ingest_transport",
+        "is_external_thread",
+        "is_owned_thread",
+        "last_edited_time",
+        "message_id",
+        "message_subtype",
+        "message_type",
+        "message_version",
+        "parent_message_id",
+        "recipient_details",
+        "report_id",
+        "sender_display_name",
+        "sender_email_address",
+        "sender_object_id",
+        "sender_type",
+        "subject",
+        "teams_message_id",
+        "thread_id",
+        "thread_name",
+        "thread_sub_type",
+        "thread_type"
+      ],
+      "packages": [
+        "internal/collectors/defender/messageevents"
+      ]
+    },
+    {
+      "event_name": "defender.teams_message_url",
+      "domain": "defender",
+      "attr_keys": [
+        "ingest_transport",
+        "report_id",
+        "teams_message_id",
+        "url",
+        "url_domain"
+      ],
+      "packages": [
+        "internal/collectors/defender/messageurlinfo"
+      ]
+    },
+    {
+      "event_name": "defender.url_click_event",
+      "domain": "defender",
+      "attr_keys": [
+        "account_upn",
+        "action_type",
+        "app_name",
+        "app_version",
+        "ingest_transport",
+        "ip_address",
+        "is_clicked_through",
+        "network_message_id",
+        "report_id",
+        "source_id",
+        "url",
+        "url_chain",
+        "workload"
+      ],
+      "packages": [
+        "internal/collectors/defender/urlclickevents"
+      ]
+    },
+    {
+      "event_name": "defender.vulnerability",
+      "domain": "defender",
+      "attr_keys": [
+        "cve_id",
+        "cvss_score",
+        "cvss_vector",
+        "device_id",
+        "device_name",
+        "epss_score",
+        "exploit_available",
+        "os_platform",
+        "os_version",
+        "published_date",
+        "recommended_security_update",
+        "severity",
+        "software_name",
+        "software_vendor",
+        "software_version"
+      ],
+      "packages": [
+        "internal/collectors/defender/vulnerabilities"
+      ]
+    },
+    {
+      "event_name": "entra.access_review",
+      "domain": "entra",
+      "attr_keys": [
+        "additional_notification_recipient_count",
+        "apply_action_types",
+        "auto_apply_decisions_enabled",
+        "created_by",
+        "created_by_id",
+        "created_by_type",
+        "created_by_user_principal_name",
+        "created_date_time",
+        "default_decision",
+        "default_decision_enabled",
+        "description_for_admins",
+        "description_for_reviewers",
+        "display_name",
+        "fallback_reviewer_count",
+        "id",
+        "instance_duration_days",
+        "justification_required_on_approval",
+        "last_modified_date_time",
+        "mail_notifications_enabled",
+        "recommendations_enabled",
+        "recurrence_interval",
+        "recurrence_pattern_type",
+        "recurrence_range_type",
+        "recurrence_start_date",
+        "reminder_notifications_enabled",
+        "reviewer_count",
+        "reviewer_queries",
+        "scope_odata_type",
+        "scope_principal_queries",
+        "scope_query",
+        "scope_resource_queries",
+        "stage_count",
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/entra/accessreviews"
+      ]
+    },
+    {
+      "event_name": "entra.agent_risk_detection",
+      "domain": "entra",
+      "attr_keys": [
+        "agent_display_name",
+        "agent_id",
+        "detection_timing_type",
+        "id",
+        "identity_type",
+        "ingest_transport",
+        "mitre_techniques",
+        "risk_detail",
+        "risk_event_type",
+        "risk_evidence",
+        "risk_level",
+        "risk_state",
+        "source"
+      ],
+      "packages": [
+        "internal/collectors/entra/agentriskdetections"
+      ]
+    },
+    {
+      "event_name": "entra.app_credential",
+      "domain": "entra",
+      "attr_keys": [
+        "app_id",
+        "app_object_id",
+        "credential_display_name",
+        "credential_type",
+        "custom_key_identifier",
+        "display_name",
+        "end_date_time",
+        "expiry_bucket",
+        "key_id",
+        "key_type",
+        "key_usage",
+        "owner_type",
+        "start_date_time"
+      ],
+      "packages": [
+        "internal/collectors/entra/credentialexpiry"
+      ]
+    },
+    {
+      "event_name": "entra.app_signin_activity",
+      "domain": "entra",
+      "attr_keys": [
+        "app_id",
+        "app_object_id",
+        "created_date_time",
+        "credential_origin",
+        "expiration_date_time",
+        "id",
+        "key_id",
+        "key_type",
+        "key_usage",
+        "last_sign_in_date_time",
+        "last_sign_in_request_id",
+        "resource_id"
+      ],
+      "packages": [
+        "internal/collectors/entra/signinactivity"
+      ]
+    },
+    {
+      "event_name": "entra.application",
+      "domain": "entra",
+      "attr_keys": [
+        "app_id",
+        "created_date_time",
+        "display_name",
+        "owner_count",
+        "owner_principal_names",
+        "sign_in_audience"
+      ],
+      "packages": [
+        "internal/collectors/entra/appownership"
+      ]
+    },
+    {
+      "event_name": "entra.consent_grant",
+      "domain": "entra",
+      "attr_keys": [
+        "app_role",
+        "app_role_id",
+        "client_id",
+        "consent_type",
+        "id",
+        "principal_display_name",
+        "principal_id",
+        "principal_type",
+        "privilege",
+        "resource_display_name",
+        "resource_id",
+        "resource_label",
+        "scope"
+      ],
+      "packages": [
+        "internal/collectors/entra/consent"
+      ]
+    },
+    {
+      "event_name": "entra.deleted_item",
+      "domain": "entra",
+      "attr_keys": [
+        "app_id",
+        "deleted_date_time",
+        "device_id",
+        "display_name",
+        "id",
+        "near_purge",
+        "object_type",
+        "user_principal_name"
+      ],
+      "packages": [
+        "internal/collectors/entra/deleteditems"
+      ]
+    },
+    {
+      "event_name": "entra.directory_audit",
+      "domain": "entra",
+      "attr_keys": [
+        "activity_display_name",
+        "category",
+        "correlation_id",
+        "granted_scope",
+        "id",
+        "ingest_transport",
+        "initiator_app_display_name",
+        "initiator_service_principal_id",
+        "logged_by_service",
+        "modified_property_names",
+        "result",
+        "role_name",
+        "target_display_names",
+        "target_resource_count"
+      ],
+      "packages": [
+        "internal/collectors/entra/directoryaudits"
+      ]
+    },
+    {
+      "event_name": "entra.directory_sync_error",
+      "domain": "entra",
+      "attr_keys": [
+        "category",
+        "conflicting_value",
+        "id",
+        "object_type",
+        "occurred_date_time",
+        "property_causing_error",
+        "user_principal_name"
+      ],
+      "packages": [
+        "internal/collectors/entra/syncerrors"
+      ]
+    },
+    {
+      "event_name": "entra.domain",
+      "domain": "entra",
+      "attr_keys": [
+        "authentication_type",
+        "id",
+        "is_admin_managed",
+        "is_default",
+        "is_initial",
+        "is_root",
+        "is_verified",
+        "supported_services"
+      ],
+      "packages": [
+        "internal/collectors/entra/domains"
+      ]
+    },
+    {
+      "event_name": "entra.federated_identity_credential",
+      "domain": "entra",
+      "attr_keys": [
+        "app_id",
+        "audiences",
+        "credential_name",
+        "display_name",
+        "issuer",
+        "subject"
+      ],
+      "packages": [
+        "internal/collectors/entra/appownership"
+      ]
+    },
+    {
+      "event_name": "entra.graph_activity",
+      "domain": "entra",
+      "attr_keys": [
+        "api_version",
+        "app_id",
+        "caller_ip_address",
+        "client_request_id",
+        "correlation_id",
+        "duration_ms",
+        "identity_provider",
+        "identity_type",
+        "ingest_transport",
+        "is_replay",
+        "location",
+        "operation_id",
+        "request_id",
+        "request_method",
+        "request_uri",
+        "response_size_bytes",
+        "response_status_code",
+        "roles",
+        "service_principal_id",
+        "sign_in_activity_id",
+        "token_issued_at",
+        "user_agent",
+        "user_principal_object_id",
+        "wids"
+      ],
+      "packages": [
+        "internal/collectors/entra/graphactivity"
+      ]
+    },
+    {
+      "event_name": "entra.graph_notifications",
+      "domain": "entra",
+      "attr_keys": [
+        "account_type",
+        "application_id",
+        "context_id",
+        "correlation_id",
+        "duration_ms",
+        "ingest_transport",
+        "is_replay",
+        "location",
+        "operation_type",
+        "result_description",
+        "result_status_code",
+        "subscription_id",
+        "workload_namespace"
+      ],
+      "packages": [
+        "internal/collectors/entra/graphnotifications"
+      ]
+    },
+    {
+      "event_name": "entra.gsa_filtering_policy",
+      "domain": "entra",
+      "attr_keys": [
+        "action",
+        "id",
+        "name",
+        "version"
+      ],
+      "packages": [
+        "internal/collectors/entra/gsa"
+      ]
+    },
+    {
+      "event_name": "entra.gsa_forwarding_profile",
+      "domain": "entra",
+      "attr_keys": [
+        "association_count",
+        "client_fallback_action",
+        "id",
+        "is_custom_profile",
+        "name",
+        "priority",
+        "state",
+        "traffic_forwarding_type",
+        "version"
+      ],
+      "packages": [
+        "internal/collectors/entra/gsa"
+      ]
+    },
+    {
+      "event_name": "entra.license_group_error",
+      "domain": "entra",
+      "attr_keys": [
+        "display_name",
+        "id"
+      ],
+      "packages": [
+        "internal/collectors/entra/licensing"
+      ]
+    },
+    {
+      "event_name": "entra.pim_alert",
+      "domain": "entra",
+      "attr_keys": [
+        "alert_evaluation_window_seconds",
+        "alert_id",
+        "alert_type",
+        "description",
+        "display_name",
+        "global_admin_count_threshold",
+        "global_admin_percentage_threshold",
+        "how_to_prevent",
+        "incident_count",
+        "is_active",
+        "is_configurable",
+        "is_enabled",
+        "is_remediatable",
+        "last_modified_date_time",
+        "last_scanned_date_time",
+        "mitigation_steps",
+        "security_impact",
+        "sequential_activation_counter_threshold",
+        "severity",
+        "time_between_activations_seconds"
+      ],
+      "packages": [
+        "internal/collectors/entra/pimalerts"
+      ]
+    },
+    {
+      "event_name": "entra.pim_role_policy",
+      "domain": "entra",
+      "attr_keys": [
+        "activation_enabled_rules",
+        "activation_max_duration",
+        "approval_required",
+        "approval_stage_timeout_days",
+        "assignment_expiry_required",
+        "assignment_max_duration",
+        "auth_context_claim",
+        "auth_context_enabled",
+        "eligibility_expiry_required",
+        "eligibility_max_duration",
+        "is_organization_default",
+        "last_modified_date_time",
+        "policy_id",
+        "role_definition_id"
+      ],
+      "packages": [
+        "internal/collectors/entra/pimrolepolicies"
+      ]
+    },
+    {
+      "event_name": "entra.provisioning",
+      "domain": "entra",
+      "attr_keys": [
+        "change_id",
+        "cycle_id",
+        "id",
+        "ingest_transport",
+        "job_id",
+        "provisioning_action",
+        "service_principal_id",
+        "service_principal_name",
+        "source_identity_display_name",
+        "source_identity_id",
+        "status",
+        "target_identity_id"
+      ],
+      "packages": [
+        "internal/collectors/entra/provisioning"
+      ]
+    },
+    {
+      "event_name": "entra.risk_detection",
+      "domain": "entra",
+      "attr_keys": [
+        "activity",
+        "correlation_id",
+        "detection_timing_type",
+        "id",
+        "ingest_transport",
+        "ip_address",
+        "location_city",
+        "location_country_or_region",
+        "location_latitude",
+        "location_longitude",
+        "location_state",
+        "mitre_techniques",
+        "request_id",
+        "risk_detail",
+        "risk_event_type",
+        "risk_level",
+        "risk_state",
+        "source",
+        "token_issuer_type",
+        "user_agent",
+        "user_display_name",
+        "user_id",
+        "user_principal_name"
+      ],
+      "packages": [
+        "internal/collectors/entra/riskdetections"
+      ]
+    },
+    {
+      "event_name": "entra.risky_agent",
+      "domain": "entra",
+      "attr_keys": [
+        "agent_display_name",
+        "id",
+        "identity_type",
+        "is_deleted",
+        "is_enabled",
+        "is_processing",
+        "risk_detail",
+        "risk_last_updated",
+        "risk_level",
+        "risk_state"
+      ],
+      "packages": [
+        "internal/collectors/entra/riskyagents"
+      ]
+    },
+    {
+      "event_name": "entra.risky_service_principal",
+      "domain": "entra",
+      "attr_keys": [
+        "app_id",
+        "display_name",
+        "id",
+        "risk_detail",
+        "risk_last_updated",
+        "risk_level",
+        "risk_state",
+        "service_principal_type"
+      ],
+      "packages": [
+        "internal/collectors/entra/risk"
+      ]
+    },
+    {
+      "event_name": "entra.risky_user",
+      "domain": "entra",
+      "attr_keys": [
+        "id",
+        "is_deleted",
+        "is_processing",
+        "risk_detail",
+        "risk_last_updated",
+        "risk_level",
+        "risk_state",
+        "user_display_name",
+        "user_principal_name"
+      ],
+      "packages": [
+        "internal/collectors/entra/risk"
+      ]
+    },
+    {
+      "event_name": "entra.role_member",
+      "domain": "entra",
+      "attr_keys": [
+        "assignment_type",
+        "end_date_time",
+        "permanent",
+        "principal_app_id",
+        "principal_display_name",
+        "principal_id",
+        "principal_type",
+        "principal_user_principal_name",
+        "role_id",
+        "role_name"
+      ],
+      "packages": [
+        "internal/collectors/entra/roles"
+      ]
+    },
+    {
+      "event_name": "entra.secure_score_control",
+      "domain": "entra",
+      "attr_keys": [
+        "category",
+        "control_count",
+        "control_name",
+        "control_total",
+        "implementation_status",
+        "last_synced",
+        "score",
+        "score_in_percentage"
+      ],
+      "packages": [
+        "internal/collectors/entra/securescore"
+      ]
+    },
+    {
+      "event_name": "entra.secure_score_control_profile",
+      "domain": "entra",
+      "attr_keys": [
+        "action_type",
+        "action_url",
+        "category",
+        "deprecated",
+        "id",
+        "implementation_cost",
+        "max_score",
+        "rank",
+        "service",
+        "threats",
+        "tier",
+        "user_impact"
+      ],
+      "packages": [
+        "internal/collectors/entra/securescore"
+      ]
+    },
+    {
+      "event_name": "entra.security_alert",
+      "domain": "entra",
+      "attr_keys": [
+        "category",
+        "classification",
+        "detection_source",
+        "determination",
+        "evidence_count",
+        "id",
+        "incident_id",
+        "ingest_transport",
+        "provider_alert_id",
+        "service_source",
+        "severity",
+        "status",
+        "title"
+      ],
+      "packages": [
+        "internal/collectors/entra/securityalerts"
+      ]
+    },
+    {
+      "event_name": "entra.security_incident",
+      "domain": "entra",
+      "attr_keys": [
+        "assigned_to",
+        "classification",
+        "created_time",
+        "determination",
+        "display_name",
+        "id",
+        "ingest_transport",
+        "last_update_time",
+        "priority_score",
+        "severity",
+        "status",
+        "system_tags"
+      ],
+      "packages": [
+        "internal/collectors/entra/securityincidents"
+      ]
+    },
+    {
+      "event_name": "entra.service_principal_risk_detection",
+      "domain": "entra",
+      "attr_keys": [
+        "activity",
+        "app_id",
+        "detection_timing_type",
+        "id",
+        "ingest_transport",
+        "mitre_techniques",
+        "risk_detail",
+        "risk_event_type",
+        "risk_level",
+        "risk_state",
+        "service_principal_id",
+        "service_principal_name",
+        "source",
+        "token_issuer_type"
+      ],
+      "packages": [
+        "internal/collectors/entra/spriskdetections"
+      ]
+    },
+    {
+      "event_name": "entra.signin",
+      "domain": "entra",
+      "attr_keys": [
+        "app_display_name",
+        "app_id",
+        "client_app_used",
+        "conditional_access_status",
+        "correlation_id",
+        "id",
+        "ingest_transport",
+        "ip_address",
+        "location_country_or_region",
+        "resource_display_name",
+        "resource_id",
+        "risk_level_during_sign_in",
+        "risk_state",
+        "service_principal_id",
+        "service_principal_name",
+        "sign_in_event_types",
+        "status_error_code",
+        "status_failure_reason",
+        "user_id",
+        "user_principal_name"
+      ],
+      "packages": [
+        "internal/collectors/entra/signins"
+      ]
+    },
+    {
+      "event_name": "entra.tenant_policy",
+      "domain": "entra",
+      "attr_keys": [
+        "admin_consent_request_duration_days",
+        "admin_consent_reviewer_count",
+        "allow_invites_from",
+        "app_password_credentials_restricted",
+        "guest_user_role_id",
+        "permission_grant_policies"
+      ],
+      "packages": [
+        "internal/collectors/entra/tenantpolicy"
+      ]
+    },
+    {
+      "event_name": "entra.user_registration",
+      "domain": "entra",
+      "attr_keys": [
+        "id",
+        "is_admin",
+        "last_updated",
+        "methods_registered",
+        "mfa_capable",
+        "mfa_registered",
+        "passwordless_capable",
+        "sspr_capable",
+        "sspr_enabled",
+        "sspr_registered",
+        "system_preferred_auth_enabled",
+        "system_preferred_auth_methods",
+        "user_display_name",
+        "user_preferred_secondary_method",
+        "user_principal_name",
+        "user_type"
+      ],
+      "packages": [
+        "internal/collectors/entra/mfaregistration"
+      ]
+    },
+    {
+      "event_name": "graph2otel.blob_category",
+      "domain": "graph2otel",
+      "attr_keys": [
+        "container",
+        "diagnostic_category",
+        "is_enabled",
+        "is_mapped",
+        "state"
+      ],
+      "packages": [
+        "internal/collectors/selfobs/blobcategories"
+      ]
+    },
+    {
+      "event_name": "intune.app_health",
+      "domain": "intune",
+      "attr_keys": [
+        "active_device_count",
+        "app_crash_count",
+        "app_display_name",
+        "app_hang_count",
+        "app_health_score",
+        "app_name",
+        "app_usage_duration",
+        "health_state",
+        "mean_time_to_failure_minutes",
+        "publisher"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "event_name": "intune.app_install_status",
+      "domain": "intune",
+      "attr_keys": [
+        "app_id",
+        "app_name",
+        "failed_device_count",
+        "ingest_transport",
+        "installed_device_count",
+        "not_applicable_device_count",
+        "not_installed_device_count",
+        "pending_install_device_count",
+        "platform",
+        "platform_code",
+        "publisher"
+      ],
+      "packages": [
+        "internal/collectors/intune/appinstallreport"
+      ]
+    },
+    {
+      "event_name": "intune.app_registration",
+      "domain": "intune",
+      "attr_keys": [
+        "app_identifier",
+        "device_tag",
+        "flagged_reasons",
+        "platform",
+        "user_id"
+      ],
+      "packages": [
+        "internal/collectors/intune/appprotection"
+      ]
+    },
+    {
+      "event_name": "intune.audit_event",
+      "domain": "intune",
+      "attr_keys": [
+        "activity",
+        "activity_operation_type",
+        "activity_result",
+        "activity_type",
+        "actor_application_display_name",
+        "actor_application_id",
+        "actor_type",
+        "actor_user_id",
+        "actor_user_principal_name",
+        "category",
+        "component_name",
+        "correlation_id",
+        "display_name",
+        "id",
+        "ingest_transport",
+        "modified_property_names",
+        "resource_display_names",
+        "resource_types"
+      ],
+      "packages": [
+        "internal/collectors/intune/auditevents"
+      ]
+    },
+    {
+      "event_name": "intune.autopilot.sync",
+      "domain": "intune",
+      "attr_keys": [
+        "id",
+        "last_manual_sync_trigger_date_time",
+        "last_sync_date_time",
+        "sync_status"
+      ],
+      "packages": [
+        "internal/collectors/intune/autopilot"
+      ]
+    },
+    {
+      "event_name": "intune.autopilot_deployment",
+      "domain": "intune",
+      "attr_keys": [
+        "current_provisioning_phase",
+        "deployment_duration_seconds",
+        "deployment_status",
+        "device_id",
+        "device_name",
+        "enrollment_time",
+        "ingest_transport",
+        "phase",
+        "result_code",
+        "serial_number",
+        "upn"
+      ],
+      "packages": [
+        "internal/collectors/intune/autopilotdeployment"
+      ]
+    },
+    {
+      "event_name": "intune.autopilot_deployment_apps",
+      "domain": "intune",
+      "attr_keys": [
+        "app_name",
+        "app_type",
+        "application_id",
+        "device_id",
+        "ingest_transport",
+        "is_admin_selected",
+        "policy_install_status"
+      ],
+      "packages": [
+        "internal/collectors/intune/autopilotdeploymentapps"
+      ]
+    },
+    {
+      "event_name": "intune.autopilot_deployment_scripts",
+      "domain": "intune",
+      "attr_keys": [
+        "device_id",
+        "display_name",
+        "ingest_transport",
+        "policy_id",
+        "policy_install_status"
+      ],
+      "packages": [
+        "internal/collectors/intune/autopilotdeploymentscripts"
+      ]
+    },
+    {
+      "event_name": "intune.autopilot_event",
+      "domain": "intune",
+      "attr_keys": [
+        "account_setup_duration_seconds",
+        "account_setup_status",
+        "deployment_duration_seconds",
+        "deployment_state",
+        "device_id",
+        "device_serial_number",
+        "device_setup_duration_seconds",
+        "device_setup_status",
+        "enrollment_failure_details",
+        "enrollment_type",
+        "id",
+        "ingest_transport"
+      ],
+      "packages": [
+        "internal/collectors/intune/autopilotevents"
+      ]
+    },
+    {
+      "event_name": "intune.cloud_pc_audit",
+      "domain": "intune",
+      "attr_keys": [
+        "activity",
+        "activity_operation_type",
+        "activity_result",
+        "actor_application_id",
+        "actor_user_id",
+        "actor_user_principal_name",
+        "category",
+        "component_name",
+        "correlation_id",
+        "id",
+        "ingest_transport",
+        "modified_property_names",
+        "resource_display_names",
+        "resource_ids",
+        "resource_types"
+      ],
+      "packages": [
+        "internal/collectors/intune/cloudpcaudit"
+      ]
+    },
+    {
+      "event_name": "intune.cloud_pki_authority",
+      "domain": "intune",
+      "attr_keys": [
+        "certificate_key_size",
+        "certificate_revocation_list_url",
+        "certification_authority_id",
+        "certification_authority_issuer_id",
+        "certification_authority_issuer_uri",
+        "certification_authority_status",
+        "certification_authority_type",
+        "common_name",
+        "country_name",
+        "created_date_time",
+        "declared_valid_to",
+        "display_name",
+        "expiry_bucket",
+        "expiry_source",
+        "extended_key_usages",
+        "geographic_region",
+        "hashing_algorithm",
+        "issuer_name",
+        "key_platform",
+        "last_modified_date_time",
+        "locality_name",
+        "organization_name",
+        "organization_unit",
+        "role_scope_tag_ids",
+        "root_certificate_common_name",
+        "scep_server_url",
+        "serial_number",
+        "state_name",
+        "subject_name",
+        "thumbprint",
+        "valid_from",
+        "valid_to",
+        "validity_period_years",
+        "version_number"
+      ],
+      "packages": [
+        "internal/collectors/intune/cloudpki"
+      ]
+    },
+    {
+      "event_name": "intune.cloud_pki_leaf_certificate",
+      "domain": "intune",
+      "attr_keys": [
+        "certificate_status",
+        "certification_authority_id",
+        "certification_authority_issuer_uri",
+        "crl_distribution_point_url",
+        "device_id",
+        "device_name",
+        "expiry_bucket",
+        "extended_key_usages",
+        "issuer_name",
+        "key_usages",
+        "leaf_certificate_id",
+        "revocation_date_time",
+        "serial_number",
+        "subject_name",
+        "thumbprint",
+        "user_id",
+        "user_principal_name",
+        "valid_from",
+        "valid_to"
+      ],
+      "packages": [
+        "internal/collectors/intune/cloudpki"
+      ]
+    },
+    {
+      "event_name": "intune.compliance_alert",
+      "domain": "intune",
+      "attr_keys": [
+        "alert_display_name",
+        "alert_type",
+        "description",
+        "device_host_name",
+        "device_id",
+        "device_name",
+        "device_net_bios_name",
+        "ingest_transport",
+        "intune_account_id",
+        "intune_user_id",
+        "operating_system",
+        "operational_log_category",
+        "scale_unit",
+        "scenario_name",
+        "upn_suffix",
+        "user_display_name",
+        "user_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/compliancealerts"
+      ]
+    },
+    {
+      "event_name": "intune.config_assignment_status",
+      "domain": "intune",
+      "attr_keys": [
+        "assignment_status_code",
+        "device_id",
+        "device_name",
+        "ingest_transport",
+        "policy_id",
+        "policy_name",
+        "policy_platform",
+        "policy_type",
+        "report_status",
+        "upn"
+      ],
+      "packages": [
+        "internal/collectors/intune/configassignments"
+      ]
+    },
+    {
+      "event_name": "intune.config_profile_device_status",
+      "domain": "intune",
+      "attr_keys": [
+        "device_id",
+        "device_name",
+        "ingest_transport",
+        "policy_id",
+        "policy_name",
+        "policy_status",
+        "report_status",
+        "unified_policy_type",
+        "upn"
+      ],
+      "packages": [
+        "internal/collectors/intune/configprofiledevicestatus"
+      ]
+    },
+    {
+      "event_name": "intune.config_setting_status",
+      "domain": "intune",
+      "attr_keys": [
+        "compliant_device_count",
+        "conflict_device_count",
+        "error_device_count",
+        "ingest_transport",
+        "policy_id",
+        "setting_id",
+        "setting_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/configsettingstatus"
+      ]
+    },
+    {
+      "event_name": "intune.connector",
+      "domain": "intune",
+      "attr_keys": [
+        "bind_status",
+        "connector_type",
+        "enrollment_target",
+        "last_app_sync_status",
+        "owner_principal_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/connectors"
+      ]
+    },
+    {
+      "event_name": "intune.defender_agent",
+      "domain": "intune",
+      "attr_keys": [
+        "device_id",
+        "device_name",
+        "device_state",
+        "device_state_code",
+        "ingest_transport",
+        "malware_protection_enabled",
+        "network_inspection_system_enabled",
+        "product_status",
+        "product_status_code",
+        "real_time_protection_enabled",
+        "signature_update_overdue",
+        "tamper_protection_enabled",
+        "upn"
+      ],
+      "packages": [
+        "internal/collectors/intune/defenderreport"
+      ]
+    },
+    {
+      "event_name": "intune.device_app_health",
+      "domain": "intune",
+      "attr_keys": [
+        "app_crash_count",
+        "app_hang_count",
+        "crashed_app_count",
+        "device_app_health_score",
+        "device_id",
+        "device_name",
+        "health_state",
+        "manufacturer",
+        "mean_time_to_failure_minutes",
+        "model"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "event_name": "intune.device_attestation",
+      "domain": "intune",
+      "attr_keys": [
+        "attestation_status",
+        "attestation_status_detail",
+        "device_id",
+        "device_name",
+        "ingest_transport",
+        "last_checkin",
+        "model",
+        "os",
+        "os_version",
+        "ownership",
+        "tpm_manufacturer",
+        "tpm_version",
+        "upn"
+      ],
+      "packages": [
+        "internal/collectors/intune/deviceattestation"
+      ]
+    },
+    {
+      "event_name": "intune.device_battery_health",
+      "domain": "intune",
+      "attr_keys": [
+        "battery_age_days",
+        "battery_count",
+        "battery_health_score",
+        "battery_ids",
+        "device_id",
+        "device_name",
+        "estimated_runtime_minutes",
+        "full_battery_drain_count",
+        "health_state",
+        "manufacturer",
+        "max_capacity_percentage",
+        "model"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "event_name": "intune.device_boot_security",
+      "domain": "intune",
+      "attr_keys": [
+        "aik_key",
+        "attestation_error",
+        "bitlocker_status",
+        "boot_debugging_status",
+        "code_integrity_status",
+        "dep_policy",
+        "device_id",
+        "device_name",
+        "elam_driver_loaded_status",
+        "firmware_protection_status",
+        "health_cert_issued_date",
+        "ingest_transport",
+        "intune_user_id",
+        "os",
+        "os_kernel_debugging_status",
+        "safe_mode_status",
+        "secure_boot_status",
+        "tpm_version",
+        "upn",
+        "vsm_status",
+        "winpe_status"
+      ],
+      "packages": [
+        "internal/collectors/intune/bootsecurity"
+      ]
+    },
+    {
+      "event_name": "intune.device_certificate",
+      "domain": "intune",
+      "attr_keys": [
+        "certificate_profile_name",
+        "certificate_status",
+        "device_display_name",
+        "device_id",
+        "device_name",
+        "enhanced_key_usage",
+        "expiration_date_time",
+        "id",
+        "ingest_transport",
+        "intended_purpose",
+        "issuance_state",
+        "issuer_name",
+        "key_usage",
+        "policy_id",
+        "serial_number",
+        "source",
+        "state_bucket",
+        "subject_name",
+        "thumbprint",
+        "upn",
+        "user_display_name",
+        "user_id",
+        "user_principal_name",
+        "valid_from",
+        "valid_to"
+      ],
+      "packages": [
+        "internal/collectors/intune/certificates",
+        "internal/collectors/intune/certinventoryreport"
+      ]
+    },
+    {
+      "event_name": "intune.device_encryption",
+      "domain": "intune",
+      "attr_keys": [
+        "advanced_bitlocker_states",
+        "device_id",
+        "device_name",
+        "device_type",
+        "encryption_policy_setting_state",
+        "encryption_readiness_state",
+        "encryption_state",
+        "file_vault_states",
+        "os_version",
+        "tpm_specification_version",
+        "user_principal_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/deviceencryption"
+      ]
+    },
+    {
+      "event_name": "intune.device_endpoint_analytics",
+      "domain": "intune",
+      "attr_keys": [
+        "app_reliability_score",
+        "battery_health_score",
+        "device_name",
+        "endpoint_analytics_score",
+        "health_state",
+        "id",
+        "manufacturer",
+        "mean_resource_spike_time_score",
+        "model",
+        "startup_performance_score",
+        "work_from_anywhere_score"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "event_name": "intune.device_hardware",
+      "domain": "intune",
+      "attr_keys": [
+        "battery_level_percentage",
+        "cellular_technology",
+        "credential_guard_state",
+        "device_guard_hardware_requirement_state",
+        "device_id",
+        "device_licensing_status",
+        "device_name",
+        "esim_identifier",
+        "free_storage_bytes",
+        "imei",
+        "is_shared_device",
+        "is_supervised",
+        "manufacturer",
+        "operating_system",
+        "operating_system_edition",
+        "operating_system_language",
+        "operating_system_product_type",
+        "phone_number",
+        "product_name",
+        "subscriber_carrier",
+        "system_management_bios_version",
+        "total_storage_bytes",
+        "tpm_manufacturer",
+        "tpm_specification_version",
+        "tpm_version",
+        "vbs_state",
+        "wired_ipv4_addresses"
+      ],
+      "packages": [
+        "internal/collectors/intune/hardwareinventory"
+      ]
+    },
+    {
+      "event_name": "intune.device_malware_state",
+      "domain": "intune",
+      "attr_keys": [
+        "device_id",
+        "full_scan_overdue",
+        "full_scan_required",
+        "is_virtual_machine",
+        "malware_protection_enabled",
+        "network_inspection_system_enabled",
+        "product_status",
+        "product_status_raw",
+        "quick_scan_overdue",
+        "real_time_protection_enabled",
+        "reboot_required",
+        "signature_update_overdue",
+        "tamper_protection_enabled"
+      ],
+      "packages": [
+        "internal/collectors/intune/malware"
+      ]
+    },
+    {
+      "event_name": "intune.device_resource_performance",
+      "domain": "intune",
+      "attr_keys": [
+        "average_spike_time_score",
+        "cpu_spike_time_percentage",
+        "cpu_spike_time_percentage_threshold",
+        "cpu_spike_time_score",
+        "device_id",
+        "device_name",
+        "disk_type",
+        "health_state",
+        "machine_type",
+        "manufacturer",
+        "model",
+        "ram_spike_time_percentage",
+        "ram_spike_time_percentage_threshold",
+        "ram_spike_time_score",
+        "resource_performance_score"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "event_name": "intune.device_startup",
+      "domain": "intune",
+      "attr_keys": [
+        "core_boot_time_ms",
+        "core_login_time_ms",
+        "device_id",
+        "feature_update_boot_time_ms",
+        "group_policy_boot_time_ms",
+        "group_policy_login_time_ms",
+        "is_feature_update",
+        "is_first_login",
+        "os_version",
+        "responsive_desktop_time_ms",
+        "restart_category",
+        "restart_fault_bucket",
+        "restart_stop_code",
+        "total_boot_time_ms",
+        "total_login_time_ms"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "event_name": "intune.device_startup_process",
+      "domain": "intune",
+      "attr_keys": [
+        "device_id",
+        "process_name",
+        "product_name",
+        "publisher",
+        "startup_impact_ms"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "event_name": "intune.device_work_from_anywhere",
+      "domain": "intune",
+      "attr_keys": [
+        "device_name",
+        "health_state",
+        "id",
+        "manufacturer",
+        "model",
+        "os",
+        "os_version",
+        "ownership",
+        "processor_family_check_failed",
+        "secure_boot_check_failed",
+        "serial_number",
+        "tpm_check_failed",
+        "upgrade_eligibility",
+        "windows_score",
+        "work_from_anywhere_score"
+      ],
+      "packages": [
+        "internal/collectors/intune/endpointanalytics"
+      ]
+    },
+    {
+      "event_name": "intune.devices_without_compliance_policy",
+      "domain": "intune",
+      "attr_keys": [
+        "compliance_state",
+        "device_id",
+        "device_name",
+        "ingest_transport",
+        "os",
+        "os_version",
+        "owner_type",
+        "upn"
+      ],
+      "packages": [
+        "internal/collectors/intune/deviceswithoutcompliancepolicy"
+      ]
+    },
+    {
+      "event_name": "intune.enrollment_event",
+      "domain": "intune",
+      "attr_keys": [
+        "correlation_id",
+        "device_id",
+        "enrollment_type",
+        "failure_category",
+        "failure_reason",
+        "id",
+        "ingest_transport",
+        "operating_system",
+        "os_version",
+        "user_id"
+      ],
+      "packages": [
+        "internal/collectors/intune/enrollmentevents"
+      ]
+    },
+    {
+      "event_name": "intune.epm_denied",
+      "domain": "intune",
+      "attr_keys": [
+        "device_id",
+        "device_name",
+        "elevation_type",
+        "file_description",
+        "file_name",
+        "hash",
+        "ingest_transport",
+        "month_elevation_count",
+        "publisher",
+        "user_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/epmdenied"
+      ]
+    },
+    {
+      "event_name": "intune.epm_elevation_events",
+      "domain": "intune",
+      "attr_keys": [
+        "company_name",
+        "device_id",
+        "device_name",
+        "elevation_id",
+        "elevation_type",
+        "file_description",
+        "file_hash",
+        "file_path",
+        "file_version",
+        "ingest_transport",
+        "internal_name",
+        "is_system_initiated",
+        "parent_process_name",
+        "process_type",
+        "product_name",
+        "result",
+        "upn",
+        "user_type"
+      ],
+      "packages": [
+        "internal/collectors/intune/epmelevationevents"
+      ]
+    },
+    {
+      "event_name": "intune.epm_elevations",
+      "domain": "intune",
+      "attr_keys": [
+        "company_name",
+        "elevation_count",
+        "elevation_type",
+        "file_hash",
+        "file_name",
+        "file_version",
+        "ingest_transport",
+        "internal_name",
+        "is_background_process"
+      ],
+      "packages": [
+        "internal/collectors/intune/epmelevations"
+      ]
+    },
+    {
+      "event_name": "intune.epm_elevations_by_publisher",
+      "domain": "intune",
+      "attr_keys": [
+        "company_name",
+        "elevation_count",
+        "elevation_type",
+        "ingest_transport"
+      ],
+      "packages": [
+        "internal/collectors/intune/epmelevationsbypublisher"
+      ]
+    },
+    {
+      "event_name": "intune.epm_elevations_by_user",
+      "domain": "intune",
+      "attr_keys": [
+        "ingest_transport",
+        "managed_count",
+        "total_count",
+        "unmanaged_count",
+        "upn"
+      ],
+      "packages": [
+        "internal/collectors/intune/epmelevationsbyuser"
+      ]
+    },
+    {
+      "event_name": "intune.firewall_status",
+      "domain": "intune",
+      "attr_keys": [
+        "device_id",
+        "device_name",
+        "firewall_status",
+        "ingest_transport",
+        "last_reported_date_time",
+        "upn"
+      ],
+      "packages": [
+        "internal/collectors/intune/firewallstatus"
+      ]
+    },
+    {
+      "event_name": "intune.managed_device",
+      "domain": "intune",
+      "attr_keys": [
+        "compliance_state",
+        "device_name",
+        "id",
+        "is_encrypted",
+        "last_sync_date_time",
+        "manufacturer",
+        "model",
+        "operating_system",
+        "os_version",
+        "partner_reported_threat_state",
+        "serial_number",
+        "staleness_bucket",
+        "user_principal_name",
+        "wifi_mac_address"
+      ],
+      "packages": [
+        "internal/collectors/intune/manageddevices"
+      ]
+    },
+    {
+      "event_name": "intune.noncompliant_setting",
+      "domain": "intune",
+      "attr_keys": [
+        "device_id",
+        "device_name",
+        "error_code",
+        "ingest_transport",
+        "os",
+        "os_version",
+        "policy_name",
+        "setting_display_name",
+        "setting_name",
+        "setting_status",
+        "setting_status_code",
+        "upn"
+      ],
+      "packages": [
+        "internal/collectors/intune/noncompliantsettings"
+      ]
+    },
+    {
+      "event_name": "intune.remediation_run_states",
+      "domain": "intune",
+      "attr_keys": [
+        "detection_output",
+        "detection_state",
+        "device_id",
+        "device_name",
+        "last_state_update",
+        "last_sync_date_time",
+        "os",
+        "os_version",
+        "ownership",
+        "publisher",
+        "remediation_id",
+        "remediation_name",
+        "remediation_script_error",
+        "remediation_state"
+      ],
+      "packages": [
+        "internal/collectors/intune/remediationrunstates"
+      ]
+    },
+    {
+      "event_name": "intune.role_assignment",
+      "domain": "intune",
+      "attr_keys": [
+        "description",
+        "display_name",
+        "is_built_in",
+        "members",
+        "members_count",
+        "resource_scopes",
+        "role_assignment_id",
+        "role_id",
+        "role_name",
+        "role_scope_tag_ids",
+        "scope_members",
+        "scope_type"
+      ],
+      "packages": [
+        "internal/collectors/intune/rbac"
+      ]
+    },
+    {
+      "event_name": "intune.role_definition",
+      "domain": "intune",
+      "attr_keys": [
+        "actions",
+        "assignment_count",
+        "description",
+        "display_name",
+        "is_built_in",
+        "is_built_in_role_definition",
+        "not_allowed_actions",
+        "role_definition_type",
+        "role_id",
+        "role_name",
+        "role_scope_tag_ids"
+      ],
+      "packages": [
+        "internal/collectors/intune/rbac"
+      ]
+    },
+    {
+      "event_name": "intune.windows_update_deployment",
+      "domain": "intune",
+      "attr_keys": [
+        "audience_id",
+        "catalog_entry_id",
+        "catalog_entry_type",
+        "created_date_time",
+        "days_until_forced_reboot",
+        "deployment_effective_state",
+        "deployment_id",
+        "deployment_requested_state",
+        "deployment_state_matches_request",
+        "deployment_state_reasons",
+        "display_name",
+        "is_expeditable",
+        "is_expedited",
+        "is_readiness_test",
+        "last_modified_date_time",
+        "update_cadence",
+        "update_classification",
+        "update_content_type",
+        "update_release_date_time"
+      ],
+      "packages": [
+        "internal/collectors/intune/windowsupdates"
+      ]
+    },
+    {
+      "event_name": "intune.windows_update_policy",
+      "domain": "intune",
+      "attr_keys": [
+        "audience_id",
+        "auto_enrollment_update_categories",
+        "compliance_change_rule_types",
+        "content_filter_cadences",
+        "content_filter_classifications",
+        "content_filter_types",
+        "created_date_time",
+        "deployment_start_delays",
+        "is_hotpatch_enabled",
+        "offer_as_optional",
+        "offer_while_recommended_by",
+        "policy_id",
+        "rule_last_evaluated_date_times",
+        "rules_never_evaluated"
+      ],
+      "packages": [
+        "internal/collectors/intune/windowsupdates"
+      ]
+    },
+    {
+      "event_name": "m365.audit",
+      "domain": "m365",
+      "attr_keys": [
+        "actor_ids",
+        "azure_ad_event_type",
+        "client_ip",
+        "extended_property_names",
+        "extended_property_values",
+        "id",
+        "ingest_transport",
+        "modified_property_names",
+        "network_message_id",
+        "object_id",
+        "operation",
+        "organization_id",
+        "record_type",
+        "record_type_id",
+        "release_to",
+        "request_type",
+        "result_status",
+        "service",
+        "user_id",
+        "user_key",
+        "user_type",
+        "user_type_id",
+        "version",
+        "workload"
+      ],
+      "packages": [
+        "internal/collectors/m365/activity",
+        "internal/collectors/m365/unifiedaudit"
+      ]
+    },
+    {
+      "event_name": "m365.drive_storage",
+      "domain": "m365",
+      "attr_keys": [
+        "active_file_count",
+        "drive_type",
+        "file_count",
+        "is_deleted",
+        "last_activity_date",
+        "names_concealed",
+        "owner_display_name",
+        "owner_principal_name",
+        "quota_state",
+        "root_web_template",
+        "site_id",
+        "site_url",
+        "storage_allocated_bytes",
+        "storage_remaining_bytes",
+        "storage_used_bytes"
+      ],
+      "packages": [
+        "internal/collectors/m365/storage"
+      ]
+    },
+    {
+      "event_name": "m365.exchange_audit_config",
+      "domain": "m365",
+      "attr_keys": [
+        "admin_audit_log_age_limit",
+        "admin_audit_log_enabled",
+        "ingest_transport",
+        "log_level",
+        "test_cmdlet_logging_enabled",
+        "unified_audit_log_first_opt_in_date",
+        "unified_audit_log_ingestion_enabled"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangeauditconfig"
+      ]
+    },
+    {
+      "event_name": "m365.exchange_connector",
+      "domain": "m365",
+      "attr_keys": [
+        "all_accepted_domains",
+        "cloud_services_mail_enabled",
+        "comment",
+        "connector_source",
+        "connector_type",
+        "direction",
+        "enabled",
+        "enhanced_filtering_skip_last_ip",
+        "enhanced_filtering_test_mode",
+        "id",
+        "identity",
+        "ingest_transport",
+        "is_transport_rule_scoped",
+        "is_valid",
+        "is_validated",
+        "last_validation_timestamp",
+        "mta_sts_mode",
+        "name",
+        "require_tls",
+        "restrict_domains_to_certificate",
+        "restrict_domains_to_ip_addresses",
+        "route_all_messages_via_on_premises",
+        "sender_domains",
+        "sender_ip_addresses",
+        "sender_rewriting_enabled",
+        "smart_hosts",
+        "smtp_dane_mode",
+        "test_mode",
+        "tls_sender_certificate_name",
+        "tls_settings",
+        "treat_messages_as_internal",
+        "use_mx_record",
+        "validation_recipients",
+        "when_changed",
+        "when_created"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangeconnectors"
+      ]
+    },
+    {
+      "event_name": "m365.exchange_dkim_config",
+      "domain": "m365",
+      "attr_keys": [
+        "algorithm",
+        "body_canonicalization",
+        "domain",
+        "enabled",
+        "header_canonicalization",
+        "ingest_transport",
+        "is_default",
+        "is_valid",
+        "key_creation_time",
+        "last_checked",
+        "rotate_on_date",
+        "selector1_cname",
+        "selector1_key_size",
+        "selector2_cname",
+        "selector2_key_size",
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangedkim"
+      ]
+    },
+    {
+      "event_name": "m365.exchange_mailbox",
+      "domain": "m365",
+      "attr_keys": [
+        "account_disabled",
+        "archive_guid",
+        "archive_state",
+        "archive_status",
+        "audit_enabled",
+        "audit_log_age_limit",
+        "compliance_tag_hold_applied",
+        "deliver_to_mailbox_and_forward",
+        "display_name",
+        "email_addresses",
+        "exchange_guid",
+        "external_directory_object_id",
+        "hidden_from_address_lists",
+        "id",
+        "ingest_transport",
+        "is_dir_synced",
+        "is_inactive_mailbox",
+        "is_mailbox_enabled",
+        "is_resource",
+        "is_shared",
+        "issue_warning_quota",
+        "litigation_hold_duration",
+        "litigation_hold_enabled",
+        "mailbox_plan",
+        "message_copy_for_send_on_behalf_enabled",
+        "message_copy_for_sent_as_enabled",
+        "primary_smtp_address",
+        "prohibit_send_quota",
+        "prohibit_send_receive_quota",
+        "recipient_type_details",
+        "retain_deleted_items_for",
+        "retention_hold_enabled",
+        "single_item_recovery_enabled",
+        "user_principal_name",
+        "when_mailbox_created"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangemailboxes"
+      ]
+    },
+    {
+      "event_name": "m365.exchange_org_config",
+      "domain": "m365",
+      "attr_keys": [
+        "activity_based_authentication_timeout_interval",
+        "audit_disabled",
+        "customer_lockbox_enabled",
+        "display_name",
+        "ews_enabled",
+        "id",
+        "ingest_transport",
+        "is_dehydrated",
+        "is_mixed_mode",
+        "name",
+        "oauth2_client_profile_enabled",
+        "public_folders_enabled"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangeorgconfig"
+      ]
+    },
+    {
+      "event_name": "m365.exchange_remote_domain",
+      "domain": "m365",
+      "attr_keys": [
+        "allowed_oof_type",
+        "auto_forward_enabled",
+        "auto_reply_enabled",
+        "character_set",
+        "content_type",
+        "delivery_report_enabled",
+        "display_sender_name",
+        "domain",
+        "id",
+        "ingest_transport",
+        "is_internal",
+        "is_valid",
+        "line_wrap_size",
+        "meeting_forward_notification_enabled",
+        "name",
+        "ndr_diagnostic_info_enabled",
+        "ndr_enabled",
+        "non_mime_character_set",
+        "target_delivery_domain",
+        "tnef_enabled",
+        "trusted_mail_inbound_enabled",
+        "trusted_mail_outbound_enabled",
+        "use_simple_display_name",
+        "when_changed",
+        "when_created"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangeremotedomains"
+      ]
+    },
+    {
+      "event_name": "m365.exchange_transport_rule",
+      "domain": "m365",
+      "attr_keys": [
+        "action_types",
+        "apply_rights_protection_template",
+        "blind_copy_to",
+        "condition_types",
+        "created_by",
+        "delete_message",
+        "description",
+        "from_scope",
+        "id",
+        "ingest_transport",
+        "is_valid",
+        "last_modified_by",
+        "manually_modified",
+        "name",
+        "prepend_subject",
+        "priority",
+        "quarantine",
+        "redirect_message_to",
+        "redirects_mail",
+        "rule_error_action",
+        "rule_mode",
+        "sender_address_location",
+        "set_audit_severity",
+        "state",
+        "stop_rule_processing",
+        "when_changed"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangetransportrules"
+      ]
+    },
+    {
+      "event_name": "m365.message_trace",
+      "domain": "m365",
+      "attr_keys": [
+        "from_ip",
+        "ingest_transport",
+        "internet_message_id",
+        "message_trace_id",
+        "received_time",
+        "recipient_address",
+        "sender_address",
+        "size",
+        "status",
+        "subject",
+        "to_ip"
+      ],
+      "packages": [
+        "internal/collectors/m365/messagetrace"
+      ]
+    },
+    {
+      "event_name": "m365.service_health_issue",
+      "domain": "m365",
+      "attr_keys": [
+        "classification",
+        "feature",
+        "feature_group",
+        "id",
+        "impact_description",
+        "is_resolved",
+        "last_modified_date_time",
+        "origin",
+        "service",
+        "start_date_time",
+        "status",
+        "title"
+      ],
+      "packages": [
+        "internal/collectors/m365/servicehealth"
+      ]
+    },
+    {
+      "event_name": "m365.service_message",
+      "domain": "m365",
+      "attr_keys": [
+        "action_required_by_date_time",
+        "category",
+        "end_date_time",
+        "has_attachments",
+        "id",
+        "is_major_change",
+        "last_modified_date_time",
+        "message_body",
+        "services",
+        "severity",
+        "start_date_time",
+        "title"
+      ],
+      "packages": [
+        "internal/collectors/m365/servicemessage"
+      ]
+    },
+    {
+      "event_name": "m365.sharepoint_settings",
+      "domain": "m365",
+      "attr_keys": [
+        "external_resharing_enabled",
+        "idle_session_signout_enabled",
+        "legacy_auth_enabled",
+        "sharing_capability",
+        "sharing_domain_restriction_mode",
+        "unmanaged_sync_restricted"
+      ],
+      "packages": [
+        "internal/collectors/m365/sharepointsettings"
+      ]
+    },
+    {
+      "event_name": "m365.team",
+      "domain": "m365",
+      "attr_keys": [
+        "description",
+        "display_name",
+        "guests_count",
+        "id",
+        "is_archived",
+        "members_count",
+        "owners_count",
+        "visibility"
+      ],
+      "packages": [
+        "internal/collectors/m365/teams"
+      ]
+    },
+    {
+      "event_name": "m365.team_channel",
+      "domain": "m365",
+      "attr_keys": [
+        "display_name",
+        "email_address",
+        "files_folder_web_url",
+        "id",
+        "is_archived",
+        "membership_type",
+        "team_display_name",
+        "team_id"
+      ],
+      "packages": [
+        "internal/collectors/m365/teams"
+      ]
+    },
+    {
+      "event_name": "m365.teams_app",
+      "domain": "m365",
+      "attr_keys": [
+        "app_display_name",
+        "app_id",
+        "distribution_method",
+        "external_id",
+        "has_rsc_permissions",
+        "rsc_permissions",
+        "scope",
+        "team_display_name",
+        "team_id"
+      ],
+      "packages": [
+        "internal/collectors/m365/teams"
+      ]
+    },
+    {
+      "event_name": "mdca.discovery_parse",
+      "domain": "mdca",
+      "attr_keys": [
+        "cloud_services_count",
+        "id",
+        "ingest_transport",
+        "input_stream_id",
+        "is_success",
+        "state",
+        "template",
+        "transactions_count"
+      ],
+      "packages": [
+        "internal/collectors/mdca/discoveryparse"
+      ]
+    },
+    {
+      "event_name": "purview.dlp_policy",
+      "domain": "purview",
+      "attr_keys": [
+        "bound_workloads",
+        "enforcement_mode",
+        "policy_id",
+        "policy_name",
+        "when_changed_utc",
+        "when_rules_changed_utc"
+      ],
+      "packages": [
+        "internal/collectors/purview/dlppolicies"
+      ]
+    },
+    {
+      "event_name": "purview.dlp_rule",
+      "domain": "purview",
+      "attr_keys": [
+        "actions",
+        "enabled",
+        "enforcement_mode",
+        "last_modified_utc",
+        "management_rule_id",
+        "max_confidence",
+        "max_count",
+        "min_confidence",
+        "min_count",
+        "policy_id",
+        "rule_id",
+        "rule_name",
+        "sensitive_info_type_ids",
+        "severity",
+        "workload"
+      ],
+      "packages": [
+        "internal/collectors/purview/dlppolicies"
+      ]
+    },
+    {
+      "event_name": "purview.ediscovery_case",
+      "domain": "purview",
+      "attr_keys": [
+        "closed_date_time",
+        "created_date_time",
+        "description",
+        "display_name",
+        "external_id",
+        "id",
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/purview/ediscoverycases"
+      ]
+    },
+    {
+      "event_name": "purview.retention_event_type",
+      "domain": "purview",
+      "attr_keys": [
+        "description",
+        "id",
+        "name"
+      ],
+      "packages": [
+        "internal/collectors/purview/retentionlabels"
+      ]
+    },
+    {
+      "event_name": "purview.retention_label",
+      "domain": "purview",
+      "attr_keys": [
+        "action_after_retention",
+        "behavior_during_retention",
+        "description_for_admins",
+        "description_for_users",
+        "id",
+        "name",
+        "retention_trigger"
+      ],
+      "packages": [
+        "internal/collectors/purview/retentionlabels"
+      ]
+    },
+    {
+      "event_name": "purview.sensitivity_label",
+      "domain": "purview",
+      "attr_keys": [
+        "applicable_to",
+        "description",
+        "id",
+        "name",
+        "priority"
+      ],
+      "packages": [
+        "internal/collectors/purview/sensitivitylabels"
+      ]
+    }
+  ]
+}

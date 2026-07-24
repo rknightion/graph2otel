@@ -5,7 +5,7 @@ directory:
 
 | Directory | Assets | Format | Target Grafana Cloud folder |
 | --- | --- | --- | --- |
-| `dashboards/` | 3 dashboards | raw Grafana dashboard JSON (top-level `uid`) | folder of your choice |
+| `dashboards/` | 6 dashboards (**generated**) | raw Grafana dashboard JSON (top-level `uid`) | folder of your choice |
 | `alerts/` | 10 alert rules + 1 contact-point/policy file | Grafana **file-provisioning** YAML (`apiVersion: 1` + `groups:`) | `graph2otel` |
 | `recording-rules/` | 2 recording rules | Grafana-managed rule objects (provisioning API JSON) | `graph2otel derived metrics` |
 
@@ -19,31 +19,59 @@ and path in this file so a successor can reproduce the production deploy.
 
 ## Dashboards
 
-The three dashboards are plain Grafana dashboard JSON — each has a stable
+The six dashboards are plain Grafana dashboard JSON — each has a stable
 top-level `uid` that is also its slug:
 
 | File | UID / slug | Title |
 | --- | --- | --- |
-| `dashboards/entra-compliance-overview.json` | `graph2otel-entra-compliance` | graph2otel: Entra ID compliance overview |
-| `dashboards/graph2otel-self-observability.json` | `graph2otel-self-obs` | graph2otel / Self-Observability |
 | `dashboards/intune-fleet-overview.json` | `intune-fleet-overview` | Intune Fleet Overview |
+| `dashboards/entra-compliance-overview.json` | `graph2otel-entra-compliance` | graph2otel: Entra ID compliance overview |
+| `dashboards/m365-services-overview.json` | `graph2otel-m365-services` | graph2otel: Microsoft 365 services overview |
+| `dashboards/defender-security-overview.json` | `graph2otel-defender-security` | graph2otel: Defender security posture |
+| `dashboards/purview-compliance-overview.json` | `graph2otel-purview-compliance` | graph2otel: Purview data governance |
+| `dashboards/graph2otel-self-observability.json` | `graph2otel-self-obs` | graph2otel / Self-Observability |
 
 Push each with `gcx dashboards` (the UID is the update key):
 
 ```bash
 # First time — create by file:
-gcx dashboards create -f dashboards/entra-compliance-overview.json
-gcx dashboards create -f dashboards/graph2otel-self-observability.json
-gcx dashboards create -f dashboards/intune-fleet-overview.json
+for f in dashboards/*.json; do gcx dashboards create -f "$f"; done
 
 # Subsequent updates — update by UID:
-gcx dashboards update graph2otel-entra-compliance -f dashboards/entra-compliance-overview.json
-gcx dashboards update graph2otel-self-obs         -f dashboards/graph2otel-self-observability.json
-gcx dashboards update intune-fleet-overview       -f dashboards/intune-fleet-overview.json
+gcx dashboards update intune-fleet-overview          -f dashboards/intune-fleet-overview.json
+gcx dashboards update graph2otel-entra-compliance    -f dashboards/entra-compliance-overview.json
+gcx dashboards update graph2otel-m365-services       -f dashboards/m365-services-overview.json
+gcx dashboards update graph2otel-defender-security   -f dashboards/defender-security-overview.json
+gcx dashboards update graph2otel-purview-compliance  -f dashboards/purview-compliance-overview.json
+gcx dashboards update graph2otel-self-obs            -f dashboards/graph2otel-self-observability.json
 ```
 
 You can also import any of them in the Grafana UI: **Dashboards → New →
 Import**, upload the JSON.
+
+### They are GENERATED — do not hand-edit them
+
+`dashboards/*.json` is built by `grafana/build_dashboard.py` from
+`grafana/boards/*.py` and `spec/signal-catalog.json`, and `make grafana-check`
+(a required CI leg) fails on a hand-edited file. To change a panel, edit the
+board module and run `make dashboard`. See
+[`grafana/AUTHORING.md`](../grafana/AUTHORING.md).
+
+The same gate fails when a metric graph2otel emits reaches no panel at all, so
+the dashboards cannot silently fall behind the collectors: `spec/signal-catalog.json`
+is itself generated from what the collectors' tests actually emit, with no human
+step between a new collector and the gate noticing it.
+
+### Log panels need a Loki datasource
+
+Every dashboard carries a **Logs** row (#162) built on
+`{service_name="graph2otel"} | event_name=…`, which needs a **Loki** datasource
+selected in the `Loki datasource` dropdown. Without one those panels say so
+rather than looking broken; the metric panels are unaffected.
+
+Log attributes are Loki **structured metadata**, not stream labels — only
+`service_name` is a stream label. `{event_name="entra.signin"}` matches zero rows
+silently. See [signals.md](signals.md#querying-the-logs-in-loki--attributes-are-structured-metadata-not-stream-labels).
 
 ### Datasource UID — nothing to substitute
 
