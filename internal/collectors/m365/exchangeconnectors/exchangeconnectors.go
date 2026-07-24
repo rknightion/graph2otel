@@ -43,20 +43,42 @@
 // apart deliberately; folding them would produce a label whose meaning changes
 // per row.
 //
-// # The outbound half is DELIBERATELY THIN — live-measured 2026-07-23
+// # The two directions are DIFFERENT RECORD SHAPES, not one shape with extras
 //
-// m7kni has two inbound connectors and ZERO outbound ones, so the outbound
-// record's field shape has never been on the wire. This collector therefore maps
-// only the fields proven present on a real connector record, and does NOT guess
-// at the outbound-only ones (smart hosts, recipient domains, the MX-record and
-// transport-rule-scoping flags). Writing those from Microsoft's documentation is
-// exactly the mistake #142/#165 record — a wrong field name maps to nothing and
-// looks healthy doing it.
+// This is the fact the collector is built around, and it was only settled when an
+// outbound connector first existed on m7kni (live-measured 2026-07-24, #253).
+// The two cmdlets return overlapping but distinct field sets:
 //
-// The consequence is honest and bounded: an outbound connector is COUNTED, rated
-// and twinned the moment it exists, but its twin will not yet say where the mail
-// goes. #253 stays open for that, and its unblock condition is one outbound
-// connector existing on a tenant this poller can read.
+//   - INBOUND-only: RequireTls, SenderIPAddresses, SenderDomains,
+//     TrustedOrganizations, ClientHostNames, AssociatedAcceptedDomains,
+//     RestrictDomainsTo{IPAddresses,Certificate}, TreatMessagesAsInternal,
+//     TlsSenderCertificateName, ScanAndDropRecipients, every EF* field.
+//   - OUTBOUND-only: SmartHosts, RecipientDomains, UseMXRecord,
+//     RouteAllMessagesViaOnPremises, IsTransportRuleScoped, AllAcceptedDomains,
+//     SenderRewritingEnabled, TestMode, TlsSettings, TlsDomain, MtaStsMode,
+//     SmtpDaneMode, ValidationRecipients, IsValidated,
+//     LastValidationTimestamp.
+//   - Shared: Enabled, ConnectorType, ConnectorSource, Comment,
+//     CloudServicesMailEnabled, AdminDisplayName, Name, Identity, Guid, IsValid,
+//     WhenCreatedUTC, WhenChangedUTC.
+//
+// Two consequences drive the code, and both were live DEFECTS in the first
+// version rather than hypotheticals:
+//
+//  1. A boolean is stamped only when the wire carried one (setBoolIfPresent).
+//     An unconditional stamp published six fabricated `false` values on every
+//     outbound twin — each a positive claim that a mail-security control was off,
+//     about a field Microsoft never sent.
+//  2. TLS is read per direction (hasTLS). Inbound uses the boolean RequireTls;
+//     outbound has no such field and uses the TlsSettings enum. Reading
+//     RequireTls off an outbound record returned false every time, so the
+//     without_tls gauge counted EVERY outbound connector as cleartext — a wrong
+//     number on a security posture metric, not a missing attribute.
+//
+// TlsSettings' member names are deliberately NOT enumerated anywhere here: one
+// value ("CertificateValidation") has ever been observed, and the rest would have
+// to come from documentation (#142/#165). Presence of a non-empty setting is the
+// honest test a single sample supports.
 //
 // A state snapshot, not an event stream: the twins are stamped at poll time.
 package exchangeconnectors
@@ -143,6 +165,28 @@ const (
 	fieldWhenCreatedUTC               = "WhenCreatedUTC"
 )
 
+// OUTBOUND-only wire field names, read from the one verbatim
+// Get-OutboundConnector record ever observed (m7kni, live-measured 2026-07-24).
+// None of these appears on an inbound record, and none of the inbound-only
+// fields above appears here.
+const (
+	fieldSmartHosts                = "SmartHosts"
+	fieldRecipientDomains          = "RecipientDomains"
+	fieldUseMXRecord               = "UseMXRecord"
+	fieldRouteAllMessagesViaOnPrem = "RouteAllMessagesViaOnPremises"
+	fieldIsTransportRuleScoped     = "IsTransportRuleScoped"
+	fieldAllAcceptedDomains        = "AllAcceptedDomains"
+	fieldSenderRewritingEnabled    = "SenderRewritingEnabled"
+	fieldTestMode                  = "TestMode"
+	fieldTLSSettings               = "TlsSettings"
+	fieldTLSDomain                 = "TlsDomain"
+	fieldMtaStsMode                = "MtaStsMode"
+	fieldSmtpDaneMode              = "SmtpDaneMode"
+	fieldValidationRecipients      = "ValidationRecipients"
+	fieldIsValidated               = "IsValidated"
+	fieldLastValidationTimestamp   = "LastValidationTimestamp"
+)
+
 // Collector reads Exchange Online inbound and outbound connectors.
 type Collector struct {
 	c collectors.EXOClient
@@ -196,7 +240,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		}
 		for _, r := range recs {
 			counts[[2]string{side.direction, boolStr(boolVal(r, fieldEnabled))}]++
-			if !boolVal(r, fieldRequireTLS) {
+			if !hasTLS(r, side.direction) {
 				noTLS[side.direction]++
 			}
 			e.LogEvent(connectorTwin(r, side.direction))
@@ -241,10 +285,11 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 func connectorTwin(r map[string]any, direction string) telemetry.Event {
 	name := str(r, fieldName)
 	enabled := boolVal(r, fieldEnabled)
-	requireTLS := boolVal(r, fieldRequireTLS)
+	requireTLS := hasTLS(r, direction)
 	handMade := str(r, fieldConnectorSource) == sourceAdminUI
 
 	attrs := telemetry.Attrs{}
+	// Fields present on BOTH record shapes.
 	telemetry.SetStr(attrs, semconv.AttrDirection, direction)
 	telemetry.SetStr(attrs, semconv.AttrName, name)
 	telemetry.SetStr(attrs, semconv.AttrIdentity, str(r, fieldIdentity))
@@ -254,20 +299,26 @@ func connectorTwin(r map[string]any, direction string) telemetry.Event {
 	telemetry.SetStr(attrs, semconv.AttrConnectorSource, str(r, fieldConnectorSource))
 	telemetry.SetStr(attrs, semconv.AttrComment, str(r, fieldComment))
 	telemetry.SetStr(attrs, semconv.AttrAdminDisplayName, str(r, fieldAdminDisplayName))
-	telemetry.SetBool(attrs, semconv.AttrRequireTls, requireTLS)
-	telemetry.SetBool(attrs, semconv.AttrRestrictDomainsToIpAddresses, boolVal(r, fieldRestrictDomainsToIPAddresses))
-	telemetry.SetBool(attrs, semconv.AttrRestrictDomainsToCertificate, boolVal(r, fieldRestrictDomainsToCertificate))
-	telemetry.SetBool(attrs, semconv.AttrCloudServicesMailEnabled, boolVal(r, fieldCloudServicesMailEnabled))
-	telemetry.SetBool(attrs, semconv.AttrTreatMessagesAsInternal, boolVal(r, fieldTreatMessagesAsInternal))
-	telemetry.SetBool(attrs, semconv.AttrEnhancedFilteringTestMode, boolVal(r, fieldEFTestMode))
-	telemetry.SetBool(attrs, semconv.AttrEnhancedFilteringSkipLastIp, boolVal(r, fieldEFSkipLastIP))
-	telemetry.SetBool(attrs, semconv.AttrIsValid, boolVal(r, fieldIsValid))
+	setBoolIfPresent(attrs, semconv.AttrCloudServicesMailEnabled, r, fieldCloudServicesMailEnabled)
+	setBoolIfPresent(attrs, semconv.AttrIsValid, r, fieldIsValid)
 	telemetry.SetStr(attrs, semconv.AttrWhenCreated, str(r, fieldWhenCreatedUTC))
 	telemetry.SetStr(attrs, semconv.AttrWhenChanged, str(r, fieldWhenChangedUTC))
+
+	// INBOUND-only. Every one of these is ABSENT from an outbound record, so each
+	// is stamped only when the wire actually carried it (live-measured
+	// 2026-07-24). An unconditional bool stamp here published six fabricated
+	// `false` values on every outbound twin — a positive claim that a security
+	// control was off, about a field Microsoft never sent.
+	setBoolIfPresent(attrs, semconv.AttrRequireTls, r, fieldRequireTLS)
+	setBoolIfPresent(attrs, semconv.AttrRestrictDomainsToIpAddresses, r, fieldRestrictDomainsToIPAddresses)
+	setBoolIfPresent(attrs, semconv.AttrRestrictDomainsToCertificate, r, fieldRestrictDomainsToCertificate)
+	setBoolIfPresent(attrs, semconv.AttrTreatMessagesAsInternal, r, fieldTreatMessagesAsInternal)
+	setBoolIfPresent(attrs, semconv.AttrEnhancedFilteringTestMode, r, fieldEFTestMode)
+	setBoolIfPresent(attrs, semconv.AttrEnhancedFilteringSkipLastIp, r, fieldEFSkipLastIP)
 	// TlsSenderCertificateName is null when no certificate is pinned — omitted
 	// rather than stamped empty, so "no certificate" and "" stay distinguishable.
 	telemetry.SetStr(attrs, semconv.AttrTlsSenderCertificateName, str(r, fieldTLSSenderCertificateName))
-	// The list fields are where a connector actually says what it trusts. Emitted
+	// The list fields are where an INBOUND connector says what it trusts. Emitted
 	// verbatim, priority suffixes and all (#142) — "smtp:*;1" is the wire value,
 	// not something to parse into a domain and a number.
 	setStrList(attrs, semconv.AttrSenderIpAddresses, r, fieldSenderIPAddresses)
@@ -279,6 +330,29 @@ func connectorTwin(r map[string]any, direction string) telemetry.Event {
 	setStrList(attrs, semconv.AttrEnhancedFilteringSkipIps, r, fieldEFSkipIPs)
 	setStrList(attrs, semconv.AttrEnhancedFilteringSkipMailGateway, r, fieldEFSkipMailGateway)
 	setStrList(attrs, semconv.AttrEnhancedFilteringUsers, r, fieldEFUsers)
+
+	// OUTBOUND-only. SmartHosts and RecipientDomains are the pair that answer
+	// WHERE THE MAIL GOES — the single most useful fact about an outbound
+	// connector, and the gap #253 stayed open for.
+	setStrList(attrs, semconv.AttrSmartHosts, r, fieldSmartHosts)
+	setStrList(attrs, semconv.AttrRecipientDomains, r, fieldRecipientDomains)
+	setStrList(attrs, semconv.AttrValidationRecipients, r, fieldValidationRecipients)
+	setBoolIfPresent(attrs, semconv.AttrUseMxRecord, r, fieldUseMXRecord)
+	setBoolIfPresent(attrs, semconv.AttrRouteAllMessagesViaOnPremises, r, fieldRouteAllMessagesViaOnPrem)
+	setBoolIfPresent(attrs, semconv.AttrIsTransportRuleScoped, r, fieldIsTransportRuleScoped)
+	setBoolIfPresent(attrs, semconv.AttrAllAcceptedDomains, r, fieldAllAcceptedDomains)
+	setBoolIfPresent(attrs, semconv.AttrSenderRewritingEnabled, r, fieldSenderRewritingEnabled)
+	setBoolIfPresent(attrs, semconv.AttrTestMode, r, fieldTestMode)
+	setBoolIfPresent(attrs, semconv.AttrIsValidated, r, fieldIsValidated)
+	// TlsSettings / TlsDomain are outbound's TLS axis — an enum string plus an
+	// optional pinned domain, NOT the inbound boolean. Emitted verbatim; the
+	// member names are deliberately not enumerated anywhere in this collector,
+	// because exactly one value has ever been observed on the wire.
+	telemetry.SetStr(attrs, semconv.AttrTlsSettings, str(r, fieldTLSSettings))
+	telemetry.SetStr(attrs, semconv.AttrTlsDomain, str(r, fieldTLSDomain))
+	telemetry.SetStr(attrs, semconv.AttrMtaStsMode, str(r, fieldMtaStsMode))
+	telemetry.SetStr(attrs, semconv.AttrSmtpDaneMode, str(r, fieldSmtpDaneMode))
+	telemetry.SetStr(attrs, semconv.AttrLastValidationTimestamp, str(r, fieldLastValidationTimestamp))
 
 	sev := telemetry.SeverityInfo
 	body := fmt.Sprintf("%s connector %q: enabled=%t require_tls=%t source=%s",
@@ -311,6 +385,46 @@ func str(m map[string]any, key string) string {
 func boolVal(m map[string]any, key string) bool {
 	b, _ := m[key].(bool)
 	return b
+}
+
+// setBoolIfPresent stamps a boolean attribute ONLY when the wire actually
+// carried a bool for it.
+//
+// The two connector record shapes overlap in only a handful of fields, so
+// reading an inbound-only boolean off an outbound record yields "absent" — and
+// an unconditional stamp renders that as a confident `false`. On a record
+// describing mail-flow security controls, a fabricated `false` is a claim that a
+// protection is switched off. Absent and off are different answers and this keeps
+// them different (live-measured 2026-07-24, #253; same class as the
+// zero-is-absent traps in intune.hardware_inventory).
+func setBoolIfPresent(attrs telemetry.Attrs, key string, m map[string]any, field string) {
+	if b, ok := m[field].(bool); ok {
+		telemetry.SetBool(attrs, key, b)
+	}
+}
+
+// hasTLS reports whether a connector demands TLS, reading whichever field its
+// direction actually uses.
+//
+// The two directions express this DIFFERENTLY, and conflating them is a wrong
+// number rather than a cosmetic slip: inbound carries the boolean RequireTls,
+// while an outbound record has no such field and instead carries TlsSettings, an
+// enum string (plus an optional TlsDomain). Reading RequireTls off an outbound
+// record therefore returned false for every outbound connector ever, so the
+// without_tls gauge counted them all as cleartext regardless of their real
+// configuration.
+//
+// Outbound is judged by TlsSettings being NON-EMPTY rather than by matching
+// member names. Exactly one value has been observed on the wire
+// ("CertificateValidation", live-measured 2026-07-24); enumerating the others
+// would mean taking them from documentation, which is how a mapper ends up
+// matching nothing and looking healthy (#142/#165). Presence is the honest test
+// the single sample supports.
+func hasTLS(r map[string]any, direction string) bool {
+	if direction == directionOutbound {
+		return strings.TrimSpace(str(r, fieldTLSSettings)) != ""
+	}
+	return boolVal(r, fieldRequireTLS)
 }
 
 // boolStr renders a bool as the metric label value.

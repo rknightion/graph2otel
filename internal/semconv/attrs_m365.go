@@ -261,3 +261,33 @@ const (
 	AttrTreatMessagesAsInternal          = "treat_messages_as_internal"
 	AttrTrustedOrganizations             = "trusted_organizations"
 )
+
+// OUTBOUND-only connector attributes (#253). An outbound Get-OutboundConnector
+// record is a different shape from an inbound one, not a superset of it: it
+// carries none of RequireTls, the Sender*/Trusted*/EF* fields or
+// TlsSenderCertificateName, and expresses TLS through AttrTlsSettings +
+// AttrTlsDomain instead. Live-measured 2026-07-24 against the one outbound
+// connector m7kni has ever had.
+//
+// AttrSmartHosts and AttrRecipientDomains are the pair that answer WHERE THE MAIL
+// GOES, which is the whole reason an outbound connector matters. AttrTestMode is
+// the connector's own validation flag and is unrelated to
+// AttrEnhancedFilteringTestMode above — different wire fields, different
+// meanings, so deliberately not folded.
+const (
+	AttrAllAcceptedDomains            = "all_accepted_domains"
+	AttrIsTransportRuleScoped         = "is_transport_rule_scoped"
+	AttrIsValidated                   = "is_validated"
+	AttrLastValidationTimestamp       = "last_validation_timestamp"
+	AttrMtaStsMode                    = "mta_sts_mode"
+	AttrRecipientDomains              = "recipient_domains"
+	AttrRouteAllMessagesViaOnPremises = "route_all_messages_via_on_premises"
+	AttrSenderRewritingEnabled        = "sender_rewriting_enabled"
+	AttrSmartHosts                    = "smart_hosts"
+	AttrSmtpDaneMode                  = "smtp_dane_mode"
+	AttrTestMode                      = "test_mode"
+	AttrTlsDomain                     = "tls_domain"
+	AttrTlsSettings                   = "tls_settings"
+	AttrUseMxRecord                   = "use_mx_record"
+	AttrValidationRecipients          = "validation_recipients"
+)
