@@ -23,14 +23,14 @@ tool is beta-specific except the default `metadata_url`.
 
 ## Coverage
 
-19 packages, 21 collectors, 62 beta operations. The authoritative list is
+26 packages, 28 collectors, 79 beta operations. The authoritative list is
 `spec/graph-beta-surface.json`; `TestBetaDriftDocNamesEveryWatchedCollector` fails if a
 collector listed there stops being named below.
 
 | domain | collectors |
 | --- | --- |
-| Entra ID | `entra.agent_risk_detections`, `entra.app_ownership`, `entra.gsa`, `entra.recommendations`, `entra.risky_agents`, `entra.signin_activity`, `entra.signins.non_interactive`, `entra.signins.service_principal`, `entra.signins.managed_identity` |
-| Intune | `intune.apple_tokens`, `intune.autopilot`, `intune.autopilot_events`, `intune.certificates`, `intune.connectors`, `intune.device_encryption`, `intune.endpoint_analytics`, `intune.gpo_analytics`, `intune.hardware_inventory`, `intune.remediation_run_states`, `intune.scripts`, `intune.settings_catalog`, `intune.updates` |
+| Entra ID | `entra.agent_risk_detections`, `entra.app_ownership`, `entra.gsa`, `entra.pim_alerts`, `entra.recommendations`, `entra.risky_agents`, `entra.signin_activity`, `entra.signins.non_interactive`, `entra.signins.service_principal`, `entra.signins.managed_identity` |
+| Intune | `intune.apple_tokens`, `intune.autopilot`, `intune.autopilot_events`, `intune.certificates`, `intune.cloud_pki`, `intune.connectors`, `intune.device_encryption`, `intune.endpoint_analytics`, `intune.gpo_analytics`, `intune.hardware_inventory`, `intune.remediation_run_states`, `intune.scripts`, `intune.settings_catalog`, `intune.updates`, `intune.windows_updates` |
 | M365 | `m365.teams`, `m365.unified_audit` |
 | Purview | `purview.dlp_policies` |
 

@@ -1,0 +1,58 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.rbac.role_assignments",
+      "Unit": "{assignment}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "is_built_in",
+        "scope_type"
+      ]
+    },
+    {
+      "Name": "intune.rbac.role_definitions",
+      "Unit": "{role}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "is_built_in",
+        "is_built_in_role_definition",
+        "role_definition_type"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.role_assignment",
+      "AttrKeys": [
+        "description",
+        "display_name",
+        "is_built_in",
+        "members",
+        "members_count",
+        "resource_scopes",
+        "role_assignment_id",
+        "role_id",
+        "role_name",
+        "role_scope_tag_ids",
+        "scope_members",
+        "scope_type"
+      ]
+    },
+    {
+      "EventName": "intune.role_definition",
+      "AttrKeys": [
+        "actions",
+        "assignment_count",
+        "description",
+        "display_name",
+        "is_built_in",
+        "is_built_in_role_definition",
+        "not_allowed_actions",
+        "role_definition_type",
+        "role_id",
+        "role_name",
+        "role_scope_tag_ids"
+      ]
+    }
+  ]
+}

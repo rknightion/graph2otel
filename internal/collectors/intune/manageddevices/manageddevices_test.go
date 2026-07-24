@@ -1041,3 +1041,34 @@ func TestUnmappedComplianceStateIsReported(t *testing.T) {
 		t.Errorf("fleet count = %v, want 2 — an unexpected value must not drop a device", total)
 	}
 }
+
+// TestCaseVariantComplianceStateBucketsAndIsNotReported pins the second half of
+// #261's fix. complianceBucketFor case-folds, so a member arriving in another
+// casing is MAPPED, not a hole — and the watchdog must stay silent on it. A
+// watchdog that fires on data the collector handles correctly is worse than no
+// watchdog (#234).
+func TestCaseVariantComplianceStateBucketsAndIsNotReported(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		overviewURL(): overviewFixture,
+		fleetURL(): devicesPage(
+			device("InGracePeriod", "Windows 10", true, daysAgo(0)),
+			device("ConfigManager", "Windows 10", true, daysAgo(0)),
+		),
+	}}
+	rec := telemetrytest.New()
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if got := findings(rec); len(got) != 0 {
+		t.Errorf("a mapped member in another casing produced findings %v, want none", got)
+	}
+	got := map[string]float64{}
+	for _, p := range rec.MetricPoints(countMetricName) {
+		got[p.Attrs[semconv.AttrComplianceState]] += p.Value
+	}
+	for _, want := range []string{"in_grace_period", "config_manager"} {
+		if got[want] != 1 {
+			t.Errorf("series compliance_state=%s = %v, want 1; all=%v", want, got[want], got)
+		}
+	}
+}

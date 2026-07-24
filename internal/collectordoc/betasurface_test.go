@@ -3,6 +3,7 @@ package collectordoc
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -212,6 +213,44 @@ func TestBetaDriftDocNamesEveryWatchedCollector(t *testing.T) {
 				t.Errorf("docs/api-drift.md does not name the watched collector %s in its coverage table", c)
 			}
 		}
+	}
+}
+
+// TestBetaDriftDocCountsMatchTheManifest gates the summary line in
+// docs/api-drift.md ("N packages, N collectors, N beta operations").
+//
+// The sibling test above proves every watched collector is NAMED, which is why
+// that table stays honest. Nothing checked the COUNTS, and they duly rotted: the
+// line read "19 packages, 21 collectors, 62 beta operations" while the manifest
+// held 23/25/72, then drifted further as three beta collectors landed in one
+// day. A stale count is worse than no count — a reader takes it as a measurement
+// of the canary's reach and concludes coverage is a third smaller than it is.
+//
+// Collectors are counted DISTINCT across packages: one collector may consume
+// beta operations from more than one package, and counting it twice would make
+// the number disagree with the table it summarizes.
+func TestBetaDriftDocCountsMatchTheManifest(t *testing.T) {
+	man := loadBetaManifest(t)
+	collectors := map[string]struct{}{}
+	ops := 0
+	for _, p := range man.Packages {
+		ops += len(p.Operations)
+		for _, c := range p.Collectors {
+			collectors[c] = struct{}{}
+		}
+	}
+
+	want := fmt.Sprintf("%d packages, %d collectors, %d beta operations.",
+		len(man.Packages), len(collectors), ops)
+
+	doc, err := os.ReadFile(repoPath("docs", "api-drift.md"))
+	if err != nil {
+		t.Fatalf("read docs/api-drift.md: %v", err)
+	}
+	if !strings.Contains(string(doc), want) {
+		t.Errorf("docs/api-drift.md does not state the manifest's real size.\n"+
+			"want the line to read: %q\n"+
+			"update that sentence in docs/api-drift.md — the manifest is the source of truth, not the prose.", want)
 	}
 }
 

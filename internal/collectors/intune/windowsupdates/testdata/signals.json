@@ -1,0 +1,67 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.windows_updates.deployments",
+      "Unit": "{deployment}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "catalog_entry_type",
+        "deployment_effective_state",
+        "deployment_requested_state"
+      ]
+    },
+    {
+      "Name": "intune.windows_updates.update_policies",
+      "Unit": "{policy}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "update_category"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.windows_update_deployment",
+      "AttrKeys": [
+        "audience_id",
+        "catalog_entry_id",
+        "catalog_entry_type",
+        "created_date_time",
+        "days_until_forced_reboot",
+        "deployment_effective_state",
+        "deployment_id",
+        "deployment_requested_state",
+        "deployment_state_matches_request",
+        "deployment_state_reasons",
+        "display_name",
+        "is_expeditable",
+        "is_expedited",
+        "is_readiness_test",
+        "last_modified_date_time",
+        "update_cadence",
+        "update_classification",
+        "update_content_type",
+        "update_release_date_time"
+      ]
+    },
+    {
+      "EventName": "intune.windows_update_policy",
+      "AttrKeys": [
+        "audience_id",
+        "auto_enrollment_update_categories",
+        "compliance_change_rule_types",
+        "content_filter_cadences",
+        "content_filter_classifications",
+        "content_filter_types",
+        "created_date_time",
+        "deployment_start_delays",
+        "is_hotpatch_enabled",
+        "offer_as_optional",
+        "offer_while_recommended_by",
+        "policy_id",
+        "rule_last_evaluated_date_times",
+        "rules_never_evaluated"
+      ]
+    }
+  ]
+}

@@ -2,7 +2,12 @@ package endpointanalytics
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"net/url"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +19,19 @@ import (
 type fakeGraph struct {
 	bodies map[string]string
 	errs   map[string]error
+
+	// postErr, when set, fails every $batch POST.
+	postErr error
+	// subStatus, when non-zero, is the status every $batch sub-response carries
+	// instead of 200 — how an unlicensed tenant answers a fan-out.
+	subStatus int
+	// gets records every GET url, so a test can assert a URL was NEVER fetched.
+	gets []string
+	// batchURLs records every sub-request URL the collector asked for, in the
+	// order it asked, plus one entry per POST in batchSizes — so a test can pin
+	// the fan-out shape (one call per 20 devices), not merely its output.
+	batchURLs  []string
+	batchSizes []int
 }
 
 func (f *fakeGraph) RawGet(ctx context.Context, url string) ([]byte, error) {
@@ -21,6 +39,7 @@ func (f *fakeGraph) RawGet(ctx context.Context, url string) ([]byte, error) {
 }
 
 func (f *fakeGraph) RawGetWithHeaders(_ context.Context, url string, _ map[string]string) ([]byte, error) {
+	f.gets = append(f.gets, url)
 	if err, ok := f.errs[url]; ok {
 		return nil, err
 	}
@@ -29,6 +48,65 @@ func (f *fakeGraph) RawGetWithHeaders(_ context.Context, url string, _ map[strin
 		return nil, errors.New("no canned body for " + url)
 	}
 	return []byte(b), nil
+}
+
+// RawPost fakes Graph's JSON batching endpoint. Each sub-request URL is
+// service-relative, so it is resolved against the beta root and served from the
+// same canned-body map as a plain GET; a sub-request with no exact canned body
+// falls back to the body for its path with the query stripped, which keeps every
+// test that does not care about the per-device fan-out working unchanged.
+//
+// Sub-responses are returned in REVERSE request order on purpose: Graph does not
+// guarantee response ordering, and correlating by position instead of by id is
+// exactly the bug this fake exists to catch (live-observed 2026-07-24 — a
+// three-device batch came back 2, 1, 0).
+func (f *fakeGraph) RawPost(_ context.Context, url string, body []byte, _ map[string]string) ([]byte, error) {
+	if f.postErr != nil {
+		return nil, f.postErr
+	}
+	if url != "https://graph.microsoft.com/beta/$batch" {
+		return nil, errors.New("unexpected $batch url " + url)
+	}
+	var req struct {
+		Requests []struct {
+			ID     string `json:"id"`
+			Method string `json:"method"`
+			URL    string `json:"url"`
+		} `json:"requests"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		return nil, err
+	}
+	f.batchSizes = append(f.batchSizes, len(req.Requests))
+
+	type subResponse struct {
+		ID     string          `json:"id"`
+		Status int             `json:"status"`
+		Body   json.RawMessage `json:"body"`
+	}
+	subs := make([]subResponse, 0, len(req.Requests))
+	for _, r := range req.Requests {
+		full := "https://graph.microsoft.com/beta" + r.URL
+		f.batchURLs = append(f.batchURLs, full)
+		if f.subStatus != 0 {
+			subs = append(subs, subResponse{ID: r.ID, Status: f.subStatus, Body: json.RawMessage(`{"error":{"code":"Authorization_RequestDenied"}}`)})
+			continue
+		}
+		canned, ok := f.bodies[full]
+		if !ok {
+			base, _, _ := strings.Cut(full, "?")
+			canned, ok = f.bodies[base]
+		}
+		if !ok {
+			subs = append(subs, subResponse{ID: r.ID, Status: 404, Body: json.RawMessage(`{"error":{"code":"ResourceNotFound"}}`)})
+			continue
+		}
+		subs = append(subs, subResponse{ID: r.ID, Status: 200, Body: json.RawMessage(canned)})
+	}
+	slices.Reverse(subs)
+	return json.Marshal(struct {
+		Responses []subResponse `json:"responses"`
+	}{Responses: subs})
 }
 
 var _ collectors.GraphClient = (*fakeGraph)(nil)
@@ -539,6 +617,205 @@ func TestStartupHistoryEmitsPerBootTwinStampedWithStartTime(t *testing.T) {
 	}
 }
 
+// The three m7kni managed-device ids this package's startup-process tests use,
+// verbatim from the live tenant (probed as graph2otel-poller 2026-07-24, #255).
+// deviceC is real and genuinely has ZERO startup-process rows — an empty
+// sub-response is a normal outcome of the fan-out, not a fault.
+const (
+	startupProcDeviceA = "1625d698-7b22-4ed4-912c-3c86d78254e0"
+	startupProcDeviceB = "0703fa65-0894-4cce-8492-f4a3bc15b32b"
+	startupProcDeviceC = "3a96203f-ddf8-4944-8d95-6c7bd928f6a3"
+)
+
+// startupProcFilterURL is the per-device fan-out URL the collector must send.
+// It is spelled out here independently of the collector's own builder so the
+// test pins the WIRE SHAPE, not just the collector's agreement with itself.
+func startupProcFilterURL(id string) string {
+	return startupProcURL + "?$filter=" + url.QueryEscape("managedDeviceId eq '"+id+"'")
+}
+
+// deviceScoresWithIDs builds a userExperienceAnalyticsDeviceScores page whose
+// rows carry the given managed-device ids — the id set the startup-process
+// fan-out keys off.
+func deviceScoresWithIDs(ids ...string) string {
+	rows := make([]string, 0, len(ids))
+	for _, id := range ids {
+		rows = append(rows, fmt.Sprintf(`{"id":%q,"deviceName":%q,"endpointAnalyticsScore":80,"healthStatus":"meetingGoals"}`, id, "device-"+id[:8]))
+	}
+	return `{"value":[` + strings.Join(rows, ",") + `]}`
+}
+
+// TestStartupProcessesFanOutOverEveryKnownDeviceNotTheBareList is the #255
+// regression guard, and it is the one test in this file that fails on the
+// shipped code rather than merely describing it.
+//
+// THE DEFECT (live-measured 2026-07-24, m7kni, verified twice): the bare
+// userExperienceAnalyticsDeviceStartupProcesses list returns rows for exactly
+// ONE device — 5 rows out of the tenant's 27 across 7 devices — and carries NO
+// @odata.nextLink, so nothing in the response says data is missing. Which single
+// device it serves rotates between polls, which is why it read as a "rolling
+// window" rather than as a dropped fetch.
+//
+// The canned bodies below reproduce that exactly: the bare list serves deviceB
+// only, while the per-device filters reach all of deviceA's rows too. A
+// collector that trusts the bare list emits deviceB's one row and looks healthy;
+// the assertion is that it emits every row belonging to the device set it
+// already holds from the device-scores fetch.
+func TestStartupProcessesFanOutOverEveryKnownDeviceNotTheBareList(t *testing.T) {
+	// Verbatim live rows (m7kni, graph2otel-poller 2026-07-24).
+	rowsA := `{"value":[
+	  {"id":"1625d698-7b22-4ed4-912c-3c86d78254e0","managedDeviceId":"1625d698-7b22-4ed4-912c-3c86d78254e0","processName":"MsMpEng","productName":"Windows Defender Antivirus","publisher":"Microsoft Corporation","startupImpactInMs":8038},
+	  {"id":"1625d698-7b22-4ed4-912c-3c86d78254e0","managedDeviceId":"1625d698-7b22-4ed4-912c-3c86d78254e0","processName":"MsSense","productName":"Windows Defender Advanced Threat Protection","publisher":"Microsoft Corporation","startupImpactInMs":4822}
+	]}`
+	rowsB := `{"value":[
+	  {"id":"0703fa65-0894-4cce-8492-f4a3bc15b32b","managedDeviceId":"0703fa65-0894-4cce-8492-f4a3bc15b32b","processName":"WmiPrvSE","productName":"WMI Provider Host","publisher":"Microsoft Corporation","startupImpactInMs":2599}
+	]}`
+
+	g := &fakeGraph{bodies: allEndpoints(map[string]string{
+		deviceScoresURL: deviceScoresWithIDs(startupProcDeviceA, startupProcDeviceB, startupProcDeviceC),
+		// The bare list as the wire actually behaves: ONE device's rows, no nextLink.
+		startupProcURL:                           rowsB,
+		startupProcFilterURL(startupProcDeviceA): rowsA,
+		startupProcFilterURL(startupProcDeviceB): rowsB,
+		startupProcFilterURL(startupProcDeviceC): emptyPage,
+	})}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	byDevice := map[string]int{}
+	for _, r := range logsNamed(rec, eventStartupProcess) {
+		byDevice[r.Attrs[semconv.AttrDeviceId]]++
+	}
+	if byDevice[startupProcDeviceA] != 2 || byDevice[startupProcDeviceB] != 1 || len(byDevice) != 2 {
+		t.Errorf("startup-process twins by device = %v, want %s:2 %s:1 and nothing else — the bare list serves ONE device and must not be trusted (#255)",
+			byDevice, startupProcDeviceA, startupProcDeviceB)
+	}
+
+	// The bare list must never be fetched at all: a 200 carrying a partial,
+	// unsignalled row set is worse than no fetch, because it looks healthy.
+	if slices.Contains(g.gets, startupProcURL) {
+		t.Errorf("collector GET the bare %s list; the fan-out must replace it, not supplement it", startupProcURL)
+	}
+
+	// One $batch call for three devices — the fan-out must not cost one request
+	// per device against the Intune reporting bucket (~5 req/10s, no Retry-After).
+	if len(g.batchSizes) != 1 || g.batchSizes[0] != 3 {
+		t.Errorf("batch calls = %v sub-requests each, want exactly one call of 3", g.batchSizes)
+	}
+
+	// The exact wire shape, pinned literally rather than by agreement with the
+	// collector's own builder: url.QueryEscape spells the space as "+" and the
+	// quote as "%27", and THAT string is the one live-verified inside a $batch
+	// (2026-07-24, #255). A "tidy-up" to %20 or to raw spaces is a wire change.
+	wantURL := startupProcURL + "?$filter=managedDeviceId+eq+%27" + startupProcDeviceA + "%27"
+	if !slices.Contains(g.batchURLs, wantURL) {
+		t.Errorf("batch sub-request URLs = %v, want one of exactly %q", g.batchURLs, wantURL)
+	}
+}
+
+// TestStartupProcessFanOutFailsTheSubFetchWhenTheBatchPostFails pins that a
+// transport failure is reported, not swallowed. Every other outcome here degrades
+// to a per-device warning; a dead POST means the whole chunk was never asked, and
+// silence would be indistinguishable from a tenant with no startup processes.
+func TestStartupProcessFanOutFailsTheSubFetchWhenTheBatchPostFails(t *testing.T) {
+	g := &fakeGraph{
+		bodies:  allEndpoints(map[string]string{deviceScoresURL: deviceScoresWithIDs(startupProcDeviceA)}),
+		postErr: errors.New("status 503 service unavailable"),
+	}
+	rec := telemetrytest.New()
+	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	if err == nil || !strings.Contains(err.Error(), "503") {
+		t.Fatalf("Collect error = %v, want the $batch transport failure surfaced", err)
+	}
+}
+
+// TestStartupProcessFanOutChunksAtGraphsBatchCeiling pins the request budget.
+// The fan-out turns 1 request into N, and the Intune reporting bucket is
+// ~5 req/10s with NO Retry-After, so N must ride $batch at 20 sub-requests per
+// POST — 25 devices cost two calls, not twenty-five.
+func TestStartupProcessFanOutChunksAtGraphsBatchCeiling(t *testing.T) {
+	ids := make([]string, 0, 25)
+	for i := range 25 {
+		ids = append(ids, fmt.Sprintf("device-%02d-aaaa-bbbb-cccc-dddddddddddd", i))
+	}
+	bodies := allEndpoints(map[string]string{deviceScoresURL: deviceScoresWithIDs(ids...)})
+	for _, id := range ids {
+		bodies[startupProcFilterURL(id)] = fmt.Sprintf(
+			`{"value":[{"managedDeviceId":%q,"processName":"WmiPrvSE","productName":"WMI Provider Host","publisher":"Microsoft Corporation","startupImpactInMs":2130}]}`, id)
+	}
+	g := &fakeGraph{bodies: bodies}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	if want := []int{20, 5}; !slices.Equal(g.batchSizes, want) {
+		t.Errorf("$batch sub-request counts = %v, want %v", g.batchSizes, want)
+	}
+	if got := len(logsNamed(rec, eventStartupProcess)); got != 25 {
+		t.Errorf("got %d startup-process twins, want one per device (25) — chunking must not lose a device", got)
+	}
+}
+
+// TestStartupProcessFanOutAllForbiddenStaysAQuietTenantGap pins the one
+// behavior the fan-out could have silently broken. Endpoint Analytics being
+// unlicensed used to surface as a 403 on ONE list GET, which Collect's
+// isNotLicensed turns into an info-level skip. Fanned out, the same tenant
+// answers 403 on every sub-request — so an unlicensed tenant would have started
+// logging a warning per device, every cycle, forever.
+func TestStartupProcessFanOutAllForbiddenStaysAQuietTenantGap(t *testing.T) {
+	g := &fakeGraph{
+		bodies:    allEndpoints(map[string]string{deviceScoresURL: deviceScoresWithIDs(startupProcDeviceA, startupProcDeviceB)}),
+		subStatus: 403,
+	}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v — an all-403 fan-out is an unlicensed tenant, not a collection failure", err)
+	}
+	if got := len(logsNamed(rec, eventStartupProcess)); got != 0 {
+		t.Errorf("got %d startup-process twins from an all-403 fan-out, want 0", got)
+	}
+}
+
+// getOnlyGraph is a Graph client with no RawPost, i.e. one that cannot batch.
+type getOnlyGraph struct{ bodies map[string]string }
+
+func (g *getOnlyGraph) RawGet(ctx context.Context, url string) ([]byte, error) {
+	return g.RawGetWithHeaders(ctx, url, nil)
+}
+
+func (g *getOnlyGraph) RawGetWithHeaders(_ context.Context, url string, _ map[string]string) ([]byte, error) {
+	b, ok := g.bodies[url]
+	if !ok {
+		return nil, errors.New("no canned body for " + url)
+	}
+	return []byte(b), nil
+}
+
+var _ collectors.GraphClient = (*getOnlyGraph)(nil)
+
+// TestStartupProcessFanOutFailsLoudlyWithoutAPostCapableClient pins the one
+// decision that matters most here: with no way to batch, the collector REPORTS
+// that it cannot fetch rather than falling back to the bare list. The bare list
+// returns 200 with one device's rows, so a fallback would restore exactly the
+// silent 18.5% #255 is about — a loud failure is strictly better than a quiet
+// wrong answer.
+func TestStartupProcessFanOutFailsLoudlyWithoutAPostCapableClient(t *testing.T) {
+	g := &getOnlyGraph{bodies: allEndpoints(map[string]string{
+		deviceScoresURL: deviceScoresWithIDs(startupProcDeviceA),
+	})}
+	rec := telemetrytest.New()
+	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	if err == nil || !strings.Contains(err.Error(), "$batch") {
+		t.Fatalf("Collect error = %v, want one naming the impossible $batch fan-out", err)
+	}
+	if got := len(logsNamed(rec, eventStartupProcess)); got != 0 {
+		t.Errorf("got %d startup-process twins from a client that cannot batch, want 0 — the bare list must never be the fallback", got)
+	}
+}
+
 // TestStartupProcessesEmitTwinOnlyNeverAMetric pins the #199 sub-fetch and the
 // cardinality call: the (device, process) pair is unbounded, so it emits a twin
 // and NO metric at all.
@@ -548,7 +825,10 @@ func TestStartupProcessesEmitTwinOnlyNeverAMetric(t *testing.T) {
 	  {"id":"1625d698","managedDeviceId":"1625d698","processName":"MsMpEng","productName":"Windows Defender Antivirus","publisher":"Microsoft Corporation","startupImpactInMs":8038},
 	  {"id":"1625d698","managedDeviceId":"1625d698","processName":"MsSense","productName":"Windows Defender Advanced Threat Protection","publisher":"Microsoft Corporation","startupImpactInMs":4822}
 	]}`
-	g := &fakeGraph{bodies: allEndpoints(map[string]string{startupProcURL: body})}
+	g := &fakeGraph{bodies: allEndpoints(map[string]string{
+		deviceScoresURL:                          deviceScoresWithIDs(startupProcDeviceA),
+		startupProcFilterURL(startupProcDeviceA): body,
+	})}
 	rec := telemetrytest.New()
 	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
 		t.Fatalf("Collect: %v", err)

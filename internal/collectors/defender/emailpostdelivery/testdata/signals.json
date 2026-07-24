@@ -1,5 +1,16 @@
 {
-  "Metrics": null,
+  "Metrics": [
+    {
+      "Name": "graph2otel.api.unexpected",
+      "Unit": "1",
+      "Kind": "sum",
+      "AttrKeys": [
+        "collector",
+        "field",
+        "kind"
+      ]
+    }
+  ],
   "Logs": [
     {
       "EventName": "defender.email_post_delivery",

@@ -47,6 +47,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	neturl "net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -147,6 +148,25 @@ const (
 const (
 	defaultBaseURL = "https://graph.microsoft.com/v1.0"
 	betaBaseURL    = "https://graph.microsoft.com/beta"
+)
+
+const (
+	// startupProcessPath is the segment the per-device fan-out queries. It is
+	// only ever requested WITH a managedDeviceId filter — see the startupProcess
+	// doc for why the bare list must not be trusted (#255).
+	startupProcessPath = "/deviceManagement/userExperienceAnalyticsDeviceStartupProcesses"
+	// batchPath is the Graph JSON batching endpoint, POSTed to under the beta
+	// root so its sub-requests resolve against beta.
+	batchPath = "/$batch"
+	// batchChunkSize is Graph's documented ceiling of 20 sub-requests per $batch
+	// call. EVIDENCE CLASS: $batch accepting a FILTERED GET against this segment
+	// is live-measured (2026-07-24, #255 — a three-device batch returned 200/200/200
+	// with 10, 5 and 3 rows, matching the per-device counts measured serially).
+	// The 20 boundary itself is DOCS-ONLY and has not been driven to the edge
+	// here; it is the conservative direction, so a wrong ceiling costs requests
+	// rather than correctness. Same value and same reasoning as
+	// intune.hardware_inventory.
+	batchChunkSize = 20
 )
 
 // bootTimeBounds are the shared explicit histogram bucket boundaries (in
@@ -334,14 +354,29 @@ type startupHistory struct {
 // startupProcess is one (device, startup process) pair from the beta
 // userExperienceAnalyticsDeviceStartupProcesses segment (#199).
 //
-// TRAP (live-measured 2026-07-21): this segment REJECTS $top at any value with a
-// 400, and $count with it, while $orderby is accepted and the bare list works.
-// That is the inverse of the usual per-endpoint $top ceiling documented in
-// docs/graph-api-gotchas.md — there is no ceiling to stay under, the parameter is
-// simply unsupported. The sibling DeviceStartupHistory segment has the same
-// trigger but answers 500 instead of 400, so a 5xx here is not a transient fault.
-// collectors.GetAllValues paginates with the Prefer: odata.maxpagesize header and
-// never emits $top, which is why both fetches work.
+// TRAP 1 — THE BARE LIST SERVES ONE DEVICE (live-measured 2026-07-24, #255,
+// verified twice). A bare GET of this segment returns the rows of exactly ONE
+// device and carries NO @odata.nextLink, so nothing on the wire says the rest is
+// missing: m7kni answered 5 rows / 1 device while holding 27 rows across 7.
+// Prefer: odata.maxpagesize does not change it, so it is not a page-size problem
+// and it is NOT a bug in collectors.GetAllValues — that helper correctly
+// concludes it has everything. Which device gets served rotates between polls,
+// which is how this read for three days as a "rolling window" rather than as a
+// dropped fetch. The fix is the per-device fan-out in collectStartupProcesses;
+// the bare list is never fetched at all.
+//
+// TRAP 2 — $filter WORKS HERE DESPITE THE EDM SAYING IT DOES NOT. The beta
+// $metadata annotates managedDeviceId "Supports: $select, $OrderBy" with no
+// $filter, yet ?$filter=managedDeviceId eq '<guid>' returns that device's full
+// row set (live-measured 2026-07-24). Wire over docs, in the direction where
+// believing the annotation rules out the only working fix.
+//
+// TRAP 3 (live-measured 2026-07-21): this segment REJECTS $top at any value with
+// a 400, and $count with it, while $orderby is accepted. That is the inverse of
+// the usual per-endpoint $top ceiling documented in docs/graph-api-gotchas.md —
+// there is no ceiling to stay under, the parameter is simply unsupported.
+// The sibling DeviceStartupHistory segment has the same trigger but answers 500
+// instead of 400, so a 5xx there is not a transient fault.
 //
 // The (device, process) pair is unbounded, so nothing here may be a metric label —
 // this sub-fetch is twin-only, with no metric at all.
@@ -550,9 +585,58 @@ type wfaMetricDevice struct {
 	CloudProvisioningScore        *float64 `json:"cloudProvisioningScore"`
 }
 
+// batchPoster is the POST seam the startup-process fan-out needs on top of
+// collectors.GraphClient, which is GET-only. *graphclient.Client satisfies it.
+// Declared locally for the same reason intune/hardwareinventory declares its
+// own: widening the shared GraphClient seam would force a RawPost stub into
+// every collector fake in the repo.
+type batchPoster interface {
+	RawPost(ctx context.Context, url string, body []byte, headers map[string]string) ([]byte, error)
+}
+
+// batchRequest is the Graph JSON batching envelope: up to batchChunkSize
+// sub-requests, each a plain GET.
+type batchRequest struct {
+	Requests []batchSubRequest `json:"requests"`
+}
+
+// batchSubRequest is one GET inside a batch. ID is a chunk-relative ordinal.
+type batchSubRequest struct {
+	ID     string `json:"id"`
+	Method string `json:"method"`
+	URL    string `json:"url"`
+}
+
+// batchResponse is the reply envelope. Graph does NOT return the sub-responses
+// in request order (live-observed 2026-07-24: a three-device batch came back
+// 2, 1, 0), so they are correlated by ID and never by position.
+type batchResponse struct {
+	Responses []batchSubResponse `json:"responses"`
+}
+
+// batchSubResponse is one sub-response. A non-200 Status carries an OData error
+// in Body instead of a page.
+type batchSubResponse struct {
+	ID     string          `json:"id"`
+	Status int             `json:"status"`
+	Body   json.RawMessage `json:"body"`
+}
+
+// odataPage is one collection page inside a $batch sub-response. NextLink is
+// read so a truncated per-device page can be followed rather than silently
+// dropped — the failure mode this whole fan-out exists to remove.
+type odataPage struct {
+	Value    []json.RawMessage `json:"value"`
+	NextLink string            `json:"@odata.nextLink"`
+}
+
 // Collector polls Intune Endpoint Analytics (User Experience Analytics).
 type Collector struct {
-	g       collectors.GraphClient
+	g collectors.GraphClient
+	// poster is g asserted to batchPoster; nil when the injected client cannot
+	// POST, which the startup-process fan-out reports as an error rather than
+	// falling back to the bare list (which would emit a silent 18.5% — #255).
+	poster  batchPoster
 	baseURL string
 	beta    string
 	logger  *slog.Logger
@@ -564,7 +648,11 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Collector{g: g, baseURL: defaultBaseURL, beta: betaBaseURL, logger: logger}
+	c := &Collector{g: g, baseURL: defaultBaseURL, beta: betaBaseURL, logger: logger}
+	if p, ok := g.(batchPoster); ok {
+		c.poster = p
+	}
+	return c
 }
 
 // Name implements collector.Collector.
@@ -592,11 +680,36 @@ func (c *Collector) RequiredPermissions() []string {
 // into the returned error, and every other sub-fetch's metrics still emit
 // regardless of one failing.
 func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+	// The managed-device ids this cycle's device-scores fetch reported. The
+	// startup-process fan-out keys off them, which is why ORDER MATTERS in the
+	// slice below: "device scores" must run before "startup processes". The two
+	// are wired through a local rather than a Collector field because a Collector
+	// outlives a cycle, and a stale device set carried across cycles would fan
+	// out over devices that have since left the tenant.
+	//
+	// userExperienceAnalyticsDeviceScores is the id source rather than any of the
+	// other per-device fetches because it is the widest one live-verified in the
+	// managed-device id space: on m7kni (2026-07-24) its 10 ids are a strict
+	// SUPERSET of the 8 that userExperienceAnalyticsDevicePerformance reports and
+	// of the 7 that work-from-anywhere metricDevices reports, and they cover every
+	// device that holds startup-process rows. The sets are therefore not unioned
+	// because there is nothing to add, not because they disagree.
+	//
+	// A claim that these segments use DIFFERENT id spaces (that metricDevices
+	// keys LAPHAM as d5900d67-… where device scores keys it 13bca6e7-…) was
+	// recorded here and is WRONG — re-measured 2026-07-24, all 7 metricDevices
+	// ids are byte-identical to their device-scores counterparts, LAPHAM included,
+	// and no d5900d67-… id exists in either collection. The wfaMetricDevice doc
+	// above is right: id IS the managed-device id.
+	var deviceIDs []string
+
 	fetchers := []struct {
 		name string
 		fn   func(context.Context, telemetry.Emitter) error
 	}{
-		{"device scores", c.collectDeviceScores},
+		{"device scores", func(ctx context.Context, e telemetry.Emitter) error {
+			return c.collectDeviceScores(ctx, e, &deviceIDs)
+		}},
 		{"model scores", c.collectModelScores},
 		{"startup histories", c.collectStartupHistories},
 		{"app health", c.collectAppHealth},
@@ -607,7 +720,9 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		{"work from anywhere readiness", c.collectWorkFromAnywhere},
 		{"app health os version", c.collectAppHealthOSVersion},
 		{"app health device performance", c.collectAppHealthDevicePerformance},
-		{"startup processes", c.collectStartupProcesses},
+		{"startup processes", func(ctx context.Context, e telemetry.Emitter) error {
+			return c.collectStartupProcesses(ctx, e, deviceIDs)
+		}},
 	}
 
 	var errs []error
@@ -640,7 +755,11 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // rolls them into a bounded score histogram (by category, sentinels excluded)
 // plus a device count by health state - see the deviceScore doc for why there
 // is no log twin.
-func (c *Collector) collectDeviceScores(ctx context.Context, e telemetry.Emitter) error {
+//
+// deviceIDs, when non-nil, collects every managed-device id this fetch sees, for
+// the startup-process fan-out (#255). See Collect for why this segment is the id
+// source.
+func (c *Collector) collectDeviceScores(ctx context.Context, e telemetry.Emitter, deviceIDs *[]string) error {
 	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/userExperienceAnalyticsDeviceScores", nil)
 	if err != nil {
 		return err
@@ -651,6 +770,9 @@ func (c *Collector) collectDeviceScores(ctx context.Context, e telemetry.Emitter
 		if err := json.Unmarshal(r, &d); err != nil {
 			c.logger.Warn("endpoint_analytics: skipping malformed device score row", "collector", collectorName, "error", err)
 			continue
+		}
+		if deviceIDs != nil && d.ID != "" {
+			*deviceIDs = append(*deviceIDs, d.ID)
 		}
 		state := healthStateBucketFor(d.HealthStatus)
 		counts[state]++
@@ -851,23 +973,162 @@ func msOrUnknown(v float64) string {
 	return strconv.FormatFloat(v, 'f', -1, 64) + "ms"
 }
 
+// startupProcessSubURL is one device's fan-out URL, SERVICE-RELATIVE for use as
+// a $batch sub-request (the outer POST already selects the beta version). The
+// filter is percent-encoded, the repo convention (cf. entra/consent,
+// entra/users), and no $top is sent because this segment 400s on $top at any
+// value.
+//
+// url.QueryEscape spells a space as "+" and a quote as "%27", which is a
+// different string from the one a hand-written probe sends, and a $batch
+// sub-request URL is parsed by Graph rather than by an HTTP request line — so
+// the exact output of this function was put on the wire before being relied on:
+// "…?$filter=managedDeviceId+eq+%27<guid>%27" inside a $batch returned 200 with
+// the device's full row set [live-measured 2026-07-24, #255].
+func startupProcessSubURL(deviceID string) string {
+	return startupProcessPath + "?$filter=" + neturl.QueryEscape("managedDeviceId eq '"+deviceID+"'")
+}
+
 // collectStartupProcesses fetches the per-(device, process) startup impact
-// (#199). It is TWIN-ONLY and emits no metric: the pair is unbounded, so every
-// aggregation shape would either grow with the fleet or need an arbitrary
-// allow-list. A LogQL topk over startup_impact_ms answers the same question.
-func (c *Collector) collectStartupProcesses(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.beta+"/deviceManagement/userExperienceAnalyticsDeviceStartupProcesses", nil)
-	if err != nil {
-		return err
+// (#199), FANNED OUT PER DEVICE (#255).
+//
+// The bare list is never requested: it serves one device's rows with no
+// nextLink, so it is a silent partial that looks healthy (see the startupProcess
+// doc). Instead each id from this cycle's device-scores fetch gets its own
+// ?$filter=managedDeviceId eq '<guid>' GET, and those GETs ride Graph's JSON
+// batching endpoint at batchChunkSize sub-requests per POST — the same shape
+// intune.hardware_inventory uses for its N+1, and the reason this costs
+// ceil(N/20) requests per cycle rather than N against the Intune reporting
+// bucket (~5 req/10s, no Retry-After).
+//
+// It is TWIN-ONLY and emits no metric: the (device, process) pair is unbounded,
+// so every aggregation shape would either grow with the fleet or need an
+// arbitrary allow-list. A LogQL topk over startup_impact_ms answers the same
+// question.
+//
+// Failure model, matching intune.hardware_inventory's: one device's sub-response
+// failing skips that device with a warning rather than costing the other 19 in
+// its chunk, while a whole-POST failure fails the sub-fetch. A tenant with no
+// Endpoint Analytics license answers 403 on EVERY sub-request instead of on a
+// list GET, so an all-403 sweep is folded back into the quiet skip Collect
+// already gives an unlicensed sub-endpoint.
+func (c *Collector) collectStartupProcesses(ctx context.Context, e telemetry.Emitter, deviceIDs []string) error {
+	ids := dedupe(deviceIDs)
+	if len(ids) == 0 {
+		// Deliberately NOT a fall back to the bare list: emitting one arbitrary
+		// device's rows while looking healthy is the defect, not the mitigation.
+		// The device-scores fetch that would have supplied the ids reports its own
+		// failure through Collect, so this stays a warning rather than a second
+		// error for one cause.
+		c.logger.Warn("endpoint_analytics: no device ids available, so the startup-process fan-out is skipped; the bare list is deliberately not used as a fallback because it serves ONE device (#255)",
+			"collector", collectorName)
+		return nil
 	}
-	for _, r := range raw {
+	if c.poster == nil {
+		return fmt.Errorf("the Graph client cannot POST, so the required $batch fan-out over %d devices is impossible", len(ids))
+	}
+
+	var forbidden int
+	for start := 0; start < len(ids); start += batchChunkSize {
+		end := min(start+batchChunkSize, len(ids))
+		chunk := ids[start:end]
+
+		req := batchRequest{Requests: make([]batchSubRequest, 0, len(chunk))}
+		for i, id := range chunk {
+			req.Requests = append(req.Requests, batchSubRequest{
+				ID:     strconv.Itoa(i),
+				Method: "GET",
+				URL:    startupProcessSubURL(id),
+			})
+		}
+		body, err := json.Marshal(req)
+		if err != nil {
+			return fmt.Errorf("encode $batch request: %w", err)
+		}
+		respBody, err := c.poster.RawPost(ctx, c.beta+batchPath, body, nil)
+		if err != nil {
+			return fmt.Errorf("$batch startup processes for devices %d-%d: %w", start, end-1, err)
+		}
+		var resp batchResponse
+		if err := json.Unmarshal(respBody, &resp); err != nil {
+			return fmt.Errorf("decode $batch response: %w", err)
+		}
+
+		// Correlated by ID, never by position: Graph does not preserve order.
+		byID := make(map[string]batchSubResponse, len(resp.Responses))
+		for _, sub := range resp.Responses {
+			byID[sub.ID] = sub
+		}
+		for i, id := range chunk {
+			sub, ok := byID[strconv.Itoa(i)]
+			if !ok {
+				c.logger.Warn("endpoint_analytics: no $batch sub-response for device; its startup processes are missing from this cycle",
+					"collector", collectorName, "device_id", id)
+				continue
+			}
+			if sub.Status == 403 {
+				forbidden++
+				continue
+			}
+			if sub.Status != 200 {
+				c.logger.Warn("endpoint_analytics: startup-process sub-request failed; skipping device",
+					"collector", collectorName, "device_id", id, "status", sub.Status, "body", string(sub.Body))
+				continue
+			}
+			c.emitStartupProcesses(ctx, e, id, sub.Body)
+		}
+	}
+	if forbidden == len(ids) {
+		// Every device 403'd: the segment is unavailable, not one device. The
+		// phrase "status 403" is LOAD-BEARING — isNotLicensed matches on it, which
+		// is what turns this back into the quiet tenant-gap skip a bare 403 list
+		// GET used to produce. Do not reword it.
+		return fmt.Errorf("status 403 on every startup-process sub-request (%d devices)", len(ids))
+	}
+	if forbidden > 0 {
+		c.logger.Warn("endpoint_analytics: startup-process sub-requests forbidden for some devices",
+			"collector", collectorName, "forbidden", forbidden, "devices", len(ids))
+	}
+	return nil
+}
+
+// emitStartupProcesses decodes one device's page and emits a twin per row,
+// following an @odata.nextLink if the device's rows span pages. A per-device page
+// has never been observed to carry one, but the whole point of #255 is that a
+// truncation nothing signals is invisible — so a failure to follow is logged
+// loudly rather than dropping rows quietly.
+func (c *Collector) emitStartupProcesses(ctx context.Context, e telemetry.Emitter, deviceID string, body json.RawMessage) {
+	var page odataPage
+	if err := json.Unmarshal(body, &page); err != nil {
+		c.logger.Warn("endpoint_analytics: undecodable startup-process page; skipping device",
+			"collector", collectorName, "device_id", deviceID, "error", err)
+		return
+	}
+	rows := page.Value
+	if page.NextLink != "" {
+		more, err := collectors.GetAllValues(ctx, c.g, page.NextLink, nil)
+		if err != nil {
+			c.logger.Warn("endpoint_analytics: startup-process page for device is truncated and the nextLink failed; some rows are missing from this cycle",
+				"collector", collectorName, "device_id", deviceID, "error", err)
+		} else {
+			rows = append(rows, more...)
+		}
+	}
+	for _, r := range rows {
 		var p startupProcess
 		if err := json.Unmarshal(r, &p); err != nil {
 			c.logger.Warn("endpoint_analytics: skipping malformed startup process row", "collector", collectorName, "error", err)
 			continue
 		}
 		attrs := telemetry.Attrs{}
-		telemetry.SetStr(attrs, semconv.AttrDeviceId, p.ManagedDeviceID)
+		// managedDeviceId is echoed on every observed row, but the filtered device
+		// id is the authoritative fallback: a row that lost it must still be
+		// attributable, or the twin cannot answer "which device".
+		id := p.ManagedDeviceID
+		if id == "" {
+			id = deviceID
+		}
+		telemetry.SetStr(attrs, semconv.AttrDeviceId, id)
 		telemetry.SetStr(attrs, semconv.AttrProcessName, p.ProcessName)
 		telemetry.SetStr(attrs, semconv.AttrProductName, p.ProductName)
 		telemetry.SetStr(attrs, semconv.AttrPublisher, p.Publisher)
@@ -881,7 +1142,25 @@ func (c *Collector) collectStartupProcesses(ctx context.Context, e telemetry.Emi
 			Attrs:    attrs,
 		})
 	}
-	return nil
+}
+
+// dedupe returns ids with blanks and repeats removed, preserving order. A
+// duplicate id would cost a sub-request and emit every one of that device's rows
+// twice.
+func dedupe(ids []string) []string {
+	seen := make(map[string]struct{}, len(ids))
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
 }
 
 // collectAppHealthDevicePerformance fetches the DEVICE-level app-health rows

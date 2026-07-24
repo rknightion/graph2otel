@@ -26,6 +26,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // collectorName is the stable key used for config (enable/interval),
@@ -89,11 +90,52 @@ const (
 	odataTypeCountryNamedLocation = "#microsoft.graph.countryNamedLocation"
 )
 
+// namedLocationTypes maps each namedLocation @odata.type discriminator this
+// collector understands to its bounded `type` attribute value. It is the single
+// list of subtypes: the lookup, the metric's zero-filled dimension, and the
+// watched Enum below all derive from it, so none of the three can drift apart.
+var namedLocationTypes = map[string]string{
+	odataTypeIPNamedLocation:      "ip",
+	odataTypeCountryNamedLocation: "country",
+}
+
+// The wire assumptions this collector watches at runtime (#233/#234).
+//
+// Both fields are METRIC LABELS, and both do something worse than bucket to
+// "unknown": an unrecognized value is SKIPPED, so the policy or location leaves
+// the total entirely. A Microsoft subtype addition therefore does not move a
+// series — it silently makes one smaller, which reads exactly like a tenant
+// that deleted something. Nothing else in the emitted signal says otherwise.
+//
+// Each Enum is derived from the mapping the collector actually keys on — the
+// namedLocationTypes map and the policyStates table — rather than restated from
+// Microsoft's documentation, so the watched set is by construction the set this
+// collector maps: it fires when, and only when, the mapping has a hole. Same
+// reasoning as intune.autopilot's three bucket-map Enums.
+var (
+	knownNamedLocationTypes = func() wirecheck.Enum {
+		keys := make([]string, 0, len(namedLocationTypes))
+		for k := range namedLocationTypes {
+			keys = append(keys, k)
+		}
+		return wirecheck.NewEnum(keys...)
+	}()
+
+	knownPolicyStates = func() wirecheck.Enum {
+		values := make([]string, 0, len(policyStates))
+		for _, ps := range policyStates {
+			values = append(values, ps.graphValue)
+		}
+		return wirecheck.NewEnum(values...)
+	}()
+)
+
 // Collector polls Conditional Access policies and named locations.
 type Collector struct {
 	g       collectors.GraphClient
 	baseURL string
 	logger  *slog.Logger
+	watch   *wirecheck.Reporter
 }
 
 // New builds the Conditional Access collector. A nil logger falls back to the
@@ -102,7 +144,7 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Collector{g: g, baseURL: defaultBaseURL, logger: logger}
+	return &Collector{g: g, baseURL: defaultBaseURL, logger: logger, watch: wirecheck.New(collectorName, logger)}
 }
 
 // Name implements collector.Collector.
@@ -145,7 +187,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	} else {
 		e.GaugeSnapshot(policiesMetricName, "{policy}",
 			"Entra Conditional Access policies, by enforcement state.",
-			policyPoints(rawPolicies, c.logger))
+			c.policyPoints(rawPolicies, e))
 	}
 
 	rawLocations, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/identity/conditionalAccess/namedLocations", nil)
@@ -155,7 +197,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	} else {
 		e.GaugeSnapshot(namedLocationsMetricName, "{location}",
 			"Entra Conditional Access named locations, by type and trust.",
-			namedLocationPoints(rawLocations, c.logger))
+			c.namedLocationPoints(rawLocations, e))
 	}
 
 	return errors.Join(errs...)
@@ -177,8 +219,10 @@ func policyStateAttr(graphValue string) (attr string, ok bool) {
 // policyPoints tallies raw policy JSON into the fixed, zero-filled set of
 // per-state counts and returns them as gauge points. A policy with an
 // unparseable body or an unrecognized state is logged and excluded from the
-// count, never mapped to some catch-all series.
-func policyPoints(raw []json.RawMessage, logger *slog.Logger) []telemetry.GaugePoint {
+// count, never mapped to some catch-all series — and an unrecognized state is
+// also reported to wirecheck, because in the metric alone the exclusion looks
+// exactly like a tenant that deleted a policy.
+func (c *Collector) policyPoints(raw []json.RawMessage, e telemetry.Emitter) []telemetry.GaugePoint {
 	counts := make(map[string]int, len(policyStates))
 	for _, ps := range policyStates {
 		counts[ps.attr] = 0
@@ -187,12 +231,13 @@ func policyPoints(raw []json.RawMessage, logger *slog.Logger) []telemetry.GaugeP
 	for _, r := range raw {
 		var p conditionalAccessPolicy
 		if err := json.Unmarshal(r, &p); err != nil {
-			logger.Warn("conditional access: skipping unparseable policy", "collector", collectorName, "error", err)
+			c.logger.Warn("conditional access: skipping unparseable policy", "collector", collectorName, "error", err)
 			continue
 		}
 		attr, ok := policyStateAttr(p.State)
 		if !ok {
-			logger.Warn("conditional access: skipping policy with unrecognized state", "collector", collectorName, "state", p.State)
+			c.watch.Value(e, semconv.AttrState, p.State, knownPolicyStates)
+			c.logger.Warn("conditional access: skipping policy with unrecognized state", "collector", collectorName, "state", p.State)
 			continue
 		}
 		counts[attr]++
@@ -211,16 +256,11 @@ func policyPoints(raw []json.RawMessage, logger *slog.Logger) []telemetry.GaugeP
 // namedLocationType resolves a namedLocation's @odata.type discriminator to
 // its bounded `type` attribute value. ok is false for any subtype outside the
 // two Graph defines today, so Collect can skip it rather than grow the label
-// set on a future Microsoft addition.
+// set on a future Microsoft addition — and report it, since a skip is
+// invisible in the metric (see knownNamedLocationTypes).
 func namedLocationType(odataType string) (typ string, ok bool) {
-	switch odataType {
-	case odataTypeIPNamedLocation:
-		return "ip", true
-	case odataTypeCountryNamedLocation:
-		return "country", true
-	default:
-		return "", false
-	}
+	typ, ok = namedLocationTypes[odataType]
+	return typ, ok
 }
 
 // namedLocationPoints tallies raw named-location JSON into the fixed,
@@ -228,23 +268,27 @@ func namedLocationType(odataType string) (typ string, ok bool) {
 // points. countryNamedLocation has no isTrusted property in Graph at all
 // (trust is an IP-range-only concept), so every country location counts as
 // is_trusted=false — never a parse error, never a third "unknown" bucket.
-func namedLocationPoints(raw []json.RawMessage, logger *slog.Logger) []telemetry.GaugePoint {
-	counts := map[locKey]int{
-		{"ip", true}:       0,
-		{"ip", false}:      0,
-		{"country", true}:  0,
-		{"country", false}: 0,
+//
+// A location of an unrecognized subtype is skipped as before AND reported to
+// wirecheck: skipping is the right emission (a guessed bucket would be worse),
+// but on its own it shrinks the total with nothing saying why.
+func (c *Collector) namedLocationPoints(raw []json.RawMessage, e telemetry.Emitter) []telemetry.GaugePoint {
+	counts := make(map[locKey]int, 2*len(namedLocationTypes))
+	for _, typ := range namedLocationTypes {
+		counts[locKey{typ, true}] = 0
+		counts[locKey{typ, false}] = 0
 	}
 
 	for _, r := range raw {
 		var l namedLocation
 		if err := json.Unmarshal(r, &l); err != nil {
-			logger.Warn("conditional access: skipping unparseable named location", "collector", collectorName, "error", err)
+			c.logger.Warn("conditional access: skipping unparseable named location", "collector", collectorName, "error", err)
 			continue
 		}
 		typ, ok := namedLocationType(l.Type)
 		if !ok {
-			logger.Warn("conditional access: skipping named location with unrecognized @odata.type", "collector", collectorName, "type", l.Type)
+			c.watch.Value(e, semconv.AttrType, l.Type, knownNamedLocationTypes)
+			c.logger.Warn("conditional access: skipping named location with unrecognized @odata.type", "collector", collectorName, "type", l.Type)
 			continue
 		}
 		trusted := l.IsTrusted != nil && *l.IsTrusted

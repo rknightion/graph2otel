@@ -18,11 +18,29 @@ package manageddevices
 // transports are byte-identical. Every mapping below is verified against BOTH
 // live shapes captured 2026-07-18 (#135):
 //
-//	blob CompliantState "Compliant"      -> managedDevice.ComplianceState "compliant"  (case-fold; polled is lowercase)
+//	blob CompliantState "InGracePeriod"  -> managedDevice.ComplianceState "inGracePeriod" (canonicalized onto complianceBuckets' Graph keys)
 //	blob OS "MacOS"/"IOS"                -> OperatingSystem "macOS"/"iOS"               (enum re-map; NOT a fold)
 //	blob EncryptionStatusString "True"   -> IsEncrypted true                            (string -> bool)
 //	blob LastContact (no timezone)       -> LastSyncDateTime (parsed as UTC)
 //	blob DeviceId/UPN/SerialNumber/...   -> ID/UserPrincipalName/SerialNumber/...       (rename)
+//
+// # What is actually known about complianceState casing (#261)
+//
+// The blob spells it PascalCase (`Compliant`, `InGracePeriod` — live-measured
+// 2026-07-18) and the Graph managedDevice enum is camelCase, so the two
+// transports differ in casing for the two multi-word members and are
+// indistinguishable for the five single-word ones. This file used to claim
+// "polled is lowercase", which is only true of the single-word members and is
+// what made the old strings.ToLower look correct: `InGracePeriod` lowercased to
+// a spelling complianceBuckets does not contain, and bucketed to "other" on
+// blob only. The repo's live Graph captures contain only compliant /
+// noncompliant / unknown — all single-word — so a live capture does NOT
+// establish the polled casing of inGracePeriod or configManager. The schema
+// does: spec/graph-beta-snapshot.json's `microsoft.graph.complianceState`
+// EnumType lists exactly complianceBuckets' seven members, camelCase
+// [EDM snapshot, not prose docs]. canonicalComplianceState folds anyway,
+// precisely so neither transport's casing has to be assumed correctly for the
+// twin or the bucket to be right.
 //
 // The DeviceComplianceOrg category (threat level, management agents) is a
 // separate concern, not folded here (#135). partnerReportedThreatState is absent
@@ -58,6 +76,15 @@ const (
 // transports. Verified pairs (2026-07-18): blob MacOS/IOS/Windows vs polled
 // macOS/iOS/Windows. Values not in the map pass through unchanged (Windows,
 // Linux, Android are the same string in both).
+//
+// Audited under #261 and deliberately left exact-keyed: unlike CompliantState
+// there is nothing case-mangling its input, both sides of every pair are live
+// captures, and operatingSystem has no Graph enum to canonicalize onto — this
+// map IS the only list, so folding it would still only cover what is written
+// here. Its miss behavior is pass-through rather than a catch-all bucket, and
+// the metric side folds independently (osBucketFor/hasPrefixFold), so an
+// unexpected casing could at worst split the twin's raw attribute, never a
+// gauge series.
 var osNormalize = map[string]string{
 	"MacOS": "macOS",
 	"IOS":   "iOS",
@@ -106,7 +133,7 @@ func mapBlobDevice(rec map[string]any) (telemetry.Event, bool) {
 		DeviceName:                 blobStr(props, "DeviceName"),
 		SerialNumber:               blobStr(props, "SerialNumber"),
 		UserPrincipalName:          blobStr(props, "UPN"),
-		ComplianceState:            strings.ToLower(blobStr(props, "CompliantState")),
+		ComplianceState:            canonicalComplianceState(blobStr(props, "CompliantState")),
 		OperatingSystem:            normalizeOS(blobStr(props, "OS")),
 		OsVersion:                  blobStr(props, "OSVersion"),
 		IsEncrypted:                strings.EqualFold(blobStr(props, "EncryptionStatusString"), "true"),

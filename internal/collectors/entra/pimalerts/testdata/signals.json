@@ -1,0 +1,59 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.pim.alert.configurations",
+      "Unit": "{configuration}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "alert_type",
+        "is_enabled"
+      ]
+    },
+    {
+      "Name": "entra.pim.alert.count",
+      "Unit": "{alert}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "alert_type",
+        "is_active",
+        "severity"
+      ]
+    },
+    {
+      "Name": "entra.pim.alert.incidents",
+      "Unit": "{incident}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "alert_type",
+        "severity"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "entra.pim_alert",
+      "AttrKeys": [
+        "alert_evaluation_window_seconds",
+        "alert_id",
+        "alert_type",
+        "description",
+        "display_name",
+        "global_admin_count_threshold",
+        "global_admin_percentage_threshold",
+        "how_to_prevent",
+        "incident_count",
+        "is_active",
+        "is_configurable",
+        "is_enabled",
+        "is_remediatable",
+        "last_modified_date_time",
+        "last_scanned_date_time",
+        "mitigation_steps",
+        "security_impact",
+        "sequential_activation_counter_threshold",
+        "severity",
+        "time_between_activations_seconds"
+      ]
+    }
+  ]
+}

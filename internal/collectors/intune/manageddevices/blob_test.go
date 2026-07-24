@@ -100,6 +100,51 @@ func TestMapBlobDeviceDropsUndated(t *testing.T) {
 	}
 }
 
+// TestComplianceStateParityAcrossTransports is #261's proof. The blob Devices
+// category spells complianceState in PascalCase and the Graph managedDevice
+// resource spells it camelCase, so the SAME device state arrives as two
+// different strings depending on which transport is configured — and transport
+// is exclusive per collector (#144), so nobody ever sees both to notice.
+//
+// The two camelCase members are the ones that broke: the blob path lowercased
+// them into a spelling complianceBuckets does not contain, so they bucketed to
+// "other" on blob and correctly on Graph. Both halves are asserted — the raw
+// twin attribute (the value a SIEM query filters on) and the bucket (the metric
+// label) — because the lowercasing corrupted both.
+func TestComplianceStateParityAcrossTransports(t *testing.T) {
+	for _, tc := range []struct{ blobValue, graphValue, wantAttr, wantBucket string }{
+		{"Compliant", "compliant", "compliant", "compliant"},
+		{"Noncompliant", "noncompliant", "noncompliant", "noncompliant"},
+		{"Conflict", "conflict", "conflict", "conflict"},
+		{"Error", "error", "error", "error"},
+		{"Unknown", "unknown", "unknown", "unknown"},
+		{"InGracePeriod", "inGracePeriod", "inGracePeriod", "in_grace_period"},
+		{"ConfigManager", "configManager", "configManager", "config_manager"},
+	} {
+		t.Run(tc.blobValue, func(t *testing.T) {
+			blobEv, ok := mapBlobDevice(decodeDev(t, `{"time":"2026-07-18T00:44:52.4221000Z","category":"Devices","properties":{"DeviceId":"d","DeviceName":"dev","OS":"Windows","CompliantState":"`+tc.blobValue+`"}}`))
+			if !ok {
+				t.Fatal("mapBlobDevice dropped a valid record")
+			}
+			graphEv := deviceLogTwin(
+				managedDevice{ID: "d", DeviceName: "dev", OperatingSystem: "Windows", ComplianceState: tc.graphValue},
+				complianceBucketFor(tc.graphValue), stalenessUnknown)
+
+			blobState, _ := blobEv.Attrs[semconv.AttrComplianceState].(string)
+			graphState, _ := graphEv.Attrs[semconv.AttrComplianceState].(string)
+			if blobState != tc.wantAttr || graphState != tc.wantAttr {
+				t.Errorf("compliance_state: blob %q, graph %q, want %q on both", blobState, graphState, tc.wantAttr)
+			}
+			if got := complianceBucketFor(tc.blobValue); got != tc.wantBucket {
+				t.Errorf("blob %q buckets to %q, want %q", tc.blobValue, got, tc.wantBucket)
+			}
+			if got := complianceBucketFor(tc.graphValue); got != tc.wantBucket {
+				t.Errorf("graph %q buckets to %q, want %q", tc.graphValue, got, tc.wantBucket)
+			}
+		})
+	}
+}
+
 func TestNormalizeOSPassesThroughUnmapped(t *testing.T) {
 	for blob, want := range map[string]string{"MacOS": "macOS", "IOS": "iOS", "Windows": "Windows", "Linux": "Linux"} {
 		if got := normalizeOS(blob); got != want {
@@ -147,6 +192,17 @@ func TestMapBlobDeviceGraceExpiryParity(t *testing.T) {
 	want := time.Date(2026, 7, 14, 14, 31, 8, 412200000, time.UTC).Format(time.RFC3339)
 	if got := ev.Attrs[semconv.AttrComplianceGracePeriodExpiration]; got != want {
 		t.Errorf("grace attr = %q, want %q", got, want)
+	}
+	// #261: this fixture has always carried CompliantState "InGracePeriod" with
+	// nothing asserting what it normalized to, which is exactly how the blob
+	// path's lowercasing hid for so long. The twin must carry the canonical
+	// Graph member, and the bucket must be the same one the Graph path picks.
+	if got := ev.Attrs[semconv.AttrComplianceState]; got != "inGracePeriod" {
+		t.Errorf("compliance_state = %q, want inGracePeriod (from blob \"InGracePeriod\")", got)
+	}
+	state, _ := ev.Attrs[semconv.AttrComplianceState].(string)
+	if got := complianceBucketFor(state); got != "in_grace_period" {
+		t.Errorf("bucket = %q, want in_grace_period", got)
 	}
 	// The 9999 max-date sentinel → omitted.
 	ev, _ = mapBlobDevice(rec("9999-12-31T23:59:59.9999999"))

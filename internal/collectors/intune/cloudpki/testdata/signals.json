@@ -1,0 +1,96 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.cloud_pki.authorities",
+      "Unit": "{authority}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "certification_authority_status",
+        "certification_authority_type"
+      ]
+    },
+    {
+      "Name": "intune.cloud_pki.days_until_expiry",
+      "Unit": "d",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "certification_authority_type",
+        "display_name"
+      ]
+    },
+    {
+      "Name": "intune.cloud_pki.leaf_certificates",
+      "Unit": "{certificate}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "certificate_status",
+        "display_name"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.cloud_pki_authority",
+      "AttrKeys": [
+        "certificate_key_size",
+        "certificate_revocation_list_url",
+        "certification_authority_id",
+        "certification_authority_issuer_id",
+        "certification_authority_issuer_uri",
+        "certification_authority_status",
+        "certification_authority_type",
+        "common_name",
+        "country_name",
+        "created_date_time",
+        "declared_valid_to",
+        "display_name",
+        "expiry_bucket",
+        "expiry_source",
+        "extended_key_usages",
+        "geographic_region",
+        "hashing_algorithm",
+        "issuer_name",
+        "key_platform",
+        "last_modified_date_time",
+        "locality_name",
+        "organization_name",
+        "organization_unit",
+        "role_scope_tag_ids",
+        "root_certificate_common_name",
+        "scep_server_url",
+        "serial_number",
+        "state_name",
+        "subject_name",
+        "thumbprint",
+        "valid_from",
+        "valid_to",
+        "validity_period_years",
+        "version_number"
+      ]
+    },
+    {
+      "EventName": "intune.cloud_pki_leaf_certificate",
+      "AttrKeys": [
+        "certificate_status",
+        "certification_authority_id",
+        "certification_authority_issuer_uri",
+        "crl_distribution_point_url",
+        "device_id",
+        "device_name",
+        "expiry_bucket",
+        "extended_key_usages",
+        "issuer_name",
+        "key_usages",
+        "leaf_certificate_id",
+        "revocation_date_time",
+        "serial_number",
+        "subject_name",
+        "thumbprint",
+        "user_id",
+        "user_principal_name",
+        "valid_from",
+        "valid_to"
+      ]
+    }
+  ]
+}

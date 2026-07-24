@@ -2,6 +2,16 @@
   "source": "https://graph.microsoft.com/beta/$metadata",
   "operations": [
     {
+      "path": "/admin/windows/updates/deployments",
+      "type": "microsoft.graph.windowsUpdates.deployment",
+      "resolution": "model"
+    },
+    {
+      "path": "/admin/windows/updates/updatePolicies",
+      "type": "microsoft.graph.windowsUpdates.updatePolicy",
+      "resolution": "model"
+    },
+    {
       "path": "/applications",
       "type": "microsoft.graph.application",
       "resolution": "model"
@@ -14,6 +24,16 @@
     {
       "path": "/deviceManagement/autopilotEvents",
       "type": "microsoft.graph.deviceManagementAutopilotEvent",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/cloudCertificationAuthority",
+      "type": "microsoft.graph.cloudCertificationAuthority",
+      "resolution": "model"
+    },
+    {
+      "path": "/deviceManagement/cloudCertificationAuthority/{id}/cloudCertificationAuthorityLeafCertificate",
+      "type": "microsoft.graph.cloudCertificationAuthorityLeafCertificate",
       "resolution": "model"
     },
     {
@@ -287,6 +307,21 @@
       "resolution": "model"
     },
     {
+      "path": "/identityGovernance/roleManagementAlerts/alertConfigurations",
+      "type": "microsoft.graph.unifiedRoleManagementAlertConfiguration",
+      "resolution": "model"
+    },
+    {
+      "path": "/identityGovernance/roleManagementAlerts/alertDefinitions",
+      "type": "microsoft.graph.unifiedRoleManagementAlertDefinition",
+      "resolution": "model"
+    },
+    {
+      "path": "/identityGovernance/roleManagementAlerts/alerts",
+      "type": "microsoft.graph.unifiedRoleManagementAlert",
+      "resolution": "model"
+    },
+    {
       "path": "/identityProtection/agentRiskDetections",
       "type": "microsoft.graph.agentRiskDetection",
       "resolution": "model"
@@ -438,6 +473,17 @@
         "agentType": "microsoft.graph.agentic.agentType",
         "parentAppId": "Edm.String"
       }
+    },
+    "microsoft.graph.alertSeverity": {
+      "kind": "EnumType",
+      "members": [
+        "high",
+        "informational",
+        "low",
+        "medium",
+        "unknown",
+        "unknownFutureValue"
+      ]
     },
     "microsoft.graph.apiApplication": {
       "kind": "ComplexType",
@@ -791,6 +837,146 @@
         "federatedIdentityCredential",
         "managedIdentity",
         "none",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.cloudCertificationAuthority": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "certificateDownloadUrl": "Edm.String",
+        "certificateKeySize": "microsoft.graph.cloudCertificationAuthorityCertificateKeySize",
+        "certificateRevocationListUrl": "Edm.String",
+        "certificateSigningRequest": "Edm.String",
+        "certificationAuthorityIssuerId": "Edm.String",
+        "certificationAuthorityIssuerUri": "Edm.String",
+        "certificationAuthorityStatus": "microsoft.graph.cloudCertificationAuthorityStatus",
+        "cloudCertificationAuthorityHashingAlgorithm": "microsoft.graph.cloudCertificationAuthorityHashingAlgorithm",
+        "cloudCertificationAuthorityType": "microsoft.graph.cloudCertificationAuthorityType",
+        "commonName": "Edm.String",
+        "countryName": "Edm.String",
+        "createdDateTime": "Edm.DateTimeOffset",
+        "description": "Edm.String",
+        "displayName": "Edm.String",
+        "eTag": "Edm.String",
+        "extendedKeyUsages": "Collection(microsoft.graph.extendedKeyUsage)",
+        "geographicRegion": "Edm.String",
+        "issuerCommonName": "Edm.String",
+        "keyPlatform": "microsoft.graph.cloudCertificationAuthorityKeyPlatformType",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "localityName": "Edm.String",
+        "ocspResponderUri": "Edm.String",
+        "organizationName": "Edm.String",
+        "organizationUnit": "Edm.String",
+        "roleScopeTagIds": "Collection(Edm.String)",
+        "rootCertificateCommonName": "Edm.String",
+        "scepServerUrl": "Edm.String",
+        "serialNumber": "Edm.String",
+        "stateName": "Edm.String",
+        "subjectName": "Edm.String",
+        "thumbprint": "Edm.String",
+        "validityEndDateTime": "Edm.DateTimeOffset",
+        "validityPeriodInYears": "Edm.Int32",
+        "validityStartDateTime": "Edm.DateTimeOffset",
+        "versionNumber": "Edm.Int32"
+      },
+      "navigation_properties": {
+        "activeVersion": "microsoft.graph.cloudCertificationAuthorityVersion",
+        "cloudCertificationAuthorityLeafCertificate": "Collection(microsoft.graph.cloudCertificationAuthorityLeafCertificate)",
+        "versions": "Collection(microsoft.graph.cloudCertificationAuthorityVersion)"
+      }
+    },
+    "microsoft.graph.cloudCertificationAuthorityCertificateKeySize": {
+      "kind": "EnumType",
+      "members": [
+        "eCP256",
+        "eCP256k",
+        "eCP384",
+        "eCP521",
+        "rsa2048",
+        "rsa3072",
+        "rsa4096",
+        "unknown",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.cloudCertificationAuthorityHashingAlgorithm": {
+      "kind": "EnumType",
+      "members": [
+        "sha256",
+        "sha384",
+        "sha512",
+        "unknown",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.cloudCertificationAuthorityKeyPlatformType": {
+      "kind": "EnumType",
+      "members": [
+        "hardwareSecurityModule",
+        "software",
+        "unknown",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.cloudCertificationAuthorityLeafCertificate": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "certificateStatus": "microsoft.graph.cloudCertificationAuthorityLeafCertificateStatus",
+        "certificationAuthorityIssuerUri": "Edm.String",
+        "certificationAuthorityVersionNumber": "Edm.Int32",
+        "crlDistributionPointUrl": "Edm.String",
+        "deviceId": "Edm.String",
+        "deviceName": "Edm.String",
+        "devicePlatform": "Edm.String",
+        "extendedKeyUsages": "Collection(Edm.String)",
+        "issuerId": "Edm.String",
+        "issuerName": "Edm.String",
+        "keyUsages": "Collection(Edm.String)",
+        "ocspResponderUri": "Edm.String",
+        "revocationDateTime": "Edm.DateTimeOffset",
+        "serialNumber": "Edm.String",
+        "subjectName": "Edm.String",
+        "thumbprint": "Edm.String",
+        "userId": "Edm.String",
+        "userPrincipalName": "Edm.String",
+        "validityEndDateTime": "Edm.DateTimeOffset",
+        "validityStartDateTime": "Edm.DateTimeOffset"
+      },
+      "navigation_properties": {
+        "cloudCertificationAuthorityVersion": "microsoft.graph.cloudCertificationAuthorityVersion"
+      }
+    },
+    "microsoft.graph.cloudCertificationAuthorityLeafCertificateStatus": {
+      "kind": "EnumType",
+      "members": [
+        "active",
+        "expired",
+        "revoked",
+        "unknown",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.cloudCertificationAuthorityStatus": {
+      "kind": "EnumType",
+      "members": [
+        "active",
+        "expired",
+        "paused",
+        "revoked",
+        "signingPending",
+        "unknown",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.cloudCertificationAuthorityType": {
+      "kind": "EnumType",
+      "members": [
+        "issuingCertificationAuthority",
+        "issuingCertificationAuthorityWithExternalRoot",
+        "rootCertificationAuthority",
+        "unknown",
         "unknownFutureValue"
       ]
     },
@@ -1589,6 +1775,13 @@
         "daysUntilForcedReboot": "Edm.Int32",
         "qualityUpdateCatalogItemId": "Edm.String",
         "qualityUpdateRelease": "Edm.String"
+      }
+    },
+    "microsoft.graph.extendedKeyUsage": {
+      "kind": "ComplexType",
+      "properties": {
+        "name": "Edm.String",
+        "objectIdentifier": "Edm.String"
       }
     },
     "microsoft.graph.fileVaultState": {
@@ -3534,6 +3727,53 @@
         "signInSessionStatusCode": "Edm.Int32"
       }
     },
+    "microsoft.graph.unifiedRoleManagementAlert": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "alertDefinitionId": "Edm.String",
+        "incidentCount": "Edm.Int32",
+        "isActive": "Edm.Boolean",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "lastScannedDateTime": "Edm.DateTimeOffset",
+        "scopeId": "Edm.String",
+        "scopeType": "Edm.String"
+      },
+      "navigation_properties": {
+        "alertConfiguration": "microsoft.graph.unifiedRoleManagementAlertConfiguration",
+        "alertDefinition": "microsoft.graph.unifiedRoleManagementAlertDefinition",
+        "alertIncidents": "Collection(microsoft.graph.unifiedRoleManagementAlertIncident)"
+      }
+    },
+    "microsoft.graph.unifiedRoleManagementAlertConfiguration": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "alertDefinitionId": "Edm.String",
+        "isEnabled": "Edm.Boolean",
+        "scopeId": "Edm.String",
+        "scopeType": "Edm.String"
+      },
+      "navigation_properties": {
+        "alertDefinition": "microsoft.graph.unifiedRoleManagementAlertDefinition"
+      }
+    },
+    "microsoft.graph.unifiedRoleManagementAlertDefinition": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "description": "Edm.String",
+        "displayName": "Edm.String",
+        "howToPrevent": "Edm.String",
+        "isConfigurable": "Edm.Boolean",
+        "isRemediatable": "Edm.Boolean",
+        "mitigationSteps": "Edm.String",
+        "scopeId": "Edm.String",
+        "scopeType": "Edm.String",
+        "securityImpact": "Edm.String",
+        "severityLevel": "microsoft.graph.alertSeverity"
+      }
+    },
     "microsoft.graph.userExperienceAnalyticsAnomalySeverityOverview": {
       "kind": "ComplexType",
       "properties": {
@@ -3921,6 +4161,62 @@
         "offerEndDateTimeInUTC": "Edm.DateTimeOffset",
         "offerIntervalInDays": "Edm.Int32",
         "offerStartDateTimeInUTC": "Edm.DateTimeOffset"
+      }
+    },
+    "microsoft.graph.windowsUpdates.complianceChangeRule": {
+      "kind": "ComplexType",
+      "properties": {
+        "createdDateTime": "Edm.DateTimeOffset",
+        "lastEvaluatedDateTime": "Edm.DateTimeOffset",
+        "lastModifiedDateTime": "Edm.DateTimeOffset"
+      }
+    },
+    "microsoft.graph.windowsUpdates.deployableContent": {
+      "kind": "ComplexType"
+    },
+    "microsoft.graph.windowsUpdates.deployment": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "content": "microsoft.graph.windowsUpdates.deployableContent",
+        "createdDateTime": "Edm.DateTimeOffset",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "settings": "microsoft.graph.windowsUpdates.deploymentSettings",
+        "state": "microsoft.graph.windowsUpdates.deploymentState"
+      },
+      "navigation_properties": {
+        "audience": "microsoft.graph.windowsUpdates.deploymentAudience"
+      }
+    },
+    "microsoft.graph.windowsUpdates.deploymentSettings": {
+      "kind": "ComplexType",
+      "properties": {
+        "contentApplicability": "microsoft.graph.windowsUpdates.contentApplicabilitySettings",
+        "expedite": "microsoft.graph.windowsUpdates.expediteSettings",
+        "monitoring": "microsoft.graph.windowsUpdates.monitoringSettings",
+        "schedule": "microsoft.graph.windowsUpdates.scheduleSettings",
+        "userExperience": "microsoft.graph.windowsUpdates.userExperienceSettings"
+      }
+    },
+    "microsoft.graph.windowsUpdates.deploymentState": {
+      "kind": "ComplexType",
+      "properties": {
+        "effectiveValue": "microsoft.graph.windowsUpdates.deploymentStateValue",
+        "reasons": "Collection(microsoft.graph.windowsUpdates.deploymentStateReason)",
+        "requestedValue": "microsoft.graph.windowsUpdates.requestedDeploymentStateValue"
+      }
+    },
+    "microsoft.graph.windowsUpdates.updatePolicy": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "complianceChangeRules": "Collection(microsoft.graph.windowsUpdates.complianceChangeRule)",
+        "createdDateTime": "Edm.DateTimeOffset",
+        "deploymentSettings": "microsoft.graph.windowsUpdates.deploymentSettings"
+      },
+      "navigation_properties": {
+        "audience": "microsoft.graph.windowsUpdates.deploymentAudience",
+        "complianceChanges": "Collection(microsoft.graph.windowsUpdates.complianceChange)"
       }
     }
   }

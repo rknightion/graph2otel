@@ -1,0 +1,62 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.access_reviews.total",
+      "Unit": "{review}",
+      "Kind": "gauge",
+      "AttrKeys": [
+        "status"
+      ]
+    },
+    {
+      "Name": "graph2otel.api.unexpected",
+      "Unit": "1",
+      "Kind": "sum",
+      "AttrKeys": [
+        "collector",
+        "field",
+        "kind"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "entra.access_review",
+      "AttrKeys": [
+        "additional_notification_recipient_count",
+        "apply_action_types",
+        "auto_apply_decisions_enabled",
+        "created_by",
+        "created_by_id",
+        "created_by_type",
+        "created_by_user_principal_name",
+        "created_date_time",
+        "default_decision",
+        "default_decision_enabled",
+        "description_for_admins",
+        "description_for_reviewers",
+        "display_name",
+        "fallback_reviewer_count",
+        "id",
+        "instance_duration_days",
+        "justification_required_on_approval",
+        "last_modified_date_time",
+        "mail_notifications_enabled",
+        "recommendations_enabled",
+        "recurrence_interval",
+        "recurrence_pattern_type",
+        "recurrence_range_type",
+        "recurrence_start_date",
+        "reminder_notifications_enabled",
+        "reviewer_count",
+        "reviewer_queries",
+        "scope_odata_type",
+        "scope_principal_queries",
+        "scope_query",
+        "scope_resource_queries",
+        "stage_count",
+        "status"
+      ]
+    }
+  ]
+}

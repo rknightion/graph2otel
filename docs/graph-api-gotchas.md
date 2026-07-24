@@ -51,6 +51,36 @@ issue. Do not record correction narratives here — those live on the issues.
   empty-or-error result and got written down as a fact about the tenant. **Before parking
   anything as blocked-on-data, vary the request shape first** — bare vs `$select` vs `$top`
   vs single-entity vs cast segment — and only then attribute the emptiness to the tenant.
+- **The bare `userExperienceAnalyticsDeviceStartupProcesses` list serves ONE device, and
+  says nothing about it** `[live-measured 2026-07-24, #255, verified twice]`. A bare `GET`
+  of that segment returns the rows of a single device — m7kni answered **5 rows / 1 device**
+  while holding **27 rows across 7** — and carries **no `@odata.nextLink`**, so the response
+  contains no signal that anything is missing. `Prefer: odata.maxpagesize` does not change it,
+  so this is not a page-size problem and not a `collectors.GetAllValues` bug: that helper
+  correctly concludes it has the whole collection. **Which** device gets served rotates
+  between polls, which is why the behavior first read as a rolling window rather than as a
+  dropped fetch.
+
+  **The fix is a per-device fan-out, and the EDM says it is impossible.** The beta
+  `$metadata` annotates `userExperienceAnalyticsDeviceStartupProcess/managedDeviceId` as
+  `"Supports: $select, $OrderBy. Read-only."` — **no `$filter`** — yet
+  `?$filter=managedDeviceId eq '<guid>'` returns that device's full row set every time.
+  Wire over docs, in the direction that matters most: an author who trusts the annotation
+  rules out the only working fix and ships a collector emitting 18.5% of the data. The
+  filter also rides `POST /beta/$batch` — a three-device batch returned `200/200/200` with
+  10, 5 and 3 rows, matching the counts measured serially — so `intune.endpoint_analytics`
+  pays the N+1 at `ceil(N/20)` requests per cycle, the same shape as
+  `intune.hardware_inventory` below. Note the sub-responses came back **out of request
+  order** (2, 1, 0): correlate a `$batch` reply by its sub-request `id`, never by position.
+  The `+`-for-space form `url.QueryEscape` produces
+  (`?$filter=managedDeviceId+eq+%27<guid>%27`) is accepted inside a `$batch` sub-request URL
+  too, verified separately from the literal-space form a probe sends.
+
+  **The lesson beyond this segment:** a `200` carrying rows is not evidence the collection
+  is complete. `CLAUDE.md`'s "a green tick is not evidence of data" covers empty-success;
+  this is *partial* success, which is worse, because there is nothing anomalous to notice.
+  When a collection is per-entity in nature, cross-check its row count against an entity
+  list you already hold.
 - **`$count=true` on `userExperienceAnalyticsModelScores` returns the count and DROPS the
   rows** `[live-measured 2026-07-24, #194]`. `?$count=true` answers `200` with
   `@odata.count: 1` and `"value": []`, while the bare list returns the row. The count is
@@ -390,10 +420,43 @@ are recorded rather than left on an open issue behind an unblock condition that 
 | --- | --- | --- |
 | `userExperienceAnalyticsDevicesWithoutCloudIdentity` | beta `200`, 0 rows (v1.0 `400`) | an **exception list** — empty is the healthy answer |
 | `userExperienceAnalyticsNotAutopilotReadyDevice` | beta `200`, 0 rows (v1.0 `400`) | same, and the tenant has **zero** Autopilot device identities and zero deployment profiles (#201), so it stays empty at any fleet size |
+| `userExperienceAnalyticsDeviceStartupProcessPerformance` | `200` + `"@odata.count":0` on **both** versions | **unknown.** Five separate explanations were tested and every one was refuted — see below |
 
-Both were re-probed on three separate days across a fleet that grew 10 → 17 devices, with the
-request shape varied (bare / `$orderby` / `$select`) each time. If a tenant with Autopilot
-registrations ever appears, this entry is the pointer back.
+The first two were re-probed on three separate days across a fleet that grew 10 → 17 devices,
+with the request shape varied (bare / `$orderby` / `$select`) each time. If a tenant with
+Autopilot registrations ever appears, this entry is the pointer back.
+
+**`DeviceStartupProcessPerformance` is in this table for a different reason, and it is worth
+reading before anyone re-opens it.** It is the fleet-wide per-process rollup of
+`userExperienceAnalyticsDeviceStartupProcesses`, whose per-device sibling ships as
+`intune.device_startup_process` and returns rows. These are the five theories that were
+tested and killed, so that none of them is proposed a sixth time:
+
+1. **Device count / the documented five-device EA floor** — refuted: `ModelScores` published a
+   bucket with `modelDeviceCount: 1` while a five-device bucket on the same tenant was absent.
+2. **Insufficient boot telemetry** — refuted: startup history went 3 records/2 devices → 11/6,
+   and scored devices 4 → 10. The segment did not move. This condition was chosen *because* it
+   was testable; it fired and changed nothing.
+3. **A malformed request** — refuted: bare, three numeric `$filter`s, two `$orderby`s,
+   `$select`, `Prefer: odata.maxpagesize`, single-entity and `/$count`, on both versions.
+4. **The per-process input only exists on one device** — refuted: the input exists on
+   **7 devices / 27 (device, process) rows**; a rollup over it would trivially yield rows.
+5. **A model-keyed aggregation axis being broken** — the `summarizeDevicePerformanceDevices`
+   function accepts only `model` (`200`, 0 rows); `none`, `allRegressions`, `modelRegression`,
+   `manufacturerRegression` and `operatingSystemVersionRegression` all `400` with the same
+   backend error as the five UXA segments that return `500`. The summarize path is broadly
+   non-functional here, so it explains nothing specific to this segment.
+
+The handler itself is demonstrably real and model-faithful: `$select=bogusProperty` returns an
+EDM-aware `400` naming the type, `$filter` is accepted on exactly the three properties the EDM
+annotates as filterable and rejected on the three it does not, and the binding is an ordinary
+`ContainsTarget` collection nav identical in kind to the populated siblings. There is no
+`summarize` function for startup processes and none of the 77 `deviceManagementReports`
+actions touches this data, so the async export API is not an alternate route.
+
+**Do NOT attach an unblock condition to this segment.** Four of the five theories above were
+recorded at the time as confident, reasoned verdicts, and each cost a probing round to undo.
+Re-probe it opportunistically if something else brings you back to this collector.
 
 > **#130 deferral has FIRED (`live-measured 2026-07-23, #239`).** The condition was "out of
 > scope until a GSA tenant exists" — a GSA tenant now exists: `GET /beta/networkAccess/tenantStatus`
@@ -421,3 +484,48 @@ The escape hatch for blob-only categories is diagnostic settings → Azure Stora
   "Same rows" and "same fitness for purpose" are different claims — #100 and #109 were
   both closed on the wrong question and the wrong verdicts then suppressed
   re-investigation.
+
+## PIM role-management alerts (`identityGovernance/roleManagementAlerts`)
+
+**The `$filter` is MANDATORY, and its absence lies about why** `[live-measured 2026-07-24, #256]`.
+A bare list of any of the three segments answers:
+
+```
+GET /beta/identityGovernance/roleManagementAlerts/alerts
+400 {"errorCode":"MissingProvider","message":"The provider is missing.","instanceAnnotations":[]}
+```
+
+That reads like PIM not being provisioned on the tenant, or the segment not existing. It is
+neither — the scope filter is not an optimization on this surface, it is part of the request:
+
+```
+?$filter=scopeId eq '/' and scopeType eq 'DirectoryRole'
+```
+
+With it, all three of `alerts`, `alertDefinitions` and `alertConfigurations` answer `200` with 7
+rows each. The wire-verified URL encoding is `?$filter=scopeId+eq+'/'+and+scopeType+eq+'DirectoryRole'`
+(spaces as `+`, quotes and slash literal) — the same encoding `entra/pimrolepolicies` uses on the
+identically shaped `roleManagementPolicies` filter. Same class as the Intune EA `$top` that is
+rejected at every value: a query parameter whose absence produces an error naming something else.
+
+**`v1.0` has no `roleManagementAlerts` segment at all** (`400`), so the surface is beta-only →
+`Experimental` (#183).
+
+**`alertIncidents` is not reachable**: `400 Resource not found for the segment 'alertIncidents'`
+even with the filter present. `incidentCount` on the alert row is therefore the finest granularity
+this surface offers — the flagged entities themselves cannot be enumerated by this route, and
+nothing should promise them.
+
+**`lastModifiedDateTime` is the .NET zero date `0001-01-01T08:00:00Z`** on every alert that has
+never fired. It means ABSENT, not "modified in year 1" — drop it rather than emit it
+(the absent-vs-sentinel rule). `lastScannedDateTime` is always real.
+
+**The alert id embeds the tenant GUID** (`DirectoryRole_<tid>_StaleSignInAlert`), so the raw id is
+per-tenant cardinality and can never be a metric label; the stripped type suffix is a bounded
+catalog and is. `alertDefinitionId` is byte-identical to the row's own `id` on all three segments,
+so it is a join key, not a second field worth emitting.
+
+**No P2 licence is needed to READ the alerts.** The verification tenant holds no Entra ID Premium
+P2 and still got `200` + 7 rows — one of which is Microsoft's own `InvalidLicenseAlert`,
+`severityLevel: high`, saying so. What the licence bounds is what the other six alerts can ever
+report, not whether the endpoint answers.

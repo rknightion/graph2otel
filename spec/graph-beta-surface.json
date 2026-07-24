@@ -53,6 +53,25 @@
       ]
     },
     {
+      "package": "internal/collectors/entra/pimalerts",
+      "collectors": [
+        "entra.pim_alerts"
+      ],
+      "operations": [
+        {
+          "path": "/identityGovernance/roleManagementAlerts/alerts",
+          "note": "every segment REQUIRES ?$filter=scopeId eq '/' and scopeType eq 'DirectoryRole'; a bare list answers 400 MissingProvider, which reads like the segment not existing. v1.0 has no roleManagementAlerts segment at all"
+        },
+        {
+          "path": "/identityGovernance/roleManagementAlerts/alertDefinitions"
+        },
+        {
+          "path": "/identityGovernance/roleManagementAlerts/alertConfigurations",
+          "note": "polymorphic: each row carries a per-type @odata.type (#microsoft.graph.staleSignInAlertConfiguration, …) and only that type's threshold fields"
+        }
+      ]
+    },
+    {
       "package": "internal/collectors/entra/recommendations",
       "collectors": [
         "entra.recommendations"
@@ -226,6 +245,21 @@
       ]
     },
     {
+      "package": "internal/collectors/intune/cloudpki",
+      "collectors": [
+        "intune.cloud_pki"
+      ],
+      "operations": [
+        {
+          "path": "/deviceManagement/cloudCertificationAuthority"
+        },
+        {
+          "path": "/deviceManagement/cloudCertificationAuthority/{id}/cloudCertificationAuthorityLeafCertificate",
+          "note": "the per-CA navigation is the ONLY working leaf route; the top-level /deviceManagement/cloudCertificationAuthorityLeafCertificate list is declared in the beta EDM but 404s (live-measured 2026-07-24)"
+        }
+      ]
+    },
+    {
       "package": "internal/collectors/intune/deviceencryption",
       "collectors": [
         "intune.device_encryption"
@@ -376,6 +410,21 @@
         },
         {
           "path": "/deviceManagement/windowsQualityUpdateProfiles"
+        }
+      ]
+    },
+    {
+      "package": "internal/collectors/intune/windowsupdates",
+      "collectors": [
+        "intune.windows_updates"
+      ],
+      "operations": [
+        {
+          "path": "/admin/windows/updates/updatePolicies",
+          "note": "the whole /admin/windows segment is beta-only; v1.0 rejects it with 400 \"Resource not found for the segment 'windows'\""
+        },
+        {
+          "path": "/admin/windows/updates/deployments"
         }
       ]
     },

@@ -111,6 +111,13 @@ const managedDevicesSelect = "?$select=id,complianceState,operatingSystem,isEncr
 // enum addition, or a null/unexpected value) falls into "other" rather than
 // being passed through raw, so the compliance_state dimension can never grow
 // unbounded.
+//
+// The KEYS are the Graph managedDevice spellings and are the canonical form for
+// this collector — the blob Devices category spells the same states in
+// PascalCase (`InGracePeriod`), so lookups case-fold (see complianceFold) and
+// blob.go canonicalizes onto these keys before emitting. Casing is the only
+// difference between the two transports' spellings; the members themselves are
+// the same set.
 var complianceBuckets = map[string]string{
 	"unknown":       "unknown",
 	"compliant":     "compliant",
@@ -121,8 +128,39 @@ var complianceBuckets = map[string]string{
 	"configManager": "config_manager",
 }
 
+// complianceFold maps a case-folded complianceState onto complianceBuckets'
+// canonical key. Built FROM that map, so a member added there is folded
+// automatically and the two can never disagree.
+//
+// It exists because the two transports disagree on casing and nothing was
+// reconciling them (#261): the blob path lowercased its PascalCase value, which
+// matched the five single-word members by luck and missed inGracePeriod and
+// configManager, silently reclassifying both as "other" on blob only. Folding
+// at the LOOKUP — rather than at either call site — means neither transport has
+// to have its casing assumed correctly, which kills the whole class rather than
+// the two instances of it.
+var complianceFold = func() map[string]string {
+	m := make(map[string]string, len(complianceBuckets))
+	for k := range complianceBuckets {
+		m[strings.ToLower(k)] = k
+	}
+	return m
+}()
+
+// canonicalComplianceState returns the Graph spelling of a complianceState
+// however the wire cased it, or raw unchanged when it maps to nothing. That
+// pass-through matters twice over: it keeps an unmapped value reaching "other"
+// exactly as before, and it means the value handed to wirecheck below is the
+// VERBATIM wire string in precisely the case where the log has to name it.
+func canonicalComplianceState(raw string) string {
+	if k, ok := complianceFold[strings.ToLower(raw)]; ok {
+		return k
+	}
+	return raw
+}
+
 func complianceBucketFor(raw string) string {
-	if b, ok := complianceBuckets[raw]; ok {
+	if b, ok := complianceBuckets[canonicalComplianceState(raw)]; ok {
 		return b
 	}
 	return "other"
@@ -134,7 +172,10 @@ func complianceBucketFor(raw string) string {
 // legitimate traffic, so the fleet count moves between series and nothing says
 // why. The set is derived from complianceBuckets' own keys rather than
 // restated, so it is by construction the set this collector maps: it fires when
-// the mapping has a hole, never on data the collector handles correctly.
+// the mapping has a hole, never on data the collector handles correctly. The
+// value is canonicalized before the check for the same reason (#261): the
+// lookup case-folds, so a member in another casing is MAPPED and must stay
+// silent — a watchdog firing on correctly handled data is worse than none.
 //
 // Deliberately NOT applied to operatingSystem: that property is free text with
 // no Graph-side enum (see osPrefixes), so a declared set there would fire on
@@ -546,7 +587,7 @@ func (c *Collector) collectFleet(ctx context.Context, e telemetry.Emitter) error
 			c.logger.Warn("manageddevices: skipping malformed managedDevice element", "collector", collectorName, "error", err)
 			continue
 		}
-		c.watch.Value(e, semconv.AttrComplianceState, d.ComplianceState, knownComplianceStates)
+		c.watch.Value(e, semconv.AttrComplianceState, canonicalComplianceState(d.ComplianceState), knownComplianceStates)
 		compliance := complianceBucketFor(d.ComplianceState)
 		os := osBucketFor(d.OperatingSystem)
 		counts[[2]string{compliance, os}]++

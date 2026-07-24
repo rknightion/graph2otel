@@ -7,7 +7,9 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // fakeGraph maps request URLs to canned page bodies (or errors) and records
@@ -672,5 +674,109 @@ func TestNoPerEntitySeries(t *testing.T) {
 	}
 	if n := len(rec.MetricPoints(namedLocationsMetricName)); n > 4 {
 		t.Errorf("named locations series count = %d, want <= 4", n)
+	}
+}
+
+// --- wire-assumption watchdog (#233/#234) --------------------------------
+//
+// Both of this collector's fields are METRIC LABELS, and both go further than
+// the usual "unknown" bucket: an unrecognized value is SKIPPED, so the location
+// or policy vanishes from the total. A new Microsoft subtype therefore does not
+// move a series, it quietly makes one smaller — the hardest kind of wrong to
+// spot, because a count that shrinks looks like a tenant that changed.
+
+func findings(rec *telemetrytest.Recorder) map[string]float64 {
+	out := map[string]float64{}
+	for _, p := range rec.MetricPoints(wirecheck.MetricUnexpected) {
+		out[p.Attrs[semconv.AttrKind]+"/"+p.Attrs[semconv.AttrField]] += p.Value
+	}
+	return out
+}
+
+// The verbatim live capture is the steady state. A watchdog that fires on it is
+// worse than no watchdog at all.
+func TestLiveCaptureReportsNothingUnexpected(t *testing.T) {
+	g := &fakeGraph{bodies: fullFixture()}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if got := findings(rec); len(got) != 0 {
+		t.Errorf("live capture produced findings %v, want none", got)
+	}
+}
+
+// TestUnrecognizedValuesAreReportedAndStillSkipped pins both halves at once:
+// the surprise is announced, and the pre-existing skip behavior is untouched.
+// Report-only means report-only — a finding must never change a count, and the
+// counts asserted here are exactly the ones
+// TestCollectSkipsUnrecognizedPolicyStateAndLocationType already pins.
+func TestUnrecognizedValuesAreReportedAndStillSkipped(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		policiesURL: policiesPage(`
+			{"id":"p1","state":"enabled"},
+			{"id":"p2","state":"someFutureState"}
+		`),
+		locationsURL: locationsPage(`
+			{"@odata.type":"#microsoft.graph.ipNamedLocation","id":"l1","isTrusted":true},
+			{"@odata.type":"#microsoft.graph.someFutureLocationType","id":"l2"}
+		`),
+	}}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	got := findings(rec)
+	for _, field := range []string{semconv.AttrType, semconv.AttrState} {
+		key := wirecheck.KindUnmappedValue + "/" + field
+		if got[key] != 1 {
+			t.Errorf("findings[%s] = %v, want 1; all=%v", key, got[key], got)
+		}
+	}
+
+	var policies, locations float64
+	for _, p := range rec.MetricPoints(policiesMetricName) {
+		policies += p.Value
+	}
+	for _, p := range rec.MetricPoints(namedLocationsMetricName) {
+		locations += p.Value
+	}
+	if policies != 1 {
+		t.Errorf("policy total = %v, want 1 — reporting must not change the count", policies)
+	}
+	if locations != 1 {
+		t.Errorf("named location total = %v, want 1 — reporting must not change the count", locations)
+	}
+	// Both metrics still emit their full zero-filled series set: a surprise must
+	// not cost a fetch or collapse the bounded dimension.
+	if n := len(rec.MetricPoints(namedLocationsMetricName)); n != 4 {
+		t.Errorf("named location series = %d, want 4 (zero-fill intact)", n)
+	}
+}
+
+// TestWatchedSetsComeFromTheCollectorsOwnMappings is the anti-drift guard: both
+// Enums must be DERIVED from the very tables the collector maps on, never a
+// hand-restated list that can fall out of step with them (#234). Evidence for
+// the members is this package's own constants — not Microsoft's documentation.
+func TestWatchedSetsComeFromTheCollectorsOwnMappings(t *testing.T) {
+	for _, odataType := range []string{odataTypeIPNamedLocation, odataTypeCountryNamedLocation} {
+		if !knownNamedLocationTypes.Has(odataType) {
+			t.Errorf("knownNamedLocationTypes is missing %q, a subtype this collector maps", odataType)
+		}
+		if _, ok := namedLocationType(odataType); !ok {
+			t.Errorf("namedLocationType(%q) does not map — the watched set and the mapped set have diverged", odataType)
+		}
+	}
+	if n := len(knownNamedLocationTypes); n != len(namedLocationTypes) {
+		t.Errorf("knownNamedLocationTypes has %d members, namedLocationTypes maps %d — it must be derived, not restated", n, len(namedLocationTypes))
+	}
+	if n := len(knownPolicyStates); n != len(policyStates) {
+		t.Errorf("knownPolicyStates has %d members, policyStates maps %d — it must be derived, not restated", n, len(policyStates))
+	}
+	for _, ps := range policyStates {
+		if !knownPolicyStates.Has(ps.graphValue) {
+			t.Errorf("knownPolicyStates is missing %q, a state this collector maps", ps.graphValue)
+		}
 	}
 }

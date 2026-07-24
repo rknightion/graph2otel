@@ -3,6 +3,7 @@ package unifiedaudit
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"reflect"
 	"strings"
 	"testing"
@@ -12,7 +13,9 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/jobpipeline"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // TestBuildRequest asserts the window [from, to] becomes the exact JSON body
@@ -986,6 +989,10 @@ func deps(t *testing.T, client jobpipeline.JobClient) collectors.WindowDeps {
 		TenantID:  "t1",
 		JobClient: client,
 		Store:     checkpoint.NewStore(t.TempDir()),
+		// Discarded, not defaulted: the wire-assumption tests below deliberately
+		// trip the watchdog, and its one-shot WARN would otherwise print a wall of
+		// alarming text on a passing run (#234).
+		Logger: slog.New(slog.DiscardHandler),
 	}
 }
 
@@ -1190,3 +1197,218 @@ var _ jobpipeline.JobClient = (*fakeJobClient)(nil)
 
 // Compile-time: the collector satisfies the window seam.
 var _ collector.WindowCollector = (*collectorImpl)(nil)
+
+// --- wire-assumption watchdog (#234) -------------------------------------
+//
+// Every assumption covered here came from ONE capture and is then trusted
+// forever, and every one fails silently. The value sets this collector does NOT
+// declare — RequestType above all — are argued in the package doc.
+
+// collectRecords drives the real engine over the given raw records and returns
+// the recorder, so a finding is asserted where it is actually emitted. The
+// mapper alone cannot report anything: it is handed no emitter (see watcher).
+func collectRecords(t *testing.T, raws ...string) *telemetrytest.Recorder {
+	t.Helper()
+	recs := make([]map[string]any, 0, len(raws))
+	for _, raw := range raws {
+		recs = append(recs, decodeLive(t, raw))
+	}
+	rec := telemetrytest.New()
+	fake := &fakeJobClient{statuses: []string{jobpipeline.StatusSucceeded}, records: recs}
+	c := newCollector(deps(t, fake))
+	// The window brackets every captured record's createdDateTime.
+	from := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter()); err != nil {
+		t.Fatalf("CollectWindow: %v", err)
+	}
+	return rec
+}
+
+// findings totals the watchdog counter by "<kind>/<field>", the same shape
+// defender.quarantine's tests use.
+func findings(rec *telemetrytest.Recorder) map[string]float64 {
+	out := map[string]float64{}
+	for _, p := range rec.MetricPoints(wirecheck.MetricUnexpected) {
+		out[p.Attrs[semconv.AttrKind]+"/"+p.Attrs[semconv.AttrField]] += p.Value
+	}
+	return out
+}
+
+// mutateLive decodes a pinned record, applies fn to the whole envelope, and
+// re-encodes it — so each case starts from the real wire shape and changes
+// exactly one thing.
+func mutateLive(t *testing.T, raw string, fn func(rec map[string]any)) string {
+	t.Helper()
+	rec := decodeLive(t, raw)
+	fn(rec)
+	out, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatalf("re-encoding the mutated record: %v", err)
+	}
+	return string(out)
+}
+
+// The two records of an IN-SCOPE record type are the steady state. If either
+// produces a finding, the watchdog cries wolf on correct data and nobody will
+// read it again.
+func TestInScopeLiveRecordsReportNothingUnexpected(t *testing.T) {
+	for name, raw := range map[string]string{
+		"quarantine release (live)":      liveQuarantineReleaseRecord,
+		"SharePoint file op (synthetic)": syntheticInScopeClientIPRecord,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := findings(collectRecords(t, raw)); len(got) != 0 {
+				t.Errorf("an in-scope record produced findings %v, want none", got)
+			}
+		})
+	}
+}
+
+// The include-list is the only thing keeping this collector off the tenant's
+// firehose, and that it filters SERVER-SIDE has never been measured — #98
+// verified the other half, that each entry is accepted and returns records.
+//
+// The four fixtures below are the evidence: real rows, of record types this
+// collector never asks for, captured from an UNFILTERED query. If one of these
+// types ever arrives from a filtered one, the filter has stopped filtering.
+func TestExcludedRecordTypeIsReportedAsAFilterBreak(t *testing.T) {
+	for name, raw := range map[string]string{
+		"AzureActiveDirectoryStsLogon": liveUserLoggedInRecord,
+		"DataInsightsRestApiAudit":     liveGUIDUserIDRecord,
+		"AuditSearch":                  liveNullSentinelUserKeyRecord,
+	} {
+		t.Run(name, func(t *testing.T) {
+			rec := collectRecords(t, raw)
+			key := wirecheck.KindInvariant + "/" + ruleRecordTypeFilter
+			if got := findings(rec)[key]; got != 1 {
+				t.Errorf("findings[%s] = %v, want 1; all=%v", key, got, findings(rec))
+			}
+			// Report-only: an unasked-for record type is still emitted. Dropping
+			// it here would hide the volume problem rather than announce it.
+			if got := len(rec.LogRecords()); got != 1 {
+				t.Errorf("emitted %d records, want 1 — a filter break must never drop the record", got)
+			}
+		})
+	}
+
+	// DLPEndpoint was 78% of the unfiltered window and is the reason the
+	// include-list exists, but no DLPEndpoint row is pinned in this package — the
+	// type name comes from the 2026-07-17 census. Assert on the record type alone
+	// so the most consequential member is still covered.
+	t.Run("DLPEndpoint (census, no pinned row)", func(t *testing.T) {
+		raw := mutateLive(t, liveQuarantineReleaseRecord, func(rec map[string]any) {
+			rec["auditLogRecordType"] = "DLPEndpoint"
+		})
+		key := wirecheck.KindInvariant + "/" + ruleRecordTypeFilter
+		if got := findings(collectRecords(t, raw))[key]; got != 1 {
+			t.Errorf("findings[%s] = %v, want 1", key, got)
+		}
+	})
+}
+
+// auditData arrives as a plain nested object on this transport, not the
+// doubly-JSON-encoded string entra/riskdetections' additionalInfo is. If that
+// flips, nested() returns nil and six attributes vanish at once.
+func TestAuditDataAsAStringIsReportedAsAnInvariantBreak(t *testing.T) {
+	raw := mutateLive(t, liveQuarantineReleaseRecord, func(rec map[string]any) {
+		encoded, err := json.Marshal(rec["auditData"])
+		if err != nil {
+			t.Fatalf("re-encoding auditData: %v", err)
+		}
+		rec["auditData"] = string(encoded)
+	})
+	rec := collectRecords(t, raw)
+	key := wirecheck.KindInvariant + "/" + ruleAuditDataObject
+	if got := findings(rec)[key]; got != 1 {
+		t.Errorf("findings[%s] = %v, want 1; all=%v", key, got, findings(rec))
+	}
+	// The record still emits, carrying only its envelope fields — which is
+	// exactly the silent degradation this check exists to announce.
+	logs := rec.LogRecords()
+	if len(logs) != 1 {
+		t.Fatalf("emitted %d records, want 1", len(logs))
+	}
+	if got, present := logs[0].Attrs["workload"]; present {
+		t.Errorf("workload = %q, want it ABSENT — this is the loss the finding reports", got)
+	}
+}
+
+// A record with no auditData at all is the normal case (see TestMapOmitsAbsentAttrs),
+// so absence must never be mistaken for a type change.
+func TestAbsentAuditDataIsNotAnInvariantBreak(t *testing.T) {
+	for name, set := range map[string]func(rec map[string]any){
+		"absent": func(rec map[string]any) { delete(rec, "auditData") },
+		"null":   func(rec map[string]any) { rec["auditData"] = nil },
+	} {
+		t.Run(name, func(t *testing.T) {
+			raw := mutateLive(t, liveQuarantineReleaseRecord, set)
+			key := wirecheck.KindInvariant + "/" + ruleAuditDataObject
+			if got := findings(collectRecords(t, raw))[key]; got != 0 {
+				t.Errorf("findings[%s] = %v, want 0 — absent auditData is normal, not a type change", key, got)
+			}
+		})
+	}
+}
+
+// The crossing was measured 500/500 and getting it wrong IS #151. Each record
+// carries the classic O365 names inside auditData, so it argues with its own
+// envelope — no remembered measurement needed.
+func TestUserFieldCrossingBreakIsReported(t *testing.T) {
+	for name, set := range map[string]func(rec map[string]any){
+		"userId no longer holds the classic UserKey": func(rec map[string]any) {
+			rec["userId"] = "someone-else"
+		},
+		"userPrincipalName no longer holds the classic UserId": func(rec map[string]any) {
+			rec["userPrincipalName"] = "someone-else"
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			raw := mutateLive(t, liveQuarantineReleaseRecord, set)
+			rec := collectRecords(t, raw)
+			key := wirecheck.KindInvariant + "/" + ruleUserFieldCrossing
+			if got := findings(rec)[key]; got != 1 {
+				t.Errorf("findings[%s] = %v, want 1; all=%v", key, got, findings(rec))
+			}
+			if got := len(rec.LogRecords()); got != 1 {
+				t.Errorf("emitted %d records, want 1 — a crossing break must never drop the record", got)
+			}
+		})
+	}
+}
+
+// Only compared when BOTH sides are populated. A record whose auditData carries
+// no UserKey/UserId is not evidence the crossing broke.
+func TestAbsentUserFieldsAreNotACrossingBreak(t *testing.T) {
+	raw := mutateLive(t, liveQuarantineReleaseRecord, func(rec map[string]any) {
+		data, _ := rec["auditData"].(map[string]any)
+		delete(data, "UserKey")
+		delete(data, "UserId")
+	})
+	key := wirecheck.KindInvariant + "/" + ruleUserFieldCrossing
+	if got := findings(collectRecords(t, raw))[key]; got != 0 {
+		t.Errorf("findings[%s] = %v, want 0 — an absent classic field proves nothing about the crossing", key, got)
+	}
+}
+
+// An empty dedupe id is not merely undedupeable: jobpipeline adds "" to SeenIDs
+// on the first such record, and every later one is then silently deduped away.
+func TestMissingRecordIDIsReported(t *testing.T) {
+	for name, set := range map[string]func(rec map[string]any){
+		"absent": func(rec map[string]any) { delete(rec, "id") },
+		"null":   func(rec map[string]any) { rec["id"] = nil },
+		"empty":  func(rec map[string]any) { rec["id"] = "" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			raw := mutateLive(t, liveQuarantineReleaseRecord, set)
+			rec := collectRecords(t, raw)
+			key := wirecheck.KindMissingField + "/" + semconv.AttrId
+			if got := findings(rec)[key]; got != 1 {
+				t.Errorf("findings[%s] = %v, want 1; all=%v", key, got, findings(rec))
+			}
+			if got := len(rec.LogRecords()); got != 1 {
+				t.Errorf("emitted %d records, want 1 — a missing id must never drop the record", got)
+			}
+		})
+	}
+}

@@ -14,24 +14,95 @@
 //
 // Namespace: M365 activity is neither an Entra nor an Intune signal, so it uses
 // a NEW top-level log EventName "m365.audit" (the metric-namespace rule reserves
-// entra.*/intune.* for those domains; this collector emits only logs, no
-// metrics). The collector's stable name/config key is "m365.unified_audit".
+// entra.*/intune.* for those domains; this collector emits no domain metric at
+// all — see the cardinality note). The collector's stable name/config key is
+// "m365.unified_audit".
 //
 // Cardinality note (INVERTED from the metric collectors): these are LOGS, so
 // per-entity detail — the record id, UPN, client IP, object id, operation —
 // belongs here as structured log attributes. That same data must NEVER become a
-// metric label; this package emits no metrics.
+// metric label; this package emits no DOMAIN metric. Its one metric is
+// self-observability, graph2otel.api.unexpected, whose labels are all strings
+// from graph2otel's own source (#234).
 //
 // Experimental / opt-in: this targets a licensing-gated Purview Audit surface
 // (Standard, included with E3, minimum; Premium/E5 for high-value records like
 // MailItemsAccessed and 1-year retention — verified live in #98) and is new, so
 // it is marked Experimental and registers only when config explicitly enables
 // it. A default deployment does not poll it.
+//
+// # What this collector watches, and what it deliberately does not (#234)
+//
+// Three of this package's load-bearing facts were established by ONE capture and
+// are then trusted forever, and every one of them fails SILENTLY — the API keeps
+// answering 200 and the records keep looking reasonable. Those three are watched
+// as wirecheck INVARIANTS, plus the dedupe key as a MissingField:
+//
+//   - Invariant(record_type_filter). The curated recordTypeFilters include-list
+//     is the only thing keeping this collector off the tenant's firehose (3,003
+//     of #98's 3,837 records were endpoint-DLP FileDeleted from one host). That
+//     the filter EXCLUDES server-side has never actually been measured — #98
+//     verified each entry is accepted and returns records, which is the other
+//     half. See the check for how it is tested without guessing at record-type
+//     spellings.
+//
+//   - Invariant(audit_data_object). auditData arrives as a plain nested object on
+//     this transport, NOT the doubly-JSON-encoded string entra/riskdetections'
+//     additionalInfo is. Six attributes are read straight out of it — workload,
+//     result_status, client_ip, network_message_id, release_to, request_type — so
+//     if it ever arrives as a string, nested() returns nil and all six disappear
+//     at once with no error anywhere.
+//
+//   - Invariant(user_field_crossing). The wire's `userId` holds the classic
+//     UserKey and its `userPrincipalName` holds the classic UserId — crossed,
+//     500/500 byte-identical on the 2026-07-17 capture. Taking the names at face
+//     value IS #151. Each record carries the classic names inside auditData, so
+//     the crossing is checked against the record's own envelope rather than
+//     against a remembered measurement.
+//
+//   - MissingField(id). jobpipeline dedupes on the immutable auditLogRecord.id.
+//     An empty id is not merely undedupeable: the first record adds "" to
+//     SeenIDs and then EVERY later record with an empty id is deduped away
+//     silently. That is data loss wearing the shape of a quiet tenant.
+//
+//   - NOT WATCHED: RequestType. #234 names it, and it stays unwatched. It is an
+//     UNDOCUMENTED integer enum — Microsoft publishes no member list — and this
+//     repository contains exactly one observed value (2 on a
+//     QuarantineReleaseMessage record). One integer is not a range, and guessing
+//     a bound would fire on the first legitimate member outside it. It is emitted
+//     as the raw number for the same reason; see the mapper.
+//     WHAT WOULD CLOSE IT: quarantine audit records covering each operation
+//     (release, preview, delete, policy change) so the integers can be paired
+//     with the operations that produce them, or a Microsoft-published member list.
+//
+//   - NOT WATCHED: ResultStatus. The evidence in this package positively argues
+//     AGAINST declaring it — the live captures carry "Success" (AAD sign-in) and
+//     "Successful" (quarantine), two spellings of the same outcome from two
+//     workloads, and mapRecord already tests for both "Failed" and "Failure" on
+//     the other side. A field whose spelling varies by workload has no single set
+//     to declare from four fixtures.
+//
+//   - NOT WATCHED: operation, workload, service, userType. Free-form
+//     per-workload vocabularies (`operation` alone spans every Exchange,
+//     SharePoint and Teams verb), all log-only, none bucketed to "unknown" by
+//     this collector — it passes them through raw. There is no assumed set here
+//     to break.
+//
+//   - NOT WATCHED: NetworkMessageId's presence on quarantine records, and this
+//     one is a near-miss worth recording. It is the join key onto
+//     defender.quarantine and defender.email_post_delivery, so the
+//     MissingField case looks identical to theirs — except two of the four
+//     quarantine record types in the include-list (updateQuarantineMetadata, and
+//     quarantine-policy changes generally) describe POLICY, not a message, and
+//     legitimately carry no message id at all. The check would fire on correct
+//     data every time an admin edited a quarantine policy.
 package unifiedaudit
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collector"
@@ -39,6 +110,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/jobpipeline"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 const (
@@ -129,11 +201,152 @@ var recordTypeFilters = []string{
 	"updateQuarantineMetadata",
 }
 
+// The wire assumptions this collector watches at runtime (#234). Each names a
+// guarantee taken from a single capture; see the package doc for what each one
+// costs when it stops holding.
+const (
+	// ruleRecordTypeFilter: a record type this collector never asked for came
+	// back from a filtered query.
+	ruleRecordTypeFilter = "record_type_filter"
+	// ruleAuditDataObject: auditData stopped being a plain nested object.
+	ruleAuditDataObject = "audit_data_object"
+	// ruleUserFieldCrossing: the crossed user fields stopped being crossed.
+	ruleUserFieldCrossing = "user_field_crossing"
+)
+
+// excludedRecordTypes is the evidence-backed half of the record-type filter
+// check: record types LIVE-OBSERVED in this tenant that recordTypeFilters
+// deliberately does not ask for. If one of them comes back from a filtered
+// query, the include-list has stopped filtering server-side — no inference
+// required.
+//
+// It is deliberately NOT the complement of recordTypeFilters. The filter values
+// are camelCase ("sharePointFileOperation") while the returned
+// auditLogRecordType is PascalCase ("SharePointFileOperation"), and the mapping
+// between the two forms is asserted by Microsoft's documentation, confirmed on
+// the wire for exactly one pair (quarantine -> Quarantine, live-measured
+// 2026-07-23). Deriving the whole allowed set from that transformation would
+// make the watchdog fire on a correct record whose PascalCase spelling differs
+// from the mechanical one — the exact failure mode #234 forbids. So this checks
+// only what was measured: the five types the 2026-07-17 census actually counted
+// in this tenant (DLPEndpoint 468, DataInsightsRestApiAudit 18, AuditSearch 6,
+// AzureActiveDirectoryStsLogon 6, AzureActiveDirectory 2), every one of them
+// excluded on purpose. Three are pinned as fixtures in this package's tests;
+// DLPEndpoint and AzureActiveDirectory come from that census.
+//
+// The consequence of a break is not subtle: DLPEndpoint alone was 78% of an
+// unfiltered window, so the collector would silently start ingesting several
+// times its intended volume.
+var excludedRecordTypes = wirecheck.NewEnum(
+	"DLPEndpoint",
+	"DataInsightsRestApiAudit",
+	"AuditSearch",
+	"AzureActiveDirectoryStsLogon",
+	"AzureActiveDirectory",
+)
+
+// watcher carries the wire-assumption reporter across jobpipeline's mapper
+// boundary (#234).
+//
+// jobpipeline.QueryConfig.Map is func(record) (id, Event) — it is handed no
+// emitter. wirecheck needs one: the WARN log alone is not alertable, and the
+// counter is the whole point. Rather than widen a signature the engine's other
+// callers share, this collector BINDS the emitter of the window that is running
+// for the duration of its own CollectWindow, and the mapper reads it back.
+//
+// Map runs synchronously inside CollectWindow, so the mapper always sees the
+// emitter of the window it is part of. The mutex is not for that: it is because
+// nothing promises CollectWindow is never entered twice at once, and a data race
+// on a plain field would be a real one under -race.
+type watcher struct {
+	r *wirecheck.Reporter
+
+	mu sync.Mutex
+	e  telemetry.Emitter
+}
+
+// bind sets the emitter findings are counted onto; bind(nil) clears it. A nil
+// emitter still logs the WARN, it just cannot count — see wirecheck.report.
+func (w *watcher) bind(e telemetry.Emitter) {
+	w.mu.Lock()
+	w.e = e
+	w.mu.Unlock()
+}
+
+func (w *watcher) emitter() telemetry.Emitter {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.e
+}
+
+// mapRecord is the engine's Map hook: the wire checks, then the pure mapper.
+// Report-only — nothing here can change the id, the event, or whether the record
+// is emitted.
+func (w *watcher) mapRecord(rec map[string]any) (string, telemetry.Event) {
+	w.check(rec)
+	return mapRecord(rec)
+}
+
+// check reports anything on this record that contradicts what the collector was
+// built against. See the package doc for why each check exists, and for the
+// fields deliberately left unwatched.
+func (w *watcher) check(rec map[string]any) {
+	e := w.emitter()
+
+	// The dedupe key. An empty id poisons SeenIDs: the first one is emitted and
+	// remembered as "", and every later record with an empty id is then deduped
+	// away as already seen.
+	if str(rec, "id") == "" {
+		w.r.MissingField(e, semconv.AttrId)
+	}
+
+	// The include-list is what keeps this collector off the tenant's firehose.
+	if rt := str(rec, "auditLogRecordType"); excludedRecordTypes.Has(rt) {
+		w.r.Invariant(e, ruleRecordTypeFilter,
+			"record type "+rt+" came back from a query that did not ask for it — recordTypeFilters is no longer filtering server-side, and this collector is ingesting record types it deliberately excludes")
+	}
+
+	// auditData as anything but a nested object takes six attributes with it.
+	raw, present := rec["auditData"]
+	if present && raw != nil {
+		if _, ok := raw.(map[string]any); !ok {
+			w.r.Invariant(e, ruleAuditDataObject,
+				fmt.Sprintf("auditData arrived as %T, not a nested object — workload, result_status, client_ip, network_message_id, release_to and request_type are all silently dropped", raw))
+		}
+	}
+
+	// The crossed user fields, checked against the record's OWN envelope: the
+	// classic O365 field names live inside auditData, so a record proves or
+	// disproves the crossing by itself. Only compared when both sides are
+	// populated — an absent side is the normal case, not a break.
+	if data := nested(rec, "auditData"); data != nil {
+		if classic, top := str(data, "UserKey"), str(rec, "userId"); classic != "" && top != "" && classic != top {
+			w.r.Invariant(e, ruleUserFieldCrossing,
+				"the envelope's userId no longer holds auditData.UserKey — user_key is mapped from that crossing (#151)")
+		}
+		if classic, top := str(data, "UserId"), str(rec, "userPrincipalName"); classic != "" && top != "" && classic != top {
+			w.r.Invariant(e, ruleUserFieldCrossing,
+				"the envelope's userPrincipalName no longer holds auditData.UserId — user_id is mapped from that crossing (#151)")
+		}
+	}
+}
+
 // collectorImpl is the M365 unified-audit WindowCollector: the generic
 // jobpipeline.JobCollector plus the experimental-opt-in and permission
 // declarations the composition root gates on.
 type collectorImpl struct {
 	*jobpipeline.JobCollector
+	watch *watcher
+}
+
+// CollectWindow binds the window's emitter for the duration of the poll, so
+// findings raised inside the mapper reach the counter, then delegates to the
+// generic collector. See the watcher type for why the emitter has to travel this
+// way.
+func (c *collectorImpl) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter) (time.Time, error) {
+	c.watch.bind(e)
+	defer c.watch.bind(nil)
+	return c.JobCollector.CollectWindow(ctx, from, to, e)
 }
 
 // Experimental marks the collector opt-in (beta/licensing-gated surface); the
@@ -282,19 +495,20 @@ func auditBody(operation, service, userID string) string {
 // wires the async QueryConfig to the tenant's shared, instrumented JobClient
 // (deps.JobClient) and checkpoint store (deps.Store).
 func newCollector(d collectors.WindowDeps) *collectorImpl {
+	w := &watcher{r: wirecheck.New(name, d.Logger)}
 	cfg := jobpipeline.QueryConfig{
 		CreatePath:      createPath,
 		BaseURLOverride: betaBaseURL,
 		CheckpointKey:   checkpointKey,
 		BuildRequest:    buildRequest,
-		Map:             mapRecord,
+		Map:             w.mapRecord,
 		TimeField:       timeField,
 		SafetyLag:       safetyLag,
 		Overlap:         overlap,
 		PageSize:        pageSize,
 	}
 	jc := jobpipeline.NewJobCollector(name, interval, lag, d.TenantID, cfg, d.JobClient, d.Store)
-	return &collectorImpl{JobCollector: jc}
+	return &collectorImpl{JobCollector: jc, watch: w}
 }
 
 // --- small defensive accessors for untyped Graph JSON ---
