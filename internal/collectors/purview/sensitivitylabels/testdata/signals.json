@@ -1,6 +1,16 @@
 {
   "Metrics": [
     {
+      "Name": "graph2otel.api.unexpected",
+      "Unit": "1",
+      "Kind": "sum",
+      "AttrKeys": [
+        "collector",
+        "field",
+        "kind"
+      ]
+    },
+    {
       "Name": "purview.labels.count",
       "Unit": "{label}",
       "Kind": "gauge",

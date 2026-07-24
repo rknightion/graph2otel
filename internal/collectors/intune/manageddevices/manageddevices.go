@@ -53,6 +53,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // collectorName is the stable key used for config (enable/interval),
@@ -126,6 +127,25 @@ func complianceBucketFor(raw string) string {
 	}
 	return "other"
 }
+
+// knownComplianceStates is the wire assumption this collector watches at
+// runtime (#233/#234): compliance_state is a METRIC LABEL, and an enum member
+// Microsoft adds later collapses into "other" — a bucket that already carries
+// legitimate traffic, so the fleet count moves between series and nothing says
+// why. The set is derived from complianceBuckets' own keys rather than
+// restated, so it is by construction the set this collector maps: it fires when
+// the mapping has a hole, never on data the collector handles correctly.
+//
+// Deliberately NOT applied to operatingSystem: that property is free text with
+// no Graph-side enum (see osPrefixes), so a declared set there would fire on
+// correct data — the failure mode #234 warns about.
+var knownComplianceStates = func() wirecheck.Enum {
+	keys := make([]string, 0, len(complianceBuckets))
+	for k := range complianceBuckets {
+		keys = append(keys, k)
+	}
+	return wirecheck.NewEnum(keys...)
+}()
 
 // osPrefixes buckets the free-text managedDevice.operatingSystem property
 // (no enum in the Graph schema) into a small, fixed set of platform names,
@@ -396,6 +416,7 @@ type Collector struct {
 	g       collectors.GraphClient
 	baseURL string
 	logger  *slog.Logger
+	watch   *wirecheck.Reporter
 	// fleet fetches the managedDevices list. Defaults to an uncached
 	// DirectFleetFetcher over g (so unit tests are unchanged); the composition
 	// root injects a shared CachingFleetFetcher via the factory so this and
@@ -420,6 +441,7 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 		g:       g,
 		baseURL: defaultBaseURL,
 		logger:  logger,
+		watch:   wirecheck.New(collectorName, logger),
 		fleet:   &collectors.DirectFleetFetcher{G: g, URL: defaultBaseURL + "/deviceManagement/managedDevices" + managedDevicesSelect},
 		now:     time.Now,
 	}
@@ -524,6 +546,7 @@ func (c *Collector) collectFleet(ctx context.Context, e telemetry.Emitter) error
 			c.logger.Warn("manageddevices: skipping malformed managedDevice element", "collector", collectorName, "error", err)
 			continue
 		}
+		c.watch.Value(e, semconv.AttrComplianceState, d.ComplianceState, knownComplianceStates)
 		compliance := complianceBucketFor(d.ComplianceState)
 		os := osBucketFor(d.OperatingSystem)
 		counts[[2]string{compliance, os}]++

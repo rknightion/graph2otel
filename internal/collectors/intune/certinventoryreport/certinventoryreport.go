@@ -80,6 +80,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/exportjob"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // collectorName is the stable key used for config (enable/interval),
@@ -176,6 +177,24 @@ func certificateStatusBucketFor(raw string) string {
 	return otherStateBucket
 }
 
+// knownCertificateStatuses is the wire assumption this collector watches at
+// runtime (#233/#234). The announce log below is diagnosable but NOT alertable:
+// nothing counts it, so a fleet whose every row lands in "other" is visible
+// only to whoever reads the logs — and `state` is a METRIC LABEL, so that miss
+// moves the healthy/failed counts an operator alerts on. The counter is what
+// makes it alertable; the announce log stays, because it carries the issuer the
+// bounded counter must not.
+//
+// Derived from certificateStatusBuckets' own keys rather than restated, so the
+// watched set is exactly the set this collector maps.
+var knownCertificateStatuses = func() wirecheck.Enum {
+	keys := make([]string, 0, len(certificateStatusBuckets))
+	for k := range certificateStatusBuckets {
+		keys = append(keys, k)
+	}
+	return wirecheck.NewEnum(keys...)
+}()
+
 // Bounded expiry-window buckets for the days_until_expiry dimension. Fixed
 // regardless of tenant/cert-count.
 const (
@@ -269,6 +288,7 @@ type bucketKey struct {
 type Collector struct {
 	export exportjob.Runner
 	logger *slog.Logger
+	watch  *wirecheck.Reporter
 	// now returns the current time; overridable in tests so expiry bucketing
 	// is deterministic and assertable.
 	now func() time.Time
@@ -282,7 +302,7 @@ func New(export exportjob.Runner, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Collector{export: export, logger: logger, now: time.Now}
+	return &Collector{export: export, logger: logger, watch: wirecheck.New(collectorName, logger), now: time.Now}
 }
 
 // Name implements collector.SnapshotCollector.
@@ -358,6 +378,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		expiryBucket := expiryBucketFor(now, parseRowTime(row["ValidTo"]))
 		days[bucketKey{issuer: issuer, bucket: expiryBucket}]++
 
+		c.watch.Value(e, semconv.AttrCertificateStatus, row["CertificateStatus"], knownCertificateStatuses)
 		stateBucket := certificateStatusBucketFor(row["CertificateStatus"])
 		// Announce a value the vocabulary does not cover, naming the raw
 		// string. This collector's CertificateStatus mapping is still an

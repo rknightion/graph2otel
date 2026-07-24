@@ -68,6 +68,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/preflight"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // collectorName is the stable key used for config (enable/interval),
@@ -168,7 +169,26 @@ var installStateColumns = []struct {
 type Collector struct {
 	export exportjob.Runner
 	logger *slog.Logger
+	watch  *wirecheck.Reporter
 }
+
+// knownPlatformCodes is the wire assumption this collector watches at runtime
+// (#233/#234). platform is a METRIC LABEL fed from platformNames, which is a
+// LIVE-MEASURED code table (2026-07-17, #142) and therefore a fact about one
+// tenant at one moment: '4' was already known to exist and simply not be
+// emitted there. The announce log below makes a decode miss diagnosable but not
+// ALERTABLE — nothing counts it — so a code Microsoft starts sending moves
+// installs into "unknown" and only a log reader would ever know.
+//
+// Derived from platformNames' own keys rather than restated, so the watched set
+// is exactly the set this collector decodes.
+var knownPlatformCodes = func() wirecheck.Enum {
+	keys := make([]string, 0, len(platformNames))
+	for k := range platformNames {
+		keys = append(keys, k)
+	}
+	return wirecheck.NewEnum(keys...)
+}()
 
 // New builds the app-install-status collector. export is typically the
 // per-tenant *exportjob.Client the composition root builds
@@ -179,7 +199,7 @@ func New(export exportjob.Runner, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Collector{export: export, logger: logger}
+	return &Collector{export: export, logger: logger, watch: wirecheck.New(collectorName, logger)}
 }
 
 // Name implements collector.SnapshotCollector.
@@ -257,6 +277,10 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	counts := map[seriesKey]float64{}
 	for _, row := range rows {
 		platform, known := platformFor(row["Platform"])
+		// Count it too (#234): the log below is diagnosable but not alertable,
+		// and platform is a METRIC LABEL, so a new code moves installs into
+		// "unknown" where only a log reader would see it.
+		c.watch.Value(e, semconv.AttrPlatformCode, row["Platform"], knownPlatformCodes)
 		// An unmapped code is a Microsoft-side enum addition, and it is
 		// invisible on the metric (it buckets to "unknown" like an empty
 		// column). Log it once per row so a new platform is discoverable

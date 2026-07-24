@@ -8,7 +8,9 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/collectors/purview/sensitivitylabels"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // fakeGraph is a canned-response GraphClient: bodies keyed by exact URL, or an
@@ -408,5 +410,73 @@ func TestRetentionGatingMetadata(t *testing.T) {
 	}
 	if c.Name() != retentionName {
 		t.Errorf("Name = %q, want %q", c.Name(), retentionName)
+	}
+}
+
+// --- wire-assumption watchdog (#233/#234) --------------------------------
+//
+// All three retention enums are METRIC LABELS, and all three collapse an
+// unrecognized member into the same "unknown" bucket an absent field lands in.
+// A Microsoft addition therefore moves the by-combination count with nothing
+// saying why.
+
+func findings(rec *telemetrytest.Recorder) map[string]float64 {
+	out := map[string]float64{}
+	for _, p := range rec.MetricPoints(wirecheck.MetricUnexpected) {
+		out[p.Attrs[semconv.AttrKind]+"/"+p.Attrs[semconv.AttrField]] += p.Value
+	}
+	return out
+}
+
+func TestRetentionMappedEnumsReportNothingUnexpected(t *testing.T) {
+	rl := `{"value":[
+	  {"displayName":"A","behaviorDuringRetentionPeriod":"retainAsRecord","actionAfterRetentionPeriod":"delete","retentionTrigger":"dateLabeled"},
+	  {"displayName":"B","behaviorDuringRetentionPeriod":"retain","actionAfterRetentionPeriod":"none","retentionTrigger":"dateCreated"},
+	  {"displayName":"C","behaviorDuringRetentionPeriod":"doNotRetain","actionAfterRetentionPeriod":"startDispositionReview","retentionTrigger":"dateOfEvent"}
+	]}`
+	et := `{"value":[]}`
+	g := &fakeGraph{bodies: map[string]string{retentionURL: rl, eventTypesURL: et}}
+	rec := telemetrytest.New()
+	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if got := findings(rec); len(got) != 0 {
+		t.Errorf("mapped enums produced findings %v, want none", got)
+	}
+}
+
+func TestRetentionUnmappedEnumsAreReported(t *testing.T) {
+	// An EMPTY actionAfterRetentionPeriod is deliberately included: an absent
+	// optional field is the normal case across these APIs and must NOT be a
+	// finding, or the watchdog fires on correct data.
+	rl := `{"value":[
+	  {"displayName":"D","behaviorDuringRetentionPeriod":"martian","actionAfterRetentionPeriod":"","retentionTrigger":"whatever"}
+	]}`
+	et := `{"value":[]}`
+	g := &fakeGraph{bodies: map[string]string{retentionURL: rl, eventTypesURL: et}}
+	rec := telemetrytest.New()
+	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	got := findings(rec)
+	want := map[string]float64{
+		wirecheck.KindUnmappedValue + "/" + semconv.AttrBehaviorDuringRetention: 1,
+		wirecheck.KindUnmappedValue + "/" + semconv.AttrRetentionTrigger:        1,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("findings = %v, want %v", got, want)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("findings[%s] = %v, want %v (all: %v)", k, got[k], v, got)
+		}
+	}
+	// Report-only: the label is still counted and still emitted as a twin.
+	var total float64
+	for _, p := range rec.MetricPoints(retentionLabelsMetric) {
+		total += p.Value
+	}
+	if total != 1 {
+		t.Errorf("label count = %v, want 1 — an unexpected value must not drop a label", total)
 	}
 }

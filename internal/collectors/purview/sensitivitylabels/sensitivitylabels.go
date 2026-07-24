@@ -104,6 +104,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // defaultBaseURL is the Graph v1.0 root.
@@ -151,6 +152,7 @@ type SensitivityCollector struct {
 	g       collectors.GraphClient
 	baseURL string
 	logger  *slog.Logger
+	watch   *wirecheck.Reporter
 }
 
 // NewSensitivity builds the sensitivity-label collector. A nil logger falls
@@ -159,7 +161,7 @@ func NewSensitivity(g collectors.GraphClient, logger *slog.Logger) *SensitivityC
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &SensitivityCollector{g: g, baseURL: defaultBaseURL, logger: logger}
+	return &SensitivityCollector{g: g, baseURL: defaultBaseURL, logger: logger, watch: wirecheck.New(sensitivityName, logger)}
 }
 
 // Name implements collector.Collector.
@@ -225,6 +227,7 @@ func (c *SensitivityCollector) Collect(ctx context.Context, e telemetry.Emitter)
 			c.logger.Warn("sensitivity labels: skipping unparseable entry", "collector", sensitivityName, "error", err)
 			continue
 		}
+		c.watchTargets(e, l.ApplicableTo)
 		for _, t := range applicableTargets(l.ApplicableTo) {
 			byTarget[t]++
 		}
@@ -271,6 +274,31 @@ var sensitivityTargets = map[string]string{
 	"teamwork":        "teamwork",
 	"site":            "site",
 	"schematizeddata": "schematized_data",
+}
+
+// knownTargets is the wire assumption this collector watches at runtime
+// (#233/#234): applicable_to is a METRIC LABEL, and an unrecognized target
+// collapses into "unknown" — a bucket nobody inspects, so a member Microsoft
+// adds to the sensitivityLabelTarget flags enum moves the per-target counts in
+// silence. Derived from sensitivityTargets' own keys rather than restated, so
+// the watched set is exactly the set this collector maps.
+var knownTargets = func() wirecheck.Enum {
+	keys := make([]string, 0, len(sensitivityTargets))
+	for k := range sensitivityTargets {
+		keys = append(keys, k)
+	}
+	return wirecheck.NewEnum(keys...)
+}()
+
+// watchTargets reports every flag in a label's applicableTo that this collector
+// does not map. It walks the raw string rather than applicableTargets' output
+// because that output has already collapsed every unmapped flag into one
+// "unknown" — which is precisely the information being recovered. An empty flag
+// is skipped by wirecheck itself: absent optional fields are the normal case.
+func (c *SensitivityCollector) watchTargets(e telemetry.Emitter, raw string) {
+	for _, part := range strings.Split(raw, ",") {
+		c.watch.Value(e, semconv.AttrApplicableTo, strings.ToLower(strings.TrimSpace(part)), knownTargets)
+	}
 }
 
 // applicableTargets splits the comma-separated applicableTo flags string into

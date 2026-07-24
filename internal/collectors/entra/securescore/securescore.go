@@ -40,6 +40,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // collectorName is the stable key used for config (enable/interval),
@@ -81,7 +82,27 @@ type Collector struct {
 	g       collectors.GraphClient
 	baseURL string
 	logger  *slog.Logger
+	watch   *wirecheck.Reporter
 }
+
+// The wire assumptions this collector watches at runtime (#233/#234).
+//
+// Both fields are METRIC LABELS and both normalizers below collapse an
+// unrecognized member into "unknown" — a bucket nobody inspects. A category
+// Microsoft adds moves the by-category score AND the maximum-attainable score
+// it is compared against; a state Microsoft adds moves the by-status control
+// count. Neither is visible without this.
+//
+// Each Enum is the set its normalizer NAMES: a value this collector explicitly
+// handles is one it was built against, which is what makes the watchdog fire on
+// a hole in the mapping rather than on correct data (the m365.message_trace
+// precedent). Members are the LOWERCASED forms the switches match on, and the
+// reported value is lowercased to match — the raw casing is not what the
+// mapping keys on ("Identity" and "identity" are the same control category).
+var (
+	knownCategories = wirecheck.NewEnum("identity", "data", "device", "apps", "infrastructure")
+	knownStates     = wirecheck.NewEnum("default", "ignored", "thirdparty", "reviewed")
+)
 
 // New builds the secure-score collector. A nil logger falls back to the slog
 // default.
@@ -89,7 +110,7 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Collector{g: g, baseURL: defaultBaseURL, logger: logger}
+	return &Collector{g: g, baseURL: defaultBaseURL, logger: logger, watch: wirecheck.New(collectorName, logger)}
 }
 
 // Name implements collector.Collector.
@@ -207,6 +228,7 @@ func (c *Collector) collectScore(ctx context.Context, e telemetry.Emitter) error
 func (c *Collector) emitControlScores(e telemetry.Emitter, scores []controlScore) {
 	byCategory := map[string]float64{}
 	for _, cs := range scores {
+		c.watch.Value(e, semconv.AttrCategory, strings.ToLower(cs.ControlCategory), knownCategories)
 		byCategory[normalizeCategory(cs.ControlCategory)] += cs.Score
 		e.LogEvent(controlTwin(cs))
 	}
@@ -323,9 +345,13 @@ func (c *Collector) collectControlProfiles(ctx context.Context, e telemetry.Emit
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return fmt.Errorf("decode secureScoreControlProfile: %w", err)
 		}
+		state := latestState(p.ControlStateUpdates)
+		c.watch.Value(e, semconv.AttrCategory, strings.ToLower(p.ControlCategory), knownCategories)
+		c.watch.Value(e, semconv.AttrStatus, strings.ToLower(state), knownStates)
+
 		cat := normalizeCategory(p.ControlCategory)
 		byCategory[cat]++
-		byStatus[normalizeStatus(latestState(p.ControlStateUpdates))]++
+		byStatus[normalizeStatus(state)]++
 		maxByCategory[cat] += p.MaxScore
 		e.LogEvent(profileTwin(p))
 	}

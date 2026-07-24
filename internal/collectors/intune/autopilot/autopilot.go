@@ -44,6 +44,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // collectorName is the stable key used for config (enable/interval),
@@ -155,6 +156,32 @@ func syncStatusBucketFor(raw string) string {
 		return b
 	}
 	return "other"
+}
+
+// The wire assumptions this collector watches at runtime (#233/#234).
+//
+// All three bucket maps above feed METRIC LABELS, and all three collapse an
+// unrecognized member into "other" — a bucket that looks like a designed-in
+// steady state and that nothing ever complains about. That is exactly how a
+// Microsoft enum addition moves a series without saying so.
+//
+// Each Enum is derived from its own bucket map's KEYS rather than restated, so
+// the watched set is by construction the set this collector actually maps: it
+// fires when, and only when, the mapping has a hole. Same reasoning as
+// m365.message_trace's knownStatuses.
+var (
+	knownEnrollmentStates = enumOfKeys(enrollmentStateBuckets)
+	knownDeviceTypes      = enumOfKeys(deviceTypeBuckets)
+	knownSyncStatuses     = enumOfKeys(syncStatusBuckets)
+)
+
+// enumOfKeys builds the watched Enum from a bucket map's raw wire keys.
+func enumOfKeys(m map[string]string) wirecheck.Enum {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return wirecheck.NewEnum(keys...)
 }
 
 func boolAttr(b bool) string {
@@ -299,6 +326,7 @@ type Collector struct {
 	baseURL string
 	betaURL string
 	logger  *slog.Logger
+	watch   *wirecheck.Reporter
 	// now returns the current time; overridable in tests so stale-contact
 	// bucketing is deterministic and assertable.
 	now func() time.Time
@@ -310,7 +338,14 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Collector{g: g, baseURL: defaultBaseURL, betaURL: betaBaseURL, logger: logger, now: time.Now}
+	return &Collector{
+		g:       g,
+		baseURL: defaultBaseURL,
+		betaURL: betaBaseURL,
+		logger:  logger,
+		watch:   wirecheck.New(collectorName, logger),
+		now:     time.Now,
+	}
 }
 
 // Name implements collector.Collector.
@@ -396,6 +431,7 @@ func (c *Collector) collectDevices(ctx context.Context, e telemetry.Emitter) err
 		norm := normGroupTag(d.GroupTag)
 		tagTotals[norm]++
 		stale := d.LastContactedDateTime != nil && now.Sub(*d.LastContactedDateTime) > staleContactThreshold
+		c.watch.Value(e, semconv.AttrEnrollmentState, d.EnrollmentState, knownEnrollmentStates)
 		items = append(items, parsed{state: enrollmentStateBucketFor(d.EnrollmentState), groupTag: norm, stale: stale})
 	}
 
@@ -462,6 +498,7 @@ func (c *Collector) collectProfiles(ctx context.Context, e telemetry.Emitter) er
 			continue
 		}
 
+		c.watch.Value(e, semconv.AttrDeviceType, p.DeviceType, knownDeviceTypes)
 		countBuckets[[2]string{deviceTypeBucketFor(p.DeviceType), boolAttr(p.PreprovisioningAllowed)}]++
 
 		name := p.profileName()
@@ -563,6 +600,7 @@ func (c *Collector) collectSyncSettings(ctx context.Context, e telemetry.Emitter
 			age, nil)
 	}
 
+	c.watch.Value(e, semconv.AttrSyncStatus, s.SyncStatus, knownSyncStatuses)
 	bucket := syncStatusBucketFor(s.SyncStatus)
 	e.GaugeSnapshot(syncStatusMetricName, "1",
 		"Windows Autopilot device-registration sync status (value 1 for the current bounded status bucket).",

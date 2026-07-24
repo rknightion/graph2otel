@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // fakeGraph maps request URLs to canned raw bodies (or errors), mirroring the
@@ -811,5 +814,68 @@ func TestNameIntervalPermissionsAndExperimental(t *testing.T) {
 	var _ collectors.Experimental = c
 	if !c.Experimental() {
 		t.Error("Experimental() = false, want true (deployment profiles are beta-only)")
+	}
+}
+
+// --- wire-assumption watchdog (#233/#234) --------------------------------
+//
+// enrollment_state, device_type and sync_status are METRIC LABELS derived from
+// three explicit bucket maps in this package. A Microsoft addition to any of
+// those enums lands in "other"/"unknown" and silently moves a series, so each
+// is declared to wirecheck and reported rather than swallowed.
+
+func findings(rec *telemetrytest.Recorder) map[string]float64 {
+	out := map[string]float64{}
+	for _, p := range rec.MetricPoints(wirecheck.MetricUnexpected) {
+		out[p.Attrs[semconv.AttrKind]+"/"+p.Attrs[semconv.AttrField]] += p.Value
+	}
+	return out
+}
+
+// The verbatim live captures are the steady state. A watchdog that fires on
+// them is worse than no watchdog at all.
+func TestLiveCaptureReportsNothingUnexpected(t *testing.T) {
+	g := &fakeGraph{bodies: baseFixtures()}
+	rec := telemetrytest.New()
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if got := findings(rec); len(got) != 0 {
+		t.Errorf("live capture produced findings %v, want none", got)
+	}
+}
+
+func TestUnmappedEnumsOnMetricLabelsAreReported(t *testing.T) {
+	for _, tc := range []struct{ name, from, to, field string }{
+		{"enrollmentState", `"enrollmentState": "enrolled"`, `"enrollmentState": "quarantined"`, semconv.AttrEnrollmentState},
+		{"deviceType", `"deviceType": "windowsPc"`, `"deviceType": "windowsIoT"`, semconv.AttrDeviceType},
+		{"syncStatus", `"syncStatus": "completed"`, `"syncStatus": "throttled"`, semconv.AttrSyncStatus},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bodies := baseFixtures()
+			replaced := false
+			for url, body := range bodies {
+				if next := strings.Replace(body, tc.from, tc.to, 1); next != body {
+					bodies[url] = next
+					replaced = true
+				}
+			}
+			if !replaced {
+				t.Fatalf("no fixture contains %q — the test is not exercising what it claims", tc.from)
+			}
+			rec := telemetrytest.New()
+			if err := newTestCollector(&fakeGraph{bodies: bodies}).Collect(context.Background(), rec.Emitter()); err != nil {
+				t.Fatalf("Collect: %v", err)
+			}
+			key := wirecheck.KindUnmappedValue + "/" + tc.field
+			if got := findings(rec)[key]; got != 1 {
+				t.Errorf("findings[%s] = %v, want 1; all=%v", key, got, findings(rec))
+			}
+			// Report-only: the rows must still be counted. An unexpected value is
+			// never a reason to lose data.
+			if len(rec.MetricPoints(devicesMetricName)) == 0 || len(rec.MetricPoints(profileCountMetricName)) == 0 {
+				t.Error("an unexpected enum value must not stop the collector emitting")
+			}
+		})
 	}
 }

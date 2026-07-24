@@ -12,6 +12,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // fakeGraph maps request URLs to canned raw bodies (or errors), mirroring the
@@ -981,5 +982,62 @@ func TestLogTwinGraceExpiryFiltersSentinels(t *testing.T) {
 				t.Errorf("grace attr = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// --- wire-assumption watchdog (#233/#234) --------------------------------
+//
+// compliance_state is a METRIC LABEL and complianceBuckets is the complete set
+// this collector maps. A member Microsoft adds later lands in "other" and moves
+// the fleet count between series with nothing saying so.
+
+func findings(rec *telemetrytest.Recorder) map[string]float64 {
+	out := map[string]float64{}
+	for _, p := range rec.MetricPoints(wirecheck.MetricUnexpected) {
+		out[p.Attrs[semconv.AttrKind]+"/"+p.Attrs[semconv.AttrField]] += p.Value
+	}
+	return out
+}
+
+// The pinned live fleet is the steady state — it must produce no findings.
+func TestLiveFleetReportsNothingUnexpected(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		overviewURL(): overviewFixture,
+		fleetURL():    liveFleetBody(),
+	}}
+	rec := telemetrytest.New()
+	c := New(g, nil)
+	c.now = func() time.Time { return liveNow }
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if got := findings(rec); len(got) != 0 {
+		t.Errorf("live fleet produced findings %v, want none", got)
+	}
+}
+
+func TestUnmappedComplianceStateIsReported(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		overviewURL(): overviewFixture,
+		fleetURL(): devicesPage(
+			device("compliant", "Windows 10", true, daysAgo(0)),
+			device("quarantined", "Windows 10", true, daysAgo(0)),
+		),
+	}}
+	rec := telemetrytest.New()
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	key := wirecheck.KindUnmappedValue + "/" + semconv.AttrComplianceState
+	if got := findings(rec)[key]; got != 1 {
+		t.Errorf("findings[%s] = %v, want 1; all=%v", key, got, findings(rec))
+	}
+	// Report-only: both devices still counted, the surprise one in "other".
+	var total float64
+	for _, p := range rec.MetricPoints(countMetricName) {
+		total += p.Value
+	}
+	if total != 2 {
+		t.Errorf("fleet count = %v, want 2 — an unexpected value must not drop a device", total)
 	}
 }

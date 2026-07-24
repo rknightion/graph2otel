@@ -10,6 +10,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // fakeRunner is a canned exportjob.Runner: it returns a fixed set of rows or
@@ -438,6 +439,50 @@ func TestPlatformUnknownCodeKeepsRawCodeAndStaysBounded(t *testing.T) {
 	}
 	if got := logs[0].Attrs["platform"]; got != platformUnknown {
 		t.Errorf("log attr platform = %q, want %q - never invent a name for an unmapped code", got, platformUnknown)
+	}
+}
+
+// --- wire-assumption watchdog (#233/#234) --------------------------------
+//
+// platform is a METRIC LABEL and platformNames is a LIVE-MEASURED code table
+// (2026-07-17, #142). The announce log above makes a decode miss diagnosable
+// but not ALERTABLE — nothing counts it — so a new Microsoft code silently
+// moves installs into "unknown". The bounded counter closes that; the announce
+// log stays, because it carries the _loc sibling that names the new code.
+
+func TestUnmappedPlatformCodeIsCounted(t *testing.T) {
+	c := New(&fakeRunner{rows: []exportjob.Row{row("Future App", "app-9", "99", 1, 0, 0, 0, 0)}}, nil)
+	rec := telemetrytest.New()
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect returned error: %v", err)
+	}
+
+	pts := rec.MetricPoints(wirecheck.MetricUnexpected)
+	if len(pts) != 1 {
+		t.Fatalf("got %d %s points, want 1", len(pts), wirecheck.MetricUnexpected)
+	}
+	if got := pts[0].Attrs[semconv.AttrKind]; got != wirecheck.KindUnmappedValue {
+		t.Errorf("kind = %q, want %q", got, wirecheck.KindUnmappedValue)
+	}
+	if got := pts[0].Attrs[semconv.AttrField]; got != semconv.AttrPlatformCode {
+		t.Errorf("field = %q, want %q", got, semconv.AttrPlatformCode)
+	}
+	// Report-only: the row still counts toward the installations gauge.
+	if len(rec.MetricPoints(installationsMetricName)) == 0 {
+		t.Error("an unmapped platform code must not stop the collector emitting")
+	}
+}
+
+// A live-measured code must stay quiet, or the watchdog fires on every row of a
+// healthy tenant and gets muted.
+func TestMappedPlatformCodeIsNotCounted(t *testing.T) {
+	c := New(&fakeRunner{rows: []exportjob.Row{row("Teams", "app-1", "5", 1, 0, 0, 0, 0)}}, nil)
+	rec := telemetrytest.New()
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect returned error: %v", err)
+	}
+	if got := len(rec.MetricPoints(wirecheck.MetricUnexpected)); got != 0 {
+		t.Errorf("a live-measured platform code produced %d findings, want 0", got)
 	}
 }
 

@@ -64,6 +64,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // collectorName is the stable key used for config (enable/interval),
@@ -178,6 +179,22 @@ func issuanceBucketFor(raw string) string {
 	}
 	return "unknown"
 }
+
+// knownIssuanceStates is the wire assumption this collector watches at runtime
+// (#233/#234). `state` is a METRIC LABEL, and issuanceBucketFor sends an
+// unrecognized value into the SAME "unknown" bucket the documented "unknown"
+// member maps to — so a Microsoft addition is indistinguishable from a
+// legitimately-unknown certificate and moves the failed/pending counts an
+// operator alerts on. Derived from issuanceStateBuckets' own keys rather than
+// restated, so the watched set is exactly the set this collector maps: it fires
+// when the mapping has a hole, never on data handled correctly.
+var knownIssuanceStates = func() wirecheck.Enum {
+	keys := make([]string, 0, len(issuanceStateBuckets))
+	for k := range issuanceStateBuckets {
+		keys = append(keys, k)
+	}
+	return wirecheck.NewEnum(keys...)
+}()
 
 // Bounded expiry-window buckets for the days_until_expiry dimension. Fixed
 // regardless of tenant/cert-count.
@@ -321,6 +338,7 @@ type Collector struct {
 	g       collectors.GraphClient
 	baseURL string
 	logger  *slog.Logger
+	watch   *wirecheck.Reporter
 	// now returns the current time; overridable in tests so expiry bucketing
 	// is deterministic and assertable.
 	now func() time.Time
@@ -332,7 +350,7 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Collector{g: g, baseURL: betaBaseURL, logger: logger, now: time.Now}
+	return &Collector{g: g, baseURL: betaBaseURL, logger: logger, watch: wirecheck.New(collectorName, logger), now: time.Now}
 }
 
 // Name implements collector.SnapshotCollector.
@@ -447,6 +465,7 @@ func (c *Collector) collectManagedDeviceCertificateStates(ctx context.Context, e
 				profileName = dc.DisplayName
 			}
 			bucketName := capper.bucket(profileName)
+			c.watch.Value(e, semconv.AttrIssuanceState, st.CertificateIssuanceState, knownIssuanceStates)
 			stateBucket := issuanceBucketFor(st.CertificateIssuanceState)
 			expiryBucket := expiryBucketFor(now, st.CertificateExpirationDateTime)
 

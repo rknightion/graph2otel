@@ -8,7 +8,9 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // fakeGraph is a canned-response GraphClient: bodies keyed by exact URL, or an
@@ -268,5 +270,62 @@ func TestSensitivityGatingMetadata(t *testing.T) {
 	}
 	if c.Name() != sensitivityName {
 		t.Errorf("Name = %q, want %q", c.Name(), sensitivityName)
+	}
+}
+
+// --- wire-assumption watchdog (#233/#234) --------------------------------
+//
+// applicable_to is a METRIC LABEL, and an unrecognized target collapses into
+// "unknown" — a bucket nobody inspects. A target Microsoft adds to the
+// sensitivityLabelTarget flags enum therefore moves the per-target counts with
+// nothing saying why.
+
+func findings(rec *telemetrytest.Recorder) map[string]float64 {
+	out := map[string]float64{}
+	for _, p := range rec.MetricPoints(wirecheck.MetricUnexpected) {
+		out[p.Attrs[semconv.AttrKind]+"/"+p.Attrs[semconv.AttrField]] += p.Value
+	}
+	return out
+}
+
+func TestSensitivityMappedTargetsReportNothingUnexpected(t *testing.T) {
+	// Every member of sensitivityTargets, plus an EMPTY applicableTo — an absent
+	// optional field is the normal case and must never be a finding.
+	body := `{"value":[
+	  {"applicableTo":"email,file","name":"A"},
+	  {"applicableTo":"teamwork,site,schematizedData","name":"B"},
+	  {"applicableTo":"","name":"C"}
+	]}`
+	g := &fakeGraph{bodies: map[string]string{sensitivityURL: body}}
+	rec := telemetrytest.New()
+	if err := NewSensitivity(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if got := findings(rec); len(got) != 0 {
+		t.Errorf("mapped targets produced findings %v, want none", got)
+	}
+}
+
+func TestSensitivityUnmappedTargetIsReported(t *testing.T) {
+	body := `{"value":[
+	  {"applicableTo":"file","name":"Secret"},
+	  {"applicableTo":"file,martian","name":"Weird"}
+	]}`
+	g := &fakeGraph{bodies: map[string]string{sensitivityURL: body}}
+	rec := telemetrytest.New()
+	if err := NewSensitivity(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	key := wirecheck.KindUnmappedValue + "/" + semconv.AttrApplicableTo
+	if got := findings(rec)[key]; got != 1 {
+		t.Errorf("findings[%s] = %v, want 1; all=%v", key, got, findings(rec))
+	}
+	// Report-only: both labels still counted, the surprise one under "unknown".
+	got := map[string]float64{}
+	for _, p := range rec.MetricPoints(sensitivityMetric) {
+		got[p.Attrs[semconv.AttrApplicableTo]] = p.Value
+	}
+	if got["file"] != 2 || got["unknown"] != 1 {
+		t.Errorf("counts = %v, want file=2 unknown=1 — an unexpected target must not drop a label", got)
 	}
 }

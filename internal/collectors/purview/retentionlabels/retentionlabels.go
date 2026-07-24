@@ -90,6 +90,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // defaultBaseURL is the Graph v1.0 root shared by both sub-fetches.
@@ -178,7 +179,28 @@ type RetentionCollector struct {
 	g       collectors.GraphClient
 	baseURL string
 	logger  *slog.Logger
+	watch   *wirecheck.Reporter
 }
+
+// The wire assumptions this collector watches at runtime (#233/#234).
+//
+// All three fields are METRIC LABELS, and all three normalizers send an
+// unrecognized member to the SAME "unknown" bucket an absent field lands in —
+// so a Microsoft addition is indistinguishable from a label that simply does
+// not set the field, and the by-combination count moves with nothing saying
+// why.
+//
+// The watched set is the set each normalizer NAMES: a value this collector
+// explicitly handles is one it was built against, which is what makes the
+// watchdog fire on a hole in the mapping rather than on correct data (the
+// m365.message_trace precedent). The members are the LOWERCASED forms the
+// switches match on, and the reported value is lowercased to match — the raw
+// casing is not what the mapping keys on.
+var (
+	knownBehaviors = wirecheck.NewEnum("donotretain", "retain", "retainasrecord", "retainasregulatoryrecord")
+	knownActions   = wirecheck.NewEnum("none", "delete", "startdispositionreview")
+	knownTriggers  = wirecheck.NewEnum("datelabeled", "datecreated", "datemodified", "dateofevent")
+)
 
 // NewRetention builds the retention-label collector. A nil logger falls back
 // to the slog default.
@@ -186,7 +208,7 @@ func NewRetention(g collectors.GraphClient, logger *slog.Logger) *RetentionColle
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &RetentionCollector{g: g, baseURL: defaultBaseURL, logger: logger}
+	return &RetentionCollector{g: g, baseURL: defaultBaseURL, logger: logger, watch: wirecheck.New(retentionName, logger)}
 }
 
 // Name implements collector.Collector.
@@ -251,6 +273,10 @@ func (c *RetentionCollector) collectLabels(ctx context.Context, e telemetry.Emit
 			c.logger.Warn("retention labels: skipping unparseable entry", "collector", retentionName, "error", err)
 			continue
 		}
+		c.watch.Value(e, semconv.AttrBehaviorDuringRetention, strings.ToLower(l.BehaviorDuringRetentionPeriod), knownBehaviors)
+		c.watch.Value(e, semconv.AttrActionAfterRetention, strings.ToLower(l.ActionAfterRetentionPeriod), knownActions)
+		c.watch.Value(e, semconv.AttrRetentionTrigger, strings.ToLower(l.RetentionTrigger), knownTriggers)
+
 		behavior := normalizeBehavior(l.BehaviorDuringRetentionPeriod)
 		action := normalizeAction(l.ActionAfterRetentionPeriod)
 		trigger := normalizeTrigger(l.RetentionTrigger)

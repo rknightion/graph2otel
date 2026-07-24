@@ -1,6 +1,16 @@
 {
   "Metrics": [
     {
+      "Name": "graph2otel.api.unexpected",
+      "Unit": "1",
+      "Kind": "sum",
+      "AttrKeys": [
+        "collector",
+        "field",
+        "kind"
+      ]
+    },
+    {
       "Name": "intune.certificate.days_until_expiry",
       "Unit": "{certificate}",
       "Kind": "gauge",

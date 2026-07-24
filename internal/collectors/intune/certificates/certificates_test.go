@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // fakeGraph maps request URLs to canned raw bodies (or errors), mirroring the
@@ -579,5 +581,71 @@ func TestNameIntervalPermissionsAndExperimental(t *testing.T) {
 	}
 	if !c.Experimental() {
 		t.Error("Experimental() = false, want true (both endpoints are beta-only)")
+	}
+}
+
+// --- wire-assumption watchdog (#233/#234) --------------------------------
+//
+// `state` is a METRIC LABEL, and issuanceBucketFor sends an unrecognized value
+// to the SAME "unknown" bucket the documented "unknown" member maps to. A new
+// Microsoft member is therefore indistinguishable from a legitimately-unknown
+// certificate — the exact masking #234 is about.
+
+func findings(rec *telemetrytest.Recorder) map[string]float64 {
+	out := map[string]float64{}
+	for _, p := range rec.MetricPoints(wirecheck.MetricUnexpected) {
+		out[p.Attrs[semconv.AttrKind]+"/"+p.Attrs[semconv.AttrField]] += p.Value
+	}
+	return out
+}
+
+func TestMappedIssuanceStatesReportNothingUnexpected(t *testing.T) {
+	g := &fakeGraph{bodies: baseFixture()}
+	rec := telemetrytest.New()
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if got := findings(rec); len(got) != 0 {
+		t.Errorf("mapped issuance states produced findings %v, want none", got)
+	}
+}
+
+func TestUnmappedIssuanceStateIsReported(t *testing.T) {
+	bodies := baseFixture()
+	bodies[certStatesURL("profile-1", "iosScepCertificateProfile")] = page(
+		certState("Corp Wifi Certs", "issued", daysFromNow(120)),
+		certState("Corp Wifi Certs", "renewalPending", daysFromNow(5)),
+	)
+	rec := telemetrytest.New()
+	if err := newTestCollector(&fakeGraph{bodies: bodies}).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	key := wirecheck.KindUnmappedValue + "/" + semconv.AttrIssuanceState
+	if got := findings(rec)[key]; got != 1 {
+		t.Errorf("findings[%s] = %v, want 1; all=%v", key, got, findings(rec))
+	}
+	// Report-only: both certificates still counted.
+	var total float64
+	for _, p := range rec.MetricPoints(stateCountMetricName) {
+		total += p.Value
+	}
+	if total != 2 {
+		t.Errorf("state count = %v, want 2 — an unexpected value must not drop a certificate", total)
+	}
+}
+
+// The documented "unknown" member is a real, mapped value: it must NOT be
+// reported, or the watchdog fires on every tenant with an unknown certificate.
+func TestDocumentedUnknownIssuanceStateIsNotAFinding(t *testing.T) {
+	bodies := baseFixture()
+	bodies[certStatesURL("profile-1", "iosScepCertificateProfile")] = page(
+		certState("Corp Wifi Certs", "unknown", daysFromNow(120)),
+	)
+	rec := telemetrytest.New()
+	if err := newTestCollector(&fakeGraph{bodies: bodies}).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if got := findings(rec); len(got) != 0 {
+		t.Errorf("documented unknown produced findings %v, want none", got)
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // fakeRunner is a canned exportjob.Runner: it returns the fixed rows/err
@@ -430,6 +431,39 @@ func TestMappedCertificateStatusIsNotAnnounced(t *testing.T) {
 
 	if strings.Contains(logBuf.String(), "unmapped CertificateStatus") {
 		t.Errorf("a mapped status must not be announced: %s", logBuf.String())
+	}
+	if got := len(rec.MetricPoints(wirecheck.MetricUnexpected)); got != 0 {
+		t.Errorf("a mapped status produced %d wirecheck findings, want 0", got)
+	}
+}
+
+// --- wire-assumption watchdog (#233/#234) --------------------------------
+//
+// The announce log above is diagnosable but not ALERTABLE: nothing counts it,
+// so a fleet whose every row lands in "other" is only visible to whoever reads
+// the logs. `state` is a METRIC LABEL, so that miss moves the healthy/failed
+// counts an operator actually alerts on. The bounded counter is what closes it;
+// the announce log stays, because it carries the issuer the counter must not.
+func TestUnmappedCertificateStatusIsCounted(t *testing.T) {
+	rows := []exportjob.Row{row("Contoso Issuing CA", "3", daysFromNow(30))}
+	rec := telemetrytest.New()
+	if err := New(&fakeRunner{rows: rows}, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect returned error: %v", err)
+	}
+
+	pts := rec.MetricPoints(wirecheck.MetricUnexpected)
+	if len(pts) != 1 {
+		t.Fatalf("got %d %s points, want 1", len(pts), wirecheck.MetricUnexpected)
+	}
+	if got := pts[0].Attrs[semconv.AttrKind]; got != wirecheck.KindUnmappedValue {
+		t.Errorf("kind = %q, want %q", got, wirecheck.KindUnmappedValue)
+	}
+	if got := pts[0].Attrs[semconv.AttrField]; got != semconv.AttrCertificateStatus {
+		t.Errorf("field = %q, want %q", got, semconv.AttrCertificateStatus)
+	}
+	// Report-only: the row is still counted and still logged.
+	if got := len(rec.LogRecords()); got != 1 {
+		t.Errorf("emitted %d twins, want 1 — an unexpected value must not drop the row", got)
 	}
 }
 

@@ -7,7 +7,9 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // fakeGraph maps request URLs to canned response bodies (or errors). It
@@ -874,5 +876,67 @@ func assertSingleGaugeApprox(t *testing.T, rec *telemetrytest.Recorder, name str
 	const epsilon = 1e-9
 	if diff := pts[0].Value - want; diff > epsilon || diff < -epsilon {
 		t.Errorf("%s = %v, want %v", name, pts[0].Value, want)
+	}
+}
+
+// --- wire-assumption watchdog (#233/#234) --------------------------------
+//
+// category and status are METRIC LABELS, and both normalizers collapse an
+// unrecognized member into "unknown" — a bucket nobody inspects. A Microsoft
+// addition therefore moves the by-category score and the by-status control
+// count with nothing saying why.
+
+func findings(rec *telemetrytest.Recorder) map[string]float64 {
+	out := map[string]float64{}
+	for _, p := range rec.MetricPoints(wirecheck.MetricUnexpected) {
+		out[p.Attrs[semconv.AttrKind]+"/"+p.Attrs[semconv.AttrField]] += p.Value
+	}
+	return out
+}
+
+// The verbatim live capture is the steady state on both endpoints.
+func TestLiveCaptureReportsNothingUnexpected(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		scoreURL:        liveScores,
+		profilesURL:     liveProfiles,
+		profilesNextURL: emptyProfiles,
+	}}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if got := findings(rec); len(got) != 0 {
+		t.Errorf("live capture produced findings %v, want none", got)
+	}
+}
+
+// mixedProfiles carries exactly one unmapped category and one unmapped state,
+// alongside four mapped ones — so this pins both halves at once.
+func TestUnmappedCategoryAndStatusAreReported(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{scoreURL: emptyScores, profilesURL: mixedProfiles}}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	got := findings(rec)
+	want := map[string]float64{
+		wirecheck.KindUnmappedValue + "/" + semconv.AttrCategory: 1,
+		wirecheck.KindUnmappedValue + "/" + semconv.AttrStatus:   1,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("findings = %v, want %v", got, want)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("findings[%s] = %v, want %v (all: %v)", k, got[k], v, got)
+		}
+	}
+	// Report-only: all four profiles still counted.
+	var total float64
+	for _, p := range rec.MetricPoints(metricByCategory) {
+		total += p.Value
+	}
+	if total != 4 {
+		t.Errorf("profile count = %v, want 4 — an unexpected value must not drop a profile", total)
 	}
 }
