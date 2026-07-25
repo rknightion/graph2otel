@@ -1410,6 +1410,7 @@
         "internal/collectors/entra/accessreviews",
         "internal/collectors/entra/conditionalaccess",
         "internal/collectors/entra/risk",
+        "internal/collectors/entra/riskyagents",
         "internal/collectors/entra/securescore",
         "internal/collectors/intune/appinstallreport",
         "internal/collectors/intune/autopilot",

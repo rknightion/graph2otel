@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // fakeGraph maps request URLs to canned page bodies (or errors), satisfying
@@ -80,6 +82,27 @@ func TestCollectEmitsBoundedGauge(t *testing.T) {
 
 // TestCollectNoPerEntitySeries is the #112 metric-boundary check: no per-entity
 // id / display name may reach a metric attribute.
+// TestCollectReportsUnmappedRiskEnum proves riskLevel/riskState (raw metric
+// labels, the same Identity Protection enums entra.risk watches) fire the
+// graph2otel.api.unexpected watchdog on an out-of-set value (#234).
+func TestCollectReportsUnmappedRiskEnum(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		agentsURL: `{"value":[{"id":"a1","riskLevel":"apocalyptic","riskState":"quantumFlux"}]}`,
+	}}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	fields := map[string]bool{}
+	for _, p := range rec.MetricPoints(wirecheck.MetricUnexpected) {
+		fields[p.Attrs[semconv.AttrField]] = true
+	}
+	if !fields[semconv.AttrRiskLevel] || !fields[semconv.AttrRiskState] {
+		t.Errorf("expected %s to fire for both %s and %s; got %v",
+			wirecheck.MetricUnexpected, semconv.AttrRiskLevel, semconv.AttrRiskState, fields)
+	}
+}
+
 func TestCollectNoPerEntitySeries(t *testing.T) {
 	rec := telemetrytest.New()
 	if err := New(liveFixture(), nil).Collect(context.Background(), rec.Emitter()); err != nil {

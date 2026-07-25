@@ -638,13 +638,17 @@ measure, then update the known set (and the ledger entry in
 
 ### Which collectors are watched, and which deliberately are not
 
-**19 collectors declare watched value sets** (#233, #254, #234): `defender.quarantine`,
+**20 collectors declare watched value sets** (#233, #254, #234): `defender.quarantine`,
 `m365.message_trace`, `intune.autopilot`, `intune.devices`, `intune.certificates`,
 `intune.cert_inventory`, `intune.app_install_status`, `intune.malware`,
 `entra.secure_score`, `purview.retention_labels`, `purview.sensitivity_labels`,
 `entra.access_reviews`, `entra.conditional_access`, `intune.gpo_analytics`,
 `intune.config_profiles`, `intune.enrollment`, `intune.noncompliant_settings`,
-`entra.risk` and `m365.sharepoint_settings`.
+`entra.risk`, `entra.risky_agents` and `m365.sharepoint_settings`.
+
+`entra.risky_agents` reuses `entra.risk`'s exported `KnownRiskLevels`/`KnownRiskStates`
+directly — it is the agent analog on the identical Identity Protection enums, so the two
+cannot drift.
 
 Most derive their `Enum` from a bucket map the collector already keys on, so the watched
 set cannot drift from the mapped set. Two are declared explicitly from the Graph v1.0 CSDL
@@ -666,7 +670,7 @@ has stopped being queue depth.
 
 **Several collectors bucket unrecognized values to `"unknown"` and are still
 unwatched on purpose** — among them `intune.detected_apps`, `intune.connectors`,
-`intune.settings_catalog`, `entra.domains`, `entra.risky_agents`,
+`intune.settings_catalog`, `entra.domains`, `entra.recommendations`,
 `intune.device_encryption`, `intune.mobile_apps` and `intune.remediation_run_states`.
 In each case the legitimate value set could only be taken from Microsoft's
 documentation, and **a watchdog that fires on correct data is worse than none**: it trains

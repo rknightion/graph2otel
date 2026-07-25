@@ -59,9 +59,11 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/collectors/entra/risk"
 	"github.com/rknightion/graph2otel/internal/graphclient"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // collectorName is the stable key used for config, self-observability, and the
@@ -87,6 +89,7 @@ type Collector struct {
 	g       collectors.GraphClient
 	baseURL string
 	logger  *slog.Logger
+	watch   *wirecheck.Reporter
 }
 
 // New builds the risky-agents collector. A nil logger falls back to
@@ -95,7 +98,7 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Collector{g: g, baseURL: betaBaseURL, logger: logger}
+	return &Collector{g: g, baseURL: betaBaseURL, logger: logger, watch: wirecheck.New(collectorName, logger)}
 }
 
 // Name implements collector.Collector.
@@ -159,6 +162,10 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		if err := json.Unmarshal(raw, &item); err != nil {
 			return fmt.Errorf("decode %s: %w", riskyAgentsPath, err)
 		}
+		// riskLevel/riskState are metric labels passed raw — the same Identity
+		// Protection enums entra.risk watches, reused rather than restated (#234).
+		c.watch.Value(e, semconv.AttrRiskLevel, item.RiskLevel, risk.KnownRiskLevels)
+		c.watch.Value(e, semconv.AttrRiskState, item.RiskState, risk.KnownRiskStates)
 		counts[[2]string{item.RiskLevel, item.RiskState}]++
 		e.LogEvent(logTwin(item))
 	}
