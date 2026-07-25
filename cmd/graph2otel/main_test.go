@@ -3,13 +3,21 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rknightion/graph2otel/internal/admin"
+	"github.com/rknightion/graph2otel/internal/config"
+	"github.com/rknightion/graph2otel/internal/telemetry"
+	buildversion "github.com/rknightion/graph2otel/internal/version"
 )
 
 const validStdoutYAML = `
@@ -42,14 +50,58 @@ func writeTempConfig(t *testing.T, content string) string {
 	return p
 }
 
-func TestRun_Version(t *testing.T) {
+func TestRun_VersionUsesCanonicalBuildVersion(t *testing.T) {
+	oldVersion := buildversion.Version
+	buildversion.Version = "1.2.3-test"
+	t.Cleanup(func() { buildversion.Version = oldVersion })
+
 	var stdout, stderr bytes.Buffer
 	code := run(context.Background(), []string{"-version"}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0; stderr=%s", code, stderr.String())
 	}
-	if got := strings.TrimSpace(stdout.String()); got != version {
-		t.Errorf("stdout = %q, want %q", got, version)
+	if got, want := strings.TrimSpace(stdout.String()), buildversion.String(); got != want {
+		t.Errorf("stdout = %q, want %q", got, want)
+	}
+}
+
+func TestCanonicalBuildVersionReachesProviderResourceAndAdmin(t *testing.T) {
+	const wantVersion = "1.2.3-test"
+	oldVersion := buildversion.Version
+	buildversion.Version = wantVersion
+	t.Cleanup(func() { buildversion.Version = oldVersion })
+
+	cfg, err := config.Load(writeTempConfig(t, validStdoutYAML))
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+
+	var telemetryOutput bytes.Buffer
+	provider, err := newTelemetryProvider(context.Background(), cfg, &telemetryOutput)
+	if err != nil {
+		t.Fatalf("new telemetry provider: %v", err)
+	}
+	provider.Emitter().LogEvent(telemetry.Event{Name: "test.version", Body: "version resource probe"})
+	if err := provider.Shutdown(context.Background()); err != nil {
+		t.Fatalf("shutdown telemetry provider: %v", err)
+	}
+	if got := telemetryOutput.String(); !strings.Contains(got, "service.version") || !strings.Contains(got, wantVersion) {
+		t.Fatalf("provider log resource does not carry canonical version %q; got:\n%s", wantVersion, got)
+	}
+
+	adminServer := admin.New(config.AdminConfig{Enabled: true}, nil, nil, nil, cfg, nil, provider)
+	req := httptest.NewRequest(http.MethodGet, "/api/status.json", nil)
+	w := httptest.NewRecorder()
+	adminServer.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /api/status.json status = %d, want %d", w.Code, http.StatusOK)
+	}
+	var status admin.Status
+	if err := json.Unmarshal(w.Body.Bytes(), &status); err != nil {
+		t.Fatalf("unmarshal admin status: %v", err)
+	}
+	if got := status.Service.Version; got != wantVersion {
+		t.Errorf("admin version = %q, want canonical version %q", got, wantVersion)
 	}
 }
 

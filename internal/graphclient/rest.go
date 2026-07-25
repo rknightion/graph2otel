@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
@@ -37,6 +39,9 @@ func (c *Client) RawGet(ctx context.Context, url string) ([]byte, error) {
 // caller's headers win over the defaults for any colliding key, so a caller
 // cannot accidentally strip Authorization by passing an unrelated header set.
 func (c *Client) RawGetWithHeaders(ctx context.Context, url string, headers map[string]string) ([]byte, error) {
+	if err := c.validateRawURL(url); err != nil {
+		return nil, err
+	}
 	tok, err := c.cred.GetToken(ctx, policy.TokenRequestOptions{Scopes: []string{auth.GraphDefaultScope}})
 	if err != nil {
 		return nil, fmt.Errorf("graphclient: tenant %q: acquire token: %w", c.TenantID, err)
@@ -58,9 +63,9 @@ func (c *Client) RawGetWithHeaders(ctx context.Context, url string, headers map[
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxRawBodyBytes))
+	body, err := readRawBody(url, resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("graphclient: read %s body: %w", url, err)
+		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("graphclient: GET %s: status %d: %s", url, resp.StatusCode, string(body))
@@ -78,6 +83,9 @@ func (c *Client) RawGetWithHeaders(ctx context.Context, url string, headers map[
 // response is returned as an error including the status and body, so the caller
 // can classify the export API's report-specific 400s (bad reportName/select).
 func (c *Client) RawPost(ctx context.Context, url string, body []byte, headers map[string]string) ([]byte, error) {
+	if err := c.validateRawURL(url); err != nil {
+		return nil, err
+	}
 	tok, err := c.cred.GetToken(ctx, policy.TokenRequestOptions{Scopes: []string{auth.GraphDefaultScope}})
 	if err != nil {
 		return nil, fmt.Errorf("graphclient: tenant %q: acquire token: %w", c.TenantID, err)
@@ -100,9 +108,9 @@ func (c *Client) RawPost(ctx context.Context, url string, body []byte, headers m
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxRawBodyBytes))
+	respBody, err := readRawBody(url, resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("graphclient: read %s body: %w", url, err)
+		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("graphclient: POST %s: status %d: %s", url, resp.StatusCode, string(respBody))
@@ -113,3 +121,45 @@ func (c *Client) RawPost(ctx context.Context, url string, body []byte, headers m
 // maxRawBodyBytes caps a raw-REST response read so a pathological/hostile
 // response cannot exhaust memory (32 MiB is generous for a paged Graph page).
 const maxRawBodyBytes = 32 << 20
+
+// rawBodyTooLargeError reports that a raw response was not returned because it
+// exceeded the complete-body cap. Returning no bytes prevents callers from
+// treating a valid prefix as a complete JSON or CSV payload.
+type rawBodyTooLargeError struct {
+	url   string
+	limit int
+}
+
+func (e *rawBodyTooLargeError) Error() string {
+	return fmt.Sprintf("graphclient: read %s body: exceeds %d-byte limit", e.url, e.limit)
+}
+
+func (e *rawBodyTooLargeError) rawBodyLimit() int { return e.limit }
+
+func (e *rawBodyTooLargeError) rawBodyURL() string { return e.url }
+
+func (c *Client) validateRawURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("graphclient: parse raw URL %q: %w", rawURL, err)
+	}
+	if u.Scheme != "https" {
+		return fmt.Errorf("graphclient: raw URL %q must use HTTPS", rawURL)
+	}
+	host := strings.ToLower(u.Hostname())
+	if _, ok := c.validHosts[host]; !ok {
+		return fmt.Errorf("graphclient: raw URL %q host %q is not allowed", rawURL, u.Hostname())
+	}
+	return nil
+}
+
+func readRawBody(url string, body io.Reader) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(body, maxRawBodyBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("graphclient: read %s body: %w", url, err)
+	}
+	if len(data) > maxRawBodyBytes {
+		return nil, &rawBodyTooLargeError{url: url, limit: maxRawBodyBytes}
+	}
+	return data, nil
+}

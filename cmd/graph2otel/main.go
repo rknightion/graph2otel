@@ -22,6 +22,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/config"
 	"github.com/rknightion/graph2otel/internal/profiling"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/version"
 )
 
 // otelErrorHandler adapts the OTEL SDK's error channel onto a slog logger. See
@@ -31,9 +32,6 @@ func otelErrorHandler(logger *slog.Logger) otel.ErrorHandler {
 		logger.Error("otel sdk error", "error", err)
 	})
 }
-
-// version is overridden at build time via -ldflags "-X main.version=...".
-var version = "dev"
 
 // selfObsReportInterval is how often the cardinality tracker snapshots and emits
 // the graph2otel.series.* self-observability gauges. It matches the telemetry
@@ -58,6 +56,26 @@ func dispatch(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	return run(ctx, args, stdout, stderr)
 }
 
+// newTelemetryProvider constructs the process-wide telemetry pipeline from the
+// effective config. Keeping this composition-root boundary explicit lets tests
+// exercise the real provider resource built by the command.
+func newTelemetryProvider(ctx context.Context, cfg *config.Config, stdout io.Writer) (*telemetry.Provider, error) {
+	return telemetry.NewProvider(ctx, telemetry.Options{
+		ServiceName:    "graph2otel",
+		ServiceVersion: version.String(),
+		Protocol:       cfg.OTLP.Protocol,
+		Endpoint:       cfg.OTLP.Endpoint,
+		InstanceID:     cfg.OTLP.GrafanaCloud.InstanceID,
+		Token:          cfg.OTLP.GrafanaCloud.Token.Reveal(),
+		SelfObsEnabled: true,
+		Limits: telemetry.Limits{
+			PerMetric: cfg.Cardinality.PerMetricLimit,
+			Global:    cfg.Cardinality.GlobalLimit,
+		},
+		StdoutWriter: stdout,
+	})
+}
+
 // run parses flags, loads and validates the config, and (barring -version or
 // an error) blocks until ctx is canceled — by a real SIGINT/SIGTERM in main,
 // or directly by a test. Splitting it out of main lets every exit path be
@@ -72,7 +90,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 
 	if *showVersion {
-		fmt.Fprintln(stdout, version)
+		fmt.Fprintln(stdout, version.String())
 		return 0
 	}
 
@@ -89,7 +107,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	logger := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: parseLevel(cfg.LogLevel)}))
 
 	logger.Info("graph2otel starting",
-		"version", version, "otlp_protocol", cfg.OTLP.Protocol, "tenants", len(cfg.Tenants))
+		"version", version.String(), "otlp_protocol", cfg.OTLP.Protocol, "tenants", len(cfg.Tenants))
 
 	// Advisories: valid settings that take effect exactly as written and are
 	// still probably not what was meant (#118). Logged rather than fatal — each
@@ -115,20 +133,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 	// Telemetry provider: the single OTLP metrics+logs pipeline everything emits
 	// through. Built here so the process fails fast on a bad exporter config.
-	provider, err := telemetry.NewProvider(ctx, telemetry.Options{
-		ServiceName:    "graph2otel",
-		ServiceVersion: version,
-		Protocol:       cfg.OTLP.Protocol,
-		Endpoint:       cfg.OTLP.Endpoint,
-		InstanceID:     cfg.OTLP.GrafanaCloud.InstanceID,
-		Token:          cfg.OTLP.GrafanaCloud.Token.Reveal(),
-		SelfObsEnabled: true,
-		Limits: telemetry.Limits{
-			PerMetric: cfg.Cardinality.PerMetricLimit,
-			Global:    cfg.Cardinality.GlobalLimit,
-		},
-		StdoutWriter: stdout,
-	})
+	provider, err := newTelemetryProvider(ctx, cfg, stdout)
 	if err != nil {
 		fmt.Fprintf(stderr, "failed to build telemetry provider: %v\n", err)
 		return 1
@@ -149,7 +154,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	// Continuous profiling is opt-in (default off). Start also applies the
 	// runtime mutex/block sampling rates. A failure to reach Pyroscope is
 	// non-fatal — the exporter's core job is unaffected.
-	if prof, perr := profiling.Start(cfg.Profiling, "graph2otel", version, logger); perr != nil {
+	if prof, perr := profiling.Start(cfg.Profiling, "graph2otel", version.String(), logger); perr != nil {
 		logger.Error("pyroscope profiler failed to start", "error", perr)
 	} else if prof != nil {
 		defer func() { _ = prof.Stop() }()

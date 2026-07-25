@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/semconv"
@@ -21,6 +22,7 @@ import (
 type fakeSource struct {
 	blobs   map[string]string
 	listErr error
+	readErr map[string]error
 	reads   []string // "name[offset:offset+count]" per ReadRange, to pin ranged reads
 }
 
@@ -38,6 +40,9 @@ func (f *fakeSource) List(_ context.Context, _, prefix string) ([]BlobInfo, erro
 }
 
 func (f *fakeSource) ReadRange(_ context.Context, _, name string, offset, count int64) ([]byte, error) {
+	if err := f.readErr[name]; err != nil {
+		return nil, err
+	}
 	content, ok := f.blobs[name]
 	if !ok {
 		return nil, fmt.Errorf("fakeSource: no blob %q", name)
@@ -216,6 +221,45 @@ func TestPollNeverEmitsOrSkipsAPartialTrailingLine(t *testing.T) {
 	}
 }
 
+// A short unfinished append is ordinary Azure behavior. It must stay pending
+// without falsely failing the tick, then be consumed after the append completes.
+func TestPollLeavesAShortPartialAppendPending(t *testing.T) {
+	name := "tenantId=t1/y=2026/m=07/d=16/h=00/m=00/PT1H.json"
+	partial := `{"time":"2026-07-16T13:00:00Z","id":"b`
+	src := &fakeSource{blobs: map[string]string{name: partial}}
+	r := telemetrytest.New()
+	cur := newCursor()
+
+	if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil); err != nil {
+		t.Fatalf("Poll: %v — a short unfinished append must remain pending", err)
+	}
+	if got := bodies(r); len(got) != 0 {
+		t.Fatalf("emitted %v, want no partial record", got)
+	}
+	if got := cur.Offsets[name]; got != 0 {
+		t.Fatalf("offset = %d, want 0 while the only record has no terminator", got)
+	}
+}
+
+// A record that fills the configured chunk and still lacks a terminator cannot
+// complete on a later byte in the same range: retrying it forever would leave
+// the collector reporting healthy while permanently stuck.
+func TestPollReturnsDegradedErrorForCapSizedNewlineFreeRecord(t *testing.T) {
+	name := "tenantId=t1/y=2026/m=07/d=16/h=00/m=00/PT1H.json"
+	src := &fakeSource{blobs: map[string]string{name: "0123456789"}}
+	r := telemetrytest.New()
+	cfg := testConfig()
+	cfg.MaxBytesPerTick = 10
+
+	err := Poll(context.Background(), cfg, newCursor(), src, r.Emitter(), discardLogger(), nil)
+	if err == nil {
+		t.Fatal("Poll returned nil for a cap-sized newline-free record; it would retry forever as a healthy tick")
+	}
+	if !strings.Contains(err.Error(), "oversized record") || !strings.Contains(err.Error(), name) || !strings.Contains(err.Error(), cfg.Container) {
+		t.Fatalf("Poll error = %q, want an oversized-record error naming %s and %s", err, cfg.Container, name)
+	}
+}
+
 // The 7-day lifecycle rule deletes blobs. Their cursor entries must go too, or
 // the cursor grows forever.
 func TestPollPrunesCursorEntriesForDeletedBlobs(t *testing.T) {
@@ -233,6 +277,55 @@ func TestPollPrunesCursorEntriesForDeletedBlobs(t *testing.T) {
 	}
 	if _, ok := cur.Offsets[live]; !ok {
 		t.Error("pruning removed the live blob's offset")
+	}
+}
+
+// A lifecycle deletion can be the only cursor mutation in a tick. Persisting
+// it is necessary so a restart does not revive every deleted blob entry.
+func TestPollSavesPruneOnlyCursorMutation(t *testing.T) {
+	live := "tenantId=t1/y=2026/m=07/d=16/h=00/m=00/PT1H.json"
+	deleted := "tenantId=t1/y=2026/m=07/d=01/h=00/m=00/PT1H.json"
+	src := &fakeSource{blobs: map[string]string{live: rec("a")}}
+	cur := newCursor()
+	cur.Offsets[live] = int64(len(rec("a")))
+	cur.Offsets[deleted] = 500
+	var persisted *checkpoint.BlobCursor
+	save := func(c *checkpoint.BlobCursor) error {
+		persisted = &checkpoint.BlobCursor{TenantID: c.TenantID, Key: c.Key, Offsets: make(map[string]int64, len(c.Offsets))}
+		for name, off := range c.Offsets {
+			persisted.Offsets[name] = off
+		}
+		return nil
+	}
+
+	if err := Poll(context.Background(), testConfig(), cur, src, telemetrytest.New().Emitter(), discardLogger(), save); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	if persisted == nil {
+		t.Fatal("prune-only cursor mutation was not persisted")
+	}
+	if _, ok := persisted.Offsets[deleted]; ok {
+		t.Error("persisted cursor still contains the lifecycle-deleted blob")
+	}
+	if got := persisted.Offsets[live]; got != int64(len(rec("a"))) {
+		t.Errorf("persisted live offset = %d, want %d", got, len(rec("a")))
+	}
+}
+
+// An idle tick that neither advances nor prunes must not rewrite the cursor.
+func TestPollDoesNotSaveAnUnchangedCursor(t *testing.T) {
+	name := "tenantId=t1/y=2026/m=07/d=16/h=00/m=00/PT1H.json"
+	src := &fakeSource{blobs: map[string]string{name: rec("a")}}
+	cur := newCursor()
+	cur.Offsets[name] = int64(len(rec("a")))
+	saves := 0
+	save := func(*checkpoint.BlobCursor) error { saves++; return nil }
+
+	if err := Poll(context.Background(), testConfig(), cur, src, telemetrytest.New().Emitter(), discardLogger(), save); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	if saves != 0 {
+		t.Errorf("save called %d times, want 0 for an unchanged cursor", saves)
 	}
 }
 
@@ -330,6 +423,68 @@ func TestPollReturnsListErrors(t *testing.T) {
 	}
 }
 
+// One unreadable blob must not prevent later blobs from emitting and
+// checkpointing, but the scheduler still needs a degraded tick result.
+func TestPollReturnsDegradedErrorAfterMixedReadFailure(t *testing.T) {
+	broken := "tenantId=t1/y=2026/m=07/d=16/h=00/m=00/PT1H.json"
+	healthy := "tenantId=t1/y=2026/m=07/d=16/h=01/m=00/PT1H.json"
+	readErr := errors.New("storage reader denied")
+	healthyRecord := tsRec(5*time.Minute, "healthy")
+	src := &fakeSource{
+		blobs:   map[string]string{broken: rec("broken"), healthy: healthyRecord},
+		readErr: map[string]error{broken: readErr},
+	}
+	// Use the real bounded counter Derive path so this test also pins the
+	// reportGate-before-degraded-return ordering. A healthy record must still
+	// produce its gate metric when another blob makes the tick degraded.
+	cfg := gatedConfig(time.Hour)
+	r := telemetrytest.New()
+	cur := newCursor()
+	saves := 0
+	save := func(*checkpoint.BlobCursor) error { saves++; return nil }
+
+	err := Poll(context.Background(), cfg, cur, src, r.Emitter(), discardLogger(), save)
+	if !errors.Is(err, readErr) {
+		t.Fatalf("Poll error = %v, want joined read failure %v", err, readErr)
+	}
+	if got := bodies(r); len(got) != 1 || got[0] != "healthy" {
+		t.Fatalf("emitted %v, want the healthy blob despite the failed read", got)
+	}
+	if got := cur.Offsets[healthy]; got != int64(len(healthyRecord)) {
+		t.Errorf("healthy offset = %d, want %d", got, len(healthyRecord))
+	}
+	if _, ok := cur.Offsets[broken]; ok {
+		t.Error("failed blob advanced its cursor")
+	}
+	if saves != 1 {
+		t.Errorf("save called %d times, want 1 for the healthy blob", saves)
+	}
+	if got := metricSum(r, "entra.test.count"); got != 1 {
+		t.Errorf("entra.test.count = %v, want 1 from the healthy blob despite the degraded return", got)
+	}
+	if got := metricSum(r, metricEmitted); got != 1 {
+		t.Errorf("%s = %v, want 1 despite the degraded return", metricEmitted, got)
+	}
+}
+
+// A tick where every listed blob is unreadable must surface every underlying
+// failure instead of looking like an idle successful scrape.
+func TestPollReturnsDegradedErrorWhenAllReadsFail(t *testing.T) {
+	first := "tenantId=t1/y=2026/m=07/d=16/h=00/m=00/PT1H.json"
+	second := "tenantId=t1/y=2026/m=07/d=16/h=01/m=00/PT1H.json"
+	firstErr := errors.New("first denied")
+	secondErr := errors.New("second denied")
+	src := &fakeSource{
+		blobs:   map[string]string{first: rec("a"), second: rec("b")},
+		readErr: map[string]error{first: firstErr, second: secondErr},
+	}
+
+	err := Poll(context.Background(), testConfig(), newCursor(), src, telemetrytest.New().Emitter(), discardLogger(), nil)
+	if !errors.Is(err, firstErr) || !errors.Is(err, secondErr) {
+		t.Fatalf("Poll error = %v, want joined failures %v and %v", err, firstErr, secondErr)
+	}
+}
+
 // Blobs are read oldest-first so the emitted stream is roughly time-ordered.
 func TestPollReadsBlobsInChronologicalNameOrder(t *testing.T) {
 	src := &fakeSource{blobs: map[string]string{
@@ -365,18 +520,20 @@ func TestPollSavesTheCursorPerAdvancedBlob(t *testing.T) {
 	}
 }
 
-// A save failure must not lose the emitted records' progress silently, but it
-// also must not fail the tick: the next poll simply re-reads. It is logged.
-func TestPollContinuesWhenTheCursorSaveFails(t *testing.T) {
+// A save failure must not stop later blobs from emitting, but it must make the
+// tick degraded: on restart every unsaved record may be emitted again.
+func TestPollReturnsDegradedErrorWhenTheCursorSaveFails(t *testing.T) {
 	src := &fakeSource{blobs: map[string]string{
 		"tenantId=t1/y=2026/m=07/d=16/h=00/m=00/PT1H.json": rec("a"),
 		"tenantId=t1/y=2026/m=07/d=16/h=01/m=00/PT1H.json": rec("b"),
 	}}
 	r := telemetrytest.New()
-	save := func(*checkpoint.BlobCursor) error { return errors.New("disk full") }
+	saveErr := errors.New("disk full")
+	save := func(*checkpoint.BlobCursor) error { return saveErr }
 
-	if err := Poll(context.Background(), testConfig(), newCursor(), src, r.Emitter(), discardLogger(), save); err != nil {
-		t.Fatalf("Poll: %v — a save failure must not fail the tick", err)
+	err := Poll(context.Background(), testConfig(), newCursor(), src, r.Emitter(), discardLogger(), save)
+	if !errors.Is(err, saveErr) {
+		t.Fatalf("Poll error = %v, want joined cursor save failure %v", err, saveErr)
 	}
 	if got := bodies(r); len(got) != 2 {
 		t.Errorf("emitted %v, want both records — a save failure must not stop draining", got)

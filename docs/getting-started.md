@@ -43,7 +43,7 @@ or clone and build a binary with the version stamped in:
 ```sh
 git clone https://github.com/rknightion/graph2otel
 cd graph2otel
-go build -ldflags "-X main.version=$(git describe --tags --always)" ./cmd/graph2otel
+go build -ldflags "-X github.com/rknightion/graph2otel/internal/version.Version=$(git describe --tags --always)" ./cmd/graph2otel
 ```
 
 ## Auth setup

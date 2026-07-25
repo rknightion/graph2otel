@@ -274,22 +274,22 @@ func (c *Client) Export(ctx context.Context, req Request, e telemetry.Emitter) (
 		// 429 would put back the duplicate create this exists to remove.
 		if errors.Is(err, ErrJobFailed) {
 			c.emitTerminal(e, req.ReportName, "failed", pollCount, c.opts.Now().Sub(start), 0)
-			c.clearJob(req.ReportName)
+			return nil, c.joinTerminalClear(req.ReportName, err)
 		}
 		return nil, err
 	}
 
 	expiry, perr := time.Parse(time.RFC3339, jr.ExpirationDateTime)
 	if perr != nil {
-		c.clearJob(req.ReportName)
-		return nil, fmt.Errorf("exportjob: %s: parse expirationDateTime %q: %w", req.ReportName, jr.ExpirationDateTime, perr)
+		return nil, c.joinTerminalClear(req.ReportName,
+			fmt.Errorf("exportjob: %s: parse expirationDateTime %q: %w", req.ReportName, jr.ExpirationDateTime, perr))
 	}
 	if !c.opts.Now().Before(expiry) {
 		// The job completed but its download url is gone. Only a NEW job can
 		// produce the data, so retaining this id would make every later tick
 		// re-poll something it can never download.
-		c.clearJob(req.ReportName)
-		return nil, fmt.Errorf("exportjob: %s: %w", req.ReportName, ErrSASExpired)
+		return nil, c.joinTerminalClear(req.ReportName,
+			fmt.Errorf("exportjob: %s: %w", req.ReportName, ErrSASExpired))
 	}
 
 	zipBytes, err := c.dl.Download(ctx, jr.URL)
@@ -303,12 +303,14 @@ func (c *Client) Export(ctx context.Context, req Request, e telemetry.Emitter) (
 	if err != nil {
 		// A payload that will not parse will not parse next time either — the same
 		// bytes are behind the same url. Drop the id rather than wedge on it.
-		c.clearJob(req.ReportName)
-		return nil, fmt.Errorf("exportjob: %s: parse: %w", req.ReportName, err)
+		return nil, c.joinTerminalClear(req.ReportName,
+			fmt.Errorf("exportjob: %s: parse: %w", req.ReportName, err))
 	}
 
-	c.clearJob(req.ReportName)
 	c.emitTerminal(e, req.ReportName, "completed", pollCount, c.opts.Now().Sub(start), len(zipBytes))
+	if err := c.clearJob(req.ReportName); err != nil {
+		return rows, fmt.Errorf("exportjob: %s: clear terminal job state: %w", req.ReportName, err)
+	}
 	return rows, nil
 }
 
@@ -378,8 +380,24 @@ func (c *Client) saveJob(reportName string, j *checkpoint.InFlightJob) {
 }
 
 // clearJob drops reportName's in-flight record: the job reached an outcome that
-// re-polling it cannot improve on.
-func (c *Client) clearJob(reportName string) { c.saveJob(reportName, nil) }
+// re-polling it cannot improve on. Unlike the initial save, which is deliberately
+// best-effort because the job is already running, a clear error is returned: a
+// terminal id left on disk is otherwise adoptable on the next process.
+func (c *Client) clearJob(reportName string) error {
+	if c.opts.Store == nil {
+		return nil
+	}
+	return c.opts.Store.SaveJob(&checkpoint.JobRecord{TenantID: c.opts.TenantID, Key: reportName})
+}
+
+// joinTerminalClear retains a terminal outcome while adding the checkpoint
+// durability failure that prevents it from being safely forgotten.
+func (c *Client) joinTerminalClear(reportName string, outcome error) error {
+	if err := c.clearJob(reportName); err != nil {
+		return errors.Join(outcome, fmt.Errorf("exportjob: %s: clear terminal job state: %w", reportName, err))
+	}
+	return outcome
+}
 
 // requestScope fingerprints the request that created a job, so an id is only ever
 // adopted for the identical request. It hashes every field that shapes the

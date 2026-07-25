@@ -151,6 +151,104 @@ func TestGovernancePaginatesBySkip(t *testing.T) {
 	}
 }
 
+func TestGovernanceErrorsWhenPaginationCapLeavesRecordsUndiscovered(t *testing.T) {
+	// A server reporting one record beyond the final permitted full page must
+	// not be treated as a successful, complete discovery result. Removing the
+	// cap-exhaustion check would return maxPages*defaultPageLimit records here.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var b governanceBody
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &b)
+		recs := make([]map[string]any, defaultPageLimit)
+		for i := range recs {
+			recs[i] = map[string]any{"_id": fmt.Sprintf("id-%d", b.Skip+i)}
+		}
+		resp, _ := json.Marshal(governanceResponse{
+			Total: maxPages*defaultPageLimit + 1,
+			Data:  recs,
+		})
+		_, _ = w.Write(resp)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	page, err := c.Governance(context.Background(), GovernanceQuery{})
+	if err == nil {
+		t.Fatal("Governance returned nil error, want pagination-cap error")
+	}
+	if !contains(err.Error(), "pagination cap") {
+		t.Errorf("Governance error = %v, want pagination-cap context", err)
+	}
+	if page != nil {
+		t.Errorf("Governance page = %+v, want nil so partial rows cannot be consumed", page)
+	}
+}
+
+func TestGovernanceErrorsWhenFinalPermittedPageIsShortAndIncomplete(t *testing.T) {
+	var requests int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var b governanceBody
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &b)
+		requests++
+
+		n := defaultPageLimit
+		if requests == maxPages {
+			n = defaultPageLimit - 1
+		}
+		recs := make([]map[string]any, n)
+		for i := range recs {
+			recs[i] = map[string]any{"_id": fmt.Sprintf("id-%d", b.Skip+i)}
+		}
+		resp, _ := json.Marshal(governanceResponse{
+			Total: maxPages*defaultPageLimit + 1,
+			Data:  recs,
+		})
+		_, _ = w.Write(resp)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	page, err := c.Governance(context.Background(), GovernanceQuery{})
+	if err == nil {
+		t.Fatal("Governance returned nil error, want pagination-cap error")
+	}
+	if !contains(err.Error(), "pagination cap") {
+		t.Errorf("Governance error = %v, want pagination-cap context", err)
+	}
+	if page != nil {
+		t.Errorf("Governance page = %+v, want nil so partial rows cannot be consumed", page)
+	}
+	if requests != maxPages {
+		t.Errorf("requests = %d, want %d", requests, maxPages)
+	}
+}
+
+func TestGovernanceAllowsExactCompletionOnFinalPermittedPage(t *testing.T) {
+	var requests int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		resp, _ := json.Marshal(governanceResponse{
+			Total: maxPages * defaultPageLimit,
+			Data:  make([]map[string]any, defaultPageLimit),
+		})
+		_, _ = w.Write(resp)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	page, err := c.Governance(context.Background(), GovernanceQuery{})
+	if err != nil {
+		t.Fatalf("Governance: %v", err)
+	}
+	if page.Total != maxPages*defaultPageLimit || len(page.Records) != maxPages*defaultPageLimit {
+		t.Errorf("Governance total/records = %d/%d, want %d/%d", page.Total, len(page.Records), maxPages*defaultPageLimit, maxPages*defaultPageLimit)
+	}
+	if requests != maxPages {
+		t.Errorf("requests = %d, want %d", requests, maxPages)
+	}
+}
+
 func TestGovernanceAPIErrorOnNon2xx(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)

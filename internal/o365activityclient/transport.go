@@ -1,6 +1,7 @@
 package o365activityclient
 
 import (
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -222,14 +223,15 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 
 		delay := t.backoff.Delay(attempt, parseRetryAfter(resp.Header.Get(headerRetryAfter)))
-		// The body is never read on a retried attempt, so it must be drained and
-		// closed or the connection leaks. Close's error is irrelevant here: the
-		// response is already being discarded in favor of another attempt.
+		// The response is discarded on a retried attempt, so its body must be
+		// drained and closed or the connection leaks. Close's error is irrelevant
+		// here: another attempt will replace this response.
+		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
 
 		if !sleepCtx(req, delay) {
 			// The context died mid-backoff; re-issuing would only fail again.
-			return t.next.RoundTrip(req)
+			return nil, req.Context().Err()
 		}
 		if err := rewindBody(req); err != nil {
 			return nil, err

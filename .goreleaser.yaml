@@ -40,7 +40,7 @@ builds:
       # Matches the repo-root Dockerfile. {{ .Version }} is the tag without the
       # leading "v" (e.g. 1.2.3), aligning the binary's reported version with the
       # image tags produced below.
-      - -s -w -X main.version={{ .Version }}
+      - -s -w -X github.com/rknightion/graph2otel/internal/version.Version={{ .Version }}
     mod_timestamp: "{{ .CommitTimestamp }}"
     # Full 5-target matrix (linux/darwin/windows × amd64/arm64, minus
     # windows/arm64) — same as the sibling repos. Cross-compiling the

@@ -209,14 +209,15 @@ func (c *Client) Governance(ctx context.Context, q GovernanceQuery) (*Governance
 		total = gr.Total
 		records = append(records, gr.Data...)
 
-		// Stop when the server has no more: a short page (fewer than the limit)
-		// or having reached the reported total. A total of 0 with an empty page
-		// exits immediately.
-		if len(gr.Data) < defaultPageLimit || len(records) >= total {
-			break
+		// Stop after reaching the reported total, or when a short page before
+		// the cap proves the server has no more. On the final permitted page,
+		// only reaching the reported total succeeds; otherwise the loop falls
+		// through to the pagination-cap error.
+		if len(records) >= total || (page < maxPages-1 && len(gr.Data) < defaultPageLimit) {
+			return &GovernancePage{Total: total, Records: records}, nil
 		}
 	}
-	return &GovernancePage{Total: total, Records: records}, nil
+	return nil, fmt.Errorf("mdcaclient: governance pagination cap reached after %d pages: collected %d of reported %d records", maxPages, len(records), total)
 }
 
 // checkHost refuses to send the token anywhere but this client's own endpoint.

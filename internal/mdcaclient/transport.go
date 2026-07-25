@@ -1,6 +1,7 @@
 package mdcaclient
 
 import (
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -181,10 +182,11 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 		delay := t.backoff.Delay(attempt, parseRetryAfter(resp.Header.Get(headerRetryAfter)))
 		// Drain and close the discarded response's body or the connection leaks.
+		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
 
 		if !sleepCtx(req, delay) {
-			return t.next.RoundTrip(req)
+			return nil, req.Context().Err()
 		}
 		if err := rewindBody(req); err != nil {
 			return nil, err

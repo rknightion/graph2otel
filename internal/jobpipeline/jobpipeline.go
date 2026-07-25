@@ -58,6 +58,10 @@ const (
 	DefaultOverlap = 2 * time.Hour
 	// DefaultPageSize is the $top page size requested per records page.
 	DefaultPageSize = 200
+	// maxRecordPages bounds one query's records walk. A query result set is
+	// finite, so reaching this cap signals a non-converging cursor rather than a
+	// result that is safe to emit or checkpoint.
+	maxRecordPages = 1000
 	// DefaultPollInitial is the first delay between status polls; it doubles up
 	// to DefaultPollMax. No Microsoft SLA is documented for query completion, so
 	// these are deliberate working defaults, overridable per collector.
@@ -309,7 +313,14 @@ func Run(ctx context.Context, cfg QueryConfig, cp *checkpoint.Checkpoint, from, 
 		// on a 429 would put back the duplicate create this all exists to remove.
 		if errors.Is(err, ErrJobFailed) || errors.Is(err, ErrJobCancelled) {
 			cp.InFlight = nil
-			persist(cfg, cp)
+			if cfg.Persist != nil {
+				if clearErr := cfg.Persist(cp); clearErr != nil {
+					return cp.Watermark, errors.Join(
+						fmt.Errorf("jobpipeline: %s: %w", cfg.CreatePath, err),
+						fmt.Errorf("jobpipeline: %s: clear terminal in-flight checkpoint: %w", cfg.CreatePath, clearErr),
+					)
+				}
+			}
 		}
 		return cp.Watermark, fmt.Errorf("jobpipeline: %s: %w", cfg.CreatePath, err)
 	}
@@ -500,7 +511,17 @@ func pollToSucceeded(ctx context.Context, cfg QueryConfig, client JobClient, que
 func drainRecords(ctx context.Context, cfg QueryConfig, client JobClient, queryURL string) ([]map[string]any, error) {
 	var out []map[string]any
 	pageURL := queryURL + "/records?$top=" + strconv.Itoa(cfg.PageSize)
+	seenPages := make(map[string]struct{})
+	pages := 0
 	for pageURL != "" {
+		if _, seen := seenPages[pageURL]; seen {
+			return nil, fmt.Errorf("repeated records page %q for %q", pageURL, queryURL)
+		}
+		if pages >= maxRecordPages {
+			return nil, fmt.Errorf("records pagination exceeded %d pages for %q", maxRecordPages, queryURL)
+		}
+		seenPages[pageURL] = struct{}{}
+		pages++
 		records, next, err := client.FetchRecordsPage(ctx, pageURL)
 		if err != nil {
 			return nil, err

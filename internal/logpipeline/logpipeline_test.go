@@ -2,6 +2,7 @@ package logpipeline
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"strings"
 	"testing"
@@ -124,6 +125,126 @@ func TestPollDrainsAllPagesViaNextLink(t *testing.T) {
 	logs := rec.LogRecords()
 	if len(logs) != 3 {
 		t.Fatalf("expected 3 emitted logs across both pages, got %d: %+v", len(logs), logs)
+	}
+}
+
+// TestPollRejectsRepeatedNextLinkBeforeEmission makes a self-referential
+// nextLink fail when Poll observes the initial URL for a second time. The
+// first page must remain uncommitted: no log event may be emitted and the
+// checkpoint must be left exactly as it was for the retry.
+func TestPollRejectsRepeatedNextLinkBeforeEmission(t *testing.T) {
+	rec := telemetrytest.New()
+	cfg := EndpointConfig{
+		Path:            "/auditLogs/signIns",
+		TimeField:       "createdDateTime",
+		Flavor:          FlavorGeLe,
+		OrderByReliable: true,
+		ExcludeSelf:     true,
+		SelfClientID:    "graph2otel-poller",
+		SelfAppID: func(record map[string]any) string {
+			appID, _ := record["appId"].(string)
+			return appID
+		},
+		CollectorName: "entra.test",
+		Map:           mapByID,
+	}
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+	cp := newCheckpoint("t1", cfg.Path)
+	cp.Watermark = from.Add(-time.Hour)
+	cp.SeenIDs.Add("already-seen", from.Add(-2*time.Hour))
+
+	calls := 0
+	fetcher := pageFetcherFunc(func(_ context.Context, pageURL string) ([]map[string]any, string, error) {
+		calls++
+		if calls > 1 {
+			return nil, "", fmt.Errorf("repeat guard was not enforced for %q", pageURL)
+		}
+		return []map[string]any{{
+			"id":              "new-record",
+			"createdDateTime": from.Add(10 * time.Minute).Format(time.RFC3339),
+			"appId":           "graph2otel-poller",
+		}}, pageURL, nil
+	})
+
+	_, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter())
+	if err == nil || !strings.Contains(err.Error(), "repeated pagination URL") {
+		t.Fatalf("Poll error = %v, want repeated pagination URL error", err)
+	}
+	if calls != 1 {
+		t.Fatalf("FetchPage calls = %d, want 1: repeat must be rejected before the second fetch", calls)
+	}
+	if logs := rec.LogRecords(); len(logs) != 0 {
+		t.Fatalf("emitted %d logs, want 0 when pagination does not drain", len(logs))
+	}
+	if points := rec.MetricPoints(metricSelfExcluded); len(points) != 0 {
+		t.Fatalf("emitted %d self-exclusion metric points, want 0 when pagination does not drain", len(points))
+	}
+	if !cp.Watermark.Equal(from.Add(-time.Hour)) {
+		t.Errorf("checkpoint watermark = %v, want unchanged %v", cp.Watermark, from.Add(-time.Hour))
+	}
+	if len(cp.SeenIDs) != 1 || !cp.SeenIDs.Has("already-seen") {
+		t.Errorf("checkpoint SeenIDs = %v, want unchanged existing id only", cp.SeenIDs)
+	}
+}
+
+// TestPollRejectsPaginationPastOneThousandPagesBeforeEmission makes the
+// 1001st distinct page URL fail before FetchPage. A cap is a failed drain, not
+// a partial success: buffered records must not emit and the checkpoint must
+// remain retryable.
+func TestPollRejectsPaginationPastOneThousandPagesBeforeEmission(t *testing.T) {
+	rec := telemetrytest.New()
+	cfg := EndpointConfig{
+		Path:            "/auditLogs/signIns",
+		TimeField:       "createdDateTime",
+		Flavor:          FlavorGeLe,
+		OrderByReliable: true,
+		ExcludeSelf:     true,
+		SelfClientID:    "graph2otel-poller",
+		SelfAppID: func(record map[string]any) string {
+			appID, _ := record["appId"].(string)
+			return appID
+		},
+		CollectorName: "entra.test",
+		Map:           mapByID,
+	}
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+	cp := newCheckpoint("t1", cfg.Path)
+	cp.Watermark = from.Add(-time.Hour)
+	cp.SeenIDs.Add("already-seen", from.Add(-2*time.Hour))
+
+	calls := 0
+	fetcher := pageFetcherFunc(func(_ context.Context, _ string) ([]map[string]any, string, error) {
+		calls++
+		if calls > 1000 {
+			return nil, "", fmt.Errorf("page cap guard was not enforced")
+		}
+		return []map[string]any{{
+			"id":              fmt.Sprintf("record-%d", calls),
+			"createdDateTime": from.Add(10 * time.Minute).Format(time.RFC3339),
+			"appId":           "graph2otel-poller",
+		}}, fmt.Sprintf("https://graph.microsoft.com/v1.0/auditLogs/signIns?$skiptoken=page-%d", calls+1), nil
+	})
+
+	_, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter())
+	if err == nil || !strings.Contains(err.Error(), "pagination exceeded 1000 pages") || !strings.Contains(err.Error(), cfg.Path) {
+		t.Fatalf("Poll error = %v, want contextual 1000-page cap error for %s", err, cfg.Path)
+	}
+	if calls != 1000 {
+		t.Fatalf("FetchPage calls = %d, want 1000: the 1001st distinct URL must be rejected before fetch", calls)
+	}
+	if logs := rec.LogRecords(); len(logs) != 0 {
+		t.Fatalf("emitted %d logs, want 0 when pagination does not drain", len(logs))
+	}
+	if points := rec.MetricPoints(metricSelfExcluded); len(points) != 0 {
+		t.Fatalf("emitted %d self-exclusion metric points, want 0 when pagination does not drain", len(points))
+	}
+	if !cp.Watermark.Equal(from.Add(-time.Hour)) {
+		t.Errorf("checkpoint watermark = %v, want unchanged %v", cp.Watermark, from.Add(-time.Hour))
+	}
+	if len(cp.SeenIDs) != 1 || !cp.SeenIDs.Has("already-seen") {
+		t.Errorf("checkpoint SeenIDs = %v, want unchanged existing id only", cp.SeenIDs)
 	}
 }
 

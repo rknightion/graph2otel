@@ -159,6 +159,76 @@ func TestRun_ClearsInFlightOnTerminalFailure(t *testing.T) {
 	}
 }
 
+// TestRun_TerminalClearFailureJoinsQueryAndPersistErrors proves #273's durable
+// clear error is not allowed to hide the failed-query sentinel. Removing the
+// terminal Persist call loses clearErr; replacing errors.Join with either error
+// alone loses one of the two errors.Is assertions.
+func TestRun_TerminalClearFailureJoinsQueryAndPersistErrors(t *testing.T) {
+	rec := telemetrytest.New()
+	from := time.Date(2026, 7, 25, 10, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+	clearErr := errors.New("checkpoint clear failed")
+	var persistedInFlight *checkpoint.InFlightJob
+
+	cfg := baseConfig()
+	cfg.Now = fixedNow(to)
+	cfg.Persist = func(cp *checkpoint.Checkpoint) error {
+		if cp.InFlight == nil {
+			return clearErr
+		}
+		inFlight := *cp.InFlight
+		persistedInFlight = &inFlight
+		return nil // initial persist: retain the intentional orphan behavior.
+	}
+	client := &fakeJobClient{statuses: []string{StatusFailed}}
+	cp := newCheckpoint("t1", cfg.CreatePath)
+
+	_, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter())
+	if !errors.Is(err, ErrJobFailed) {
+		t.Fatalf("Run error = %v, want ErrJobFailed", err)
+	}
+	if !errors.Is(err, clearErr) {
+		t.Fatalf("Run error = %v, want terminal clear error", err)
+	}
+	if cp.InFlight != nil {
+		t.Errorf("InFlight = %+v after a terminal query, want nil even when its durable clear fails", cp.InFlight)
+	}
+	if persistedInFlight == nil || persistedInFlight.ID != "query-1" {
+		t.Errorf("prior durable checkpoint = %+v, want the initial query-1 record intact after its clear failed", persistedInFlight)
+	}
+}
+
+// TestJobCollector_TerminalClearPreventsFreshInstanceAdoption is #273's
+// restart proof. A terminal query is persisted as cleared before Run returns,
+// so a fresh collector creates a new query rather than adopting the failed id.
+func TestJobCollector_TerminalClearPreventsFreshInstanceAdoption(t *testing.T) {
+	store := checkpoint.NewStore(t.TempDir())
+	from := time.Date(2026, 7, 25, 10, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+
+	cfg := baseConfig()
+	cfg.Now = fixedNow(to)
+	first := NewJobCollector("m365.unified_audit", 30*time.Minute, 15*time.Minute, "t1", cfg,
+		&fakeJobClient{statuses: []string{StatusFailed}}, store)
+	if _, err := first.CollectWindow(context.Background(), from, to, telemetrytest.New().Emitter()); !errors.Is(err, ErrJobFailed) {
+		t.Fatalf("first CollectWindow error = %v, want ErrJobFailed", err)
+	}
+
+	secondClient := &fakeJobClient{
+		statuses: []string{StatusSucceeded},
+		pages: map[string]fakePage{
+			recordsURL("query-1", DefaultPageSize): {records: []map[string]any{}},
+		},
+	}
+	second := NewJobCollector("m365.unified_audit", 30*time.Minute, 15*time.Minute, "t1", cfg, secondClient, store)
+	if _, err := second.CollectWindow(context.Background(), from, to, telemetrytest.New().Emitter()); err != nil {
+		t.Fatalf("second CollectWindow: %v", err)
+	}
+	if secondClient.createCalls != 1 {
+		t.Errorf("fresh collector created %d queries, want 1 — it must not adopt the terminal query left by the first collector", secondClient.createCalls)
+	}
+}
+
 // TestRun_AdoptsInFlightRatherThanCreating is the core of #118 at engine level:
 // a checkpoint carrying an in-flight id must be polled, not re-created — and
 // crucially it must be adopted even though `to` has advanced since, because

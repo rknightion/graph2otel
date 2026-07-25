@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -319,6 +320,106 @@ func TestExport_ClearsInFlightOnSASExpired(t *testing.T) {
 	}
 }
 
+// TestExport_TerminalClearFailuresPreserveTheOutcome makes terminal checkpoint
+// clearing observable. A terminal id left on disk is re-adopted on the next
+// process, so treating this as a best-effort write turns a primary job result
+// into a silent duplicate-download risk.
+func TestExport_TerminalClearFailuresPreserveTheOutcome(t *testing.T) {
+	now := time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)
+	clearErr := errors.New("checkpoint clear failed")
+
+	tests := []struct {
+		name      string
+		statusFor func() ([]byte, error)
+		download  func(context.Context, string) ([]byte, error)
+		wantRows  bool
+		wantIs    error
+		wantInErr string
+	}{
+		{
+			name:      "completed",
+			statusFor: func() ([]byte, error) { return completedBody("job-1", now.Add(time.Hour)), nil },
+			download:  func(context.Context, string) ([]byte, error) { return csvZip(t), nil },
+			wantRows:  true,
+		},
+		{
+			name:      "failed",
+			statusFor: func() ([]byte, error) { return []byte(`{"id":"job-1","status":"failed"}`), nil },
+			download: func(context.Context, string) ([]byte, error) {
+				t.Fatal("Download called for failed job")
+				return nil, nil
+			},
+			wantIs: ErrJobFailed,
+		},
+		{
+			name:      "expired SAS",
+			statusFor: func() ([]byte, error) { return completedBody("job-1", now.Add(-time.Minute)), nil },
+			download: func(context.Context, string) ([]byte, error) {
+				t.Fatal("Download called for expired SAS")
+				return nil, nil
+			},
+			wantIs: ErrSASExpired,
+		},
+		{
+			name:      "unparseable payload",
+			statusFor: func() ([]byte, error) { return completedBody("job-1", now.Add(time.Hour)), nil },
+			download:  func(context.Context, string) ([]byte, error) { return []byte("not a zip"), nil },
+			wantInErr: "parse:",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := clearFailJobStore{clearErr: clearErr}
+			poster := &exportPoster{statusFor: func(string) ([]byte, error) { return tt.statusFor() }}
+			client := New(poster, &fakeDownloader{download: tt.download}, Options{
+				Store: &store, TenantID: "t1", Now: fixedNow(now), Sleep: func(context.Context, time.Duration) error { return nil },
+			})
+
+			rows, err := client.Export(context.Background(), defenderReq(), telemetrytest.New().Emitter())
+			if !errors.Is(err, clearErr) {
+				t.Fatalf("Export error = %v, want joined clear failure %v", err, clearErr)
+			}
+			if tt.wantIs != nil && !errors.Is(err, tt.wantIs) {
+				t.Fatalf("Export error = %v, want primary error %v preserved", err, tt.wantIs)
+			}
+			if tt.wantInErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantInErr)) {
+				t.Fatalf("Export error = %v, want primary error containing %q", err, tt.wantInErr)
+			}
+			if tt.wantRows && len(rows) != 1 {
+				t.Fatalf("completed rows = %v, want primary result preserved", rows)
+			}
+			if !store.clearAttempted {
+				t.Fatal("terminal outcome did not attempt to clear its in-flight record")
+			}
+		})
+	}
+}
+
+// TestExport_SuccessfulClearPreventsFreshInstanceAdoption proves the important
+// durability property through the public API: after a successful terminal
+// clear, a newly constructed client creates a job instead of adopting the old
+// completed one.
+func TestExport_SuccessfulClearPreventsFreshInstanceAdoption(t *testing.T) {
+	store := checkpoint.NewStore(t.TempDir())
+	now := time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)
+	poster := &exportPoster{statusFor: func(url string) ([]byte, error) {
+		return completedBody(url[len(url)-5:], now.Add(time.Hour)), nil
+	}}
+	dl := &fakeDownloader{download: func(context.Context, string) ([]byte, error) { return csvZip(t), nil }}
+	opts := Options{Store: store, TenantID: "t1", Now: fixedNow(now), Sleep: func(context.Context, time.Duration) error { return nil }}
+
+	if _, err := New(poster, dl, opts).Export(context.Background(), defenderReq(), telemetrytest.New().Emitter()); err != nil {
+		t.Fatalf("first instance Export: %v", err)
+	}
+	if _, err := New(poster, dl, opts).Export(context.Background(), defenderReq(), telemetrytest.New().Emitter()); err != nil {
+		t.Fatalf("fresh instance Export: %v", err)
+	}
+	if poster.createCalls != 2 {
+		t.Fatalf("fresh instance created %d jobs, want 2; it adopted a terminal id instead", poster.createCalls)
+	}
+}
+
 // TestExport_KeepsInFlightOnPollError is the resume path: a transient poll
 // failure must LEAVE the record, because that is exactly the job the next tick
 // should adopt.
@@ -384,7 +485,7 @@ func TestExport_StoreFailureDoesNotAbandonTheCreatedJob(t *testing.T) {
 	}}
 	dl := &fakeDownloader{download: func(context.Context, string) ([]byte, error) { return csvZip(t), nil }}
 	client := New(poster, dl, Options{
-		Store: failingJobStore{}, TenantID: "t1", Now: fixedNow(now), Sleep: noSleep(&delays),
+		Store: initialSaveFailingJobStore{}, TenantID: "t1", Now: fixedNow(now), Sleep: noSleep(&delays),
 	})
 
 	rows, err := client.Export(context.Background(), defenderReq(), telemetrytest.New().Emitter())
@@ -396,12 +497,34 @@ func TestExport_StoreFailureDoesNotAbandonTheCreatedJob(t *testing.T) {
 	}
 }
 
-// failingJobStore fails every operation, modeling an unusable checkpoint dir.
-type failingJobStore struct{}
+// initialSaveFailingJobStore fails the best-effort write after create while
+// allowing the terminal clear. The first failure must not discard a job that
+// already exists server-side; clear failures have their own observable contract.
+type initialSaveFailingJobStore struct{}
 
-func (failingJobStore) LoadJob(string, string) (*checkpoint.JobRecord, error) {
+func (initialSaveFailingJobStore) LoadJob(string, string) (*checkpoint.JobRecord, error) {
 	return nil, errors.New("checkpoint dir is unreadable")
 }
-func (failingJobStore) SaveJob(*checkpoint.JobRecord) error {
+func (initialSaveFailingJobStore) SaveJob(rec *checkpoint.JobRecord) error {
+	if rec.InFlight == nil {
+		return nil
+	}
 	return errors.New("checkpoint dir is unwritable")
+}
+
+// clearFailJobStore accepts the initial in-flight write but fails the terminal
+// clear, isolating the failure the job result must surface.
+type clearFailJobStore struct {
+	clearErr       error
+	clearAttempted bool
+}
+
+func (*clearFailJobStore) LoadJob(string, string) (*checkpoint.JobRecord, error) { return nil, nil }
+
+func (s *clearFailJobStore) SaveJob(rec *checkpoint.JobRecord) error {
+	if rec.InFlight != nil {
+		return nil
+	}
+	s.clearAttempted = true
+	return s.clearErr
 }

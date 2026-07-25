@@ -8,6 +8,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/config"
 	"github.com/rknightion/graph2otel/internal/preflight"
+	"github.com/rknightion/graph2otel/internal/version"
 )
 
 // fakePermissionSource is an in-memory preflight.PermissionSource so these
@@ -95,7 +96,7 @@ func TestDispatch_FallsThroughToRun(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("dispatch(-version) = %d, want 0; stderr=%s", code, stderr.String())
 	}
-	if got := strings.TrimSpace(stdout.String()); got != version {
-		t.Errorf("stdout = %q, want %q", got, version)
+	if got, want := strings.TrimSpace(stdout.String()), version.String(); got != want {
+		t.Errorf("stdout = %q, want %q", got, want)
 	}
 }

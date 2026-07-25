@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -190,9 +191,10 @@ func (c ContainerConfig) maxBytes() int64 {
 // Failure semantics mirror the logpipeline engine: records are emitted BEFORE
 // the cursor advances, so a crash re-reads rather than skips (at-least-once,
 // never a gap). A List failure fails the tick, because a tick that saw nothing
-// must not look successful. A per-blob read failure, a malformed line, or a
-// failed cursor save do not: they are logged and the remaining blobs still
-// drain.
+// must not look successful. Per-blob read failures and failed cursor saves are
+// logged and do not stop the remaining blobs from draining, but they make the
+// completed tick degraded. Malformed JSON lines remain logged and consumed
+// without degrading the tick.
 func Poll(
 	ctx context.Context,
 	cfg ContainerConfig,
@@ -214,9 +216,11 @@ func Poll(
 	}
 	sort.Slice(blobs, func(i, j int) bool { return blobs[i].Name < blobs[j].Name })
 
-	pruneDeleted(cur, blobs)
+	pruned := pruneDeleted(cur, blobs)
 
 	var stats gateStats
+	var failures []error
+	advancedAny := false
 	for _, b := range blobs {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -226,8 +230,10 @@ func Poll(
 			// One unreadable blob must not cost us the other 167.
 			log.Warn("blob read failed; skipping until next tick",
 				"container", cfg.Container, "blob", b.Name, "error", err)
+			failures = append(failures, fmt.Errorf("blobpipeline: read %s/%s: %w", cfg.Container, b.Name, err))
 			continue
 		}
+		advancedAny = advancedAny || advanced
 		if !advanced || save == nil {
 			continue
 		}
@@ -237,10 +243,18 @@ func Poll(
 			// persisted offset, so this is a duplicate risk, not a data loss.
 			log.Warn("blob cursor save failed; records may be re-emitted after a restart",
 				"container", cfg.Container, "blob", b.Name, "error", err)
+			failures = append(failures, fmt.Errorf("blobpipeline: save cursor for %s/%s: %w", cfg.Container, b.Name, err))
+		}
+	}
+	if pruned && !advancedAny && save != nil {
+		if err := save(cur); err != nil {
+			log.Warn("blob cursor save failed after pruning deleted blobs",
+				"container", cfg.Container, "error", err)
+			failures = append(failures, fmt.Errorf("blobpipeline: save pruned cursor for %s: %w", cfg.Container, err))
 		}
 	}
 	reportGate(e, log, cfg, stats)
-	return nil
+	return errors.Join(failures...)
 }
 
 // reportGate emits the per-tick gate self-obs and the one summary line per tick
@@ -284,7 +298,8 @@ func reportGate(e telemetry.Emitter, log *slog.Logger, cfg ContainerConfig, stat
 // storage account's lifecycle rule deletes blobs past its retention window, and
 // without this the cursor would accumulate an entry per hour per category
 // forever.
-func pruneDeleted(cur *checkpoint.BlobCursor, blobs []BlobInfo) {
+func pruneDeleted(cur *checkpoint.BlobCursor, blobs []BlobInfo) bool {
+	pruned := false
 	live := make(map[string]struct{}, len(blobs))
 	for _, b := range blobs {
 		live[b.Name] = struct{}{}
@@ -292,8 +307,10 @@ func pruneDeleted(cur *checkpoint.BlobCursor, blobs []BlobInfo) {
 	for name := range cur.Offsets {
 		if _, ok := live[name]; !ok {
 			delete(cur.Offsets, name)
+			pruned = true
 		}
 	}
+	return pruned
 }
 
 // consumeBlob reads and emits whatever is new in one blob, returning whether
@@ -339,6 +356,9 @@ func consumeBlob(
 	// bytes next tick.
 	nl := bytes.LastIndexByte(chunk, '\n')
 	if nl < 0 {
+		if int64(len(chunk)) == cfg.maxBytes() {
+			return false, fmt.Errorf("blobpipeline: oversized record without newline in %s/%s reached the %d-byte cap", cfg.Container, b.Name, cfg.maxBytes())
+		}
 		return false, nil
 	}
 	complete := chunk[:nl+1]

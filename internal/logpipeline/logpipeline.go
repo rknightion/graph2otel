@@ -43,6 +43,10 @@ const (
 	DefaultOverlap = 2 * time.Hour
 	// DefaultPageSize is the $top page size requested per Graph page.
 	DefaultPageSize = 1000
+	// maxPages bounds an opaque next-link walk. Reaching it means the window
+	// was not fully drained, so Poll fails without emitting or advancing its
+	// checkpoint rather than treating a partial read as success.
+	maxPages = 1000
 )
 
 // FilterFlavor selects the pair of OData comparison operators Poll builds
@@ -219,22 +223,30 @@ func Poll(ctx context.Context, cfg EndpointConfig, cp *checkpoint.Checkpoint, fr
 	}
 
 	var all []drainedRecord
+	selfExcluded := 0
 	pageURL := buildFirstURL(cfg, from, to)
+	seenURLs := make(map[string]struct{})
+	pages := 0
 	for pageURL != "" {
+		if _, seen := seenURLs[pageURL]; seen {
+			return cp.Watermark, fmt.Errorf("logpipeline: %s: repeated pagination URL %q", cfg.Path, pageURL)
+		}
+		seenURLs[pageURL] = struct{}{}
+		if pages >= maxPages {
+			return cp.Watermark, fmt.Errorf("logpipeline: %s: pagination exceeded %d pages at %q", cfg.Path, maxPages, pageURL)
+		}
+		pages++
+
 		records, next, ferr := fetcher.FetchPage(ctx, pageURL)
 		if ferr != nil {
 			return cp.Watermark, fmt.Errorf("logpipeline: %s: fetch page: %w", cfg.Path, ferr)
 		}
 		for _, rec := range records {
 			if cfg.ExcludeSelf && cfg.SelfAppID != nil && cfg.SelfClientID != "" && cfg.SelfAppID(rec) == cfg.SelfClientID {
-				// graph2otel's own polling exhaust (#176). Drop it before Map, but
-				// LOUDLY: a per-collector self-obs counter, never a silent skip. Self-
-				// ONLY: any other appId falls through untouched. The record is simply
-				// not drained; the window still advances to to-SafetyLag below whether
-				// or not any non-self records remain, so a self-only window never loops.
-				e.Counter(metricSelfExcluded, "{record}",
-					"Graph-polled records dropped by exclude_self because their appId matched this tenant's own poller client_id (#176).",
-					1, telemetry.Attrs{semconv.AttrCollector: cfg.CollectorName})
+				// graph2otel's own polling exhaust (#176). Keep the counter local
+				// until the whole page walk succeeds: a failed walk is retried, so
+				// emitting it here would double-count the same self-authored record.
+				selfExcluded++
 				continue
 			}
 			id, ev := cfg.Map(rec)
@@ -262,6 +274,11 @@ func Poll(ctx context.Context, cfg EndpointConfig, cp *checkpoint.Checkpoint, fr
 	// so "newest" below reflects real event time, not arrival order.
 	if !cfg.OrderByReliable {
 		sort.Slice(all, func(i, j int) bool { return all[i].t.Before(all[j].t) })
+	}
+	if selfExcluded > 0 {
+		e.Counter(metricSelfExcluded, "{record}",
+			"Graph-polled records dropped by exclude_self because their appId matched this tenant's own poller client_id (#176).",
+			float64(selfExcluded), telemetry.Attrs{semconv.AttrCollector: cfg.CollectorName})
 	}
 
 	newest := cp.Watermark

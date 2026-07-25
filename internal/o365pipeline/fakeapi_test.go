@@ -85,10 +85,22 @@ type fakeAPI struct {
 	fetches []string
 	// listRanges records the [startTime, endTime] of every listing request.
 	listRanges [][2]string
+	// lists records every content type passed to subscriptions/content, in order.
+	lists []string
 
 	// noSubscriptionFor makes subscriptions/content fail with AF20022 for these
 	// content types until subscriptions/start is called for them.
 	noSubscriptionFor map[string]bool
+	// disabledSubscriptionFor makes subscriptions/content fail with AF20023 for
+	// these content types until subscriptions/start is called for them.
+	disabledSubscriptionFor map[string]bool
+	// persistentDisabledFor keeps returning AF20023 after subscriptions/start,
+	// exercising the pipeline's bounded recovery path.
+	persistentDisabledFor map[string]bool
+	// startFailures makes subscriptions/start fail once for these content types.
+	startFailures map[string]string
+	// listFailures makes subscriptions/content fail once for these content types.
+	listFailures map[string]string
 	// alreadyEnabledFor makes subscriptions/start fail with AF20024 for these
 	// content types — the real API's response when the subscription is already
 	// on, which is the steady state on any tenant whose subscriptions were
@@ -100,7 +112,15 @@ type fakeAPI struct {
 
 func newFakeAPI(t *testing.T, blobs ...blobSpec) *fakeAPI {
 	t.Helper()
-	f := &fakeAPI{blobs: blobs, noSubscriptionFor: map[string]bool{}, alreadyEnabledFor: map[string]bool{}}
+	f := &fakeAPI{
+		blobs:                   blobs,
+		noSubscriptionFor:       map[string]bool{},
+		disabledSubscriptionFor: map[string]bool{},
+		persistentDisabledFor:   map[string]bool{},
+		alreadyEnabledFor:       map[string]bool{},
+		startFailures:           map[string]string{},
+		listFailures:            map[string]string{},
+	}
 	f.srv = httptest.NewServer(http.HandlerFunc(f.handle))
 	t.Cleanup(f.srv.Close)
 	return f
@@ -124,8 +144,15 @@ func (f *fakeAPI) handleStart(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	f.starts = append(f.starts, ct)
 	delete(f.noSubscriptionFor, ct)
+	delete(f.disabledSubscriptionFor, ct)
 	already := f.alreadyEnabledFor[ct]
+	failure := f.startFailures[ct]
+	delete(f.startFailures, ct)
 	f.mu.Unlock()
+	if failure != "" {
+		writeAPIError(w, http.StatusBadRequest, failure, "injected "+failure)
+		return
+	}
 
 	// AF20024 is what the REAL API returns when the content type is already
 	// enabled — an undocumented 400 for an operation the reference describes as a
@@ -150,12 +177,25 @@ func (f *fakeAPI) handleContent(w http.ResponseWriter, r *http.Request) {
 
 	f.mu.Lock()
 	blocked := f.noSubscriptionFor[ct]
+	disabled := f.disabledSubscriptionFor[ct] || f.persistentDisabledFor[ct]
+	failure := f.listFailures[ct]
+	delete(f.listFailures, ct)
 	f.listRanges = append(f.listRanges, [2]string{q.Get("startTime"), q.Get("endTime")})
+	f.lists = append(f.lists, ct)
 	f.mu.Unlock()
 
 	if blocked {
 		writeAPIError(w, http.StatusBadRequest, o365activityclient.CodeNoSubscription,
 			"There is no subscription for the specified content type.")
+		return
+	}
+	if disabled {
+		writeAPIError(w, http.StatusBadRequest, o365activityclient.CodeSubscriptionDisabled,
+			"The subscription was disabled by a tenant admin.")
+		return
+	}
+	if failure != "" {
+		writeAPIError(w, http.StatusBadRequest, failure, "injected "+failure)
 		return
 	}
 
@@ -274,12 +314,41 @@ func (f *fakeAPI) lastListRange() [2]string {
 	return f.listRanges[len(f.listRanges)-1]
 }
 
+// recordedLists returns how many content-list requests the fake received for ct.
+func (f *fakeAPI) recordedLists(ct o365activityclient.ContentType) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	count := 0
+	for _, got := range f.lists {
+		if got == string(ct) {
+			count++
+		}
+	}
+	return count
+}
+
 // blockSubscription makes subscriptions/content return AF20022 for ct until
 // subscriptions/start is called.
 func (f *fakeAPI) blockSubscription(ct o365activityclient.ContentType) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.noSubscriptionFor[string(ct)] = true
+}
+
+// disableSubscription makes subscriptions/content return AF20023 until a
+// subscriptions/start call reenables ct.
+func (f *fakeAPI) disableSubscription(ct o365activityclient.ContentType) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.disabledSubscriptionFor[string(ct)] = true
+}
+
+// persistentlyDisableSubscription makes subscriptions/content return AF20023
+// even after a subscriptions/start call, exercising one bounded retry.
+func (f *fakeAPI) persistentlyDisableSubscription(ct o365activityclient.ContentType) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.persistentDisabledFor[string(ct)] = true
 }
 
 // client builds a real o365activityclient pointed at the fake, so these tests

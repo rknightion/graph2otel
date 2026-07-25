@@ -208,6 +208,10 @@ func (c *Collector) Collect(ctx context.Context, from, to time.Time, e telemetry
 	}
 
 	resumeFrom := c.resumeFrom(cp, from)
+	cycleBoundary := cp.Watermark
+	if cycleBoundary.IsZero() {
+		cycleBoundary = resumeFrom
+	}
 
 	var errs []error
 	var maxConsumed, earliestFailed time.Time
@@ -215,6 +219,14 @@ func (c *Collector) Collect(ctx context.Context, from, to time.Time, e telemetry
 		consumed, failed, cerr := c.collectContentType(ctx, ct, cp, resumeFrom, to, e)
 		if cerr != nil {
 			errs = append(errs, cerr)
+			// A failure before listing (including subscription start) has no
+			// contentCreated timestamp to bound the shared watermark. Cap it at
+			// this cycle's starting boundary instead: healthy sibling content
+			// still persists its SeenIDs, but cannot move the cursor past unseen
+			// content in the failed type.
+			if failed.IsZero() && (earliestFailed.IsZero() || cycleBoundary.Before(earliestFailed)) {
+				earliestFailed = cycleBoundary
+			}
 		}
 		if !consumed.IsZero() && consumed.After(maxConsumed) {
 			maxConsumed = consumed
@@ -311,19 +323,20 @@ func (c *Collector) collectContentType(
 	return consumed, failed, nil
 }
 
-// list lists content for ct, recovering once from AF20022 by starting the
-// subscription. That code means the subscription is genuinely absent — an admin
-// stopped it, or it was never started — and a restart is the only way forward.
+// list lists content for ct, recovering once from AF20022 or AF20023 by
+// starting the subscription. The first means the subscription is absent; the
+// second means an administrator disabled one this process had already started.
+// Both require exactly one start and one list retry.
 func (c *Collector) list(ctx context.Context, ct o365activityclient.ContentType, from, to time.Time) ([]o365activityclient.ContentBlob, error) {
 	blobs, err := c.client.ListContent(ctx, ct, from, to)
 	if err == nil {
 		return blobs, nil
 	}
-	if !o365activityclient.IsNoSubscription(err) {
+	if !o365activityclient.IsNoSubscription(err) && !o365activityclient.IsSubscriptionDisabled(err) {
 		return nil, fmt.Errorf("o365pipeline: %s: list %s: %w", c.cfg.CollectorName, ct, err)
 	}
 
-	slog.Info("no subscription for content type; starting it and retrying the listing once",
+	slog.Info("content subscription unavailable; starting it and retrying the listing once",
 		"collector", c.cfg.CollectorName, "tenant_id", c.client.TenantID, "content_type", ct)
 	if serr := c.startSubscription(ctx, ct); serr != nil {
 		return nil, serr

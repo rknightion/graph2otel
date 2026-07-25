@@ -6,6 +6,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collector"
+	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
 // CheckpointState reads the durable blob cursor read-only for the admin page
@@ -54,5 +55,40 @@ func TestBlobCollectorCheckpointStateCold(t *testing.T) {
 	}
 	if st.ByteOffset != 0 || st.BlobsTracked != 0 || st.NewestBlob != "" {
 		t.Errorf("cold state = %+v, want zero offset/blobs/newest", st)
+	}
+}
+
+// Lifecycle deletion must survive a process restart even when the surviving
+// blob is already fully consumed and therefore cannot trigger the usual save.
+func TestBlobCollectorCheckpointStateDoesNotRestorePrunedBlobAfterRestart(t *testing.T) {
+	dir := t.TempDir()
+	store := checkpoint.NewStore(dir)
+	live := "tenantId=t1/y=2026/m=07/d=16/h=00/m=00/PT1H.json"
+	deleted := "tenantId=t1/y=2026/m=07/d=01/h=00/m=00/PT1H.json"
+	if err := store.SaveCursor(&checkpoint.BlobCursor{
+		TenantID: "t1",
+		Key:      testConfig().Container,
+		Offsets: map[string]int64{
+			live:    int64(len(rec("a"))),
+			deleted: 500,
+		},
+	}); err != nil {
+		t.Fatalf("SaveCursor: %v", err)
+	}
+
+	c := NewBlobCollector("test.blob", time.Minute, "t1", testConfig(),
+		&fakeSource{blobs: map[string]string{live: rec("a")}}, store, discardLogger())
+	if err := c.Collect(t.Context(), telemetrytest.New().Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	// Construct a fresh collector to read the durable cursor as a restart would.
+	restarted := NewBlobCollector("test.blob", time.Minute, "t1", testConfig(), nil, store, discardLogger())
+	st := restarted.CheckpointState()
+	if st == nil {
+		t.Fatal("CheckpointState() = nil after restart")
+	}
+	if st.BlobsTracked != 1 || st.NewestBlob != live || st.ByteOffset != int64(len(rec("a"))) {
+		t.Errorf("durable cursor after prune = %+v, want only %q at offset %d", st, live, len(rec("a")))
 	}
 }

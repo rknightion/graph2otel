@@ -26,6 +26,7 @@ import (
 	"fmt"
 
 	"net/http"
+	"strings"
 
 	azureauth "github.com/microsoft/kiota-authentication-azure-go"
 	msgraphsdk "github.com/microsoftgraph/msgraph-sdk-go"
@@ -81,6 +82,7 @@ type Client struct {
 
 	httpClient *http.Client
 	cred       tokenCredential
+	validHosts map[string]struct{}
 }
 
 // NewClient builds a Graph client for one tenant from its credential (#3). It
@@ -94,6 +96,10 @@ func NewClient(_ context.Context, ta *auth.TenantAuth, opts Options) (*Client, e
 	hosts := opts.ValidHosts
 	if len(hosts) == 0 {
 		hosts = defaultValidHosts
+	}
+	validHosts := make(map[string]struct{}, len(hosts))
+	for _, host := range hosts {
+		validHosts[strings.ToLower(host)] = struct{}{}
 	}
 	if opts.TenantID == "" {
 		// The limiter/self-obs wiring keys off opts.TenantID; default it from
@@ -124,5 +130,6 @@ func NewClient(_ context.Context, ta *auth.TenantAuth, opts Options) (*Client, e
 		TenantID:   ta.TenantID,
 		httpClient: httpClient,
 		cred:       ta.Cred,
+		validHosts: validHosts,
 	}, nil
 }

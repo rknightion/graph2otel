@@ -3,7 +3,9 @@ package jobpipeline
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,6 +36,9 @@ type fakeJobClient struct {
 
 	pages     map[string]fakePage
 	pageCalls int
+	// fetchPage, when set, replaces pages for a test that needs a dynamic
+	// response sequence (such as a deliberately non-converging cursor walk).
+	fetchPage func(context.Context, string) ([]map[string]any, string, error)
 }
 
 type fakePage struct {
@@ -65,8 +70,11 @@ func (f *fakeJobClient) QueryStatus(_ context.Context, queryURL string) (string,
 	return StatusSucceeded, nil
 }
 
-func (f *fakeJobClient) FetchRecordsPage(_ context.Context, pageURL string) ([]map[string]any, string, error) {
+func (f *fakeJobClient) FetchRecordsPage(ctx context.Context, pageURL string) ([]map[string]any, string, error) {
 	f.pageCalls++
+	if f.fetchPage != nil {
+		return f.fetchPage(ctx, pageURL)
+	}
 	p := f.pages[pageURL]
 	return p.records, p.next, nil
 }
@@ -191,6 +199,137 @@ func TestRun_SubmitPollPageEmits(t *testing.T) {
 	}
 	if !cp.Watermark.Equal(wantHW) {
 		t.Errorf("checkpoint watermark = %v, want %v", cp.Watermark, wantHW)
+	}
+}
+
+// TestRun_RepeatedNextLinkFailsBeforeEmission pins #277's lossless failure
+// mode: a query that points its nextLink back at a page already consumed must
+// fail before the accumulated records can emit or the checkpoint can advance.
+// Removing the URL-seen guard would make the fake's second fetch run and return
+// its own error instead of the repeated-cursor error this test requires.
+func TestRun_RepeatedNextLinkFailsBeforeEmission(t *testing.T) {
+	rec := telemetrytest.New()
+	from := time.Date(2026, 7, 25, 10, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+
+	cfg := baseConfig()
+	cfg.Now = fixedNow(to)
+	pageURL := recordsURL("query-loop", DefaultPageSize)
+	fetched := false
+	client := &fakeJobClient{
+		statuses: []string{StatusSucceeded},
+		fetchPage: func(_ context.Context, got string) ([]map[string]any, string, error) {
+			if got != pageURL {
+				return nil, "", fmt.Errorf("fake fetch URL = %q, want %q", got, pageURL)
+			}
+			if fetched {
+				return nil, "", errors.New("fake fetched repeated page")
+			}
+			fetched = true
+			return []map[string]any{{
+				"id":              "a",
+				"createdDateTime": from.Add(time.Minute).Format(time.RFC3339),
+			}}, pageURL, nil
+		},
+	}
+	cp := newCheckpoint("t1", cfg.CreatePath)
+	cp.InFlight = &checkpoint.InFlightJob{ID: "query-loop", CreatedAt: to.Add(-time.Minute), WindowFrom: from, WindowTo: to}
+
+	_, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter())
+	if err == nil || !strings.Contains(err.Error(), "repeated records page") {
+		t.Fatalf("Run error = %v, want repeated records page error", err)
+	}
+	if client.pageCalls != 1 {
+		t.Errorf("FetchRecordsPage called %d times, want 1 — the repeated nextLink must be rejected before fetching it again", client.pageCalls)
+	}
+	if logs := rec.LogRecords(); len(logs) != 0 {
+		t.Errorf("emitted %d records, want 0 before cursor failure", len(logs))
+	}
+	if !cp.Watermark.IsZero() || cp.InFlight == nil || cp.InFlight.ID != "query-loop" {
+		t.Errorf("checkpoint changed after cursor failure: %+v", cp)
+	}
+}
+
+// TestRun_RepeatedNextLinkAtPageCapReportsRepeat pins #277's precedence at the
+// exact page-limit boundary. After maxRecordPages unique fetches, a nextLink
+// that points back to page one has been observed twice and must report the
+// repeated cursor, not the generic cap. Swapping the guards makes this fail.
+func TestRun_RepeatedNextLinkAtPageCapReportsRepeat(t *testing.T) {
+	rec := telemetrytest.New()
+	from := time.Date(2026, 7, 25, 10, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+
+	cfg := baseConfig()
+	cfg.Now = fixedNow(to)
+	firstPageURL := recordsURL("query-boundary-repeat", DefaultPageSize)
+	client := &fakeJobClient{statuses: []string{StatusSucceeded}}
+	client.fetchPage = func(_ context.Context, _ string) ([]map[string]any, string, error) {
+		if client.pageCalls == maxRecordPages {
+			return nil, firstPageURL, nil
+		}
+		return nil, "https://next/" + strconv.Itoa(client.pageCalls), nil
+	}
+	cp := newCheckpoint("t1", cfg.CreatePath)
+	cp.InFlight = &checkpoint.InFlightJob{
+		ID:         "query-boundary-repeat",
+		CreatedAt:  to.Add(-time.Minute),
+		WindowFrom: from,
+		WindowTo:   to,
+	}
+
+	_, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter())
+	if err == nil || !strings.Contains(err.Error(), "repeated records page") {
+		t.Fatalf("Run error = %v, want repeated records page error at the page-cap boundary", err)
+	}
+	if client.pageCalls != maxRecordPages {
+		t.Errorf("FetchRecordsPage called %d times, want %d — the repeated cursor must be rejected before refetch", client.pageCalls, maxRecordPages)
+	}
+	if logs := rec.LogRecords(); len(logs) != 0 {
+		t.Errorf("emitted %d records, want 0 before boundary cursor failure", len(logs))
+	}
+	if !cp.Watermark.IsZero() || cp.InFlight == nil || cp.InFlight.ID != "query-boundary-repeat" {
+		t.Errorf("checkpoint changed after boundary cursor failure: %+v", cp)
+	}
+}
+
+// TestRun_RecordPageCapFailsBeforeEmission prevents a non-converging walk with
+// distinct cursors from growing the in-memory drain indefinitely. Removing the
+// page cap lets the fake's pageLimit+1 fetch return its injected error instead
+// of the guard error; neither case may emit or move the checkpoint.
+func TestRun_RecordPageCapFailsBeforeEmission(t *testing.T) {
+	const pageLimit = maxRecordPages
+
+	rec := telemetrytest.New()
+	from := time.Date(2026, 7, 25, 10, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+
+	cfg := baseConfig()
+	cfg.Now = fixedNow(to)
+	client := &fakeJobClient{statuses: []string{StatusSucceeded}}
+	client.fetchPage = func(_ context.Context, _ string) ([]map[string]any, string, error) {
+		if client.pageCalls > pageLimit {
+			return nil, "", errors.New("fake fetched beyond page cap")
+		}
+		return []map[string]any{{
+			"id":              "record-" + strconv.Itoa(client.pageCalls),
+			"createdDateTime": from.Add(time.Minute).Format(time.RFC3339),
+		}}, "https://next/" + strconv.Itoa(client.pageCalls), nil
+	}
+	cp := newCheckpoint("t1", cfg.CreatePath)
+	cp.InFlight = &checkpoint.InFlightJob{ID: "query-many-pages", CreatedAt: to.Add(-time.Minute), WindowFrom: from, WindowTo: to}
+
+	_, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter())
+	if err == nil || !strings.Contains(err.Error(), "records pagination exceeded") {
+		t.Fatalf("Run error = %v, want records pagination exceeded error", err)
+	}
+	if client.pageCalls != pageLimit {
+		t.Errorf("FetchRecordsPage called %d times, want cap %d", client.pageCalls, pageLimit)
+	}
+	if logs := rec.LogRecords(); len(logs) != 0 {
+		t.Errorf("emitted %d records, want 0 before page-cap failure", len(logs))
+	}
+	if !cp.Watermark.IsZero() || cp.InFlight == nil || cp.InFlight.ID != "query-many-pages" {
+		t.Errorf("checkpoint changed after page-cap failure: %+v", cp)
 	}
 }
 

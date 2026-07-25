@@ -518,6 +518,178 @@ func TestCollectDoesNotAdvanceWatermarkPastAnotherTypesFailedBlob(t *testing.T) 
 	}
 }
 
+// TestCollectRetainsCycleWatermarkOnAnotherTypesListFailure pins the failure
+// mode where a content type fails BEFORE listing any blob, so there is no
+// contentCreated timestamp available to bound the shared watermark.
+func TestCollectRetainsCycleWatermarkOnAnotherTypesListFailure(t *testing.T) {
+	base := testBase()
+	boundary := base.Add(time.Hour)
+	api := newFakeAPI(t,
+		blobSpec{
+			contentType: o365activityclient.ContentExchange,
+			contentID:   "blob-ex",
+			created:     base.Add(2 * time.Hour),
+			records:     []map[string]any{rec("r-ex", base.Add(100*time.Minute))},
+		},
+		blobSpec{
+			contentType: o365activityclient.ContentSharePoint,
+			contentID:   "blob-sp",
+			created:     base.Add(5 * time.Hour),
+			records:     []map[string]any{rec("r-sp", base.Add(290*time.Minute))},
+		},
+	)
+	api.listFailures[string(o365activityclient.ContentExchange)] = o365activityclient.CodeInvalidContentType
+
+	store := newStore(t)
+	cp, err := store.Load(testTenantID, "o365/activity")
+	if err != nil {
+		t.Fatalf("Load initial checkpoint: %v", err)
+	}
+	cp.Watermark = boundary
+	cp.OverlapWindow = DefaultOverlap
+	if err := store.Save(cp); err != nil {
+		t.Fatalf("Save initial checkpoint: %v", err)
+	}
+
+	rc := telemetrytest.New()
+	c := New(api.client(t), store, testConfig(o365activityclient.ContentExchange, o365activityclient.ContentSharePoint))
+	if err := c.Collect(context.Background(), boundary, base.Add(6*time.Hour), rc.Emitter()); err == nil {
+		t.Fatal("Collect must surface the pre-list failure")
+	}
+	if got := bodies(rc.LogRecords()); !reflect.DeepEqual(got, []string{"r-sp"}) {
+		t.Errorf("emitted %v, want [r-sp] — the healthy content type must still ship", got)
+	}
+
+	cp, err = store.Load(testTenantID, "o365/activity")
+	if err != nil {
+		t.Fatalf("Load checkpoint: %v", err)
+	}
+	if !cp.Watermark.Equal(boundary) {
+		t.Errorf("watermark = %s, want unchanged cycle boundary %s after a pre-list failure",
+			cp.Watermark.Format(time.RFC3339Nano), boundary.Format(time.RFC3339Nano))
+	}
+	for _, id := range []string{"content:blob-sp", "record:r-sp"} {
+		if !cp.SeenIDs.Has(id) {
+			t.Errorf("%q missing after the sibling failure; healthy progress must remain deduped", id)
+		}
+	}
+
+	// The failed type's blob is older than the healthy type's overlap window.
+	// If the first tick had advanced to blob-sp, this later recovery could no
+	// longer list blob-ex; retaining the cycle boundary keeps it reachable.
+	rc = telemetrytest.New()
+	if err := c.Collect(context.Background(), boundary, base.Add(6*time.Hour), rc.Emitter()); err != nil {
+		t.Fatalf("recovery Collect: %v", err)
+	}
+	if got := bodies(rc.LogRecords()); !reflect.DeepEqual(got, []string{"r-ex"}) {
+		t.Errorf("recovery emitted %v, want [r-ex] — the failed type's older blob must remain reachable", got)
+	}
+}
+
+// TestCollectRetainsCycleWatermarkOnAnotherTypesSubscriptionStartFailure pins
+// the same boundary rule when the failure occurs before listing because the
+// lazy subscription write itself failed.
+func TestCollectRetainsCycleWatermarkOnAnotherTypesSubscriptionStartFailure(t *testing.T) {
+	base := testBase()
+	boundary := base.Add(time.Hour)
+	api := newFakeAPI(t, blobSpec{
+		contentType: o365activityclient.ContentSharePoint,
+		contentID:   "blob-sp",
+		created:     base.Add(2 * time.Hour),
+		records:     []map[string]any{rec("r-sp", base.Add(110*time.Minute))},
+	})
+	api.startFailures[string(o365activityclient.ContentExchange)] = o365activityclient.CodeInvalidContentType
+
+	store := newStore(t)
+	cp, err := store.Load(testTenantID, "o365/activity")
+	if err != nil {
+		t.Fatalf("Load initial checkpoint: %v", err)
+	}
+	cp.Watermark = boundary
+	cp.OverlapWindow = DefaultOverlap
+	if err := store.Save(cp); err != nil {
+		t.Fatalf("Save initial checkpoint: %v", err)
+	}
+
+	rc := telemetrytest.New()
+	c := New(api.client(t), store, testConfig(o365activityclient.ContentExchange, o365activityclient.ContentSharePoint))
+	if err := c.Collect(context.Background(), boundary, base.Add(3*time.Hour), rc.Emitter()); err == nil {
+		t.Fatal("Collect must surface the subscription-start failure")
+	}
+	if got := bodies(rc.LogRecords()); !reflect.DeepEqual(got, []string{"r-sp"}) {
+		t.Errorf("emitted %v, want [r-sp] — the healthy content type must still ship", got)
+	}
+
+	cp, err = store.Load(testTenantID, "o365/activity")
+	if err != nil {
+		t.Fatalf("Load checkpoint: %v", err)
+	}
+	if !cp.Watermark.Equal(boundary) {
+		t.Errorf("watermark = %s, want unchanged cycle boundary %s after a start failure",
+			cp.Watermark.Format(time.RFC3339Nano), boundary.Format(time.RFC3339Nano))
+	}
+	for _, id := range []string{"content:blob-sp", "record:r-sp"} {
+		if !cp.SeenIDs.Has(id) {
+			t.Errorf("%q missing after the sibling failure; healthy progress must remain deduped", id)
+		}
+	}
+}
+
+// TestCollectRestartsDisabledSubscriptionOnce pins AF20023 recovery: an
+// administrator can disable a subscription after this process has cached it as
+// started, so one list failure must cause one start and one retry.
+func TestCollectRestartsDisabledSubscriptionOnce(t *testing.T) {
+	base := testBase()
+	api := newFakeAPI(t, blobSpec{
+		contentType: o365activityclient.ContentExchange,
+		contentID:   "blob-1",
+		created:     base.Add(time.Hour),
+		records:     []map[string]any{rec("r1", base.Add(50*time.Minute))},
+	})
+	c := New(api.client(t), newStore(t), testConfig(o365activityclient.ContentExchange))
+	if err := c.Collect(context.Background(), base, base.Add(2*time.Hour), telemetrytest.New().Emitter()); err != nil {
+		t.Fatalf("initial Collect: %v", err)
+	}
+
+	api.disableSubscription(o365activityclient.ContentExchange)
+	if err := c.Collect(context.Background(), base, base.Add(2*time.Hour), telemetrytest.New().Emitter()); err != nil {
+		t.Fatalf("Collect should recover from AF20023, got: %v", err)
+	}
+	if got := api.recordedStarts(); len(got) != 2 {
+		t.Errorf("starts = %v, want initial start plus exactly one AF20023 recovery start", got)
+	}
+	if got := api.recordedLists(o365activityclient.ContentExchange); got != 3 {
+		t.Errorf("lists = %d, want 3 (initial list, failed AF20023 list, one retry)", got)
+	}
+}
+
+// TestCollectSurfacesRepeatedDisabledSubscriptionWithoutLoop pins that AF20023
+// recovery is bounded: if the retry also fails, surface it after one start and
+// one retry rather than looping within the tick.
+func TestCollectSurfacesRepeatedDisabledSubscriptionWithoutLoop(t *testing.T) {
+	base := testBase()
+	api := newFakeAPI(t)
+	c := New(api.client(t), newStore(t), testConfig(o365activityclient.ContentExchange))
+	if err := c.Collect(context.Background(), base, base.Add(2*time.Hour), telemetrytest.New().Emitter()); err != nil {
+		t.Fatalf("initial Collect: %v", err)
+	}
+
+	api.persistentlyDisableSubscription(o365activityclient.ContentExchange)
+	err := c.Collect(context.Background(), base, base.Add(2*time.Hour), telemetrytest.New().Emitter())
+	if err == nil {
+		t.Fatal("Collect must surface a repeated AF20023 after one retry")
+	}
+	if !o365activityclient.IsSubscriptionDisabled(err) {
+		t.Errorf("error %v does not preserve AF20023", err)
+	}
+	if got := api.recordedStarts(); len(got) != 2 {
+		t.Errorf("starts = %v, want initial start plus one bounded recovery start", got)
+	}
+	if got := api.recordedLists(o365activityclient.ContentExchange); got != 3 {
+		t.Errorf("lists = %d, want 3 (initial list, failed list, one retry) — more is a loop", got)
+	}
+}
+
 // TestCollectEmitsEveryRecordTheMapperAccepts pins #112: the engine ships what
 // the mapper yields and filters nothing of its own. Only the mapper's explicit
 // ok=false drops a record.

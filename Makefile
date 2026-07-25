@@ -5,7 +5,7 @@ export GOFLAGS
 
 BINARY := graph2otel
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
-LDFLAGS := -s -w -X main.version=$(VERSION)
+LDFLAGS := -s -w -X github.com/rknightion/graph2otel/internal/version.Version=$(VERSION)
 
 # Build with the goroutineleakprofile runtime experiment so the shipped binary
 # registers the goroutineleak pprof profile (pushed to Pyroscope by default). The

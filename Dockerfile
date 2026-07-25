@@ -13,7 +13,7 @@ ARG VERSION=dev
 # in sync with the Makefile and .goreleaser.yaml.
 RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOEXPERIMENT=goroutineleakprofile go build -trimpath \
-    -ldflags "-s -w -X main.version=${VERSION}" \
+    -ldflags "-s -w -X github.com/rknightion/graph2otel/internal/version.Version=${VERSION}" \
     -o /out/graph2otel ./cmd/graph2otel
 
 # Third-party notices for the linked modules, baked into /licenses/ in the runtime
