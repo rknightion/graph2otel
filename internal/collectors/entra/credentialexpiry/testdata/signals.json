@@ -4,6 +4,7 @@
       "Name": "entra.credentials.expiring.total",
       "Unit": "{credential}",
       "Kind": "gauge",
+      "Description": "Count of application and service-principal credentials (secrets and certificates) by expiry window.",
       "AttrKeys": [
         "credential_type",
         "expiry_bucket",

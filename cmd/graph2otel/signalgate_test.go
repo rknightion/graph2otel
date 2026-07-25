@@ -3,9 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -66,7 +70,339 @@ func TestEveryCollectorPackageEnforcesCardinality(t *testing.T) {
 	}
 }
 
-// goldenMetrics reads every collector package's testdata/signals.json and
+// TestEverySelfObservabilityEmitterPackageHasSignalGate closes #288's
+// non-collector discovery loop. GoldenPaths deliberately starts from gates,
+// so source inspection is used only to find packages that should have opted
+// in; emitted signal shape still comes exclusively from runtime captures.
+func TestEverySelfObservabilityEmitterPackageHasSignalGate(t *testing.T) {
+	root := filepath.Join("..", "..")
+	missing, err := missingSelfObsSignalGates(root)
+	if err != nil {
+		t.Fatalf("discovering self-observability emitters: %v", err)
+	}
+	if len(missing) != 0 {
+		t.Fatalf("production packages emit graph2otel.* metrics without a signal gate: %s\n"+
+			"Add signalgate_test.go and a dedicated testdata/signals.json fixture; "+
+			"otherwise the generated catalog can stay green while missing the package.",
+			strings.Join(missing, ", "))
+	}
+}
+
+func TestEverySourceNamedSelfObservabilityMetricIsCaptured(t *testing.T) {
+	root := filepath.Join("..", "..")
+	missing, err := uncapturedSelfObsMetrics(root)
+	if err != nil {
+		t.Fatalf("checking source-named self-observability metrics: %v", err)
+	}
+	if len(missing) != 0 {
+		t.Fatalf("production graph2otel.* metrics are absent from every signal golden: %s\n"+
+			"Exercise each metric in its package's dedicated signal fixture and regenerate; "+
+			"source discovery establishes completeness, while the golden remains the shape authority.",
+			strings.Join(missing, ", "))
+	}
+}
+
+func TestSelfObservabilityEmitterDiscoveryRejectsAnUngatedPackage(t *testing.T) {
+	root := t.TempDir()
+	pkg := filepath.Join(root, "internal", "newtransport")
+	if err := os.MkdirAll(pkg, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	source := `package newtransport
+const metricPrefix = "graph2otel.new."
+const metricRequests = metricPrefix + "requests"
+func emit(e interface{ Counter(string, string, string, float64, map[string]string) }) {
+	e.Counter(metricRequests, "1", "requests", 1, nil)
+}
+`
+	if err := os.WriteFile(filepath.Join(pkg, "transport.go"), []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	missing, err := missingSelfObsSignalGates(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(missing) != 1 || missing[0] != "internal/newtransport" {
+		t.Fatalf("missing gates = %v, want [internal/newtransport]", missing)
+	}
+}
+
+func TestSourceNamedSelfObservabilityMetricDiscoveryRejectsAnUncapturedMetric(t *testing.T) {
+	root := t.TempDir()
+	pkg := filepath.Join(root, "internal", "newtransport")
+	if err := os.MkdirAll(filepath.Join(pkg, "testdata"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	source := `package newtransport
+const metricRequests = "graph2otel.new.requests"
+func emit(e interface{ Counter(string, string, string, float64, map[string]string) }) {
+	e.Counter(metricRequests, "1", "requests", 1, nil)
+}
+`
+	for path, body := range map[string]string{
+		filepath.Join(pkg, "transport.go"):             source,
+		filepath.Join(pkg, "signalgate_test.go"):       "package newtransport\n",
+		filepath.Join(pkg, "testdata", "signals.json"): "{}\n",
+	} {
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	missing, err := uncapturedSelfObsMetrics(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "internal/newtransport:graph2otel.new.requests"
+	if len(missing) != 1 || missing[0] != want {
+		t.Fatalf("uncaptured metrics = %v, want [%s]", missing, want)
+	}
+}
+
+func TestSourceNamedSelfObservabilityMetricMustBeCapturedByEveryEmitterPackage(t *testing.T) {
+	root := t.TempDir()
+	const metric = "graph2otel.shared.requests"
+	for _, name := range []string{"first", "second"} {
+		pkg := filepath.Join(root, "internal", name)
+		if err := os.MkdirAll(filepath.Join(pkg, "testdata"), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		source := "package " + name + "\n" +
+			"const metricRequests = \"" + metric + "\"\n" +
+			"func emit(e interface{ Counter(string, string, string, float64, map[string]string) }) {\n" +
+			"\te.Counter(metricRequests, \"1\", \"requests\", 1, nil)\n}\n"
+		golden := "{}\n"
+		if name == "first" {
+			golden = `{"Metrics":[{"Name":"graph2otel.shared.requests","Unit":"1","Kind":"sum","Description":"requests","AttrKeys":null}],"Logs":null}` + "\n"
+		}
+		for path, body := range map[string]string{
+			filepath.Join(pkg, "transport.go"):             source,
+			filepath.Join(pkg, "signalgate_test.go"):       "package " + name + "\n",
+			filepath.Join(pkg, "testdata", "signals.json"): golden,
+		} {
+			if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	missing, err := uncapturedSelfObsMetrics(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "internal/second:" + metric
+	if len(missing) != 1 || missing[0] != want {
+		t.Fatalf("uncaptured package-metric pairs = %v, want [%s]", missing, want)
+	}
+}
+
+func missingSelfObsSignalGates(root string) ([]string, error) {
+	packages, err := selfObsEmitterPackages(filepath.Join(root, "internal"))
+	if err != nil {
+		return nil, err
+	}
+	var missing []string
+	for _, pkg := range packages {
+		if _, err := os.Stat(filepath.Join(pkg, "signalgate_test.go")); err == nil {
+			continue
+		} else if !os.IsNotExist(err) {
+			return nil, err
+		}
+		rel, _ := filepath.Rel(root, pkg)
+		missing = append(missing, filepath.ToSlash(rel))
+	}
+	sort.Strings(missing)
+	return missing, nil
+}
+
+func uncapturedSelfObsMetrics(root string) ([]string, error) {
+	source, err := selfObsEmitterMetrics(filepath.Join(root, "internal"))
+	if err != nil {
+		return nil, err
+	}
+	paths, err := signalcapture.GoldenPaths(root)
+	if err != nil {
+		return nil, err
+	}
+	captured := map[string]map[string]bool{}
+	for _, path := range paths {
+		body, readErr := os.ReadFile(path) //nolint:gosec // fixed in-repo/test tree
+		if readErr != nil {
+			return nil, readErr
+		}
+		var signals signalcapture.Signals
+		if err := json.Unmarshal(body, &signals); err != nil {
+			return nil, fmt.Errorf("%s: %w", path, err)
+		}
+		pkg := filepath.Dir(filepath.Dir(path))
+		captured[pkg] = map[string]bool{}
+		for _, metric := range signals.Metrics {
+			captured[pkg][metric.Name] = true
+		}
+	}
+	var missing []string
+	for name, packages := range source {
+		for _, pkg := range packages {
+			if !captured[pkg][name] {
+				rel, _ := filepath.Rel(root, pkg)
+				missing = append(missing, filepath.ToSlash(rel)+":"+name)
+			}
+		}
+	}
+	sort.Strings(missing)
+	return missing, nil
+}
+
+func selfObsEmitterPackages(internalRoot string) ([]string, error) {
+	metrics, err := selfObsEmitterMetrics(internalRoot)
+	if err != nil {
+		return nil, err
+	}
+	dirs := map[string]bool{}
+	for _, packages := range metrics {
+		for _, dir := range packages {
+			dirs[dir] = true
+		}
+	}
+	var out []string
+	for dir := range dirs {
+		out = append(out, dir)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+func selfObsEmitterMetrics(internalRoot string) (map[string][]string, error) {
+	filesByDir := map[string][]string{}
+	err := filepath.WalkDir(internalRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		filesByDir[filepath.Dir(path)] = append(filesByDir[filepath.Dir(path)], path)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	metrics := map[string][]string{}
+	for dir, files := range filesByDir {
+		names, parseErr := packageSelfObsMetrics(files)
+		if parseErr != nil {
+			return nil, fmt.Errorf("%s: %w", dir, parseErr)
+		}
+		for _, name := range names {
+			metrics[name] = append(metrics[name], dir)
+		}
+	}
+	return metrics, nil
+}
+
+func packageSelfObsMetrics(files []string) ([]string, error) {
+	var parsed []*ast.File
+	constExprs := map[string]ast.Expr{}
+	for _, path := range files {
+		file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if err != nil {
+			return nil, err
+		}
+		parsed = append(parsed, file)
+		for _, decl := range file.Decls {
+			gen, ok := decl.(*ast.GenDecl)
+			if !ok || gen.Tok != token.CONST {
+				continue
+			}
+			for _, spec := range gen.Specs {
+				values := spec.(*ast.ValueSpec)
+				for i, name := range values.Names {
+					if i < len(values.Values) {
+						constExprs[name.Name] = values.Values[i]
+					}
+				}
+			}
+		}
+	}
+
+	var resolve func(ast.Expr) (string, bool)
+	var resolveExpr func(ast.Expr, map[string]bool) (string, bool)
+	resolveExpr = func(expr ast.Expr, visiting map[string]bool) (string, bool) {
+		switch value := expr.(type) {
+		case *ast.BasicLit:
+			if value.Kind != token.STRING {
+				return "", false
+			}
+			s, err := strconv.Unquote(value.Value)
+			return s, err == nil
+		case *ast.Ident:
+			if visiting[value.Name] {
+				return "", false
+			}
+			constExpr, ok := constExprs[value.Name]
+			if !ok {
+				return "", false
+			}
+			visiting[value.Name] = true
+			s, ok := resolveExpr(constExpr, visiting)
+			delete(visiting, value.Name)
+			return s, ok
+		case *ast.BinaryExpr:
+			if value.Op != token.ADD {
+				return "", false
+			}
+			left, lok := resolveExpr(value.X, visiting)
+			right, rok := resolveExpr(value.Y, visiting)
+			return left + right, lok && rok
+		default:
+			return "", false
+		}
+	}
+	resolve = func(expr ast.Expr) (string, bool) {
+		return resolveExpr(expr, map[string]bool{})
+	}
+
+	names := map[string]bool{}
+	for identifier, expr := range constExprs {
+		if !strings.Contains(strings.ToLower(identifier), "metric") {
+			continue
+		}
+		if name, ok := resolve(expr); ok &&
+			strings.HasPrefix(name, "graph2otel.") &&
+			!strings.HasSuffix(name, ".") {
+			names[name] = true
+		}
+	}
+
+	emitterMethods := map[string]bool{
+		"Counter": true, "Gauge": true, "GaugeSnapshot": true,
+		"Histogram": true, "HistogramCtx": true,
+	}
+	for _, file := range parsed {
+		ast.Inspect(file, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok || len(call.Args) == 0 {
+				return true
+			}
+			selector, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || !emitterMethods[selector.Sel.Name] {
+				return true
+			}
+			name, ok := resolve(call.Args[0])
+			if ok && strings.HasPrefix(name, "graph2otel.") {
+				names[name] = true
+			}
+			return true
+		})
+	}
+	var out []string
+	for name := range names {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// goldenMetrics reads every signal-gated package's testdata/signals.json and
 // returns each metric it declares, tagged with the package it came from.
 //
 // The goldens are the only tree-wide inventory of what graph2otel emits that is
@@ -76,27 +412,24 @@ func TestEveryCollectorPackageEnforcesCardinality(t *testing.T) {
 // #235, whose limiter has to have an answer for every metric on the wire.
 func goldenMetrics(t *testing.T) map[string][]signalcapture.MetricSignal {
 	t.Helper()
-	root := filepath.Join("..", "..", "internal", "collectors")
+	root := filepath.Join("..", "..")
 	out := map[string][]signalcapture.MetricSignal{}
 
-	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() || d.Name() != "signals.json" {
-			return err
-		}
+	paths, err := signalcapture.GoldenPaths(root)
+	if err != nil {
+		t.Fatalf("discovering signal goldens: %v", err)
+	}
+	for _, path := range paths {
 		b, readErr := os.ReadFile(path) //nolint:gosec // walking a fixed in-repo tree
 		if readErr != nil {
-			return readErr
+			t.Fatalf("reading %s: %v", path, readErr)
 		}
 		var s signalcapture.Signals
 		if jerr := json.Unmarshal(b, &s); jerr != nil {
-			return fmt.Errorf("%s: %w", path, jerr)
+			t.Fatalf("parsing %s: %v", path, jerr)
 		}
 		rel, _ := filepath.Rel(root, filepath.Dir(filepath.Dir(path)))
 		out[rel] = s.Metrics
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("walking %s: %v", root, err)
 	}
 	if len(out) == 0 {
 		t.Fatal("no signal goldens found — this gate would pass vacuously")
@@ -149,7 +482,7 @@ func TestEveryEmittedUnitIsClassifiedForAdditivity(t *testing.T) {
 // in one package and non-additive in another would make the limiter's behavior
 // depend on which collector emitted first.
 func TestNoMetricNameIsEmittedWithTwoShapes(t *testing.T) {
-	type shape struct{ unit, kind, pkg string }
+	type shape struct{ unit, kind, description, pkg string }
 	seen := map[string]shape{}
 
 	// Sorted for a deterministic "first" in the error message; map order would
@@ -165,17 +498,21 @@ func TestNoMetricNameIsEmittedWithTwoShapes(t *testing.T) {
 		for _, m := range byPkg[pkg] {
 			prev, ok := seen[m.Name]
 			if !ok {
-				seen[m.Name] = shape{unit: m.Unit, kind: m.Kind, pkg: pkg}
+				seen[m.Name] = shape{
+					unit: m.Unit, kind: m.Kind, description: m.Description, pkg: pkg,
+				}
 				continue
 			}
-			if prev.unit != m.Unit || prev.kind != m.Kind {
+			if prev.unit != m.Unit || prev.kind != m.Kind || prev.description != m.Description {
 				t.Errorf("metric %q is emitted with two different shapes:\n"+
-					"  %s: unit %q, kind %q\n"+
-					"  %s: unit %q, kind %q\n"+
+					"  %s: unit %q, kind %q, description %q\n"+
+					"  %s: unit %q, kind %q, description %q\n"+
 					"The emitter caches the instrument by NAME on first use, so only one of "+
-					"these ever reaches the wire and which one depends on collector scheduling. "+
+					"these shapes ever reaches the wire and which one depends on collector scheduling. "+
 					"Either make them agree or give them different metric names.",
-					m.Name, prev.pkg, prev.unit, prev.kind, pkg, m.Unit, m.Kind)
+					m.Name,
+					prev.pkg, prev.unit, prev.kind, prev.description,
+					pkg, m.Unit, m.Kind, m.Description)
 			}
 		}
 	}

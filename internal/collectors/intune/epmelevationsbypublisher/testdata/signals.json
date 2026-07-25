@@ -4,6 +4,7 @@
       "Name": "intune.epm_elevations_by_publisher.count",
       "Unit": "{elevation}",
       "Kind": "gauge",
+      "Description": "Intune Endpoint Privilege Management elevation count by elevation type (managed vs unmanaged), summed across publishers; per-publisher detail on the intune.epm_elevations_by_publisher log twin.",
       "AttrKeys": [
         "elevation_type"
       ]

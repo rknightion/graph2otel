@@ -1,0 +1,50 @@
+{
+  "Metrics": [
+    {
+      "Name": "graph2otel.hunt.http.client.request.duration",
+      "Unit": "s",
+      "Kind": "histogram",
+      "Description": "Duration of an outbound advanced-hunting query.",
+      "AttrKeys": [
+        "http.request.method",
+        "http.response.status_code",
+        "hunt.query",
+        "server.address",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.hunt.http_4xx",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Count of 4xx responses graph2otel received from its own advanced-hunting queries.",
+      "AttrKeys": [
+        "http.response.status_code",
+        "hunt.query",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.hunt.http_5xx",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Count of 5xx responses graph2otel received from its own advanced-hunting queries.",
+      "AttrKeys": [
+        "http.response.status_code",
+        "hunt.query",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.hunt.throttle.count",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Count of 429 throttle responses observed from the advanced-hunting API.",
+      "AttrKeys": [
+        "hunt.query",
+        "tenant_id"
+      ]
+    }
+  ],
+  "Logs": null
+}

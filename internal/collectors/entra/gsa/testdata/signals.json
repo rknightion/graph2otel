@@ -4,6 +4,7 @@
       "Name": "entra.gsa.filtering_policies",
       "Unit": "{policy}",
       "Kind": "gauge",
+      "Description": "Count of Global Secure Access filtering policies, by action.",
       "AttrKeys": [
         "action"
       ]
@@ -12,6 +13,7 @@
       "Name": "entra.gsa.forwarding_profiles",
       "Unit": "{profile}",
       "Kind": "gauge",
+      "Description": "Count of Global Secure Access traffic-forwarding profiles, by traffic type and state.",
       "AttrKeys": [
         "state",
         "traffic_forwarding_type"
@@ -21,24 +23,28 @@
       "Name": "entra.gsa.onboarding_status",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "Global Secure Access onboarding status (0 = onboarded, 1 = in progress, 2 = error/offboarded, -1 = unmapped). See docs/signals.md.",
       "AttrKeys": []
     },
     {
       "Name": "entra.gsa.packet_tagging_enabled",
       "Unit": "{setting}",
       "Kind": "gauge",
+      "Description": "Whether Global Secure Access cross-tenant network packet tagging is enabled (1) or not (0).",
       "AttrKeys": []
     },
     {
       "Name": "entra.gsa.remote_networks",
       "Unit": "{network}",
       "Kind": "gauge",
+      "Description": "Count of Global Secure Access remote networks configured for the tenant.",
       "AttrKeys": []
     },
     {
       "Name": "entra.gsa.signaling_enabled",
       "Unit": "{setting}",
       "Kind": "gauge",
+      "Description": "Whether Global Secure Access data-plane signaling to Conditional Access is enabled (1) or not (0).",
       "AttrKeys": []
     }
   ],

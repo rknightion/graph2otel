@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/rknightion/graph2otel/internal/signalcapture"
 )
 
 var update = flag.Bool("update", false, "rewrite spec/signal-catalog.json from the collector signal goldens")
@@ -60,9 +62,9 @@ func TestLoadAggregatesEveryGolden(t *testing.T) {
 	if len(cat.Metrics) == 0 || len(cat.Logs) == 0 {
 		t.Fatalf("catalog is empty: %d metrics, %d logs", len(cat.Metrics), len(cat.Logs))
 	}
-	golden, err := filepath.Glob(filepath.Join(repoRoot, "internal", "collectors", "*", "*", "testdata", "signals.json"))
+	golden, err := signalcapture.GoldenPaths(repoRoot)
 	if err != nil {
-		t.Fatalf("glob: %v", err)
+		t.Fatalf("discover goldens: %v", err)
 	}
 	if len(golden) != cat.PackageCount {
 		t.Errorf("PackageCount = %d, want %d (one per committed golden)", cat.PackageCount, len(golden))
@@ -77,10 +79,92 @@ func TestLoadAggregatesEveryGolden(t *testing.T) {
 		if m.PrometheusName == "" {
 			t.Errorf("metric %q has no prometheus_name", m.Name)
 		}
+		if m.Description == "" {
+			t.Errorf("metric %q has no description", m.Name)
+		}
 	}
 	for _, l := range cat.Logs {
 		if len(l.Packages) == 0 {
 			t.Errorf("log %q names no package", l.EventName)
+		}
+	}
+}
+
+func TestLoadDiscoversNonCollectorSignalGateAndRetainsDescription(t *testing.T) {
+	root := t.TempDir()
+	pkg := filepath.Join(root, "internal", "graphclient")
+	if err := os.MkdirAll(filepath.Join(pkg, "testdata"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pkg, "signalgate_test.go"), []byte("package graphclient\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	golden := `{
+  "Metrics": [
+    {
+      "Name": "graph2otel.http.duration",
+      "Unit": "s",
+      "Kind": "histogram",
+      "Description": "Graph request duration.",
+      "AttrKeys": ["tenant_id"]
+    }
+  ],
+  "Logs": null
+}
+`
+	if err := os.WriteFile(filepath.Join(pkg, "testdata", "signals.json"), []byte(golden), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cat, err := Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cat.PackageCount != 1 || len(cat.Metrics) != 1 {
+		t.Fatalf("catalog = %+v, want one package and one metric", cat)
+	}
+	if got := cat.Metrics[0].Description; got != "Graph request duration." {
+		t.Errorf("description = %q, want Graph request duration.", got)
+	}
+	if got := cat.Metrics[0].Packages; len(got) != 1 || got[0] != "internal/graphclient" {
+		t.Errorf("packages = %v, want [internal/graphclient]", got)
+	}
+}
+
+func TestSelfObservabilityScopeIsGeneratedAndProcessSetIsExact(t *testing.T) {
+	cat, err := Load(repoRoot)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	wantProcess := map[string]bool{
+		"graph2otel.build_info":     true,
+		"graph2otel.series.active":  true,
+		"graph2otel.series.clipped": true,
+		"graph2otel.series.limit":   true,
+		"graph2otel.series.total":   true,
+	}
+	gotProcess := map[string]bool{}
+	for _, metric := range cat.Metrics {
+		if metric.Domain != "graph2otel" {
+			continue
+		}
+		hasTenant := false
+		for _, key := range metric.AttrKeys {
+			if key == "tenant_id" {
+				hasTenant = true
+				break
+			}
+		}
+		if !hasTenant {
+			gotProcess[metric.Name] = true
+		}
+	}
+	if len(gotProcess) != len(wantProcess) {
+		t.Fatalf("process-scoped self-observability metrics = %v, want %v", gotProcess, wantProcess)
+	}
+	for name := range wantProcess {
+		if !gotProcess[name] {
+			t.Errorf("process-scoped self-observability metrics missing %q: got %v", name, gotProcess)
 		}
 	}
 }

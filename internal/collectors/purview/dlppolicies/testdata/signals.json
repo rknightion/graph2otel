@@ -4,6 +4,7 @@
       "Name": "purview.dlp.policies",
       "Unit": "{policy}",
       "Kind": "gauge",
+      "Description": "DLP policies, by enforcement mode (Enforce vs audit/test/disabled).",
       "AttrKeys": [
         "enforcement_mode"
       ]
@@ -12,12 +13,14 @@
       "Name": "purview.dlp.policy.last_changed_age",
       "Unit": "s",
       "Kind": "gauge",
+      "Description": "Seconds since the most recently changed DLP policy (max over whenChangedUtc).",
       "AttrKeys": []
     },
     {
       "Name": "purview.dlp.policy_bindings",
       "Unit": "{binding}",
       "Kind": "gauge",
+      "Description": "DLP policy bindings, by workload and binding type.",
       "AttrKeys": [
         "binding_type",
         "workload"
@@ -27,6 +30,7 @@
       "Name": "purview.dlp.rules",
       "Unit": "{rule}",
       "Kind": "gauge",
+      "Description": "DLP rules, by target workload and action.",
       "AttrKeys": [
         "action",
         "workload"

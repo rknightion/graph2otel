@@ -3987,7 +3987,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (identity_type, is_replay, request_method, response_status_code) (rate(entra_graph_activity_requests_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (identity_type, is_replay, request_method, response_status_code, tenant_id) (rate(entra_graph_activity_requests_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -4044,7 +4044,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (normalized_path, request_method, response_status_class) (rate(entra_graph_activity_endpoint_requests_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (normalized_path, request_method, response_status_class, tenant_id) (rate(entra_graph_activity_endpoint_requests_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -4101,7 +4101,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, request_method) (rate(entra_graph_activity_request_duration_milliseconds_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, request_method, tenant_id) (rate(entra_graph_activity_request_duration_milliseconds_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -4158,7 +4158,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, request_method) (rate(entra_graph_activity_response_size_bytes_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, request_method, tenant_id) (rate(entra_graph_activity_response_size_bytes_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"

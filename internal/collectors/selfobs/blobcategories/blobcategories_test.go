@@ -61,7 +61,11 @@ func collectSample(t *testing.T, containers []string) *telemetrytest.Recorder {
 	t.Helper()
 	rec := telemetrytest.New()
 	c := New(&fakeARM{body: []byte(sample)}, containers, nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	emitter := telemetry.WithTenant(
+		telemetry.WithTransport(rec.Emitter(), telemetry.TransportGraph),
+		"tenant-a",
+	)
+	if err := c.Collect(context.Background(), emitter); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	return rec
@@ -88,6 +92,9 @@ func TestCollect_ClassifiesEveryState(t *testing.T) {
 	}
 	got := map[string]float64{}
 	for _, p := range rec.MetricPoints(metricCategories) {
+		if got := p.Attrs[semconv.AttrTenantID]; got != "tenant-a" {
+			t.Errorf("tenant_id = %q, want tenant-a from the emitter boundary", got)
+		}
 		got[p.Attrs[semconv.AttrState]] = p.Value
 	}
 	if len(got) != len(want) {
@@ -112,6 +119,14 @@ func TestCollect_TwinAttributes(t *testing.T) {
 	}
 	if len(byCategory) != 4 {
 		t.Fatalf("want 4 category twins, got %d", len(byCategory))
+	}
+	for category, record := range byCategory {
+		if got := record.Attrs[semconv.AttrTenantID]; got != "tenant-a" {
+			t.Errorf("%s tenant_id = %q, want tenant-a", category, got)
+		}
+		if got := record.Attrs[semconv.AttrIngestTransport]; got != string(telemetry.TransportGraph) {
+			t.Errorf("%s ingest_transport = %q, want graph", category, got)
+		}
 	}
 	// The container attribute is the derived insights-logs-<lowercase> name.
 	if c := byCategory["SignInLogs"].Attrs[semconv.AttrContainer]; c != "insights-logs-signinlogs" {

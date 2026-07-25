@@ -16,7 +16,7 @@ Pure standard-library `python3`. Nothing to install, which is why the CI job has
 | path | role |
 | --- | --- |
 | `spec/signal-catalog.json` | **generated** — every metric and log event graph2otel emits, with its Prometheus name, unit, aggregation kind, additivity, domain, attribute keys and emitting packages |
-| `internal/signalcatalog/` | the Go package that generates it, by aggregating `internal/collectors/*/*/testdata/signals.json` |
+| `internal/signalcatalog/` | the Go package that generates it, by aggregating every `internal/**/testdata/signals.json` owned by a signal gate |
 | `grafana/catalog.py` | reads the catalog; `metrics_referenced_by()` is what the coverage gate counts with |
 | `grafana/builder.py` | `Builder` — panels, queries, layout, the LogQL selector, the two expression corpora |
 | `grafana/boards/*.py` | one module per dashboard; **data, not code** |
@@ -26,15 +26,15 @@ Pure standard-library `python3`. Nothing to install, which is why the CI job has
 
 ## Where the catalog comes from, and why nobody maintains it
 
-`internal/signalcapture` captures what each collector package's tests **actually emit**
-into `testdata/signals.json`, and `scripts/regen-generated.sh` regenerates those goldens.
-`internal/signalcatalog` merges all 139 of them into `spec/signal-catalog.json`, which
+`internal/signalcapture` captures what each gated package's dedicated fixture **actually
+emits** into `testdata/signals.json`, and `scripts/regen-generated.sh` regenerates those
+goldens. `internal/signalcatalog` merges them into `spec/signal-catalog.json`, which
 `scripts/regen-generated.sh catalog` also regenerates and `TestSignalCatalogInSync`
 gates.
 
-So the chain from "a collector emits a metric" to "the dashboard gate knows about it" has
+So the chain from "a package emits a metric" to "the dashboard gate knows about it" has
 **no human step**. That is the whole design: a hand-kept catalog rots exactly where it
-matters — on the collector that just landed — and a gate reading a rotted catalog
+matters — on the package that just landed — and a gate reading a rotted catalog
 reports coverage it does not have.
 
 ## Adding a metric to a dashboard
@@ -138,20 +138,14 @@ and optionally `LOGS` and `extra(b)`. Then add `("boards.<name>", "<file>.json")
 `BOARDS` in `build_dashboard.py`. `test_no_orphan_dashboard_files` fails if a renamed
 board leaves its old JSON behind.
 
-## The one thing the catalog cannot see
+## Self-observability uses the same catalog
 
-`internal/signalcapture` captures what a **collector package** emits, so the goldens carry
-only the seven `graph2otel.*` metrics that collectors themselves emit. The rest of the
-self-observability surface — scrape health, checkpoint persistence, export jobs, the
-cardinality limiter, throttling, outbound HTTP — is emitted by the scheduler, the
-transport and the telemetry package, none of which is a collector package and none of
-which has a golden.
-
-`boards/selfobs.py` therefore declares those by hand as `(otel name, unit, kind)` triples
-copied from their emit sites, and derives the Prometheus name with `promname.prom_name` —
-the same rule the Go catalog uses, pinned to it by a test over all 274 cataloged
-metrics. **Those panels are not covered by the coverage gate**; extending `signalcapture`
-to non-collector packages is the fix, and it belongs with `signalcapture`.
+Scheduler, transport, exporter and limiter packages own dedicated signal fixtures just
+like collectors. `GoldenPaths` discovers every gated package, and the command-level
+source coverage test rejects a production package that emits a `graph2otel.*` metric
+without installing a gate. `boards/selfobs.py` therefore reads names, units, kinds,
+descriptions, attributes and tenant/process scope from the generated catalog. It
+hand-authors presentation only.
 
 ## Metric names are a convention, not a byte-exact promise
 

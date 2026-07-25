@@ -4,6 +4,7 @@
       "Name": "intune.windows_updates.deployments",
       "Unit": "{deployment}",
       "Kind": "gauge",
+      "Description": "Windows Update for Business deployments by EFFECTIVE state, REQUESTED state and the kind of catalog entry being deployed. The two states are separate dimensions because they disagree in the interesting case — a series where they differ is a deployment not doing what was asked; per-deployment detail, including the reasons the effective state differs, on the intune.windows_update_deployment log twin.",
       "AttrKeys": [
         "catalog_entry_type",
         "deployment_effective_state",
@@ -14,6 +15,7 @@
       "Name": "intune.windows_updates.update_policies",
       "Unit": "{policy}",
       "Kind": "gauge",
+      "Description": "Windows Update for Business deployment-service update policies by auto-enrollment update category (quality/driver/feature; `none` for a policy enrolled in none). A policy enrolled in SEVERAL categories counts once in each, so a sum over this metric is not the policy count; per-policy detail — approval rules, content filters, user experience and audience — on the intune.windows_update_policy log twin.",
       "AttrKeys": [
         "update_category"
       ]

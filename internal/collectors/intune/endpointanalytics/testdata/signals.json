@@ -4,6 +4,7 @@
       "Name": "intune.uxa.anomaly_count",
       "Unit": "{anomaly}",
       "Kind": "gauge",
+      "Description": "Intune Endpoint Analytics anomaly count by severity.",
       "AttrKeys": [
         "anomaly_severity"
       ]
@@ -12,6 +13,7 @@
       "Name": "intune.uxa.app_crash_count",
       "Unit": "{crash}",
       "Kind": "gauge",
+      "Description": "Intune Endpoint Analytics app crash count by client executable. Bounded by the central cardinality limiter: past cardinality.per_metric_limit the top executables by crash count are kept and the tail folds into app_name=\"other\".",
       "AttrKeys": [
         "app_name"
       ]
@@ -20,6 +22,7 @@
       "Name": "intune.uxa.app_health.active_device_count",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune Endpoint Analytics count of devices actively reporting application health, by OS version.",
       "AttrKeys": [
         "os_version"
       ]
@@ -28,6 +31,7 @@
       "Name": "intune.uxa.app_health.device_count",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune Endpoint Analytics device count, by application health state.",
       "AttrKeys": [
         "health_state"
       ]
@@ -36,6 +40,7 @@
       "Name": "intune.uxa.app_health.mean_time_to_failure_minutes",
       "Unit": "min",
       "Kind": "gauge",
+      "Description": "Intune Endpoint Analytics application mean time to failure (minutes) per OS version; the int32-max 'no failures' sentinel is excluded.",
       "AttrKeys": [
         "os_version"
       ]
@@ -44,6 +49,7 @@
       "Name": "intune.uxa.app_health.os_version_score",
       "Unit": "{score}",
       "Kind": "gauge",
+      "Description": "Intune Endpoint Analytics application health score (0-100) per OS version, by app-health state.",
       "AttrKeys": [
         "health_state",
         "os_version"
@@ -53,6 +59,7 @@
       "Name": "intune.uxa.baseline_score",
       "Unit": "{score}",
       "Kind": "gauge",
+      "Description": "Intune Endpoint Analytics baseline overall score, by baseline.",
       "AttrKeys": [
         "baseline_name",
         "is_built_in"
@@ -62,6 +69,7 @@
       "Name": "intune.uxa.battery_health.device_count",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune Endpoint Analytics device count, by battery health state.",
       "AttrKeys": [
         "health_state"
       ]
@@ -70,6 +78,7 @@
       "Name": "intune.uxa.battery_health_score",
       "Unit": "{score}",
       "Kind": "histogram",
+      "Description": "Intune Endpoint Analytics device battery health score (0-100), by health state; the -1 'not enough data' sentinel is excluded.",
       "AttrKeys": [
         "health_state"
       ]
@@ -78,6 +87,7 @@
       "Name": "intune.uxa.boot_time_ms",
       "Unit": "ms",
       "Kind": "histogram",
+      "Description": "Intune Endpoint Analytics device boot time, by restart category; the -1 'not enough data' sentinel is excluded.",
       "AttrKeys": [
         "restart_category"
       ]
@@ -86,6 +96,7 @@
       "Name": "intune.uxa.device_count",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune Endpoint Analytics device count, by overall Endpoint Analytics health state.",
       "AttrKeys": [
         "health_state"
       ]
@@ -94,6 +105,7 @@
       "Name": "intune.uxa.device_score",
       "Unit": "{score}",
       "Kind": "histogram",
+      "Description": "Intune Endpoint Analytics per-device score distribution (0-100), by score category.",
       "AttrKeys": [
         "category"
       ]
@@ -102,6 +114,7 @@
       "Name": "intune.uxa.login_time_ms",
       "Unit": "ms",
       "Kind": "histogram",
+      "Description": "Intune Endpoint Analytics device login time, by restart category; the -1 'not enough data' sentinel is excluded.",
       "AttrKeys": [
         "restart_category"
       ]
@@ -110,6 +123,7 @@
       "Name": "intune.uxa.model_device_count",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune Endpoint Analytics scored-device count per device model. Microsoft publishes buckets as small as one device, so this is the real bucket size, not a floor.",
       "AttrKeys": [
         "health_state",
         "manufacturer",
@@ -120,6 +134,7 @@
       "Name": "intune.uxa.model_score",
       "Unit": "{score}",
       "Kind": "gauge",
+      "Description": "Intune Endpoint Analytics score (0-100) per device model, by score category. Bounded by the number of distinct (model, manufacturer) pairs in the fleet; the -1 'not enough data' sentinel is excluded rather than emitted as a negative score.",
       "AttrKeys": [
         "category",
         "health_state",
@@ -131,6 +146,7 @@
       "Name": "intune.uxa.resource_performance.device_count",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune Endpoint Analytics device count, by resource performance health state.",
       "AttrKeys": [
         "health_state"
       ]
@@ -139,6 +155,7 @@
       "Name": "intune.uxa.resource_performance_score",
       "Unit": "{score}",
       "Kind": "histogram",
+      "Description": "Intune Endpoint Analytics device resource performance score (0-100), by health state; the -1 'not enough data' sentinel is excluded.",
       "AttrKeys": [
         "health_state"
       ]
@@ -147,6 +164,7 @@
       "Name": "intune.uxa.work_from_anywhere.device_count",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune Endpoint Analytics device count by Windows 11 upgrade eligibility and health state; per-device readiness detail on the intune.device_work_from_anywhere log twin.",
       "AttrKeys": [
         "health_state",
         "upgrade_eligibility"

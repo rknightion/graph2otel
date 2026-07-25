@@ -4,6 +4,7 @@
       "Name": "graph2otel.api.unexpected",
       "Unit": "1",
       "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
       "AttrKeys": [
         "collector",
         "field",
@@ -14,6 +15,7 @@
       "Name": "intune.enrollment_config.count",
       "Unit": "{config}",
       "Kind": "gauge",
+      "Description": "Intune device enrollment configurations, by config type.",
       "AttrKeys": [
         "config_type"
       ]
@@ -22,6 +24,7 @@
       "Name": "intune.enrollment_config.priority",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "Evaluation priority of each Intune device enrollment configuration. Lower values win: a user in scope for multiple configurations of the same type is subject only to the one with the lowest priority value - a higher number is NOT higher precedence.",
       "AttrKeys": [
         "config_name",
         "config_type"
@@ -31,6 +34,7 @@
       "Name": "intune.enrollment_config.version",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "Version counter of each Intune device enrollment configuration, for change detection.",
       "AttrKeys": [
         "config_name"
       ]

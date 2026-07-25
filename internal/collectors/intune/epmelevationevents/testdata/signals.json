@@ -4,6 +4,7 @@
       "Name": "intune.epm_elevation_events.count",
       "Unit": "{event}",
       "Kind": "sum",
+      "Description": "Intune EPM privilege elevations newly observed, counted by elevation type and result; per-event detail (device, user, file, hash) on the intune.epm_elevation_events log twin.",
       "AttrKeys": [
         "elevation_type",
         "result"

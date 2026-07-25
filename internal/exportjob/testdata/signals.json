@@ -1,0 +1,46 @@
+{
+  "Metrics": [
+    {
+      "Name": "graph2otel.export.bytes",
+      "Unit": "By",
+      "Kind": "gauge",
+      "Description": "Size in bytes of the last downloaded export ZIP.",
+      "AttrKeys": [
+        "report_name",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.export.duration_seconds",
+      "Unit": "s",
+      "Kind": "gauge",
+      "Description": "Wall-clock duration of the last export job from create to terminal state.",
+      "AttrKeys": [
+        "report_name",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.export.jobs",
+      "Unit": "{job}",
+      "Kind": "sum",
+      "Description": "Intune export jobs by terminal result.",
+      "AttrKeys": [
+        "report_name",
+        "result",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.export.poll_count",
+      "Unit": "{poll}",
+      "Kind": "gauge",
+      "Description": "Number of status polls the last export job needed to reach a terminal state.",
+      "AttrKeys": [
+        "report_name",
+        "tenant_id"
+      ]
+    }
+  ],
+  "Logs": null
+}

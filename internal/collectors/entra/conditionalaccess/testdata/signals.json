@@ -4,6 +4,7 @@
       "Name": "entra.ca.policies.total",
       "Unit": "{policy}",
       "Kind": "gauge",
+      "Description": "Entra Conditional Access policies, by enforcement state.",
       "AttrKeys": [
         "state"
       ]
@@ -12,6 +13,7 @@
       "Name": "entra.named_locations.total",
       "Unit": "{location}",
       "Kind": "gauge",
+      "Description": "Entra Conditional Access named locations, by type and trust.",
       "AttrKeys": [
         "is_trusted",
         "type"
@@ -21,6 +23,7 @@
       "Name": "graph2otel.api.unexpected",
       "Unit": "1",
       "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
       "AttrKeys": [
         "collector",
         "field",

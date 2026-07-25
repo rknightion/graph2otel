@@ -1,6 +1,8 @@
 package signalcapture_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -32,6 +34,114 @@ func TestUnionCollectsMetricsAndLogsAcrossRecorders(t *testing.T) {
 	}
 	if len(got.Logs[0].AttrKeys) != 1 || got.Logs[0].AttrKeys[0] != "id" {
 		t.Errorf("log attr keys = %v, want [id]", got.Logs[0].AttrKeys)
+	}
+}
+
+func TestUnionCapturesMetricDescription(t *testing.T) {
+	r := telemetrytest.New()
+	r.Emitter().Gauge("test.described", "1", "operator-facing description", 1, telemetry.Attrs{})
+
+	got := signalcapture.Union([]*telemetrytest.Recorder{r})
+
+	if len(got.Metrics) != 1 {
+		t.Fatalf("metrics = %+v, want one metric", got.Metrics)
+	}
+	if got.Metrics[0].Description != "operator-facing description" {
+		t.Errorf("description = %q, want operator-facing description", got.Metrics[0].Description)
+	}
+}
+
+func TestGoldenAtGatesSignalMutations(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "testdata", "signals.json")
+	original := telemetrytest.New()
+	original.Emitter().Gauge("test.golden", "1", "original description", 1, telemetry.Attrs{})
+	if err := signalcapture.GoldenAt(path, true, original); err != nil {
+		t.Fatalf("GoldenAt(update): %v", err)
+	}
+	if err := signalcapture.GoldenAt(path, false, original); err != nil {
+		t.Fatalf("GoldenAt(check unchanged): %v", err)
+	}
+
+	mutations := map[string]func() *telemetrytest.Recorder{
+		"added": func() *telemetrytest.Recorder {
+			rec := telemetrytest.New()
+			rec.Emitter().Gauge("test.golden", "1", "original description", 1, telemetry.Attrs{})
+			rec.Emitter().Gauge("test.added", "1", "added metric", 1, telemetry.Attrs{})
+			return rec
+		},
+		"removed": telemetrytest.New,
+		"renamed": func() *telemetrytest.Recorder {
+			rec := telemetrytest.New()
+			rec.Emitter().Gauge("test.renamed", "1", "original description", 1, telemetry.Attrs{})
+			return rec
+		},
+		"reunit": func() *telemetrytest.Recorder {
+			rec := telemetrytest.New()
+			rec.Emitter().Gauge("test.golden", "s", "original description", 1, telemetry.Attrs{})
+			return rec
+		},
+		"retyped": func() *telemetrytest.Recorder {
+			rec := telemetrytest.New()
+			rec.Emitter().Counter("test.golden", "1", "original description", 1, telemetry.Attrs{})
+			return rec
+		},
+		"description": func() *telemetrytest.Recorder {
+			rec := telemetrytest.New()
+			rec.Emitter().Gauge("test.golden", "1", "changed description", 1, telemetry.Attrs{})
+			return rec
+		},
+	}
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			err := signalcapture.GoldenAt(path, false, mutate())
+			if err == nil || !strings.Contains(err.Error(), "stale") {
+				t.Fatalf("GoldenAt(%s mutation) error = %v, want stale golden", name, err)
+			}
+		})
+	}
+}
+
+func TestGoldenPathsDiscoversEverySignalgateAndRejectsMissingOrOrphanGoldens(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel string) {
+		t.Helper()
+		path := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+			t.Fatalf("mkdir %s: %v", rel, err)
+		}
+		if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+			t.Fatalf("write %s: %v", rel, err)
+		}
+	}
+
+	write("internal/collectors/entra/example/signalgate_test.go")
+	write("internal/collectors/entra/example/testdata/signals.json")
+	write("internal/graphclient/signalgate_test.go")
+	write("internal/graphclient/testdata/signals.json")
+
+	got, err := signalcapture.GoldenPaths(root)
+	if err != nil {
+		t.Fatalf("GoldenPaths: %v", err)
+	}
+	want := []string{
+		filepath.Join(root, "internal", "collectors", "entra", "example", "testdata", "signals.json"),
+		filepath.Join(root, "internal", "graphclient", "testdata", "signals.json"),
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("GoldenPaths = %v, want %v", got, want)
+	}
+
+	if err := os.Remove(want[1]); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := signalcapture.GoldenPaths(root); err == nil || !strings.Contains(err.Error(), "missing golden") {
+		t.Fatalf("missing golden error = %v", err)
+	}
+
+	write("internal/graphclient/testdata/signals.json")
+	write("internal/orphan/testdata/signals.json")
+	if _, err := signalcapture.GoldenPaths(root); err == nil || !strings.Contains(err.Error(), "orphan golden") {
+		t.Fatalf("orphan golden error = %v", err)
 	}
 }
 

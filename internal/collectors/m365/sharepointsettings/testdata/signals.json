@@ -4,6 +4,7 @@
       "Name": "graph2otel.api.unexpected",
       "Unit": "1",
       "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
       "AttrKeys": [
         "collector",
         "field",
@@ -14,36 +15,42 @@
       "Name": "m365.sharepoint.deleted_user_retention_days",
       "Unit": "d",
       "Kind": "gauge",
+      "Description": "Retention period for a deleted user's personal site, in days.",
       "AttrKeys": []
     },
     {
       "Name": "m365.sharepoint.external_resharing_enabled",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "1 if external users may re-share content that was shared with them, else 0.",
       "AttrKeys": []
     },
     {
       "Name": "m365.sharepoint.idle_session_signout_enabled",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "1 if idle-session sign-out is enabled for SharePoint/OneDrive, else 0.",
       "AttrKeys": []
     },
     {
       "Name": "m365.sharepoint.legacy_auth_enabled",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "1 if legacy authentication protocols are enabled tenant-wide (a security risk), else 0.",
       "AttrKeys": []
     },
     {
       "Name": "m365.sharepoint.personal_site_storage_limit_mb",
       "Unit": "MB",
       "Kind": "gauge",
+      "Description": "Default per-user OneDrive storage limit, in MB.",
       "AttrKeys": []
     },
     {
       "Name": "m365.sharepoint.sharing",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "Constant 1 carrying the tenant's external-sharing posture as bounded attributes.",
       "AttrKeys": [
         "sharing_capability",
         "sharing_domain_restriction_mode"
@@ -53,24 +60,28 @@
       "Name": "m365.sharepoint.sharing_allowed_domains",
       "Unit": "{domain}",
       "Kind": "gauge",
+      "Description": "Count of domains on the external-sharing allow list.",
       "AttrKeys": []
     },
     {
       "Name": "m365.sharepoint.sharing_blocked_domains",
       "Unit": "{domain}",
       "Kind": "gauge",
+      "Description": "Count of domains on the external-sharing block list.",
       "AttrKeys": []
     },
     {
       "Name": "m365.sharepoint.site_storage_limit_mb",
       "Unit": "MB",
       "Kind": "gauge",
+      "Description": "Default per-site SharePoint storage limit, in MB.",
       "AttrKeys": []
     },
     {
       "Name": "m365.sharepoint.unmanaged_sync_restricted",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "1 if the OneDrive sync app is restricted to managed/domain-joined devices, else 0.",
       "AttrKeys": []
     }
   ],

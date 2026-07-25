@@ -1,0 +1,76 @@
+{
+  "Metrics": [
+    {
+      "Name": "graph2otel.api.unexpected",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
+      "AttrKeys": [
+        "collector",
+        "field",
+        "kind",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.blob.event_age",
+      "Unit": "s",
+      "Kind": "gauge",
+      "Description": "Freshest blob event age this tick — the metric propagation floor (#128).",
+      "AttrKeys": [
+        "collector",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.blob.metric_emitted",
+      "Unit": "{record}",
+      "Kind": "sum",
+      "Description": "Blob records that reached the metrics path (#128).",
+      "AttrKeys": [
+        "collector",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.blob.metric_gated",
+      "Unit": "{record}",
+      "Kind": "sum",
+      "Description": "Blob records too old for the metrics path, taken log-only (#128).",
+      "AttrKeys": [
+        "collector",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.blob.records_dropped",
+      "Unit": "{record}",
+      "Kind": "sum",
+      "Description": "Blob records dropped because they had no parseable event time (#275).",
+      "AttrKeys": [
+        "collector",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.blob.self_excluded",
+      "Unit": "{record}",
+      "Kind": "sum",
+      "Description": "Blob records dropped by exclude_self because their appId matched this tenant's own poller client_id (#154).",
+      "AttrKeys": [
+        "collector",
+        "tenant_id"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "entra.graph_activity",
+      "AttrKeys": [
+        "app_id",
+        "ingest_transport",
+        "tenant_id"
+      ]
+    }
+  ]
+}

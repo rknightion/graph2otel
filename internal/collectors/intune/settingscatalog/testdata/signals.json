@@ -4,6 +4,7 @@
       "Name": "intune.intent.count",
       "Unit": "{intent}",
       "Kind": "gauge",
+      "Description": "Intune template-based device management intents, by migration status. An intent already represented as a Settings Catalog configurationPolicy (migrating, matched by templateReference) is excluded here to avoid double-counting against intune.settings_catalog.policy.count.",
       "AttrKeys": [
         "migrating"
       ]
@@ -12,6 +13,7 @@
       "Name": "intune.intent.devices",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Per-intent device compliance status from deviceStateSummary, by intent and compliance status.",
       "AttrKeys": [
         "compliance_status",
         "intent_name"
@@ -21,6 +23,7 @@
       "Name": "intune.security_baseline.devices",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Per-security-baseline device state from deviceStateSummary, by baseline and state.",
       "AttrKeys": [
         "baseline_name",
         "state"
@@ -30,6 +33,7 @@
       "Name": "intune.settings_catalog.policy.count",
       "Unit": "{policy}",
       "Kind": "gauge",
+      "Description": "Intune Settings Catalog configuration policy count, by platform, technology, and template family.",
       "AttrKeys": [
         "platform",
         "technology",

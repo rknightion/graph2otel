@@ -69,10 +69,8 @@ def build(mod, cat) -> Builder:
         b.row(section_title)
         for item in items:
             _entry(b, item)
-    # A board with panels the catalog cannot describe declares them itself.
-    # Today that is only self-observability: the scheduler/transport metrics are
-    # emitted outside any collector package, so no signals.json golden captures
-    # them and the catalog cannot see them (see AUTHORING.md).
+    # Boards may add hand-authored presentation for cataloged signals that need
+    # richer PromQL than the standard section renderer can express.
     extra = getattr(mod, "extra", None)
     if extra is not None:
         extra(b)

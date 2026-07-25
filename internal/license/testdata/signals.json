@@ -1,0 +1,15 @@
+{
+  "Metrics": [
+    {
+      "Name": "graph2otel.tenant.license_tier",
+      "Unit": "1",
+      "Kind": "gauge",
+      "Description": "Constant 1 per detected premium Microsoft Entra/Intune licensing capability for a tenant; attrs {tenant_id, tier}.",
+      "AttrKeys": [
+        "tenant_id",
+        "tier"
+      ]
+    }
+  ],
+  "Logs": null
+}

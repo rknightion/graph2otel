@@ -4,6 +4,7 @@
       "Name": "intune.driver_update_summary.devices",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune driver-update policy device counts by deployment state (error/in_progress/success/cancelled), via the Reports Export API.",
       "AttrKeys": [
         "policy_id",
         "policy_name",

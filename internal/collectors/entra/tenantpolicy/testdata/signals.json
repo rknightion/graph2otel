@@ -4,6 +4,7 @@
       "Name": "entra.tenant_policy.scoped_policies",
       "Unit": "{policy}",
       "Kind": "gauge",
+      "Description": "Count of scoped tenant policies, by kind.",
       "AttrKeys": [
         "kind"
       ]
@@ -12,6 +13,7 @@
       "Name": "entra.tenant_policy.setting",
       "Unit": "{setting}",
       "Kind": "gauge",
+      "Description": "Tenant policy posture switches, 0/1 by setting.",
       "AttrKeys": [
         "setting"
       ]

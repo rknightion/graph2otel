@@ -4,6 +4,7 @@
       "Name": "entra.pim.assignments.total",
       "Unit": "{assignment}",
       "Kind": "gauge",
+      "Description": "PIM active/eligible directory-role assignment count, per role and assignment_type.",
       "AttrKeys": [
         "assignment_type",
         "role_name"
@@ -13,6 +14,7 @@
       "Name": "entra.pim.permanent_assignments.total",
       "Unit": "{assignment}",
       "Kind": "gauge",
+      "Description": "Active PIM directory-role assignments with no end time (not time-bound), per role.",
       "AttrKeys": [
         "role_name"
       ]
@@ -21,6 +23,7 @@
       "Name": "entra.roles.members.total",
       "Unit": "{member}",
       "Kind": "gauge",
+      "Description": "Standing (non-PIM) Entra directory-role membership count, per role.",
       "AttrKeys": [
         "role_name"
       ]

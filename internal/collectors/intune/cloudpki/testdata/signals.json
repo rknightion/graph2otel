@@ -4,6 +4,7 @@
       "Name": "intune.cloud_pki.authorities",
       "Unit": "{authority}",
       "Kind": "gauge",
+      "Description": "Intune Cloud PKI certification authorities by type (root/issuing) and status. Per-CA detail — decoded subject and issuer, key platform, CRL and SCEP endpoints — on the intune.cloud_pki_authority log twin.",
       "AttrKeys": [
         "certification_authority_status",
         "certification_authority_type"
@@ -13,6 +14,7 @@
       "Name": "intune.cloud_pki.days_until_expiry",
       "Unit": "d",
       "Kind": "gauge",
+      "Description": "Days until each Intune Cloud PKI certification authority expires, read from the CA's own certificate rather than from a Graph field; negative once expired. When an issuing CA expires every device authenticating with its certificates loses Wi-Fi/VPN/802.1X at once. A CA whose expiry cannot be established emits NO point rather than a fabricated one.",
       "AttrKeys": [
         "certification_authority_type",
         "display_name"
@@ -22,6 +24,7 @@
       "Name": "intune.cloud_pki.leaf_certificates",
       "Unit": "{certificate}",
       "Kind": "gauge",
+      "Description": "Leaf certificates issued by each Intune Cloud PKI certification authority, by status (active/expired/revoked). Which device and user each certificate belongs to is on the intune.cloud_pki_leaf_certificate log twin.",
       "AttrKeys": [
         "certificate_status",
         "display_name"

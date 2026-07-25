@@ -1,0 +1,50 @@
+{
+  "Metrics": [
+    {
+      "Name": "graph2otel.mdca.http.client.request.duration",
+      "Unit": "s",
+      "Kind": "histogram",
+      "Description": "Duration of an outbound Microsoft Defender for Cloud Apps API HTTP request.",
+      "AttrKeys": [
+        "http.request.method",
+        "http.response.status_code",
+        "mdca.operation",
+        "server.address",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.mdca.http_4xx",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Count of 4xx responses graph2otel received from its own outbound Microsoft Defender for Cloud Apps API calls.",
+      "AttrKeys": [
+        "http.response.status_code",
+        "mdca.operation",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.mdca.http_5xx",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Count of 5xx responses graph2otel received from its own outbound Microsoft Defender for Cloud Apps API calls.",
+      "AttrKeys": [
+        "http.response.status_code",
+        "mdca.operation",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.mdca.throttle.count",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Count of 429 throttle responses observed from the Microsoft Defender for Cloud Apps API.",
+      "AttrKeys": [
+        "mdca.operation",
+        "tenant_id"
+      ]
+    }
+  ],
+  "Logs": null
+}

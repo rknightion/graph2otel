@@ -4,6 +4,7 @@
       "Name": "graph2otel.api.unexpected",
       "Unit": "1",
       "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
       "AttrKeys": [
         "collector",
         "field",
@@ -14,6 +15,7 @@
       "Name": "intune.mobile_app_config.status",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune mobile app configuration policy device-status counts, by policy and status.",
       "AttrKeys": [
         "policy_name",
         "status"
@@ -23,6 +25,7 @@
       "Name": "intune.mobile_apps.count",
       "Unit": "{app}",
       "Kind": "gauge",
+      "Description": "Intune mobile app catalog entries, by app type and publishing state.",
       "AttrKeys": [
         "app_type",
         "publishing_state"

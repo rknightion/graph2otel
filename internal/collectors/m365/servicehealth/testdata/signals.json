@@ -4,6 +4,7 @@
       "Name": "m365.service_health.issues.total",
       "Unit": "{issue}",
       "Kind": "gauge",
+      "Description": "Count of M365 service-health issues by classification and status.",
       "AttrKeys": [
         "classification",
         "status"
@@ -13,6 +14,7 @@
       "Name": "m365.service_health.services.total",
       "Unit": "{service}",
       "Kind": "gauge",
+      "Description": "Count of M365 services in each health status.",
       "AttrKeys": [
         "status"
       ]
@@ -21,6 +23,7 @@
       "Name": "m365.service_health.status",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "Numeric health-status enum per M365 service (0 = operational, higher = worse, -1 = unmapped). See docs/signals.md.",
       "AttrKeys": [
         "service"
       ]

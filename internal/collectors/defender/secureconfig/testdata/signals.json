@@ -4,6 +4,7 @@
       "Name": "defender.secure_config.assessments",
       "Unit": "{assessment}",
       "Kind": "gauge",
+      "Description": "Applicable secure-configuration assessments, by configuration category and compliance.",
       "AttrKeys": [
         "configuration_category",
         "is_compliant"
@@ -13,6 +14,7 @@
       "Name": "defender.secure_config.impact_at_risk",
       "Unit": "{impact}",
       "Kind": "gauge",
+      "Description": "Summed configuration impact of the failing assessments, by configuration category.",
       "AttrKeys": [
         "configuration_category"
       ]
@@ -21,6 +23,7 @@
       "Name": "defender.secure_config.noncompliant_devices",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Devices failing at least one configuration, by configuration category.",
       "AttrKeys": [
         "configuration_category"
       ]

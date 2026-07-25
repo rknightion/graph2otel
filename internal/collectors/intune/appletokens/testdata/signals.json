@@ -4,6 +4,7 @@
       "Name": "intune.apple_token.days_until_expiry",
       "Unit": "d",
       "Kind": "gauge",
+      "Description": "Days until expiry for each Apple MDM integration token (APNS certificate, VPP tokens, DEP onboarding settings); negative once expired.",
       "AttrKeys": [
         "state",
         "token_name",
@@ -14,6 +15,7 @@
       "Name": "intune.apple_token.synced_device_count",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Devices synced through each Apple DEP onboarding setting.",
       "AttrKeys": [
         "token_name"
       ]

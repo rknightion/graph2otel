@@ -64,6 +64,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -99,8 +100,12 @@ type MetricSignal struct {
 	// the instrument kind. That is the right granularity here: additivity is a
 	// property of the aggregation, and a Counter and an UpDownCounter are both
 	// sums that fold identically.
-	Kind     string
-	AttrKeys []string
+	Kind string
+	// Description is the operator-facing OTEL instrument description. The
+	// emitter caches instruments by name, so the first description wins just as
+	// the first unit and kind do; drift must therefore be review-visible.
+	Description string
+	AttrKeys    []string
 }
 
 // LogSignal is one log event name and the union of its observed attribute keys.
@@ -133,7 +138,7 @@ func Union(recs []*telemetrytest.Recorder) Signals {
 	// instrument's unit, so this capture structurally cannot observe a second unit
 	// for the same name within a package. Cross-package disagreement IS visible —
 	// it is checked by the tree walk over every golden, not here.
-	type metricShape struct{ unit, kind string }
+	type metricShape struct{ unit, kind, description string }
 	shapes := map[string]*metricShape{}
 
 	for _, r := range recs {
@@ -148,7 +153,9 @@ func Union(recs []*telemetrytest.Recorder) Signals {
 					keys[k] = struct{}{}
 				}
 				if _, ok := shapes[name]; !ok {
-					shapes[name] = &metricShape{unit: p.Unit, kind: p.Kind}
+					shapes[name] = &metricShape{
+						unit: p.Unit, kind: p.Kind, description: p.Description,
+					}
 				}
 			}
 		}
@@ -171,7 +178,8 @@ func Union(recs []*telemetrytest.Recorder) Signals {
 			sh = &metricShape{}
 		}
 		s.Metrics = append(s.Metrics, MetricSignal{
-			Name: name, Unit: sh.unit, Kind: sh.kind, AttrKeys: sortedKeys(keys),
+			Name: name, Unit: sh.unit, Kind: sh.kind,
+			Description: sh.description, AttrKeys: sortedKeys(keys),
 		})
 	}
 	for name, keys := range logs {
@@ -400,16 +408,23 @@ func ThinReasons(s Signals) []string {
 // point is that it can never happen silently, which is how the doc drifted from
 // reality in the first place.
 func Golden(update bool) error {
-	got := Union(telemetrytest.Live())
+	return GoldenAt("testdata/signals.json", update, telemetrytest.Live()...)
+}
+
+// GoldenAt writes or verifies a dedicated capture at path. Unlike Golden,
+// callers supply the exact recorders whose production branches define the
+// package surface, so non-collector packages do not accidentally catalog
+// unrelated synthetic metrics from their wider test suite.
+func GoldenAt(path string, update bool, recs ...*telemetrytest.Recorder) error {
+	got := Union(recs)
 	body, err := json.MarshalIndent(got, "", "  ")
 	if err != nil {
 		return err
 	}
 	body = append(body, '\n')
 
-	const path = "testdata/signals.json"
 	if update {
-		if err := os.MkdirAll("testdata", 0o750); err != nil {
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 			return err
 		}
 		return os.WriteFile(path, body, 0o600)
@@ -429,6 +444,64 @@ func Golden(update bool) error {
 			"want:\n%s\ngot:\n%s", path, want, body)
 	}
 	return nil
+}
+
+// GoldenPaths returns every in-repo signal golden, discovered from the package
+// gate that owns it. It validates both directions: a gate without a golden and
+// a golden without a gate are both errors, so adding or removing a package
+// cannot silently shrink the aggregate catalog.
+func GoldenPaths(root string) ([]string, error) {
+	internalRoot := filepath.Join(root, "internal")
+	gates := map[string]struct{}{}
+	goldens := map[string]string{}
+
+	err := filepath.WalkDir(internalRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		switch {
+		case d.Name() == "signalgate_test.go":
+			gates[filepath.Dir(path)] = struct{}{}
+		case d.Name() == "signals.json" && filepath.Base(filepath.Dir(path)) == "testdata":
+			pkgDir := filepath.Dir(filepath.Dir(path))
+			goldens[pkgDir] = path
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("walking signal gates under %s: %w", internalRoot, err)
+	}
+
+	var missing, orphan, paths []string
+	for pkgDir := range gates {
+		path, ok := goldens[pkgDir]
+		if !ok {
+			missing = append(missing, filepath.Join(pkgDir, "testdata", "signals.json"))
+			continue
+		}
+		paths = append(paths, path)
+	}
+	for pkgDir, path := range goldens {
+		if _, ok := gates[pkgDir]; !ok {
+			orphan = append(orphan, path)
+		}
+	}
+	sort.Strings(missing)
+	sort.Strings(orphan)
+	sort.Strings(paths)
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("missing golden for signal gate: %s", strings.Join(missing, ", "))
+	}
+	if len(orphan) > 0 {
+		return nil, fmt.Errorf("orphan golden without signal gate: %s", strings.Join(orphan, ", "))
+	}
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("no signal gates found under %s", internalRoot)
+	}
+	return paths, nil
 }
 
 // Main is the one-line TestMain a collector package installs to enforce #112

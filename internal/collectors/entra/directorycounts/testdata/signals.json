@@ -4,6 +4,7 @@
       "Name": "entra.directory.objects.total",
       "Unit": "{object}",
       "Kind": "gauge",
+      "Description": "Total Entra directory objects, by object type.",
       "AttrKeys": [
         "type"
       ]

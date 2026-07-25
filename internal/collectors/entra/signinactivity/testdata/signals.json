@@ -4,6 +4,7 @@
       "Name": "entra.app.credential.signin.stale.total",
       "Unit": "{credential}",
       "Kind": "gauge",
+      "Description": "App credentials with no sign-in within the threshold.",
       "AttrKeys": [
         "threshold_days"
       ]
@@ -12,6 +13,7 @@
       "Name": "entra.app.signin.summary.total",
       "Unit": "{signin}",
       "Kind": "gauge",
+      "Description": "App sign-ins over the last 7 days by result.",
       "AttrKeys": [
         "result"
       ]
@@ -20,6 +22,7 @@
       "Name": "entra.serviceprincipal.signin.stale.total",
       "Unit": "{service_principal}",
       "Kind": "gauge",
+      "Description": "Service principals with no sign-in within the threshold.",
       "AttrKeys": [
         "threshold_days"
       ]

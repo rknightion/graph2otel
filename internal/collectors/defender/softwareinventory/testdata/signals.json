@@ -4,6 +4,7 @@
       "Name": "defender.software.eos_devices",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Devices carrying software in a given end-of-support status.",
       "AttrKeys": [
         "end_of_support_status"
       ]
@@ -12,6 +13,7 @@
       "Name": "defender.software.installs",
       "Unit": "{install}",
       "Kind": "gauge",
+      "Description": "Installed-software instances (device x product x version), by end-of-support status.",
       "AttrKeys": [
         "end_of_support_status"
       ]
@@ -20,6 +22,7 @@
       "Name": "defender.software.products",
       "Unit": "{product}",
       "Kind": "gauge",
+      "Description": "Distinct products (vendor x name), by end-of-support status.",
       "AttrKeys": [
         "end_of_support_status"
       ]

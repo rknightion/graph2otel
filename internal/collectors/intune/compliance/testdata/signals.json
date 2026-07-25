@@ -4,6 +4,7 @@
       "Name": "intune.compliance.devices",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Tenant-wide Intune device compliance state summary.",
       "AttrKeys": [
         "state"
       ]
@@ -12,6 +13,7 @@
       "Name": "intune.compliance.policy.devices",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Per-policy Intune device compliance status overview, by policy and state.",
       "AttrKeys": [
         "policy_name",
         "state"
@@ -21,6 +23,7 @@
       "Name": "intune.compliance.policy.users",
       "Unit": "{user}",
       "Kind": "gauge",
+      "Description": "Per-policy Intune user compliance status overview, by policy and state.",
       "AttrKeys": [
         "policy_name",
         "state"
@@ -30,6 +33,7 @@
       "Name": "intune.compliance.policy.version",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "Configured version of each Intune device compliance policy; a bump signals a policy-content change.",
       "AttrKeys": [
         "policy_name"
       ]
@@ -38,6 +42,7 @@
       "Name": "intune.compliance.setting.devices",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune compliance setting-state summary, aggregated across every policy checking that setting, by setting, platform, and state.",
       "AttrKeys": [
         "platform",
         "setting_name",

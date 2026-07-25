@@ -4,6 +4,7 @@
       "Name": "intune.config_profile_device_status.devices",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune configuration-profile device deployment status counted by report status. Each device x profile assignment row is bucketed into Microsoft's ReportStatus enum space (bounded); the per-row detail — which device, which policy, which user — is on the intune.config_profile_device_status log twin, never a metric label.",
       "AttrKeys": [
         "report_status"
       ]

@@ -4,6 +4,7 @@
       "Name": "intune.device_attestation.devices",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune managed-device count by TPM attestation status and OS; per-device detail on the intune.device_attestation log twin.",
       "AttrKeys": [
         "attestation_status",
         "os"

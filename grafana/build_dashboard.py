@@ -8,7 +8,7 @@ Run from grafana/ (``make dashboard`` / ``make grafana-check`` do).
 
 # What the coverage gate is for
 
-graph2otel emits 274 metrics. Nothing forced a newly-emitted one onto a panel,
+graph2otel emits hundreds of metrics. Nothing forced a newly-emitted one onto a panel,
 which is the exact drift the fleet coverage gate exists to prevent: a collector
 lands, its signal ships, and no operator ever sees it because nobody remembered
 to add a panel. The gate closes that by failing when a cataloged metric is on no

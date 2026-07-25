@@ -4,6 +4,7 @@
       "Name": "graph2otel.api.unexpected",
       "Unit": "1",
       "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
       "AttrKeys": [
         "collector",
         "field",
@@ -14,6 +15,7 @@
       "Name": "intune.config_profile.count",
       "Unit": "{profile}",
       "Kind": "gauge",
+      "Description": "Intune device configuration profile inventory, by configuration type (excludes Windows Update ring profiles, owned by the update-rings collector).",
       "AttrKeys": [
         "odata_type"
       ]
@@ -22,6 +24,7 @@
       "Name": "intune.config_profile.status",
       "Unit": "{profile}",
       "Kind": "gauge",
+      "Description": "Per-profile Intune device configuration deployment status, by profile and state.",
       "AttrKeys": [
         "profile_name",
         "state"
@@ -31,6 +34,7 @@
       "Name": "intune.config_profile.version",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "Configured version of each Intune device configuration profile; a bump signals a profile-content change.",
       "AttrKeys": [
         "profile_name"
       ]

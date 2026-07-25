@@ -4,6 +4,7 @@
       "Name": "entra.license.capability_status",
       "Unit": "{sku}",
       "Kind": "gauge",
+      "Description": "Current Graph capabilityStatus per Entra subscribed SKU (value is always 1; status is the label).",
       "AttrKeys": [
         "sku",
         "status"
@@ -13,6 +14,7 @@
       "Name": "entra.license.consumed",
       "Unit": "{unit}",
       "Kind": "gauge",
+      "Description": "Consumed license units per Entra subscribed SKU.",
       "AttrKeys": [
         "sku"
       ]
@@ -21,6 +23,7 @@
       "Name": "entra.license.enabled",
       "Unit": "{unit}",
       "Kind": "gauge",
+      "Description": "Enabled (prepaid) license units per Entra subscribed SKU.",
       "AttrKeys": [
         "sku"
       ]
@@ -29,12 +32,14 @@
       "Name": "entra.license.groups_with_errors.total",
       "Unit": "{group}",
       "Kind": "gauge",
+      "Description": "Total Entra groups with at least one member whose license assignment failed.",
       "AttrKeys": []
     },
     {
       "Name": "entra.license.units",
       "Unit": "{unit}",
       "Kind": "gauge",
+      "Description": "Prepaid license units per Entra subscribed SKU, by unit state (enabled/suspended/warning/locked_out).",
       "AttrKeys": [
         "sku",
         "state"

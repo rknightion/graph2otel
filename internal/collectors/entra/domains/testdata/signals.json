@@ -4,12 +4,14 @@
       "Name": "entra.domains.federated.total",
       "Unit": "{domain}",
       "Kind": "gauge",
+      "Description": "Entra domains configured with federated authentication.",
       "AttrKeys": []
     },
     {
       "Name": "entra.domains.total",
       "Unit": "{domain}",
       "Kind": "gauge",
+      "Description": "Entra domains by authentication type and verification status.",
       "AttrKeys": [
         "authentication_type",
         "is_verified"

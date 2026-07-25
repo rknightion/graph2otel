@@ -4,6 +4,7 @@
       "Name": "graph2otel.api.unexpected",
       "Unit": "1",
       "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
       "AttrKeys": [
         "collector",
         "field",
@@ -14,12 +15,14 @@
       "Name": "purview.retention.event_types.count",
       "Unit": "{event_type}",
       "Kind": "gauge",
+      "Description": "Purview retention event types configured for the tenant.",
       "AttrKeys": []
     },
     {
       "Name": "purview.retention.labels.count",
       "Unit": "{label}",
       "Kind": "gauge",
+      "Description": "Purview retention labels, by retention behavior, post-retention action, and trigger.",
       "AttrKeys": [
         "action_after_retention",
         "behavior_during_retention",

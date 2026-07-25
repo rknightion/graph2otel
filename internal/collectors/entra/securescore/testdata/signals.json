@@ -4,6 +4,7 @@
       "Name": "entra.secure_score.by_category",
       "Unit": "{score}",
       "Kind": "gauge",
+      "Description": "Current Secure Score achieved, summed by control category.",
       "AttrKeys": [
         "category"
       ]
@@ -12,6 +13,7 @@
       "Name": "entra.secure_score.control_profiles.by_category",
       "Unit": "{control}",
       "Kind": "gauge",
+      "Description": "Secure Score control profiles, by control category.",
       "AttrKeys": [
         "category"
       ]
@@ -20,6 +22,7 @@
       "Name": "entra.secure_score.control_profiles.by_status",
       "Unit": "{control}",
       "Kind": "gauge",
+      "Description": "Secure Score control profiles, by tenant implementation status.",
       "AttrKeys": [
         "status"
       ]
@@ -28,18 +31,21 @@
       "Name": "entra.secure_score.current",
       "Unit": "{score}",
       "Kind": "gauge",
+      "Description": "Latest Microsoft Secure Score for the tenant.",
       "AttrKeys": []
     },
     {
       "Name": "entra.secure_score.max",
       "Unit": "{score}",
       "Kind": "gauge",
+      "Description": "Maximum attainable Microsoft Secure Score for the tenant.",
       "AttrKeys": []
     },
     {
       "Name": "entra.secure_score.max_by_category",
       "Unit": "{score}",
       "Kind": "gauge",
+      "Description": "Maximum attainable Secure Score, summed by control category.",
       "AttrKeys": [
         "category"
       ]
@@ -48,6 +54,7 @@
       "Name": "entra.secure_score.peer_average",
       "Unit": "{score}",
       "Kind": "gauge",
+      "Description": "Peer average Secure Score, by comparison basis.",
       "AttrKeys": [
         "basis"
       ]
@@ -56,12 +63,14 @@
       "Name": "entra.secure_score.percentage",
       "Unit": "%",
       "Kind": "gauge",
+      "Description": "Latest Secure Score expressed as a percentage of the maximum attainable score.",
       "AttrKeys": []
     },
     {
       "Name": "graph2otel.api.unexpected",
       "Unit": "1",
       "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
       "AttrKeys": [
         "collector",
         "field",

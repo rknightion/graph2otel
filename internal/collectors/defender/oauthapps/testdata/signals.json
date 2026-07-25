@@ -4,6 +4,7 @@
       "Name": "defender.oauth_app.apps",
       "Unit": "{app}",
       "Kind": "gauge",
+      "Description": "Consented OAuth applications, by privilege level, status, origin and admin-consent.",
       "AttrKeys": [
         "admin_consented",
         "app_origin",
@@ -15,6 +16,7 @@
       "Name": "defender.oauth_app.consented_users",
       "Unit": "{user}",
       "Kind": "gauge",
+      "Description": "Summed user consents for OAuth apps, by privilege level.",
       "AttrKeys": [
         "privilege_level"
       ]
@@ -23,6 +25,7 @@
       "Name": "defender.oauth_app.max_risk_score",
       "Unit": "{score}",
       "Kind": "gauge",
+      "Description": "Highest Defender OAuth-app risk score, by privilege level.",
       "AttrKeys": [
         "privilege_level"
       ]

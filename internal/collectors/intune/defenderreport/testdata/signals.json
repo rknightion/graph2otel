@@ -4,6 +4,7 @@
       "Name": "intune.defender_agents.count",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune managed devices by Defender agent health signal, from the DefenderAgents export report.",
       "AttrKeys": [
         "signal"
       ]
@@ -12,6 +13,7 @@
       "Name": "intune.defender_agents.product_status",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune managed devices by Windows Defender ProductStatus flag, from the DefenderAgents export report. ProductStatus is a bitmask: a device setting several flags is counted under each, so these points are independent counts and can sum to more than the fleet size.",
       "AttrKeys": [
         "status"
       ]

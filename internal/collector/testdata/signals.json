@@ -1,0 +1,86 @@
+{
+  "Metrics": [
+    {
+      "Name": "graph2otel.build_info",
+      "Unit": "1",
+      "Kind": "gauge",
+      "Description": "Constant 1 build-info gauge; carries the graph2otel version and Go runtime version as attributes.",
+      "AttrKeys": [
+        "go.version",
+        "version"
+      ]
+    },
+    {
+      "Name": "graph2otel.checkpoint.persist.errors",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Count of failed checkpoint high-water-mark persists, per collector.",
+      "AttrKeys": [
+        "collector",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.scrape.budget",
+      "Unit": "1",
+      "Kind": "gauge",
+      "Description": "Last scrape's duration as a fraction of the collector's poll interval.",
+      "AttrKeys": [
+        "collector",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.scrape.duration",
+      "Unit": "s",
+      "Kind": "gauge",
+      "Description": "Wall-clock duration of the last scrape, per collector.",
+      "AttrKeys": [
+        "collector",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.scrape.errors",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Count of failed scrapes, per collector, classified by error.type.",
+      "AttrKeys": [
+        "collector",
+        "error.type",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.scrape.last_timestamp",
+      "Unit": "s",
+      "Kind": "gauge",
+      "Description": "Unix time, in seconds, at which the most recent scrape finished.",
+      "AttrKeys": [
+        "collector",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.scrape.staleness",
+      "Unit": "s",
+      "Kind": "gauge",
+      "Description": "Seconds elapsed since this collector's last successful scrape.",
+      "AttrKeys": [
+        "collector",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.scrape.success",
+      "Unit": "1",
+      "Kind": "gauge",
+      "Description": "1 if the last scrape for that collector succeeded, else 0.",
+      "AttrKeys": [
+        "collector",
+        "tenant_id"
+      ]
+    }
+  ],
+  "Logs": null
+}

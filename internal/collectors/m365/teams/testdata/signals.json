@@ -4,6 +4,7 @@
       "Name": "m365.teams.channels.total",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "Teams channels by membership type and archived state.",
       "AttrKeys": [
         "is_archived",
         "membership_type"
@@ -13,6 +14,7 @@
       "Name": "m365.teams.installed_apps.total",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "Teams installed apps by distribution method and whether they hold RSC grants.",
       "AttrKeys": [
         "distribution_method",
         "has_rsc_permissions"
@@ -22,6 +24,7 @@
       "Name": "m365.teams.membership.total",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "Tenant-wide Teams membership count by role.",
       "AttrKeys": [
         "role"
       ]
@@ -30,12 +33,14 @@
       "Name": "m365.teams.ownerless.total",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "Teams with zero owners (excluding archived) — unmanageable orphans.",
       "AttrKeys": []
     },
     {
       "Name": "m365.teams.total",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "Total Teams by visibility.",
       "AttrKeys": [
         "visibility"
       ]
@@ -44,6 +49,7 @@
       "Name": "m365.teams.with_guests.total",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "Teams with at least one external guest — a data-egress exposure surface.",
       "AttrKeys": []
     }
   ],

@@ -4,6 +4,7 @@
       "Name": "intune.config_setting_status.devices",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune configuration-policy per-setting device counts summed across all settings, bucketed by status (compliant/error/conflict); per-setting detail on the intune.config_setting_status log twin.",
       "AttrKeys": [
         "setting_device_status"
       ]

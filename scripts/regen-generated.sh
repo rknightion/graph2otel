@@ -8,8 +8,8 @@
 #   docs/collectors.md  <- the collector registry     (TestCollectorReferenceDocInSync -update)
 #                          + internal/collectordoc/annotations.go
 #                          + internal/collectors/*/*/testdata/signals.json (#140)
-#   internal/collectors/*/*/testdata/signals.json
-#                       <- what each package's tests really emit (signalcapture.Main -update)
+#   internal/**/testdata/signals.json
+#                       <- what each gated package's tests really emit
 #   spec/signal-catalog.json
 #                       <- the aggregate of those goldens  (TestSignalCatalogInSync -update)
 #
@@ -85,10 +85,11 @@ regen_collectordoc() {
   go test -C "$ROOT" ./cmd/graph2otel -run TestCollectorReferenceDocInSync -update -count=1 >/dev/null
 }
 
-# regen_signals rewrites every collector package's testdata/signals.json from what
-# that package's tests ACTUALLY emit (#140). Unlike the two artifacts above these
-# are not a doc — they are the captured truth a doc can later be built from, and
-# the drift gate that fails `go test` when a collector's emissions change.
+# regen_signals rewrites every gated package's testdata/signals.json from what
+# that package's dedicated production fixture ACTUALLY emits (#140/#288). Unlike
+# the two artifacts above these are not a doc — they are the captured truth a doc
+# can later be built from, and the drift gate that fails `go test` when emissions
+# change.
 #
 # Scoped per package rather than `./internal/collectors/...`: -update is defined
 # only by packages that install signalcapture.Main, and Go passes the flag to
@@ -100,12 +101,12 @@ regen_signals() {
     skip "go not installed -> testdata/signals.json not regenerated (CI will gate it)"
     return 0
   fi
-  note "internal/collectors/*/*/testdata/signals.json (emitted-signal captures)"
+  note "internal/**/testdata/signals.json (emitted-signal captures)"
   local pkgs=()
   while IFS= read -r f; do
     pkgs+=("./$(dirname "$f")")
-  done < <(cd "$ROOT" && git ls-files 'internal/collectors/*/*/signalgate_test.go')
-  [ ${#pkgs[@]} -eq 0 ] && { skip "no collector package installs signalcapture.Main"; return 0; }
+  done < <(cd "$ROOT" && rg --files internal -g 'signalgate_test.go' | sort)
+  [ ${#pkgs[@]} -eq 0 ] && { skip "no package installs a signal capture gate"; return 0; }
   go test -C "$ROOT" "${pkgs[@]}" -update -count=1 >/dev/null
 }
 

@@ -139,8 +139,8 @@ rules:
 #                panel or waived), the waiver-hygiene gates (no stale waiver, no
 #                reasonless waiver), and #162's per-domain log-panel gate.
 #   2. build_rules.py --check       (#219) the reverse-validation gate (every
-#                PromQL metric token in every rule resolves to a real catalog or
-#                self-obs Prometheus name — no waiver concept, an unresolvable
+#                PromQL metric token in every rule resolves to a real catalog
+#                Prometheus name — no waiver concept, an unresolvable
 #                name is just a failure) plus its own regen-staleness check on
 #                alerts/graph2otel-alerts.yaml and recording-rules/*.json.
 #   3. unittest  staleness — TestStructure.test_committed_dashboards_are_not_stale
@@ -149,7 +149,7 @@ rules:
 #                plus the structural gates (LogQL never uses a stream selector on
 #                an attribute, the PromQL and LogQL corpora stay disjoint, output
 #                is deterministic, panels fit the 24-column grid, the Python and
-#                Go name derivations agree over all 274 metrics, no duplicate
+#                Go name derivations agree over every cataloged metric, no duplicate
 #                rule uid, isPaused matches alerts/README.md).
 #
 # Staleness is checked by comparing file contents rather than by `git diff

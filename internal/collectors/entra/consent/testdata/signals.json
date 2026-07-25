@@ -4,6 +4,7 @@
       "Name": "entra.consent.grants.total",
       "Unit": "{grant}",
       "Kind": "gauge",
+      "Description": "Entra OAuth consent grants (delegated permission grants and application role assignments), by consent type and privilege classification.",
       "AttrKeys": [
         "consent_type",
         "privilege"

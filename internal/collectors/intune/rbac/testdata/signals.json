@@ -4,6 +4,7 @@
       "Name": "intune.rbac.role_assignments",
       "Unit": "{assignment}",
       "Kind": "gauge",
+      "Description": "Intune role assignments by scope type and whether the role they grant is built-in. scope_type=allDevicesAndLicensedUsers with is_built_in=false is a hand-made role holding tenant-wide device management; is_built_in=unknown means the assignment's role definition could not be resolved. Members and scopes on the intune.role_assignment log twin.",
       "AttrKeys": [
         "is_built_in",
         "scope_type"
@@ -13,6 +14,7 @@
       "Name": "intune.rbac.role_definitions",
       "Unit": "{role}",
       "Kind": "gauge",
+      "Description": "Intune role definitions by built-in flags and @odata.type subtype. Intune keeps its OWN role store, separate from Entra directory roles; both wire built-in flags are emitted because they are separate fields that happen to agree. Per-role detail — name, description, scope tags and the full Microsoft.Intune_* action list — on the intune.role_definition log twin.",
       "AttrKeys": [
         "is_built_in",
         "is_built_in_role_definition",

@@ -130,6 +130,18 @@ class Builder:
         self.needs_loki = needs_loki
         # label_values() needs a metric that actually exists for the tenant
         # dropdown to populate; each board names one of its own.
+        tenant_source = next(
+            (metric for metric in catalog.metrics.values()
+             if metric.prom == tenant_metric),
+            None,
+        )
+        if tenant_source is None:
+            raise KeyError(f"tenant dropdown metric {tenant_metric!r} is not cataloged")
+        if tenant_source.scope != "tenant":
+            raise ValueError(
+                f"tenant dropdown metric {tenant_metric!r} is process-scoped "
+                "and has no tenant_id label"
+            )
         self.tenant_metric = tenant_metric
 
         self._id = 0
@@ -245,7 +257,7 @@ class Builder:
         return self._viz_panel(viz, title, queries, unit, desc, w, h)
 
     def _expr(self, m, keys: list, quantile: float) -> str:
-        sel = f"{{{TENANT_SEL}}}"
+        sel = "" if m.scope == "process" else f"{{{TENANT_SEL}}}"
         if m.kind == "histogram":
             grp = ", ".join(["le"] + keys)
             return (f"histogram_quantile({quantile}, sum by ({grp}) "

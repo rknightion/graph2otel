@@ -1,0 +1,38 @@
+{
+  "Metrics": [
+    {
+      "Name": "graph2otel.series.active",
+      "Unit": "{series}",
+      "Kind": "gauge",
+      "Description": "Exact distinct active time series emitted for `metric.name` during the last export interval, AFTER cardinality limiting — the series actually billed. What was shed is graph2otel.series.clipped.",
+      "AttrKeys": [
+        "metric.name"
+      ]
+    },
+    {
+      "Name": "graph2otel.series.clipped",
+      "Unit": "{series}",
+      "Kind": "gauge",
+      "Description": "Series clipped from `metric.name` during the last interval: `mode=folded` were summed into the `other` bucket, `mode=dropped` were discarded because the metric is not additive and a synthetic aggregate would be worse than the loss.",
+      "AttrKeys": [
+        "metric.name",
+        "mode"
+      ]
+    },
+    {
+      "Name": "graph2otel.series.limit",
+      "Unit": "{series}",
+      "Kind": "gauge",
+      "Description": "Configured per-metric active-series limit (cardinality.per_metric_limit): past it the top series by value are kept and the tail is folded into an `other` bucket or dropped. Emitted only when a positive limit is configured.",
+      "AttrKeys": []
+    },
+    {
+      "Name": "graph2otel.series.total",
+      "Unit": "{series}",
+      "Kind": "gauge",
+      "Description": "Total distinct active time series across every metric during the last export interval, against cardinality.global_limit.",
+      "AttrKeys": []
+    }
+  ],
+  "Logs": null
+}

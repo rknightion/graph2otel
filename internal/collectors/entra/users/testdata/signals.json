@@ -4,6 +4,7 @@
       "Name": "entra.users.population",
       "Unit": "{user}",
       "Kind": "gauge",
+      "Description": "Entra users jointly sliced by user_type and account_enabled (e.g. disabled guests), one series per combination.",
       "AttrKeys": [
         "account_enabled",
         "user_type"
@@ -13,6 +14,7 @@
       "Name": "entra.users.stale.total",
       "Unit": "{user}",
       "Kind": "gauge",
+      "Description": "Count of Entra users whose last sign-in is older than threshold_days. Requires Entra ID P1 or P2 (signInActivity).",
       "AttrKeys": [
         "threshold_days"
       ]
@@ -21,6 +23,7 @@
       "Name": "entra.users.total",
       "Unit": "{user}",
       "Kind": "gauge",
+      "Description": "Total Entra users, independently sliced by account_enabled, user_type, and on_premises_sync_enabled.",
       "AttrKeys": [
         "account_enabled",
         "on_premises_sync_enabled",

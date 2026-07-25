@@ -4,6 +4,7 @@
       "Name": "entra.mfa.registration.admin_mfa_capable.total",
       "Unit": "{user}",
       "Kind": "gauge",
+      "Description": "Entra users capable of MFA, split by admin role membership.",
       "AttrKeys": [
         "is_admin"
       ]
@@ -12,6 +13,7 @@
       "Name": "entra.mfa.registration.methods.total",
       "Unit": "{user}",
       "Kind": "gauge",
+      "Description": "Entra users registered for each authentication method (a user may count toward several methods).",
       "AttrKeys": [
         "method"
       ]
@@ -20,6 +22,7 @@
       "Name": "entra.mfa.registration.users.total",
       "Unit": "{user}",
       "Kind": "gauge",
+      "Description": "Entra users by MFA/SSPR/passwordless registration and capability status.",
       "AttrKeys": [
         "status",
         "user_type"

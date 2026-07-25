@@ -4,6 +4,7 @@
       "Name": "graph2otel.api.unexpected",
       "Unit": "1",
       "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
       "AttrKeys": [
         "collector",
         "field",
@@ -14,6 +15,7 @@
       "Name": "m365.message_trace.bytes",
       "Unit": "By",
       "Kind": "sum",
+      "Description": "Total size of the messages ingested from the Exchange Online message trace, by delivery status.",
       "AttrKeys": [
         "status"
       ]
@@ -22,6 +24,7 @@
       "Name": "m365.message_trace.messages",
       "Unit": "{message}",
       "Kind": "sum",
+      "Description": "Messages ingested from the Exchange Online message trace, by delivery status. Per-message detail (sender, recipient, subject, message id) is on the m365.message_trace log twin, never here.",
       "AttrKeys": [
         "status"
       ]

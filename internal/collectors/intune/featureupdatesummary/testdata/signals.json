@@ -4,6 +4,7 @@
       "Name": "intune.feature_update_summary.devices",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune Windows feature-update policy device counts by deployment state, from the pre-aggregated FeatureUpdatePolicyStatusSummary report.",
       "AttrKeys": [
         "feature_update_version",
         "policy_id",

@@ -4,6 +4,7 @@
       "Name": "graph2otel.api.unexpected",
       "Unit": "1",
       "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
       "AttrKeys": [
         "collector",
         "field",
@@ -14,6 +15,7 @@
       "Name": "intune.gpo.config.count",
       "Unit": "{config}",
       "Kind": "gauge",
+      "Description": "Intune Group Policy configurations by policy configuration ingestion type.",
       "AttrKeys": [
         "ingestion_type"
       ]
@@ -22,6 +24,7 @@
       "Name": "intune.gpo.migration_readiness",
       "Unit": "{report}",
       "Kind": "gauge",
+      "Description": "Intune Group Policy migration reports by readiness state.",
       "AttrKeys": [
         "readiness",
         "report_name"
@@ -31,6 +34,7 @@
       "Name": "intune.gpo.supported_settings_percent",
       "Unit": "%",
       "Kind": "gauge",
+      "Description": "Percentage of a Group Policy Object's settings supported by Intune, computed from supportedSettingsCount/totalSettingsCount.",
       "AttrKeys": [
         "report_name"
       ]

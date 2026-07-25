@@ -22,23 +22,21 @@ sys.path.insert(0, GRAFANA)
 
 import build_dashboard  # noqa: E402
 import catalog as catalog_mod  # noqa: E402
-from builder import TENANT_SEL, dumps, group_keys  # noqa: E402
+from builder import Builder, TENANT_SEL, dumps, group_keys  # noqa: E402
 from promname import prom_name  # noqa: E402
-from selfobs_metrics import PROCESS_SCOPE, SELF_OBS, TENANT_SCOPE  # noqa: E402
 
 CAT = catalog_mod.load()
+SELF_OBS = {
+    name: metric for name, metric in CAT.metrics.items()
+    if metric.domain == catalog_mod.SELF_OBS_DOMAIN
+}
 BUILT, COVERED, LOG_DOMAINS = build_dashboard.build_all(CAT)
 WAIVERS = build_dashboard.load_waivers()
 
 
 class TestPromName(unittest.TestCase):
     def test_reproduces_every_cataloged_prometheus_name(self):
-        """Pins the Python derivation to the Go one over all 274 real metrics.
-
-        The two exist because the catalog cannot see self-observability metrics
-        emitted outside a collector package, so the board there derives its own
-        names. This is what stops the two rules drifting apart silently.
-        """
+        """Pins the independent Python derivation to the Go rule over real metrics."""
         for m in CAT.metrics.values():
             self.assertEqual(prom_name(m.name, m.unit, m.kind), m.prom, m.name)
 
@@ -100,37 +98,41 @@ class TestSelfObservabilityScopeGate(unittest.TestCase):
         self.board = next(b for name, b in BUILT
                           if name == "graph2otel-self-observability.json")
 
-    def test_every_hand_declared_metric_has_an_explicit_scope(self):
+    def test_every_generated_self_observability_metric_has_an_explicit_scope(self):
         self.assertEqual(
             {m.scope for m in SELF_OBS.values()},
-            {TENANT_SCOPE, PROCESS_SCOPE},
+            {catalog_mod.TENANT_SCOPE, catalog_mod.PROCESS_SCOPE},
         )
 
     def test_every_referenced_selfobs_metric_uses_its_declared_scope(self):
         """#284: a tenant selector on a process metric is an empty panel.
 
         Conversely, omitting it from a tenant metric blends tenants. The
-        declaration and the query must move together, so adding a new
-        hand-declared metric cannot silently pick whichever convention the
-        author happened to copy.
+        generated scope and the query must move together, so adding a new
+        metric cannot silently pick whichever convention the author happened
+        to copy.
         """
         referenced = set()
         for expr in self.board._exprs:
-            for metric in SELF_OBS.values():
-                if metric.prom not in expr:
+            for name in CAT.metrics_referenced_by(expr):
+                metric = SELF_OBS.get(name)
+                if metric is None:
                     continue
                 referenced.add(metric.name)
-                if metric.scope == TENANT_SCOPE:
+                if metric.scope == catalog_mod.TENANT_SCOPE:
                     self.assertIn(TENANT_SEL, expr, f"{metric.name}: {expr}")
                 else:
                     self.assertNotIn(TENANT_SEL, expr, f"{metric.name}: {expr}")
         self.assertEqual(referenced, set(SELF_OBS),
-                         "hand-declared self-observability metrics missing a panel")
+                         "generated self-observability metrics missing a panel")
 
     def test_process_total_is_declared_and_panelled_without_tenant_filter(self):
         metric = SELF_OBS["graph2otel.series.total"]
-        self.assertEqual(metric.scope, PROCESS_SCOPE)
-        exprs = [expr for expr in self.board._exprs if metric.prom in expr]
+        self.assertEqual(metric.scope, catalog_mod.PROCESS_SCOPE)
+        exprs = [
+            expr for expr in self.board._exprs
+            if metric.name in CAT.metrics_referenced_by(expr)
+        ]
         self.assertEqual(len(exprs), 1)
         self.assertNotIn(TENANT_SEL, exprs[0])
 
@@ -183,6 +185,25 @@ class TestLogPanels(unittest.TestCase):
 
 
 class TestStructure(unittest.TestCase):
+    def test_every_tenant_dropdown_metric_resolves_to_the_catalog(self):
+        known = {metric.prom: metric for metric in CAT.metrics.values()}
+        for out_name, board in BUILT:
+            self.assertIn(
+                board.tenant_metric,
+                known,
+                f"{out_name} tenant dropdown queries an uncataloged metric",
+            )
+            self.assertEqual(
+                known[board.tenant_metric].scope,
+                catalog_mod.TENANT_SCOPE,
+                f"{out_name} tenant dropdown queries a process-scoped metric",
+            )
+
+    def test_process_metric_cannot_back_a_tenant_dropdown(self):
+        metric = SELF_OBS["graph2otel.build_info"]
+        with self.assertRaisesRegex(ValueError, "process-scoped"):
+            Builder("test", "test", "", [], metric.prom, CAT)
+
     def test_panel_ids_are_unique_within_a_dashboard(self):
         for name, b in BUILT:
             ids = [p["id"] for p in b.render()["panels"]]

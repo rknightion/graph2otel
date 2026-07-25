@@ -4,12 +4,14 @@
       "Name": "entra.groups.role_assignable.total",
       "Unit": "{group}",
       "Kind": "gauge",
+      "Description": "Total Entra groups assignable to a directory role.",
       "AttrKeys": []
     },
     {
       "Name": "entra.groups.total",
       "Unit": "{group}",
       "Kind": "gauge",
+      "Description": "Total Entra groups, sliced by bounded population dimensions (group_type, membership_type, security_enabled, mail_enabled).",
       "AttrKeys": [
         "group_type",
         "mail_enabled",

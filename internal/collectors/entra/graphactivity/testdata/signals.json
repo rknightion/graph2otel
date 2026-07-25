@@ -4,69 +4,85 @@
       "Name": "entra.graph_activity.endpoint_requests",
       "Unit": "{request}",
       "Kind": "sum",
+      "Description": "Microsoft Graph API calls by normalized endpoint path, method, and status class (#185).",
       "AttrKeys": [
         "normalized_path",
         "request_method",
-        "response_status_class"
+        "response_status_class",
+        "tenant_id"
       ]
     },
     {
       "Name": "entra.graph_activity.request.duration",
       "Unit": "ms",
       "Kind": "histogram",
+      "Description": "Server-side duration of Microsoft Graph API calls against the tenant, by method (#186).",
       "AttrKeys": [
-        "request_method"
+        "request_method",
+        "tenant_id"
       ]
     },
     {
       "Name": "entra.graph_activity.requests",
       "Unit": "{request}",
       "Kind": "sum",
+      "Description": "Microsoft Graph API calls against the tenant, by method, response status, caller identity type, and replay flag (#128).",
       "AttrKeys": [
         "identity_type",
         "is_replay",
         "request_method",
-        "response_status_code"
+        "response_status_code",
+        "tenant_id"
       ]
     },
     {
       "Name": "entra.graph_activity.response.size",
       "Unit": "By",
       "Kind": "histogram",
+      "Description": "Response size of Microsoft Graph API calls against the tenant, by method (#186).",
       "AttrKeys": [
-        "request_method"
+        "request_method",
+        "tenant_id"
       ]
     },
     {
       "Name": "graph2otel.blob.endpoint_paths",
       "Unit": "{path}",
       "Kind": "gauge",
+      "Description": "Distinct normalized Graph endpoint paths seen by this collector — headroom against the path cap (#185).",
       "AttrKeys": [
-        "collector"
+        "collector",
+        "tenant_id"
       ]
     },
     {
       "Name": "graph2otel.blob.event_age",
       "Unit": "s",
       "Kind": "gauge",
+      "Description": "Freshest blob event age this tick — the metric propagation floor (#128).",
       "AttrKeys": [
-        "collector"
+        "collector",
+        "tenant_id"
       ]
     },
     {
       "Name": "graph2otel.blob.metric_emitted",
       "Unit": "{record}",
       "Kind": "sum",
+      "Description": "Blob records that reached the metrics path (#128).",
       "AttrKeys": [
-        "collector"
+        "collector",
+        "tenant_id"
       ]
     },
     {
       "Name": "graph2otel.blob.metric_gated",
       "Unit": "{record}",
       "Kind": "sum",
+      "Description": "Blob records too old for the metrics path, taken log-only (#128).",
       "AttrKeys": [
-        "collector"
+        "collector",
+        "tenant_id"
       ]
     }
   ],
@@ -94,6 +110,7 @@
         "roles",
         "service_principal_id",
         "sign_in_activity_id",
+        "tenant_id",
         "token_issued_at",
         "user_agent",
         "user_principal_object_id",

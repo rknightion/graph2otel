@@ -4,6 +4,7 @@
       "Name": "m365.exchange.transport_rules",
       "Unit": "{rule}",
       "Kind": "gauge",
+      "Description": "Exchange Online transport rules by state and rule mode. Disabled rules are counted too: a staged rule is one toggle from live. Which rule, and what it does, is on the m365.exchange_transport_rule log twin.",
       "AttrKeys": [
         "rule_mode",
         "state"
@@ -13,6 +14,7 @@
       "Name": "m365.exchange.transport_rules.redirecting",
       "Unit": "{rule}",
       "Kind": "gauge",
+      "Description": "Transport rules that blind-copy, copy, redirect or add a recipient — a message reaching someone the sender did not address. An ENABLED one is the textbook business-email-compromise persistence shape and also emits an Error-severity log record naming the target.",
       "AttrKeys": [
         "state"
       ]

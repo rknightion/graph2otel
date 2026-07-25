@@ -4,6 +4,7 @@
       "Name": "intune.connector.heartbeat_age_seconds",
       "Unit": "s",
       "Kind": "gauge",
+      "Description": "Age of the most recent heartbeat/sync across each Intune connector type's instances, in seconds (the most stale instance, not an average).",
       "AttrKeys": [
         "connector_type"
       ]
@@ -12,6 +13,7 @@
       "Name": "intune.connector.mtd_platform.total",
       "Unit": "{connector}",
       "Kind": "gauge",
+      "Description": "Mobile Threat Defense connector instances by platform and enabled state.",
       "AttrKeys": [
         "enabled",
         "platform"
@@ -21,6 +23,7 @@
       "Name": "intune.connector.state",
       "Unit": "{connector}",
       "Kind": "gauge",
+      "Description": "Intune connector instances by connector type and state.",
       "AttrKeys": [
         "connector_type",
         "state"

@@ -4,6 +4,7 @@
       "Name": "defender.quarantine.held_messages.total",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "Messages currently held in Microsoft Defender for Office 365 quarantine, by quarantine type, direction and entity type.",
       "AttrKeys": [
         "direction",
         "entity_type",
@@ -14,6 +15,7 @@
       "Name": "graph2otel.api.unexpected",
       "Unit": "1",
       "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
       "AttrKeys": [
         "collector",
         "field",

@@ -4,6 +4,7 @@
       "Name": "intune.driver_update.pending_approval",
       "Unit": "{update}",
       "Kind": "gauge",
+      "Description": "Pending-approval driver updates awaiting admin action, by driver update profile.",
       "AttrKeys": [
         "profile_name"
       ]
@@ -12,6 +13,7 @@
       "Name": "intune.driver_update.sync_staleness_seconds",
       "Unit": "s",
       "Kind": "gauge",
+      "Description": "Seconds since a driver update profile's last successful inventory sync.",
       "AttrKeys": [
         "profile_name"
       ]
@@ -20,6 +22,7 @@
       "Name": "intune.feature_update_profile.eol_target",
       "Unit": "s",
       "Kind": "gauge",
+      "Description": "Seconds until a Windows feature update profile's target version reaches end of support.",
       "AttrKeys": [
         "feature_update_version",
         "profile_name"
@@ -29,6 +32,7 @@
       "Name": "intune.quality_update_config.count",
       "Unit": "{resource}",
       "Kind": "gauge",
+      "Description": "Count of Windows quality update config resources, by resource type (profile vs policy).",
       "AttrKeys": [
         "resource_type"
       ]
@@ -37,6 +41,7 @@
       "Name": "intune.update_ring.pause_expiry_seconds",
       "Unit": "s",
       "Kind": "gauge",
+      "Description": "Seconds until a paused Windows Update ring's pause expires, by ring and update type.",
       "AttrKeys": [
         "ring_name",
         "update_type"
@@ -46,6 +51,7 @@
       "Name": "intune.update_ring.pause_state",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "Windows Update ring pause state (1=paused, 0=not paused), by ring and update type.",
       "AttrKeys": [
         "ring_name",
         "update_type"
@@ -55,6 +61,7 @@
       "Name": "intune.update_ring.rollback_active",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "Windows Update ring rollback-active state (1=active, 0=inactive), by ring and update type.",
       "AttrKeys": [
         "ring_name",
         "update_type"
@@ -64,6 +71,7 @@
       "Name": "intune.update_ring.status",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Windows Update ring device rollout status rollup, by ring and state.",
       "AttrKeys": [
         "ring_name",
         "state"

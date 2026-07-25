@@ -4,6 +4,7 @@
       "Name": "graph2otel.api.unexpected",
       "Unit": "1",
       "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
       "AttrKeys": [
         "collector",
         "field",
@@ -14,6 +15,7 @@
       "Name": "intune.device_encryption.devices",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune managed devices by disk-encryption state, encryption readiness state and device type (wire enums verbatim); per-device detail — device, user, OS/TPM version and the BitLocker blockers — on the intune.device_encryption log twin.",
       "AttrKeys": [
         "device_type",
         "encryption_readiness_state",
@@ -24,6 +26,7 @@
       "Name": "intune.device_encryption.policy_state",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune managed devices by disk-encryption POLICY setting state (notAssigned/compliant/error/…) — whether an encryption policy even reached the device, which the encryption-state gauge cannot say.",
       "AttrKeys": [
         "encryption_policy_setting_state"
       ]

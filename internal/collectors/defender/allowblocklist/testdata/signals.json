@@ -4,6 +4,7 @@
       "Name": "defender.allow_block_list.entries",
       "Unit": "{entry}",
       "Kind": "gauge",
+      "Description": "Tenant Allow/Block List entries by list type, action and list subtype. Which VALUE is listed is on the defender.allow_block_list log twin, never here.",
       "AttrKeys": [
         "action",
         "list_subtype",
@@ -14,6 +15,7 @@
       "Name": "defender.allow_block_list.expiring_soon",
       "Unit": "{entry}",
       "Kind": "gauge",
+      "Description": "Tenant Allow/Block List entries whose expiration date falls within 7 days. An expiring BLOCK silently restores delivery from a sender that was blocked for a reason.",
       "AttrKeys": [
         "action",
         "list_type"
@@ -23,6 +25,7 @@
       "Name": "defender.allow_block_list.non_expiring_allow",
       "Unit": "{entry}",
       "Kind": "gauge",
+      "Description": "Allow entries with neither an expiration date nor a remove-after-last-use window — a permanent bypass of mail security. Each one also emits an Error-severity defender.allow_block_list log record naming it.",
       "AttrKeys": [
         "list_type"
       ]
@@ -31,6 +34,7 @@
       "Name": "defender.allow_block_list.spoof_entries",
       "Unit": "{entry}",
       "Kind": "gauge",
+      "Description": "Spoof-intelligence overrides by spoof type and action. A spoof allow has no expiry mechanism at all, so it is permanent by construction.",
       "AttrKeys": [
         "action",
         "spoof_type"

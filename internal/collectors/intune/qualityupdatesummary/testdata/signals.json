@@ -4,6 +4,7 @@
       "Name": "intune.quality_update_summary.devices",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Windows quality/expedite-update policy device counts by deployment state, from the pre-aggregated QualityUpdatePolicyStatusSummary report.",
       "AttrKeys": [
         "expedite_release_date",
         "policy_id",

@@ -4,6 +4,7 @@
       "Name": "intune.app_protection.flagged_registrations",
       "Unit": "{registration}",
       "Kind": "gauge",
+      "Description": "Intune managed app registrations, by aggregated flagged reason and platform (never a per-user or per-app series).",
       "AttrKeys": [
         "flagged_reason",
         "platform"
@@ -13,6 +14,7 @@
       "Name": "intune.app_protection.policy.count",
       "Unit": "{policy}",
       "Kind": "gauge",
+      "Description": "Intune app protection / app configuration policy count, by platform and assignment state.",
       "AttrKeys": [
         "assigned",
         "platform"
@@ -22,6 +24,7 @@
       "Name": "intune.wip.policy.count",
       "Unit": "{policy}",
       "Kind": "gauge",
+      "Description": "Legacy Windows Information Protection (WIP) policy count (windowsInformationProtectionPolicies + mdmWindowsInformationProtectionPolicies), by assignment state.",
       "AttrKeys": [
         "assigned"
       ]

@@ -345,7 +345,11 @@ func TestCollectorEmitsLiveRecordEndToEnd(t *testing.T) {
 		Logger:   slog.New(slog.DiscardHandler),
 	})
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	emitter := telemetry.WithTenant(
+		telemetry.WithTransport(rec.Emitter(), telemetry.TransportBlob),
+		tenant,
+	)
+	if err := c.Collect(context.Background(), emitter); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -356,6 +360,12 @@ func TestCollectorEmitsLiveRecordEndToEnd(t *testing.T) {
 	got := logs[0]
 	if got.EventName != eventName {
 		t.Errorf("event name = %q, want %q", got.EventName, eventName)
+	}
+	if got.Attrs["tenant_id"] != tenant {
+		t.Errorf("tenant_id = %q, want %q from the emitter boundary", got.Attrs["tenant_id"], tenant)
+	}
+	if got.Attrs["ingest_transport"] != string(telemetry.TransportBlob) {
+		t.Errorf("ingest_transport = %q, want blob from the emitter boundary", got.Attrs["ingest_transport"])
 	}
 
 	// The record's own event time must survive the engine: these records are
@@ -487,7 +497,11 @@ func TestCollectorDerivesRequestCounterForFreshRecord(t *testing.T) {
 		Logger:              slog.New(slog.DiscardHandler),
 		MetricRecencyWindow: 20 * time.Minute,
 	})
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	emitter := telemetry.WithTenant(
+		telemetry.WithTransport(rec.Emitter(), telemetry.TransportBlob),
+		tenant,
+	)
+	if err := c.Collect(context.Background(), emitter); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -496,7 +510,10 @@ func TestCollectorDerivesRequestCounterForFreshRecord(t *testing.T) {
 		t.Fatalf("entra.graph_activity.requests = %+v, want a single point value 1", pts)
 	}
 	got := pts[0].Attrs
-	want := map[string]bool{"request_method": true, "response_status_code": true, "identity_type": true, "is_replay": true}
+	want := map[string]bool{
+		"request_method": true, "response_status_code": true,
+		"identity_type": true, "is_replay": true, "tenant_id": true,
+	}
 	for k := range got {
 		if !want[k] {
 			t.Errorf("per-entity label leaked into metric: %q", k)
@@ -506,6 +523,9 @@ func TestCollectorDerivesRequestCounterForFreshRecord(t *testing.T) {
 		if _, ok := got[k]; !ok {
 			t.Errorf("missing bounded label %q", k)
 		}
+	}
+	if got["tenant_id"] != tenant {
+		t.Errorf("tenant_id = %q, want %q from the emitter boundary", got["tenant_id"], tenant)
 	}
 	for _, forbidden := range []string{"app_id", "request_uri", "caller_ip_address", "user_id", "request_id", "service_principal_id"} {
 		if _, present := got[forbidden]; present {

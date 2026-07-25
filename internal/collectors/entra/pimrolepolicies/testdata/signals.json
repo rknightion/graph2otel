@@ -4,6 +4,7 @@
       "Name": "entra.pim.role_policy.requirement",
       "Unit": "{policy}",
       "Kind": "gauge",
+      "Description": "PIM role-activation policies, by activation requirement, whether it is enabled, and caller.",
       "AttrKeys": [
         "caller",
         "enabled",

@@ -3,16 +3,14 @@
 # Why this exists twice
 
 Every CATALOGUED metric already carries its derived ``prometheus_name``, so the
-board modules never need this: they name the OTEL metric and the builder reads
-the normalized form out of the catalog. This module exists for the one surface
-the catalog structurally cannot see — the self-observability metrics emitted
-outside any collector package (the scheduler, the HTTP transport, the
-cardinality limiter), which no ``testdata/signals.json`` golden captures.
+board modules do not need this: they name the OTEL metric and the builder reads
+the normalized form out of the catalog. This independent implementation remains
+as a cross-language contract test for the Go normalization rule.
 
 # Why a second implementation is safe here
 
 ``tests/test_build_dashboard.py`` asserts this function reproduces
-``prometheus_name`` for all 274 cataloged metrics. So the two implementations
+``prometheus_name`` for every cataloged metric. So the two implementations
 are pinned to each other by a test over real data on every run: they cannot
 drift silently, and a change to the Go rule fails here immediately.
 """

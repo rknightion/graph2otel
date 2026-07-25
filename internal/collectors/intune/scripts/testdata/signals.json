@@ -4,18 +4,21 @@
       "Name": "intune.remediation.overview.remediated_device_count",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Tenant-wide count of devices remediated by health scripts (getRemediationSummary() cross-check).",
       "AttrKeys": []
     },
     {
       "Name": "intune.remediation.overview.script_count",
       "Unit": "{script}",
       "Kind": "gauge",
+      "Description": "Tenant-wide count of health scripts deployed (getRemediationSummary() cross-check).",
       "AttrKeys": []
     },
     {
       "Name": "intune.remediation.remediated_cumulative_devices",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Distinct devices remediated by each health script over the trailing 30 days (issueRemediatedCumulativeDeviceCount).",
       "AttrKeys": [
         "script_name"
       ]
@@ -24,6 +27,7 @@
       "Name": "intune.remediation.summary",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Proactive remediation (health script) run outcomes, by script, phase (detection or remediation) and state.",
       "AttrKeys": [
         "phase",
         "script_name",
@@ -34,6 +38,7 @@
       "Name": "intune.script.run_summary",
       "Unit": "{run}",
       "Kind": "gauge",
+      "Description": "Windows PowerShell / macOS shell script run outcomes, by script, OS, target (device or user context) and run state.",
       "AttrKeys": [
         "os",
         "run_state",

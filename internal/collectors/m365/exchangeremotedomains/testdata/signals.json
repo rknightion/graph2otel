@@ -4,6 +4,7 @@
       "Name": "m365.exchange.remote_domains",
       "Unit": "{domain}",
       "Kind": "gauge",
+      "Description": "Exchange Online remote domains by whether they permit automatic external forwarding. The entry whose domain is \"*\" covers EVERY remote domain, so a non-zero true bucket may be one tenant-wide hole rather than a narrow exception — which domain it is lives on the m365.exchange_remote_domain log twin.",
       "AttrKeys": [
         "auto_forward_enabled"
       ]

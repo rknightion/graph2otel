@@ -4,6 +4,7 @@
       "Name": "intune.devices_without_compliance_policy.devices",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune managed device count without a compliance policy assigned, by OS; per-device detail on the intune.devices_without_compliance_policy log twin.",
       "AttrKeys": [
         "os"
       ]

@@ -4,8 +4,10 @@
       "Name": "graph2otel.blob.categories",
       "Unit": "{category}",
       "Kind": "gauge",
+      "Description": "Azure diagnostic-settings categories on the aadiam provider, by census state: consumed / enabled_unread (billed but read by no collector) / mapped_but_disabled (a collector polls a container that is never written) / disabled.",
       "AttrKeys": [
-        "state"
+        "state",
+        "tenant_id"
       ]
     }
   ],
@@ -15,9 +17,11 @@
       "AttrKeys": [
         "container",
         "diagnostic_category",
+        "ingest_transport",
         "is_enabled",
         "is_mapped",
-        "state"
+        "state",
+        "tenant_id"
       ]
     }
   ]

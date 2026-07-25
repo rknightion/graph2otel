@@ -4,6 +4,7 @@
       "Name": "entra.devices.compliance.total",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Total Entra directory devices, by MDM compliance state.",
       "AttrKeys": [
         "is_compliant"
       ]
@@ -12,6 +13,7 @@
       "Name": "entra.devices.managed.total",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Total Entra directory devices, by MDM-managed state.",
       "AttrKeys": [
         "is_managed"
       ]
@@ -20,6 +22,7 @@
       "Name": "entra.devices.os.total",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Total Entra directory devices, by operating system.",
       "AttrKeys": [
         "operating_system"
       ]
@@ -28,6 +31,7 @@
       "Name": "entra.devices.stale.total",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Entra directory devices whose last sign-in is older than the staleness threshold.",
       "AttrKeys": [
         "threshold_days"
       ]
@@ -36,6 +40,7 @@
       "Name": "entra.devices.total",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Total Entra directory devices, by trust type.",
       "AttrKeys": [
         "trust_type"
       ]

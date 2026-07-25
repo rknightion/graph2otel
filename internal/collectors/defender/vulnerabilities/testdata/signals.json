@@ -4,6 +4,7 @@
       "Name": "defender.vulnerability.affected_devices",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Devices with at least one software vulnerability, by severity and exploit availability.",
       "AttrKeys": [
         "exploit_available",
         "severity"
@@ -13,6 +14,7 @@
       "Name": "defender.vulnerability.cves",
       "Unit": "{cve}",
       "Kind": "gauge",
+      "Description": "Distinct CVEs present, by severity and exploit availability.",
       "AttrKeys": [
         "exploit_available",
         "severity"
@@ -22,6 +24,7 @@
       "Name": "defender.vulnerability.instances",
       "Unit": "{vulnerability}",
       "Kind": "gauge",
+      "Description": "Software-vulnerability instances (device x CVE x software), by severity and exploit availability.",
       "AttrKeys": [
         "exploit_available",
         "severity"
@@ -31,6 +34,7 @@
       "Name": "defender.vulnerability.max_cvss",
       "Unit": "{score}",
       "Kind": "gauge",
+      "Description": "Highest CVSS base score present, by severity and exploit availability.",
       "AttrKeys": [
         "exploit_available",
         "severity"
@@ -40,6 +44,7 @@
       "Name": "defender.vulnerability.max_epss",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "Highest EPSS probability present, by severity and exploit availability.",
       "AttrKeys": [
         "exploit_available",
         "severity"

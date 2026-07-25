@@ -4,6 +4,7 @@
       "Name": "entra.pim.alert.configurations",
       "Unit": "{configuration}",
       "Kind": "gauge",
+      "Description": "PIM alert configurations by whether the alert is switched ON. A disabled alert reports itself inactive forever and is otherwise indistinguishable from a healthy one, so is_enabled=false is itself a finding.",
       "AttrKeys": [
         "alert_type",
         "is_enabled"
@@ -13,6 +14,7 @@
       "Name": "entra.pim.alert.count",
       "Unit": "{alert}",
       "Kind": "gauge",
+      "Description": "Microsoft's pre-computed PIM privileged-access findings, one series per alert type, labeled by Microsoft's severity and whether the finding is currently active. Microsoft's description, security impact and mitigation steps are on the entra.pim_alert log twin.",
       "AttrKeys": [
         "alert_type",
         "is_active",
@@ -23,6 +25,7 @@
       "Name": "entra.pim.alert.incidents",
       "Unit": "{incident}",
       "Kind": "gauge",
+      "Description": "Entities each PIM alert covers (roles without MFA on activation, assignments made outside PIM, stale privileged accounts). The entities themselves are not reachable — the alertIncidents segment is not exposed — so this count is the finest granularity available.",
       "AttrKeys": [
         "alert_type",
         "severity"

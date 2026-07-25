@@ -1,0 +1,50 @@
+{
+  "Metrics": [
+    {
+      "Name": "graph2otel.o365activity.http.client.request.duration",
+      "Unit": "s",
+      "Kind": "histogram",
+      "Description": "Duration of an outbound Office 365 Management Activity API HTTP request.",
+      "AttrKeys": [
+        "http.request.method",
+        "http.response.status_code",
+        "o365.operation",
+        "server.address",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.o365activity.http_4xx",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Count of 4xx responses graph2otel received from its own outbound Office 365 Management Activity API calls.",
+      "AttrKeys": [
+        "http.response.status_code",
+        "o365.operation",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.o365activity.http_5xx",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Count of 5xx responses graph2otel received from its own outbound Office 365 Management Activity API calls.",
+      "AttrKeys": [
+        "http.response.status_code",
+        "o365.operation",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.o365activity.throttle.count",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Count of 429 throttle responses observed from the Office 365 Management Activity API.",
+      "AttrKeys": [
+        "o365.operation",
+        "tenant_id"
+      ]
+    }
+  ],
+  "Logs": null
+}

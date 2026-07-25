@@ -4,6 +4,7 @@
       "Name": "entra.application.federated_credentials",
       "Unit": "{credential}",
       "Kind": "gauge",
+      "Description": "Application federated identity credentials, by issuer host.",
       "AttrKeys": [
         "issuer_host"
       ]
@@ -12,6 +13,7 @@
       "Name": "entra.application.ownership",
       "Unit": "{application}",
       "Kind": "gauge",
+      "Description": "Applications by whether they have an owner and by sign-in audience.",
       "AttrKeys": [
         "has_owner",
         "sign_in_audience"
@@ -21,6 +23,7 @@
       "Name": "entra.service_principal.ownership",
       "Unit": "{service_principal}",
       "Kind": "gauge",
+      "Description": "Service principals by whether they have an owner and by type.",
       "AttrKeys": [
         "has_owner",
         "service_principal_type"

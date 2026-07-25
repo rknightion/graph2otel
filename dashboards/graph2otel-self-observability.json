@@ -108,7 +108,7 @@
     {
       "id": 2,
       "type": "row",
-      "title": "Blob ingest health and API drift (cataloged)",
+      "title": "Blob ingest health and API drift",
       "collapsed": false,
       "panels": [],
       "gridPos": {
@@ -164,7 +164,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (collector, field, kind) (rate(graph2otel_api_unexpected_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (collector, field, kind, tenant_id) (rate(graph2otel_api_unexpected_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -221,7 +221,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (state) (graph2otel_blob_categories{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (state, tenant_id) (graph2otel_blob_categories{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -278,7 +278,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (collector) (graph2otel_blob_endpoint_paths{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (collector, tenant_id) (graph2otel_blob_endpoint_paths{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -335,7 +335,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (collector) (graph2otel_blob_event_age_seconds{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (collector, tenant_id) (graph2otel_blob_event_age_seconds{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -349,7 +349,7 @@
     {
       "id": 7,
       "type": "timeseries",
-      "title": "Blob records: emitted as metrics vs gated",
+      "title": "Blob records dropped",
       "description": "",
       "gridPos": {
         "h": 8,
@@ -392,18 +392,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (collector) (rate(graph2otel_blob_metric_emitted_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "range": true,
-          "instant": false
-        },
-        {
-          "refId": "B",
-          "expr": "sum by (collector) (rate(graph2otel_blob_metric_gated_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (collector, tenant_id) (rate(graph2otel_blob_records_dropped_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -417,7 +406,7 @@
     {
       "id": 8,
       "type": "timeseries",
-      "title": "Logpipeline self excluded",
+      "title": "Blob self excluded",
       "description": "",
       "gridPos": {
         "h": 8,
@@ -460,7 +449,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (collector) (rate(graph2otel_logpipeline_self_excluded_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (collector, tenant_id) (rate(graph2otel_blob_self_excluded_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -473,19 +462,144 @@
     },
     {
       "id": 9,
+      "type": "timeseries",
+      "title": "Blob records: emitted as metrics vs gated",
+      "description": "",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 37
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (collector, tenant_id) (rate(graph2otel_blob_metric_emitted_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (collector, tenant_id) (rate(graph2otel_blob_metric_gated_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Logpipeline self excluded",
+      "description": "",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 45
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (collector, tenant_id) (rate(graph2otel_logpipeline_self_excluded_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ]
+    },
+    {
+      "id": 11,
       "type": "row",
-      "title": "Collector health (hand-declared \u2014 see the module docstring)",
+      "title": "Collector health (generated signal catalog)",
       "collapsed": false,
       "panels": [],
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 45
+        "y": 53
       }
     },
     {
-      "id": 10,
+      "id": 12,
       "type": "timeseries",
       "title": "Scrape success by collector",
       "description": "1 when the last run completed without error, 0 otherwise (including a recovered panic). A green tick is not evidence of data: several collectors succeed on an empty collection by design.",
@@ -493,7 +607,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 46
+        "y": 54
       },
       "datasource": {
         "type": "prometheus",
@@ -542,7 +656,7 @@
       ]
     },
     {
-      "id": 11,
+      "id": 13,
       "type": "timeseries",
       "title": "Scrape duration by collector",
       "description": "",
@@ -550,7 +664,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 46
+        "y": 54
       },
       "datasource": {
         "type": "prometheus",
@@ -599,7 +713,7 @@
       ]
     },
     {
-      "id": 12,
+      "id": 14,
       "type": "table",
       "title": "Scrape staleness (seconds since last SUCCESS)",
       "description": "Counts up from process start until the first success, so a collector that has never succeeded shows a growing value rather than no series.",
@@ -607,7 +721,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 54
+        "y": 62
       },
       "datasource": {
         "type": "prometheus",
@@ -646,15 +760,72 @@
       ]
     },
     {
-      "id": 13,
+      "id": 15,
+      "type": "timeseries",
+      "title": "Age of the latest completed scrape",
+      "description": "Wall-clock age of the latest completed run, whether it succeeded or failed.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 62
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - graph2otel_scrape_last_timestamp_seconds{tenant_id=~\"$tenant\", collector=~\"$collector\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ]
+    },
+    {
+      "id": 16,
       "type": "timeseries",
       "title": "Scrape budget (duration / interval)",
       "description": "At or above 1 a scrape takes as long as its own poll interval \u2014 no headroom, risk of overrun.",
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 54
+        "x": 0,
+        "y": 70
       },
       "datasource": {
         "type": "prometheus",
@@ -703,15 +874,15 @@
       ]
     },
     {
-      "id": 14,
+      "id": 17,
       "type": "timeseries",
       "title": "Scrape error rate by error type",
       "description": "",
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 62
+        "x": 12,
+        "y": 70
       },
       "datasource": {
         "type": "prometheus",
@@ -760,15 +931,15 @@
       ]
     },
     {
-      "id": 15,
+      "id": 18,
       "type": "timeseries",
       "title": "Checkpoint persist error rate",
       "description": "The window succeeded but its high-water mark did not reach disk. The next tick still advances; the window is only re-polled after a restart.",
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 62
+        "x": 0,
+        "y": 78
       },
       "datasource": {
         "type": "prometheus",
@@ -817,7 +988,7 @@
       ]
     },
     {
-      "id": 16,
+      "id": 19,
       "type": "row",
       "title": "Build and licensing",
       "collapsed": false,
@@ -826,11 +997,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 70
+        "y": 86
       }
     },
     {
-      "id": 17,
+      "id": 20,
       "type": "table",
       "title": "Build info (process-wide)",
       "description": "One series for the graph2otel process. Tenant selection does not apply: duplicating build identity per tenant would create misleading copies of the same process fact.",
@@ -838,7 +1009,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 71
+        "y": 87
       },
       "datasource": {
         "type": "prometheus",
@@ -877,7 +1048,7 @@
       ]
     },
     {
-      "id": 18,
+      "id": 21,
       "type": "table",
       "title": "Detected license tier by tenant",
       "description": "",
@@ -885,7 +1056,7 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 71
+        "y": 87
       },
       "datasource": {
         "type": "prometheus",
@@ -924,7 +1095,7 @@
       ]
     },
     {
-      "id": 19,
+      "id": 22,
       "type": "row",
       "title": "Export jobs (Intune report exports, M365 audit query)",
       "collapsed": false,
@@ -933,11 +1104,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 77
+        "y": 93
       }
     },
     {
-      "id": 20,
+      "id": 23,
       "type": "timeseries",
       "title": "Export jobs by result",
       "description": "",
@@ -945,7 +1116,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 78
+        "y": 94
       },
       "datasource": {
         "type": "prometheus",
@@ -994,7 +1165,7 @@
       ]
     },
     {
-      "id": 21,
+      "id": 24,
       "type": "timeseries",
       "title": "Export job duration",
       "description": "",
@@ -1002,7 +1173,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 78
+        "y": 94
       },
       "datasource": {
         "type": "prometheus",
@@ -1051,7 +1222,7 @@
       ]
     },
     {
-      "id": 22,
+      "id": 25,
       "type": "timeseries",
       "title": "Export polls to terminal state",
       "description": "",
@@ -1059,7 +1230,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 78
+        "y": 94
       },
       "datasource": {
         "type": "prometheus",
@@ -1108,7 +1279,7 @@
       ]
     },
     {
-      "id": 23,
+      "id": 26,
       "type": "timeseries",
       "title": "Downloaded export size",
       "description": "",
@@ -1116,7 +1287,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 86
+        "y": 102
       },
       "datasource": {
         "type": "prometheus",
@@ -1165,7 +1336,7 @@
       ]
     },
     {
-      "id": 24,
+      "id": 27,
       "type": "row",
       "title": "Cardinality limiter (#235)",
       "collapsed": false,
@@ -1174,11 +1345,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 92
+        "y": 108
       }
     },
     {
-      "id": 25,
+      "id": 28,
       "type": "table",
       "title": "Active series by source metric (process-wide)",
       "description": "Distinct series emitted per source metric across the shared process AFTER limiting \u2014 the series actually billed. Tenant selection does not apply.",
@@ -1186,7 +1357,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 93
+        "y": 109
       },
       "datasource": {
         "type": "prometheus",
@@ -1225,7 +1396,7 @@
       ]
     },
     {
-      "id": 26,
+      "id": 29,
       "type": "timeseries",
       "title": "Series clipped, by mode (process-wide)",
       "description": "mode=folded were summed into the `other` bucket; mode=dropped were discarded because the metric is not additive and a synthetic aggregate would be worse than the loss. Counts cover the shared process; tenant selection does not apply.",
@@ -1233,7 +1404,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 93
+        "y": 109
       },
       "datasource": {
         "type": "prometheus",
@@ -1282,7 +1453,7 @@
       ]
     },
     {
-      "id": 27,
+      "id": 30,
       "type": "stat",
       "title": "Total active series (process-wide)",
       "description": "Total distinct active series across the shared process during the last export interval. Tenant selection does not apply.",
@@ -1290,7 +1461,7 @@
         "h": 4,
         "w": 12,
         "x": 0,
-        "y": 101
+        "y": 117
       },
       "datasource": {
         "type": "prometheus",
@@ -1332,7 +1503,7 @@
       ]
     },
     {
-      "id": 28,
+      "id": 31,
       "type": "stat",
       "title": "Configured per-metric series limit (process-wide)",
       "description": "One process-wide cardinality policy. Tenant selection does not apply.",
@@ -1340,7 +1511,7 @@
         "h": 4,
         "w": 12,
         "x": 12,
-        "y": 101
+        "y": 117
       },
       "datasource": {
         "type": "prometheus",
@@ -1382,7 +1553,7 @@
       ]
     },
     {
-      "id": 29,
+      "id": 32,
       "type": "row",
       "title": "Graph throttling and outbound HTTP",
       "collapsed": false,
@@ -1391,11 +1562,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 105
+        "y": 121
       }
     },
     {
-      "id": 30,
+      "id": 33,
       "type": "timeseries",
       "title": "Throttle (429) rate by workload",
       "description": "",
@@ -1403,7 +1574,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 106
+        "y": 122
       },
       "datasource": {
         "type": "prometheus",
@@ -1452,7 +1623,7 @@
       ]
     },
     {
-      "id": 31,
+      "id": 34,
       "type": "timeseries",
       "title": "Graph-reported throttle budget consumed",
       "description": "From the x-ms-throttle-limit-percentage response header, which is not sent on every 429 or every workload \u2014 an absent series does NOT mean the budget is healthy.",
@@ -1460,7 +1631,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 106
+        "y": 122
       },
       "datasource": {
         "type": "prometheus",
@@ -1509,7 +1680,7 @@
       ]
     },
     {
-      "id": 32,
+      "id": 35,
       "type": "timeseries",
       "title": "Outbound Graph request latency (p95)",
       "description": "",
@@ -1517,7 +1688,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 106
+        "y": 122
       },
       "datasource": {
         "type": "prometheus",
@@ -1566,7 +1737,7 @@
       ]
     },
     {
-      "id": 33,
+      "id": 36,
       "type": "timeseries",
       "title": "Outbound Graph 4xx / 5xx rate by workload",
       "description": "",
@@ -1574,7 +1745,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 114
+        "y": 130
       },
       "datasource": {
         "type": "prometheus",
@@ -1636,7 +1807,576 @@
       ]
     },
     {
-      "id": 34,
+      "id": 37,
+      "type": "row",
+      "title": "Non-Graph transport HTTP",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 138
+      }
+    },
+    {
+      "id": 38,
+      "type": "timeseries",
+      "title": "Exchange Online request latency (p95)",
+      "description": "",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 139
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(graph2otel_exo_http_client_request_duration_seconds_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ]
+    },
+    {
+      "id": 39,
+      "type": "timeseries",
+      "title": "Exchange Online errors and throttling",
+      "description": "",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 139
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(graph2otel_exo_http_4xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false,
+          "legendFormat": "4xx"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(graph2otel_exo_http_5xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false,
+          "legendFormat": "5xx"
+        },
+        {
+          "refId": "C",
+          "expr": "sum(rate(graph2otel_exo_throttle_count_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false,
+          "legendFormat": "429 throttle"
+        }
+      ]
+    },
+    {
+      "id": 40,
+      "type": "timeseries",
+      "title": "Advanced hunting request latency (p95)",
+      "description": "",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 146
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(graph2otel_hunt_http_client_request_duration_seconds_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ]
+    },
+    {
+      "id": 41,
+      "type": "timeseries",
+      "title": "Advanced hunting errors and throttling",
+      "description": "",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 146
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(graph2otel_hunt_http_4xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false,
+          "legendFormat": "4xx"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(graph2otel_hunt_http_5xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false,
+          "legendFormat": "5xx"
+        },
+        {
+          "refId": "C",
+          "expr": "sum(rate(graph2otel_hunt_throttle_count_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false,
+          "legendFormat": "429 throttle"
+        }
+      ]
+    },
+    {
+      "id": 42,
+      "type": "timeseries",
+      "title": "MDCA request latency (p95)",
+      "description": "",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 153
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(graph2otel_mdca_http_client_request_duration_seconds_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ]
+    },
+    {
+      "id": 43,
+      "type": "timeseries",
+      "title": "MDCA errors and throttling",
+      "description": "",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 153
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(graph2otel_mdca_http_4xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false,
+          "legendFormat": "4xx"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(graph2otel_mdca_http_5xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false,
+          "legendFormat": "5xx"
+        },
+        {
+          "refId": "C",
+          "expr": "sum(rate(graph2otel_mdca_throttle_count_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false,
+          "legendFormat": "429 throttle"
+        }
+      ]
+    },
+    {
+      "id": 44,
+      "type": "timeseries",
+      "title": "O365 Activity request latency (p95)",
+      "description": "",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 160
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(graph2otel_o365activity_http_client_request_duration_seconds_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ]
+    },
+    {
+      "id": 45,
+      "type": "timeseries",
+      "title": "O365 Activity errors and throttling",
+      "description": "",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 160
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(graph2otel_o365activity_http_4xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false,
+          "legendFormat": "4xx"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(graph2otel_o365activity_http_5xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false,
+          "legendFormat": "5xx"
+        },
+        {
+          "refId": "C",
+          "expr": "sum(rate(graph2otel_o365activity_throttle_count_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false,
+          "legendFormat": "429 throttle"
+        }
+      ]
+    },
+    {
+      "id": 46,
       "type": "row",
       "title": "Logs \u2014 which one, not how many (#162)",
       "collapsed": false,
@@ -1645,11 +2385,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 122
+        "y": 167
       }
     },
     {
-      "id": 35,
+      "id": 47,
       "type": "logs",
       "title": "Blob diagnostic categories \u2014 which container, mapped or not",
       "description": "One record per diagnostic category found in the storage account, saying whether graph2otel has a mapper for it. An unmapped category is data arriving that nothing reads.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
@@ -1657,7 +2397,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 123
+        "y": 168
       },
       "datasource": {
         "type": "loki",

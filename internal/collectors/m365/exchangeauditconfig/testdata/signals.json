@@ -4,6 +4,7 @@
       "Name": "m365.exchange.audit_config.enabled",
       "Unit": "{setting}",
       "Kind": "gauge",
+      "Description": "Exchange Online audit posture as a 0/1 flag per setting: unified_audit_log_ingestion (when off, m365.activity and m365.unified_audit silently return nothing) and admin_audit_log.",
       "AttrKeys": [
         "setting"
       ]

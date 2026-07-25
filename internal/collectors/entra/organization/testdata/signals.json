@@ -4,18 +4,21 @@
       "Name": "entra.directory.sync.last_sync_age_seconds",
       "Unit": "s",
       "Kind": "gauge",
+      "Description": "Seconds since the on-premises directory last synced to this tenant. Only emitted when on-premises sync is enabled and a last-sync timestamp is available.",
       "AttrKeys": []
     },
     {
       "Name": "entra.organization.age_days",
       "Unit": "d",
       "Kind": "gauge",
+      "Description": "Age of the Entra tenant in days, from its createdDateTime.",
       "AttrKeys": []
     },
     {
       "Name": "entra.organization.info",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "Constant 1 gauge carrying bounded tenant posture (tenant type) as an attribute.",
       "AttrKeys": [
         "tenant_type"
       ]
@@ -24,12 +27,14 @@
       "Name": "entra.organization.on_premises_sync_enabled",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "1 if the tenant is currently synced from an on-premises directory (hybrid AD Connect/Cloud Sync), else 0.",
       "AttrKeys": []
     },
     {
       "Name": "entra.organization.verified_domains.total",
       "Unit": "{domain}",
       "Kind": "gauge",
+      "Description": "Total verified domains associated with the tenant.",
       "AttrKeys": []
     }
   ],

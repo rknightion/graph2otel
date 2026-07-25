@@ -1,5 +1,5 @@
 {
-  "package_count": 139,
+  "package_count": 151,
   "domains": [
     "defender",
     "entra",
@@ -15,6 +15,7 @@
       "prometheus_name": "defender_allow_block_list_entries",
       "unit": "{entry}",
       "kind": "gauge",
+      "description": "Tenant Allow/Block List entries by list type, action and list subtype. Which VALUE is listed is on the defender.allow_block_list log twin, never here.",
       "additive": true,
       "domain": "defender",
       "attr_keys": [
@@ -31,6 +32,7 @@
       "prometheus_name": "defender_allow_block_list_expiring_soon",
       "unit": "{entry}",
       "kind": "gauge",
+      "description": "Tenant Allow/Block List entries whose expiration date falls within 7 days. An expiring BLOCK silently restores delivery from a sender that was blocked for a reason.",
       "additive": true,
       "domain": "defender",
       "attr_keys": [
@@ -46,6 +48,7 @@
       "prometheus_name": "defender_allow_block_list_non_expiring_allow",
       "unit": "{entry}",
       "kind": "gauge",
+      "description": "Allow entries with neither an expiration date nor a remove-after-last-use window — a permanent bypass of mail security. Each one also emits an Error-severity defender.allow_block_list log record naming it.",
       "additive": true,
       "domain": "defender",
       "attr_keys": [
@@ -60,6 +63,7 @@
       "prometheus_name": "defender_allow_block_list_spoof_entries",
       "unit": "{entry}",
       "kind": "gauge",
+      "description": "Spoof-intelligence overrides by spoof type and action. A spoof allow has no expiry mechanism at all, so it is permanent by construction.",
       "additive": true,
       "domain": "defender",
       "attr_keys": [
@@ -75,6 +79,7 @@
       "prometheus_name": "defender_mdo_policies",
       "unit": "{policy}",
       "kind": "gauge",
+      "description": "Microsoft Defender for Office 365 policies, by policy type.",
       "additive": true,
       "domain": "defender",
       "attr_keys": [
@@ -89,6 +94,7 @@
       "prometheus_name": "defender_mdo_protection_enabled",
       "unit": "{policy}",
       "kind": "gauge",
+      "description": "MDO policies with a named boolean protection enabled, by policy type and protection.",
       "additive": true,
       "domain": "defender",
       "attr_keys": [
@@ -104,6 +110,7 @@
       "prometheus_name": "defender_oauth_app_apps",
       "unit": "{app}",
       "kind": "gauge",
+      "description": "Consented OAuth applications, by privilege level, status, origin and admin-consent.",
       "additive": true,
       "domain": "defender",
       "attr_keys": [
@@ -121,6 +128,7 @@
       "prometheus_name": "defender_oauth_app_consented_users",
       "unit": "{user}",
       "kind": "gauge",
+      "description": "Summed user consents for OAuth apps, by privilege level.",
       "additive": true,
       "domain": "defender",
       "attr_keys": [
@@ -135,6 +143,7 @@
       "prometheus_name": "defender_oauth_app_max_risk_score",
       "unit": "{score}",
       "kind": "gauge",
+      "description": "Highest Defender OAuth-app risk score, by privilege level.",
       "additive": false,
       "domain": "defender",
       "attr_keys": [
@@ -149,6 +158,7 @@
       "prometheus_name": "defender_quarantine_held_messages_total_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "Messages currently held in Microsoft Defender for Office 365 quarantine, by quarantine type, direction and entity type.",
       "additive": false,
       "domain": "defender",
       "attr_keys": [
@@ -165,6 +175,7 @@
       "prometheus_name": "defender_secure_config_assessments",
       "unit": "{assessment}",
       "kind": "gauge",
+      "description": "Applicable secure-configuration assessments, by configuration category and compliance.",
       "additive": true,
       "domain": "defender",
       "attr_keys": [
@@ -180,6 +191,7 @@
       "prometheus_name": "defender_secure_config_impact_at_risk",
       "unit": "{impact}",
       "kind": "gauge",
+      "description": "Summed configuration impact of the failing assessments, by configuration category.",
       "additive": true,
       "domain": "defender",
       "attr_keys": [
@@ -194,6 +206,7 @@
       "prometheus_name": "defender_secure_config_noncompliant_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Devices failing at least one configuration, by configuration category.",
       "additive": true,
       "domain": "defender",
       "attr_keys": [
@@ -208,6 +221,7 @@
       "prometheus_name": "defender_software_eos_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Devices carrying software in a given end-of-support status.",
       "additive": true,
       "domain": "defender",
       "attr_keys": [
@@ -222,6 +236,7 @@
       "prometheus_name": "defender_software_installs",
       "unit": "{install}",
       "kind": "gauge",
+      "description": "Installed-software instances (device x product x version), by end-of-support status.",
       "additive": true,
       "domain": "defender",
       "attr_keys": [
@@ -236,6 +251,7 @@
       "prometheus_name": "defender_software_products",
       "unit": "{product}",
       "kind": "gauge",
+      "description": "Distinct products (vendor x name), by end-of-support status.",
       "additive": true,
       "domain": "defender",
       "attr_keys": [
@@ -250,6 +266,7 @@
       "prometheus_name": "defender_vulnerability_affected_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Devices with at least one software vulnerability, by severity and exploit availability.",
       "additive": true,
       "domain": "defender",
       "attr_keys": [
@@ -265,6 +282,7 @@
       "prometheus_name": "defender_vulnerability_cves",
       "unit": "{cve}",
       "kind": "gauge",
+      "description": "Distinct CVEs present, by severity and exploit availability.",
       "additive": true,
       "domain": "defender",
       "attr_keys": [
@@ -280,6 +298,7 @@
       "prometheus_name": "defender_vulnerability_instances",
       "unit": "{vulnerability}",
       "kind": "gauge",
+      "description": "Software-vulnerability instances (device x CVE x software), by severity and exploit availability.",
       "additive": true,
       "domain": "defender",
       "attr_keys": [
@@ -295,6 +314,7 @@
       "prometheus_name": "defender_vulnerability_max_cvss",
       "unit": "{score}",
       "kind": "gauge",
+      "description": "Highest CVSS base score present, by severity and exploit availability.",
       "additive": false,
       "domain": "defender",
       "attr_keys": [
@@ -310,6 +330,7 @@
       "prometheus_name": "defender_vulnerability_max_epss_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "Highest EPSS probability present, by severity and exploit availability.",
       "additive": false,
       "domain": "defender",
       "attr_keys": [
@@ -325,6 +346,7 @@
       "prometheus_name": "entra_access_reviews_total",
       "unit": "{review}",
       "kind": "gauge",
+      "description": "Entra access-review definitions configured for the tenant, by review status.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -339,6 +361,7 @@
       "prometheus_name": "entra_agreements_acceptances_total",
       "unit": "{acceptance}",
       "kind": "gauge",
+      "description": "Entra terms-of-use acceptance counts, by agreement and acceptance state (accepted/declined).",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -354,6 +377,7 @@
       "prometheus_name": "entra_agreements_total",
       "unit": "{agreement}",
       "kind": "gauge",
+      "description": "Total Entra terms-of-use agreements configured for the tenant.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [],
@@ -366,6 +390,7 @@
       "prometheus_name": "entra_app_credential_signin_stale_total",
       "unit": "{credential}",
       "kind": "gauge",
+      "description": "App credentials with no sign-in within the threshold.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -380,6 +405,7 @@
       "prometheus_name": "entra_app_signin_summary_total",
       "unit": "{signin}",
       "kind": "gauge",
+      "description": "App sign-ins over the last 7 days by result.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -394,6 +420,7 @@
       "prometheus_name": "entra_application_federated_credentials",
       "unit": "{credential}",
       "kind": "gauge",
+      "description": "Application federated identity credentials, by issuer host.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -408,6 +435,7 @@
       "prometheus_name": "entra_application_ownership",
       "unit": "{application}",
       "kind": "gauge",
+      "description": "Applications by whether they have an owner and by sign-in audience.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -423,6 +451,7 @@
       "prometheus_name": "entra_auth_methods_policy_legacy_enabled_total",
       "unit": "{method}",
       "kind": "gauge",
+      "description": "Count of legacy authentication methods (SMS, voice) currently enabled tenant-wide.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [],
@@ -435,6 +464,7 @@
       "prometheus_name": "entra_auth_methods_policy_method_enabled_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "1 if the authentication method is enabled tenant-wide, else 0, per bounded method type.",
       "additive": false,
       "domain": "entra",
       "attr_keys": [
@@ -449,6 +479,7 @@
       "prometheus_name": "entra_ca_policies_total",
       "unit": "{policy}",
       "kind": "gauge",
+      "description": "Entra Conditional Access policies, by enforcement state.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -463,6 +494,7 @@
       "prometheus_name": "entra_consent_grants_total",
       "unit": "{grant}",
       "kind": "gauge",
+      "description": "Entra OAuth consent grants (delegated permission grants and application role assignments), by consent type and privilege classification.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -478,6 +510,7 @@
       "prometheus_name": "entra_credentials_expiring_total",
       "unit": "{credential}",
       "kind": "gauge",
+      "description": "Count of application and service-principal credentials (secrets and certificates) by expiry window.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -494,6 +527,7 @@
       "prometheus_name": "entra_deleted_items_count",
       "unit": "{object}",
       "kind": "gauge",
+      "description": "Current count of recoverable soft-deleted directory objects, by type and near-purge state (#191).",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -509,6 +543,7 @@
       "prometheus_name": "entra_devices_compliance_total",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Total Entra directory devices, by MDM compliance state.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -523,6 +558,7 @@
       "prometheus_name": "entra_devices_managed_total",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Total Entra directory devices, by MDM-managed state.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -537,6 +573,7 @@
       "prometheus_name": "entra_devices_os_total",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Total Entra directory devices, by operating system.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -551,6 +588,7 @@
       "prometheus_name": "entra_devices_stale_total",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Entra directory devices whose last sign-in is older than the staleness threshold.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -565,6 +603,7 @@
       "prometheus_name": "entra_devices_total",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Total Entra directory devices, by trust type.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -579,6 +618,7 @@
       "prometheus_name": "entra_directory_objects_total",
       "unit": "{object}",
       "kind": "gauge",
+      "description": "Total Entra directory objects, by object type.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -593,6 +633,7 @@
       "prometheus_name": "entra_directory_sync_errors_total",
       "unit": "{object}",
       "kind": "gauge",
+      "description": "Directory-sync provisioning errors, counted by object type, error category, and the conflicting property. An explicit zero means the sweep ran and found none.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -609,6 +650,7 @@
       "prometheus_name": "entra_directory_sync_last_sync_age_seconds",
       "unit": "s",
       "kind": "gauge",
+      "description": "Seconds since the on-premises directory last synced to this tenant. Only emitted when on-premises sync is enabled and a last-sync timestamp is available.",
       "additive": false,
       "domain": "entra",
       "attr_keys": [],
@@ -621,6 +663,7 @@
       "prometheus_name": "entra_domains_federated_total",
       "unit": "{domain}",
       "kind": "gauge",
+      "description": "Entra domains configured with federated authentication.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [],
@@ -633,6 +676,7 @@
       "prometheus_name": "entra_domains_total",
       "unit": "{domain}",
       "kind": "gauge",
+      "description": "Entra domains by authentication type and verification status.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -648,12 +692,14 @@
       "prometheus_name": "entra_graph_activity_endpoint_requests_total",
       "unit": "{request}",
       "kind": "sum",
+      "description": "Microsoft Graph API calls by normalized endpoint path, method, and status class (#185).",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
         "normalized_path",
         "request_method",
-        "response_status_class"
+        "response_status_class",
+        "tenant_id"
       ],
       "packages": [
         "internal/collectors/entra/graphactivity"
@@ -664,10 +710,12 @@
       "prometheus_name": "entra_graph_activity_request_duration_milliseconds",
       "unit": "ms",
       "kind": "histogram",
+      "description": "Server-side duration of Microsoft Graph API calls against the tenant, by method (#186).",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
-        "request_method"
+        "request_method",
+        "tenant_id"
       ],
       "packages": [
         "internal/collectors/entra/graphactivity"
@@ -678,13 +726,15 @@
       "prometheus_name": "entra_graph_activity_requests_total",
       "unit": "{request}",
       "kind": "sum",
+      "description": "Microsoft Graph API calls against the tenant, by method, response status, caller identity type, and replay flag (#128).",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
         "identity_type",
         "is_replay",
         "request_method",
-        "response_status_code"
+        "response_status_code",
+        "tenant_id"
       ],
       "packages": [
         "internal/collectors/entra/graphactivity"
@@ -695,10 +745,12 @@
       "prometheus_name": "entra_graph_activity_response_size_bytes",
       "unit": "By",
       "kind": "histogram",
+      "description": "Response size of Microsoft Graph API calls against the tenant, by method (#186).",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
-        "request_method"
+        "request_method",
+        "tenant_id"
       ],
       "packages": [
         "internal/collectors/entra/graphactivity"
@@ -709,6 +761,7 @@
       "prometheus_name": "entra_groups_role_assignable_total",
       "unit": "{group}",
       "kind": "gauge",
+      "description": "Total Entra groups assignable to a directory role.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [],
@@ -721,6 +774,7 @@
       "prometheus_name": "entra_groups_total",
       "unit": "{group}",
       "kind": "gauge",
+      "description": "Total Entra groups, sliced by bounded population dimensions (group_type, membership_type, security_enabled, mail_enabled).",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -738,6 +792,7 @@
       "prometheus_name": "entra_gsa_filtering_policies",
       "unit": "{policy}",
       "kind": "gauge",
+      "description": "Count of Global Secure Access filtering policies, by action.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -752,6 +807,7 @@
       "prometheus_name": "entra_gsa_forwarding_profiles",
       "unit": "{profile}",
       "kind": "gauge",
+      "description": "Count of Global Secure Access traffic-forwarding profiles, by traffic type and state.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -767,6 +823,7 @@
       "prometheus_name": "entra_gsa_onboarding_status_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "Global Secure Access onboarding status (0 = onboarded, 1 = in progress, 2 = error/offboarded, -1 = unmapped). See docs/signals.md.",
       "additive": false,
       "domain": "entra",
       "attr_keys": [],
@@ -779,6 +836,7 @@
       "prometheus_name": "entra_gsa_packet_tagging_enabled",
       "unit": "{setting}",
       "kind": "gauge",
+      "description": "Whether Global Secure Access cross-tenant network packet tagging is enabled (1) or not (0).",
       "additive": true,
       "domain": "entra",
       "attr_keys": [],
@@ -791,6 +849,7 @@
       "prometheus_name": "entra_gsa_remote_networks",
       "unit": "{network}",
       "kind": "gauge",
+      "description": "Count of Global Secure Access remote networks configured for the tenant.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [],
@@ -803,6 +862,7 @@
       "prometheus_name": "entra_gsa_signaling_enabled",
       "unit": "{setting}",
       "kind": "gauge",
+      "description": "Whether Global Secure Access data-plane signaling to Conditional Access is enabled (1) or not (0).",
       "additive": true,
       "domain": "entra",
       "attr_keys": [],
@@ -815,6 +875,7 @@
       "prometheus_name": "entra_license_capability_status",
       "unit": "{sku}",
       "kind": "gauge",
+      "description": "Current Graph capabilityStatus per Entra subscribed SKU (value is always 1; status is the label).",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -830,6 +891,7 @@
       "prometheus_name": "entra_license_consumed",
       "unit": "{unit}",
       "kind": "gauge",
+      "description": "Consumed license units per Entra subscribed SKU.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -844,6 +906,7 @@
       "prometheus_name": "entra_license_enabled",
       "unit": "{unit}",
       "kind": "gauge",
+      "description": "Enabled (prepaid) license units per Entra subscribed SKU.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -858,6 +921,7 @@
       "prometheus_name": "entra_license_groups_with_errors_total",
       "unit": "{group}",
       "kind": "gauge",
+      "description": "Total Entra groups with at least one member whose license assignment failed.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [],
@@ -870,6 +934,7 @@
       "prometheus_name": "entra_license_units",
       "unit": "{unit}",
       "kind": "gauge",
+      "description": "Prepaid license units per Entra subscribed SKU, by unit state (enabled/suspended/warning/locked_out).",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -885,6 +950,7 @@
       "prometheus_name": "entra_mfa_registration_admin_mfa_capable_total",
       "unit": "{user}",
       "kind": "gauge",
+      "description": "Entra users capable of MFA, split by admin role membership.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -899,6 +965,7 @@
       "prometheus_name": "entra_mfa_registration_methods_total",
       "unit": "{user}",
       "kind": "gauge",
+      "description": "Entra users registered for each authentication method (a user may count toward several methods).",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -913,6 +980,7 @@
       "prometheus_name": "entra_mfa_registration_users_total",
       "unit": "{user}",
       "kind": "gauge",
+      "description": "Entra users by MFA/SSPR/passwordless registration and capability status.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -928,6 +996,7 @@
       "prometheus_name": "entra_named_locations_total",
       "unit": "{location}",
       "kind": "gauge",
+      "description": "Entra Conditional Access named locations, by type and trust.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -943,6 +1012,7 @@
       "prometheus_name": "entra_organization_age_days",
       "unit": "d",
       "kind": "gauge",
+      "description": "Age of the Entra tenant in days, from its createdDateTime.",
       "additive": false,
       "domain": "entra",
       "attr_keys": [],
@@ -955,6 +1025,7 @@
       "prometheus_name": "entra_organization_info_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "Constant 1 gauge carrying bounded tenant posture (tenant type) as an attribute.",
       "additive": false,
       "domain": "entra",
       "attr_keys": [
@@ -969,6 +1040,7 @@
       "prometheus_name": "entra_organization_on_premises_sync_enabled_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "1 if the tenant is currently synced from an on-premises directory (hybrid AD Connect/Cloud Sync), else 0.",
       "additive": false,
       "domain": "entra",
       "attr_keys": [],
@@ -981,6 +1053,7 @@
       "prometheus_name": "entra_organization_verified_domains_total",
       "unit": "{domain}",
       "kind": "gauge",
+      "description": "Total verified domains associated with the tenant.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [],
@@ -993,6 +1066,7 @@
       "prometheus_name": "entra_pim_alert_configurations",
       "unit": "{configuration}",
       "kind": "gauge",
+      "description": "PIM alert configurations by whether the alert is switched ON. A disabled alert reports itself inactive forever and is otherwise indistinguishable from a healthy one, so is_enabled=false is itself a finding.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -1008,6 +1082,7 @@
       "prometheus_name": "entra_pim_alert_count",
       "unit": "{alert}",
       "kind": "gauge",
+      "description": "Microsoft's pre-computed PIM privileged-access findings, one series per alert type, labeled by Microsoft's severity and whether the finding is currently active. Microsoft's description, security impact and mitigation steps are on the entra.pim_alert log twin.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -1024,6 +1099,7 @@
       "prometheus_name": "entra_pim_alert_incidents",
       "unit": "{incident}",
       "kind": "gauge",
+      "description": "Entities each PIM alert covers (roles without MFA on activation, assignments made outside PIM, stale privileged accounts). The entities themselves are not reachable — the alertIncidents segment is not exposed — so this count is the finest granularity available.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -1039,6 +1115,7 @@
       "prometheus_name": "entra_pim_assignments_total",
       "unit": "{assignment}",
       "kind": "gauge",
+      "description": "PIM active/eligible directory-role assignment count, per role and assignment_type.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -1054,6 +1131,7 @@
       "prometheus_name": "entra_pim_permanent_assignments_total",
       "unit": "{assignment}",
       "kind": "gauge",
+      "description": "Active PIM directory-role assignments with no end time (not time-bound), per role.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -1068,6 +1146,7 @@
       "prometheus_name": "entra_pim_role_policy_requirement",
       "unit": "{policy}",
       "kind": "gauge",
+      "description": "PIM role-activation policies, by activation requirement, whether it is enabled, and caller.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -1084,6 +1163,7 @@
       "prometheus_name": "entra_recommendations_impacted_resources_total",
       "unit": "{resource}",
       "kind": "gauge",
+      "description": "Impacted resources per Entra recommendation type.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -1098,6 +1178,7 @@
       "prometheus_name": "entra_recommendations_total",
       "unit": "{recommendation}",
       "kind": "gauge",
+      "description": "Entra recommendations by status and priority.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -1113,6 +1194,7 @@
       "prometheus_name": "entra_risky_agents_total",
       "unit": "{agent}",
       "kind": "gauge",
+      "description": "Current count of risky Entra agent identities, by risk level and risk state.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -1128,6 +1210,7 @@
       "prometheus_name": "entra_risky_service_principals_total",
       "unit": "{service_principal}",
       "kind": "gauge",
+      "description": "Current count of risky Entra service principals, by risk level and risk state.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -1143,6 +1226,7 @@
       "prometheus_name": "entra_risky_users_total",
       "unit": "{user}",
       "kind": "gauge",
+      "description": "Current count of risky Entra users, by risk level and risk state.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -1158,6 +1242,7 @@
       "prometheus_name": "entra_roles_members_total",
       "unit": "{member}",
       "kind": "gauge",
+      "description": "Standing (non-PIM) Entra directory-role membership count, per role.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -1172,6 +1257,7 @@
       "prometheus_name": "entra_secure_score_by_category",
       "unit": "{score}",
       "kind": "gauge",
+      "description": "Current Secure Score achieved, summed by control category.",
       "additive": false,
       "domain": "entra",
       "attr_keys": [
@@ -1186,6 +1272,7 @@
       "prometheus_name": "entra_secure_score_control_profiles_by_category",
       "unit": "{control}",
       "kind": "gauge",
+      "description": "Secure Score control profiles, by control category.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -1200,6 +1287,7 @@
       "prometheus_name": "entra_secure_score_control_profiles_by_status",
       "unit": "{control}",
       "kind": "gauge",
+      "description": "Secure Score control profiles, by tenant implementation status.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -1214,6 +1302,7 @@
       "prometheus_name": "entra_secure_score_current",
       "unit": "{score}",
       "kind": "gauge",
+      "description": "Latest Microsoft Secure Score for the tenant.",
       "additive": false,
       "domain": "entra",
       "attr_keys": [],
@@ -1226,6 +1315,7 @@
       "prometheus_name": "entra_secure_score_max",
       "unit": "{score}",
       "kind": "gauge",
+      "description": "Maximum attainable Microsoft Secure Score for the tenant.",
       "additive": false,
       "domain": "entra",
       "attr_keys": [],
@@ -1238,6 +1328,7 @@
       "prometheus_name": "entra_secure_score_max_by_category",
       "unit": "{score}",
       "kind": "gauge",
+      "description": "Maximum attainable Secure Score, summed by control category.",
       "additive": false,
       "domain": "entra",
       "attr_keys": [
@@ -1252,6 +1343,7 @@
       "prometheus_name": "entra_secure_score_peer_average",
       "unit": "{score}",
       "kind": "gauge",
+      "description": "Peer average Secure Score, by comparison basis.",
       "additive": false,
       "domain": "entra",
       "attr_keys": [
@@ -1266,6 +1358,7 @@
       "prometheus_name": "entra_secure_score_percentage_percent",
       "unit": "%",
       "kind": "gauge",
+      "description": "Latest Secure Score expressed as a percentage of the maximum attainable score.",
       "additive": false,
       "domain": "entra",
       "attr_keys": [],
@@ -1278,6 +1371,7 @@
       "prometheus_name": "entra_service_principal_ownership",
       "unit": "{service_principal}",
       "kind": "gauge",
+      "description": "Service principals by whether they have an owner and by type.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -1293,6 +1387,7 @@
       "prometheus_name": "entra_serviceprincipal_signin_stale_total",
       "unit": "{service_principal}",
       "kind": "gauge",
+      "description": "Service principals with no sign-in within the threshold.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -1307,6 +1402,7 @@
       "prometheus_name": "entra_signin_count_total",
       "unit": "{signin}",
       "kind": "sum",
+      "description": "Sign-ins against the tenant, by result, conditional access status, risk level, and client app used (#187).",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -1324,6 +1420,7 @@
       "prometheus_name": "entra_tenant_policy_scoped_policies",
       "unit": "{policy}",
       "kind": "gauge",
+      "description": "Count of scoped tenant policies, by kind.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -1338,6 +1435,7 @@
       "prometheus_name": "entra_tenant_policy_setting",
       "unit": "{setting}",
       "kind": "gauge",
+      "description": "Tenant policy posture switches, 0/1 by setting.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -1352,6 +1450,7 @@
       "prometheus_name": "entra_users_population",
       "unit": "{user}",
       "kind": "gauge",
+      "description": "Entra users jointly sliced by user_type and account_enabled (e.g. disabled guests), one series per combination.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -1367,6 +1466,7 @@
       "prometheus_name": "entra_users_stale_total",
       "unit": "{user}",
       "kind": "gauge",
+      "description": "Count of Entra users whose last sign-in is older than threshold_days. Requires Entra ID P1 or P2 (signInActivity).",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -1381,6 +1481,7 @@
       "prometheus_name": "entra_users_total",
       "unit": "{user}",
       "kind": "gauge",
+      "description": "Total Entra users, independently sliced by account_enabled, user_type, and on_premises_sync_enabled.",
       "additive": true,
       "domain": "entra",
       "attr_keys": [
@@ -1397,14 +1498,17 @@
       "prometheus_name": "graph2otel_api_unexpected_total",
       "unit": "1",
       "kind": "sum",
+      "description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
       "additive": true,
       "domain": "graph2otel",
       "attr_keys": [
         "collector",
         "field",
-        "kind"
+        "kind",
+        "tenant_id"
       ],
       "packages": [
+        "internal/blobpipeline",
         "internal/collectors/defender/emailpostdelivery",
         "internal/collectors/defender/quarantine",
         "internal/collectors/entra/accessreviews",
@@ -1431,7 +1535,8 @@
         "internal/collectors/m365/sharepointsettings",
         "internal/collectors/m365/unifiedaudit",
         "internal/collectors/purview/retentionlabels",
-        "internal/collectors/purview/sensitivitylabels"
+        "internal/collectors/purview/sensitivitylabels",
+        "internal/wirecheck"
       ]
     },
     {
@@ -1439,10 +1544,12 @@
       "prometheus_name": "graph2otel_blob_categories",
       "unit": "{category}",
       "kind": "gauge",
+      "description": "Azure diagnostic-settings categories on the aadiam provider, by census state: consumed / enabled_unread (billed but read by no collector) / mapped_but_disabled (a collector polls a container that is never written) / disabled.",
       "additive": true,
       "domain": "graph2otel",
       "attr_keys": [
-        "state"
+        "state",
+        "tenant_id"
       ],
       "packages": [
         "internal/collectors/selfobs/blobcategories"
@@ -1453,10 +1560,12 @@
       "prometheus_name": "graph2otel_blob_endpoint_paths",
       "unit": "{path}",
       "kind": "gauge",
+      "description": "Distinct normalized Graph endpoint paths seen by this collector — headroom against the path cap (#185).",
       "additive": true,
       "domain": "graph2otel",
       "attr_keys": [
-        "collector"
+        "collector",
+        "tenant_id"
       ],
       "packages": [
         "internal/collectors/entra/graphactivity"
@@ -1467,12 +1576,15 @@
       "prometheus_name": "graph2otel_blob_event_age_seconds",
       "unit": "s",
       "kind": "gauge",
+      "description": "Freshest blob event age this tick — the metric propagation floor (#128).",
       "additive": false,
       "domain": "graph2otel",
       "attr_keys": [
-        "collector"
+        "collector",
+        "tenant_id"
       ],
       "packages": [
+        "internal/blobpipeline",
         "internal/collectors/entra/graphactivity",
         "internal/collectors/entra/signins"
       ]
@@ -1482,12 +1594,15 @@
       "prometheus_name": "graph2otel_blob_metric_emitted_total",
       "unit": "{record}",
       "kind": "sum",
+      "description": "Blob records that reached the metrics path (#128).",
       "additive": true,
       "domain": "graph2otel",
       "attr_keys": [
-        "collector"
+        "collector",
+        "tenant_id"
       ],
       "packages": [
+        "internal/blobpipeline",
         "internal/collectors/entra/graphactivity",
         "internal/collectors/entra/signins"
       ]
@@ -1497,14 +1612,336 @@
       "prometheus_name": "graph2otel_blob_metric_gated_total",
       "unit": "{record}",
       "kind": "sum",
+      "description": "Blob records too old for the metrics path, taken log-only (#128).",
       "additive": true,
       "domain": "graph2otel",
       "attr_keys": [
-        "collector"
+        "collector",
+        "tenant_id"
       ],
       "packages": [
+        "internal/blobpipeline",
         "internal/collectors/entra/graphactivity",
         "internal/collectors/entra/signins"
+      ]
+    },
+    {
+      "name": "graph2otel.blob.records_dropped",
+      "prometheus_name": "graph2otel_blob_records_dropped_total",
+      "unit": "{record}",
+      "kind": "sum",
+      "description": "Blob records dropped because they had no parseable event time (#275).",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/blobpipeline"
+      ]
+    },
+    {
+      "name": "graph2otel.blob.self_excluded",
+      "prometheus_name": "graph2otel_blob_self_excluded_total",
+      "unit": "{record}",
+      "kind": "sum",
+      "description": "Blob records dropped by exclude_self because their appId matched this tenant's own poller client_id (#154).",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/blobpipeline"
+      ]
+    },
+    {
+      "name": "graph2otel.build_info",
+      "prometheus_name": "graph2otel_build_info_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "description": "Constant 1 build-info gauge; carries the graph2otel version and Go runtime version as attributes.",
+      "additive": false,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "go.version",
+        "version"
+      ],
+      "packages": [
+        "internal/collector"
+      ]
+    },
+    {
+      "name": "graph2otel.checkpoint.persist.errors",
+      "prometheus_name": "graph2otel_checkpoint_persist_errors_total",
+      "unit": "1",
+      "kind": "sum",
+      "description": "Count of failed checkpoint high-water-mark persists, per collector.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/collector"
+      ]
+    },
+    {
+      "name": "graph2otel.exo.http.client.request.duration",
+      "prometheus_name": "graph2otel_exo_http_client_request_duration_seconds",
+      "unit": "s",
+      "kind": "histogram",
+      "description": "Duration of an outbound Exchange Online admin API cmdlet invocation.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "exo.cmdlet",
+        "http.request.method",
+        "http.response.status_code",
+        "server.address",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/exoclient"
+      ]
+    },
+    {
+      "name": "graph2otel.exo.http_4xx",
+      "prometheus_name": "graph2otel_exo_http_4xx_total",
+      "unit": "1",
+      "kind": "sum",
+      "description": "Count of 4xx responses graph2otel received from its own outbound Exchange Online admin API calls.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "exo.cmdlet",
+        "http.response.status_code",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/exoclient"
+      ]
+    },
+    {
+      "name": "graph2otel.exo.http_5xx",
+      "prometheus_name": "graph2otel_exo_http_5xx_total",
+      "unit": "1",
+      "kind": "sum",
+      "description": "Count of 5xx responses graph2otel received from its own outbound Exchange Online admin API calls.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "exo.cmdlet",
+        "http.response.status_code",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/exoclient"
+      ]
+    },
+    {
+      "name": "graph2otel.exo.throttle.count",
+      "prometheus_name": "graph2otel_exo_throttle_count_total",
+      "unit": "1",
+      "kind": "sum",
+      "description": "Count of 429 throttle responses observed from the Exchange Online admin API.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "exo.cmdlet",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/exoclient"
+      ]
+    },
+    {
+      "name": "graph2otel.export.bytes",
+      "prometheus_name": "graph2otel_export_bytes",
+      "unit": "By",
+      "kind": "gauge",
+      "description": "Size in bytes of the last downloaded export ZIP.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "report_name",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/exportjob"
+      ]
+    },
+    {
+      "name": "graph2otel.export.duration_seconds",
+      "prometheus_name": "graph2otel_export_duration_seconds",
+      "unit": "s",
+      "kind": "gauge",
+      "description": "Wall-clock duration of the last export job from create to terminal state.",
+      "additive": false,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "report_name",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/exportjob"
+      ]
+    },
+    {
+      "name": "graph2otel.export.jobs",
+      "prometheus_name": "graph2otel_export_jobs_total",
+      "unit": "{job}",
+      "kind": "sum",
+      "description": "Intune export jobs by terminal result.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "report_name",
+        "result",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/exportjob"
+      ]
+    },
+    {
+      "name": "graph2otel.export.poll_count",
+      "prometheus_name": "graph2otel_export_poll_count",
+      "unit": "{poll}",
+      "kind": "gauge",
+      "description": "Number of status polls the last export job needed to reach a terminal state.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "report_name",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/exportjob"
+      ]
+    },
+    {
+      "name": "graph2otel.graphclient.http_4xx",
+      "prometheus_name": "graph2otel_graphclient_http_4xx_total",
+      "unit": "1",
+      "kind": "sum",
+      "description": "Count of 4xx responses graph2otel received from its own outbound Microsoft Graph calls.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "http.response.status_code",
+        "tenant_id",
+        "workload"
+      ],
+      "packages": [
+        "internal/graphclient"
+      ]
+    },
+    {
+      "name": "graph2otel.graphclient.http_5xx",
+      "prometheus_name": "graph2otel_graphclient_http_5xx_total",
+      "unit": "1",
+      "kind": "sum",
+      "description": "Count of 5xx responses graph2otel received from its own outbound Microsoft Graph calls.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "http.response.status_code",
+        "tenant_id",
+        "workload"
+      ],
+      "packages": [
+        "internal/graphclient"
+      ]
+    },
+    {
+      "name": "graph2otel.http.client.request.duration",
+      "prometheus_name": "graph2otel_http_client_request_duration_seconds",
+      "unit": "s",
+      "kind": "histogram",
+      "description": "Duration of an outbound Microsoft Graph HTTP request.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "http.request.method",
+        "http.response.status_code",
+        "server.address",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/graphclient"
+      ]
+    },
+    {
+      "name": "graph2otel.hunt.http.client.request.duration",
+      "prometheus_name": "graph2otel_hunt_http_client_request_duration_seconds",
+      "unit": "s",
+      "kind": "histogram",
+      "description": "Duration of an outbound advanced-hunting query.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "http.request.method",
+        "http.response.status_code",
+        "hunt.query",
+        "server.address",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/huntclient"
+      ]
+    },
+    {
+      "name": "graph2otel.hunt.http_4xx",
+      "prometheus_name": "graph2otel_hunt_http_4xx_total",
+      "unit": "1",
+      "kind": "sum",
+      "description": "Count of 4xx responses graph2otel received from its own advanced-hunting queries.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "http.response.status_code",
+        "hunt.query",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/huntclient"
+      ]
+    },
+    {
+      "name": "graph2otel.hunt.http_5xx",
+      "prometheus_name": "graph2otel_hunt_http_5xx_total",
+      "unit": "1",
+      "kind": "sum",
+      "description": "Count of 5xx responses graph2otel received from its own advanced-hunting queries.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "http.response.status_code",
+        "hunt.query",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/huntclient"
+      ]
+    },
+    {
+      "name": "graph2otel.hunt.throttle.count",
+      "prometheus_name": "graph2otel_hunt_throttle_count_total",
+      "unit": "1",
+      "kind": "sum",
+      "description": "Count of 429 throttle responses observed from the advanced-hunting API.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "hunt.query",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/huntclient"
       ]
     },
     {
@@ -1512,13 +1949,356 @@
       "prometheus_name": "graph2otel_logpipeline_self_excluded_total",
       "unit": "{record}",
       "kind": "sum",
+      "description": "Graph-polled records dropped by exclude_self because their appId matched this tenant's own poller client_id (#176).",
       "additive": true,
       "domain": "graph2otel",
       "attr_keys": [
-        "collector"
+        "collector",
+        "tenant_id"
       ],
       "packages": [
-        "internal/collectors/entra/signins"
+        "internal/collectors/entra/signins",
+        "internal/logpipeline"
+      ]
+    },
+    {
+      "name": "graph2otel.mdca.http.client.request.duration",
+      "prometheus_name": "graph2otel_mdca_http_client_request_duration_seconds",
+      "unit": "s",
+      "kind": "histogram",
+      "description": "Duration of an outbound Microsoft Defender for Cloud Apps API HTTP request.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "http.request.method",
+        "http.response.status_code",
+        "mdca.operation",
+        "server.address",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/mdcaclient"
+      ]
+    },
+    {
+      "name": "graph2otel.mdca.http_4xx",
+      "prometheus_name": "graph2otel_mdca_http_4xx_total",
+      "unit": "1",
+      "kind": "sum",
+      "description": "Count of 4xx responses graph2otel received from its own outbound Microsoft Defender for Cloud Apps API calls.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "http.response.status_code",
+        "mdca.operation",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/mdcaclient"
+      ]
+    },
+    {
+      "name": "graph2otel.mdca.http_5xx",
+      "prometheus_name": "graph2otel_mdca_http_5xx_total",
+      "unit": "1",
+      "kind": "sum",
+      "description": "Count of 5xx responses graph2otel received from its own outbound Microsoft Defender for Cloud Apps API calls.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "http.response.status_code",
+        "mdca.operation",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/mdcaclient"
+      ]
+    },
+    {
+      "name": "graph2otel.mdca.throttle.count",
+      "prometheus_name": "graph2otel_mdca_throttle_count_total",
+      "unit": "1",
+      "kind": "sum",
+      "description": "Count of 429 throttle responses observed from the Microsoft Defender for Cloud Apps API.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "mdca.operation",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/mdcaclient"
+      ]
+    },
+    {
+      "name": "graph2otel.o365activity.http.client.request.duration",
+      "prometheus_name": "graph2otel_o365activity_http_client_request_duration_seconds",
+      "unit": "s",
+      "kind": "histogram",
+      "description": "Duration of an outbound Office 365 Management Activity API HTTP request.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "http.request.method",
+        "http.response.status_code",
+        "o365.operation",
+        "server.address",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/o365activityclient"
+      ]
+    },
+    {
+      "name": "graph2otel.o365activity.http_4xx",
+      "prometheus_name": "graph2otel_o365activity_http_4xx_total",
+      "unit": "1",
+      "kind": "sum",
+      "description": "Count of 4xx responses graph2otel received from its own outbound Office 365 Management Activity API calls.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "http.response.status_code",
+        "o365.operation",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/o365activityclient"
+      ]
+    },
+    {
+      "name": "graph2otel.o365activity.http_5xx",
+      "prometheus_name": "graph2otel_o365activity_http_5xx_total",
+      "unit": "1",
+      "kind": "sum",
+      "description": "Count of 5xx responses graph2otel received from its own outbound Office 365 Management Activity API calls.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "http.response.status_code",
+        "o365.operation",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/o365activityclient"
+      ]
+    },
+    {
+      "name": "graph2otel.o365activity.throttle.count",
+      "prometheus_name": "graph2otel_o365activity_throttle_count_total",
+      "unit": "1",
+      "kind": "sum",
+      "description": "Count of 429 throttle responses observed from the Office 365 Management Activity API.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "o365.operation",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/o365activityclient"
+      ]
+    },
+    {
+      "name": "graph2otel.scrape.budget",
+      "prometheus_name": "graph2otel_scrape_budget_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "description": "Last scrape's duration as a fraction of the collector's poll interval.",
+      "additive": false,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/collector"
+      ]
+    },
+    {
+      "name": "graph2otel.scrape.duration",
+      "prometheus_name": "graph2otel_scrape_duration_seconds",
+      "unit": "s",
+      "kind": "gauge",
+      "description": "Wall-clock duration of the last scrape, per collector.",
+      "additive": false,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/collector"
+      ]
+    },
+    {
+      "name": "graph2otel.scrape.errors",
+      "prometheus_name": "graph2otel_scrape_errors_total",
+      "unit": "1",
+      "kind": "sum",
+      "description": "Count of failed scrapes, per collector, classified by error.type.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector",
+        "error.type",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/collector"
+      ]
+    },
+    {
+      "name": "graph2otel.scrape.last_timestamp",
+      "prometheus_name": "graph2otel_scrape_last_timestamp_seconds",
+      "unit": "s",
+      "kind": "gauge",
+      "description": "Unix time, in seconds, at which the most recent scrape finished.",
+      "additive": false,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/collector"
+      ]
+    },
+    {
+      "name": "graph2otel.scrape.staleness",
+      "prometheus_name": "graph2otel_scrape_staleness_seconds",
+      "unit": "s",
+      "kind": "gauge",
+      "description": "Seconds elapsed since this collector's last successful scrape.",
+      "additive": false,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/collector"
+      ]
+    },
+    {
+      "name": "graph2otel.scrape.success",
+      "prometheus_name": "graph2otel_scrape_success_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "description": "1 if the last scrape for that collector succeeded, else 0.",
+      "additive": false,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/collector"
+      ]
+    },
+    {
+      "name": "graph2otel.series.active",
+      "prometheus_name": "graph2otel_series_active",
+      "unit": "{series}",
+      "kind": "gauge",
+      "description": "Exact distinct active time series emitted for `metric.name` during the last export interval, AFTER cardinality limiting — the series actually billed. What was shed is graph2otel.series.clipped.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "metric.name"
+      ],
+      "packages": [
+        "internal/telemetry"
+      ]
+    },
+    {
+      "name": "graph2otel.series.clipped",
+      "prometheus_name": "graph2otel_series_clipped",
+      "unit": "{series}",
+      "kind": "gauge",
+      "description": "Series clipped from `metric.name` during the last interval: `mode=folded` were summed into the `other` bucket, `mode=dropped` were discarded because the metric is not additive and a synthetic aggregate would be worse than the loss.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "metric.name",
+        "mode"
+      ],
+      "packages": [
+        "internal/telemetry"
+      ]
+    },
+    {
+      "name": "graph2otel.series.limit",
+      "prometheus_name": "graph2otel_series_limit",
+      "unit": "{series}",
+      "kind": "gauge",
+      "description": "Configured per-metric active-series limit (cardinality.per_metric_limit): past it the top series by value are kept and the tail is folded into an `other` bucket or dropped. Emitted only when a positive limit is configured.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [],
+      "packages": [
+        "internal/telemetry"
+      ]
+    },
+    {
+      "name": "graph2otel.series.total",
+      "prometheus_name": "graph2otel_series_total",
+      "unit": "{series}",
+      "kind": "gauge",
+      "description": "Total distinct active time series across every metric during the last export interval, against cardinality.global_limit.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [],
+      "packages": [
+        "internal/telemetry"
+      ]
+    },
+    {
+      "name": "graph2otel.tenant.license_tier",
+      "prometheus_name": "graph2otel_tenant_license_tier_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "description": "Constant 1 per detected premium Microsoft Entra/Intune licensing capability for a tenant; attrs {tenant_id, tier}.",
+      "additive": false,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "tenant_id",
+        "tier"
+      ],
+      "packages": [
+        "internal/license"
+      ]
+    },
+    {
+      "name": "graph2otel.throttle.count",
+      "prometheus_name": "graph2otel_throttle_count_total",
+      "unit": "1",
+      "kind": "sum",
+      "description": "Count of 429 throttle responses observed from Microsoft Graph.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "tenant_id",
+        "workload"
+      ],
+      "packages": [
+        "internal/graphclient"
+      ]
+    },
+    {
+      "name": "graph2otel.throttle.limit_percentage",
+      "prometheus_name": "graph2otel_throttle_limit_percentage_percent",
+      "unit": "%",
+      "kind": "gauge",
+      "description": "Graph-reported throttle budget consumption at the time of a 429 (x-ms-throttle-limit-percentage).",
+      "additive": false,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "tenant_id",
+        "workload"
+      ],
+      "packages": [
+        "internal/graphclient"
       ]
     },
     {
@@ -1526,6 +2306,7 @@
       "prometheus_name": "intune_app_install_status_installations",
       "unit": "{installation}",
       "kind": "gauge",
+      "description": "Intune app installations by install state and platform, summed across every app in the AppInstallStatusAggregate export report. A device counts once per app it has, so this counts installations, not distinct devices; see the intune.app_install_status log event for per-app detail.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1541,6 +2322,7 @@
       "prometheus_name": "intune_app_protection_flagged_registrations",
       "unit": "{registration}",
       "kind": "gauge",
+      "description": "Intune managed app registrations, by aggregated flagged reason and platform (never a per-user or per-app series).",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1556,6 +2338,7 @@
       "prometheus_name": "intune_app_protection_policy_count",
       "unit": "{policy}",
       "kind": "gauge",
+      "description": "Intune app protection / app configuration policy count, by platform and assignment state.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1571,6 +2354,7 @@
       "prometheus_name": "intune_apple_token_days_until_expiry",
       "unit": "d",
       "kind": "gauge",
+      "description": "Days until expiry for each Apple MDM integration token (APNS certificate, VPP tokens, DEP onboarding settings); negative once expired.",
       "additive": false,
       "domain": "intune",
       "attr_keys": [
@@ -1587,6 +2371,7 @@
       "prometheus_name": "intune_apple_token_synced_device_count",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Devices synced through each Apple DEP onboarding setting.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1601,6 +2386,7 @@
       "prometheus_name": "intune_autopilot_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Windows Autopilot device identities, by enrollment state and group tag (capped to top tags by device count, see maxGroupTags).",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1616,6 +2402,7 @@
       "prometheus_name": "intune_autopilot_profile_assignments",
       "unit": "{assignment}",
       "kind": "gauge",
+      "description": "Windows Autopilot deployment profile group assignment count, by profile.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1630,6 +2417,7 @@
       "prometheus_name": "intune_autopilot_profile_count",
       "unit": "{profile}",
       "kind": "gauge",
+      "description": "Windows Autopilot deployment profiles, by device type and whether pre-provisioning (white glove) is allowed.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1645,6 +2433,7 @@
       "prometheus_name": "intune_autopilot_profile_esp_timeout_minutes",
       "unit": "min",
       "kind": "gauge",
+      "description": "Windows Autopilot deployment profile Enrollment Status Page install-progress timeout, by profile.",
       "additive": false,
       "domain": "intune",
       "attr_keys": [
@@ -1659,6 +2448,7 @@
       "prometheus_name": "intune_autopilot_profile_setting_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "Windows Autopilot deployment profile config-drift-relevant boolean settings (1=enabled, 0=disabled), by profile and setting.",
       "additive": false,
       "domain": "intune",
       "attr_keys": [
@@ -1674,6 +2464,7 @@
       "prometheus_name": "intune_autopilot_stale_contact_count",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Windows Autopilot device identities whose lastContactedDateTime is older than the stale-contact threshold, by group tag.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1688,6 +2479,7 @@
       "prometheus_name": "intune_autopilot_sync_age_seconds",
       "unit": "s",
       "kind": "gauge",
+      "description": "Seconds since Windows Autopilot last synced device registrations from the OEM/partner (windowsAutopilotSettings.lastSyncDateTime).",
       "additive": false,
       "domain": "intune",
       "attr_keys": [],
@@ -1700,6 +2492,7 @@
       "prometheus_name": "intune_autopilot_sync_status_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "Windows Autopilot device-registration sync status (value 1 for the current bounded status bucket).",
       "additive": false,
       "domain": "intune",
       "attr_keys": [
@@ -1714,6 +2507,7 @@
       "prometheus_name": "intune_autopilot_deployment_deployments",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune Autopilot device-preparation (V2) deployment count by raw DeploymentStatus code; per-device detail on the intune.autopilot_deployment log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1728,6 +2522,7 @@
       "prometheus_name": "intune_autopilot_deployment_apps_installs",
       "unit": "{app}",
       "kind": "gauge",
+      "description": "Intune Autopilot device-preparation (V2) per-application install count by raw PolicyInstallStatus code; per-app detail on the intune.autopilot_deployment_apps log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1742,6 +2537,7 @@
       "prometheus_name": "intune_autopilot_deployment_scripts_executions",
       "unit": "{script}",
       "kind": "gauge",
+      "description": "Intune Autopilot device-preparation (V2) per-script execution count by raw PolicyInstallStatus code; per-script detail on the intune.autopilot_deployment_scripts log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1756,6 +2552,7 @@
       "prometheus_name": "intune_cert_inventory_days_until_expiry",
       "unit": "{certificate}",
       "kind": "gauge",
+      "description": "Intune fleet device certificates (AllDeviceCertificates export report) by time-until-expiry window and issuing CA.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1771,6 +2568,7 @@
       "prometheus_name": "intune_cert_inventory_state",
       "unit": "{certificate}",
       "kind": "gauge",
+      "description": "Intune fleet device certificates (AllDeviceCertificates export report) by collapsed certificate status.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1785,6 +2583,7 @@
       "prometheus_name": "intune_certificate_days_until_expiry",
       "unit": "{certificate}",
       "kind": "gauge",
+      "description": "Intune certificates by time-until-expiry window, issuance state, and certificate profile.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1801,6 +2600,7 @@
       "prometheus_name": "intune_certificate_state_count",
       "unit": "{certificate}",
       "kind": "gauge",
+      "description": "Intune certificates by collapsed issuance state.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1815,6 +2615,7 @@
       "prometheus_name": "intune_cloud_pki_authorities",
       "unit": "{authority}",
       "kind": "gauge",
+      "description": "Intune Cloud PKI certification authorities by type (root/issuing) and status. Per-CA detail — decoded subject and issuer, key platform, CRL and SCEP endpoints — on the intune.cloud_pki_authority log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1830,6 +2631,7 @@
       "prometheus_name": "intune_cloud_pki_days_until_expiry",
       "unit": "d",
       "kind": "gauge",
+      "description": "Days until each Intune Cloud PKI certification authority expires, read from the CA's own certificate rather than from a Graph field; negative once expired. When an issuing CA expires every device authenticating with its certificates loses Wi-Fi/VPN/802.1X at once. A CA whose expiry cannot be established emits NO point rather than a fabricated one.",
       "additive": false,
       "domain": "intune",
       "attr_keys": [
@@ -1845,6 +2647,7 @@
       "prometheus_name": "intune_cloud_pki_leaf_certificates",
       "unit": "{certificate}",
       "kind": "gauge",
+      "description": "Leaf certificates issued by each Intune Cloud PKI certification authority, by status (active/expired/revoked). Which device and user each certificate belongs to is on the intune.cloud_pki_leaf_certificate log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1860,6 +2663,7 @@
       "prometheus_name": "intune_compliance_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Tenant-wide Intune device compliance state summary.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1874,6 +2678,7 @@
       "prometheus_name": "intune_compliance_policy_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Per-policy Intune device compliance status overview, by policy and state.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1889,6 +2694,7 @@
       "prometheus_name": "intune_compliance_policy_users",
       "unit": "{user}",
       "kind": "gauge",
+      "description": "Per-policy Intune user compliance status overview, by policy and state.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1904,6 +2710,7 @@
       "prometheus_name": "intune_compliance_policy_version_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "Configured version of each Intune device compliance policy; a bump signals a policy-content change.",
       "additive": false,
       "domain": "intune",
       "attr_keys": [
@@ -1918,6 +2725,7 @@
       "prometheus_name": "intune_compliance_setting_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune compliance setting-state summary, aggregated across every policy checking that setting, by setting, platform, and state.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1934,6 +2742,7 @@
       "prometheus_name": "intune_config_assignment_status_assignments",
       "unit": "{assignment}",
       "kind": "gauge",
+      "description": "Intune configuration-policy assignments counted by report status and policy platform. Each device x policy assignment row is bucketed into Microsoft's ReportStatus x UnifiedPolicyPlatformType enum space (both bounded); the per-row detail — which device, which policy, which user — is on the intune.config_assignment_status log twin, never a metric label.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1949,6 +2758,7 @@
       "prometheus_name": "intune_config_profile_count",
       "unit": "{profile}",
       "kind": "gauge",
+      "description": "Intune device configuration profile inventory, by configuration type (excludes Windows Update ring profiles, owned by the update-rings collector).",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1963,6 +2773,7 @@
       "prometheus_name": "intune_config_profile_status",
       "unit": "{profile}",
       "kind": "gauge",
+      "description": "Per-profile Intune device configuration deployment status, by profile and state.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -1978,6 +2789,7 @@
       "prometheus_name": "intune_config_profile_version_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "Configured version of each Intune device configuration profile; a bump signals a profile-content change.",
       "additive": false,
       "domain": "intune",
       "attr_keys": [
@@ -1992,6 +2804,7 @@
       "prometheus_name": "intune_config_profile_device_status_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune configuration-profile device deployment status counted by report status. Each device x profile assignment row is bucketed into Microsoft's ReportStatus enum space (bounded); the per-row detail — which device, which policy, which user — is on the intune.config_profile_device_status log twin, never a metric label.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2006,6 +2819,7 @@
       "prometheus_name": "intune_config_setting_status_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune configuration-policy per-setting device counts summed across all settings, bucketed by status (compliant/error/conflict); per-setting detail on the intune.config_setting_status log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2020,6 +2834,7 @@
       "prometheus_name": "intune_connector_heartbeat_age_seconds",
       "unit": "s",
       "kind": "gauge",
+      "description": "Age of the most recent heartbeat/sync across each Intune connector type's instances, in seconds (the most stale instance, not an average).",
       "additive": false,
       "domain": "intune",
       "attr_keys": [
@@ -2034,6 +2849,7 @@
       "prometheus_name": "intune_connector_mtd_platform_total",
       "unit": "{connector}",
       "kind": "gauge",
+      "description": "Mobile Threat Defense connector instances by platform and enabled state.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2049,6 +2865,7 @@
       "prometheus_name": "intune_connector_state",
       "unit": "{connector}",
       "kind": "gauge",
+      "description": "Intune connector instances by connector type and state.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2064,6 +2881,7 @@
       "prometheus_name": "intune_defender_product_status",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Windows managed devices polled this cycle, by Windows Defender product status flag. productStatus is a bitmask: a device reporting several flags is counted under each, so these points are independent counts and can sum to more than the number of devices polled.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2078,6 +2896,7 @@
       "prometheus_name": "intune_defender_protection_state",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Windows managed devices polled this cycle, by Defender protection-health signal (count of devices where the signal is true).",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2092,6 +2911,7 @@
       "prometheus_name": "intune_defender_agents_count",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune managed devices by Defender agent health signal, from the DefenderAgents export report.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2106,6 +2926,7 @@
       "prometheus_name": "intune_defender_agents_product_status",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune managed devices by Windows Defender ProductStatus flag, from the DefenderAgents export report. ProductStatus is a bitmask: a device setting several flags is counted under each, so these points are independent counts and can sum to more than the fleet size.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2120,6 +2941,7 @@
       "prometheus_name": "intune_detected_apps_catalog_size",
       "unit": "{app}",
       "kind": "gauge",
+      "description": "Total distinct app/version/platform rows in the Intune detectedApps catalog.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [],
@@ -2132,6 +2954,7 @@
       "prometheus_name": "intune_detected_apps_device_count",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Devices reporting a detected app installed, by app name and platform, summed across versions. Bounded by the central cardinality limiter: past cardinality.per_metric_limit the top apps by device count are kept and the tail folds into app_name=\"other\".",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2147,6 +2970,7 @@
       "prometheus_name": "intune_device_attestation_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune managed-device count by TPM attestation status and OS; per-device detail on the intune.device_attestation log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2162,6 +2986,7 @@
       "prometheus_name": "intune_device_boot_security_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune managed-device count by boot-security posture (bitlocker/secure_boot/code_integrity/vsm/firmware_protection/memory_integrity/secured_core_pc), status, and OS; per-device detail on the intune.device_boot_security log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2178,6 +3003,7 @@
       "prometheus_name": "intune_device_encryption_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune managed devices by disk-encryption state, encryption readiness state and device type (wire enums verbatim); per-device detail — device, user, OS/TPM version and the BitLocker blockers — on the intune.device_encryption log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2194,6 +3020,7 @@
       "prometheus_name": "intune_device_encryption_policy_state",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune managed devices by disk-encryption POLICY setting state (notAssigned/compliant/error/…) — whether an encryption policy even reached the device, which the encryption-state gauge cannot say.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2208,6 +3035,7 @@
       "prometheus_name": "intune_devices_count",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune managed device fleet count, by compliance state and operating system.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2223,6 +3051,7 @@
       "prometheus_name": "intune_devices_encrypted_count",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune managed devices reporting isEncrypted=true, by operating system.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2237,6 +3066,7 @@
       "prometheus_name": "intune_devices_os_version_count",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune managed device fleet count, by operating system bucket and raw operatingSystemVersion (unbucketed full version string; osVersion=\"unknown\" when the device reported none).",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2252,6 +3082,7 @@
       "prometheus_name": "intune_devices_overview_dual_enrolled_device_count",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Devices enrolled in both MDM and EAS (managedDeviceOverview cross-check, may lag the live count).",
       "additive": true,
       "domain": "intune",
       "attr_keys": [],
@@ -2264,6 +3095,7 @@
       "prometheus_name": "intune_devices_overview_enrolled_device_count",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Total enrolled Intune device count (managedDeviceOverview cross-check, may lag the live count).",
       "additive": true,
       "domain": "intune",
       "attr_keys": [],
@@ -2276,6 +3108,7 @@
       "prometheus_name": "intune_devices_overview_mdm_enrolled_device_count",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Devices enrolled in MDM (managedDeviceOverview cross-check, may lag the live count).",
       "additive": true,
       "domain": "intune",
       "attr_keys": [],
@@ -2288,6 +3121,7 @@
       "prometheus_name": "intune_devices_overview_total",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune managedDeviceOverview device counts by operating system / Android management mode (Microsoft-aggregated cross-check, may lag the live count).",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2302,6 +3136,7 @@
       "prometheus_name": "intune_devices_sync_staleness_seconds",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune managed devices bucketed by time since lastSyncDateTime.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2316,6 +3151,7 @@
       "prometheus_name": "intune_devices_without_compliance_policy_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune managed device count without a compliance policy assigned, by OS; per-device detail on the intune.devices_without_compliance_policy log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2330,6 +3166,7 @@
       "prometheus_name": "intune_driver_update_pending_approval",
       "unit": "{update}",
       "kind": "gauge",
+      "description": "Pending-approval driver updates awaiting admin action, by driver update profile.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2344,6 +3181,7 @@
       "prometheus_name": "intune_driver_update_sync_staleness_seconds",
       "unit": "s",
       "kind": "gauge",
+      "description": "Seconds since a driver update profile's last successful inventory sync.",
       "additive": false,
       "domain": "intune",
       "attr_keys": [
@@ -2358,6 +3196,7 @@
       "prometheus_name": "intune_driver_update_summary_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune driver-update policy device counts by deployment state (error/in_progress/success/cancelled), via the Reports Export API.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2374,6 +3213,7 @@
       "prometheus_name": "intune_enrollment_config_count",
       "unit": "{config}",
       "kind": "gauge",
+      "description": "Intune device enrollment configurations, by config type.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2388,6 +3228,7 @@
       "prometheus_name": "intune_enrollment_config_priority_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "Evaluation priority of each Intune device enrollment configuration. Lower values win: a user in scope for multiple configurations of the same type is subject only to the one with the lowest priority value - a higher number is NOT higher precedence.",
       "additive": false,
       "domain": "intune",
       "attr_keys": [
@@ -2403,6 +3244,7 @@
       "prometheus_name": "intune_enrollment_config_version_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "Version counter of each Intune device enrollment configuration, for change detection.",
       "additive": false,
       "domain": "intune",
       "attr_keys": [
@@ -2417,6 +3259,7 @@
       "prometheus_name": "intune_epm_denied_denials",
       "unit": "{denial}",
       "kind": "gauge",
+      "description": "Intune Endpoint Privilege Management denied elevation count by elevation type; per-denial detail on the intune.epm_denied log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2431,6 +3274,7 @@
       "prometheus_name": "intune_epm_elevation_events_count_total",
       "unit": "{event}",
       "kind": "sum",
+      "description": "Intune EPM privilege elevations newly observed, counted by elevation type and result; per-event detail (device, user, file, hash) on the intune.epm_elevation_events log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2446,6 +3290,7 @@
       "prometheus_name": "intune_epm_elevations_count",
       "unit": "{elevation}",
       "kind": "gauge",
+      "description": "Intune Endpoint Privilege Management elevation count by elevation type (managed vs unmanaged); per-application detail on the intune.epm_elevations log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2460,6 +3305,7 @@
       "prometheus_name": "intune_epm_elevations_by_publisher_count",
       "unit": "{elevation}",
       "kind": "gauge",
+      "description": "Intune Endpoint Privilege Management elevation count by elevation type (managed vs unmanaged), summed across publishers; per-publisher detail on the intune.epm_elevations_by_publisher log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2474,6 +3320,7 @@
       "prometheus_name": "intune_epm_elevations_by_user_count",
       "unit": "{elevation}",
       "kind": "gauge",
+      "description": "Intune Endpoint Privilege Management elevation count by governance (policy-managed vs unmanaged), summed across users; per-user detail on the intune.epm_elevations_by_user log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2488,6 +3335,7 @@
       "prometheus_name": "intune_feature_update_profile_eol_target_seconds",
       "unit": "s",
       "kind": "gauge",
+      "description": "Seconds until a Windows feature update profile's target version reaches end of support.",
       "additive": false,
       "domain": "intune",
       "attr_keys": [
@@ -2503,6 +3351,7 @@
       "prometheus_name": "intune_feature_update_summary_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune Windows feature-update policy device counts by deployment state, from the pre-aggregated FeatureUpdatePolicyStatusSummary report.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2520,6 +3369,7 @@
       "prometheus_name": "intune_firewall_status_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune managed-device count by raw Windows firewall status code; per-device detail on the intune.firewall_status log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2534,6 +3384,7 @@
       "prometheus_name": "intune_gpo_config_count",
       "unit": "{config}",
       "kind": "gauge",
+      "description": "Intune Group Policy configurations by policy configuration ingestion type.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2548,6 +3399,7 @@
       "prometheus_name": "intune_gpo_migration_readiness",
       "unit": "{report}",
       "kind": "gauge",
+      "description": "Intune Group Policy migration reports by readiness state.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2563,6 +3415,7 @@
       "prometheus_name": "intune_gpo_supported_settings_percent",
       "unit": "%",
       "kind": "gauge",
+      "description": "Percentage of a Group Policy Object's settings supported by Intune, computed from supportedSettingsCount/totalSettingsCount.",
       "additive": false,
       "domain": "intune",
       "attr_keys": [
@@ -2577,6 +3430,7 @@
       "prometheus_name": "intune_hardware_inventory_device_guard_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune managed devices by Windows Device Guard virtualization-based-security state and Credential Guard state (wire enums verbatim). Non-Windows devices report Windows-only values here and must not be read as a macOS/iOS/Linux security posture.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2592,6 +3446,7 @@
       "prometheus_name": "intune_hardware_inventory_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune managed devices reporting hardware inventory, by operating system and hardware manufacturer; per-device detail — storage, TPM chip, firmware, wired IPs, cellular identity — on the intune.device_hardware log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2607,6 +3462,7 @@
       "prometheus_name": "intune_hardware_inventory_storage_bytes",
       "unit": "By",
       "kind": "gauge",
+      "description": "Total and free disk bytes summed across Intune managed devices, by operating system. Devices reporting totalStorageSpace=0 (\"not reported\", e.g. Defender-managed Linux hosts) are excluded rather than summed as zero.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2622,6 +3478,7 @@
       "prometheus_name": "intune_hardware_inventory_tpm_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune managed devices by TPM specification version, emitted verbatim as the comma-joined wire triple (\"2.0, 0, 1.64\"); \"unknown\" for devices reporting no TPM (iOS/macOS/Linux).",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2636,6 +3493,7 @@
       "prometheus_name": "intune_intent_count",
       "unit": "{intent}",
       "kind": "gauge",
+      "description": "Intune template-based device management intents, by migration status. An intent already represented as a Settings Catalog configurationPolicy (migrating, matched by templateReference) is excluded here to avoid double-counting against intune.settings_catalog.policy.count.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2650,6 +3508,7 @@
       "prometheus_name": "intune_intent_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Per-intent device compliance status from deviceStateSummary, by intent and compliance status.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2665,6 +3524,7 @@
       "prometheus_name": "intune_malware_overview_by_category",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Windows devices with malware detected, by malware category.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2679,6 +3539,7 @@
       "prometheus_name": "intune_malware_overview_by_severity",
       "unit": "{detection}",
       "kind": "gauge",
+      "description": "Windows malware detections, by malware severity.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2693,6 +3554,7 @@
       "prometheus_name": "intune_malware_overview_detected_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Windows devices with malware detected in the last 30 days.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [],
@@ -2705,6 +3567,7 @@
       "prometheus_name": "intune_malware_overview_total",
       "unit": "{detection}",
       "kind": "gauge",
+      "description": "Total Windows malware detections across all devices in the last 30 days.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [],
@@ -2717,6 +3580,7 @@
       "prometheus_name": "intune_mobile_app_config_status",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune mobile app configuration policy device-status counts, by policy and status.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2732,6 +3596,7 @@
       "prometheus_name": "intune_mobile_apps_count",
       "unit": "{app}",
       "kind": "gauge",
+      "description": "Intune mobile app catalog entries, by app type and publishing state.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2747,6 +3612,7 @@
       "prometheus_name": "intune_noncompliant_settings_count",
       "unit": "{setting}",
       "kind": "gauge",
+      "description": "Counts of noncompliant device×setting rows from the Intune NoncompliantDevicesAndSettings export report, bucketed by OS and decoded setting status; per-setting detail is on the intune.noncompliant_setting log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2762,6 +3628,7 @@
       "prometheus_name": "intune_quality_update_config_count",
       "unit": "{resource}",
       "kind": "gauge",
+      "description": "Count of Windows quality update config resources, by resource type (profile vs policy).",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2776,6 +3643,7 @@
       "prometheus_name": "intune_quality_update_summary_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Windows quality/expedite-update policy device counts by deployment state, from the pre-aggregated QualityUpdatePolicyStatusSummary report.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2793,6 +3661,7 @@
       "prometheus_name": "intune_rbac_role_assignments",
       "unit": "{assignment}",
       "kind": "gauge",
+      "description": "Intune role assignments by scope type and whether the role they grant is built-in. scope_type=allDevicesAndLicensedUsers with is_built_in=false is a hand-made role holding tenant-wide device management; is_built_in=unknown means the assignment's role definition could not be resolved. Members and scopes on the intune.role_assignment log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2808,6 +3677,7 @@
       "prometheus_name": "intune_rbac_role_definitions",
       "unit": "{role}",
       "kind": "gauge",
+      "description": "Intune role definitions by built-in flags and @odata.type subtype. Intune keeps its OWN role store, separate from Entra directory roles; both wire built-in flags are emitted because they are separate fields that happen to agree. Per-role detail — name, description, scope tags and the full Microsoft.Intune_* action list — on the intune.role_definition log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2824,6 +3694,7 @@
       "prometheus_name": "intune_remediation_overview_remediated_device_count",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Tenant-wide count of devices remediated by health scripts (getRemediationSummary() cross-check).",
       "additive": true,
       "domain": "intune",
       "attr_keys": [],
@@ -2836,6 +3707,7 @@
       "prometheus_name": "intune_remediation_overview_script_count",
       "unit": "{script}",
       "kind": "gauge",
+      "description": "Tenant-wide count of health scripts deployed (getRemediationSummary() cross-check).",
       "additive": true,
       "domain": "intune",
       "attr_keys": [],
@@ -2848,6 +3720,7 @@
       "prometheus_name": "intune_remediation_remediated_cumulative_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Distinct devices remediated by each health script over the trailing 30 days (issueRemediatedCumulativeDeviceCount).",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2862,6 +3735,7 @@
       "prometheus_name": "intune_remediation_summary",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Proactive remediation (health script) run outcomes, by script, phase (detection or remediation) and state.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2878,6 +3752,7 @@
       "prometheus_name": "intune_remediation_run_states_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune proactive-remediation device run states, counted by remediation, detection state and remediation state; per-device detail (device, OS, the detection script's output) on the intune.remediation_run_states log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2894,6 +3769,7 @@
       "prometheus_name": "intune_script_run_summary",
       "unit": "{run}",
       "kind": "gauge",
+      "description": "Windows PowerShell / macOS shell script run outcomes, by script, OS, target (device or user context) and run state.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2911,6 +3787,7 @@
       "prometheus_name": "intune_security_baseline_devices",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Per-security-baseline device state from deviceStateSummary, by baseline and state.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2926,6 +3803,7 @@
       "prometheus_name": "intune_settings_catalog_policy_count",
       "unit": "{policy}",
       "kind": "gauge",
+      "description": "Intune Settings Catalog configuration policy count, by platform, technology, and template family.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -2942,6 +3820,7 @@
       "prometheus_name": "intune_update_ring_pause_expiry_seconds",
       "unit": "s",
       "kind": "gauge",
+      "description": "Seconds until a paused Windows Update ring's pause expires, by ring and update type.",
       "additive": false,
       "domain": "intune",
       "attr_keys": [
@@ -2957,6 +3836,7 @@
       "prometheus_name": "intune_update_ring_pause_state_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "Windows Update ring pause state (1=paused, 0=not paused), by ring and update type.",
       "additive": false,
       "domain": "intune",
       "attr_keys": [
@@ -2972,6 +3852,7 @@
       "prometheus_name": "intune_update_ring_rollback_active_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "Windows Update ring rollback-active state (1=active, 0=inactive), by ring and update type.",
       "additive": false,
       "domain": "intune",
       "attr_keys": [
@@ -2987,6 +3868,7 @@
       "prometheus_name": "intune_update_ring_status",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Windows Update ring device rollout status rollup, by ring and state.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -3002,6 +3884,7 @@
       "prometheus_name": "intune_uxa_anomaly_count",
       "unit": "{anomaly}",
       "kind": "gauge",
+      "description": "Intune Endpoint Analytics anomaly count by severity.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -3016,6 +3899,7 @@
       "prometheus_name": "intune_uxa_app_crash_count",
       "unit": "{crash}",
       "kind": "gauge",
+      "description": "Intune Endpoint Analytics app crash count by client executable. Bounded by the central cardinality limiter: past cardinality.per_metric_limit the top executables by crash count are kept and the tail folds into app_name=\"other\".",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -3030,6 +3914,7 @@
       "prometheus_name": "intune_uxa_app_health_active_device_count",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune Endpoint Analytics count of devices actively reporting application health, by OS version.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -3044,6 +3929,7 @@
       "prometheus_name": "intune_uxa_app_health_device_count",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune Endpoint Analytics device count, by application health state.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -3058,6 +3944,7 @@
       "prometheus_name": "intune_uxa_app_health_mean_time_to_failure_minutes",
       "unit": "min",
       "kind": "gauge",
+      "description": "Intune Endpoint Analytics application mean time to failure (minutes) per OS version; the int32-max 'no failures' sentinel is excluded.",
       "additive": false,
       "domain": "intune",
       "attr_keys": [
@@ -3072,6 +3959,7 @@
       "prometheus_name": "intune_uxa_app_health_os_version_score",
       "unit": "{score}",
       "kind": "gauge",
+      "description": "Intune Endpoint Analytics application health score (0-100) per OS version, by app-health state.",
       "additive": false,
       "domain": "intune",
       "attr_keys": [
@@ -3087,6 +3975,7 @@
       "prometheus_name": "intune_uxa_baseline_score",
       "unit": "{score}",
       "kind": "gauge",
+      "description": "Intune Endpoint Analytics baseline overall score, by baseline.",
       "additive": false,
       "domain": "intune",
       "attr_keys": [
@@ -3102,6 +3991,7 @@
       "prometheus_name": "intune_uxa_battery_health_device_count",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune Endpoint Analytics device count, by battery health state.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -3116,6 +4006,7 @@
       "prometheus_name": "intune_uxa_battery_health_score",
       "unit": "{score}",
       "kind": "histogram",
+      "description": "Intune Endpoint Analytics device battery health score (0-100), by health state; the -1 'not enough data' sentinel is excluded.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -3130,6 +4021,7 @@
       "prometheus_name": "intune_uxa_boot_time_ms_milliseconds",
       "unit": "ms",
       "kind": "histogram",
+      "description": "Intune Endpoint Analytics device boot time, by restart category; the -1 'not enough data' sentinel is excluded.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -3144,6 +4036,7 @@
       "prometheus_name": "intune_uxa_device_count",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune Endpoint Analytics device count, by overall Endpoint Analytics health state.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -3158,6 +4051,7 @@
       "prometheus_name": "intune_uxa_device_score",
       "unit": "{score}",
       "kind": "histogram",
+      "description": "Intune Endpoint Analytics per-device score distribution (0-100), by score category.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -3172,6 +4066,7 @@
       "prometheus_name": "intune_uxa_login_time_ms_milliseconds",
       "unit": "ms",
       "kind": "histogram",
+      "description": "Intune Endpoint Analytics device login time, by restart category; the -1 'not enough data' sentinel is excluded.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -3186,6 +4081,7 @@
       "prometheus_name": "intune_uxa_model_device_count",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune Endpoint Analytics scored-device count per device model. Microsoft publishes buckets as small as one device, so this is the real bucket size, not a floor.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -3202,6 +4098,7 @@
       "prometheus_name": "intune_uxa_model_score",
       "unit": "{score}",
       "kind": "gauge",
+      "description": "Intune Endpoint Analytics score (0-100) per device model, by score category. Bounded by the number of distinct (model, manufacturer) pairs in the fleet; the -1 'not enough data' sentinel is excluded rather than emitted as a negative score.",
       "additive": false,
       "domain": "intune",
       "attr_keys": [
@@ -3219,6 +4116,7 @@
       "prometheus_name": "intune_uxa_resource_performance_device_count",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune Endpoint Analytics device count, by resource performance health state.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -3233,6 +4131,7 @@
       "prometheus_name": "intune_uxa_resource_performance_score",
       "unit": "{score}",
       "kind": "histogram",
+      "description": "Intune Endpoint Analytics device resource performance score (0-100), by health state; the -1 'not enough data' sentinel is excluded.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -3247,6 +4146,7 @@
       "prometheus_name": "intune_uxa_work_from_anywhere_device_count",
       "unit": "{device}",
       "kind": "gauge",
+      "description": "Intune Endpoint Analytics device count by Windows 11 upgrade eligibility and health state; per-device readiness detail on the intune.device_work_from_anywhere log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -3262,6 +4162,7 @@
       "prometheus_name": "intune_windows_updates_deployments",
       "unit": "{deployment}",
       "kind": "gauge",
+      "description": "Windows Update for Business deployments by EFFECTIVE state, REQUESTED state and the kind of catalog entry being deployed. The two states are separate dimensions because they disagree in the interesting case — a series where they differ is a deployment not doing what was asked; per-deployment detail, including the reasons the effective state differs, on the intune.windows_update_deployment log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -3278,6 +4179,7 @@
       "prometheus_name": "intune_windows_updates_update_policies",
       "unit": "{policy}",
       "kind": "gauge",
+      "description": "Windows Update for Business deployment-service update policies by auto-enrollment update category (quality/driver/feature; `none` for a policy enrolled in none). A policy enrolled in SEVERAL categories counts once in each, so a sum over this metric is not the policy count; per-policy detail — approval rules, content filters, user experience and audience — on the intune.windows_update_policy log twin.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -3292,6 +4194,7 @@
       "prometheus_name": "intune_wip_policy_count",
       "unit": "{policy}",
       "kind": "gauge",
+      "description": "Legacy Windows Information Protection (WIP) policy count (windowsInformationProtectionPolicies + mdmWindowsInformationProtectionPolicies), by assignment state.",
       "additive": true,
       "domain": "intune",
       "attr_keys": [
@@ -3306,6 +4209,7 @@
       "prometheus_name": "m365_exchange_audit_config_enabled",
       "unit": "{setting}",
       "kind": "gauge",
+      "description": "Exchange Online audit posture as a 0/1 flag per setting: unified_audit_log_ingestion (when off, m365.activity and m365.unified_audit silently return nothing) and admin_audit_log.",
       "additive": true,
       "domain": "m365",
       "attr_keys": [
@@ -3320,6 +4224,7 @@
       "prometheus_name": "m365_exchange_connectors",
       "unit": "{connector}",
       "kind": "gauge",
+      "description": "Exchange Online mail-flow connectors by direction and enabled state. All four series are seeded, so a connector appearing on a tenant that had none is a change from 0 rather than a new series. A connector is mail ROUTING — an outbound one can send the tenant's mail through infrastructure Microsoft does not own, and an inbound one can let mail arrive pre-trusted. Which connector, where it points and whether it demands TLS live on the m365.exchange_connector log twin.",
       "additive": true,
       "domain": "m365",
       "attr_keys": [
@@ -3335,6 +4240,7 @@
       "prometheus_name": "m365_exchange_connectors_without_tls",
       "unit": "{connector}",
       "kind": "gauge",
+      "description": "Exchange Online connectors that do not require TLS, by direction. Mail crossing such a connector is neither encrypted nor authenticated in transit, so an inbound one is a channel for mail to arrive pre-trusted over cleartext.",
       "additive": true,
       "domain": "m365",
       "attr_keys": [
@@ -3349,6 +4255,7 @@
       "prometheus_name": "m365_exchange_dkim_signing",
       "unit": "{domain}",
       "kind": "gauge",
+      "description": "Accepted domains counted by outbound DKIM signing enablement and configuration status.",
       "additive": true,
       "domain": "m365",
       "attr_keys": [
@@ -3364,6 +4271,7 @@
       "prometheus_name": "m365_exchange_mailboxes",
       "unit": "{mailbox}",
       "kind": "gauge",
+      "description": "Exchange Online mailboxes by recipient type, whether forwarding is configured and whether auditing is on. Keyed by mailbox TYPE, never by mailbox — which mailbox forwards where is on the m365.exchange_mailbox log twin.",
       "additive": true,
       "domain": "m365",
       "attr_keys": [
@@ -3380,6 +4288,7 @@
       "prometheus_name": "m365_exchange_mailboxes_setting_enabled",
       "unit": "{mailbox}",
       "kind": "gauge",
+      "description": "Mailboxes with each named boolean setting ON. Every setting is seeded, so \"how many mailboxes have single-item recovery OFF\" is the mailbox total minus this series rather than a missing one.",
       "additive": true,
       "domain": "m365",
       "attr_keys": [
@@ -3394,6 +4303,7 @@
       "prometheus_name": "m365_exchange_org_config_setting_enabled",
       "unit": "{setting}",
       "kind": "gauge",
+      "description": "Exchange Online organization settings as a 0/1 flag per setting, named from the wire field so the polarity reads off the name (audit_disabled=1 means org-wide mailbox auditing is OFF). A setting the tenant has not configured arrives null and is OMITTED rather than reported as 0.",
       "additive": true,
       "domain": "m365",
       "attr_keys": [
@@ -3408,6 +4318,7 @@
       "prometheus_name": "m365_exchange_remote_domains",
       "unit": "{domain}",
       "kind": "gauge",
+      "description": "Exchange Online remote domains by whether they permit automatic external forwarding. The entry whose domain is \"*\" covers EVERY remote domain, so a non-zero true bucket may be one tenant-wide hole rather than a narrow exception — which domain it is lives on the m365.exchange_remote_domain log twin.",
       "additive": true,
       "domain": "m365",
       "attr_keys": [
@@ -3422,6 +4333,7 @@
       "prometheus_name": "m365_exchange_transport_rules",
       "unit": "{rule}",
       "kind": "gauge",
+      "description": "Exchange Online transport rules by state and rule mode. Disabled rules are counted too: a staged rule is one toggle from live. Which rule, and what it does, is on the m365.exchange_transport_rule log twin.",
       "additive": true,
       "domain": "m365",
       "attr_keys": [
@@ -3437,6 +4349,7 @@
       "prometheus_name": "m365_exchange_transport_rules_redirecting",
       "unit": "{rule}",
       "kind": "gauge",
+      "description": "Transport rules that blind-copy, copy, redirect or add a recipient — a message reaching someone the sender did not address. An ENABLED one is the textbook business-email-compromise persistence shape and also emits an Error-severity log record naming the target.",
       "additive": true,
       "domain": "m365",
       "attr_keys": [
@@ -3451,6 +4364,7 @@
       "prometheus_name": "m365_message_trace_bytes_total",
       "unit": "By",
       "kind": "sum",
+      "description": "Total size of the messages ingested from the Exchange Online message trace, by delivery status.",
       "additive": true,
       "domain": "m365",
       "attr_keys": [
@@ -3465,6 +4379,7 @@
       "prometheus_name": "m365_message_trace_messages_total",
       "unit": "{message}",
       "kind": "sum",
+      "description": "Messages ingested from the Exchange Online message trace, by delivery status. Per-message detail (sender, recipient, subject, message id) is on the m365.message_trace log twin, never here.",
       "additive": true,
       "domain": "m365",
       "attr_keys": [
@@ -3479,6 +4394,7 @@
       "prometheus_name": "m365_service_health_issues_total",
       "unit": "{issue}",
       "kind": "gauge",
+      "description": "Count of M365 service-health issues by classification and status.",
       "additive": true,
       "domain": "m365",
       "attr_keys": [
@@ -3494,6 +4410,7 @@
       "prometheus_name": "m365_service_health_services_total",
       "unit": "{service}",
       "kind": "gauge",
+      "description": "Count of M365 services in each health status.",
       "additive": true,
       "domain": "m365",
       "attr_keys": [
@@ -3508,6 +4425,7 @@
       "prometheus_name": "m365_service_health_status_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "Numeric health-status enum per M365 service (0 = operational, higher = worse, -1 = unmapped). See docs/signals.md.",
       "additive": false,
       "domain": "m365",
       "attr_keys": [
@@ -3522,6 +4440,7 @@
       "prometheus_name": "m365_service_messages_total",
       "unit": "{message}",
       "kind": "gauge",
+      "description": "Count of active M365 message-center posts by category and severity.",
       "additive": true,
       "domain": "m365",
       "attr_keys": [
@@ -3537,6 +4456,7 @@
       "prometheus_name": "m365_sharepoint_deleted_user_retention_days",
       "unit": "d",
       "kind": "gauge",
+      "description": "Retention period for a deleted user's personal site, in days.",
       "additive": false,
       "domain": "m365",
       "attr_keys": [],
@@ -3549,6 +4469,7 @@
       "prometheus_name": "m365_sharepoint_external_resharing_enabled_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "1 if external users may re-share content that was shared with them, else 0.",
       "additive": false,
       "domain": "m365",
       "attr_keys": [],
@@ -3561,6 +4482,7 @@
       "prometheus_name": "m365_sharepoint_idle_session_signout_enabled_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "1 if idle-session sign-out is enabled for SharePoint/OneDrive, else 0.",
       "additive": false,
       "domain": "m365",
       "attr_keys": [],
@@ -3573,6 +4495,7 @@
       "prometheus_name": "m365_sharepoint_legacy_auth_enabled_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "1 if legacy authentication protocols are enabled tenant-wide (a security risk), else 0.",
       "additive": false,
       "domain": "m365",
       "attr_keys": [],
@@ -3585,6 +4508,7 @@
       "prometheus_name": "m365_sharepoint_personal_site_storage_limit_mb",
       "unit": "MB",
       "kind": "gauge",
+      "description": "Default per-user OneDrive storage limit, in MB.",
       "additive": true,
       "domain": "m365",
       "attr_keys": [],
@@ -3597,6 +4521,7 @@
       "prometheus_name": "m365_sharepoint_sharing_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "Constant 1 carrying the tenant's external-sharing posture as bounded attributes.",
       "additive": false,
       "domain": "m365",
       "attr_keys": [
@@ -3612,6 +4537,7 @@
       "prometheus_name": "m365_sharepoint_sharing_allowed_domains",
       "unit": "{domain}",
       "kind": "gauge",
+      "description": "Count of domains on the external-sharing allow list.",
       "additive": true,
       "domain": "m365",
       "attr_keys": [],
@@ -3624,6 +4550,7 @@
       "prometheus_name": "m365_sharepoint_sharing_blocked_domains",
       "unit": "{domain}",
       "kind": "gauge",
+      "description": "Count of domains on the external-sharing block list.",
       "additive": true,
       "domain": "m365",
       "attr_keys": [],
@@ -3636,6 +4563,7 @@
       "prometheus_name": "m365_sharepoint_site_storage_limit_mb",
       "unit": "MB",
       "kind": "gauge",
+      "description": "Default per-site SharePoint storage limit, in MB.",
       "additive": true,
       "domain": "m365",
       "attr_keys": [],
@@ -3648,6 +4576,7 @@
       "prometheus_name": "m365_sharepoint_unmanaged_sync_restricted_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "1 if the OneDrive sync app is restricted to managed/domain-joined devices, else 0.",
       "additive": false,
       "domain": "m365",
       "attr_keys": [],
@@ -3660,6 +4589,7 @@
       "prometheus_name": "m365_storage_drives_total",
       "unit": "{drive}",
       "kind": "gauge",
+      "description": "Count of drives per derived quota state (normal \u003c75% used, nearing \u003e=75%, critical \u003e=90%, exceeded \u003e=100%).",
       "additive": true,
       "domain": "m365",
       "attr_keys": [
@@ -3675,6 +4605,7 @@
       "prometheus_name": "m365_storage_total_bytes",
       "unit": "By",
       "kind": "gauge",
+      "description": "Tenant SharePoint storage quota (pooled ceiling), in bytes.",
       "additive": true,
       "domain": "m365",
       "attr_keys": [
@@ -3689,6 +4620,7 @@
       "prometheus_name": "m365_storage_used_bytes",
       "unit": "By",
       "kind": "gauge",
+      "description": "Tenant SharePoint storage used, in bytes.",
       "additive": true,
       "domain": "m365",
       "attr_keys": [
@@ -3703,6 +4635,7 @@
       "prometheus_name": "m365_teams_channels_total_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "Teams channels by membership type and archived state.",
       "additive": false,
       "domain": "m365",
       "attr_keys": [
@@ -3718,6 +4651,7 @@
       "prometheus_name": "m365_teams_installed_apps_total_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "Teams installed apps by distribution method and whether they hold RSC grants.",
       "additive": false,
       "domain": "m365",
       "attr_keys": [
@@ -3733,6 +4667,7 @@
       "prometheus_name": "m365_teams_membership_total_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "Tenant-wide Teams membership count by role.",
       "additive": false,
       "domain": "m365",
       "attr_keys": [
@@ -3747,6 +4682,7 @@
       "prometheus_name": "m365_teams_ownerless_total_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "Teams with zero owners (excluding archived) — unmanageable orphans.",
       "additive": false,
       "domain": "m365",
       "attr_keys": [],
@@ -3759,6 +4695,7 @@
       "prometheus_name": "m365_teams_total_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "Total Teams by visibility.",
       "additive": false,
       "domain": "m365",
       "attr_keys": [
@@ -3773,6 +4710,7 @@
       "prometheus_name": "m365_teams_with_guests_total_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "Teams with at least one external guest — a data-egress exposure surface.",
       "additive": false,
       "domain": "m365",
       "attr_keys": [],
@@ -3785,6 +4723,7 @@
       "prometheus_name": "mdca_discovery_parse_cloud_services_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "Distinct cloud apps discovered in a Cloud Discovery input stream's last successful parse.",
       "additive": false,
       "domain": "mdca",
       "attr_keys": [
@@ -3799,6 +4738,7 @@
       "prometheus_name": "mdca_discovery_parse_last_success_age_seconds",
       "unit": "s",
       "kind": "gauge",
+      "description": "Seconds since a Cloud Discovery input stream last parsed successfully (alert-on-silence).",
       "additive": false,
       "domain": "mdca",
       "attr_keys": [
@@ -3813,6 +4753,7 @@
       "prometheus_name": "mdca_discovery_parse_tasks_total",
       "unit": "1",
       "kind": "sum",
+      "description": "Count of terminal MDCA Cloud Discovery parse tasks, by stream, template and outcome.",
       "additive": true,
       "domain": "mdca",
       "attr_keys": [
@@ -3829,6 +4770,7 @@
       "prometheus_name": "mdca_discovery_parse_transactions_ratio",
       "unit": "1",
       "kind": "gauge",
+      "description": "Transactions discovered in a Cloud Discovery input stream's last successful parse.",
       "additive": false,
       "domain": "mdca",
       "attr_keys": [
@@ -3843,6 +4785,7 @@
       "prometheus_name": "purview_dlp_policies",
       "unit": "{policy}",
       "kind": "gauge",
+      "description": "DLP policies, by enforcement mode (Enforce vs audit/test/disabled).",
       "additive": true,
       "domain": "purview",
       "attr_keys": [
@@ -3857,6 +4800,7 @@
       "prometheus_name": "purview_dlp_policy_last_changed_age_seconds",
       "unit": "s",
       "kind": "gauge",
+      "description": "Seconds since the most recently changed DLP policy (max over whenChangedUtc).",
       "additive": false,
       "domain": "purview",
       "attr_keys": [],
@@ -3869,6 +4813,7 @@
       "prometheus_name": "purview_dlp_policy_bindings",
       "unit": "{binding}",
       "kind": "gauge",
+      "description": "DLP policy bindings, by workload and binding type.",
       "additive": true,
       "domain": "purview",
       "attr_keys": [
@@ -3884,6 +4829,7 @@
       "prometheus_name": "purview_dlp_rules",
       "unit": "{rule}",
       "kind": "gauge",
+      "description": "DLP rules, by target workload and action.",
       "additive": true,
       "domain": "purview",
       "attr_keys": [
@@ -3899,6 +4845,7 @@
       "prometheus_name": "purview_ediscovery_cases",
       "unit": "{case}",
       "kind": "gauge",
+      "description": "Purview eDiscovery cases, counted per case status.",
       "additive": true,
       "domain": "purview",
       "attr_keys": [
@@ -3913,6 +4860,7 @@
       "prometheus_name": "purview_labels_count",
       "unit": "{label}",
       "kind": "gauge",
+      "description": "Purview sensitivity labels, counted per applicability target (a multi-target label counts in each).",
       "additive": true,
       "domain": "purview",
       "attr_keys": [
@@ -3927,6 +4875,7 @@
       "prometheus_name": "purview_retention_event_types_count",
       "unit": "{event_type}",
       "kind": "gauge",
+      "description": "Purview retention event types configured for the tenant.",
       "additive": true,
       "domain": "purview",
       "attr_keys": [],
@@ -3939,6 +4888,7 @@
       "prometheus_name": "purview_retention_labels_count",
       "unit": "{label}",
       "kind": "gauge",
+      "description": "Purview retention labels, by retention behavior, post-retention action, and trigger.",
       "additive": true,
       "domain": "purview",
       "attr_keys": [
@@ -5132,12 +6082,14 @@
         "roles",
         "service_principal_id",
         "sign_in_activity_id",
+        "tenant_id",
         "token_issued_at",
         "user_agent",
         "user_principal_object_id",
         "wids"
       ],
       "packages": [
+        "internal/blobpipeline",
         "internal/collectors/entra/graphactivity"
       ]
     },
@@ -5562,9 +6514,11 @@
       "attr_keys": [
         "container",
         "diagnostic_category",
+        "ingest_transport",
         "is_enabled",
         "is_mapped",
-        "state"
+        "state",
+        "tenant_id"
       ],
       "packages": [
         "internal/collectors/selfobs/blobcategories"

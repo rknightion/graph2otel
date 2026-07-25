@@ -4,6 +4,7 @@
       "Name": "m365.exchange.connectors",
       "Unit": "{connector}",
       "Kind": "gauge",
+      "Description": "Exchange Online mail-flow connectors by direction and enabled state. All four series are seeded, so a connector appearing on a tenant that had none is a change from 0 rather than a new series. A connector is mail ROUTING — an outbound one can send the tenant's mail through infrastructure Microsoft does not own, and an inbound one can let mail arrive pre-trusted. Which connector, where it points and whether it demands TLS live on the m365.exchange_connector log twin.",
       "AttrKeys": [
         "direction",
         "enabled"
@@ -13,6 +14,7 @@
       "Name": "m365.exchange.connectors.without_tls",
       "Unit": "{connector}",
       "Kind": "gauge",
+      "Description": "Exchange Online connectors that do not require TLS, by direction. Mail crossing such a connector is neither encrypted nor authenticated in transit, so an inbound one is a channel for mail to arrive pre-trusted over cleartext.",
       "AttrKeys": [
         "direction"
       ]

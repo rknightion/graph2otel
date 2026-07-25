@@ -4,6 +4,7 @@
       "Name": "intune.autopilot_deployment_apps.installs",
       "Unit": "{app}",
       "Kind": "gauge",
+      "Description": "Intune Autopilot device-preparation (V2) per-application install count by raw PolicyInstallStatus code; per-app detail on the intune.autopilot_deployment_apps log twin.",
       "AttrKeys": [
         "policy_install_status"
       ]

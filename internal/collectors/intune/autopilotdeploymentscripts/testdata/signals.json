@@ -4,6 +4,7 @@
       "Name": "intune.autopilot_deployment_scripts.executions",
       "Unit": "{script}",
       "Kind": "gauge",
+      "Description": "Intune Autopilot device-preparation (V2) per-script execution count by raw PolicyInstallStatus code; per-script detail on the intune.autopilot_deployment_scripts log twin.",
       "AttrKeys": [
         "policy_install_status"
       ]

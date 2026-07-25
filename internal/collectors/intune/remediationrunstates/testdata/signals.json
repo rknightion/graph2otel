@@ -4,6 +4,7 @@
       "Name": "graph2otel.api.unexpected",
       "Unit": "1",
       "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
       "AttrKeys": [
         "collector",
         "field",
@@ -14,6 +15,7 @@
       "Name": "intune.remediation_run_states.devices",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune proactive-remediation device run states, counted by remediation, detection state and remediation state; per-device detail (device, OS, the detection script's output) on the intune.remediation_run_states log twin.",
       "AttrKeys": [
         "detection_state",
         "remediation_name",

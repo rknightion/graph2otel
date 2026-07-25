@@ -20,8 +20,8 @@ nobody noticed. That is the alert-side twin of #218's dead dashboard panels:
 invisible precisely because a hand-typed metric name is never checked against
 what graph2otel actually emits.
 
-So every rule's ``expr`` is assembled from a catalog/self-obs lookup
-(``_m()``/``_so()`` below), never a hand-typed literal — a wrong name is a
+So every rule's ``expr`` is assembled from the generated catalog lookup
+(``_m()`` below), never a hand-typed literal — a wrong name is a
 ``KeyError`` at build time, same guarantee ``build_dashboard.py`` gives
 dashboard panels. The reverse-validation gate below additionally scans the
 rendered PromQL text itself, so a metric name that somehow bypassed the lookup
@@ -48,7 +48,6 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import catalog as catalog_mod  # noqa: E402
-from selfobs_metrics import SELF_OBS  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
@@ -65,11 +64,6 @@ CAT = catalog_mod.load()
 def _m(name: str) -> str:
     """A catalogued metric's Prometheus name. KeyError at build time on a typo."""
     return CAT.metric(name).prom
-
-
-def _so(name: str) -> str:
-    """A self-observability metric's Prometheus name (grafana/selfobs_metrics.py)."""
-    return SELF_OBS[name].prom
 
 
 # ---------------------------------------------------------------------------
@@ -206,8 +200,8 @@ def _alert(uid: str, title: str, expr: str, op: str, params: list, for_: str,
 # ---------------------------------------------------------------------------
 # the 12 alert rules — ported 1:1 from the previously hand-authored
 # alerts/graph2otel-alerts.yaml. The ONLY change from the hand-authored
-# version: every metric name inside an expr is a catalog/self-obs lookup
-# (_m()/_so()) instead of a literal, which is what catches the
+# version: every metric name inside an expr is a catalog lookup
+# (_m()) instead of a literal, which is what catches the
 # graph2otel_throttle_limit_percentage bug below. uid, title, labels, for,
 # isPaused and the summary/description prose are unchanged, except the one
 # throttle-budget rule's description, corrected to name the real metric.
@@ -319,7 +313,7 @@ RULES = [
         "g2o-collector-staleness",
         "graph2otel collector scrape stale",
         f'max by (tenant_id, collector) '
-        f'({_so("graph2otel.scrape.staleness")})',
+        f'({_m("graph2otel.scrape.staleness")})',
         "gt", [3600], "5m",
         {"severity": "critical", "category": "self-observability", "source": "graph2otel"},
         "Collector {{ $labels.collector }} hasn't scraped successfully in over an hour "
@@ -337,7 +331,7 @@ RULES = [
         "g2o-checkpoint-persist-errors",
         "graph2otel checkpoint persist failing",
         f'sum by (tenant_id, collector) '
-        f'(increase({_so("graph2otel.checkpoint.persist.errors")}[15m]))',
+        f'(increase({_m("graph2otel.checkpoint.persist.errors")}[15m]))',
         "gt", [0], "0m",
         {"severity": "warning", "category": "self-observability", "source": "graph2otel"},
         "Collector {{ $labels.collector }} failing to persist its checkpoint (tenant "
@@ -353,7 +347,7 @@ RULES = [
         "g2o-throttle-saturation",
         "graph2otel sustained Graph API throttling",
         f'sum by (tenant_id, workload) '
-        f'(rate({_so("graph2otel.throttle.count")}[10m]))',
+        f'(rate({_m("graph2otel.throttle.count")}[10m]))',
         "gt", [0], "15m",
         {"severity": "warning", "category": "throttle", "source": "graph2otel"},
         "Sustained 429s from Microsoft Graph on the {{ $labels.workload }} workload "
@@ -373,7 +367,7 @@ RULES = [
         "g2o-throttle-budget-consumption",
         "graph2otel throttle budget consumption high",
         f'max by (tenant_id, workload) '
-        f'({_so("graph2otel.throttle.limit_percentage")})',
+        f'({_m("graph2otel.throttle.limit_percentage")})',
         "gt", [80], "15m",
         {"severity": "warning", "category": "throttle", "source": "graph2otel"},
         "Graph-reported throttle budget consumption above 80% on the {{ $labels.workload }} "
@@ -543,10 +537,10 @@ def render_recording(recording: list) -> dict:
 
 # ---------------------------------------------------------------------------
 # reverse-validation gate: every metric-shaped token that appears in a
-# rendered PromQL expr must resolve to a real catalog Prometheus name or a
-# SELF_OBS one. This is what catches a metric name that bypassed _m()/_so()
+# rendered PromQL expr must resolve to a real catalog Prometheus name. This is
+# what catches a metric name that bypassed _m()
 # entirely (pasted straight into an expr string) rather than merely a
-# misspelling of an argument to _m()/_so() (which is already a KeyError at
+# misspelling of an argument to _m() (which is already a KeyError at
 # build time, above).
 # ---------------------------------------------------------------------------
 
@@ -596,10 +590,6 @@ def _known_prom_names(cat) -> set:
         names.add(m.prom)
         if m.kind == "histogram":
             names.update({m.prom + "_bucket", m.prom + "_sum", m.prom + "_count"})
-    for so in SELF_OBS.values():
-        names.add(so.prom)
-        if so.kind == "histogram":
-            names.update({so.prom + "_bucket", so.prom + "_sum", so.prom + "_count"})
     return names
 
 
@@ -621,7 +611,7 @@ def reverse_validate(cat, rules: list) -> list:
             for tok in sorted(_metric_tokens(expr)):
                 if tok not in known:
                     violations.append(
-                        f"{rule['uid']}: {tok!r} is not a catalogued or self-obs "
+                        f"{rule['uid']}: {tok!r} is not a catalogued "
                         f"Prometheus metric name (expr: {expr})")
     return violations
 

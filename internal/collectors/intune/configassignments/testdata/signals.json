@@ -4,6 +4,7 @@
       "Name": "intune.config_assignment_status.assignments",
       "Unit": "{assignment}",
       "Kind": "gauge",
+      "Description": "Intune configuration-policy assignments counted by report status and policy platform. Each device x policy assignment row is bucketed into Microsoft's ReportStatus x UnifiedPolicyPlatformType enum space (both bounded); the per-row detail — which device, which policy, which user — is on the intune.config_assignment_status log twin, never a metric label.",
       "AttrKeys": [
         "policy_platform",
         "report_status"

@@ -1,32 +1,20 @@
 """graph2otel self-observability — is the exporter itself healthy?
 
-# The one board the catalog cannot fully describe
-
-Every other board is 100% catalog-driven. This one is not, and the reason is
-structural rather than an oversight: ``internal/signalcapture`` captures what a
-COLLECTOR PACKAGE's tests emit, so the goldens carry only the seven
-``graph2otel.*`` metrics that collectors themselves emit. The rest of the
-self-observability surface — scrape health, checkpoint persistence, export jobs,
-the cardinality limiter, throttling, outbound HTTP — is emitted by the scheduler,
-the transport and the telemetry package, none of which is a collector package
-and none of which has a golden.
-
-Those metrics are declared in ``grafana/selfobs_metrics.py`` (the ``SELF_OBS``
-allow-list), by hand, as ``(otel name, unit, kind, scope)`` quadruples copied
-from their emit sites — shared with ``grafana/build_rules.py`` (#219) so the
-two generators cannot each hand-declare their own copy and drift apart. The
-Prometheus name is DERIVED by ``promname.prom_name``, the same rule the Go
-catalog uses, pinned to it by a test over all 274 cataloged metrics.
-
-The normal catalog coverage gate cannot see these metrics, so #284 adds an
-equivalent explicit gate over ``SELF_OBS``: every entry must reach a panel,
-declare ``tenant`` or ``process`` scope, and use a tenant selector exactly when
-its declared scope is tenant. This keeps both name coverage and identity
-semantics gated even where signalcapture cannot reach.
+Every metric here comes from the generated signal catalog. Non-collector
+emitters own dedicated signal goldens, so scrape health, transport clients,
+export jobs and cardinality telemetry have the same name/shape/attribute drift
+gate as domain collectors. Presentation remains hand-authored; signal authority
+does not.
 """
 
 from builder import RATE, TENANT_SEL
-from selfobs_metrics import SELF_OBS
+import catalog as catalog_mod
+
+CAT = catalog_mod.load()
+SELF_OBS = {
+    name: metric for name, metric in CAT.metrics.items()
+    if metric.domain == catalog_mod.SELF_OBS_DOMAIN
+}
 
 UID = "graph2otel-self-obs"
 TITLE = "graph2otel / Self-Observability"
@@ -37,17 +25,17 @@ DESCRIPTION = (
     "edit grafana/boards/selfobs.py, not this JSON."
 )
 TAGS = ["graph2otel", "self-observability", "generated"]
-TENANT_METRIC = "graph2otel_scrape_success_ratio"
+TENANT_METRIC = SELF_OBS["graph2otel.scrape.success"].prom
 
-# The seven graph2otel.* metrics that ARE cataloged, because collector packages
-# emit them. These go through the normal catalog-driven path and ARE covered.
 SECTIONS = [
-    ("Blob ingest health and API drift (cataloged)", [
+    ("Blob ingest health and API drift", [
         ("Microsoft API drift — a response no longer matches what a collector expects",
          ["graph2otel.api.unexpected"], {"w": 24, "h": 8}),
         "graph2otel.blob.categories",
         "graph2otel.blob.endpoint_paths",
         "graph2otel.blob.event_age",
+        "graph2otel.blob.records_dropped",
+        "graph2otel.blob.self_excluded",
         ("Blob records: emitted as metrics vs gated",
          ["graph2otel.blob.metric_emitted", "graph2otel.blob.metric_gated"],
          {"viz": "timeseries"}),
@@ -55,12 +43,11 @@ SECTIONS = [
     ]),
 ]
 
-# Prometheus names for the self-obs metrics no golden captures, read from the
-# shared SELF_OBS allow-list (grafana/selfobs_metrics.py) rather than
-# hand-declared here.
+# Prometheus names are read from the generated catalog rather than typed here.
 SCRAPE_SUCCESS = SELF_OBS["graph2otel.scrape.success"].prom
 SCRAPE_DURATION = SELF_OBS["graph2otel.scrape.duration"].prom
 SCRAPE_STALENESS = SELF_OBS["graph2otel.scrape.staleness"].prom
+SCRAPE_LAST = SELF_OBS["graph2otel.scrape.last_timestamp"].prom
 SCRAPE_BUDGET = SELF_OBS["graph2otel.scrape.budget"].prom
 SCRAPE_ERRORS = SELF_OBS["graph2otel.scrape.errors"].prom
 CHECKPOINT_ERRORS = SELF_OBS["graph2otel.checkpoint.persist.errors"].prom
@@ -79,6 +66,22 @@ THROTTLE_PCT = SELF_OBS["graph2otel.throttle.limit_percentage"].prom
 HTTP_DURATION = SELF_OBS["graph2otel.http.client.request.duration"].prom
 HTTP_4XX = SELF_OBS["graph2otel.graphclient.http_4xx"].prom
 HTTP_5XX = SELF_OBS["graph2otel.graphclient.http_5xx"].prom
+EXO_DURATION = SELF_OBS["graph2otel.exo.http.client.request.duration"].prom
+EXO_4XX = SELF_OBS["graph2otel.exo.http_4xx"].prom
+EXO_5XX = SELF_OBS["graph2otel.exo.http_5xx"].prom
+EXO_THROTTLE = SELF_OBS["graph2otel.exo.throttle.count"].prom
+HUNT_DURATION = SELF_OBS["graph2otel.hunt.http.client.request.duration"].prom
+HUNT_4XX = SELF_OBS["graph2otel.hunt.http_4xx"].prom
+HUNT_5XX = SELF_OBS["graph2otel.hunt.http_5xx"].prom
+HUNT_THROTTLE = SELF_OBS["graph2otel.hunt.throttle.count"].prom
+MDCA_DURATION = SELF_OBS["graph2otel.mdca.http.client.request.duration"].prom
+MDCA_4XX = SELF_OBS["graph2otel.mdca.http_4xx"].prom
+MDCA_5XX = SELF_OBS["graph2otel.mdca.http_5xx"].prom
+MDCA_THROTTLE = SELF_OBS["graph2otel.mdca.throttle.count"].prom
+O365_DURATION = SELF_OBS["graph2otel.o365activity.http.client.request.duration"].prom
+O365_4XX = SELF_OBS["graph2otel.o365activity.http_4xx"].prom
+O365_5XX = SELF_OBS["graph2otel.o365activity.http_5xx"].prom
+O365_THROTTLE = SELF_OBS["graph2otel.o365activity.throttle.count"].prom
 
 _SEL = "{" + TENANT_SEL + ', collector=~"$collector"}'
 _T = "{" + TENANT_SEL + "}"
@@ -95,7 +98,7 @@ def extra(b):
                   "refId": "collector"},
         "definition": f'label_values({SCRAPE_SUCCESS}{{tenant_id=~"$tenant"}}, collector)',
     })
-    b.row("Collector health (hand-declared — see the module docstring)")
+    b.row("Collector health (generated signal catalog)")
     b.raw("Scrape success by collector", [f"{SCRAPE_SUCCESS}{_SEL}"],
           desc="1 when the last run completed without error, 0 otherwise (including a "
                "recovered panic). A green tick is not evidence of data: several "
@@ -105,6 +108,9 @@ def extra(b):
           viz="table", unit="s",
           desc="Counts up from process start until the first success, so a collector "
                "that has never succeeded shows a growing value rather than no series.")
+    b.raw("Age of the latest completed scrape",
+          [f"time() - {SCRAPE_LAST}{_SEL}"], unit="s",
+          desc="Wall-clock age of the latest completed run, whether it succeeded or failed.")
     b.raw("Scrape budget (duration / interval)", [f"{SCRAPE_BUDGET}{_SEL}"],
           desc="At or above 1 a scrape takes as long as its own poll interval — no "
                "headroom, risk of overrun.")
@@ -163,6 +169,23 @@ def extra(b):
           [f"sum by (workload) (rate({HTTP_4XX}{_T}[{RATE}]))",
            f"sum by (workload) (rate({HTTP_5XX}{_T}[{RATE}]))"],
           legends=["4xx {{workload}}", "5xx {{workload}}"], w=24, h=8)
+
+    b.row("Non-Graph transport HTTP")
+    for title, duration, errors4, errors5, throttle in [
+        ("Exchange Online", EXO_DURATION, EXO_4XX, EXO_5XX, EXO_THROTTLE),
+        ("Advanced hunting", HUNT_DURATION, HUNT_4XX, HUNT_5XX, HUNT_THROTTLE),
+        ("MDCA", MDCA_DURATION, MDCA_4XX, MDCA_5XX, MDCA_THROTTLE),
+        ("O365 Activity", O365_DURATION, O365_4XX, O365_5XX, O365_THROTTLE),
+    ]:
+        b.raw(f"{title} request latency (p95)",
+              [f"histogram_quantile(0.95, sum by (le) "
+               f"(rate({duration}_bucket{_T}[{RATE}])))"],
+              unit="s", w=12, h=7)
+        b.raw(f"{title} errors and throttling",
+              [f"sum(rate({errors4}{_T}[{RATE}]))",
+               f"sum(rate({errors5}{_T}[{RATE}]))",
+               f"sum(rate({throttle}{_T}[{RATE}]))"],
+              legends=["4xx", "5xx", "429 throttle"], w=12, h=7)
 
 
 LOGS = [

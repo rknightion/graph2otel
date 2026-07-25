@@ -4,6 +4,7 @@
       "Name": "purview.ediscovery.cases",
       "Unit": "{case}",
       "Kind": "gauge",
+      "Description": "Purview eDiscovery cases, counted per case status.",
       "AttrKeys": [
         "status"
       ]

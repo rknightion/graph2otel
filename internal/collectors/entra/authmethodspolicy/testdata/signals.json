@@ -4,12 +4,14 @@
       "Name": "entra.auth_methods_policy.legacy_enabled.total",
       "Unit": "{method}",
       "Kind": "gauge",
+      "Description": "Count of legacy authentication methods (SMS, voice) currently enabled tenant-wide.",
       "AttrKeys": []
     },
     {
       "Name": "entra.auth_methods_policy.method.enabled",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "1 if the authentication method is enabled tenant-wide, else 0, per bounded method type.",
       "AttrKeys": [
         "method"
       ]

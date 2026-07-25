@@ -4,6 +4,7 @@
       "Name": "entra.risky_service_principals.total",
       "Unit": "{service_principal}",
       "Kind": "gauge",
+      "Description": "Current count of risky Entra service principals, by risk level and risk state.",
       "AttrKeys": [
         "risk_level",
         "risk_state"
@@ -13,6 +14,7 @@
       "Name": "entra.risky_users.total",
       "Unit": "{user}",
       "Kind": "gauge",
+      "Description": "Current count of risky Entra users, by risk level and risk state.",
       "AttrKeys": [
         "risk_level",
         "risk_state"
@@ -22,6 +24,7 @@
       "Name": "graph2otel.api.unexpected",
       "Unit": "1",
       "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
       "AttrKeys": [
         "collector",
         "field",

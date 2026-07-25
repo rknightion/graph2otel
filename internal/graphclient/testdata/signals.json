@@ -1,0 +1,59 @@
+{
+  "Metrics": [
+    {
+      "Name": "graph2otel.graphclient.http_4xx",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Count of 4xx responses graph2otel received from its own outbound Microsoft Graph calls.",
+      "AttrKeys": [
+        "http.response.status_code",
+        "tenant_id",
+        "workload"
+      ]
+    },
+    {
+      "Name": "graph2otel.graphclient.http_5xx",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Count of 5xx responses graph2otel received from its own outbound Microsoft Graph calls.",
+      "AttrKeys": [
+        "http.response.status_code",
+        "tenant_id",
+        "workload"
+      ]
+    },
+    {
+      "Name": "graph2otel.http.client.request.duration",
+      "Unit": "s",
+      "Kind": "histogram",
+      "Description": "Duration of an outbound Microsoft Graph HTTP request.",
+      "AttrKeys": [
+        "http.request.method",
+        "http.response.status_code",
+        "server.address",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.throttle.count",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Count of 429 throttle responses observed from Microsoft Graph.",
+      "AttrKeys": [
+        "tenant_id",
+        "workload"
+      ]
+    },
+    {
+      "Name": "graph2otel.throttle.limit_percentage",
+      "Unit": "%",
+      "Kind": "gauge",
+      "Description": "Graph-reported throttle budget consumption at the time of a 429 (x-ms-throttle-limit-percentage).",
+      "AttrKeys": [
+        "tenant_id",
+        "workload"
+      ]
+    }
+  ],
+  "Logs": null
+}

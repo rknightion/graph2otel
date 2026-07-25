@@ -4,6 +4,7 @@
       "Name": "m365.exchange.dkim.signing",
       "Unit": "{domain}",
       "Kind": "gauge",
+      "Description": "Accepted domains counted by outbound DKIM signing enablement and configuration status.",
       "AttrKeys": [
         "enabled",
         "status"

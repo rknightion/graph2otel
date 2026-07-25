@@ -13,6 +13,18 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// NewSelfObsProviderForTest exposes the narrow Provider construction seam that
+// external-package signal capture needs. Keeping it in a _test.go file means
+// production callers cannot bypass NewProvider, while the signal fixture still
+// drives the real Provider.ReportSelfObs orchestration.
+func NewSelfObsProviderForTest(e Emitter, card *CardinalityTracker, limiter *Limiter) *Provider {
+	return &Provider{
+		selfObsEmitter: e,
+		card:           card,
+		limiter:        limiter,
+	}
+}
+
 // TestOTLPHTTPURL pins the OTLP/HTTP per-signal URL construction. The OTEL Go
 // otlphttp exporter's WithEndpointURL uses the URL path AS-IS (it does not
 // append /v1/<signal>), so a Grafana Cloud base endpoint like ".../otlp" must

@@ -4,6 +4,7 @@
       "Name": "graph2otel.api.unexpected",
       "Unit": "1",
       "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
       "AttrKeys": [
         "collector",
         "field",
@@ -14,6 +15,7 @@
       "Name": "intune.autopilot.devices",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Windows Autopilot device identities, by enrollment state and group tag (capped to top tags by device count, see maxGroupTags).",
       "AttrKeys": [
         "enrollment_state",
         "group_tag"
@@ -23,6 +25,7 @@
       "Name": "intune.autopilot.profile.assignments",
       "Unit": "{assignment}",
       "Kind": "gauge",
+      "Description": "Windows Autopilot deployment profile group assignment count, by profile.",
       "AttrKeys": [
         "profile_name"
       ]
@@ -31,6 +34,7 @@
       "Name": "intune.autopilot.profile.count",
       "Unit": "{profile}",
       "Kind": "gauge",
+      "Description": "Windows Autopilot deployment profiles, by device type and whether pre-provisioning (white glove) is allowed.",
       "AttrKeys": [
         "device_type",
         "preprovisioning_allowed"
@@ -40,6 +44,7 @@
       "Name": "intune.autopilot.profile.esp_timeout_minutes",
       "Unit": "min",
       "Kind": "gauge",
+      "Description": "Windows Autopilot deployment profile Enrollment Status Page install-progress timeout, by profile.",
       "AttrKeys": [
         "profile_name"
       ]
@@ -48,6 +53,7 @@
       "Name": "intune.autopilot.profile.setting",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "Windows Autopilot deployment profile config-drift-relevant boolean settings (1=enabled, 0=disabled), by profile and setting.",
       "AttrKeys": [
         "profile_name",
         "setting"
@@ -57,6 +63,7 @@
       "Name": "intune.autopilot.stale_contact.count",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Windows Autopilot device identities whose lastContactedDateTime is older than the stale-contact threshold, by group tag.",
       "AttrKeys": [
         "group_tag"
       ]
@@ -65,12 +72,14 @@
       "Name": "intune.autopilot.sync_age_seconds",
       "Unit": "s",
       "Kind": "gauge",
+      "Description": "Seconds since Windows Autopilot last synced device registrations from the OEM/partner (windowsAutopilotSettings.lastSyncDateTime).",
       "AttrKeys": []
     },
     {
       "Name": "intune.autopilot.sync_status",
       "Unit": "1",
       "Kind": "gauge",
+      "Description": "Windows Autopilot device-registration sync status (value 1 for the current bounded status bucket).",
       "AttrKeys": [
         "sync_status"
       ]

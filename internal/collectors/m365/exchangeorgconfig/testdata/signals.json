@@ -4,6 +4,7 @@
       "Name": "m365.exchange.org_config.setting_enabled",
       "Unit": "{setting}",
       "Kind": "gauge",
+      "Description": "Exchange Online organization settings as a 0/1 flag per setting, named from the wire field so the polarity reads off the name (audit_disabled=1 means org-wide mailbox auditing is OFF). A setting the tenant has not configured arrives null and is OMITTED rather than reported as 0.",
       "AttrKeys": [
         "setting"
       ]

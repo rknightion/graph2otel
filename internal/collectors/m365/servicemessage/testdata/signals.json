@@ -4,6 +4,7 @@
       "Name": "m365.service_messages.total",
       "Unit": "{message}",
       "Kind": "gauge",
+      "Description": "Count of active M365 message-center posts by category and severity.",
       "AttrKeys": [
         "category",
         "severity"

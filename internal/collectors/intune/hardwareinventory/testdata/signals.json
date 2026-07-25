@@ -4,6 +4,7 @@
       "Name": "graph2otel.api.unexpected",
       "Unit": "1",
       "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
       "AttrKeys": [
         "collector",
         "field",
@@ -14,6 +15,7 @@
       "Name": "intune.hardware_inventory.device_guard_devices",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune managed devices by Windows Device Guard virtualization-based-security state and Credential Guard state (wire enums verbatim). Non-Windows devices report Windows-only values here and must not be read as a macOS/iOS/Linux security posture.",
       "AttrKeys": [
         "credential_guard_state",
         "vbs_state"
@@ -23,6 +25,7 @@
       "Name": "intune.hardware_inventory.devices",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune managed devices reporting hardware inventory, by operating system and hardware manufacturer; per-device detail — storage, TPM chip, firmware, wired IPs, cellular identity — on the intune.device_hardware log twin.",
       "AttrKeys": [
         "manufacturer",
         "operating_system"
@@ -32,6 +35,7 @@
       "Name": "intune.hardware_inventory.storage_bytes",
       "Unit": "By",
       "Kind": "gauge",
+      "Description": "Total and free disk bytes summed across Intune managed devices, by operating system. Devices reporting totalStorageSpace=0 (\"not reported\", e.g. Defender-managed Linux hosts) are excluded rather than summed as zero.",
       "AttrKeys": [
         "operating_system",
         "storage_state"
@@ -41,6 +45,7 @@
       "Name": "intune.hardware_inventory.tpm_devices",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Intune managed devices by TPM specification version, emitted verbatim as the comma-joined wire triple (\"2.0, 0, 1.64\"); \"unknown\" for devices reporting no TPM (iOS/macOS/Linux).",
       "AttrKeys": [
         "tpm_specification_version"
       ]

@@ -4,12 +4,14 @@
       "Name": "intune.detected_apps.catalog_size",
       "Unit": "{app}",
       "Kind": "gauge",
+      "Description": "Total distinct app/version/platform rows in the Intune detectedApps catalog.",
       "AttrKeys": []
     },
     {
       "Name": "intune.detected_apps.device_count",
       "Unit": "{device}",
       "Kind": "gauge",
+      "Description": "Devices reporting a detected app installed, by app name and platform, summed across versions. Bounded by the central cardinality limiter: past cardinality.per_metric_limit the top apps by device count are kept and the tail folds into app_name=\"other\".",
       "AttrKeys": [
         "app_name",
         "platform"

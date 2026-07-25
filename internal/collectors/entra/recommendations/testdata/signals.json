@@ -4,6 +4,7 @@
       "Name": "entra.recommendations.impacted_resources.total",
       "Unit": "{resource}",
       "Kind": "gauge",
+      "Description": "Impacted resources per Entra recommendation type.",
       "AttrKeys": [
         "recommendation"
       ]
@@ -12,6 +13,7 @@
       "Name": "entra.recommendations.total",
       "Unit": "{recommendation}",
       "Kind": "gauge",
+      "Description": "Entra recommendations by status and priority.",
       "AttrKeys": [
         "priority",
         "status"
@@ -21,6 +23,7 @@
       "Name": "graph2otel.api.unexpected",
       "Unit": "1",
       "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
       "AttrKeys": [
         "collector",
         "field",
