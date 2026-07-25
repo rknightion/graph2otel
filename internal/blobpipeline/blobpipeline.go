@@ -29,6 +29,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // DefaultMaxBytesPerTick bounds how much of a single blob one tick reads into
@@ -257,12 +258,16 @@ func Poll(
 	return errors.Join(failures...)
 }
 
-// reportGate emits the per-tick gate self-obs and the one summary line per tick
-// per category (#128). No-op unless a Derive is configured. Counters are batched
-// (one Add of the tick total) — under cumulative temporality that is identical
-// to N individual Add(1) calls, and keeps a backfill burst from thousands of
-// per-record emissions.
+// reportGate emits the dropped-undated watchdog for every container, plus the
+// per-tick metric-gate self-obs and summary for containers with a Derive (#128).
+// Counters are batched (one Add of the tick total) — under cumulative temporality
+// that is identical to N individual Add(1) calls, and keeps a backfill burst from
+// thousands of per-record emissions.
 func reportGate(e telemetry.Emitter, log *slog.Logger, cfg ContainerConfig, stats gateStats) {
+	if stats.dropped > 0 {
+		e.Counter(metricRecordsDropped, "{record}", "Blob records dropped because they had no parseable event time (#275).",
+			float64(stats.dropped), telemetry.Attrs{semconv.AttrCollector: cfg.CollectorName})
+	}
 	if cfg.Derive == nil {
 		return
 	}
@@ -277,10 +282,6 @@ func reportGate(e telemetry.Emitter, log *slog.Logger, cfg ContainerConfig, stat
 	if stats.gated > 0 {
 		e.Counter(metricGated, "{record}", "Blob records too old for the metrics path, taken log-only (#128).",
 			float64(stats.gated), telemetry.Attrs{semconv.AttrCollector: cat})
-	}
-	if stats.dropped > 0 {
-		e.Counter(metricRecordsDropped, "{record}", "Blob records skipped by the metrics path for an unparseable event time (#128).",
-			float64(stats.dropped), telemetry.Attrs{semconv.AttrCollector: cat})
 	}
 	if stats.gated > 0 || stats.freshestSet {
 		log.Info("blob metric gate",
@@ -368,11 +369,11 @@ func consumeBlob(
 	return true, nil
 }
 
-// emitLines decodes and emits every complete JSON-Lines record in data. It
-// always emits the log twin; for a container with a Derive it additionally
-// routes each record's bounded metric increments, gated by RecencyWindow so a
-// backfilled event never touches a counter (#128). stats accumulates the gate
-// decisions for the per-tick summary.
+// emitLines decodes every complete JSON-Lines record in data. Records with a
+// parseable mapper event time emit a log twin; undated records are dropped. For
+// a container with a Derive it additionally routes each valid record's bounded
+// metric increments, gated by RecencyWindow so a backfilled event never touches
+// a counter (#128). stats accumulates the gate decisions for the per-tick summary.
 func emitLines(data []byte, cfg ContainerConfig, e telemetry.Emitter, stats *gateStats, log *slog.Logger, blob string) {
 	for _, line := range bytes.Split(data, []byte("\n")) {
 		line = bytes.TrimSpace(line) // drops the \r of the blobs' CRLF terminator
@@ -403,16 +404,18 @@ func emitLines(data []byte, cfg ContainerConfig, e telemetry.Emitter, stats *gat
 		if !ok {
 			continue
 		}
+		if ev.Timestamp.IsZero() {
+			// The mapper could not establish an event time. Letting it through
+			// would turn the zero timestamp into arrival time at the OTEL
+			// boundary, which is a false event history (#275). The bytes remain
+			// consumed by consumeBlob, preserving the offset cursor's progress.
+			stats.dropped++
+			wirecheck.Shared(cfg.CollectorName).MissingField(e, "event_time")
+			continue
+		}
 		e.LogEvent(ev)
 
 		if cfg.Derive == nil {
-			continue
-		}
-		if ev.Timestamp.IsZero() {
-			// No parseable event time: the log twin still emitted (with no
-			// timestamp), but a counter stamped "now" from an undated record
-			// would be a guess — skip the metric path and count it dropped.
-			stats.dropped++
 			continue
 		}
 		age, ok := withinWindow(ev.Timestamp, time.Now(), cfg.RecencyWindow)

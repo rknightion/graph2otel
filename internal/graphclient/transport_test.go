@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -52,14 +53,14 @@ func TestTransportRetries429(t *testing.T) {
 // TestTransportRecordsOTELMetric asserts the OTEL HTTP instrumentation is present
 // in the chain: an outbound request records a duration metric to the in-memory
 // recorder.
-func TestTransportRecordsOTELMetric(t *testing.T) {
+func TestTransportRecordsOTELMetricWithTenantIdentity(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
 
 	rec := telemetrytest.New()
-	client := newGraphHTTPClient(Options{Emitter: rec.Emitter()})
+	client := newGraphHTTPClient(Options{Emitter: rec.Emitter(), TenantID: "tenant-a"})
 
 	resp, err := client.Get(srv.URL)
 	if err != nil {
@@ -67,14 +68,14 @@ func TestTransportRecordsOTELMetric(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	found := false
-	for _, n := range rec.MetricNames() {
-		if n == metricHTTPClientDuration {
-			found = true
-		}
+	points := rec.MetricPoints(metricHTTPClientDuration)
+	if len(points) != 1 {
+		t.Fatalf("%s points = %d, want 1; metric names: %v",
+			metricHTTPClientDuration, len(points), rec.MetricNames())
 	}
-	if !found {
-		t.Errorf("expected metric %q to be recorded; got %v", metricHTTPClientDuration, rec.MetricNames())
+	if got, present := points[0].Attrs[semconv.AttrTenantID]; !present || got != "tenant-a" {
+		t.Errorf("%s tenant_id = %q present=%v, want tenant-a present=true (attrs=%v)",
+			metricHTTPClientDuration, got, present, points[0].Attrs)
 	}
 }
 

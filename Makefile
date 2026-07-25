@@ -30,7 +30,8 @@ export PATH := $(TOOLS_DIR):$(PATH)
 .PHONY: build test lint fmt vet govulncheck docker check regen tools \
         coverage notices sbom tools-licensing tools-sbom install-hooks \
         helm-docs tools-helm-docs tools-check tools-graphdrift \
-        graphdrift graphdrift-update tidy tidy-check dashboard grafana-check rules
+        graphdrift graphdrift-update tidy tidy-check dashboard grafana-check rules \
+        container-smoke
 
 build:
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/$(BINARY)
@@ -52,6 +53,13 @@ govulncheck: tools
 
 docker:
 	docker build --build-arg VERSION=$(VERSION) -t $(BINARY):dev .
+
+# Build and exercise the documented standalone-container layout. Set
+# CONTAINER_SMOKE_IMAGE plus SKIP_BUILD=1 when a caller already loaded an image
+# (the CI docker-build job does this with graph2otel:ci).
+CONTAINER_SMOKE_IMAGE ?= $(BINARY):container-smoke
+container-smoke:
+	IMAGE=$(CONTAINER_SMOKE_IMAGE) SKIP_BUILD=$(SKIP_BUILD) ./scripts/container-smoke-test.sh
 
 # The green bar — run this before every commit; CI runs the same steps. The
 # generated-doc drift gate (docs/env-vars.md vs config.example.yaml) rides the

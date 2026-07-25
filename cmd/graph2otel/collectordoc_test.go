@@ -67,6 +67,29 @@ func snapshotWindowDeps() collectors.WindowDeps {
 	}
 }
 
+// collectorDocFactoryVisitor is deliberately separate from runtime and
+// preflight. Extending the registration visitor with a new family therefore
+// compile-fails this documentation gate until it snapshots that family too.
+type collectorDocFactoryVisitor struct {
+	snapshot []collectors.Factory
+	window   []collectors.WindowFactory
+	blob     []collectors.BlobFactory
+	o365     []collectors.O365Factory
+	mdca     []collectors.MDCAFactory
+	exo      []collectors.EXOFactory
+	hunt     []collectors.HuntFactory
+}
+
+func (v *collectorDocFactoryVisitor) Snapshot(fs []collectors.Factory)     { v.snapshot = fs }
+func (v *collectorDocFactoryVisitor) Window(fs []collectors.WindowFactory) { v.window = fs }
+func (v *collectorDocFactoryVisitor) Blob(fs []collectors.BlobFactory)     { v.blob = fs }
+func (v *collectorDocFactoryVisitor) O365(fs []collectors.O365Factory)     { v.o365 = fs }
+func (v *collectorDocFactoryVisitor) MDCA(fs []collectors.MDCAFactory)     { v.mdca = fs }
+func (v *collectorDocFactoryVisitor) EXO(fs []collectors.EXOFactory)       { v.exo = fs }
+func (v *collectorDocFactoryVisitor) Hunt(fs []collectors.HuntFactory)     { v.hunt = fs }
+
+var _ collectorFactoryVisitor = (*collectorDocFactoryVisitor)(nil)
+
 // registrySnapshot constructs every registered collector exactly as the tenant
 // loop does, minus the dependencies.
 //
@@ -78,37 +101,39 @@ func snapshotWindowDeps() collectors.WindowDeps {
 // gate went green over a collector missing from the reference entirely. There
 // are now SEVEN paths; if an eighth lands, it is added here too.
 func registrySnapshot() (snapshot, window, blob, o365, mdca, exo, hunt []any) {
-	for _, f := range collectors.All() {
+	var paths collectorDocFactoryVisitor
+	visitRegisteredCollectorFactories(&paths)
+	for _, f := range paths.snapshot {
 		snapshot = append(snapshot, f(collectors.Deps{}))
 	}
-	for _, f := range collectors.WindowAll() {
+	for _, f := range paths.window {
 		rw := f(snapshotWindowDeps())
 		if rw.Collector == nil {
 			continue
 		}
 		window = append(window, rw.Collector)
 	}
-	for _, f := range collectors.BlobAll() {
+	for _, f := range paths.blob {
 		blob = append(blob, f(collectors.BlobDeps{}))
 	}
-	for _, f := range collectors.O365All() {
+	for _, f := range paths.o365 {
 		rw := f(collectors.O365Deps{})
 		if rw.Collector == nil {
 			continue
 		}
 		o365 = append(o365, rw.Collector)
 	}
-	for _, f := range collectors.MDCAAll() {
+	for _, f := range paths.mdca {
 		rw := f(collectors.MDCADeps{})
 		if rw.Collector == nil {
 			continue
 		}
 		mdca = append(mdca, rw.Collector)
 	}
-	for _, f := range collectors.EXOAll() {
+	for _, f := range paths.exo {
 		exo = append(exo, f(collectors.EXODeps{}))
 	}
-	for _, f := range collectors.HuntAll() {
+	for _, f := range paths.hunt {
 		hunt = append(hunt, f(collectors.HuntDeps{}))
 	}
 	return snapshot, window, blob, o365, mdca, exo, hunt

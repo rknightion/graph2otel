@@ -57,17 +57,40 @@ for where that claim stops holding.
      endpoint: "https://otlp-gateway-prod-us-central-0.grafana.net/otlp"
      grafana_cloud:
        instance_id: "123456"
+
+   checkpoint_dir: "/var/lib/graph2otel"
    ```
 
 4. **Run it** — as a container:
 
    ```sh
+   docker volume create graph2otel-checkpoints
+
    docker run --rm \
+     --read-only \
+     --tmpfs /tmp:uid=65532,gid=65532,mode=1777 \
      -e AZURE_TENANT_ID -e AZURE_CLIENT_ID -e AZURE_CLIENT_SECRET \
      -e G2O_OTLP__GRAFANA_CLOUD__TOKEN \
-     -v "$(pwd)/config.yaml:/etc/graph2otel/config.yaml:ro" \
+     --mount type=volume,src=graph2otel-checkpoints,dst=/var/lib/graph2otel \
+     --mount type=bind,src="$(pwd)/config.yaml",dst=/etc/graph2otel/config.yaml,readonly \
      ghcr.io/rknightion/graph2otel:latest \
      --config /etc/graph2otel/config.yaml
+   ```
+
+   The absolute `checkpoint_dir` and named volume are not
+   optional: it preserves window-collector watermarks across container restarts.
+   The image runs as UID/GID `65532`; for a host bind mount instead, prepare it
+   before starting the container:
+
+   ```sh
+   mkdir -p ./checkpoints
+   sudo chown 65532:65532 ./checkpoints
+   ```
+
+   Then replace the volume `--mount` above with:
+
+   ```sh
+   --mount type=bind,src="$(pwd)/checkpoints",dst=/var/lib/graph2otel
    ```
 
    or as a local binary: `go build ./cmd/graph2otel && ./graph2otel --config config.yaml`.
@@ -248,7 +271,7 @@ admin:
   enabled: false  # operator health/status HTTP endpoint (liveness + per-collector status)
   addr: ":9090"
 
-checkpoint_dir: "./checkpoints"  # window-log collector watermark persistence
+checkpoint_dir: "/var/lib/graph2otel"  # persistent, writable container checkpoint volume
 ```
 
 Config is layered: built-in defaults < `config.yaml` (`--config` flag) < `G2O_*`

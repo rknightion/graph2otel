@@ -31,6 +31,11 @@ type CollectorReq struct {
 	// collector needs. An empty/nil slice means the collector declared no
 	// requirement (or didn't implement PermissionRequirer).
 	Permissions []string
+	// UnverifiablePrereqs are non-Graph prerequisites required by this
+	// collector that a Graph application token cannot prove, such as a static
+	// portal token, a service-side subscription, or a directory role. They are
+	// reported explicitly but do not turn a granted Graph role into a failure.
+	UnverifiablePrereqs []string
 }
 
 // CollectorResult is one collector's outcome from Check.
@@ -42,6 +47,9 @@ type CollectorResult struct {
 	// Missing is the subset of Required not present in the granted set, in
 	// the order Required listed them.
 	Missing []string
+	// UnverifiablePrereqs is copied from CollectorReq so the rendered report
+	// keeps the Graph-role proof boundary visible to the operator.
+	UnverifiablePrereqs []string
 	// OK is true when Missing is empty.
 	OK bool
 }
@@ -93,10 +101,11 @@ func Check(granted []string, reqs []CollectorReq) Report {
 			}
 		}
 		results = append(results, CollectorResult{
-			Name:     req.Name,
-			Required: req.Permissions,
-			Missing:  missing,
-			OK:       len(missing) == 0,
+			Name:                req.Name,
+			Required:            req.Permissions,
+			Missing:             missing,
+			UnverifiablePrereqs: req.UnverifiablePrereqs,
+			OK:                  len(missing) == 0,
 		})
 	}
 

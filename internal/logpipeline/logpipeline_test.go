@@ -39,6 +39,70 @@ func newCheckpoint(tenantID, endpoint string) *checkpoint.Checkpoint {
 	return &checkpoint.Checkpoint{TenantID: tenantID, Endpoint: endpoint, SeenIDs: checkpoint.NewSeenIDs()}
 }
 
+// TestPollDropsUndatedRecords keeps #275's boundary at the ingest engine: an
+// event with neither a parseable wire time nor a mapper fallback is not allowed
+// to reach the emitter, where a zero timestamp would otherwise become arrival
+// time. A valid wire time and an intentional mapper fallback remain valid, and
+// dropping the bad row must not stall checkpoint advancement.
+func TestPollDropsUndatedRecords(t *testing.T) {
+	rec := telemetrytest.New()
+	from := time.Date(2026, 7, 25, 10, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+	fallback := from.Add(20 * time.Minute)
+	cfg := EndpointConfig{
+		Path:            "/auditLogs/signIns",
+		CollectorName:   "entra.test.undated",
+		TimeField:       "createdDateTime",
+		Flavor:          FlavorGeLe,
+		OrderByReliable: true,
+		Map: func(record map[string]any) (string, telemetry.Event) {
+			id, _ := record["id"].(string)
+			ev := telemetry.Event{Name: "test.event", Body: id}
+			if id == "mapper-fallback" {
+				ev.Timestamp = fallback
+			}
+			return id, ev
+		},
+	}
+	fetcher := pageFetcherFunc(func(_ context.Context, _ string) ([]map[string]any, string, error) {
+		return []map[string]any{
+			{"id": "undated"},
+			{"id": "malformed", "createdDateTime": "not-rfc3339"},
+			{"id": "wire-time", "createdDateTime": from.Add(10 * time.Minute).Format(time.RFC3339)},
+			{"id": "mapper-fallback"},
+		}, "", nil
+	})
+	cp := newCheckpoint("t1", cfg.Path)
+
+	hw, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter())
+	if err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	logs := rec.LogRecords()
+	if len(logs) != 2 {
+		t.Fatalf("emitted %d logs, want 2 (wire time and mapper fallback only)", len(logs))
+	}
+	if got, want := logs[0].Timestamp, from.Add(10*time.Minute); !got.Equal(want) {
+		t.Errorf("wire-time log timestamp = %v, want %v", got, want)
+	}
+	if got, want := logs[1].Timestamp, fallback; !got.Equal(want) {
+		t.Errorf("mapper-fallback log timestamp = %v, want %v", got, want)
+	}
+	if cp.SeenIDs.Has("undated") {
+		t.Error("undated record entered SeenIDs; a retry must be able to reprocess corrected data")
+	}
+	if cp.SeenIDs.Has("malformed") {
+		t.Error("malformed-time record entered SeenIDs; a retry must be able to reprocess corrected data")
+	}
+	if got, want := hw, fallback.Add(-DefaultSafetyLag); !got.Equal(want) {
+		t.Errorf("high-water = %v, want %v (latest valid event minus safety lag)", got, want)
+	}
+	points := rec.MetricPoints(wirecheck.MetricUnexpected)
+	if len(points) != 1 || points[0].Value != 2 || points[0].Attrs[semconv.AttrField] != "event_time" || points[0].Attrs[semconv.AttrKind] != wirecheck.KindMissingField {
+		t.Errorf("undated watchdog = %+v, want two missing event_time findings", points)
+	}
+}
+
 // TestPollEmptyIDRecordsAllEmitted proves #262's engine pattern is not confined
 // to jobpipeline: the same empty-id SeenIDs poisoning existed here. Three
 // records that map to an empty id in one window must emit three events, "" must

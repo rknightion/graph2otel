@@ -10,10 +10,16 @@ Pre-1.0 and pre-first-release, use the `:main` edge build if you want to try it 
 tagged version exists.
 
 ```sh
+docker volume create graph2otel-checkpoints
+
 docker run --rm \
+  --read-only \
+  --tmpfs /tmp:uid=65532,gid=65532,mode=1777 \
+  --mount type=volume,src=graph2otel-checkpoints,dst=/var/lib/graph2otel \
   -e AZURE_TENANT_ID="..." \
   -e AZURE_CLIENT_ID="..." \
   -e AZURE_CLIENT_SECRET="..." \
+  -e G2O_CHECKPOINT_DIR=/var/lib/graph2otel \
   -e G2O_OTLP__PROTOCOL=stdout \
   ghcr.io/rknightion/graph2otel:main
 ```
@@ -23,10 +29,29 @@ config file is loaded unless you mount one and pass `--config`:
 
 ```sh
 docker run --rm \
-  -v ./config.yaml:/etc/graph2otel/config.yaml:ro \
+  --read-only \
+  --tmpfs /tmp:uid=65532,gid=65532,mode=1777 \
+  --mount type=volume,src=graph2otel-checkpoints,dst=/var/lib/graph2otel \
+  --mount type=bind,src="$(pwd)/config.yaml",dst=/etc/graph2otel/config.yaml,readonly \
   -e AZURE_TENANT_ID="..." -e AZURE_CLIENT_ID="..." -e AZURE_CLIENT_SECRET="..." \
   ghcr.io/rknightion/graph2otel:main \
   --config /etc/graph2otel/config.yaml
+```
+
+Set `checkpoint_dir: /var/lib/graph2otel` in the mounted config. The named
+volume keeps each window collector's watermarks across restarts; do not rely on
+the writable container layer. The image runs as UID/GID `65532`. If policy
+requires a host bind mount instead of a named volume, prepare it first:
+
+```sh
+mkdir -p ./checkpoints
+sudo chown 65532:65532 ./checkpoints
+```
+
+Then replace the volume mount in the commands above with:
+
+```sh
+--mount type=bind,src="$(pwd)/checkpoints",dst=/var/lib/graph2otel
 ```
 
 A Helm chart is planned but not published yet — see the
@@ -89,6 +114,8 @@ tenants:
 
 otlp:
   protocol: stdout
+
+checkpoint_dir: /var/lib/graph2otel
 ```
 
 ```sh

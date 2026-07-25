@@ -724,9 +724,6 @@ func (c *Config) Validate() error {
 // its in-window records accepted while the two out-of-window ones were refused —
 // so one over-old record cannot poison a batch of good ones.
 //
-// This previously read 13 days, attributed to a maintainer estimate. The right
-// order of magnitude, wrong number, and it is now pinned to the wire.
-//
 // It is deliberately a warning threshold and NOT a clamp. graph2otel cannot know
 // every backend's retention policy: a self-hosted Loki may be configured wider,
 // and a non-Loki OTLP sink has entirely different rules. Clamping would silently
@@ -742,21 +739,19 @@ const backendAcceptWindow = 7 * 24 * time.Hour
 func (c *Config) Warnings() []string {
 	var out []string
 
-	// A lookback beyond the backend's accept window is NOT a longer recovery — it
-	// is a guaranteed silent drop at ingest, and that is worse than a short
-	// lookback precisely because it looks like it is working: graph2otel pages
-	// Graph for the history, maps it, ships it, reports no error, and Loki drops
-	// everything past its window on arrival. The operator sees Graph calls being
-	// made, a clean log, and no data in Grafana. This warning is the only thing
-	// connecting that symptom to this setting.
+	// A lookback beyond Grafana Cloud's measured accept window is NOT a longer
+	// recovery: the gateway explicitly rejects each over-age entry. Keep the
+	// accepted-but-late indexing path separate — an in-window backdated record may
+	// take minutes to become queryable even though the gateway accepted it.
 	if c.Backfill.InitialLookback > backendAcceptWindow {
 		out = append(out, fmt.Sprintf(
-			"backfill.initial_lookback is %v, beyond the ~%v that Grafana Cloud's Loki accepts old samples within "+
-				"(reject_old_samples_max_age). graph2otel will poll Graph for that history, map it and ship it, and the "+
-				"backend will silently REJECT every record older than its accept window — no error here, no data in Grafana. "+
-				"This is not clamped, because a self-hosted Loki or a non-Loki OTLP sink may accept more: if yours does, "+
-				"ignore this. Otherwise reduce it to %v or less",
-			c.Backfill.InitialLookback, backendAcceptWindow, backendAcceptWindow))
+			"backfill.initial_lookback is %v, beyond the 7 days measured on Grafana Cloud's Loki "+
+				"(live-measured 2026-07-22, #226). Its strict per-entry rejection is explicit: the gateway returns "+
+				"HTTP 400 through the OTel error handler for each over-age entry while accepting in-window entries in "+
+				"the same batch. Accepted in-window backdated records can be indexed later, so an immediately empty "+
+				"query is not evidence of rejection. This value is not clamped because a self-hosted Loki or non-Loki "+
+				"OTLP sink may accept more; if yours does, ignore this warning. Otherwise reduce it to %v or less",
+			c.Backfill.InitialLookback, backendAcceptWindow))
 	}
 
 	return out

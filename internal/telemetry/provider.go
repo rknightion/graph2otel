@@ -120,8 +120,12 @@ type Provider struct {
 	// limited is emitter wrapped by the cardinality limiter; it is what
 	// Emitter() hands out, so nothing can reach the SDK unbounded.
 	limited Emitter
-	limiter *Limiter
-	card    *CardinalityTracker // nil unless self-observability is enabled
+	// selfObsEmitter is the deliberately process-scoped path used only by
+	// ReportSelfObs. Kept as an interface so the provider-level scope/drift
+	// gate can exercise the exact orchestration against an in-memory emitter.
+	selfObsEmitter Emitter
+	limiter        *Limiter
+	card           *CardinalityTracker // nil unless self-observability is enabled
 }
 
 // metricProviderOptions returns the MeterProvider options shared by the
@@ -218,11 +222,12 @@ func NewProvider(ctx context.Context, opts Options) (*Provider, error) {
 	limiter := NewLimiter(opts.Limits)
 
 	return &Provider{
-		mp:      mp,
-		lp:      lp,
-		emitter: emitter,
-		card:    card,
-		limiter: limiter,
+		mp:             mp,
+		lp:             lp,
+		emitter:        emitter,
+		selfObsEmitter: emitter,
+		card:           card,
+		limiter:        limiter,
 		// The limiter wraps the base emitter INNERMOST, so WithTenant (#143) and
 		// WithTransport (#141) decorate outside it and their stamps are already
 		// applied by the time a point is ranked. tenant_id is part of series
@@ -246,10 +251,14 @@ func (p *Provider) Limiter() *Limiter { return p.limiter }
 //
 // It reports through the UNDECORATED emitter on purpose. These series are the
 // evidence that clipping is happening; routing them through the limiter would
-// make the report subject to the thing it reports on.
+// make the report subject to the thing it reports on. They are also genuinely
+// PROCESS-global: one MeterProvider, limiter and tracker are shared by every
+// tenant. Duplicating the same values once per tenant would make them easy to
+// over-count. providerSelfObsScopes plus its mutation-proven test makes every
+// metric on this bypass an explicit scope decision.
 func (p *Provider) ReportSelfObs() {
-	p.card.Report(p.emitter)
-	p.limiter.Report(p.emitter, p.card.Snapshot())
+	p.card.Report(p.selfObsEmitter)
+	p.limiter.Report(p.selfObsEmitter, p.card.Snapshot())
 }
 
 // Throughput returns the cumulative count of metric data points and log

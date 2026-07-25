@@ -1,7 +1,9 @@
 package preflight
 
 import (
+	"bytes"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -132,6 +134,26 @@ func TestBuildRequirements(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("BuildRequirements() = %+v, want %+v", got, want)
+	}
+}
+
+func TestCheck_ReportsUnverifiablePrerequisiteWithoutFailingRoleCheck(t *testing.T) {
+	report := Check([]string{"ThreatHunting.Read.All"}, []CollectorReq{{
+		Name:                "defender.oauth_app",
+		Permissions:         []string{"ThreatHunting.Read.All"},
+		UnverifiablePrereqs: []string{"Defender Advanced Hunting entitlement and CPU budget"},
+	}})
+
+	if !report.OK {
+		t.Fatalf("Check() OK = false, want true when all Graph roles are granted: %+v", report)
+	}
+	if got, want := report.Collectors[0].UnverifiablePrereqs, []string{"Defender Advanced Hunting entitlement and CPU budget"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("Check() unverifiable prerequisites = %v, want %v", got, want)
+	}
+	var out bytes.Buffer
+	WriteReport(&out, "tenant-a", report)
+	if !strings.Contains(out.String(), "[MANUAL]  defender.oauth_app: Defender Advanced Hunting entitlement and CPU budget") {
+		t.Errorf("WriteReport() omitted manual prerequisite:\n%s", out.String())
 	}
 }
 

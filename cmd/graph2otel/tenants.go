@@ -29,6 +29,29 @@ import (
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
+// runtimeFactoryVisitor owns the runtime view of every collector registration
+// family. Its explicit implementation is a compile-time tripwire: a newly
+// added family cannot be registered at runtime without extending this type.
+type runtimeFactoryVisitor struct {
+	snapshot []collectors.Factory
+	window   []collectors.WindowFactory
+	blob     []collectors.BlobFactory
+	o365     []collectors.O365Factory
+	mdca     []collectors.MDCAFactory
+	exo      []collectors.EXOFactory
+	hunt     []collectors.HuntFactory
+}
+
+func (v *runtimeFactoryVisitor) Snapshot(fs []collectors.Factory)     { v.snapshot = fs }
+func (v *runtimeFactoryVisitor) Window(fs []collectors.WindowFactory) { v.window = fs }
+func (v *runtimeFactoryVisitor) Blob(fs []collectors.BlobFactory)     { v.blob = fs }
+func (v *runtimeFactoryVisitor) O365(fs []collectors.O365Factory)     { v.o365 = fs }
+func (v *runtimeFactoryVisitor) MDCA(fs []collectors.MDCAFactory)     { v.mdca = fs }
+func (v *runtimeFactoryVisitor) EXO(fs []collectors.EXOFactory)       { v.exo = fs }
+func (v *runtimeFactoryVisitor) Hunt(fs []collectors.HuntFactory)     { v.hunt = fs }
+
+var _ collectorFactoryVisitor = (*runtimeFactoryVisitor)(nil)
+
 // startTenants builds one Graph client + collector set per configured tenant,
 // gates each collector by license tier and config, and launches a per-tenant
 // Scheduler goroutine bound to ctx. It returns the admin status sources (one
@@ -146,6 +169,8 @@ func setupTenant(
 	// tuning) just reduces the reuse rate, never correctness.
 	fleet := collectors.NewCachingFleetFetcher(gc, "https://graph.microsoft.com/v1.0", 30*time.Minute)
 	deps := collectors.Deps{Graph: gc, TenantID: ta.TenantID, Logger: tlog, Caps: caps, Export: exporter, Fleet: fleet, Store: store}
+	var paths runtimeFactoryVisitor
+	visitRegisteredCollectorFactories(&paths)
 	// polledNames records the stable name of every graph/window (polled)
 	// collector, gated in or not, so a same-named blob twin can be recognized as
 	// the second TRANSPORT of a polled collector and selected against it by
@@ -176,7 +201,7 @@ func setupTenant(
 		deps.ARM = armclient.NewClient(ta.Cred, armclient.Options{Logger: tlog})
 		deps.BlobContainerNames = collectors.BlobContainers(ta.TenantID, tlog)
 	}
-	for _, factory := range collectors.All() {
+	for _, factory := range paths.snapshot {
 		c := factory(deps)
 		polledNames[c.Name()] = true
 		if interval, ok := gateCollector(c, ta, cfg, caps, tlog, skips); ok {
@@ -216,7 +241,7 @@ func setupTenant(
 		ExcludeSelf:  wExcludeSelf,
 		SelfClientID: wClientID,
 	}
-	for _, wf := range collectors.WindowAll() {
+	for _, wf := range paths.window {
 		rw := wf(wdeps)
 		if rw.Collector == nil {
 			continue
@@ -245,19 +270,19 @@ func setupTenant(
 	// for at all. Configuring blob_ingest.account_url IS the opt-in: a tenant
 	// that has provisioned no storage account registers none of these, so a
 	// default deployment is untouched.
-	registerBlobCollectors(cfg, ta, caps, store, tlog, registry, skips, polledNames)
+	registerBlobCollectors(cfg, ta, caps, store, tlog, registry, skips, polledNames, paths.blob)
 
 	// O365 Management Activity API collectors (#100) — the second non-Graph
 	// first-party API. Unlike blob ingest this needs no infrastructure opt-in:
 	// the tenant's existing credential just requests a different audience, so
 	// these are default-on.
-	registerO365Collectors(cfg, ta, caps, store, tlog, emitter, registry, skips)
+	registerO365Collectors(cfg, ta, caps, store, tlog, emitter, registry, skips, paths.o365)
 
 	// MDCA Cloud Discovery collectors (#145) — the FIFTH registration path and
 	// the one non-Graph, non-poller signal. Opt-in like blob ingest: setting the
 	// tenant's mdca.portal_url is the switch, so a tenant with no mdca block
 	// registers none of these.
-	registerMDCACollectors(cfg, ta, caps, store, tlog, emitter, registry, skips)
+	registerMDCACollectors(cfg, ta, caps, store, tlog, emitter, registry, skips, paths.mdca)
 
 	// Exchange Online admin API collectors (#233) — the SIXTH registration path
 	// and the fourth first-party API. Opt-in like blob ingest and MDCA, but for
@@ -265,7 +290,7 @@ func setupTenant(
 	// (an app role AND an Entra directory role) that graph2otel cannot detect in
 	// advance and that most tenants will not have, so the switch is
 	// exchange_online.enabled rather than the presence of a URL or token.
-	registerEXOCollectors(cfg, ta, caps, tlog, exoClient, exoBuildErr, registry, skips)
+	registerEXOCollectors(cfg, ta, caps, tlog, exoClient, exoBuildErr, registry, skips, paths.exo)
 
 	// Advanced-hunting collectors (#249) — the SEVENTH registration path. The
 	// DeviceTvm* threat-and-vulnerability-management posture, reached over the
@@ -275,7 +300,7 @@ func setupTenant(
 	// every query draws on a per-tenant advanced-hunting CPU budget shared with
 	// humans in the Defender portal (#106), so an operator turns it on
 	// deliberately.
-	registerHuntCollectors(cfg, ta, caps, tlog, emitter, registry, skips)
+	registerHuntCollectors(cfg, ta, caps, tlog, emitter, registry, skips, paths.hunt)
 
 	// Transport mutual-exclusion, checked AFTER every registration path above
 	// and before anything is scheduled (#144). Position is load-bearing: run
@@ -417,6 +442,7 @@ func registerBlobCollectors(
 	registry *collector.Registry,
 	skips map[admin.SkipKey]string,
 	polledNames map[string]bool,
+	blobFactories []collectors.BlobFactory,
 ) {
 	accountURL := tenantBlobAccountURL(cfg, ta.TenantID)
 	if accountURL == "" {
@@ -427,7 +453,7 @@ func registerBlobCollectors(
 	if err != nil {
 		tlog.Error("blob ingest disabled: building the storage source failed",
 			"account_url", accountURL, "error", err)
-		for _, bf := range collectors.BlobAll() {
+		for _, bf := range blobFactories {
 			c := bf(collectors.BlobDeps{TenantID: ta.TenantID, Logger: tlog, Store: store})
 			skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] = "blob ingest unavailable: " + err.Error()
 		}
@@ -452,7 +478,7 @@ func registerBlobCollectors(
 		ExcludeSelf: excludeSelf, SelfClientID: clientID,
 		MetricRecencyWindow: cfg.BlobMetricRecencyWindow(ta.TenantID),
 	}
-	for _, bf := range collectors.BlobAll() {
+	for _, bf := range blobFactories {
 		c := bf(bdeps)
 		// A blob collector whose name matches a polled collector is that
 		// collector's second TRANSPORT (#135 group D): register it only when
@@ -492,11 +518,12 @@ func registerO365Collectors(
 	emitter telemetry.Emitter,
 	registry *collector.Registry,
 	skips map[admin.SkipKey]string,
+	o365Factories []collectors.O365Factory,
 ) {
 	types, err := tenantO365ContentTypes(cfg, ta.TenantID)
 	if err != nil {
 		tlog.Error("o365 activity disabled: invalid content_types", "error", err)
-		recordO365Skips(store, ta, tlog, skips, "o365 activity unavailable: "+err.Error())
+		recordO365Skips(store, ta, tlog, skips, "o365 activity unavailable: "+err.Error(), o365Factories)
 		return
 	}
 
@@ -518,7 +545,7 @@ func registerO365Collectors(
 	})
 	if err != nil {
 		tlog.Error("o365 activity disabled: building the client failed", "error", err)
-		recordO365Skips(store, ta, tlog, skips, "o365 activity unavailable: "+err.Error())
+		recordO365Skips(store, ta, tlog, skips, "o365 activity unavailable: "+err.Error(), o365Factories)
 		return
 	}
 
@@ -529,7 +556,7 @@ func registerO365Collectors(
 		Logger:       tlog,
 		Store:        store,
 	}
-	for _, of := range collectors.O365All() {
+	for _, of := range o365Factories {
 		rw := of(odeps)
 		if rw.Collector == nil {
 			continue
@@ -560,6 +587,7 @@ func registerMDCACollectors(
 	emitter telemetry.Emitter,
 	registry *collector.Registry,
 	skips map[admin.SkipKey]string,
+	mdcaFactories []collectors.MDCAFactory,
 ) {
 	mc := tenantMDCAConfig(cfg, ta.TenantID)
 	if !mc.Configured() {
@@ -569,7 +597,7 @@ func registerMDCACollectors(
 	token, err := os.ReadFile(mc.TokenFile)
 	if err != nil {
 		tlog.Error("mdca disabled: reading token_file failed", "path", mc.TokenFile, "error", err)
-		recordMDCASkips(store, ta, tlog, skips, "mdca unavailable: reading token_file failed: "+err.Error())
+		recordMDCASkips(store, ta, tlog, skips, "mdca unavailable: reading token_file failed: "+err.Error(), mdcaFactories)
 		return
 	}
 	client, err := mdcaclient.NewClient(ta.TenantID, mdcaclient.Options{
@@ -580,7 +608,7 @@ func registerMDCACollectors(
 	})
 	if err != nil {
 		tlog.Error("mdca disabled: building the client failed", "error", err)
-		recordMDCASkips(store, ta, tlog, skips, "mdca unavailable: "+err.Error())
+		recordMDCASkips(store, ta, tlog, skips, "mdca unavailable: "+err.Error(), mdcaFactories)
 		return
 	}
 
@@ -590,7 +618,7 @@ func registerMDCACollectors(
 		Logger:   tlog,
 		Store:    store,
 	}
-	for _, mf := range collectors.MDCAAll() {
+	for _, mf := range mdcaFactories {
 		rw := mf(mdeps)
 		if rw.Collector == nil {
 			continue
@@ -652,6 +680,7 @@ func registerEXOCollectors(
 	buildErr error,
 	registry *collector.Registry,
 	skips map[admin.SkipKey]string,
+	exoFactories []collectors.EXOFactory,
 ) {
 	if !tenantEXOConfig(cfg, ta.TenantID).Enabled {
 		return // opt-out: no exchange_online block, nothing to register or skip.
@@ -660,7 +689,7 @@ func registerEXOCollectors(
 	if buildErr != nil {
 		tlog.Error("exchange online disabled: building the client failed", "error", buildErr)
 		reason := "exchange online unavailable: " + buildErr.Error()
-		for _, ef := range collectors.EXOAll() {
+		for _, ef := range exoFactories {
 			c := ef(collectors.EXODeps{TenantID: ta.TenantID, Logger: tlog})
 			skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] = reason
 		}
@@ -668,7 +697,7 @@ func registerEXOCollectors(
 	}
 
 	edeps := collectors.EXODeps{Client: client, TenantID: ta.TenantID, Logger: tlog}
-	for _, ef := range collectors.EXOAll() {
+	for _, ef := range exoFactories {
 		c := ef(edeps)
 		if interval, ok := gateCollector(c, ta, cfg, caps, tlog, skips); ok {
 			registry.Register(c, interval)
@@ -708,6 +737,7 @@ func registerHuntCollectors(
 	emitter telemetry.Emitter,
 	registry *collector.Registry,
 	skips map[admin.SkipKey]string,
+	huntFactories []collectors.HuntFactory,
 ) {
 	if !tenantHuntingConfig(cfg, ta.TenantID).Enabled {
 		return // opt-out: no hunting block, nothing to register or skip.
@@ -717,7 +747,7 @@ func registerHuntCollectors(
 	if err != nil {
 		tlog.Error("advanced hunting disabled: building the client failed", "error", err)
 		reason := "advanced hunting unavailable: " + err.Error()
-		for _, hf := range collectors.HuntAll() {
+		for _, hf := range huntFactories {
 			c := hf(collectors.HuntDeps{TenantID: ta.TenantID, Logger: tlog})
 			skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] = reason
 		}
@@ -725,7 +755,7 @@ func registerHuntCollectors(
 	}
 
 	hdeps := collectors.HuntDeps{Client: client, TenantID: ta.TenantID, Logger: tlog}
-	for _, hf := range collectors.HuntAll() {
+	for _, hf := range huntFactories {
 		c := hf(hdeps)
 		if interval, ok := gateCollector(c, ta, cfg, caps, tlog, skips); ok {
 			registry.Register(c, interval)
@@ -753,8 +783,9 @@ func recordMDCASkips(
 	tlog *slog.Logger,
 	skips map[admin.SkipKey]string,
 	reason string,
+	mdcaFactories []collectors.MDCAFactory,
 ) {
-	for _, mf := range collectors.MDCAAll() {
+	for _, mf := range mdcaFactories {
 		rw := mf(collectors.MDCADeps{TenantID: ta.TenantID, Logger: tlog, Store: store})
 		if rw.Collector == nil {
 			continue
@@ -783,8 +814,9 @@ func recordO365Skips(
 	tlog *slog.Logger,
 	skips map[admin.SkipKey]string,
 	reason string,
+	o365Factories []collectors.O365Factory,
 ) {
-	for _, of := range collectors.O365All() {
+	for _, of := range o365Factories {
 		rw := of(collectors.O365Deps{TenantID: ta.TenantID, Logger: tlog, Store: store})
 		if rw.Collector == nil {
 			continue
@@ -872,28 +904,39 @@ func gateCollector(
 	tlog *slog.Logger,
 	skips map[admin.SkipKey]string,
 ) (time.Duration, bool) {
-	if ok, requiredCap, _ := license.ShouldRun(c, caps); !ok {
-		tlog.Info("skipping collector", "collector", c.Name(), "reason", license.SkipReason(c.Name(), ta.TenantID, requiredCap))
-		skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] = fmt.Sprintf("requires %s", requiredCap)
-		return 0, false
-	}
-	enabled, interval := cfg.CollectorSettings(ta.TenantID, c.Name())
+	interval, enabled, reason := collectorGate(c, cfg, ta.TenantID, caps)
 	if !enabled {
-		tlog.Info("collector disabled by config", "collector", c.Name())
-		skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] = "disabled by config"
-		return 0, false
-	}
-	if exp, ok := c.(collectors.Experimental); ok && exp.Experimental() &&
-		!cfg.CollectorExplicitlyEnabled(ta.TenantID, c.Name()) {
-		tlog.Info("skipping experimental collector (opt-in)", "collector", c.Name())
-		skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] = "beta; enable explicitly to opt in"
-		return 0, false
-	}
-	if hv, ok := c.(collectors.HighVolume); ok && hv.HighVolume() &&
-		!cfg.CollectorExplicitlyEnabled(ta.TenantID, c.Name()) {
-		tlog.Info("skipping high-volume collector (opt-in)", "collector", c.Name())
-		skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] = "high volume; enable explicitly to opt in"
+		tlog.Info("skipping collector", "collector", c.Name(), "reason", reason)
+		skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] = reason
 		return 0, false
 	}
 	return interval, true
+}
+
+// collectorEnabledForConfig is the pure enablement portion of gateCollector.
+// It is shared by the permission preflight so the preflight inventory follows
+// the runtime's license/config/experimental/high-volume decisions without
+// constructing a tenant client or recording runtime skips.
+func collectorEnabledForConfig(c collector.Collector, cfg *config.Config, tenantID string, caps license.Capabilities) bool {
+	_, enabled, _ := collectorGate(c, cfg, tenantID, caps)
+	return enabled
+}
+
+// collectorGate is the shared, side-effect-free runtime selection rule. The
+// scheduler records its skip reason; preflight only needs the selected bit.
+func collectorGate(c collector.Collector, cfg *config.Config, tenantID string, caps license.Capabilities) (time.Duration, bool, string) {
+	if ok, requiredCap, _ := license.ShouldRun(c, caps); !ok {
+		return 0, false, fmt.Sprintf("requires %s", requiredCap)
+	}
+	enabled, interval := cfg.CollectorSettings(tenantID, c.Name())
+	if !enabled {
+		return 0, false, "disabled by config"
+	}
+	if exp, ok := c.(collectors.Experimental); ok && exp.Experimental() && !cfg.CollectorExplicitlyEnabled(tenantID, c.Name()) {
+		return 0, false, "beta; enable explicitly to opt in"
+	}
+	if hv, ok := c.(collectors.HighVolume); ok && hv.HighVolume() && !cfg.CollectorExplicitlyEnabled(tenantID, c.Name()) {
+		return 0, false, "high volume; enable explicitly to opt in"
+	}
+	return interval, true, ""
 }

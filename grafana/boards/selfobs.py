@@ -12,17 +12,17 @@ the transport and the telemetry package, none of which is a collector package
 and none of which has a golden.
 
 Those metrics are declared in ``grafana/selfobs_metrics.py`` (the ``SELF_OBS``
-allow-list), by hand, as ``(otel name, unit, kind)`` triples copied from their
-emit sites — shared with ``grafana/build_rules.py`` (#219) so the two
-generators cannot each hand-declare their own copy and drift apart. Only the
-triple is hand-kept: the Prometheus name is DERIVED by ``promname.prom_name``,
-the same rule the Go catalog uses, pinned to it by a test over all 274
-cataloged metrics. That is what keeps the derivation honest even where the
-catalog cannot reach.
+allow-list), by hand, as ``(otel name, unit, kind, scope)`` quadruples copied
+from their emit sites — shared with ``grafana/build_rules.py`` (#219) so the
+two generators cannot each hand-declare their own copy and drift apart. The
+Prometheus name is DERIVED by ``promname.prom_name``, the same rule the Go
+catalog uses, pinned to it by a test over all 274 cataloged metrics.
 
-**These panels are NOT covered by the coverage gate** — the gate can only gate
-what the catalog can see. Extending signalcapture to non-collector packages is
-the fix, and it belongs with signalcapture, not here.
+The normal catalog coverage gate cannot see these metrics, so #284 adds an
+equivalent explicit gate over ``SELF_OBS``: every entry must reach a panel,
+declare ``tenant`` or ``process`` scope, and use a tenant selector exactly when
+its declared scope is tenant. This keeps both name coverage and identity
+semantics gated even where signalcapture cannot reach.
 """
 
 from builder import RATE, TENANT_SEL
@@ -73,6 +73,7 @@ EXPORT_BYTES = SELF_OBS["graph2otel.export.bytes"].prom
 SERIES_ACTIVE = SELF_OBS["graph2otel.series.active"].prom
 SERIES_LIMIT = SELF_OBS["graph2otel.series.limit"].prom
 SERIES_CLIPPED = SELF_OBS["graph2otel.series.clipped"].prom
+SERIES_TOTAL = SELF_OBS["graph2otel.series.total"].prom
 THROTTLE_COUNT = SELF_OBS["graph2otel.throttle.count"].prom
 THROTTLE_PCT = SELF_OBS["graph2otel.throttle.limit_percentage"].prom
 HTTP_DURATION = SELF_OBS["graph2otel.http.client.request.duration"].prom
@@ -115,7 +116,10 @@ def extra(b):
                "next tick still advances; the window is only re-polled after a restart.")
 
     b.row("Build and licensing")
-    b.raw("Build info (what is deployed)", [f"{BUILD_INFO}{_T}"], viz="table", w=12, h=6)
+    b.raw("Build info (process-wide)", [BUILD_INFO], viz="table", w=12, h=6,
+          desc="One series for the graph2otel process. Tenant selection does not apply: "
+               "duplicating build identity per tenant would create misleading copies of "
+               "the same process fact.")
     b.raw("Detected license tier by tenant", [f"{LICENSE_TIER}{_T}"], viz="table", w=12, h=6)
 
     b.row("Export jobs (Intune report exports, M365 audit query)")
@@ -126,17 +130,23 @@ def extra(b):
     b.raw("Downloaded export size", [f"{EXPORT_BYTES}{_T}"], unit="bytes", w=24, h=6)
 
     b.row("Cardinality limiter (#235)")
-    b.raw("Active series by source metric",
-          [f"topk(25, {SERIES_ACTIVE}{_T})"], viz="table", w=12, h=8,
-          desc="Distinct series emitted per source metric AFTER limiting — the series "
-               "actually billed.")
-    b.raw("Series clipped, by mode",
-          [f"sum by (metric_name, mode) ({SERIES_CLIPPED}{_T})"], w=12, h=8,
+    b.raw("Active series by source metric (process-wide)",
+          [f"topk(25, {SERIES_ACTIVE})"], viz="table", w=12, h=8,
+          desc="Distinct series emitted per source metric across the shared process AFTER "
+               "limiting — the series actually billed. Tenant selection does not apply.")
+    b.raw("Series clipped, by mode (process-wide)",
+          [f"sum by (metric_name, mode) ({SERIES_CLIPPED})"], w=12, h=8,
           desc="mode=folded were summed into the `other` bucket; mode=dropped were "
                "discarded because the metric is not additive and a synthetic aggregate "
-               "would be worse than the loss.")
-    b.raw("Configured per-metric series limit", [f"{SERIES_LIMIT}{_T}"], viz="stat",
-          w=24, h=4)
+               "would be worse than the loss. Counts cover the shared process; tenant "
+               "selection does not apply.")
+    b.raw("Total active series (process-wide)", [SERIES_TOTAL], viz="stat",
+          w=12, h=4,
+          desc="Total distinct active series across the shared process during the last "
+               "export interval. Tenant selection does not apply.")
+    b.raw("Configured per-metric series limit (process-wide)", [SERIES_LIMIT], viz="stat",
+          w=12, h=4,
+          desc="One process-wide cardinality policy. Tenant selection does not apply.")
 
     b.row("Graph throttling and outbound HTTP")
     b.raw("Throttle (429) rate by workload",

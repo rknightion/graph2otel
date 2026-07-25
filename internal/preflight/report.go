@@ -16,11 +16,15 @@ func WriteReport(w io.Writer, tenantID string, r Report) {
 		fmt.Fprintln(w, "  (no collector permission requirements to check)")
 	}
 	for _, cr := range r.Collectors {
-		if cr.OK {
+		manualOnly := cr.OK && len(cr.Required) == 0 && len(cr.UnverifiablePrereqs) > 0
+		if cr.OK && !manualOnly {
 			fmt.Fprintf(w, "  [OK]      %s (%d permission(s) required, all granted)\n", cr.Name, len(cr.Required))
-			continue
+		} else if !cr.OK {
+			fmt.Fprintf(w, "  [MISSING] %s: missing %s\n", cr.Name, strings.Join(cr.Missing, ", "))
 		}
-		fmt.Fprintf(w, "  [MISSING] %s: missing %s\n", cr.Name, strings.Join(cr.Missing, ", "))
+		if len(cr.UnverifiablePrereqs) > 0 {
+			fmt.Fprintf(w, "  [MANUAL]  %s: %s\n", cr.Name, strings.Join(cr.UnverifiablePrereqs, "; "))
+		}
 	}
 
 	if len(r.ExpectedExceptions) > 0 {
@@ -29,8 +33,21 @@ func WriteReport(w io.Writer, tenantID string, r Report) {
 	}
 
 	if r.OK {
-		fmt.Fprintln(w, "  all enabled collectors satisfied.")
+		if hasManualPrerequisites(r.Collectors) {
+			fmt.Fprintln(w, "  all enabled collectors' Graph permissions satisfied; complete the [MANUAL] prerequisites.")
+		} else {
+			fmt.Fprintln(w, "  all enabled collectors satisfied.")
+		}
 		return
 	}
 	fmt.Fprintf(w, "  grant and admin-consent these permissions: %s\n", strings.Join(r.MissingAggregate, ", "))
+}
+
+func hasManualPrerequisites(collectors []CollectorResult) bool {
+	for _, collector := range collectors {
+		if len(collector.UnverifiablePrereqs) > 0 {
+			return true
+		}
+	}
+	return false
 }

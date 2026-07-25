@@ -39,14 +39,24 @@ func TestTransportRecordsHTTP4xx(t *testing.T) {
 	if p.Value != 1 {
 		t.Errorf("http_4xx value = %v, want 1", p.Value)
 	}
-	if p.Attrs[attrTenantID] != "tenant-a" {
-		t.Errorf("tenant attr = %q, want tenant-a; attrs=%v", p.Attrs[attrTenantID], p.Attrs)
+	if got, ok := p.Attrs[attrTenantID]; !ok || got != "tenant-a" {
+		t.Errorf("tenant attr = %q present=%v, want tenant-a present=true; attrs=%v",
+			got, ok, p.Attrs)
 	}
 	if p.Attrs[attrWorkload] != string(WorkloadDirectory) {
 		t.Errorf("workload attr = %q, want %q; attrs=%v", p.Attrs[attrWorkload], WorkloadDirectory, p.Attrs)
 	}
 	if p.Attrs[attrHTTPStatusCode] != "404" {
 		t.Errorf("status attr = %q, want 404; attrs=%v", p.Attrs[attrHTTPStatusCode], p.Attrs)
+	}
+	duration := rec.MetricPoints(metricHTTPClientDuration)
+	durationTenant, durationPresent := "", false
+	if len(duration) == 1 {
+		durationTenant, durationPresent = duration[0].Attrs[attrTenantID]
+	}
+	if len(duration) != 1 || !durationPresent || durationTenant != p.Attrs[attrTenantID] {
+		t.Errorf("duration and 4xx counter disagree on tenant scope: duration=%+v counter=%+v",
+			duration, p)
 	}
 	if got := rec.MetricPoints(metricHTTPClient5xx); len(got) != 0 {
 		t.Errorf("http_5xx points = %d, want 0 (a 4xx must not be counted as a 5xx)", len(got))
@@ -82,14 +92,24 @@ func TestTransportRecordsHTTP5xx(t *testing.T) {
 	if p.Value != 1 {
 		t.Errorf("http_5xx value = %v, want 1", p.Value)
 	}
-	if p.Attrs[attrTenantID] != "tenant-b" {
-		t.Errorf("tenant attr = %q, want tenant-b; attrs=%v", p.Attrs[attrTenantID], p.Attrs)
+	if got, ok := p.Attrs[attrTenantID]; !ok || got != "tenant-b" {
+		t.Errorf("tenant attr = %q present=%v, want tenant-b present=true; attrs=%v",
+			got, ok, p.Attrs)
 	}
 	if p.Attrs[attrWorkload] != string(WorkloadIntuneDevices) {
 		t.Errorf("workload attr = %q, want %q; attrs=%v", p.Attrs[attrWorkload], WorkloadIntuneDevices, p.Attrs)
 	}
 	if p.Attrs[attrHTTPStatusCode] != "500" {
 		t.Errorf("status attr = %q, want 500; attrs=%v", p.Attrs[attrHTTPStatusCode], p.Attrs)
+	}
+	duration := rec.MetricPoints(metricHTTPClientDuration)
+	durationTenant, durationPresent := "", false
+	if len(duration) == 1 {
+		durationTenant, durationPresent = duration[0].Attrs[attrTenantID]
+	}
+	if len(duration) != 1 || !durationPresent || durationTenant != p.Attrs[attrTenantID] {
+		t.Errorf("duration and 5xx counter disagree on tenant scope: duration=%+v counter=%+v",
+			duration, p)
 	}
 	if got := rec.MetricPoints(metricHTTPClient4xx); len(got) != 0 {
 		t.Errorf("http_4xx points = %d, want 0 (a 5xx must not be counted as a 4xx)", len(got))
@@ -118,6 +138,37 @@ func TestTransportDoesNotCountSuccess(t *testing.T) {
 	}
 	if got := rec.MetricPoints(metricHTTPClient5xx); len(got) != 0 {
 		t.Errorf("http_5xx points = %d, want 0 for a 2xx", len(got))
+	}
+}
+
+// TestTransportEmptyTenantOmitsIdentityFromDurationAndErrorCounter pins the
+// same empty-tenant contract as telemetry.WithTenant: absence means "no tenant
+// configured"; an explicitly-present empty label is a different Prometheus
+// series shape and must not leak from one half of the transport metrics.
+func TestTransportEmptyTenantOmitsIdentityFromDurationAndErrorCounter(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	rec := telemetrytest.New()
+	client := newGraphHTTPClient(Options{Emitter: rec.Emitter()})
+
+	resp, err := client.Get(srv.URL + "/users/abc")
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	resp.Body.Close()
+
+	for _, metric := range []string{metricHTTPClientDuration, metricHTTPClient4xx} {
+		points := rec.MetricPoints(metric)
+		if len(points) != 1 {
+			t.Fatalf("%s points = %d, want 1: %+v", metric, len(points), points)
+		}
+		if got, present := points[0].Attrs[attrTenantID]; present {
+			t.Errorf("%s tenant_id = %q present=true, want key absent; attrs=%v",
+				metric, got, points[0].Attrs)
+		}
 	}
 }
 

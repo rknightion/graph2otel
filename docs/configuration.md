@@ -201,17 +201,18 @@ watermark, and a gap longer than a collector's max window is walked forward in c
 chunks across successive ticks — losslessly. This key only governs the case where there
 is no checkpoint to resume from.
 
-> **There is a ceiling, and exceeding it fails silently.** graph2otel ships logs over
-> OTLP into Loki, which rejects samples older than `reject_old_samples_max_age` — about
-> **13 days** on Grafana Cloud. A larger `initial_lookback` is not a longer recovery: it
-> is a guaranteed drop at ingest. graph2otel polls Graph for the history, maps it, ships
-> it, and reports no error, while the backend discards everything past its window. You
-> see Graph calls being made, a clean log, and no data in Grafana — which is worse than
-> a short lookback, because it looks like it is working.
+> **Grafana Cloud has a measured seven-day ceiling.** Its OTLP gateway strictly rejects
+> entries older than **7 days**. The rejection is explicit and per-entry: an HTTP 400
+> reaches the OTel error handler for each over-age entry, while in-window entries in the
+> same batch remain accepted. `[live-measured 2026-07-22, #226]`
 >
-> graph2otel **warns** past ~13d but deliberately does **not** clamp: a self-hosted Loki
-> may be configured wider, and a non-Loki OTLP sink has its own rules, so graph2otel does
-> not presume to know your backend's retention. If yours accepts more, ignore the warning.
+> Accepted in-window backdated records can be **indexed later** than fresh records. An
+> immediately empty query is therefore not evidence of rejection; the explicit gateway
+> response is. See [Backdated log records](signals.md#backdated-log-records-accepted-to-7-days-but-not-queryable-immediately).
+>
+> This value is **not clamped**. A self-hosted Loki may be configured wider, and a
+> non-Loki OTLP sink has its own rules, so graph2otel does not generalize Grafana Cloud's
+> measured ceiling to every backend. If yours accepts more, ignore the warning.
 
 ## Secrets — what never belongs in this file
 

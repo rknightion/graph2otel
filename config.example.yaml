@@ -244,15 +244,15 @@ cardinality:
 # replaces ALL of them, so set it for a deliberate recovery rather than as a
 # permanent default.
 #
-# CEILING — this is the part that bites: graph2otel ships logs over OTLP into Loki,
-# which REJECTS samples older than reject_old_samples_max_age (~13d on Grafana
-# Cloud). Setting this beyond that is not a longer recovery, it is a guaranteed
-# silent drop at ingest: Graph gets polled, records get shipped, nothing errors,
-# and nothing appears in Grafana. graph2otel WARNS past ~13d but does not clamp,
-# because a self-hosted Loki or a non-Loki sink may legitimately accept more.
+# GRAFANA CLOUD CEILING — live-measured 2026-07-22 (#226): its OTLP gateway
+# strictly rejects entries older than 7 days. Rejection is explicit and per-entry
+# (HTTP 400 through the OTel error handler); in-window entries in the same batch
+# remain accepted. Accepted in-window backdated records can be indexed later, so
+# an immediately empty query is not evidence of rejection. This value is not clamped
+# because a self-hosted Loki or non-Loki OTLP sink may accept more.
 # Env: G2O_BACKFILL__INITIAL_LOOKBACK.
 backfill:
-  initial_lookback: 0s # cold-start backfill window; 0 = each collector's own built-in lookback. Warns past 7d (the measured OTLP accept window, #226)
+  initial_lookback: 0s # cold-start backfill window; 0 = each collector's own built-in lookback
 
 # checkpoint_dir is where window-log collectors persist their per-(tenant,
 # endpoint) watermarks so a restart resumes rather than re-fetching or dropping.

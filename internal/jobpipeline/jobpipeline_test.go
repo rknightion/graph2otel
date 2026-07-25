@@ -105,6 +105,66 @@ func baseConfig() QueryConfig {
 	}
 }
 
+// TestRunDropsUndatedRecords keeps #275's boundary at the job engine. The
+// query window's end is an ingest boundary, not an event time: it must never
+// replace an absent timestamp. A valid wire time and mapper fallback still
+// emit, while the completed query advances its checkpoint normally.
+func TestRunDropsUndatedRecords(t *testing.T) {
+	rec := telemetrytest.New()
+	from := time.Date(2026, 7, 25, 10, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+	fallback := from.Add(20 * time.Minute)
+	cfg := baseConfig()
+	cfg.CollectorName = "m365.test.undated"
+	cfg.Map = func(record map[string]any) (string, telemetry.Event) {
+		id, _ := record["id"].(string)
+		ev := telemetry.Event{Name: "test.event", Body: id}
+		if id == "mapper-fallback" {
+			ev.Timestamp = fallback
+		}
+		return id, ev
+	}
+	page := recordsURL("query-1", DefaultPageSize)
+	client := &fakeJobClient{
+		statuses: []string{StatusSucceeded},
+		pages: map[string]fakePage{page: {records: []map[string]any{
+			{"id": "undated"},
+			{"id": "malformed", "createdDateTime": "not-rfc3339"},
+			{"id": "wire-time", "createdDateTime": from.Add(10 * time.Minute).Format(time.RFC3339)},
+			{"id": "mapper-fallback"},
+		}}},
+	}
+	cp := newCheckpoint("t1", cfg.CreatePath)
+
+	hw, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	logs := rec.LogRecords()
+	if len(logs) != 2 {
+		t.Fatalf("emitted %d logs, want 2 (wire time and mapper fallback only)", len(logs))
+	}
+	if got, want := logs[0].Timestamp, from.Add(10*time.Minute); !got.Equal(want) {
+		t.Errorf("wire-time log timestamp = %v, want %v", got, want)
+	}
+	if got, want := logs[1].Timestamp, fallback; !got.Equal(want) {
+		t.Errorf("mapper-fallback log timestamp = %v, want %v", got, want)
+	}
+	if cp.SeenIDs.Has("undated") {
+		t.Error("undated record entered SeenIDs; a retry must be able to reprocess corrected data")
+	}
+	if cp.SeenIDs.Has("malformed") {
+		t.Error("malformed-time record entered SeenIDs; a retry must be able to reprocess corrected data")
+	}
+	if got, want := hw, to.Add(-DefaultSafetyLag); !got.Equal(want) {
+		t.Errorf("high-water = %v, want %v (fully drained query still advances to its safe boundary)", got, want)
+	}
+	points := rec.MetricPoints(wirecheck.MetricUnexpected)
+	if len(points) != 1 || points[0].Value != 2 || points[0].Attrs[semconv.AttrField] != "event_time" || points[0].Attrs[semconv.AttrKind] != wirecheck.KindMissingField {
+		t.Errorf("undated watchdog = %+v, want two missing event_time findings", points)
+	}
+}
+
 // TestRun_EmptyIDRecordsAllEmitted proves #262: a record that maps to an empty
 // id must never poison SeenIDs. Before the fix the first empty-id record was
 // emitted and "" recorded in SeenIDs, so every later empty-id record in the

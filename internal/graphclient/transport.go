@@ -40,8 +40,8 @@ const defaultHTTPClientTimeout = 100 * time.Second
 // instrumentedTransport is the base RoundTripper that sits UNDERNEATH the Kiota
 // middleware pipeline: every attempt the retry handler makes passes through it,
 // so each physical request (including retries) is measured. It records a
-// duration histogram per request through the Emitter, or is a pass-through when
-// the Emitter is nil.
+// duration histogram per request through the Emitter, scoped by the Graph
+// client's tenant identity, or is a pass-through when the Emitter is nil.
 type instrumentedTransport struct {
 	next     http.RoundTripper
 	emitter  telemetry.Emitter
@@ -59,6 +59,12 @@ func (t *instrumentedTransport) RoundTrip(req *http.Request) (*http.Response, er
 	attrs := telemetry.Attrs{
 		attrHTTPMethod:    req.Method,
 		attrServerAddress: req.URL.Hostname(),
+	}
+	// The Graph client is constructed once per tenant, before the Scheduler's
+	// WithTenant decorator exists. Stamp at this transport seam so the duration
+	// histogram has the same identity contract as the 4xx/5xx counters below.
+	if t.tenantID != "" {
+		attrs[attrTenantID] = t.tenantID
 	}
 	if resp != nil {
 		attrs[attrHTTPStatusCode] = resp.StatusCode
@@ -89,11 +95,14 @@ func (t *instrumentedTransport) recordHTTPError(req *http.Request, statusCode in
 	default:
 		return
 	}
-	t.emitter.Counter(name, "1", desc, 1, telemetry.Attrs{
-		attrTenantID:       t.tenantID,
+	attrs := telemetry.Attrs{
 		attrWorkload:       string(ClassifyWorkload(req.URL.Path)),
 		attrHTTPStatusCode: statusCode,
-	})
+	}
+	if t.tenantID != "" {
+		attrs[attrTenantID] = t.tenantID
+	}
+	t.emitter.Counter(name, "1", desc, 1, attrs)
 }
 
 // buildMiddlewares returns Kiota's DEFAULT middleware chain (retry, redirect,

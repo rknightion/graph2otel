@@ -1,6 +1,9 @@
 package config_test
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -63,11 +66,9 @@ func TestBackfillNegativeInitialLookbackRejected(t *testing.T) {
 // #118's comment, with the window now LIVE-MEASURED rather than estimated
 // (#226): the Grafana Cloud OTLP gateway REJECTS log samples older than exactly
 // 7 days, and says so in the rejection body ("oldest acceptable timestamp is:
-// <now-168h>"). #118 put it at ~13d. A lookback beyond
-// that is not a longer recovery — it is a guaranteed silent drop at the backend,
-// which is a worse failure than a short lookback because it looks like it is
-// working: Graph is polled, records are mapped and shipped, no error is raised,
-// and nothing appears in Grafana.
+// <now-168h>"). A lookback beyond that is not a longer recovery: Grafana Cloud
+// explicitly rejects each over-age entry while accepting in-window entries from
+// the same batch.
 func TestBackfillWarnsBeyondBackendAcceptWindow(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -145,6 +146,87 @@ func TestBackfillWarningIsActionable(t *testing.T) {
 			t.Errorf("warning %q does not mention %q", warns[0], want)
 		}
 	}
+}
+
+// TestBackfillGuidanceMatchesMeasuredGrafanaCloudContract prevents the runtime
+// warning and its operator-facing copies from drifting back to #118's estimated
+// 13-day/silent-failure claim. The contract is intentionally Grafana
+// Cloud-specific: other OTLP backends may accept a different window.
+func TestBackfillGuidanceMatchesMeasuredGrafanaCloudContract(t *testing.T) {
+	cfg := config.Default()
+	cfg.OTLP.Protocol = "stdout"
+	cfg.Backfill.InitialLookback = 30 * 24 * time.Hour
+
+	warns := cfg.Warnings()
+	if len(warns) != 1 {
+		t.Fatalf("Warnings() = %v, want exactly 1", warns)
+	}
+
+	root := repositoryRoot(t)
+	surfaces := map[string]string{
+		"runtime warning": warns[0],
+		"config example": backfillSection(t, filepath.Join(root, "config.example.yaml"),
+			"# backfill tunes", "# checkpoint_dir"),
+		"configuration guide": backfillSection(t, filepath.Join(root, "docs/configuration.md"),
+			"### `backfill`", "## Secrets"),
+		"Helm values": backfillSection(t, filepath.Join(root, "charts/graph2otel/values.yaml"),
+			"  backfill:", "  # -- Where window-log collectors"),
+		"generated Helm README": backfillSection(t, filepath.Join(root, "charts/graph2otel/README.md"),
+			"| config.backfill.initial_lookback ", "\n| config.cardinality "),
+	}
+
+	required := []string{
+		"grafana cloud",
+		"7 days",
+		"2026-07-22",
+		"per-entry",
+		"explicit",
+		"indexed later",
+		"not clamped",
+	}
+	for name, surface := range surfaces {
+		normalized := strings.ToLower(strings.Join(strings.Fields(surface), " "))
+		for _, want := range required {
+			if !strings.Contains(normalized, want) {
+				t.Errorf("%s does not contain measured backfill fact %q:\n%s", name, want, surface)
+			}
+		}
+
+		for _, stale := range []string{"13d", "13 days", "silent drop", "silently reject", "no error"} {
+			if strings.Contains(normalized, stale) {
+				t.Errorf("%s retains stale claim %q:\n%s", name, stale, surface)
+			}
+		}
+	}
+}
+
+func repositoryRoot(t *testing.T) string {
+	t.Helper()
+
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate backfill_test.go")
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(filename), "..", ".."))
+}
+
+func backfillSection(t *testing.T, path, start, end string) string {
+	t.Helper()
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	text := string(raw)
+	startAt := strings.Index(text, start)
+	if startAt < 0 {
+		t.Fatalf("%s does not contain section start %q", path, start)
+	}
+	endAt := strings.Index(text[startAt:], end)
+	if endAt < 0 {
+		t.Fatalf("%s does not contain section end %q after %q", path, end, start)
+	}
+	return text[startAt : startAt+endAt]
 }
 
 func TestWarningsEmptyForDefaultConfig(t *testing.T) {

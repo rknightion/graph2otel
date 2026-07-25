@@ -14,6 +14,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // fakeSource is an in-memory Source: a map of blob name to its full current
@@ -71,7 +72,11 @@ func testConfig() ContainerConfig {
 		Prefix:    "tenantId=t1/",
 		Map: func(r map[string]any) (telemetry.Event, bool) {
 			id, _ := r["id"].(string)
-			return telemetry.Event{Name: "test.event", Body: id}, true
+			ev := telemetry.Event{Name: "test.event", Body: id}
+			if raw, ok := r["time"].(string); ok {
+				ev.Timestamp, _ = time.Parse(time.RFC3339, raw)
+			}
+			return ev, true
 		},
 	}
 }
@@ -118,6 +123,61 @@ func TestPollEmitsEveryRecordAndAdvancesTheCursor(t *testing.T) {
 	name := "tenantId=t1/y=2026/m=07/d=16/h=00/m=00/PT1H.json"
 	if cur.Offsets[name] != int64(len(rec("a")+rec("b"))) {
 		t.Errorf("offset = %d, want %d (whole blob consumed)", cur.Offsets[name], len(rec("a")+rec("b")))
+	}
+}
+
+// TestPollDropsUndatedRecords keeps #275's boundary before LogEvent. A blob
+// record with neither its wire-derived mapper timestamp nor a mapper fallback
+// must be consumed from the byte cursor but never emitted. Valid wire time and
+// an intentional fallback still emit.
+func TestPollDropsUndatedRecords(t *testing.T) {
+	name := "tenantId=t1/y=2026/m=07/d=16/h=00/m=00/PT1H.json"
+	from := time.Date(2026, 7, 25, 10, 0, 0, 0, time.UTC)
+	fallback := from.Add(20 * time.Minute)
+	src := &fakeSource{blobs: map[string]string{name: `{"id":"undated"}` + "\r\n" +
+		`{"id":"malformed","time":"not-rfc3339"}` + "\r\n" +
+		`{"id":"wire-time","time":"2026-07-25T10:10:00Z"}` + "\r\n" +
+		`{"id":"mapper-fallback"}` + "\r\n",
+	}}
+	cfg := testConfig()
+	cfg.CollectorName = "entra.test.undated"
+	cfg.Derive = func(map[string]any, telemetry.Event) []MetricPoint { return nil }
+	cfg.Map = func(record map[string]any) (telemetry.Event, bool) {
+		id, _ := record["id"].(string)
+		ev := telemetry.Event{Name: "test.event", Body: id}
+		if id == "mapper-fallback" {
+			ev.Timestamp = fallback
+		}
+		if raw, ok := record["time"].(string); ok {
+			ev.Timestamp, _ = time.Parse(time.RFC3339, raw)
+		}
+		return ev, true
+	}
+	r := telemetrytest.New()
+	cur := newCursor()
+
+	if err := Poll(context.Background(), cfg, cur, src, r.Emitter(), discardLogger(), nil); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	if got, want := bodies(r), []string{"wire-time", "mapper-fallback"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("emitted %v, want %v", got, want)
+	}
+	logs := r.LogRecords()
+	if got, want := logs[0].Timestamp, from.Add(10*time.Minute); !got.Equal(want) {
+		t.Errorf("wire-time log timestamp = %v, want %v", got, want)
+	}
+	if got, want := logs[1].Timestamp, fallback; !got.Equal(want) {
+		t.Errorf("mapper-fallback log timestamp = %v, want %v", got, want)
+	}
+	if got, want := cur.Offsets[name], int64(len(src.blobs[name])); got != want {
+		t.Errorf("offset = %d, want %d: dropping a record must still consume its bytes", got, want)
+	}
+	if got := metricSum(r, metricRecordsDropped); got != 2 {
+		t.Errorf("%s = %v, want 2", metricRecordsDropped, got)
+	}
+	points := r.MetricPoints(wirecheck.MetricUnexpected)
+	if len(points) != 1 || points[0].Value != 2 || points[0].Attrs[semconv.AttrField] != "event_time" || points[0].Attrs[semconv.AttrKind] != wirecheck.KindMissingField {
+		t.Errorf("undated watchdog = %+v, want two missing event_time findings", points)
 	}
 }
 
@@ -383,7 +443,11 @@ func TestPollConsumesRecordsTheMapperRejects(t *testing.T) {
 		if id == "skip" {
 			return telemetry.Event{}, false
 		}
-		return telemetry.Event{Name: "test.event", Body: id}, true
+		ev := telemetry.Event{Name: "test.event", Body: id}
+		if raw, ok := m["time"].(string); ok {
+			ev.Timestamp, _ = time.Parse(time.RFC3339, raw)
+		}
+		return ev, true
 	}
 
 	if err := Poll(context.Background(), cfg, cur, src, r.Emitter(), discardLogger(), nil); err != nil {

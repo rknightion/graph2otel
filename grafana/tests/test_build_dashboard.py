@@ -22,8 +22,9 @@ sys.path.insert(0, GRAFANA)
 
 import build_dashboard  # noqa: E402
 import catalog as catalog_mod  # noqa: E402
-from builder import dumps, group_keys  # noqa: E402
+from builder import TENANT_SEL, dumps, group_keys  # noqa: E402
 from promname import prom_name  # noqa: E402
+from selfobs_metrics import PROCESS_SCOPE, SELF_OBS, TENANT_SCOPE  # noqa: E402
 
 CAT = catalog_mod.load()
 BUILT, COVERED, LOG_DOMAINS = build_dashboard.build_all(CAT)
@@ -92,6 +93,46 @@ class TestCoverageGate(unittest.TestCase):
         self.assertIn(
             "intune.uxa.boot_time_ms",
             CAT.metrics_referenced_by("rate(intune_uxa_boot_time_ms_milliseconds_bucket{}[5m])"))
+
+
+class TestSelfObservabilityScopeGate(unittest.TestCase):
+    def setUp(self):
+        self.board = next(b for name, b in BUILT
+                          if name == "graph2otel-self-observability.json")
+
+    def test_every_hand_declared_metric_has_an_explicit_scope(self):
+        self.assertEqual(
+            {m.scope for m in SELF_OBS.values()},
+            {TENANT_SCOPE, PROCESS_SCOPE},
+        )
+
+    def test_every_referenced_selfobs_metric_uses_its_declared_scope(self):
+        """#284: a tenant selector on a process metric is an empty panel.
+
+        Conversely, omitting it from a tenant metric blends tenants. The
+        declaration and the query must move together, so adding a new
+        hand-declared metric cannot silently pick whichever convention the
+        author happened to copy.
+        """
+        referenced = set()
+        for expr in self.board._exprs:
+            for metric in SELF_OBS.values():
+                if metric.prom not in expr:
+                    continue
+                referenced.add(metric.name)
+                if metric.scope == TENANT_SCOPE:
+                    self.assertIn(TENANT_SEL, expr, f"{metric.name}: {expr}")
+                else:
+                    self.assertNotIn(TENANT_SEL, expr, f"{metric.name}: {expr}")
+        self.assertEqual(referenced, set(SELF_OBS),
+                         "hand-declared self-observability metrics missing a panel")
+
+    def test_process_total_is_declared_and_panelled_without_tenant_filter(self):
+        metric = SELF_OBS["graph2otel.series.total"]
+        self.assertEqual(metric.scope, PROCESS_SCOPE)
+        exprs = [expr for expr in self.board._exprs if metric.prom in expr]
+        self.assertEqual(len(exprs), 1)
+        self.assertNotIn(TENANT_SEL, exprs[0])
 
 
 class TestLogPanels(unittest.TestCase):

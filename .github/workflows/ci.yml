@@ -171,12 +171,16 @@ jobs:
           context: .
           file: Dockerfile
           push: false
+          load: true
           tags: graph2otel:ci
           # Layer cache (base image, go.mod copy, go mod download) across runs.
           cache-from: type=gha,scope=ci-smoke
           cache-to: type=gha,mode=max,scope=ci-smoke
           build-args: |
             VERSION=ci-${{ github.sha }}
+
+      - name: smoke standalone container layout
+        run: make CONTAINER_SMOKE_IMAGE=graph2otel:ci SKIP_BUILD=1 container-smoke
 
   helm:
     name: helm lint + template

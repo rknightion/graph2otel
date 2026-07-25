@@ -15,13 +15,9 @@ type RunOptions struct {
 	Config *config.Config
 	// Source enumerates each tenant's granted Graph application permissions.
 	Source PermissionSource
-	// Requirements returns the []CollectorReq to check for a given tenant —
-	// the composition root's wiring point. Once concrete collectors exist
-	// (#11's M2-M5 dependency), this should call BuildRequirements over that
-	// tenant's enabled collector instances. A nil Requirements is treated as
-	// "no requirements known yet" (every tenant reports OK trivially),
-	// which is the correct behavior for the v1 skeleton: there is nothing to
-	// check yet, but the check command still runs and prints its help text.
+	// Requirements returns the []CollectorReq to check for a given tenant.
+	// Every configured tenant must have a non-empty inventory; accepting an
+	// absent inventory would turn a broken composition root into a false OK.
 	Requirements func(tenantID string) []CollectorReq
 	// Out receives the human-readable report.
 	Out io.Writer
@@ -39,13 +35,16 @@ func Run(ctx context.Context, opts RunOptions) (bool, error) {
 		return false, fmt.Errorf("preflight: nil Source")
 	}
 
-	reqFn := opts.Requirements
-	if reqFn == nil {
-		reqFn = func(string) []CollectorReq { return nil }
+	if len(opts.Config.Tenants) > 0 && opts.Requirements == nil {
+		return false, fmt.Errorf("preflight: nil Requirements for configured tenants")
 	}
 
 	allOK := true
 	for _, t := range opts.Config.Tenants {
+		reqs := opts.Requirements(t.TenantID)
+		if len(reqs) == 0 {
+			return false, fmt.Errorf("preflight: tenant %q: empty collector requirement inventory", t.TenantID)
+		}
 		granted, err := opts.Source.GrantedPermissions(ctx, t.TenantID)
 		if err != nil {
 			allOK = false
@@ -53,7 +52,7 @@ func Run(ctx context.Context, opts RunOptions) (bool, error) {
 			continue
 		}
 
-		report := Check(granted, reqFn(t.TenantID))
+		report := Check(granted, reqs)
 		WriteReport(opts.Out, t.TenantID, report)
 		fmt.Fprintln(opts.Out)
 		if !report.OK {

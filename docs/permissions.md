@@ -27,8 +27,8 @@ gotchas that catch most first-run setups. For the per-collector scope list, see
    why. Ambient workload/managed identity also works if the host provides it.
 3. Under **API permissions**, add the **application permissions** (not delegated) your enabled
    collectors need. Start from [`collectors.md`](./collectors.md)'s per-collector scope column, or
-   run `graph2otel check` (below) once the app registration exists, which prints a representative,
-   domain-grouped scope catalog.
+   run `graph2otel check` (below) once the app registration exists. It compares the roles in the
+   app's token to the collectors this tenant's configuration actually selects.
 
 ## 2. Grant admin consent (gotcha #1)
 
@@ -93,8 +93,8 @@ token** until the app's service principal is separately registered with the Secu
 Compliance data plane via PowerShell. No Graph scope moves it — the data plane does not
 know the principal, which is a different failure from a missing scope (that one 403s).
 
-`graph2otel check` cannot detect this: it reports what is granted and consented, and the
-grant is not the problem.
+`graph2otel check` cannot detect this: it reports what is granted and consented, and the grant is
+not the problem.
 
 Only Purview eDiscovery (`purview.ediscovery_cases`, opt-in) needs this today. It ships the
 eDiscovery (Premium) **case inventory** — a bounded count of cases by status plus a log twin
@@ -128,8 +128,8 @@ which lives only on the legacy MDCA portal API
 authenticates with a **static portal token** in an `Authorization: Token <secret>` header, NOT
 `DefaultAzureCredential` and NOT a Graph token. So:
 
-- There is **no Graph scope to grant** for it — `RequiredPermissions()` is empty, and
-  `graph2otel check` neither lists nor verifies it (it has nothing to check against a Graph token).
+- There is **no Graph scope to grant** for it — `RequiredPermissions()` is empty. `graph2otel check`
+  reports the enabled collector with a manual MDCA-token prerequisite; it cannot verify the token.
 - The token is supplied per-tenant via `mdca.token_file` (a filesystem PATH in config; the token
   itself is mounted as a file, never in YAML or env). Generate the token in the MDCA portal
   (Settings → Cloud Discovery → automatic log upload / API tokens) with the least-privilege scope
@@ -162,16 +162,20 @@ graph2otel check --config /path/to/config.yaml
 ```
 
 Its help text (`graph2otel check -h`) also prints the least-privilege notes from this page (the
-`ReadWrite` exception and the never-request list) and the two caveats it cannot verify by itself
-(admin consent already granted vs. merely added; directory-role gating) — so it's a good first stop
-when troubleshooting a 403.
+`ReadWrite` exception and the never-request list), the two Graph caveats it cannot verify by itself
+(admin consent already granted vs. merely added; directory-role gating), and the manual boundary for
+non-Graph transports. A `[MANUAL]` line means the collector is selected but a Graph application-token
+claim cannot prove the remaining prerequisite; it is not a successful validation of that prerequisite.
 
-**Known gap, as of this writing:** the composition root's collector-requirement wiring
-(`requiredCollectorPermissions` in `cmd/graph2otel/check.go`) is still a placeholder returning no
-requirements, left over from when `check` was built ahead of the M2–M5 collectors landing. Until
-that wiring catches up to the registry of real collectors, `check` runs and prints its help text but
-does not yet compare against any tenant's actually-enabled collectors — track this against the `#11`
-follow-up rather than assuming per-collector enforcement is live today.
+The check builds its inventory from the same seven collector registration paths as runtime wiring and
+honours disabled, source-selected, experimental, high-volume, and licence gates. To make the last
+one exact, it performs the same read-only `GET /subscribedSkus` capability lookup runtime performs;
+it never grants a role or changes the tenant. If that lookup fails, the command warns and uses the
+same base-tier fallback as runtime, so premium-gated collectors are not included in that run.
+
+The O365 Management Activity roles (`ActivityFeed.Read`, and `ActivityFeed.ReadDlp` when selecting
+`DLP.All`) belong to the `manage.office.com` audience, not Microsoft Graph. They are rendered as
+`[MANUAL]` prerequisites rather than compared with the Graph-token role claim.
 
 ## Least-privilege summary
 

@@ -165,9 +165,10 @@ type QueryConfig struct {
 	// parses TimeField from the record and fills it when left zero. Required.
 	Map func(record map[string]any) (id string, ev telemetry.Event)
 	// TimeField is the record's event-time field (RFC3339 string), used to fill
-	// Event.Timestamp and to time-stamp SeenIDs entries for eviction. Optional:
-	// when empty (or absent on a record) the record is timestamped with the
-	// window's `to`, which still evicts correctly relative to the watermark.
+	// Event.Timestamp and to time-stamp SeenIDs entries for eviction. When it is
+	// empty, absent, or unparseable, Map may supply Event.Timestamp as an
+	// intentional fallback; otherwise the event is dropped rather than stamped
+	// with the query boundary.
 	TimeField string
 
 	// SafetyLag trails the window's upper bound; defaults to DefaultSafetyLag.
@@ -532,9 +533,10 @@ func drainRecords(ctx context.Context, cfg QueryConfig, client JobClient, queryU
 	return out, nil
 }
 
-// emitAndAdvance dedupes the drained records against cp.SeenIDs, emits each
-// newly-seen one as an OTLP log, and advances the watermark to (to - SafetyLag)
-// — the window [from, to] is confirmed drained, so it is never re-submitted.
+// emitAndAdvance drops undated records, then dedupes the remaining drained
+// records against cp.SeenIDs, emits each newly-seen one as an OTLP log, and
+// advances the watermark to (to - SafetyLag) — the window [from, to] is
+// confirmed drained, so it is never re-submitted.
 func emitAndAdvance(cfg QueryConfig, cp *checkpoint.Checkpoint, records []map[string]any, to time.Time, e telemetry.Emitter) time.Time {
 	type drained struct {
 		id string
@@ -542,20 +544,29 @@ func emitAndAdvance(cfg QueryConfig, cp *checkpoint.Checkpoint, records []map[st
 		t  time.Time
 	}
 	all := make([]drained, 0, len(records))
+	undated := 0
 	for _, rec := range records {
 		id, ev := cfg.Map(rec)
 		t, ok := recordTime(rec, cfg.TimeField)
 		if !ok {
 			if !ev.Timestamp.IsZero() {
 				t = ev.Timestamp
-			} else {
-				t = to
 			}
 		}
 		if ev.Timestamp.IsZero() {
 			ev.Timestamp = t
 		}
+		if t.IsZero() {
+			// The query boundary is not an event timestamp. Stamping an
+			// undated result with it would fabricate when the activity happened
+			// (#275), so drop before it can enter SeenIDs or LogEvent.
+			undated++
+			continue
+		}
 		all = append(all, drained{id: id, ev: ev, t: t})
+	}
+	for range undated {
+		wirecheck.Shared(cfg.CollectorName).MissingField(e, "event_time")
 	}
 	// Result blobs are not chronologically ordered; sort so SeenIDs eviction and
 	// any downstream ordering reflect real event time.

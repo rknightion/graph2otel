@@ -224,6 +224,7 @@ func Poll(ctx context.Context, cfg EndpointConfig, cp *checkpoint.Checkpoint, fr
 
 	var all []drainedRecord
 	selfExcluded := 0
+	undated := 0
 	pageURL := buildFirstURL(cfg, from, to)
 	seenURLs := make(map[string]struct{})
 	pages := 0
@@ -257,6 +258,14 @@ func Poll(ctx context.Context, cfg EndpointConfig, cp *checkpoint.Checkpoint, fr
 			if ev.Timestamp.IsZero() {
 				ev.Timestamp = t
 			}
+			if t.IsZero() {
+				// A zero event time would become arrival time at the OTEL boundary,
+				// silently inventing when this event happened (#275). The raw wire
+				// field and mapper fallback have both failed, so drop before it can
+				// affect emission, dedupe, or the watermark.
+				undated++
+				continue
+			}
 			// With no server-side $filter, the endpoint returns its whole
 			// collection, so bound the window client-side: drop records outside
 			// [from, to]. This keeps newest <= to (watermark invariant) and
@@ -279,6 +288,9 @@ func Poll(ctx context.Context, cfg EndpointConfig, cp *checkpoint.Checkpoint, fr
 		e.Counter(metricSelfExcluded, "{record}",
 			"Graph-polled records dropped by exclude_self because their appId matched this tenant's own poller client_id (#176).",
 			float64(selfExcluded), telemetry.Attrs{semconv.AttrCollector: cfg.CollectorName})
+	}
+	for range undated {
+		wirecheck.Shared(cfg.CollectorName).MissingField(e, "event_time")
 	}
 
 	newest := cp.Watermark

@@ -57,7 +57,7 @@ never in committed YAML.
 | `G2O_PROFILING__BLOCK_PROFILE_RATE` | `100000` | runtime.SetBlockProfileRate (ns, 100µs); 0 = disabled |
 | `G2O_CARDINALITY__PER_METRIC_LIMIT` | `5000` | per-metric active-series cap; beyond it the top series by value are kept and the tail folds into `other` (0 = unlimited) |
 | `G2O_CARDINALITY__GLOBAL_LIMIT` | `100000` | total active-series cap across every metric; overage is absorbed by the worst offenders via max-min fairness (0 = unlimited) |
-| `G2O_BACKFILL__INITIAL_LOOKBACK` | `0s` | cold-start backfill window; 0 = each collector's own built-in lookback. Warns past 7d (the measured OTLP accept window, #226) |
+| `G2O_BACKFILL__INITIAL_LOOKBACK` | `0s` | cold-start backfill window; 0 = each collector's own built-in lookback |
 | `G2O_CHECKPOINT_DIR` | `./checkpoints` | root dir for the file-based CheckpointStore |
 
 **File-only** — these take structured values (a map or a list of objects) and must be set in the YAML config, not via an environment variable: `tenants`, `collectors`, `profiling.pyroscope.tags`.

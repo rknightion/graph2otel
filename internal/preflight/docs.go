@@ -32,6 +32,12 @@ func HelpText() string {
 	b.WriteString("    require the calling service principal to hold a directory role, not just an API permission\n")
 	b.WriteString("    scope. A service principal can pass this check and still 403 at runtime if it lacks the\n")
 	b.WriteString("    required role — this check has no way to enumerate directory-role assignments.\n")
+	b.WriteString("  - Non-Graph transports: enabled Azure Storage/ARM, O365 Management Activity, MDCA,\n")
+	b.WriteString("    and Exchange Online collectors are shown with [MANUAL] prerequisites.\n")
+	b.WriteString("    In particular, O365 ActivityFeed roles are for manage.office.com, not Graph. A Graph token\n")
+	b.WriteString("    cannot prove their storage or portal credentials, service-side subscription,\n")
+	b.WriteString("    or Exchange/directory-role grants. Advanced Hunting is a Graph API: this check verifies\n")
+	b.WriteString("    ThreatHunting.Read.All, while its Defender entitlement and query budget remain manual.\n")
 
 	b.WriteString("\nRepresentative required scopes by domain (non-exhaustive; the actual check compares\n")
 	b.WriteString("against what enabled collectors declare, not this list):\n")

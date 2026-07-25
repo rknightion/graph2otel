@@ -72,7 +72,14 @@ func TestRun_SourceError(t *testing.T) {
 	src := fakeSource{err: map[string]error{"tenant-a": errors.New("token request failed")}}
 
 	var out bytes.Buffer
-	ok, err := Run(context.Background(), RunOptions{Config: cfg, Source: src, Out: &out})
+	ok, err := Run(context.Background(), RunOptions{
+		Config: cfg,
+		Source: src,
+		Requirements: func(string) []CollectorReq {
+			return []CollectorReq{{Name: "sign_ins", Permissions: []string{"AuditLog.Read.All"}}}
+		},
+		Out: &out,
+	})
 	if err != nil {
 		t.Fatalf("Run() error = %v, want nil (per-tenant errors are reported in output, not returned)", err)
 	}
@@ -84,17 +91,41 @@ func TestRun_SourceError(t *testing.T) {
 	}
 }
 
-func TestRun_NilRequirements_TrivallyOK(t *testing.T) {
+func TestRun_NilRequirementsFailsConfiguredTenant(t *testing.T) {
 	cfg := &config.Config{Tenants: []config.TenantConfig{{TenantID: "tenant-a"}}}
 	src := fakeSource{granted: map[string][]string{"tenant-a": nil}}
 
 	var out bytes.Buffer
 	ok, err := Run(context.Background(), RunOptions{Config: cfg, Source: src, Out: &out})
-	if err != nil {
-		t.Fatalf("Run() error = %v", err)
+	if err == nil {
+		t.Fatal("Run() error = nil, want error for nil requirements on a configured tenant")
 	}
-	if !ok {
-		t.Errorf("Run() ok = false, want true when no requirements are declared yet; output:\n%s", out.String())
+	if ok {
+		t.Error("Run() ok = true, want false for nil requirements")
+	}
+	if strings.Contains(out.String(), "[OK]") {
+		t.Errorf("Run() printed an OK result for nil requirements:\n%s", out.String())
+	}
+}
+
+func TestRun_EmptyRequirementsFailsConfiguredTenant(t *testing.T) {
+	cfg := &config.Config{Tenants: []config.TenantConfig{{TenantID: "tenant-a"}}}
+	src := fakeSource{granted: map[string][]string{"tenant-a": nil}}
+
+	var out bytes.Buffer
+	ok, err := Run(context.Background(), RunOptions{
+		Config: cfg,
+		Source: src,
+		Requirements: func(string) []CollectorReq {
+			return []CollectorReq{}
+		},
+		Out: &out,
+	})
+	if err == nil {
+		t.Fatal("Run() error = nil, want error for an empty requirement inventory")
+	}
+	if ok {
+		t.Error("Run() ok = true, want false for empty requirements")
 	}
 }
 

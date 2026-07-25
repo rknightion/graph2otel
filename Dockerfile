@@ -26,6 +26,10 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     GOBIN=/usr/local/bin go install github.com/google/go-licenses@${GO_LICENSES_VERSION} && \
     GO_LICENSES=go-licenses OUT=/THIRD_PARTY_NOTICES.md bash scripts/notices.sh
 
+# Seed the runtime checkpoint mount point with the distroless nonroot identity.
+# Docker copies this ownership into a new empty named volume on first use.
+RUN install -d -m 0750 -o 65532 -g 65532 /out/checkpoints
+
 # ---- runtime ----
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:f5b485ea962d9bd1186b2f6b3a061191539b905b82ec395de78cbfae51f20e35
 COPY --from=build /out/graph2otel /usr/local/bin/graph2otel
@@ -41,6 +45,9 @@ LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
 #              ghcr.io/rknightion/graph2otel:latest \
 #              --config /etc/graph2otel/config.yaml
 COPY config.example.yaml /etc/graph2otel/config.example.yaml
-USER nonroot:nonroot
+# Checkpoints must survive restarts. The directory is owned by the distroless
+# nonroot user so Docker-created named volumes are writable without a wrapper.
+COPY --from=build --chown=65532:65532 /out/checkpoints /var/lib/graph2otel
+USER 65532:65532
 ENTRYPOINT ["/usr/local/bin/graph2otel"]
 CMD []
