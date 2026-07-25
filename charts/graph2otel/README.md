@@ -1,14 +1,19 @@
 # graph2otel
 
 <!-- The two version badges are maintained by release-please: it bumps the ONE
-     semver on each annotated line at release time (its generic updater replaces
-     only the first match per line, so version-bearing text and URL must each sit
-     on their own line and carry the version exactly once — here, only in the URL).
-     helm-docs regenerates these same lines from Chart.yaml, so the two converge.
-     The Type badge is static and stays outside the block. -->
+     semver on each annotated line at release time. Two constraints its generic
+     updater imposes, both learned the hard way on release PR #80:
+       1. it replaces only the FIRST semver per line, so each version sits on its
+          own line and appears exactly once;
+       2. its semver match is prerelease-greedy — `1.0.0-informational` parses as
+          `1.0.0` + prerelease `informational` and is replaced whole, eating the
+          trailing word. So the version must be followed by a non-hyphen char.
+     The shields static/v1 query form puts `&color=…` right after the version,
+     satisfying both. helm-docs regenerates these same lines from Chart.yaml, so
+     the two converge byte-for-byte. The Type badge is static, outside the block. -->
 <!-- x-release-please-start-version -->
-![Version](https://img.shields.io/badge/Version-0.1.0-informational?style=flat-square)
-![AppVersion](https://img.shields.io/badge/AppVersion-0.1.0-informational?style=flat-square)
+![Version](https://img.shields.io/static/v1?label=Version&message=0.1.0&color=informational&style=flat-square)
+![AppVersion](https://img.shields.io/static/v1?label=AppVersion&message=0.1.0&color=informational&style=flat-square)
 <!-- x-release-please-end -->
 ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square)
 
