@@ -49,6 +49,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // collectorName is the stable key used for config (enable/interval),
@@ -73,12 +74,30 @@ const (
 // defaultBaseURL is the Graph v1.0 root.
 const defaultBaseURL = "https://graph.microsoft.com/v1.0"
 
+// KnownRiskLevels and KnownRiskStates are the value sets riskLevel and riskState
+// take on the wire — both are METRIC LABELS on the gauge below, passed RAW (no
+// bucket map), so an unmapped member silently moves series membership with
+// nothing saying why (#234). There is no in-repo map to derive these from, so
+// they are declared explicitly from the strongest evidence available: the Graph
+// v1.0 CSDL EnumType definitions (`GET /v1.0/$metadata`), cross-checked against
+// live m7kni values (`live-measured 2026-07-25` — riskLevel low/none, riskState
+// atRisk/dismissed observed directly). `unknownFutureValue` is deliberately
+// EXCLUDED: it is Microsoft's evolvable-enum sentinel, so its appearance is
+// exactly the signal that a new member exists and must fire the watchdog, not be
+// silently accepted. Exported so entra.risky_agents reuses the identical
+// Identity Protection enums rather than restating them.
+var (
+	KnownRiskLevels = wirecheck.NewEnum("low", "medium", "high", "hidden", "none")
+	KnownRiskStates = wirecheck.NewEnum("none", "confirmedSafe", "remediated", "dismissed", "atRisk", "confirmedCompromised")
+)
+
 // Collector polls the two Identity Protection current-risk endpoints.
 type Collector struct {
 	g       collectors.GraphClient
 	caps    license.Capabilities
 	baseURL string
 	logger  *slog.Logger
+	watch   *wirecheck.Reporter
 	// suppressedTwins names the per-entity twin events a blob collector owns, so
 	// this collector emits its gauges but not those twins (#135-C). nil = emit
 	// everything (the default, and every unit test).
@@ -92,7 +111,7 @@ func New(g collectors.GraphClient, caps license.Capabilities, logger *slog.Logge
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Collector{g: g, caps: caps, baseURL: defaultBaseURL, logger: logger}
+	return &Collector{g: g, caps: caps, baseURL: defaultBaseURL, logger: logger, watch: wirecheck.New(collectorName, logger)}
 }
 
 // Name implements collector.Collector.
@@ -290,6 +309,13 @@ func (c *Collector) collectHalf(ctx context.Context, e telemetry.Emitter, h half
 		if err := json.Unmarshal(raw, &item); err != nil {
 			return fmt.Errorf("decode %s: %w", h.path, err)
 		}
+		// riskLevel/riskState become metric labels below with no bucketing, so a
+		// value Microsoft adds outside the known set silently moves series
+		// membership. Report it (report-only — the record is still counted and
+		// twinned as before). Checked on every entity, deleted or not: an
+		// unexpected wire value is a wire fact independent of the gauge exclusion.
+		c.watch.Value(e, semconv.AttrRiskLevel, item.RiskLevel, KnownRiskLevels)
+		c.watch.Value(e, semconv.AttrRiskState, item.RiskState, KnownRiskStates)
 		// deleted is nil when this half was not reconciled (service principals, or
 		// the users fetch failed) — is_deleted is then omitted, never asserted
 		// false. When reconciled, a tombstoned user is excluded from the gauge (it

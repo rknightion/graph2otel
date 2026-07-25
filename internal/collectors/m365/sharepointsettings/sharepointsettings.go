@@ -21,6 +21,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 const (
@@ -40,6 +41,25 @@ const (
 	metricPersonalStorageMB       = "m365.sharepoint.personal_site_storage_limit_mb"
 	metricSiteStorageMB           = "m365.sharepoint.site_storage_limit_mb"
 	metricRetentionDays           = "m365.sharepoint.deleted_user_retention_days"
+)
+
+// knownSharingCapabilities and knownSharingDomainRestrictionModes are the value
+// sets the two external-sharing fields take on the wire. Both are METRIC LABELS
+// on the posture gauge below, passed RAW (orUnknown only substitutes for an
+// empty string — it does not bucket), so a member Microsoft adds silently spawns
+// a new series. There is no in-repo bucket map to derive these from, so they are
+// declared explicitly from the strongest evidence available: the Graph v1.0 CSDL
+// EnumType definitions (`sharingCapabilities`, `sharingDomainRestrictionMode`
+// from `GET /v1.0/$metadata`), cross-checked LIVE against m7kni — all four
+// sharingCapability members and none/allowList of the restriction modes were
+// observed by cycling the tenant setting through them (`live-measured
+// 2026-07-25`; blockList requires a non-empty domain list to set, so it comes
+// from the CSDL alone). `unknownFutureValue` is EXCLUDED so its appearance fires
+// the watchdog — that is the whole signal that a new member has landed.
+var (
+	knownSharingCapabilities = wirecheck.NewEnum(
+		"disabled", "externalUserSharingOnly", "externalUserAndGuestSharing", "existingExternalUserSharingOnly")
+	knownSharingDomainRestrictionModes = wirecheck.NewEnum("none", "allowList", "blockList")
 )
 
 // settings is the subset of /admin/sharepoint/settings this collector reads.
@@ -64,6 +84,7 @@ type Collector struct {
 	g       collectors.GraphClient
 	baseURL string
 	logger  *slog.Logger
+	watch   *wirecheck.Reporter
 }
 
 // New builds the SharePoint settings collector. A nil logger falls back to the
@@ -72,7 +93,7 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Collector{g: g, baseURL: defaultBaseURL, logger: logger}
+	return &Collector{g: g, baseURL: defaultBaseURL, logger: logger, watch: wirecheck.New(collectorName, logger)}
 }
 
 // Name implements collector.Collector.
@@ -116,7 +137,11 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 
 	// Bounded security-posture gauges. sharingCapability + the domain-restriction
 	// mode are a small closed enum set, so they ride a constant-1 info gauge as
-	// attributes; the rest are 0/1 or numeric limits.
+	// attributes; the rest are 0/1 or numeric limits. Both are watched: a member
+	// outside the CSDL-declared set silently moves the series (report-only —
+	// emission is unchanged).
+	c.watch.Value(e, semconv.AttrSharingCapability, s.SharingCapability, knownSharingCapabilities)
+	c.watch.Value(e, semconv.AttrSharingDomainRestrictionMode, s.SharingDomainRestrictionMode, knownSharingDomainRestrictionModes)
 	e.Gauge(metricSharing, semconv.UnitDimensionless,
 		"Constant 1 carrying the tenant's external-sharing posture as bounded attributes.",
 		1, telemetry.Attrs{

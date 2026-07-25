@@ -1409,6 +1409,7 @@
         "internal/collectors/defender/quarantine",
         "internal/collectors/entra/accessreviews",
         "internal/collectors/entra/conditionalaccess",
+        "internal/collectors/entra/risk",
         "internal/collectors/entra/securescore",
         "internal/collectors/intune/appinstallreport",
         "internal/collectors/intune/autopilot",
@@ -1417,6 +1418,7 @@
         "internal/collectors/intune/malware",
         "internal/collectors/intune/manageddevices",
         "internal/collectors/m365/messagetrace",
+        "internal/collectors/m365/sharepointsettings",
         "internal/collectors/m365/unifiedaudit",
         "internal/collectors/purview/retentionlabels",
         "internal/collectors/purview/sensitivitylabels"

@@ -8,8 +8,10 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // fakeGraph maps request URLs to canned page bodies (or errors). It satisfies
@@ -120,6 +122,34 @@ func metricAttrCounts(pts []telemetrytest.MetricPoint) map[[2]string]float64 {
 		got[[2]string{p.Attrs["risk_level"], p.Attrs["risk_state"]}] = p.Value
 	}
 	return got
+}
+
+// TestCollectReportsUnmappedRiskEnum proves #234: riskLevel/riskState are metric
+// labels passed raw, so a value Microsoft adds outside the CSDL-declared set must
+// fire the graph2otel.api.unexpected watchdog — and the record must still be
+// counted (report-only).
+func TestCollectReportsUnmappedRiskEnum(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		usersURL:        `{"value":[{"id":"x","riskLevel":"apocalyptic","riskState":"quantumFlux"}]}`,
+		spsURL:          `{"value":[]}`,
+		deletedUsersURL: `{"value":[]}`,
+	}}
+	rec := telemetrytest.New()
+	if err := New(g, bothCaps(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	fields := map[string]bool{}
+	for _, p := range rec.MetricPoints(wirecheck.MetricUnexpected) {
+		fields[p.Attrs[semconv.AttrField]] = true
+	}
+	if !fields[semconv.AttrRiskLevel] || !fields[semconv.AttrRiskState] {
+		t.Errorf("expected %s to fire for both %s and %s; got fields %v",
+			wirecheck.MetricUnexpected, semconv.AttrRiskLevel, semconv.AttrRiskState, fields)
+	}
+	if len(rec.MetricPoints(metricRiskyUsers)) == 0 {
+		t.Error("a record with an unmapped enum must still be counted in the gauge (report-only)")
+	}
 }
 
 func TestCollectBothLicensedEmitsBothMetrics(t *testing.T) {

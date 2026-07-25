@@ -8,6 +8,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // fakeGraph serves one canned body for the settings URL.
@@ -90,6 +91,28 @@ func TestCollectEmitsPostureGaugesAndTwin(t *testing.T) {
 	}
 	if got := logs[0].Attrs[semconv.AttrSharingCapability]; got != "externalUserAndGuestSharing" {
 		t.Errorf("twin sharing_capability = %q", got)
+	}
+}
+
+// TestCollectReportsUnmappedSharingEnum proves #234: sharingCapability and
+// sharingDomainRestrictionMode are metric labels passed raw, so a value outside
+// the CSDL-declared set must fire the graph2otel.api.unexpected watchdog.
+func TestCollectReportsUnmappedSharingEnum(t *testing.T) {
+	body := `{"sharingCapability":"cosmicSharing","sharingDomainRestrictionMode":"quantumList"}`
+	rec := telemetrytest.New()
+	if err := New(&fakeGraph{body: body}, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	fields := map[string]bool{}
+	for _, p := range rec.MetricPoints(wirecheck.MetricUnexpected) {
+		fields[p.Attrs[semconv.AttrField]] = true
+	}
+	if !fields[semconv.AttrSharingCapability] || !fields[semconv.AttrSharingDomainRestrictionMode] {
+		t.Errorf("expected %s to fire for both %s and %s; got %v",
+			wirecheck.MetricUnexpected, semconv.AttrSharingCapability, semconv.AttrSharingDomainRestrictionMode, fields)
+	}
+	if len(rec.MetricPoints(metricSharing)) != 1 {
+		t.Error("the posture gauge must still emit (report-only)")
 	}
 }
 

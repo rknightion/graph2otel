@@ -17,6 +17,16 @@
         "risk_level",
         "risk_state"
       ]
+    },
+    {
+      "Name": "graph2otel.api.unexpected",
+      "Unit": "1",
+      "Kind": "sum",
+      "AttrKeys": [
+        "collector",
+        "field",
+        "kind"
+      ]
     }
   ],
   "Logs": [
