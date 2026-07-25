@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -179,6 +180,80 @@ func TestRun_AdminEnabledBootsAndShutsDown(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "stopped") {
 		t.Errorf("stderr = %q, want a shutdown log line", stderr.String())
+	}
+}
+
+func TestRun_AdminBindFailureIsFatalWithoutWaitingForShutdown(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("occupy admin address: %v", err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+
+	path := writeTempConfig(t, "otlp:\n  protocol: stdout\nadmin:\n  enabled: true\n  addr: \""+listener.Addr().String()+"\"\n")
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var stdout, stderr bytes.Buffer
+	started := time.Now()
+	code := run(ctx, []string{"-config", path}, &stdout, &stderr)
+	elapsed := time.Since(started)
+
+	if code != 1 {
+		t.Fatalf("exit code = %d, want 1 for enabled admin bind failure; stderr=%s", code, stderr.String())
+	}
+	if elapsed >= 2*time.Second {
+		t.Fatalf("run returned after %s, want prompt fatal exit before context timeout", elapsed)
+	}
+	if !strings.Contains(stderr.String(), "admin server") {
+		t.Errorf("stderr = %q, want admin server failure log", stderr.String())
+	}
+}
+
+func TestSuperviseAdminCanceledCleanResultCancelsAndDrainsSchedulers(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	tenantCtx, cancelTenants := context.WithCancel(context.Background())
+	waitStarted := make(chan struct{})
+	releaseWait := make(chan struct{})
+	result := make(chan error, 1)
+
+	go func() {
+		result <- superviseAdmin(
+			ctx,
+			func(context.Context) error { return nil },
+			cancelTenants,
+			func() {
+				// Waiting is only valid after the scheduler context has been
+				// canceled; blocking here also proves supervision cannot return
+				// until the scheduler drain completes.
+				<-tenantCtx.Done()
+				close(waitStarted)
+				<-releaseWait
+			},
+		)
+	}()
+
+	select {
+	case <-waitStarted:
+	case <-time.After(time.Second):
+		t.Fatal("superviseAdmin did not cancel tenants and enter the scheduler drain")
+	}
+	select {
+	case err := <-result:
+		t.Fatalf("superviseAdmin returned before scheduler drain completed: %v", err)
+	default:
+	}
+
+	close(releaseWait)
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("superviseAdmin() error = %v, want clean external cancellation", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("superviseAdmin did not return after scheduler drain completed")
 	}
 }
 

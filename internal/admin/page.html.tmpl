@@ -102,6 +102,7 @@
   <span class="spacer"></span>
   <button class="ctl" id="themeToggle" title="Toggle light/dark theme" aria-label="Toggle theme">◐</button>
   <span class="badge {{healthClass .Health}}" id="healthBadge" title="{{range .HealthReasons}}{{.}}&#10;{{end}}">{{.Health}}</span>
+  <span class="badge {{if .Readiness.Ready}}ok{{else}}err{{end}}" id="readinessBadge" title="{{.Readiness.Reason}}">{{.Readiness.State}}</span>
 </header>
 <div class="reasons" id="healthReasons"{{if not .HealthReasons}} style="display:none"{{end}}>{{range .HealthReasons}}{{.}} &middot; {{end}}</div>
 <div id="staleBanner"></div>
@@ -117,6 +118,7 @@
   <section data-tab="overview">
     <div class="rollup" id="rollup">
       <div class="rc"><span class="rv" id="ruHealth">{{.Health}}</span><span class="rk">health</span></div>
+      <div class="rc"><span class="rv" id="ruReadiness">{{.Readiness.State}}</span><span class="rk">readiness</span></div>
       <div class="rc"><span class="rv" id="ruTenants">{{len .Tenants}}</span><span class="rk">tenants</span></div>
       <div class="rc"><span class="rv" id="ruEnabled">—</span><span class="rk">collectors</span></div>
       <div class="rc"><span class="rv" id="ruFailing">—</span><span class="rk">failing</span></div>
@@ -180,6 +182,7 @@
       <div class="sub-h">Tenant <code>{{.TenantID}}</code>
         <span class="tsum">{{.EnabledCount}} active{{if .FailingCount}} &middot; {{.FailingCount}} failing{{end}}{{if .PendingCount}} &middot; {{.PendingCount}} starting{{end}}{{if .CoveredCount}} &middot; {{.CoveredCount}} covered{{end}}{{if .SkippedCount}} &middot; {{.SkippedCount}} skipped{{end}}</span>
       </div>
+      {{with .StartupFailure}}<div class="reasons"><span class="badge err">startup failed</span> <code>{{.Code}}</code> &middot; {{.Reason}}</div>{{end}}
       <table class="ctable">
         <thead><tr>
           <th>Collector</th><th>State</th><th class="num">Interval</th><th class="num">Success</th>
@@ -485,6 +488,7 @@ function rebuildTenants(tenants){
   if(!tenants || !tenants.length){ host.appendChild(el('p',{'class':'muted'},'No tenants configured.')); return; }
   tenants.forEach(function(t){
     var h=el('div',{'class':'sub-h'}); h.appendChild(document.createTextNode('Tenant ')); h.appendChild(el('code',null,t.tenant_id)); h.appendChild(el('span',{'class':'tsum'}, tenantSummary(t))); host.appendChild(h);
+    if(t.startup_failure){ var sf=el('div',{'class':'reasons'}); sf.appendChild(el('span',{'class':'badge err'},'startup failed')); sf.appendChild(document.createTextNode(' ')); sf.appendChild(el('code',null,t.startup_failure.code)); sf.appendChild(document.createTextNode(' · '+t.startup_failure.reason)); host.appendChild(sf); }
     var table=el('table'); var thead=el('thead'); thead.innerHTML='<tr><th>Collector</th><th>State</th><th class="num">Interval</th><th class="num">Success</th><th class="num">Runs</th><th class="num">Failures</th><th class="num">Next run</th><th class="num">Duration</th><th>Recent</th><th>Staleness</th><th>Last error</th></tr>'; table.appendChild(thead);
     var tb=el('tbody');
     var cols=(t.collectors||[]);
@@ -523,7 +527,7 @@ function updateTrends(d){
   }
 }
 function updateRollup(d){
-  setText('ruHealth', d.health); setText('ruTenants', (d.tenants||[]).length);
+  setText('ruHealth', d.health); setText('ruReadiness', d.readiness ? d.readiness.state : ''); setText('ruTenants', (d.tenants||[]).length);
   var enabled=0,failing=0,pending=0;
   (d.tenants||[]).forEach(function(t){ enabled+=t.enabled_count||0; failing+=t.failing_count||0; pending+=t.pending_count||0; });
   setText('ruEnabled',enabled); setText('ruFailing',failing); setText('ruPending',pending);
@@ -532,13 +536,17 @@ function setHealth(d){
   var b=document.getElementById('healthBadge'); if(b){ b.textContent=d.health; b.className='badge '+(d.health==='healthy'?'ok':d.health==='degraded'?'err':'pending'); b.title=(d.health_reasons||[]).join('\n'); }
   var rb=document.getElementById('healthReasons'); if(rb){ if(d.health_reasons && d.health_reasons.length){ rb.textContent=d.health_reasons.join(' · '); rb.style.display=''; } else { rb.style.display='none'; } }
 }
+function setReadiness(d){
+  var r=d.readiness||{};
+  var b=document.getElementById('readinessBadge'); if(b){ b.textContent=r.state||''; b.className='badge '+(r.ready?'ok':'err'); b.title=r.reason||''; }
+}
 function setStale(on){ var b=document.getElementById('staleBanner'); if(!b) return; if(on){ b.className='show'; b.textContent='⚠ disconnected — last successful update '+relMs(lastOkMs); } else { b.className=''; } }
 
 function refresh(){
   fetch('/api/status.json',{cache:'no-store'}).then(function(r){ if(!r.ok) throw new Error('status '+r.status); return r.json(); }).then(function(d){
     lastOkMs=Date.now(); setStale(false);
     lastData=d;
-    setHealth(d); updateRollup(d); updateTrends(d); redrawCharts();
+    setHealth(d); setReadiness(d); updateRollup(d); updateTrends(d); redrawCharts();
     if(d.service) setText('uptime', d.service.uptime);
     setText('generatedAt', d.generated_at);
     rebuildThrottle(d.tenants); rebuildTenants(d.tenants);

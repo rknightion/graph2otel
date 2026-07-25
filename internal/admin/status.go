@@ -17,6 +17,42 @@ const (
 	healthStarting = "starting"
 )
 
+// StartupFailureCode is the bounded, non-secret reason a configured tenant
+// could not reach collector construction. The composition root logs the raw
+// error; admin retains only one of these codes.
+type StartupFailureCode string
+
+const (
+	StartupFailureCredentialInitialization  StartupFailureCode = "credential_initialization_failed" //nolint:gosec // bounded status code, not a credential
+	StartupFailureGraphClientInitialization StartupFailureCode = "graph_client_initialization_failed"
+)
+
+// TenantStartupFailure is the sanitized operator-facing form of a startup
+// failure. Reason is derived inside this package from Code; callers cannot
+// provide arbitrary text for JSON or HTML rendering.
+type TenantStartupFailure struct {
+	Code   StartupFailureCode `json:"code"`
+	Reason string             `json:"reason"`
+}
+
+const (
+	readinessReady                  = "ready"
+	readinessNoWorkingTenants       = "no_working_tenants"
+	readinessWaitingForFirstSuccess = "waiting_for_first_success"
+)
+
+// ReadinessStatus distinguishes a live HTTP server from a process that cannot
+// yet collect useful data. A tenant is successful for the process lifetime
+// once any of its collector rows has Runs > Failures.
+type ReadinessStatus struct {
+	Ready             bool   `json:"ready"`
+	State             string `json:"state"`
+	ConfiguredTenants int    `json:"configured_tenants"`
+	WorkingTenants    int    `json:"working_tenants"`
+	SuccessfulTenants int    `json:"successful_tenants"`
+	Reason            string `json:"reason"`
+}
+
 // consecutiveFailureThreshold is the number of back-to-back failures at which
 // a collector drags overall health to "degraded".
 const consecutiveFailureThreshold = 3
@@ -59,9 +95,10 @@ func skipCategory(reason string) string {
 type CollectorSource struct {
 	// TenantID identifies which tenant this Registry/Status pair belongs to
 	// (graph2otel runs one Scheduler, Registry and StatusTracker per tenant).
-	TenantID string
-	Registry *collector.Registry
-	Status   *collector.StatusTracker
+	TenantID       string
+	Registry       *collector.Registry
+	Status         *collector.StatusTracker
+	StartupFailure StartupFailureCode
 }
 
 // SkipKey identifies a collector that the composition root chose not to
@@ -74,11 +111,12 @@ type SkipKey struct {
 // Status is the full admin status snapshot, serialized as JSON at
 // /api/status.json and rendered as HTML at "/".
 type Status struct {
-	Service       ServiceInfo    `json:"service"`
-	Health        string         `json:"health"`
-	HealthReasons []string       `json:"health_reasons,omitempty"`
-	Tenants       []TenantStatus `json:"tenants"`
-	GeneratedAt   string         `json:"generated_at"`
+	Service       ServiceInfo     `json:"service"`
+	Health        string          `json:"health"`
+	HealthReasons []string        `json:"health_reasons,omitempty"`
+	Readiness     ReadinessStatus `json:"readiness"`
+	Tenants       []TenantStatus  `json:"tenants"`
+	GeneratedAt   string          `json:"generated_at"`
 	// RefreshMs is the client poll interval in milliseconds (admin.refresh_interval).
 	// The page falls back to 5000 when this is 0. The 1s freshness ticker is independent.
 	RefreshMs int `json:"refresh_ms,omitempty"`
@@ -162,13 +200,15 @@ type ServiceInfo struct {
 // Covered rows are deliberately NOT in SkippedCount — a covered signal is not a
 // gap, and the header must not tally it as one.
 type TenantStatus struct {
-	TenantID     string            `json:"tenant_id"`
-	Collectors   []CollectorStatus `json:"collectors"`
-	EnabledCount int               `json:"enabled_count"`
-	FailingCount int               `json:"failing_count"`
-	PendingCount int               `json:"pending_count"`
-	SkippedCount int               `json:"skipped_count"`
-	CoveredCount int               `json:"covered_count"`
+	TenantID       string                `json:"tenant_id"`
+	Working        bool                  `json:"working"`
+	StartupFailure *TenantStartupFailure `json:"startup_failure,omitempty"`
+	Collectors     []CollectorStatus     `json:"collectors"`
+	EnabledCount   int                   `json:"enabled_count"`
+	FailingCount   int                   `json:"failing_count"`
+	PendingCount   int                   `json:"pending_count"`
+	SkippedCount   int                   `json:"skipped_count"`
+	CoveredCount   int                   `json:"covered_count"`
 	// RateLimits is this tenant's client-side throttle-headroom panel: one row
 	// per (tenant, workload) token bucket that has actually been used since
 	// process start (#85). Empty for a tenant whose buckets are all idle (lazy
@@ -318,6 +358,26 @@ type conflicter interface {
 	ConflictsWith() []string
 }
 
+func startupFailure(code StartupFailureCode) *TenantStartupFailure {
+	switch code {
+	case StartupFailureCredentialInitialization:
+		return &TenantStartupFailure{
+			Code:   code,
+			Reason: "credential initialization failed",
+		}
+	case StartupFailureGraphClientInitialization:
+		return &TenantStartupFailure{
+			Code:   code,
+			Reason: "graph client initialization failed",
+		}
+	default:
+		// A typed string can still be explicitly converted from arbitrary text.
+		// Never retain or render an unrecognized value: raw startup errors may
+		// contain credential material and belong only in the process logs.
+		return nil
+	}
+}
+
 // buildTenantStatuses renders sources into one TenantStatus per source: a row
 // per registered collector (from Registry.Entries(), reflecting the matching
 // StatusTracker snapshot) plus a row per skip reason that names a collector
@@ -383,7 +443,13 @@ func buildTenantStatuses(sources []CollectorSource, skipReasons map[SkipKey]stri
 			rows = append(rows, row)
 		}
 
-		ten := TenantStatus{TenantID: src.TenantID, Collectors: rows}
+		failure := startupFailure(src.StartupFailure)
+		ten := TenantStatus{
+			TenantID:       src.TenantID,
+			Working:        failure == nil && src.Registry != nil && src.Status != nil && len(entries) > 0,
+			StartupFailure: failure,
+			Collectors:     rows,
+		}
 		for _, c := range rows {
 			switch {
 			case !c.Enabled:
@@ -521,6 +587,7 @@ func successRatePct(runs, failures int64) float64 {
 func deriveHealth(tenants []TenantStatus) (string, []string) {
 	var reasons, pending []string
 	for _, tenant := range tenants {
+		reasons = append(reasons, deriveTenantHealthReasons(tenant)...)
 		for _, c := range tenant.Collectors {
 			if !c.Enabled {
 				continue
@@ -545,4 +612,51 @@ func deriveHealth(tenants []TenantStatus) (string, []string) {
 	default:
 		return healthHealthy, nil
 	}
+}
+
+func deriveTenantHealthReasons(tenant TenantStatus) []string {
+	if tenant.StartupFailure == nil {
+		return nil
+	}
+	return []string{fmt.Sprintf("tenant %q: %s", tenant.TenantID, tenant.StartupFailure.Reason)}
+}
+
+// deriveReadiness uses only the immutable tenant snapshot assembled for this
+// request. It needs no mutable latch: StatusTracker lifetime counts preserve a
+// prior success even when the latest run fails (Runs > Failures).
+func deriveReadiness(tenants []TenantStatus) ReadinessStatus {
+	out := ReadinessStatus{ConfiguredTenants: len(tenants)}
+	if len(tenants) == 0 {
+		out.Ready = true
+		out.State = readinessReady
+		out.Reason = "ready: no tenants configured"
+		return out
+	}
+
+	for _, tenant := range tenants {
+		if !tenant.Working {
+			continue
+		}
+		out.WorkingTenants++
+		for _, row := range tenant.Collectors {
+			if row.Enabled && row.Runs > row.Failures {
+				out.SuccessfulTenants++
+				break
+			}
+		}
+	}
+
+	switch {
+	case out.SuccessfulTenants > 0:
+		out.Ready = true
+		out.State = readinessReady
+		out.Reason = "ready: at least one tenant has completed a successful collector run"
+	case out.WorkingTenants == 0:
+		out.State = readinessNoWorkingTenants
+		out.Reason = "no configured tenant has working collectors"
+	default:
+		out.State = readinessWaitingForFirstSuccess
+		out.Reason = "waiting for the first successful collector run"
+	}
+	return out
 }

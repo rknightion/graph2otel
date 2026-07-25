@@ -121,10 +121,15 @@ chart mounts a volume at exactly that path:
 ### Health probes
 
 `config.admin.enabled` defaults to `true` in this chart (the graph2otel
-binary itself defaults it to `false`) so the Deployment always has a working
-liveness/readiness probe against the admin server's `/healthz` — its only
-health route; there is no separate `/readyz`. Set `config.admin.enabled: false`
-to disable both the admin server and the probes.
+binary itself defaults it to `false`) so the Deployment can probe the admin
+server. Liveness uses `/healthz` and remains independent of collector state.
+Readiness uses `/readyz`: it returns 503 until any collector succeeds, then
+latches ready for the rest of the process lifetime. One working tenant is
+therefore ready even when another is degraded. Before that latch, zero working
+collectors stays unready; later transient failures do not flap a latched-ready
+process. A zero-tenant stdout-mode diagnostic run is ready immediately. Failure
+to bind the admin address remains fatal. Set `config.admin.enabled: false` to
+disable both the admin server and the probes.
 
 ### Single instance, always
 
@@ -142,7 +147,7 @@ running two.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | affinity | object | `{}` | Affinity rules for pod scheduling. |
-| config.admin | object | `{"addr":":9090","enabled":true,"refresh_interval":"5s"}` | Admin health/status HTTP endpoint (liveness at /healthz, status page at / and /api/status.json). The graph2otel binary itself defaults this to disabled, but the chart default is true so the Deployment can always wire working liveness/readiness probes; set to false to run without probes. |
+| config.admin | object | `{"addr":":9090","enabled":true,"refresh_interval":"5s"}` | Admin health/status HTTP endpoint (liveness at /healthz, readiness at /readyz, status at / and /api/status.json). Readiness latches after the first successful collector run. The binary defaults this off, while the chart enables it so the Deployment can wire both probes. |
 | config.backfill.initial_lookback | string | `"0s"` | Cold-start backfill window for window (log) collectors — no checkpoint yet: a new tenant, a wiped volume, a first deploy. 0 means "use each collector's own built-in lookback" (most 1h; m365.unified_audit 4h; entra.security_incidents 24h); a non-zero value replaces all of them. Does not affect the steady state, where polling resumes from the watermark. Grafana Cloud's strict 7 days ceiling was live-measured 2026-07-22 (#226): rejection is explicit and per-entry (HTTP 400 through the OTel error handler), while in-window entries in the same batch remain accepted. Accepted in-window backdated records can be indexed later, so an immediately empty query is not evidence of rejection. This value is not clamped because other OTLP backends may accept more. |
 | config.cardinality | object | `{"global_limit":100000,"per_metric_limit":5000}` | Output-side active-series governance (Grafana Cloud bills on active series). Enforced by graph2otel's own limiter, which keeps the most significant series and folds the rest into a named `other` bucket; the OTEL SDK's arrival-ordered cap is disabled in favor of it. graph2otel's metrics are bounded aggregates (largest measured: 175 series), so these are blast-radius guards, not normal constraints. Set 0 for unlimited. |
 | config.checkpoint_dir | string | `"/var/lib/graph2otel/checkpoints"` | Where window-log collectors persist their per-(tenant, endpoint) watermarks, so a restart resumes rather than re-fetching or dropping data. Matches the checkpoint volume's mountPath below, so overriding this also moves where the volume is mounted — keep it an absolute path. |

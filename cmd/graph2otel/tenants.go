@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -71,11 +72,45 @@ var _ collectorFactoryVisitor = (*runtimeFactoryVisitor)(nil)
 // recover from — and the state it describes is invisible from the outside. The
 // caller must cancel ctx and drain wait before exiting; tenants set up before
 // the offending one may already be running.
+type tenantAuthBuilder func(config.TenantConfig) (*auth.TenantAuth, error)
+
+type tenantSetup func(
+	context.Context,
+	*auth.TenantAuth,
+	*config.Config,
+	*telemetry.Provider,
+	*slog.Logger,
+	*graphclient.WorkloadLimiter,
+	map[admin.SkipKey]string,
+	*sync.WaitGroup,
+) (admin.CollectorSource, error)
+
+type tenantGraphClientBuilder func(
+	context.Context,
+	*auth.TenantAuth,
+	graphclient.Options,
+) (*graphclient.Client, error)
+
 func startTenants(
 	ctx context.Context,
 	cfg *config.Config,
 	provider *telemetry.Provider,
 	logger *slog.Logger,
+) (sources []admin.CollectorSource, skips map[admin.SkipKey]string, limiter *graphclient.WorkloadLimiter, wait func(), err error) {
+	return startTenantsWithBuilders(ctx, cfg, provider, logger, auth.NewTenantAuth, setupTenant)
+}
+
+// startTenantsWithBuilders is the injectable composition-root seam for tenant
+// startup. Production supplies auth.NewTenantAuth and setupTenant; tests replace
+// only those external construction boundaries so the retention/order contract
+// is exercised without contacting Entra or Graph.
+func startTenantsWithBuilders(
+	ctx context.Context,
+	cfg *config.Config,
+	provider *telemetry.Provider,
+	logger *slog.Logger,
+	buildAuth tenantAuthBuilder,
+	setup tenantSetup,
 ) (sources []admin.CollectorSource, skips map[admin.SkipKey]string, limiter *graphclient.WorkloadLimiter, wait func(), err error) {
 	skips = map[admin.SkipKey]string{}
 	var wg sync.WaitGroup
@@ -86,31 +121,40 @@ func startTenants(
 	// page can render its per-tenant throttle-headroom panel (#85).
 	limiter = graphclient.NewWorkloadLimiter()
 
-	auths, err := auth.BuildAll(cfg.Tenants)
-	if err != nil {
-		logger.Error("building tenant credentials", "error", err)
-		return nil, skips, limiter, wg.Wait, nil
-	}
+	for _, tenantCfg := range cfg.Tenants {
+		ta, buildErr := buildAuth(tenantCfg)
+		if buildErr != nil || ta == nil {
+			if buildErr == nil {
+				buildErr = errors.New("credential builder returned nil TenantAuth")
+			}
+			logger.Error("building tenant credential", "tenant", tenantCfg.TenantID, "error", buildErr)
+			sources = append(sources, admin.CollectorSource{
+				TenantID:       tenantCfg.TenantID,
+				StartupFailure: admin.StartupFailureCredentialInitialization,
+			})
+			continue
+		}
 
-	for _, ta := range auths {
-		src, launched, ferr := setupTenant(ctx, ta, cfg, provider, logger, limiter, skips, &wg)
+		src, ferr := setup(ctx, ta, cfg, provider, logger, limiter, skips, &wg)
 		if ferr != nil {
 			return sources, skips, limiter, wg.Wait, ferr
 		}
-		if launched {
-			sources = append(sources, src)
-		}
+		// Config order and identity are the operator contract. The production
+		// auth builder copies this ID, but pinning it here also prevents a faulty
+		// injected builder from losing or reordering the configured tenant row.
+		src.TenantID = tenantCfg.TenantID
+		sources = append(sources, src)
 	}
 	return sources, skips, limiter, wg.Wait, nil
 }
 
 // setupTenant wires one tenant end to end.
 //
-// launched is false when the tenant could not be brought up (client build
-// failed) — its collectors are skipped rather than aborting the whole process.
-// A non-nil error is the opposite call: a configuration that must not run at
-// all, so the caller aborts startup rather than continuing without this tenant.
-// See the conflict check below for why that distinction exists.
+// A Graph-client construction failure is returned as a retained source with a
+// bounded StartupFailure code. A non-nil error is the opposite call: a
+// configuration that must not run at all, so the caller aborts startup rather
+// than continuing without this tenant. See the conflict check below for why
+// that distinction exists.
 func setupTenant(
 	ctx context.Context,
 	ta *auth.TenantAuth,
@@ -120,18 +164,37 @@ func setupTenant(
 	limiter *graphclient.WorkloadLimiter,
 	skips map[admin.SkipKey]string,
 	wg *sync.WaitGroup,
-) (admin.CollectorSource, bool, error) {
+) (admin.CollectorSource, error) {
+	return setupTenantWithGraphClientBuilder(
+		ctx, ta, cfg, provider, logger, limiter, skips, wg, graphclient.NewClient,
+	)
+}
+
+func setupTenantWithGraphClientBuilder(
+	ctx context.Context,
+	ta *auth.TenantAuth,
+	cfg *config.Config,
+	provider *telemetry.Provider,
+	logger *slog.Logger,
+	limiter *graphclient.WorkloadLimiter,
+	skips map[admin.SkipKey]string,
+	wg *sync.WaitGroup,
+	buildGraphClient tenantGraphClientBuilder,
+) (admin.CollectorSource, error) {
 	tlog := logger.With("tenant", ta.TenantID)
 	emitter := provider.Emitter()
 
-	gc, err := graphclient.NewClient(ctx, ta, graphclient.Options{
+	gc, err := buildGraphClient(ctx, ta, graphclient.Options{
 		Emitter:  emitter,
 		Limiter:  limiter,
 		TenantID: ta.TenantID,
 	})
 	if err != nil {
 		tlog.Error("building Graph client", "error", err)
-		return admin.CollectorSource{}, false, nil
+		return admin.CollectorSource{
+			TenantID:       ta.TenantID,
+			StartupFailure: admin.StartupFailureGraphClientInitialization,
+		}, nil
 	}
 
 	// License detection is best-effort: on failure, proceed with no premium
@@ -316,7 +379,7 @@ func setupTenant(
 	// Booting is the harmful outcome. #117 drew the same line for an unwritable
 	// checkpoint dir.
 	if err := checkRegistryConflicts(registry); err != nil {
-		return admin.CollectorSource{}, false, fmt.Errorf("tenant %s: %w", ta.TenantID, err)
+		return admin.CollectorSource{}, fmt.Errorf("tenant %s: %w", ta.TenantID, err)
 	}
 
 	status := collector.NewStatusTracker()
@@ -357,7 +420,7 @@ func setupTenant(
 	})
 
 	tlog.Info("tenant started", "collectors", len(registry.Entries()))
-	return admin.CollectorSource{TenantID: ta.TenantID, Registry: registry, Status: status}, true, nil
+	return admin.CollectorSource{TenantID: ta.TenantID, Registry: registry, Status: status}, nil
 }
 
 // checkRegistryConflicts refuses a tenant whose enabled collector set contains

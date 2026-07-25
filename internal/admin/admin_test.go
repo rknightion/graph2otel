@@ -3,12 +3,14 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/config"
 	"github.com/rknightion/graph2otel/internal/graphclient"
 )
@@ -99,6 +101,80 @@ func TestHealthz_ReturnsOK(t *testing.T) {
 	}
 }
 
+func TestReadyz_ZeroConfiguredTenantsReturnsOK(t *testing.T) {
+	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, nil, nil, nil, nil, nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /readyz status = %d, want %d", w.Code, http.StatusOK)
+	}
+	var got ReadinessStatus
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal /readyz: %v", err)
+	}
+	if !got.Ready || got.State != readinessReady {
+		t.Errorf("readiness = %+v, want ready", got)
+	}
+}
+
+func TestReadyz_WorkingCollectorWaitsForFirstSuccess(t *testing.T) {
+	reg := collector.NewRegistry()
+	reg.Register(&fakeCollector{name: "devices"}, time.Hour)
+	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, []CollectorSource{{
+		TenantID: "tenant-a",
+		Registry: reg,
+		Status:   collector.NewStatusTracker(),
+	}}, nil, nil, nil, nil, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("GET /readyz status = %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+	var got ReadinessStatus
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal /readyz: %v", err)
+	}
+	if got.Ready || got.State != readinessWaitingForFirstSuccess {
+		t.Errorf("readiness = %+v, want waiting for first success", got)
+	}
+}
+
+func TestReadyz_SuccessfulCollectorReturnsOK(t *testing.T) {
+	tr, reg := runOnceAndTrack(t, "devices", nil)
+	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, []CollectorSource{{
+		TenantID: "tenant-a",
+		Registry: reg,
+		Status:   tr,
+	}}, nil, nil, nil, nil, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /readyz status = %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestHealthz_RemainsLiveWhenNoTenantCanStart(t *testing.T) {
+	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, []CollectorSource{{
+		TenantID:       "tenant-bad",
+		StartupFailure: StartupFailureCredentialInitialization,
+	}}, nil, nil, nil, nil, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /healthz status = %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
 func TestHandleStatusJSON_ReflectsCollectorState(t *testing.T) {
 	tr, reg := runOnceAndTrack(t, "devices", nil)
 	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, []CollectorSource{
@@ -153,6 +229,38 @@ func TestHandleStatusJSON_SkippedCollectorShowsReason(t *testing.T) {
 	}
 }
 
+func TestHandleStatusJSON_StartupFailureIsSanitizedAndReadinessIncluded(t *testing.T) {
+	const secret = "client secret hunter2"
+	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, []CollectorSource{
+		{TenantID: "tenant-credential", StartupFailure: StartupFailureCredentialInitialization},
+		{TenantID: "tenant-invalid", StartupFailure: StartupFailureCode(secret)},
+	}, nil, nil, nil, nil, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/status.json", nil)
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	body := w.Body.String()
+	if strings.Contains(body, secret) {
+		t.Fatalf("status JSON exposed raw startup failure: %s", body)
+	}
+
+	var got Status
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if got.Readiness.Ready || got.Readiness.State != readinessNoWorkingTenants {
+		t.Errorf("readiness = %+v, want no working tenants", got.Readiness)
+	}
+	if failure := got.Tenants[0].StartupFailure; failure == nil ||
+		failure.Code != StartupFailureCredentialInitialization ||
+		failure.Reason != "credential initialization failed" {
+		t.Errorf("credential tenant failure = %+v, want bounded sanitized failure", failure)
+	}
+	if failure := got.Tenants[1].StartupFailure; failure != nil {
+		t.Errorf("invalid tenant failure = %+v, want omitted", failure)
+	}
+}
+
 func TestHandleIndex_RendersHTML(t *testing.T) {
 	tr, reg := runOnceAndTrack(t, "devices", nil)
 	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, []CollectorSource{
@@ -200,5 +308,44 @@ func TestServer_StartAndShutdown(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Start() did not return after ctx cancel")
+	}
+}
+
+func TestServer_BindFailureStopsAndJoinsTrendSampler(t *testing.T) {
+	occupied, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("occupy admin address: %v", err)
+	}
+	defer occupied.Close()
+
+	s := New(config.AdminConfig{Enabled: true, Addr: occupied.Addr().String()}, nil, nil, nil, nil, nil, nil)
+	if s == nil {
+		t.Fatal("New() returned nil for an enabled config")
+	}
+
+	started := make(chan struct{})
+	exited := make(chan struct{})
+	s.runSampler = func(ctx context.Context) {
+		close(started)
+		<-ctx.Done()
+		close(exited)
+	}
+
+	if err := s.Start(t.Context()); err == nil {
+		t.Fatal("Start() on an occupied address = nil, want bind failure")
+	}
+
+	// Start must not return until the sampler has observed cancellation and
+	// exited. Non-blocking receives are deterministic here because the join is
+	// the behavior under test; no sleeps or goroutine-count heuristics.
+	select {
+	case <-started:
+	default:
+		t.Fatal("Start() returned before the trend sampler started")
+	}
+	select {
+	case <-exited:
+	default:
+		t.Fatal("Start() returned before the trend sampler exited")
 	}
 }

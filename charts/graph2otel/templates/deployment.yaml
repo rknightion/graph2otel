@@ -52,10 +52,9 @@ spec:
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           {{- if .Values.config.admin.enabled }}
-          # Probes hit the admin server's /healthz (its only health route — see
-          # internal/admin/admin.go; there is no separate /readyz) for both
-          # liveness and readiness. Only rendered when config.admin.enabled —
-          # the binary itself defaults this off.
+          # Liveness answers only whether the process and admin server are
+          # running. Readiness latches after the first successful collector run.
+          # Only rendered when config.admin.enabled; the binary defaults it off.
           ports:
             - name: admin
               containerPort: {{ .Values.config.admin.addr | splitList ":" | last | int }}
@@ -67,7 +66,7 @@ spec:
             periodSeconds: 15
           readinessProbe:
             httpGet:
-              path: /healthz
+              path: /readyz
               port: admin
             initialDelaySeconds: 5
             periodSeconds: 15

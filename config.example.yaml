@@ -186,10 +186,16 @@ collectors: {}
 #   "entra.credential_expiry": # /applications + /servicePrincipals keyCredentials walk (default 15m)
 #     interval: "1h"           # Graph throttles $select=keyCredentials tighter (~150/min per tenant); widen on a large app estate
 
-# admin exposes an operator health/status HTTP endpoint (liveness + per-collector
-# status). Disabled by default; bind address defaults to :9090.
+# admin exposes operator liveness (/healthz), readiness (/readyz), and
+# per-collector status. Before the readiness latch, configured tenants with
+# zero working collectors or no successful run return 503. The first collector
+# success latches readiness for the process lifetime: partial tenant success is
+# ready while failures remain degraded, and later failures do not flap it.
+# Zero-tenant stdout mode is ready immediately. Liveness is independent of
+# collector outcomes, and failure to bind an enabled admin server is fatal.
+# Disabled by default; bind address defaults to :9090.
 admin:
-  enabled: false # run the admin/health HTTP endpoint (liveness + per-collector status)
+  enabled: false # run the admin health/readiness/status HTTP endpoint
   addr: ":9090" # bind address for the admin endpoint
   refresh_interval: 5s # how often the status page re-polls /api/status.json (1s freshness ticker is independent)
 

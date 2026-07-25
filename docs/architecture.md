@@ -16,7 +16,7 @@ flowchart TB
     ej["internal/exportjob<br/>create/poll/download/parse"]
     ck["internal/checkpoint<br/>file-based Store"]
     tel["internal/telemetry<br/>Provider + Emitter"]
-    admin["internal/admin<br/>health/status endpoint"]
+    admin["internal/admin<br/>health/readiness/status endpoint"]
     preflight["internal/preflight<br/>graph2otel check"]
 
     cfg --> coll
@@ -116,11 +116,18 @@ re-fetching everything or silently dropping events that arrived out of order.
 
 ### Operator surfaces
 
-- **`internal/admin`** — an optional (`admin.enabled`) HTTP endpoint: an unconditional
-  `/healthz` liveness probe plus a per-tenant, per-collector status page served as both
-  HTML (`/`) and JSON (`/api/status.json`) from one shared data model. It's single-instance
-  ops visibility, not a control plane — no mutating endpoints, and every request renders a
-  fresh snapshot of the scheduler's own recorded state rather than keeping a separate copy.
+- **`internal/admin`** — an optional (`admin.enabled`) HTTP server: unconditional
+  `/healthz` process liveness, latched `/readyz` workload readiness, and a
+  per-tenant, per-collector status page served as both HTML (`/`) and JSON
+  (`/api/status.json`) from one shared data model. Before the latch, configured
+  tenants with zero working collectors or no successful run return 503. The
+  first collector success latches readiness for the process lifetime: partial
+  tenant success is ready while failed tenants remain degraded, and later
+  failures do not flap it. A zero-tenant `stdout` run is ready immediately.
+  Failure to bind an enabled admin server is fatal. This is single-instance ops
+  visibility, not a control plane — no mutating endpoints, and every request
+  renders a fresh snapshot of the scheduler's own recorded state rather than
+  keeping a separate copy.
 - **`internal/preflight`** — backs the `graph2otel check` subcommand: validates, ahead of
   time, that every enabled collector's declared Microsoft Graph application permissions
   are both granted on the app registration and admin-consented, so a missing scope is

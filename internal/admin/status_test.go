@@ -3,6 +3,8 @@ package admin
 import (
 	"context"
 	"errors"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,6 +29,68 @@ type fakeCollector struct {
 func (f *fakeCollector) Name() string                                         { return f.name }
 func (f *fakeCollector) DefaultInterval() time.Duration                       { return time.Hour }
 func (f *fakeCollector) Collect(_ context.Context, _ telemetry.Emitter) error { return f.err }
+
+// sequenceCollector returns one result per scheduler tick. It lets readiness
+// tests prove that a lifetime success survives a later transient failure using
+// the real scheduler and StatusTracker rather than a hand-built run snapshot.
+type sequenceCollector struct {
+	name    string
+	mu      sync.Mutex
+	results []error
+	next    int
+}
+
+func (f *sequenceCollector) Name() string                   { return f.name }
+func (f *sequenceCollector) DefaultInterval() time.Duration { return time.Millisecond }
+func (f *sequenceCollector) Collect(_ context.Context, _ telemetry.Emitter) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.next >= len(f.results) {
+		return f.results[len(f.results)-1]
+	}
+	err := f.results[f.next]
+	f.next++
+	return err
+}
+
+func runSequenceAndTrack(t *testing.T, name string, results ...error) (*collector.StatusTracker, *collector.Registry) {
+	t.Helper()
+	if len(results) == 0 {
+		t.Fatal("runSequenceAndTrack requires at least one result")
+	}
+
+	reg := collector.NewRegistry()
+	reg.Register(&sequenceCollector{name: name, results: results}, time.Millisecond)
+	tr := collector.NewStatusTracker()
+	sched := collector.NewScheduler(telemetrytest.New().Emitter(), collector.NewMemoryStore(),
+		collector.WithStaggerWindow(0),
+		collector.WithSelfObs(false),
+		collector.WithStatusTracker(tr),
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		_ = sched.Run(ctx, reg)
+		close(done)
+	}()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if r, ok := tr.Snapshot()[name]; ok && r.Runs >= int64(len(results)) {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if r, ok := tr.Snapshot()[name]; !ok || r.Runs < int64(len(results)) {
+		cancel()
+		<-done
+		t.Fatalf("collector %q recorded %+v, want at least %d runs", name, r, len(results))
+	}
+	cancel()
+	<-done
+	return tr, reg
+}
 
 // runOnceAndTrack registers a fake collector, runs the scheduler until it has
 // recorded exactly one tick, then cancels it. It returns the StatusTracker
@@ -512,5 +576,150 @@ func TestDeriveHealth_SkippedCollectorNeverDegradesHealth(t *testing.T) {
 	}
 	if len(reasons) != 0 {
 		t.Errorf("reasons = %v, want empty", reasons)
+	}
+}
+
+func TestBuildTenantStatuses_StartupFailureIsSanitized(t *testing.T) {
+	reg := collector.NewRegistry()
+	reg.Register(&fakeCollector{name: "must-not-count-as-working"}, time.Hour)
+	tenants := buildTenantStatuses([]CollectorSource{{
+		TenantID:       "tenant-bad",
+		Registry:       reg,
+		Status:         collector.NewStatusTracker(),
+		StartupFailure: StartupFailureCredentialInitialization,
+	}}, nil, time.Now())
+
+	if len(tenants) != 1 {
+		t.Fatalf("Tenants = %d, want 1", len(tenants))
+	}
+	failure := tenants[0].StartupFailure
+	if failure == nil {
+		t.Fatal("StartupFailure = nil, want sanitized credential failure")
+	}
+	if failure.Code != StartupFailureCredentialInitialization {
+		t.Errorf("StartupFailure.Code = %q, want %q", failure.Code, StartupFailureCredentialInitialization)
+	}
+	if failure.Reason != "credential initialization failed" {
+		t.Errorf("StartupFailure.Reason = %q, want sanitized operator reason", failure.Reason)
+	}
+	if tenants[0].Working {
+		t.Error("Working = true for a tenant whose startup failed")
+	}
+}
+
+func TestBuildTenantStatuses_UnknownStartupFailureCannotExposeRawText(t *testing.T) {
+	const secret = "client secret hunter2"
+	tenants := buildTenantStatuses([]CollectorSource{{
+		TenantID:       "tenant-bad",
+		StartupFailure: StartupFailureCode(secret),
+	}}, nil, time.Now())
+
+	if got := tenants[0].StartupFailure; got != nil {
+		t.Fatalf("StartupFailure = %+v, want unknown code omitted", got)
+	}
+	if got := strings.Join(deriveTenantHealthReasons(tenants[0]), " "); strings.Contains(got, secret) {
+		t.Fatalf("health reasons expose raw startup failure %q", got)
+	}
+}
+
+func TestDeriveReadiness_ZeroConfiguredTenantsIsReady(t *testing.T) {
+	got := deriveReadiness(nil)
+	want := ReadinessStatus{
+		Ready:  true,
+		State:  readinessReady,
+		Reason: "ready: no tenants configured",
+	}
+	if got != want {
+		t.Errorf("deriveReadiness(nil) = %+v, want %+v", got, want)
+	}
+}
+
+func TestDeriveReadiness_EmptyRegistryIsNotWorking(t *testing.T) {
+	tenants := buildTenantStatuses([]CollectorSource{{
+		TenantID: "tenant-empty",
+		Registry: collector.NewRegistry(),
+		Status:   collector.NewStatusTracker(),
+	}}, nil, time.Now())
+
+	got := deriveReadiness(tenants)
+	if got.Ready || got.State != readinessNoWorkingTenants {
+		t.Errorf("readiness = %+v, want not ready/%q", got, readinessNoWorkingTenants)
+	}
+	if got.ConfiguredTenants != 1 || got.WorkingTenants != 0 || got.SuccessfulTenants != 0 {
+		t.Errorf("readiness counts = %+v, want configured=1 working=0 successful=0", got)
+	}
+}
+
+func TestDeriveReadiness_WorkingCollectorWaitsForFirstSuccess(t *testing.T) {
+	reg := collector.NewRegistry()
+	reg.Register(&fakeCollector{name: "healthy-empty"}, time.Hour)
+	tenants := buildTenantStatuses([]CollectorSource{{
+		TenantID: "tenant-a",
+		Registry: reg,
+		Status:   collector.NewStatusTracker(),
+	}}, nil, time.Now())
+
+	got := deriveReadiness(tenants)
+	if got.Ready || got.State != readinessWaitingForFirstSuccess {
+		t.Errorf("readiness = %+v, want not ready/%q", got, readinessWaitingForFirstSuccess)
+	}
+	if got.WorkingTenants != 1 || got.SuccessfulTenants != 0 {
+		t.Errorf("readiness counts = %+v, want working=1 successful=0", got)
+	}
+}
+
+func TestDeriveReadiness_HealthyEmptyCollectionCountsAsSuccess(t *testing.T) {
+	tr, reg := runOnceAndTrack(t, "healthy-empty", nil)
+	tenants := buildTenantStatuses([]CollectorSource{{
+		TenantID: "tenant-a",
+		Registry: reg,
+		Status:   tr,
+	}}, nil, time.Now())
+
+	got := deriveReadiness(tenants)
+	if !got.Ready || got.State != readinessReady || got.SuccessfulTenants != 1 {
+		t.Errorf("readiness = %+v, want ready after successful empty collection", got)
+	}
+}
+
+func TestDeriveReadiness_PartialTenantSuccessIsReady(t *testing.T) {
+	tr, reg := runOnceAndTrack(t, "devices", nil)
+	tenants := buildTenantStatuses([]CollectorSource{
+		{TenantID: "tenant-bad", StartupFailure: StartupFailureGraphClientInitialization},
+		{TenantID: "tenant-good", Registry: reg, Status: tr},
+	}, nil, time.Now())
+
+	got := deriveReadiness(tenants)
+	if !got.Ready || got.State != readinessReady {
+		t.Errorf("readiness = %+v, want ready from partial tenant success", got)
+	}
+	if got.ConfiguredTenants != 2 || got.WorkingTenants != 1 || got.SuccessfulTenants != 1 {
+		t.Errorf("readiness counts = %+v, want configured=2 working=1 successful=1", got)
+	}
+
+	health, reasons := deriveHealth(tenants)
+	if health != healthDegraded {
+		t.Errorf("health = %q, want degraded while failed tenant remains visible", health)
+	}
+	if got := strings.Join(reasons, " "); !strings.Contains(got, "graph client initialization failed") {
+		t.Errorf("health reasons = %q, want sanitized startup failure", got)
+	}
+}
+
+func TestDeriveReadiness_LifetimeSuccessSurvivesLaterFailure(t *testing.T) {
+	tr, reg := runSequenceAndTrack(t, "devices", nil, errBoom)
+	tenants := buildTenantStatuses([]CollectorSource{{
+		TenantID: "tenant-a",
+		Registry: reg,
+		Status:   tr,
+	}}, nil, time.Now())
+
+	row := tenants[0].Collectors[0]
+	if row.LastSuccess || row.Runs <= row.Failures {
+		t.Fatalf("collector run = %+v, want last failure after a lifetime success", row)
+	}
+	got := deriveReadiness(tenants)
+	if !got.Ready || got.State != readinessReady || got.SuccessfulTenants != 1 {
+		t.Errorf("readiness = %+v, want latched ready from lifetime success", got)
 	}
 }

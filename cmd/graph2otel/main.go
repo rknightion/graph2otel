@@ -213,7 +213,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 			defer t.Stop()
 			for {
 				select {
-				case <-ctx.Done():
+				case <-tenantCtx.Done():
 					return
 				case <-t.C:
 					provider.ReportSelfObs()
@@ -223,20 +223,57 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 
 	// Admin/health endpoint, fed the live per-tenant status sources and skip
-	// reasons. Start blocks until ctx is canceled, then shuts the server down
-	// itself, so run it in the background.
+	// reasons. When enabled, this is an operator contract: a bind/serve failure
+	// (or an unexpected clean return while the process is live) is process-fatal
+	// rather than a log line beside an exporter that has lost its health
+	// surface. The buffered result and explicit cancellation-path drain ensure
+	// Start always gets to report its shutdown result without leaking a
+	// goroutine.
 	adminSrv := admin.New(cfg.Admin, sources, skips, limiter, cfg, provider.Cardinality(), provider)
-	go func() {
-		if err := adminSrv.Start(ctx); err != nil {
-			logger.Error("admin server", "error", err)
-		}
-	}()
+	if !cfg.Admin.Enabled {
+		<-ctx.Done()
+		cancelTenants()
+		waitTenants()
+		logger.Info("graph2otel stopped")
+		return 0
+	}
 
-	<-ctx.Done()
-	waitTenants() // drain the per-tenant schedulers before releasing telemetry
+	if err := superviseAdmin(ctx, adminSrv.Start, cancelTenants, waitTenants); err != nil {
+		logger.Error("admin server", "error", err)
+		return 1
+	}
 
 	logger.Info("graph2otel stopped")
 	return 0
+}
+
+// superviseAdmin runs an enabled admin server until it reports a result or the
+// process context is canceled. Tenant cancellation and scheduler drainage are
+// a common epilogue rather than select-branch side effects: ctx cancellation
+// and a clean admin result can both be ready at once, and either selected
+// branch must still fully stop tenant work before telemetry is released.
+func superviseAdmin(
+	ctx context.Context,
+	start func(context.Context) error,
+	cancelTenants func(),
+	waitTenants func(),
+) error {
+	adminResult := make(chan error, 1)
+	go func() { adminResult <- start(ctx) }()
+
+	var resultErr error
+	select {
+	case resultErr = <-adminResult:
+		if resultErr == nil && ctx.Err() == nil {
+			resultErr = fmt.Errorf("admin server stopped unexpectedly")
+		}
+	case <-ctx.Done():
+		resultErr = <-adminResult
+	}
+
+	cancelTenants()
+	waitTenants()
+	return resultErr
 }
 
 func parseLevel(s string) slog.Level {

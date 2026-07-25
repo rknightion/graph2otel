@@ -197,6 +197,9 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: test rendered Helm contracts
+        run: go test ./charts/graph2otel -count=1
+
       - name: helm lint
         run: helm lint charts/graph2otel
 

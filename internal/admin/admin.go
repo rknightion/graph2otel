@@ -1,10 +1,20 @@
-// Package admin implements the operator health/status HTTP endpoint (#12):
-// an unconditional /healthz liveness probe plus a per-tenant, per-collector
-// status page served as both HTML ("/") and JSON ("/api/status.json") from
-// one shared data model (see status.go). The package never keeps its own
-// copy of collector run state — every request renders a fresh snapshot of
-// the collector.StatusTracker(s) the composition root wires in, so the page
-// can never drift from what the scheduler actually recorded.
+// Package admin implements the operator health, readiness, and status HTTP
+// endpoints. /healthz is unconditional process liveness. /readyz distinguishes
+// a valid zero-tenant smoke process from configured tenants that have no
+// working collectors or are waiting for their first successful run. Readiness
+// becomes durable after any tenant records a lifetime success (Runs >
+// Failures), so a later transient failure degrades health without flapping
+// readiness.
+//
+// The per-tenant, per-collector status is served as both HTML ("/") and JSON
+// ("/api/status.json") from one shared data model (see status.go). The package
+// never keeps its own copy of collector run state — every request renders a
+// fresh snapshot of the collector.StatusTracker(s) the composition root wires
+// in, so the page cannot drift from what the scheduler actually recorded.
+//
+// Start returns non-shutdown bind and serve failures to its caller. When admin
+// is enabled, the composition root treats losing this operator contract as a
+// fatal process error and drains the tenant schedulers.
 //
 // This is single-instance ops visibility, not a control plane: it has no
 // mutating endpoints and no dependency on any other tenant's state.
@@ -54,6 +64,10 @@ type Server struct {
 	// launches; a Server that is never Started renders empty series, which the
 	// page shows as "collecting…".
 	trend *sampler
+	// runSampler is the owned trend-loop dependency. New wires trend.run;
+	// keeping the function boundary explicit lets Start guarantee cancellation
+	// and join independently of the HTTP server's return path.
+	runSampler func(context.Context)
 
 	srv *http.Server
 	mux *http.ServeMux
@@ -102,8 +116,10 @@ func New(cfg config.AdminConfig, sources []CollectorSource, skipReasons map[Skip
 		card:        card,
 	}
 	s.trend = newSampler(samplerHistoryLen, card, tp, sources, limiter, s.now)
+	s.runSampler = s.trend.run
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealthz)
+	mux.HandleFunc("/readyz", s.handleReadyz)
 	mux.HandleFunc("/api/status.json", s.handleStatusJSON)
 	mux.HandleFunc("/api/config.json", s.handleConfigJSON)
 	mux.HandleFunc("/api/cardinality.json", s.handleCardinalityJSON)
@@ -129,11 +145,19 @@ func (s *Server) Start(ctx context.Context) error {
 	if s == nil {
 		return nil
 	}
+	samplerCtx, cancelSampler := context.WithCancel(ctx)
+	samplerDone := make(chan struct{})
+	go func() {
+		defer close(samplerDone)
+		s.runSampler(samplerCtx)
+	}()
+	defer func() {
+		cancelSampler()
+		<-samplerDone
+	}()
+
 	errCh := make(chan error, 1)
 	go func() { errCh <- s.srv.ListenAndServe() }()
-	// The trend sampler lives for as long as the server does: it takes the first
-	// observation immediately, then ticks, and stops when ctx is canceled.
-	go s.trend.run(ctx)
 	select {
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -165,6 +189,7 @@ func (s *Server) snapshot() Status {
 	}
 	attachHeadroomTrends(tenants, s.trend)
 	health, reasons := deriveHealth(tenants)
+	readiness := deriveReadiness(tenants)
 	uptime := now.Sub(s.startedAt)
 	return Status{
 		Service: ServiceInfo{
@@ -176,6 +201,7 @@ func (s *Server) snapshot() Status {
 		},
 		Health:        health,
 		HealthReasons: reasons,
+		Readiness:     readiness,
 		Tenants:       tenants,
 		GeneratedAt:   now.UTC().Format(time.RFC3339),
 		RefreshMs:     s.refreshMs,

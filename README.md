@@ -268,7 +268,7 @@ collectors: {}    # per-collector enable/disable + interval overrides; omitted =
 #     interval: "5m"
 
 admin:
-  enabled: false  # operator health/status HTTP endpoint (liveness + per-collector status)
+  enabled: false  # /healthz liveness, /readyz readiness, and per-collector status
   addr: ":9090"
 
 checkpoint_dir: "/var/lib/graph2otel"  # persistent, writable container checkpoint volume
@@ -280,6 +280,14 @@ collector name's own underscore is preserved, e.g.
 `G2O_COLLECTORS__SIGN_INS__ENABLED=false`). See `config.example.yaml` for the
 authoritative, fully-commented schema, and [`docs/collectors.md`](docs/collectors.md) for
 what each `collectors:` key gates.
+
+When the admin server is enabled, `/healthz` is process liveness and is
+independent of collector outcomes. `/readyz` returns 503 until the first
+successful collector run, then stays ready for the process lifetime. Partial
+tenant success is ready while failures remain visible as degraded status.
+Before the latch, zero working collectors remains unready; later transient
+failures do not flap readiness. A zero-tenant `stdout` diagnostic run is ready
+immediately. Failure to bind the configured admin address is fatal.
 
 ## Operating notes
 

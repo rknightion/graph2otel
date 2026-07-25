@@ -117,10 +117,15 @@ chart mounts a volume at exactly that path:
 ### Health probes
 
 `config.admin.enabled` defaults to `true` in this chart (the graph2otel
-binary itself defaults it to `false`) so the Deployment always has a working
-liveness/readiness probe against the admin server's `/healthz` — its only
-health route; there is no separate `/readyz`. Set `config.admin.enabled: false`
-to disable both the admin server and the probes.
+binary itself defaults it to `false`) so the Deployment can probe the admin
+server. Liveness uses `/healthz` and remains independent of collector state.
+Readiness uses `/readyz`: it returns 503 until any collector succeeds, then
+latches ready for the rest of the process lifetime. One working tenant is
+therefore ready even when another is degraded. Before that latch, zero working
+collectors stays unready; later transient failures do not flap a latched-ready
+process. A zero-tenant stdout-mode diagnostic run is ready immediately. Failure
+to bind the admin address remains fatal. Set `config.admin.enabled: false` to
+disable both the admin server and the probes.
 
 ### Single instance, always
 

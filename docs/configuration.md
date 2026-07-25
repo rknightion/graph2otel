@@ -128,11 +128,21 @@ admin:
   addr: ":9090"
 ```
 
-Exposes an operator health/status HTTP endpoint (liveness + per-collector status).
-Disabled by default. When enabled, the status page also renders a per-tenant
-**throttle-headroom** panel — the live client-side rate-limiter state (limit/s, burst,
-tokens available, headroom %) for each Graph workload the tenant has actually hit since
-start-up — so you can see how close a tenant is running to Graph's throttling ceilings.
+Exposes the operator health/status HTTP server. Disabled by default.
+
+- `/healthz` is process liveness and does not depend on collector outcomes.
+- `/readyz` returns 503 until the first successful collector run, then latches
+  ready for the rest of the process lifetime.
+- Partial tenant success is ready while failed tenants/collectors remain
+  degraded in status. If no collector has ever succeeded, readiness stays 503.
+- A zero-tenant `stdout` diagnostic run is ready immediately.
+- Failure to bind `admin.addr` is fatal; the process never runs silently
+  without its configured health surface.
+
+The status page also renders a per-tenant **throttle-headroom** panel — the
+live client-side rate-limiter state (limit/s, burst, tokens available,
+headroom %) for each Graph workload the tenant has actually hit since start-up
+— so you can see how close a tenant is running to Graph's throttling ceilings.
 
 ### `profiling`
 

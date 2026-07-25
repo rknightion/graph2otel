@@ -71,6 +71,41 @@ func TestRender_ZeroCollectors(t *testing.T) {
 	}
 }
 
+func TestRender_ReadinessAndStartupFailureAreServerRenderedAndRefreshable(t *testing.T) {
+	s := Status{
+		Service: ServiceInfo{Version: "0.1.0"},
+		Health:  healthDegraded,
+		Readiness: ReadinessStatus{
+			Ready:             false,
+			State:             readinessNoWorkingTenants,
+			ConfiguredTenants: 1,
+			WorkingTenants:    0,
+			SuccessfulTenants: 0,
+			Reason:            "no configured tenant has working collectors",
+		},
+		Tenants: []TenantStatus{{
+			TenantID: "tenant-bad",
+			StartupFailure: &TenantStartupFailure{
+				Code:   StartupFailureGraphClientInitialization,
+				Reason: "graph client initialization failed",
+			},
+		}},
+	}
+	body := renderString(t, s)
+	for _, want := range []string{
+		`id="readinessBadge"`,
+		`id="ruReadiness"`,
+		readinessNoWorkingTenants,
+		"no configured tenant has working collectors",
+		"graph client initialization failed",
+		`d.readiness`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("page missing readiness/startup failure marker %q", want)
+		}
+	}
+}
+
 func TestRender_MultiTenantWithSkipReasons(t *testing.T) {
 	s := Status{
 		Service: ServiceInfo{Version: "0.1.0", GoVersion: "go1.24", Uptime: "5m0s"},

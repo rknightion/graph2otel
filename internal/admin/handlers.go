@@ -17,6 +17,18 @@ func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	_, _ = io.WriteString(w, "ok")
 }
 
+// handleReadyz reports whether any configured tenant has completed useful
+// work during this process lifetime. It reads only the same in-memory
+// StatusTracker snapshots as the status page and never calls an upstream.
+func (s *Server) handleReadyz(w http.ResponseWriter, _ *http.Request) {
+	readiness := s.snapshot().Readiness
+	w.Header().Set("Content-Type", "application/json")
+	if !readiness.Ready {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}
+	_ = json.NewEncoder(w).Encode(readiness)
+}
+
 // handleStatusJSON serves the current status snapshot as machine-readable JSON.
 func (s *Server) handleStatusJSON(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")

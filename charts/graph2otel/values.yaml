@@ -206,10 +206,10 @@ config:
   #     interval: "5m"
   collectors: {}
 
-  # -- Admin health/status HTTP endpoint (liveness at /healthz, status page at
-  # / and /api/status.json). The graph2otel binary itself defaults this to
-  # disabled, but the chart default is true so the Deployment can always wire
-  # working liveness/readiness probes; set to false to run without probes.
+  # -- Admin health/status HTTP endpoint (liveness at /healthz, readiness at
+  # /readyz, status at / and /api/status.json). Readiness latches after the
+  # first successful collector run. The binary defaults this off, while the
+  # chart enables it so the Deployment can wire both probes.
   admin:
     enabled: true
     addr: ":9090"

@@ -127,3 +127,11 @@ record graph2otel emits to stdout as OTLP-shaped output, instead of pushing over
 network. Switch `protocol` to `grpc` or `http` and set `otlp.endpoint` /
 `otlp.grafana_cloud` once you're ready to point at a real backend. See
 [Configuration](configuration.md) for the full key reference.
+
+For an operator health surface, enable `admin`. `/healthz` reports process
+liveness independently of collection, while `/readyz` returns 503 until the
+first collector succeeds and then remains ready for the process lifetime.
+Partial tenant success is ready with the failures reported as degraded; if no
+collector ever works, readiness stays 503. A zero-tenant `stdout` diagnostic
+run is ready immediately. A configured admin address that cannot bind is a
+fatal startup error.
