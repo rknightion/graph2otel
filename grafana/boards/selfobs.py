@@ -11,11 +11,14 @@ the cardinality limiter, throttling, outbound HTTP — is emitted by the schedul
 the transport and the telemetry package, none of which is a collector package
 and none of which has a golden.
 
-So those metrics are declared here, by hand, as ``(otel name, unit, kind)``
-triples copied from their emit sites. Only the triple is hand-kept: the
-Prometheus name is DERIVED by ``promname.prom_name``, the same rule the Go
-catalog uses, pinned to it by a test over all 274 cataloged metrics. That is
-what keeps the derivation honest even where the catalog cannot reach.
+Those metrics are declared in ``grafana/selfobs_metrics.py`` (the ``SELF_OBS``
+allow-list), by hand, as ``(otel name, unit, kind)`` triples copied from their
+emit sites — shared with ``grafana/build_rules.py`` (#219) so the two
+generators cannot each hand-declare their own copy and drift apart. Only the
+triple is hand-kept: the Prometheus name is DERIVED by ``promname.prom_name``,
+the same rule the Go catalog uses, pinned to it by a test over all 274
+cataloged metrics. That is what keeps the derivation honest even where the
+catalog cannot reach.
 
 **These panels are NOT covered by the coverage gate** — the gate can only gate
 what the catalog can see. Extending signalcapture to non-collector packages is
@@ -23,7 +26,7 @@ the fix, and it belongs with signalcapture, not here.
 """
 
 from builder import RATE, TENANT_SEL
-from promname import prom_name
+from selfobs_metrics import SELF_OBS
 
 UID = "graph2otel-self-obs"
 TITLE = "graph2otel / Self-Observability"
@@ -52,29 +55,29 @@ SECTIONS = [
     ]),
 ]
 
-# (otel name, unit, kind) for the self-obs metrics no golden captures. Copied
-# from the emit sites named in the comments; the Prometheus name below is
-# derived, never typed.
-SCRAPE_SUCCESS = prom_name("graph2otel.scrape.success", "1", "gauge")
-SCRAPE_DURATION = prom_name("graph2otel.scrape.duration", "s", "gauge")
-SCRAPE_STALENESS = prom_name("graph2otel.scrape.staleness", "s", "gauge")
-SCRAPE_BUDGET = prom_name("graph2otel.scrape.budget", "1", "gauge")
-SCRAPE_ERRORS = prom_name("graph2otel.scrape.errors", "1", "sum")
-CHECKPOINT_ERRORS = prom_name("graph2otel.checkpoint.persist.errors", "1", "sum")
-BUILD_INFO = prom_name("graph2otel.build_info", "1", "gauge")
-LICENSE_TIER = prom_name("graph2otel.tenant.license_tier", "1", "gauge")
-EXPORT_JOBS = prom_name("graph2otel.export.jobs", "{job}", "sum")
-EXPORT_DURATION = prom_name("graph2otel.export.duration_seconds", "s", "gauge")
-EXPORT_POLLS = prom_name("graph2otel.export.poll_count", "{poll}", "gauge")
-EXPORT_BYTES = prom_name("graph2otel.export.bytes", "By", "gauge")
-SERIES_ACTIVE = prom_name("graph2otel.series.active", "{series}", "gauge")
-SERIES_LIMIT = prom_name("graph2otel.series.limit", "{series}", "gauge")
-SERIES_CLIPPED = prom_name("graph2otel.series.clipped", "{series}", "gauge")
-THROTTLE_COUNT = prom_name("graph2otel.throttle.count", "1", "sum")
-THROTTLE_PCT = prom_name("graph2otel.throttle.limit_percentage", "%", "gauge")
-HTTP_DURATION = prom_name("graph2otel.http.client.request.duration", "s", "histogram")
-HTTP_4XX = prom_name("graph2otel.graphclient.http_4xx", "1", "sum")
-HTTP_5XX = prom_name("graph2otel.graphclient.http_5xx", "1", "sum")
+# Prometheus names for the self-obs metrics no golden captures, read from the
+# shared SELF_OBS allow-list (grafana/selfobs_metrics.py) rather than
+# hand-declared here.
+SCRAPE_SUCCESS = SELF_OBS["graph2otel.scrape.success"].prom
+SCRAPE_DURATION = SELF_OBS["graph2otel.scrape.duration"].prom
+SCRAPE_STALENESS = SELF_OBS["graph2otel.scrape.staleness"].prom
+SCRAPE_BUDGET = SELF_OBS["graph2otel.scrape.budget"].prom
+SCRAPE_ERRORS = SELF_OBS["graph2otel.scrape.errors"].prom
+CHECKPOINT_ERRORS = SELF_OBS["graph2otel.checkpoint.persist.errors"].prom
+BUILD_INFO = SELF_OBS["graph2otel.build_info"].prom
+LICENSE_TIER = SELF_OBS["graph2otel.tenant.license_tier"].prom
+EXPORT_JOBS = SELF_OBS["graph2otel.export.jobs"].prom
+EXPORT_DURATION = SELF_OBS["graph2otel.export.duration_seconds"].prom
+EXPORT_POLLS = SELF_OBS["graph2otel.export.poll_count"].prom
+EXPORT_BYTES = SELF_OBS["graph2otel.export.bytes"].prom
+SERIES_ACTIVE = SELF_OBS["graph2otel.series.active"].prom
+SERIES_LIMIT = SELF_OBS["graph2otel.series.limit"].prom
+SERIES_CLIPPED = SELF_OBS["graph2otel.series.clipped"].prom
+THROTTLE_COUNT = SELF_OBS["graph2otel.throttle.count"].prom
+THROTTLE_PCT = SELF_OBS["graph2otel.throttle.limit_percentage"].prom
+HTTP_DURATION = SELF_OBS["graph2otel.http.client.request.duration"].prom
+HTTP_4XX = SELF_OBS["graph2otel.graphclient.http_4xx"].prom
+HTTP_5XX = SELF_OBS["graph2otel.graphclient.http_5xx"].prom
 
 _SEL = "{" + TENANT_SEL + ', collector=~"$collector"}'
 _T = "{" + TENANT_SEL + "}"

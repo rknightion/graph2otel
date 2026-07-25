@@ -30,7 +30,7 @@ export PATH := $(TOOLS_DIR):$(PATH)
 .PHONY: build test lint fmt vet govulncheck docker check regen tools \
         coverage notices sbom tools-licensing tools-sbom install-hooks \
         helm-docs tools-helm-docs tools-check tools-graphdrift \
-        graphdrift graphdrift-update tidy tidy-check dashboard grafana-check
+        graphdrift graphdrift-update tidy tidy-check dashboard grafana-check rules
 
 build:
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/$(BINARY)
@@ -118,18 +118,31 @@ regen:
 dashboard:
 	cd grafana && python3 build_dashboard.py
 
+# Regenerate alerts/graph2otel-alerts.yaml + recording-rules/*.json from
+# grafana/build_rules.py's RULES/RECORDING lists (#219). Same pure-stdlib
+# python3, no PyYAML, no setup-python step — see build_rules.py's docstring.
+rules:
+	cd grafana && python3 build_rules.py
+
 # The Grafana gate. Writes NOTHING, so it can never launder a stale artifact into
-# a passing run. Two independent failure modes, each with its own signal:
+# a passing run. Three independent failure modes, each with its own signal:
 #
-#   1. --check   the coverage gate (every catalog metric on a panel or waived),
-#                the waiver-hygiene gates (no stale waiver, no reasonless waiver),
-#                and #162's per-domain log-panel gate.
-#   2. unittest  staleness — TestStructure.test_committed_dashboards_are_not_stale
-#                compares each committed dashboards/*.json against what the builder
-#                produces right now — plus the structural gates (LogQL never uses a
-#                stream selector on an attribute, the PromQL and LogQL corpora stay
-#                disjoint, output is deterministic, panels fit the 24-column grid,
-#                the Python and Go name derivations agree over all 274 metrics).
+#   1. build_dashboard.py --check   the coverage gate (every catalog metric on a
+#                panel or waived), the waiver-hygiene gates (no stale waiver, no
+#                reasonless waiver), and #162's per-domain log-panel gate.
+#   2. build_rules.py --check       (#219) the reverse-validation gate (every
+#                PromQL metric token in every rule resolves to a real catalog or
+#                self-obs Prometheus name — no waiver concept, an unresolvable
+#                name is just a failure) plus its own regen-staleness check on
+#                alerts/graph2otel-alerts.yaml and recording-rules/*.json.
+#   3. unittest  staleness — TestStructure.test_committed_dashboards_are_not_stale
+#                (dashboards) and TestStaleness (rules) compare each committed
+#                generated file against what its builder produces right now —
+#                plus the structural gates (LogQL never uses a stream selector on
+#                an attribute, the PromQL and LogQL corpora stay disjoint, output
+#                is deterministic, panels fit the 24-column grid, the Python and
+#                Go name derivations agree over all 274 metrics, no duplicate
+#                rule uid, isPaused matches alerts/README.md).
 #
 # Staleness is checked by comparing file contents rather than by `git diff
 # --exit-code`: a git-based check passes on a dirty tree that has never been
@@ -141,6 +154,7 @@ dashboard:
 # catalog and this target stays runnable without a Go toolchain.
 grafana-check:
 	cd grafana && python3 build_dashboard.py --check
+	cd grafana && python3 build_rules.py --check
 	cd grafana && python3 -m unittest discover -s tests -t . -q
 
 # Idempotent tool install into .tools/ (gitignored). Re-installs if the cached

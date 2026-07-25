@@ -6,6 +6,12 @@ bar (see [`docs/derived-metrics.md`](../docs/derived-metrics.md) for the heurist
 runs a LogQL `count_over_time` against the Loki logs datasource on Grafana's evaluation
 schedule and writes the result into Prometheus.
 
+**Both JSON files below are generated** by [`grafana/build_rules.py`](../grafana/build_rules.py)'s
+`RECORDING` list (#219) — do not hand-edit them; `make grafana-check` fails on a hand-edited
+file (the event name and group-by labels are validated against
+[`spec/signal-catalog.json`](../spec/signal-catalog.json) at build time). Edit `RECORDING` in
+that script, then run `make rules`. This README stays hand-authored.
+
 These are **Grafana-managed** rules (Grafana Alerting provisioning API, `record` block) — **not**
 Loki/Mimir data-source-managed ruler rules. `type=recording` on the rule confirms it.
 

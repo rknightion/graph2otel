@@ -1,23 +1,29 @@
 # graph2otel — example alert rules
 
-Example, hand-authored Grafana alert rules that complement the dashboards in
-`../dashboards/`. Two files:
+Example Grafana alert rules that complement the dashboards in `../dashboards/`.
+Two files:
 
 - [`graph2otel-alerts.yaml`](graph2otel-alerts.yaml) — Grafana-managed alert
-  rules (file provisioning: `apiVersion: 1` + `groups:`).
+  rules (file provisioning: `apiVersion: 1` + `groups:`). **Generated** by
+  [`grafana/build_rules.py`](../grafana/build_rules.py) (#219) — do not
+  hand-edit it; `make grafana-check` fails on a hand-edited file. Edit the
+  `RULES` list in that script, then run `make rules`. This file (the prose
+  below) stays hand-authored: the generator never touches it.
 - [`graph2otel-contactpoints.yaml`](graph2otel-contactpoints.yaml) — a
   documented no-op contact point + root notification policy, so the rule
   group has somewhere to attach. **Replace it** with your own receiver before
-  relying on these alerts to page anyone.
+  relying on these alerts to page anyone. Hand-authored, not generated.
 
-Ten rule objects across four alert categories, matching the four bullets in
-tracking issue #30: credential/token expiry, compliance drop, collector
-staleness, and throttle saturation. Each category ships one **primary** rule
-(`isPaused: false`) plus one or more **companion** rules (`isPaused: true`) —
-a different source metric or severity tier for the same failure mode. This
-mirrors the default-disabled pattern in the sibling `tailscale2otel` repo's
-`deploy/alerts/tailscale2otel.grafana-rules.yaml`: enable a companion in the
-Grafana UI once you've decided it fits your tenant.
+Twelve rule objects across five alert categories, matching the four bullets in
+tracking issue #30 (credential/token expiry, compliance drop, collector
+staleness, throttle saturation) plus MDCA Cloud Discovery parse health added by
+#145. Each category ships one **primary** rule (`isPaused: false`) plus one or
+more **companion** rules (`isPaused: true`) — a different source metric or
+severity tier for the same failure mode; the MDCA category ships two
+default-enabled rules instead, since neither covers the other's failure mode
+(see doc block 5). This mirrors the default-disabled pattern in the sibling
+`tailscale2otel` repo's `deploy/alerts/tailscale2otel.grafana-rules.yaml`:
+enable a companion in the Grafana UI once you've decided it fits your tenant.
 
 ## Metric naming: OTLP → Prometheus normalization
 
@@ -200,8 +206,8 @@ is still happening 10-15 minutes later. This is deliberately workload-agnostic
 that's the Identity Protection workload's 1 req/s ceiling or the reporting
 workload's 5/10s one) rather than a per-ceiling count threshold — split by the
 `workload` label (already grouped in the query) if you want workload-specific
-sensitivity. The companion tracks `graph2otel_throttle_limit_percentage` (from
-Graph's `x-ms-throttle-limit-percentage` response header, when present)
+sensitivity. The companion tracks `graph2otel_throttle_limit_percentage_percent`
+(from Graph's `x-ms-throttle-limit-percentage` response header, when present)
 sustaining above 80% for 15m.
 
 **False positive looks like:** a brief burst at process startup (initial

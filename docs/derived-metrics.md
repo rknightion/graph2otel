@@ -169,11 +169,17 @@ success record), so the count is already an enrollment-failure count; `enrollmen
 Enrollment-failure-rate alerts read straight off the recorded series. The at-least-once and
 `interval`-matching caveats above apply unchanged.
 
-## Shipped as manifests
+## Shipped as manifests, generated (#219)
 
 Resolved: the recording-rule manifests are shipped in-repo as rules-as-code in
 [`recording-rules/`](../recording-rules/) (Grafana-managed provisioning payloads), alongside the
 [dashboards](https://github.com/rknightion/graph2otel/tree/main/dashboards), and applied with
 `gcx api`. See [`recording-rules/README.md`](../recording-rules/README.md) for the apply/verify
-commands. A new candidate (directory audits, provisioning) is a copy-edit of one of the two
-existing files: change the `event_name`, the `sum by (...)` labels, and the `record.metric` name.
+commands.
+
+Both files are **generated** by `grafana/build_rules.py`'s `RECORDING` list — do not hand-edit the
+JSON. A new candidate (directory audits, provisioning) is a copy-edit of one `RECORDING` entry in
+that file: change the `event_name` passed to `cat.log(...)` (validated against
+`spec/signal-catalog.json` at build time — a misspelled event name is a `KeyError`, not a silently
+broken rule), the `by (...)` labels, and the `record.metric` name, then run `make rules` and
+`make grafana-check`.
