@@ -7,11 +7,12 @@ static Go binary, OTLP push only (no Prometheus pull endpoint). Multi-tenant fro
 one. Used as a **SIEM feed**: per-entity detail in logs is the point. See `README.md`
 for the user-facing pitch.
 
-> **Status:** pre-1.0, live in production on a real tenant. 58 collectors shipped;
-> `docs/collectors.md` is generated from the registry and drift-gated. The **launch
-> tracker is issue #79** — read its body (mission, open-set map, decisions, operating
-> rules) before starting work. Keep this file to *current truth*; correction history
-> lives on the issues.
+> **Status:** **v1.0.0 shipped 2026-07-25** — live in production on a real tenant.
+> `docs/collectors.md` is generated from the registry and drift-gated (the authoritative
+> collector count). Releases are release-please driven; the launch tracker (#79) and the
+> release checklist (#35) are both **closed** — read them for history, not current state.
+> The only open issue is #78 (Renovate's dependency dashboard, permanently open). Keep
+> this file to *current truth*; correction history lives on the issues.
 
 ## Commands
 
