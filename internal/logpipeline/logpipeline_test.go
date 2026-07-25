@@ -12,6 +12,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // pageFetcherFunc adapts a plain function to PageFetcher, so tests can drive
@@ -35,6 +36,48 @@ func mapByID(record map[string]any) (string, telemetry.Event) {
 
 func newCheckpoint(tenantID, endpoint string) *checkpoint.Checkpoint {
 	return &checkpoint.Checkpoint{TenantID: tenantID, Endpoint: endpoint, SeenIDs: checkpoint.NewSeenIDs()}
+}
+
+// TestPollEmptyIDRecordsAllEmitted proves #262's engine pattern is not confined
+// to jobpipeline: the same empty-id SeenIDs poisoning existed here. Three
+// records that map to an empty id in one window must emit three events, "" must
+// never enter the dedupe set, and the condition surfaces on the
+// graph2otel.api.unexpected watchdog.
+func TestPollEmptyIDRecordsAllEmitted(t *testing.T) {
+	rec := telemetrytest.New()
+	cfg := EndpointConfig{
+		Path:            "/auditLogs/signIns",
+		CollectorName:   "entra.test",
+		TimeField:       "createdDateTime",
+		Flavor:          FlavorGeLe,
+		OrderByReliable: true,
+		Map:             mapByID,
+	}
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+
+	fetcher := pageFetcherFunc(func(_ context.Context, _ string) ([]map[string]any, string, error) {
+		// No "id" on any record.
+		return []map[string]any{
+			{"createdDateTime": from.Add(10 * time.Minute).Format(time.RFC3339)},
+			{"createdDateTime": from.Add(20 * time.Minute).Format(time.RFC3339)},
+			{"createdDateTime": from.Add(30 * time.Minute).Format(time.RFC3339)},
+		}, "", nil
+	})
+
+	cp := newCheckpoint("t1", cfg.Path)
+	if _, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	if logs := rec.LogRecords(); len(logs) != 3 {
+		t.Fatalf("emitted %d log records, want 3 — an empty id must not dedupe later records away", len(logs))
+	}
+	if cp.SeenIDs.Has("") {
+		t.Error(`"" entered SeenIDs — an empty id must never become a dedupe key`)
+	}
+	if pts := rec.MetricPoints(wirecheck.MetricUnexpected); len(pts) == 0 {
+		t.Errorf("expected the %s watchdog counter to fire for the empty-id condition, got none", wirecheck.MetricUnexpected)
+	}
 }
 
 // TestPollDrainsAllPagesViaNextLink verifies a two-page response is fully

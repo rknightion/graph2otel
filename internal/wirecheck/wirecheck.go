@@ -119,6 +119,27 @@ func New(collector string, logger *slog.Logger) *Reporter {
 	return &Reporter{collector: collector, logger: logger, seen: map[[3]string]struct{}{}}
 }
 
+// shared holds one Reporter per collector name for the whole process, so an
+// engine-level watchdog gets the log-once-per-process behavior without having to
+// thread a *Reporter through per-poll call signatures the engine's other callers
+// share.
+var shared sync.Map // string -> *Reporter
+
+// Shared returns the process-wide Reporter for collector, creating it on first
+// use. It exists for watchdogs that live in an ingest engine rather than in a
+// collector — the empty-dedupe-id guard in jobpipeline/logpipeline/o365pipeline
+// (#262) — where there is no long-lived per-collector Reporter to hang the
+// log-once semantics on. Findings from the same collector name therefore
+// deduplicate their WARN across polls exactly as a collector-owned Reporter
+// would; the counter still increments on every occurrence.
+func Shared(collector string) *Reporter {
+	if r, ok := shared.Load(collector); ok {
+		return r.(*Reporter)
+	}
+	r, _ := shared.LoadOrStore(collector, New(collector, nil))
+	return r.(*Reporter)
+}
+
 // Value reports field carrying a value outside allowed.
 //
 // An EMPTY value is never a finding: absent optional fields are the normal case

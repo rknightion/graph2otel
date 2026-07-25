@@ -22,6 +22,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // metricSelfExcluded counts Graph-polled records dropped by exclude_self because
@@ -266,6 +267,21 @@ func Poll(ctx context.Context, cfg EndpointConfig, cp *checkpoint.Checkpoint, fr
 	newest := cp.Watermark
 	sawAny := false
 	for _, d := range all {
+		if d.id == "" {
+			// A record with no dedupe id cannot be deduplicated (#262). Emit it —
+			// undedupeable is degraded, but dropping a log record is worse — and
+			// never store "" in SeenIDs, which would silently dedupe away every
+			// later empty-id record in this window. Surface the condition on the
+			// watchdog rather than recover from it silently. It still counts as a
+			// seen record for watermark advancement.
+			wirecheck.Shared(cfg.CollectorName).MissingField(e, semconv.AttrId)
+			e.LogEvent(d.ev)
+			if !sawAny || d.t.After(newest) {
+				newest = d.t
+			}
+			sawAny = true
+			continue
+		}
 		if cp.SeenIDs.Has(d.id) {
 			continue
 		}

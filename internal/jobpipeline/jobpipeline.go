@@ -34,7 +34,9 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // graphV1BaseURL is the Graph v1.0 service root QueryConfig.CreatePath resolves
@@ -142,6 +144,11 @@ type QueryConfig struct {
 	// (M365 vs Purview recordTypeFilters) keep independent watermarks/SeenIDs.
 	// Defaults to CreatePath when empty.
 	CheckpointKey string
+	// CollectorName labels the graph2otel.api.unexpected watchdog when the engine
+	// reports an empty dedupe id (#262). Set by NewJobCollector from the
+	// collector's registered name; a caller invoking Run directly may leave it
+	// empty, which only affects the label on that self-obs counter.
+	CollectorName string
 	// BuildRequest returns the JSON request body for the window [from, to]. The
 	// caller is workload-specific: it sets filterStartDateTime/filterEndDateTime
 	// (typically from `from`/`to`) plus recordTypeFilters and any other query
@@ -534,6 +541,16 @@ func emitAndAdvance(cfg QueryConfig, cp *checkpoint.Checkpoint, records []map[st
 	sort.Slice(all, func(i, j int) bool { return all[i].t.Before(all[j].t) })
 
 	for _, d := range all {
+		if d.id == "" {
+			// A record with no dedupe id cannot be deduplicated (#262). Emit it —
+			// undedupeable is degraded, but dropping an audit record is worse — and
+			// never store "" in SeenIDs, which would silently dedupe away every
+			// later empty-id record in this window. Surface the condition on the
+			// watchdog rather than recover from it silently.
+			wirecheck.Shared(cfg.CollectorName).MissingField(e, semconv.AttrId)
+			e.LogEvent(d.ev)
+			continue
+		}
 		if cp.SeenIDs.Has(d.id) {
 			continue
 		}

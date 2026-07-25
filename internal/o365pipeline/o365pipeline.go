@@ -128,7 +128,12 @@ type EndpointConfig struct {
 	//     Both dedupe branches below are guarded on a non-empty id precisely so
 	//     this path works; the record ships untracked, so an at-least-once
 	//     re-delivery of it would duplicate. Degraded, not lost — and degraded
-	//     beats discarded.
+	//     beats discarded. This is the correct shape #262 fixed in
+	//     jobpipeline/logpipeline: an empty id must never enter SeenIDs. Here it
+	//     is not reported to the graph2otel.api.unexpected watchdog because an
+	//     id-less record is an ANTICIPATED case on this transport (contentId
+	//     dedupe still applies), not a wire surprise — firing on it would be a
+	//     watchdog firing on correct data.
 	//   - NO PARSEABLE EVENT TIME: return ok=false. This one genuinely cannot be
 	//     emitted honestly. A zero Event.Timestamp does NOT mean "unknown":
 	//     telemetry's LogEvent leaves the timestamp unset (emitter.go, `if

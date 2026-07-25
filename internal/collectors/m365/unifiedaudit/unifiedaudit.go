@@ -36,7 +36,8 @@
 // Three of this package's load-bearing facts were established by ONE capture and
 // are then trusted forever, and every one of them fails SILENTLY — the API keeps
 // answering 200 and the records keep looking reasonable. Those three are watched
-// as wirecheck INVARIANTS, plus the dedupe key as a MissingField:
+// as wirecheck INVARIANTS. The dedupe key is watched too, but by the ENGINE now,
+// not here:
 //
 //   - Invariant(record_type_filter). The curated recordTypeFilters include-list
 //     is the only thing keeping this collector off the tenant's firehose (3,003
@@ -60,10 +61,14 @@
 //     the crossing is checked against the record's own envelope rather than
 //     against a remembered measurement.
 //
-//   - MissingField(id). jobpipeline dedupes on the immutable auditLogRecord.id.
-//     An empty id is not merely undedupeable: the first record adds "" to
-//     SeenIDs and then EVERY later record with an empty id is deduped away
-//     silently. That is data loss wearing the shape of a quiet tenant.
+//   - MissingField(id) — reported by the jobpipeline ENGINE (#262), not this
+//     collector. jobpipeline dedupes on the immutable auditLogRecord.id. An empty
+//     id is not merely undedupeable: the first record used to add "" to SeenIDs
+//     and then EVERY later empty-id record was deduped away silently — data loss
+//     wearing the shape of a quiet tenant. The engine now guards the empty id and
+//     reports it on graph2otel.api.unexpected for every jobpipeline collector, so
+//     this collector no longer reports it itself (that would double-count the
+//     counter). TestMissingRecordIDIsReported drives the engine to prove it.
 //
 //   - NOT WATCHED: RequestType. #234 names it, and it stays unwatched. It is an
 //     UNDOCUMENTED integer enum — Microsoft publishes no member list — and this
@@ -293,12 +298,13 @@ func (w *watcher) mapRecord(rec map[string]any) (string, telemetry.Event) {
 func (w *watcher) check(rec map[string]any) {
 	e := w.emitter()
 
-	// The dedupe key. An empty id poisons SeenIDs: the first one is emitted and
-	// remembered as "", and every later record with an empty id is then deduped
-	// away as already seen.
-	if str(rec, "id") == "" {
-		w.r.MissingField(e, semconv.AttrId)
-	}
+	// The dedupe key. An empty id used to poison SeenIDs here: the first one was
+	// emitted and remembered as "", and every later empty-id record was then
+	// deduped away as already seen. That is now fixed and reported in the
+	// jobpipeline ENGINE (#262), which guards the empty id and reports it to the
+	// same graph2otel.api.unexpected watchdog for every jobpipeline collector —
+	// so this collector no longer reports it itself (doing so would double-count
+	// the counter). The engine coverage is exercised by TestMissingRecordIDIsReported.
 
 	// The include-list is what keeps this collector off the tenant's firehose.
 	if rt := str(rec, "auditLogRecordType"); excludedRecordTypes.Has(rt) {

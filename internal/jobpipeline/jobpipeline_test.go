@@ -11,6 +11,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // fakeJobClient is a scriptable JobClient. createErrs is returned (and consumed)
@@ -93,6 +94,51 @@ func baseConfig() QueryConfig {
 			return []byte(`{"filterStartDateTime":"` + from.UTC().Format(time.RFC3339) + `"}`), nil
 		},
 		Map: mapByID,
+	}
+}
+
+// TestRun_EmptyIDRecordsAllEmitted proves #262: a record that maps to an empty
+// id must never poison SeenIDs. Before the fix the first empty-id record was
+// emitted and "" recorded in SeenIDs, so every later empty-id record in the
+// window was silently deduped away — all-but-one of them lost, with nothing
+// warning. Three empty-id records in one window must emit three events, "" must
+// never enter the dedupe set, and the condition must surface on the
+// graph2otel.api.unexpected watchdog rather than recover silently.
+func TestRun_EmptyIDRecordsAllEmitted(t *testing.T) {
+	rec := telemetrytest.New()
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+
+	cfg := baseConfig()
+	cfg.CollectorName = "m365.test"
+	cfg.PageSize = 100
+
+	page := "https://graph.microsoft.com/v1.0/security/auditLog/queries/query-1/records?$top=100"
+	client := &fakeJobClient{
+		statuses: []string{StatusSucceeded},
+		pages: map[string]fakePage{
+			// No "id" on any record: mapByID returns "" for each.
+			page: {records: []map[string]any{
+				{"createdDateTime": from.Add(1 * time.Minute).Format(time.RFC3339)},
+				{"createdDateTime": from.Add(2 * time.Minute).Format(time.RFC3339)},
+				{"createdDateTime": from.Add(3 * time.Minute).Format(time.RFC3339)},
+			}},
+		},
+	}
+
+	cp := newCheckpoint("t1", cfg.CreatePath)
+	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if logs := rec.LogRecords(); len(logs) != 3 {
+		t.Fatalf("emitted %d log records, want 3 — an empty id must not dedupe later records away", len(logs))
+	}
+	if cp.SeenIDs.Has("") {
+		t.Error(`"" entered SeenIDs — an empty id must never become a dedupe key`)
+	}
+	if pts := rec.MetricPoints(wirecheck.MetricUnexpected); len(pts) == 0 {
+		t.Errorf("expected the %s watchdog counter to fire for the empty-id condition, got none", wirecheck.MetricUnexpected)
 	}
 }
 

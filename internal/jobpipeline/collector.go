@@ -40,6 +40,12 @@ type JobCollector struct {
 
 // NewJobCollector returns a JobCollector wired to persist through store.
 func NewJobCollector(name string, interval, lag time.Duration, tenantID string, cfg QueryConfig, client JobClient, store *checkpoint.Store) *JobCollector {
+	// The engine's empty-dedupe-id watchdog labels its counter with this (#262);
+	// derive it from the registered name so every jobpipeline collector is covered
+	// without each having to set it.
+	if cfg.CollectorName == "" {
+		cfg.CollectorName = name
+	}
 	return &JobCollector{
 		NameField: name,
 		Interval:  interval,
