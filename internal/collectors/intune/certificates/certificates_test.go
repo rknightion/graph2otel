@@ -56,6 +56,9 @@ func certStatesURL(id, segment string) string {
 }
 
 func page(values ...map[string]any) string {
+	if values == nil {
+		values = []map[string]any{}
+	}
 	b, err := json.Marshal(map[string]any{"value": values})
 	if err != nil {
 		panic(err)
@@ -153,7 +156,7 @@ func TestCollectAggregatesManagedDeviceCertificateStatesByExpiryAndState(t *test
 	g := &fakeGraph{bodies: baseFixture()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -186,7 +189,7 @@ func TestCollectSkipsNonCertificateDeviceConfigurations(t *testing.T) {
 	// to fetch a managedDeviceCertificateStates sub-collection for profile-2
 	// (the non-certificate profile), it would hit fakeGraph's "unmapped url"
 	// error path and Collect would return an error.
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 }
@@ -212,7 +215,7 @@ func TestCollectCollapsesIssuanceStateEnumToBoundedBuckets(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -250,7 +253,7 @@ func TestCollectAggregatesUserPfxCertificates(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -295,7 +298,7 @@ func TestCollectEmitsLogTwinPerManagedDeviceCertificate(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -359,7 +362,7 @@ func TestCollectLogTwinEscalatesSeverityForExpiredManagedDeviceCertificate(t *te
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -382,7 +385,7 @@ func TestCollectEmitsLogTwinPerUserPfxCertificate(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -425,7 +428,7 @@ func TestLogTwinNeverCarriesPrivateKeyMaterial(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -456,7 +459,7 @@ func TestCollectCapsCertProfileNameCardinality(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -483,7 +486,7 @@ func TestCollectIsResilientToDeviceConfigurationsFailure(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := newTestCollector(g).Collect(context.Background(), rec.Emitter())
+	err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected Collect to surface the deviceConfigurations failure as an error")
 	}
@@ -501,7 +504,7 @@ func TestCollectIsResilientToUserPfxCertificatesFailure(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := newTestCollector(g).Collect(context.Background(), rec.Emitter())
+	err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected Collect to surface the userPfxCertificates failure as an error")
 	}
@@ -523,7 +526,7 @@ func TestCollectSkipsUnavailableBetaEndpointGracefully(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v, want nil (404 should be skipped, not surfaced)", err)
 	}
 }
@@ -541,7 +544,7 @@ func TestCollectSkipsUnavailableCertProfileCastGracefully(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v, want nil (403 on one profile cast should be skipped, not surfaced)", err)
 	}
 }
@@ -550,7 +553,7 @@ func TestNoPerDeviceOrPerCertAttributes(t *testing.T) {
 	g := &fakeGraph{bodies: baseFixture()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -602,7 +605,7 @@ func findings(rec *telemetrytest.Recorder) map[string]float64 {
 func TestMappedIssuanceStatesReportNothingUnexpected(t *testing.T) {
 	g := &fakeGraph{bodies: baseFixture()}
 	rec := telemetrytest.New()
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if got := findings(rec); len(got) != 0 {
@@ -617,7 +620,7 @@ func TestUnmappedIssuanceStateIsReported(t *testing.T) {
 		certState("Corp Wifi Certs", "renewalPending", daysFromNow(5)),
 	)
 	rec := telemetrytest.New()
-	if err := newTestCollector(&fakeGraph{bodies: bodies}).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(&fakeGraph{bodies: bodies}).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	key := wirecheck.KindUnmappedValue + "/" + semconv.AttrIssuanceState
@@ -642,7 +645,7 @@ func TestDocumentedUnknownIssuanceStateIsNotAFinding(t *testing.T) {
 		certState("Corp Wifi Certs", "unknown", daysFromNow(120)),
 	)
 	rec := telemetrytest.New()
-	if err := newTestCollector(&fakeGraph{bodies: bodies}).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(&fakeGraph{bodies: bodies}).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if got := findings(rec); len(got) != 0 {

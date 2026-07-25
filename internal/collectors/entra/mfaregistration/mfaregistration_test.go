@@ -87,7 +87,7 @@ func TestCollectEmitsStatusCountsByFeature(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -130,7 +130,7 @@ func TestCollectEmitsStatusCountsByUserType(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -178,7 +178,7 @@ func TestCollectEmitsMethodCounts(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -216,7 +216,7 @@ func TestCollectEmitsAdminMfaCapableSplit(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -247,7 +247,7 @@ func TestCollectFollowsPagination(t *testing.T) {
 	}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -265,7 +265,7 @@ func TestCollectSetsNoConsistencyLevelHeader(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	for url, cl := range g.seenHeaders {
@@ -279,7 +279,7 @@ func TestCollectIsResilientToFetchError(t *testing.T) {
 	g := &fakeGraph{errs: map[string]error{requestURL: errors.New("throttled")}}
 	rec := telemetrytest.New()
 
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Error("expected Collect to surface the fetch failure as an error")
 	}
@@ -346,7 +346,7 @@ func TestCollectEmitsUserRegistrationLogTwinForEveryUser(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -368,7 +368,7 @@ func TestCollectEmitsUserRegistrationLogTwinAttrs(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -471,7 +471,7 @@ func TestUserTypeIsLowercased(t *testing.T) {
 		requestURL: page(`{"isAdmin":false,"isMfaRegistered":true,"isMfaCapable":true,"isSsprRegistered":false,"isSsprEnabled":false,"isSsprCapable":false,"isPasswordlessCapable":false,"methodsRegistered":["sms"],"userType":"Guest"}`),
 	}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	found := false
@@ -498,7 +498,7 @@ func TestNoPerEntitySeries(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

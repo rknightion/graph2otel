@@ -59,7 +59,7 @@ func TestCollectEmitsThreeStatesPerPolicy(t *testing.T) {
 	runner := &fakeRunner{rows: liveRows()}
 	c := New(runner, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if runner.lastReq.ReportName != reportName {
@@ -110,7 +110,7 @@ func TestCollectEmitsThreeStatesPerPolicy(t *testing.T) {
 func TestMetricAttrsAreBoundedNoPerDeviceData(t *testing.T) {
 	c := New(&fakeRunner{rows: liveRows()}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	wantKeys := map[string]bool{
@@ -137,7 +137,7 @@ func TestMetricAttrsAreBoundedNoPerDeviceData(t *testing.T) {
 func TestMetricNameAndUnitPinned(t *testing.T) {
 	c := New(&fakeRunner{rows: liveRows()[:1]}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	points := rec.MetricPoints(metricName)
@@ -152,7 +152,7 @@ func TestMetricNameAndUnitPinned(t *testing.T) {
 func TestCollectSkipsAndLogsOnExportError(t *testing.T) {
 	c := New(&fakeRunner{err: errors.New("exportjob: FeatureUpdatePolicyStatusSummary: boom")}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error, want nil: %v", err)
 	}
 	if len(rec.MetricPoints(metricName)) != 0 || len(rec.LogRecords()) != 0 {
@@ -163,7 +163,7 @@ func TestCollectSkipsAndLogsOnExportError(t *testing.T) {
 func TestCollectSkipsWhenExportRunnerIsNil(t *testing.T) {
 	c := New(nil, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if len(rec.MetricPoints(metricName)) != 0 || len(rec.LogRecords()) != 0 {

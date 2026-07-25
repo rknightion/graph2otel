@@ -48,7 +48,7 @@ func TestCollectEmitsPointPerState(t *testing.T) {
 	runner := &fakeRunner{rows: []exportjob.Row{liveRow()}}
 	c := New(runner, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if runner.lastReq.ReportName != reportName {
@@ -116,7 +116,7 @@ func TestCollectEmitsPointPerState(t *testing.T) {
 func TestNoAttrMapAliasing(t *testing.T) {
 	c := New(&fakeRunner{rows: []exportjob.Row{liveRow()}}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	points := rec.MetricPoints(metricName)
@@ -141,7 +141,7 @@ func TestNoAttrMapAliasing(t *testing.T) {
 func TestMetricUnitAndName(t *testing.T) {
 	c := New(&fakeRunner{rows: []exportjob.Row{liveRow()}}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	points := rec.MetricPoints(metricName)
@@ -159,7 +159,7 @@ func TestMetricUnitAndName(t *testing.T) {
 func TestCollectSkipsAndLogsOnExportError(t *testing.T) {
 	c := New(&fakeRunner{err: errors.New("exportjob: DriverUpdatePolicyStatusSummary: boom")}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error, want nil: %v", err)
 	}
 	if len(rec.MetricPoints(metricName)) != 0 || len(rec.LogRecords()) != 0 {
@@ -170,7 +170,7 @@ func TestCollectSkipsAndLogsOnExportError(t *testing.T) {
 func TestCollectSkipsWhenExportRunnerIsNil(t *testing.T) {
 	c := New(nil, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if len(rec.MetricPoints(metricName)) != 0 || len(rec.LogRecords()) != 0 {
@@ -181,7 +181,7 @@ func TestCollectSkipsWhenExportRunnerIsNil(t *testing.T) {
 func TestCollectEmptyReportEmitsNothing(t *testing.T) {
 	c := New(&fakeRunner{rows: nil}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if len(rec.MetricPoints(metricName)) != 0 || len(rec.LogRecords()) != 0 {
@@ -213,7 +213,7 @@ func TestSelectColumnsPinned(t *testing.T) {
 	runner := &fakeRunner{rows: []exportjob.Row{liveRow()}}
 	c := New(runner, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	want := []string{

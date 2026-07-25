@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
@@ -198,7 +199,7 @@ func TestCollectEmitsStateAndHeartbeatAcrossAllThreeConnectorTypes(t *testing.T)
 	}, errs: map[string]error{amsURL: amsUnavailableErr()}}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -269,7 +270,7 @@ func TestCollectEmitsLiveMTDConnectorsEndToEnd(t *testing.T) {
 	c.now = func() time.Time { return liveMTDNow }
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v, want nil (exchange 501 + empty ndes are graceful)", err)
 	}
 
@@ -328,7 +329,7 @@ func TestCollectSkipsExchangeGracefullyOn501AndStillEmitsMTDAndNDES(t *testing.T
 	}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v, want nil (501/NotSupported on exchangeConnectors is a graceful skip, not a failure)", err)
 	}
 
@@ -357,7 +358,7 @@ func TestCollectSkipsNDESSilentlyOn403AndStillEmitsExchangeAndMTD(t *testing.T) 
 	}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v, want nil (403 on the beta NDES endpoint is skip-and-log, not a failure)", err)
 	}
 
@@ -375,6 +376,46 @@ func TestCollectSkipsNDESSilentlyOn403AndStillEmitsExchangeAndMTD(t *testing.T) 
 	}
 }
 
+func TestCollectRecordsPermissionDeniedForUnavailableAndroidManagedStore(t *testing.T) {
+	g := &fakeGraph{
+		bodies: map[string]string{
+			exchangeURL: `{"value":[]}`,
+			mtdURL:      `{"value":[]}`,
+			ndesURL:     `{"value":[]}`,
+		},
+		errs: map[string]error{
+			amsURL: errors.New("graphclient: GET " + amsURL + ": status 403: forbidden"),
+		},
+	}
+	outcomes := recordoutcome.NewRecorder()
+
+	if err := newTestCollector(g).Collect(context.Background(), telemetrytest.New().Emitter(), outcomes); err != nil {
+		t.Fatalf("Collect: %v, want nil for graceful Android managed-store 403", err)
+	}
+	if got := outcomes.Snapshot().Summarize(nil, false).Cause; got != recordoutcome.CausePermissionDenied {
+		t.Errorf("outcome cause = %q, want %q", got, recordoutcome.CausePermissionDenied)
+	}
+}
+
+func TestCollectRecordsSourceErrorForUnavailableAndroidManagedStore(t *testing.T) {
+	g := &fakeGraph{
+		bodies: map[string]string{
+			exchangeURL: `{"value":[]}`,
+			mtdURL:      `{"value":[]}`,
+			ndesURL:     `{"value":[]}`,
+		},
+		errs: map[string]error{amsURL: amsUnavailableErr()},
+	}
+	outcomes := recordoutcome.NewRecorder()
+
+	if err := newTestCollector(g).Collect(context.Background(), telemetrytest.New().Emitter(), outcomes); err != nil {
+		t.Fatalf("Collect: %v, want nil for graceful Android managed-store 404", err)
+	}
+	if got := outcomes.Snapshot().Summarize(nil, false).Cause; got != recordoutcome.CauseSourceError {
+		t.Errorf("outcome cause = %q, want %q", got, recordoutcome.CauseSourceError)
+	}
+}
+
 func TestCollectIsolatesNDESRealFailureFromExchangeAndMTD(t *testing.T) {
 	g := &fakeGraph{
 		bodies: map[string]string{
@@ -388,7 +429,7 @@ func TestCollectIsolatesNDESRealFailureFromExchangeAndMTD(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := newTestCollector(g).Collect(context.Background(), rec.Emitter())
+	err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("Collect: want a non-nil error surfacing the real (non-403/404) NDES failure")
 	}
@@ -415,7 +456,7 @@ func TestCollectHandlesExchangeFailureIndependentlyOfMTDAndNDES(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := newTestCollector(g).Collect(context.Background(), rec.Emitter())
+	err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("Collect: want a non-nil error when the exchange connectors list fails")
 	}
@@ -447,7 +488,7 @@ func TestCollectEmitsLiveAndroidManagedStoreEndToEnd(t *testing.T) {
 	c.now = func() time.Time { return liveAMSNow }
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v, want nil (live steady state is graceful)", err)
 	}
 

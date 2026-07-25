@@ -74,7 +74,7 @@ func TestPollDropsUndatedRecords(t *testing.T) {
 	})
 	cp := newCheckpoint("t1", cfg.Path)
 
-	hw, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter())
+	hw, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter(), nil)
 	if err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestPollEmptyIDRecordsAllEmitted(t *testing.T) {
 	})
 
 	cp := newCheckpoint("t1", cfg.Path)
-	if _, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter()); err != nil {
+	if _, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter(), nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 	if logs := rec.LogRecords(); len(logs) != 3 {
@@ -180,7 +180,7 @@ func TestPollDrainsAllPagesViaNextLink(t *testing.T) {
 	})
 
 	cp := newCheckpoint("t1", cfg.Path)
-	if _, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter()); err != nil {
+	if _, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter(), nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 	if calls != 2 {
@@ -231,7 +231,7 @@ func TestPollRejectsRepeatedNextLinkBeforeEmission(t *testing.T) {
 		}}, pageURL, nil
 	})
 
-	_, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter())
+	_, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter(), nil)
 	if err == nil || !strings.Contains(err.Error(), "repeated pagination URL") {
 		t.Fatalf("Poll error = %v, want repeated pagination URL error", err)
 	}
@@ -291,7 +291,7 @@ func TestPollRejectsPaginationPastOneThousandPagesBeforeEmission(t *testing.T) {
 		}}, fmt.Sprintf("https://graph.microsoft.com/v1.0/auditLogs/signIns?$skiptoken=page-%d", calls+1), nil
 	})
 
-	_, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter())
+	_, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter(), nil)
 	if err == nil || !strings.Contains(err.Error(), "pagination exceeded 1000 pages") || !strings.Contains(err.Error(), cfg.Path) {
 		t.Fatalf("Poll error = %v, want contextual 1000-page cap error for %s", err, cfg.Path)
 	}
@@ -334,10 +334,10 @@ func TestPollDedupesAcrossPollCycles(t *testing.T) {
 	})
 
 	cp := newCheckpoint("t1", cfg.Path)
-	if _, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter()); err != nil {
+	if _, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter(), nil); err != nil {
 		t.Fatalf("Poll #1: %v", err)
 	}
-	if _, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter()); err != nil {
+	if _, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter(), nil); err != nil {
 		t.Fatalf("Poll #2: %v", err)
 	}
 
@@ -378,7 +378,7 @@ func TestPollAdvancesWatermarkMinusSafetyLagAndPersists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	hw, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter())
+	hw, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter(), nil)
 	if err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
@@ -429,7 +429,7 @@ func TestPollCapturesLateArrivingEventInsideOverlap(t *testing.T) {
 			{"id": "a", "createdDateTime": base.Add(10 * time.Minute).Format(time.RFC3339)},
 		}, "", nil
 	})
-	if _, err := Poll(context.Background(), cfg, cp, base, base.Add(30*time.Minute), fetch1, rec.Emitter()); err != nil {
+	if _, err := Poll(context.Background(), cfg, cp, base, base.Add(30*time.Minute), fetch1, rec.Emitter(), nil); err != nil {
 		t.Fatalf("Poll cycle 1: %v", err)
 	}
 
@@ -442,7 +442,7 @@ func TestPollCapturesLateArrivingEventInsideOverlap(t *testing.T) {
 			{"id": "a", "createdDateTime": base.Add(10 * time.Minute).Format(time.RFC3339)},
 		}, "", nil
 	})
-	if _, err := Poll(context.Background(), cfg, cp, base, base.Add(30*time.Minute), fetch2, rec.Emitter()); err != nil {
+	if _, err := Poll(context.Background(), cfg, cp, base, base.Add(30*time.Minute), fetch2, rec.Emitter(), nil); err != nil {
 		t.Fatalf("Poll cycle 2: %v", err)
 	}
 
@@ -605,7 +605,7 @@ func TestPollClientSideWindowFiltersWhenNoServerFilter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	hw, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter())
+	hw, err := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter(), nil)
 	if err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
@@ -650,7 +650,7 @@ func TestPollSortsClientSideWhenOrderByUnreliable(t *testing.T) {
 	})
 
 	cp := newCheckpoint("t1", cfg.Path)
-	hw, err := Poll(context.Background(), cfg, cp, base, base.Add(time.Hour), fetcher, rec.Emitter())
+	hw, err := Poll(context.Background(), cfg, cp, base, base.Add(time.Hour), fetcher, rec.Emitter(), nil)
 	if err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
@@ -729,7 +729,7 @@ func TestPollStampsGraphTransport(t *testing.T) {
 		}, "", nil
 	})
 
-	if _, err := Poll(context.Background(), cfg, newCheckpoint("t1", cfg.Path), from, to, fetcher, rec.Emitter()); err != nil {
+	if _, err := Poll(context.Background(), cfg, newCheckpoint("t1", cfg.Path), from, to, fetcher, rec.Emitter(), nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 

@@ -62,6 +62,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -335,10 +337,11 @@ type bucketKey struct {
 
 // Collector polls Intune's beta certificate-state resources.
 type Collector struct {
-	g       collectors.GraphClient
-	baseURL string
-	logger  *slog.Logger
-	watch   *wirecheck.Reporter
+	outcomes *outcome.Recorder
+	g        collectors.GraphClient
+	baseURL  string
+	logger   *slog.Logger
+	watch    *wirecheck.Reporter
 	// now returns the current time; overridable in tests so expiry bucketing
 	// is deterministic and assertable.
 	now func() time.Time
@@ -377,7 +380,11 @@ func (c *Collector) RequiredPermissions() []string {
 // are independently resilient: a failure in one is logged and joined into the
 // returned error, but the other's contribution to the shared metrics still
 // emits.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
+	local := *c
+	local.outcomes = outcomes
+	c = &local
 	var errs []error
 	now := c.now()
 
@@ -421,7 +428,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // support) is skipped-and-logged for the affected call, not treated as a
 // failure.
 func (c *Collector) collectManagedDeviceCertificateStates(ctx context.Context, e telemetry.Emitter, now time.Time, days map[bucketKey]int64, states map[string]int64, capper *profileNameCapper) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/deviceConfigurations", nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceManagement/deviceConfigurations", nil, c.outcomes)
 	if err != nil {
 		if isUnavailable(err) {
 			c.logger.Info("certificates: deviceConfigurations unavailable on this tenant; skipping", "collector", collectorName, "error", err)
@@ -435,15 +442,17 @@ func (c *Collector) collectManagedDeviceCertificateStates(ctx context.Context, e
 		var dc deviceConfigListItem
 		if err := json.Unmarshal(r, &dc); err != nil {
 			c.logger.Warn("certificates: skipping malformed deviceConfiguration element", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Filtered(c.outcomes, 1)
 		segment, ok := certProfileTypes[dc.ODataType]
 		if !ok {
 			continue // not a certificate profile this collector reaches - see the package doc
 		}
 
 		url := c.baseURL + "/deviceManagement/deviceConfigurations/" + dc.ID + "/microsoft.graph." + segment + "/managedDeviceCertificateStates"
-		statesRaw, err := collectors.GetAllValues(ctx, c.g, url, nil)
+		statesRaw, err := collectors.GetAllValuesRecorded(ctx, c.g, url, nil, c.outcomes)
 		if err != nil {
 			if isUnavailable(err) {
 				c.logger.Info("certificates: managedDeviceCertificateStates unavailable for profile; skipping", "collector", collectorName, "profile_type", segment, "error", err)
@@ -458,8 +467,10 @@ func (c *Collector) collectManagedDeviceCertificateStates(ctx context.Context, e
 			var st certificateState
 			if err := json.Unmarshal(sr, &st); err != nil {
 				c.logger.Warn("certificates: skipping malformed certificate state element", "collector", collectorName, "error", err)
+				outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 				continue
 			}
+			outcome.Emitted(c.outcomes, 1)
 			profileName := st.CertificateProfileDisplayName
 			if profileName == "" {
 				profileName = dc.DisplayName
@@ -483,7 +494,7 @@ func (c *Collector) collectManagedDeviceCertificateStates(ctx context.Context, e
 // managedDeviceCertificateState issuance-state buckets. A 403/404 is
 // skipped-and-logged, not treated as a failure.
 func (c *Collector) collectUserPfxCertificates(ctx context.Context, e telemetry.Emitter, now time.Time, days map[bucketKey]int64, states map[string]int64, capper *profileNameCapper) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/userPfxCertificates", nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceManagement/userPfxCertificates", nil, c.outcomes)
 	if err != nil {
 		if isUnavailable(err) {
 			c.logger.Info("certificates: userPfxCertificates unavailable on this tenant; skipping", "collector", collectorName, "error", err)
@@ -496,8 +507,10 @@ func (c *Collector) collectUserPfxCertificates(ctx context.Context, e telemetry.
 		var pfx userPfxCertificate
 		if err := json.Unmarshal(r, &pfx); err != nil {
 			c.logger.Warn("certificates: skipping malformed userPfxCertificate element", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		purpose := pfx.IntendedPurpose
 		if purpose == "" {
 			purpose = "unknown"

@@ -89,7 +89,7 @@ func TestCollectAggregatesCountsAcrossAppsIntoBoundedDimensions(t *testing.T) {
 	c := New(runner, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -146,7 +146,7 @@ func TestMetricNameAndUnitPinned(t *testing.T) {
 	c := New(&fakeRunner{rows: []exportjob.Row{row("Contoso Agent", "app-1", "5", 1, 0, 0, 0, 0)}}, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -176,7 +176,7 @@ func TestMetricCarriesOnlyBoundedDimensions(t *testing.T) {
 	c := New(&fakeRunner{rows: rows}, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -211,7 +211,7 @@ func TestCollectEmitsOneLogTwinPerAppRow(t *testing.T) {
 	c := New(runner, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -272,7 +272,7 @@ func TestLogTwinOmitsAbsentColumns(t *testing.T) {
 	c := New(&fakeRunner{rows: []exportjob.Row{r}}, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -294,7 +294,7 @@ func TestCollectTreatsUnparsableCountAsZero(t *testing.T) {
 	c := New(runner, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -320,7 +320,7 @@ func TestCollectSkipsAndLogsOnExportError(t *testing.T) {
 			c := New(runner, nil)
 			rec := telemetrytest.New()
 
-			if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+			if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 				t.Fatalf("Collect returned error, want nil (skip-and-log): %v", err)
 			}
 			if points := rec.MetricPoints(installationsMetricName); len(points) != 0 {
@@ -337,7 +337,7 @@ func TestCollectSkipsWhenExportRunnerIsNil(t *testing.T) {
 	c := New(nil, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error, want nil: %v", err)
 	}
 	if points := rec.MetricPoints(installationsMetricName); len(points) != 0 {
@@ -385,7 +385,7 @@ func TestPlatformDecodesEveryLiveWireCode(t *testing.T) {
 			}
 			c := New(&fakeRunner{rows: []exportjob.Row{row("App", "app-1", tc.code, 1, 0, 0, 0, 0)}}, nil)
 			rec := telemetrytest.New()
-			if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+			if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 				t.Fatalf("Collect returned error: %v", err)
 			}
 
@@ -420,7 +420,7 @@ func TestPlatformDecodesEveryLiveWireCode(t *testing.T) {
 func TestPlatformUnknownCodeKeepsRawCodeAndStaysBounded(t *testing.T) {
 	c := New(&fakeRunner{rows: []exportjob.Row{row("Future App", "app-9", "99", 1, 0, 0, 0, 0)}}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -453,7 +453,7 @@ func TestPlatformUnknownCodeKeepsRawCodeAndStaysBounded(t *testing.T) {
 func TestUnmappedPlatformCodeIsCounted(t *testing.T) {
 	c := New(&fakeRunner{rows: []exportjob.Row{row("Future App", "app-9", "99", 1, 0, 0, 0, 0)}}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -478,7 +478,7 @@ func TestUnmappedPlatformCodeIsCounted(t *testing.T) {
 func TestMappedPlatformCodeIsNotCounted(t *testing.T) {
 	c := New(&fakeRunner{rows: []exportjob.Row{row("Teams", "app-1", "5", 1, 0, 0, 0, 0)}}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 	if got := len(rec.MetricPoints(wirecheck.MetricUnexpected)); got != 0 {
@@ -502,7 +502,7 @@ func TestPlatformLocSiblingIsNeverUsedAsALabel(t *testing.T) {
 	r["Platform_loc"] = "macOS" // the de-DE/ja-JP casing, live 2026-07-17
 	c := New(&fakeRunner{rows: []exportjob.Row{r}}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -526,7 +526,7 @@ func TestCollectStampsReportExportTransport(t *testing.T) {
 	c := New(&fakeRunner{rows: []exportjob.Row{row("Contoso Agent", "app-1", "5", 10, 2, 1, 3, 0)}}, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"sync"
 	"time"
+
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 )
 
 // ManagedDevicesUnionSelect is the union of the $select field sets the
@@ -23,7 +25,7 @@ const ManagedDevicesUnionSelect = "?$select=id,complianceState,operatingSystem,i
 // elevated intune-devices tier, well inside its ceiling) — it's API etiquette,
 // avoiding a redundant full-fleet page-walk.
 type FleetFetcher interface {
-	ManagedDevices(ctx context.Context) ([]json.RawMessage, error)
+	ManagedDevices(ctx context.Context, outcomes *recordoutcome.Recorder) ([]json.RawMessage, error)
 }
 
 // DirectFleetFetcher is the uncached FleetFetcher: it pages URL through G on
@@ -37,8 +39,8 @@ type DirectFleetFetcher struct {
 }
 
 // ManagedDevices implements FleetFetcher.
-func (f *DirectFleetFetcher) ManagedDevices(ctx context.Context) ([]json.RawMessage, error) {
-	return GetAllValues(ctx, f.G, f.URL, nil)
+func (f *DirectFleetFetcher) ManagedDevices(ctx context.Context, outcomes *recordoutcome.Recorder) ([]json.RawMessage, error) {
+	return GetAllValuesRecorded(ctx, f.G, f.URL, nil, outcomes)
 }
 
 // CachingFleetFetcher pages the managedDevices fleet once (union $select) and
@@ -73,14 +75,14 @@ func NewCachingFleetFetcher(g GraphClient, baseURL string, ttl time.Duration) *C
 }
 
 // ManagedDevices implements FleetFetcher.
-func (f *CachingFleetFetcher) ManagedDevices(ctx context.Context) ([]json.RawMessage, error) {
+func (f *CachingFleetFetcher) ManagedDevices(ctx context.Context, outcomes *recordoutcome.Recorder) ([]json.RawMessage, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	now := f.now()
 	if !f.fetched.IsZero() && now.Sub(f.fetched) < f.ttl {
 		return f.cached, nil
 	}
-	raws, err := GetAllValues(ctx, f.g, f.url, nil)
+	raws, err := GetAllValuesRecorded(ctx, f.g, f.url, nil, outcomes)
 	if err != nil {
 		return nil, err // don't cache errors — the next caller retries
 	}

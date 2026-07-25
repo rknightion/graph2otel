@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collector"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
@@ -26,9 +27,15 @@ type fakeCollector struct {
 	err  error
 }
 
-func (f *fakeCollector) Name() string                                         { return f.name }
-func (f *fakeCollector) DefaultInterval() time.Duration                       { return time.Hour }
-func (f *fakeCollector) Collect(_ context.Context, _ telemetry.Emitter) error { return f.err }
+func (f *fakeCollector) Name() string                   { return f.name }
+func (f *fakeCollector) DefaultInterval() time.Duration { return time.Hour }
+func (f *fakeCollector) Collect(
+	_ context.Context,
+	_ telemetry.Emitter,
+	_ *recordoutcome.Recorder,
+) error {
+	return f.err
+}
 
 // sequenceCollector returns one result per scheduler tick. It lets readiness
 // tests prove that a lifetime success survives a later transient failure using
@@ -42,7 +49,11 @@ type sequenceCollector struct {
 
 func (f *sequenceCollector) Name() string                   { return f.name }
 func (f *sequenceCollector) DefaultInterval() time.Duration { return time.Millisecond }
-func (f *sequenceCollector) Collect(_ context.Context, _ telemetry.Emitter) error {
+func (f *sequenceCollector) Collect(
+	_ context.Context,
+	_ telemetry.Emitter,
+	_ *recordoutcome.Recorder,
+) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.next >= len(f.results) {
@@ -144,11 +155,17 @@ type fakeTwin struct {
 	conflicts []string
 }
 
-func (f *fakeTwin) Name() string                                     { return f.name }
-func (f *fakeTwin) DefaultInterval() time.Duration                   { return time.Hour }
-func (f *fakeTwin) Collect(context.Context, telemetry.Emitter) error { return nil }
-func (f *fakeTwin) IngestTransport() telemetry.Transport             { return f.transport }
-func (f *fakeTwin) ConflictsWith() []string                          { return f.conflicts }
+func (f *fakeTwin) Name() string                   { return f.name }
+func (f *fakeTwin) DefaultInterval() time.Duration { return time.Hour }
+func (f *fakeTwin) Collect(
+	context.Context,
+	telemetry.Emitter,
+	*recordoutcome.Recorder,
+) error {
+	return nil
+}
+func (f *fakeTwin) IngestTransport() telemetry.Transport { return f.transport }
+func (f *fakeTwin) ConflictsWith() []string              { return f.conflicts }
 
 func TestBuildTenantStatuses_TransportReflectsEngine(t *testing.T) {
 	// A plain fakeCollector polls Graph inline (no engine) -> graph.
@@ -226,10 +243,16 @@ type fakeStateful struct {
 	state *collector.CheckpointState
 }
 
-func (f *fakeStateful) Name() string                                     { return f.name }
-func (f *fakeStateful) DefaultInterval() time.Duration                   { return time.Hour }
-func (f *fakeStateful) Collect(context.Context, telemetry.Emitter) error { return nil }
-func (f *fakeStateful) CheckpointState() *collector.CheckpointState      { return f.state }
+func (f *fakeStateful) Name() string                   { return f.name }
+func (f *fakeStateful) DefaultInterval() time.Duration { return time.Hour }
+func (f *fakeStateful) Collect(
+	context.Context,
+	telemetry.Emitter,
+	*recordoutcome.Recorder,
+) error {
+	return nil
+}
+func (f *fakeStateful) CheckpointState() *collector.CheckpointState { return f.state }
 
 func TestBuildTenantStatuses_CheckpointStateSurfaced(t *testing.T) {
 	now := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)

@@ -176,7 +176,7 @@ func liveGraph() *fakeGraph {
 func collect(t *testing.T, g *fakeGraph) *telemetrytest.Recorder {
 	t.Helper()
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	return rec
@@ -763,7 +763,7 @@ func TestDeploymentTwinCarriesExpediteAndIdentity(t *testing.T) {
 func TestProductsCatalogueIsNeverFetched(t *testing.T) {
 	g := liveGraph()
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	// fakeGraph errors on any URL it has no body for, and it was given only the
@@ -802,7 +802,7 @@ func TestForbiddenSkipsGracefully(t *testing.T) {
 	forbidden := errors.New("graphclient: GET ...: status 403: forbidden")
 	g := &fakeGraph{errs: map[string]error{policiesURL(): forbidden, deploymentsURL(): forbidden}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("403 should be a graceful skip, got: %v", err)
 	}
 	if len(rec.LogRecords()) != 0 || len(rec.MetricNames()) != 0 {
@@ -819,7 +819,7 @@ func TestOneSegmentFailingLeavesTheOtherAlone(t *testing.T) {
 		errs:   map[string]error{deploymentsURL(): errors.New("boom")},
 	}
 	rec := telemetrytest.New()
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("a non-403 error on one segment must be surfaced")
 	}

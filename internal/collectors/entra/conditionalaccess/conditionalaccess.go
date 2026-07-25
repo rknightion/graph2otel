@@ -24,6 +24,8 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -177,27 +179,29 @@ func (c *Collector) RequiredCapability() license.Capability { return license.Cap
 // new for it), but the other resource still emits; the aggregated error is
 // returned so the partial failure is visible in scrape self-observability
 // without hiding the data that did succeed.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	var errs []error
 
-	rawPolicies, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/identity/conditionalAccess/policies", nil)
+	rawPolicies, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/identity/conditionalAccess/policies", nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		c.logger.Warn("conditional access: fetch policies failed", "collector", collectorName, "error", err)
 		errs = append(errs, fmt.Errorf("fetch policies: %w", err))
 	} else {
 		e.GaugeSnapshot(policiesMetricName, "{policy}",
 			"Entra Conditional Access policies, by enforcement state.",
-			c.policyPoints(rawPolicies, e))
+			c.policyPoints(rawPolicies, e, outcomes))
 	}
 
-	rawLocations, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/identity/conditionalAccess/namedLocations", nil)
+	rawLocations, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/identity/conditionalAccess/namedLocations", nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		c.logger.Warn("conditional access: fetch named locations failed", "collector", collectorName, "error", err)
 		errs = append(errs, fmt.Errorf("fetch named locations: %w", err))
 	} else {
 		e.GaugeSnapshot(namedLocationsMetricName, "{location}",
 			"Entra Conditional Access named locations, by type and trust.",
-			c.namedLocationPoints(rawLocations, e))
+			c.namedLocationPoints(rawLocations, e, outcomes))
 	}
 
 	return errors.Join(errs...)
@@ -222,7 +226,7 @@ func policyStateAttr(graphValue string) (attr string, ok bool) {
 // count, never mapped to some catch-all series — and an unrecognized state is
 // also reported to wirecheck, because in the metric alone the exclusion looks
 // exactly like a tenant that deleted a policy.
-func (c *Collector) policyPoints(raw []json.RawMessage, e telemetry.Emitter) []telemetry.GaugePoint {
+func (c *Collector) policyPoints(raw []json.RawMessage, e telemetry.Emitter, outcomes *recordoutcome.Recorder) []telemetry.GaugePoint {
 	counts := make(map[string]int, len(policyStates))
 	for _, ps := range policyStates {
 		counts[ps.attr] = 0
@@ -231,16 +235,19 @@ func (c *Collector) policyPoints(raw []json.RawMessage, e telemetry.Emitter) []t
 	for _, r := range raw {
 		var p conditionalAccessPolicy
 		if err := json.Unmarshal(r, &p); err != nil {
+			entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			c.logger.Warn("conditional access: skipping unparseable policy", "collector", collectorName, "error", err)
 			continue
 		}
 		attr, ok := policyStateAttr(p.State)
 		if !ok {
+			entraoutcome.Dropped(outcomes, 1, recordoutcome.CauseMappingError)
 			c.watch.Value(e, semconv.AttrState, p.State, knownPolicyStates)
 			c.logger.Warn("conditional access: skipping policy with unrecognized state", "collector", collectorName, "state", p.State)
 			continue
 		}
 		counts[attr]++
+		entraoutcome.Emitted(outcomes, 1)
 	}
 
 	points := make([]telemetry.GaugePoint, 0, len(policyStates))
@@ -272,7 +279,7 @@ func namedLocationType(odataType string) (typ string, ok bool) {
 // A location of an unrecognized subtype is skipped as before AND reported to
 // wirecheck: skipping is the right emission (a guessed bucket would be worse),
 // but on its own it shrinks the total with nothing saying why.
-func (c *Collector) namedLocationPoints(raw []json.RawMessage, e telemetry.Emitter) []telemetry.GaugePoint {
+func (c *Collector) namedLocationPoints(raw []json.RawMessage, e telemetry.Emitter, outcomes *recordoutcome.Recorder) []telemetry.GaugePoint {
 	counts := make(map[locKey]int, 2*len(namedLocationTypes))
 	for _, typ := range namedLocationTypes {
 		counts[locKey{typ, true}] = 0
@@ -282,17 +289,20 @@ func (c *Collector) namedLocationPoints(raw []json.RawMessage, e telemetry.Emitt
 	for _, r := range raw {
 		var l namedLocation
 		if err := json.Unmarshal(r, &l); err != nil {
+			entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			c.logger.Warn("conditional access: skipping unparseable named location", "collector", collectorName, "error", err)
 			continue
 		}
 		typ, ok := namedLocationType(l.Type)
 		if !ok {
+			entraoutcome.Dropped(outcomes, 1, recordoutcome.CauseMappingError)
 			c.watch.Value(e, semconv.AttrType, l.Type, knownNamedLocationTypes)
 			c.logger.Warn("conditional access: skipping named location with unrecognized @odata.type", "collector", collectorName, "type", l.Type)
 			continue
 		}
 		trusted := l.IsTrusted != nil && *l.IsTrusted
 		counts[locKey{typ, trusted}]++
+		entraoutcome.Emitted(outcomes, 1)
 	}
 
 	points := make([]telemetry.GaugePoint, 0, len(counts))

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
@@ -307,7 +308,7 @@ func liveGraph() *fakeGraph {
 func collect(t *testing.T, g *fakeGraph) *telemetrytest.Recorder {
 	t.Helper()
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	return rec
@@ -714,11 +715,15 @@ func TestForbiddenSkipsGracefully(t *testing.T) {
 	g := liveGraph()
 	g.errs = map[string]error{alertsURL(): errors.New("graphclient: GET ...: status 403: forbidden")}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	outcomes := recordoutcome.NewRecorder()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), outcomes); err != nil {
 		t.Fatalf("403 should be a graceful skip, got: %v", err)
 	}
 	if len(rec.MetricPoints(alertsMetricName)) != 0 || len(rec.LogRecords()) != 0 {
 		t.Error("expected no emissions on 403")
+	}
+	if got := outcomes.Snapshot().Summarize(nil, false); got.Result != recordoutcome.ResultFailure || got.Cause != recordoutcome.CausePermissionDenied {
+		t.Errorf("outcome = %+v, want failure/%s", got, recordoutcome.CausePermissionDenied)
 	}
 }
 
@@ -730,7 +735,7 @@ func TestMissingProviderSkipsGracefully(t *testing.T) {
 	g := liveGraph()
 	g.errs = map[string]error{alertsURL(): errors.New(`graphclient: GET ...: status 400: {"errorCode":"MissingProvider","message":"The provider is missing."}`)}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("MissingProvider should be a graceful skip, got: %v", err)
 	}
 	if len(rec.LogRecords()) != 0 {
@@ -742,7 +747,7 @@ func TestListErrorIsSurfaced(t *testing.T) {
 	g := liveGraph()
 	g.errs = map[string]error{definitionsURL(): errors.New("boom")}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err == nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err == nil {
 		t.Error("a non-403 fetch error must be surfaced")
 	}
 }

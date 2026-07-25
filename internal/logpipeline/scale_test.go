@@ -46,7 +46,7 @@ func TestScaleWatermarkDurableAcrossRestart(t *testing.T) {
 		}, "", nil
 	})
 	c1 := NewLogCollector("entra.signins", time.Minute, cfg.SafetyLag, "t1", cfg, fetch1, store1)
-	hw1, err := c1.CollectWindow(context.Background(), base, base.Add(time.Hour), rec1.Emitter())
+	hw1, err := c1.CollectWindow(context.Background(), base, base.Add(time.Hour), rec1.Emitter(), nil)
 	if err != nil {
 		t.Fatalf("poll 1: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestScaleWatermarkDurableAcrossRestart(t *testing.T) {
 	c2 := NewLogCollector("entra.signins", time.Minute, cfg.SafetyLag, "t1", cfg, fetch2, store2)
 	// The scheduler passes a fresh [from,to]; CollectWindow resumes from
 	// watermark-overlap internally, so `from` here is only the floor.
-	if _, err := c2.CollectWindow(context.Background(), base.Add(2*time.Hour), base.Add(2*time.Hour), rec2.Emitter()); err != nil {
+	if _, err := c2.CollectWindow(context.Background(), base.Add(2*time.Hour), base.Add(2*time.Hour), rec2.Emitter(), nil); err != nil {
 		t.Fatalf("poll 2: %v", err)
 	}
 
@@ -123,7 +123,7 @@ func BenchmarkPollWindowMemory(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		cp := &checkpoint.Checkpoint{SeenIDs: checkpoint.NewSeenIDs()}
-		if _, err := Poll(context.Background(), cfg, cp, base, base.Add(24*time.Hour), fetcher, rec.Emitter()); err != nil {
+		if _, err := Poll(context.Background(), cfg, cp, base, base.Add(24*time.Hour), fetcher, rec.Emitter(), nil); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -154,7 +154,7 @@ func TestScalePollMemoryBoundedByWindowNotBacklog(t *testing.T) {
 			return records, "", nil
 		})
 		cp := &checkpoint.Checkpoint{SeenIDs: checkpoint.NewSeenIDs()}
-		if _, err := Poll(context.Background(), cfg, cp, from, from.Add(time.Hour), f, telemetrytest.New().Emitter()); err != nil {
+		if _, err := Poll(context.Background(), cfg, cp, from, from.Add(time.Hour), f, telemetrytest.New().Emitter(), nil); err != nil {
 			t.Fatal(err)
 		}
 	}

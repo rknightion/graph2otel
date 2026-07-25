@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
@@ -137,7 +138,7 @@ func newCollector(t *testing.T, f *fakeEXO) *Collector {
 func TestCollectRunsTheCmdletOnce(t *testing.T) {
 	f := &fakeEXO{recs: decodeRecords(t, liveRecords)}
 	rec := telemetrytest.New()
-	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if len(f.cmdlets) != 1 {
@@ -151,12 +152,25 @@ func TestCollectRunsTheCmdletOnce(t *testing.T) {
 	}
 }
 
+func TestCollectAccountsEveryDomainOnce(t *testing.T) {
+	outcomes := recordoutcome.NewRecorder()
+	f := &fakeEXO{recs: decodeRecords(t, liveRecords)}
+	if err := newCollector(t, f).Collect(context.Background(), telemetrytest.New().Emitter(), outcomes); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	got := outcomes.Snapshot().Summarize(nil, false)
+	want := recordoutcome.Counts{Fetched: 2, Mapped: 2, Emitted: 2}
+	if got.Result != recordoutcome.ResultSuccess || got.Counts != want {
+		t.Errorf("outcome = %#v, want success/%#v", got, want)
+	}
+}
+
 // TestCollectEmitsBoundedGauge checks the gauge counts domains by the enabled x
 // status tuple, and carries ONLY those two bounded labels.
 func TestCollectEmitsBoundedGauge(t *testing.T) {
 	f := &fakeEXO{recs: decodeRecords(t, liveRecords)}
 	rec := telemetrytest.New()
-	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	pts := rec.MetricPoints(metricSigning)
@@ -191,7 +205,7 @@ func TestCollectEmitsBoundedGauge(t *testing.T) {
 func TestCollectEmitsPerDomainTwin(t *testing.T) {
 	f := &fakeEXO{recs: decodeRecords(t, liveRecords)}
 	rec := telemetrytest.New()
-	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	logs := rec.LogRecords()
@@ -249,7 +263,7 @@ func TestEnabledButInvalidIsWarn(t *testing.T) {
 	r["IsValid"] = false
 	f := &fakeEXO{recs: []map[string]any{r}}
 	rec := telemetrytest.New()
-	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	logs := rec.LogRecords()
@@ -274,7 +288,7 @@ func TestDisabledDomainIsInfo(t *testing.T) {
 	r["Status"] = "CnameError" // not Valid, but disabled — so not actionable
 	f := &fakeEXO{recs: []map[string]any{r}}
 	rec := telemetrytest.New()
-	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	logs := rec.LogRecords()
@@ -294,7 +308,7 @@ func TestDisabledDomainIsInfo(t *testing.T) {
 func TestEmptyResultIsNotAnError(t *testing.T) {
 	f := &fakeEXO{recs: nil}
 	rec := telemetrytest.New()
-	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect over an empty result: %v", err)
 	}
 	if got := len(rec.LogRecords()); got != 0 {
@@ -309,7 +323,7 @@ func TestCollectPropagatesClientError(t *testing.T) {
 	sentinel := errors.New("403: missing directory role")
 	f := &fakeEXO{err: sentinel}
 	rec := telemetrytest.New()
-	err := newCollector(t, f).Collect(context.Background(), rec.Emitter())
+	err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil)
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("Collect error = %v, want it to wrap %v", err, sentinel)
 	}
@@ -323,7 +337,7 @@ func TestRecordsAreStampedWithTheExchangeOnlineTransport(t *testing.T) {
 	f := &fakeEXO{recs: decodeRecords(t, liveRecords)}
 	rec := telemetrytest.New()
 	c := newCollector(t, f)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if got := rec.LogRecords()[0].Attrs[semconv.AttrIngestTransport]; got != string(telemetry.TransportExchangeOnline) {
@@ -343,7 +357,7 @@ func TestRecordsAreStampedWithTheExchangeOnlineTransport(t *testing.T) {
 func TestLogTwinIsStampedAtPollTime(t *testing.T) {
 	f := &fakeEXO{recs: decodeRecords(t, liveRecords)}
 	rec := telemetrytest.New()
-	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if ts := rec.LogRecords()[0].Timestamp; !ts.IsZero() {

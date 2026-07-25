@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -155,7 +156,7 @@ func graphWith(body string) *fakeGraph {
 func collect(t *testing.T, body string) *telemetrytest.Recorder {
 	t.Helper()
 	rec := telemetrytest.New()
-	if err := New(graphWith(body), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(graphWith(body), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	return rec
@@ -472,19 +473,30 @@ func TestAbsentSettingsOmitsTheFamilyAndIsAnnounced(t *testing.T) {
 func TestForbiddenIsAGracefulSkip(t *testing.T) {
 	g := &fakeGraph{errs: map[string]error{listURL: errors.New("graph: GET failed with status 403")}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	outcomes := recordoutcome.NewRecorder()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), outcomes); err != nil {
 		t.Fatalf("Collect = %v, want nil for a 403", err)
 	}
 	if n := len(rec.LogRecords()); n != 0 {
 		t.Errorf("emitted %d records on a 403, want 0", n)
+	}
+	got := outcomes.Snapshot()
+	summary := got.Summarize(nil, false)
+	if summary.Result != recordoutcome.ResultFailure || summary.Cause != recordoutcome.CausePermissionDenied {
+		t.Errorf("summary = %+v, want failure/%s", summary, recordoutcome.CausePermissionDenied)
 	}
 }
 
 // TestOtherErrorsFail — everything that is not a 403 must surface.
 func TestOtherErrorsFail(t *testing.T) {
 	g := &fakeGraph{errs: map[string]error{listURL: errors.New("graph: GET failed with status 500")}}
-	if err := New(g, nil).Collect(context.Background(), telemetrytest.New().Emitter()); err == nil {
+	outcomes := recordoutcome.NewRecorder()
+	if err := New(g, nil).Collect(context.Background(), telemetrytest.New().Emitter(), outcomes); err == nil {
 		t.Fatal("Collect = nil, want an error for a 500")
+	}
+	got := outcomes.Snapshot().Summarize(errors.New("fetch failed"), false)
+	if got.Result != recordoutcome.ResultFailure || got.Cause != recordoutcome.CauseSourceError {
+		t.Fatalf("outcome = %+v, want failure/source_error", got)
 	}
 }
 
@@ -496,12 +508,25 @@ func TestUnparseableDefinitionIsSkippedNotFatal(t *testing.T) {
       {"id":"b","status":"InProgress","scope":{"@odata.type":"#microsoft.graph.accessReviewQueryScope","query":"/v1.0/users"}}
     ]}`
 	rec := telemetrytest.New()
-	err := New(graphWith(body), nil).Collect(context.Background(), rec.Emitter())
+	outcomes := recordoutcome.NewRecorder()
+	err := New(graphWith(body), nil).Collect(context.Background(), rec.Emitter(), outcomes)
 	if err == nil {
 		t.Error("Collect = nil, want the decode failure aggregated")
 	}
 	if n := len(rec.LogRecords()); n != 1 {
 		t.Errorf("twins = %d, want the good row still emitted", n)
+	}
+	snapshot := outcomes.Snapshot()
+	want := recordoutcome.Counts{Fetched: 2, Mapped: 1, Emitted: 1, Errored: 1}
+	if snapshot.Counts != want {
+		t.Fatalf("counts = %+v, want %+v", snapshot.Counts, want)
+	}
+	if err := snapshot.Validate(); err != nil {
+		t.Fatalf("Validate = %v", err)
+	}
+	summary := snapshot.Summarize(err, false)
+	if summary.Result != recordoutcome.ResultPartial || summary.Cause != recordoutcome.CauseDecodeError {
+		t.Fatalf("summary = %+v, want partial/decode_error", summary)
 	}
 }
 

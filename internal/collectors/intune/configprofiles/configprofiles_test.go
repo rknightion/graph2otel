@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -169,7 +170,7 @@ func TestCollectEmitsProfileCountByODataType(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -200,7 +201,7 @@ func TestCollectExcludesWindowsUpdateForBusinessConfiguration(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -248,7 +249,7 @@ func TestCollectEmitsLiveSnapshotEndToEnd(t *testing.T) {
 	}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -310,7 +311,7 @@ func TestCollectSurfacesVersionBumpBetweenPolls(t *testing.T) {
 	rec := telemetrytest.New()
 	c := New(g, nil)
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("first Collect: %v", err)
 	}
 	first := rec.MetricPoints(versionMetricName)
@@ -319,7 +320,7 @@ func TestCollectSurfacesVersionBumpBetweenPolls(t *testing.T) {
 	}
 
 	g.bodies[profilesURL] = `{"value":[{"id":"p1","displayName":"Win10 General","version":4,"@odata.type":"#microsoft.graph.windows10GeneralConfiguration"}]}`
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("second Collect: %v", err)
 	}
 	second := rec.MetricPoints(versionMetricName)
@@ -342,7 +343,7 @@ func TestCollectIsResilientToOneProfileStatusOverviewFailure(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected Collect to surface the per-profile status overview failure as an error")
 	}
@@ -369,9 +370,13 @@ func TestCollectGracefullySkipsForbiddenProfileList(t *testing.T) {
 		errs:   map[string]error{profilesURL: forbidden403(profilesURL)},
 	}
 	rec := telemetrytest.New()
+	outcomes := recordoutcome.NewRecorder()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), outcomes); err != nil {
 		t.Fatalf("Collect should gracefully skip a 403, not surface an error: %v", err)
+	}
+	if got := outcomes.Snapshot().Summarize(nil, false).Cause; got != recordoutcome.CausePermissionDenied {
+		t.Errorf("outcome cause = %q, want %q", got, recordoutcome.CausePermissionDenied)
 	}
 	if pts := rec.MetricPoints(countMetricName); len(pts) != 0 {
 		t.Errorf("expected no count series when the profile list is forbidden, got %+v", pts)
@@ -390,9 +395,13 @@ func TestCollectGracefullySkipsForbiddenStatusOverview(t *testing.T) {
 		errs:   map[string]error{statusOverviewURL("p1"): forbidden403(statusOverviewURL("p1"))},
 	}
 	rec := telemetrytest.New()
+	outcomes := recordoutcome.NewRecorder()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), outcomes); err != nil {
 		t.Fatalf("Collect should gracefully skip a 403, not surface an error: %v", err)
+	}
+	if got := outcomes.Snapshot().Summarize(nil, false).Cause; got != recordoutcome.CausePermissionDenied {
+		t.Errorf("outcome cause = %q, want %q", got, recordoutcome.CausePermissionDenied)
 	}
 	if pts := rec.MetricPoints(statusMetricName); len(pts) != 0 {
 		t.Errorf("expected no status series when the overview is forbidden, got %+v", pts)
@@ -407,7 +416,7 @@ func TestCollectNeverFetchesPerDeviceStatusChildren(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -429,7 +438,7 @@ func TestNoPerEntityAttribute(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -474,7 +483,7 @@ func TestUnrecognizedODataTypeIsReported(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -503,7 +512,7 @@ func TestExcludedGroupBTypeNeverReportsAsUnexpected(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if got := findings(rec); len(got) != 0 {
@@ -525,7 +534,7 @@ func TestLiveCaptureReportsTheKnownODataTypeGap(t *testing.T) {
 	}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

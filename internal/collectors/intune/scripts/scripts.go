@@ -28,6 +28,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -175,9 +177,10 @@ type remediationOverview struct {
 // Collector polls the beta Intune scripts and proactive-remediation
 // surfaces.
 type Collector struct {
-	g       collectors.GraphClient
-	baseURL string
-	logger  *slog.Logger
+	outcomes *outcome.Recorder
+	g        collectors.GraphClient
+	baseURL  string
+	logger   *slog.Logger
 }
 
 // New builds the scripts collector. A nil logger falls back to the slog
@@ -216,7 +219,11 @@ func (c *Collector) RequiredPermissions() []string {
 // resilient: a 403/404 (beta surface unavailable/unlicensed on this tenant)
 // is skipped-and-logged, any other error is logged and joined into the
 // returned error, but every other metric still emits.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
+	local := *c
+	local.outcomes = outcomes
+	c = &local
 	var errs []error
 	var runPoints []telemetry.GaugePoint
 
@@ -263,6 +270,10 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 
 	if err := c.collectRemediationOverview(ctx, e); err != nil {
 		if isUnavailable(err) {
+			outcome.RecordError(c.outcomes, err)
+			if strings.Contains(err.Error(), "status 403") {
+				c.outcomes.Cause(recordoutcome.CausePermissionDenied)
+			}
 			c.logger.Info("scripts: remediation overview unavailable on this tenant; skipping",
 				"collector", collectorName, "error", err)
 		} else {
@@ -278,7 +289,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // and reads each script's runSummary singleton, returning the resulting
 // device/user x success/error points labeled with the given os.
 func (c *Collector) collectScriptRunSummaries(ctx context.Context, listPath, os string) ([]telemetry.GaugePoint, error) {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+listPath+scriptListSelect, nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+listPath+scriptListSelect, nil, c.outcomes)
 	if err != nil {
 		return nil, err
 	}
@@ -288,14 +299,21 @@ func (c *Collector) collectScriptRunSummaries(ctx context.Context, listPath, os 
 		var item scriptListItem
 		if err := json.Unmarshal(r, &item); err != nil {
 			c.logger.Warn("scripts: skipping unparseable script list entry", "collector", collectorName, "os", os, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
 		if item.ID == "" {
+			outcome.Dropped(c.outcomes, 1, recordoutcome.CauseMappingError)
 			continue
 		}
+		outcome.Filtered(c.outcomes, 1)
 
 		body, err := c.g.RawGet(ctx, c.baseURL+listPath+"/"+item.ID+"/runSummary")
 		if err != nil {
+			outcome.RecordError(c.outcomes, err)
+			if strings.Contains(err.Error(), "status 403") {
+				c.outcomes.Cause(recordoutcome.CausePermissionDenied)
+			}
 			if isUnavailable(err) {
 				continue
 			}
@@ -305,8 +323,10 @@ func (c *Collector) collectScriptRunSummaries(ctx context.Context, listPath, os 
 		var rs scriptRunSummary
 		if err := json.Unmarshal(body, &rs); err != nil {
 			c.logger.Warn("scripts: skipping unparseable runSummary", "collector", collectorName, "os", os, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 
 		name := orUnknown(item.DisplayName)
 		pts = append(pts,
@@ -324,7 +344,7 @@ func (c *Collector) collectScriptRunSummaries(ctx context.Context, listPath, os 
 // returning the phase/state points plus the separate 30-day cumulative
 // remediated-device points.
 func (c *Collector) collectHealthScriptRunSummaries(ctx context.Context) ([]telemetry.GaugePoint, []telemetry.GaugePoint, error) {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+healthScriptsPath+scriptListSelect, nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+healthScriptsPath+scriptListSelect, nil, c.outcomes)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -334,14 +354,21 @@ func (c *Collector) collectHealthScriptRunSummaries(ctx context.Context) ([]tele
 		var item scriptListItem
 		if err := json.Unmarshal(r, &item); err != nil {
 			c.logger.Warn("scripts: skipping unparseable health script list entry", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
 		if item.ID == "" {
+			outcome.Dropped(c.outcomes, 1, recordoutcome.CauseMappingError)
 			continue
 		}
+		outcome.Filtered(c.outcomes, 1)
 
 		body, err := c.g.RawGet(ctx, c.baseURL+healthScriptsPath+"/"+item.ID+"/runSummary")
 		if err != nil {
+			outcome.RecordError(c.outcomes, err)
+			if strings.Contains(err.Error(), "status 403") {
+				c.outcomes.Cause(recordoutcome.CausePermissionDenied)
+			}
 			if isUnavailable(err) {
 				continue
 			}
@@ -351,8 +378,10 @@ func (c *Collector) collectHealthScriptRunSummaries(ctx context.Context) ([]tele
 		var rs healthScriptRunSummary
 		if err := json.Unmarshal(body, &rs); err != nil {
 			c.logger.Warn("scripts: skipping unparseable health script runSummary", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 
 		name := orUnknown(item.DisplayName)
 		pts = append(pts,
@@ -383,8 +412,10 @@ func (c *Collector) collectRemediationOverview(ctx context.Context, e telemetry.
 	}
 	var ov remediationOverview
 	if err := json.Unmarshal(body, &ov); err != nil {
+		outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 		return fmt.Errorf("decode getRemediationSummary: %w", err)
 	}
+	outcome.Emitted(c.outcomes, 1)
 	e.Gauge(remediationOverviewScriptCountName, "{script}",
 		"Tenant-wide count of health scripts deployed (getRemediationSummary() cross-check).",
 		float64(ov.ScriptCount), nil)

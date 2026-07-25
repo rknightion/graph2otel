@@ -44,7 +44,7 @@ func TestLogCollectorPersistsAndResumesAcrossRestart(t *testing.T) {
 	store1 := checkpoint.NewStore(dir)
 	c1 := NewLogCollector("sign_ins", time.Minute, 5*time.Minute, "tenant1", cfg, fetcher, store1)
 
-	hw1, err := c1.CollectWindow(context.Background(), base, base.Add(30*time.Minute), rec.Emitter())
+	hw1, err := c1.CollectWindow(context.Background(), base, base.Add(30*time.Minute), rec.Emitter(), nil)
 	if err != nil {
 		t.Fatalf("CollectWindow #1: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestLogCollectorPersistsAndResumesAcrossRestart(t *testing.T) {
 	store2 := checkpoint.NewStore(dir)
 	c2 := NewLogCollector("sign_ins", time.Minute, 5*time.Minute, "tenant1", cfg, fetcher, store2)
 
-	if _, err := c2.CollectWindow(context.Background(), base.Add(20*time.Minute), base.Add(40*time.Minute), rec.Emitter()); err != nil {
+	if _, err := c2.CollectWindow(context.Background(), base.Add(20*time.Minute), base.Add(40*time.Minute), rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow #2: %v", err)
 	}
 
@@ -118,10 +118,10 @@ func TestLogCollectorCheckpointKeyIsolatesSharedPath(t *testing.T) {
 	interactive := NewLogCollector("interactive", time.Minute, 5*time.Minute, "tenant1", newCfg("/auditLogs/signIns#interactive"), fetcher, store)
 	noninteractive := NewLogCollector("noninteractive", time.Minute, 5*time.Minute, "tenant1", newCfg("/auditLogs/signIns#nonInteractiveUser"), fetcher, store)
 
-	if _, err := interactive.CollectWindow(context.Background(), base, base.Add(30*time.Minute), rec.Emitter()); err != nil {
+	if _, err := interactive.CollectWindow(context.Background(), base, base.Add(30*time.Minute), rec.Emitter(), nil); err != nil {
 		t.Fatalf("interactive CollectWindow: %v", err)
 	}
-	if _, err := noninteractive.CollectWindow(context.Background(), base, base.Add(30*time.Minute), rec.Emitter()); err != nil {
+	if _, err := noninteractive.CollectWindow(context.Background(), base, base.Add(30*time.Minute), rec.Emitter(), nil); err != nil {
 		t.Fatalf("noninteractive CollectWindow: %v", err)
 	}
 

@@ -47,6 +47,8 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/graphclient"
 	"github.com/rknightion/graph2otel/internal/license"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -224,7 +226,7 @@ var (
 // gates: each half is checked and skipped-and-logged on its own, and a
 // failure fetching one half does not prevent the other from being collected
 // and emitted.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	var errs []error
 
 	if c.caps.Has(license.CapEntraP2) {
@@ -235,8 +237,9 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		// user (fail open) and omits is_deleted, never dropping a live user on a
 		// transient error. Only fetched for the users half; service principals use
 		// a different deleted-items type and have no live sample here.
-		deletedUsers := c.fetchDeletedUserIDs(ctx)
-		if err := c.collectHalf(ctx, e, usersHalf, deletedUsers); err != nil {
+		deletedUsers := c.fetchDeletedUserIDs(ctx, outcomes)
+		if err := c.collectHalf(ctx, e, usersHalf, deletedUsers, outcomes); err != nil {
+			entraoutcome.SourceError(outcomes)
 			c.logger.Warn("risky users collection failed", "collector", collectorName, "error", err)
 			errs = append(errs, fmt.Errorf("risky users: %w", err))
 		}
@@ -253,11 +256,13 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	// tenant that genuinely lacks the feature returns 403, which is a graceful skip
 	// (info, not a failure or a 15-min WARN loop), the same way the log collectors
 	// treat a missing scope.
-	if err := c.collectHalf(ctx, e, spsHalf, nil); err != nil {
+	if err := c.collectHalf(ctx, e, spsHalf, nil, outcomes); err != nil {
 		if isForbidden(err) {
+			outcomes.Cause(recordoutcome.CausePermissionDenied)
 			c.logger.Info("skipping risky service principals: endpoint returned 403 (likely no Workload Identities Premium on this tenant)",
 				"collector", collectorName, "error", graphclient.FormatODataError(err))
 		} else {
+			entraoutcome.SourceError(outcomes)
 			c.logger.Warn("risky service principals collection failed", "collector", collectorName, "error", err)
 			errs = append(errs, fmt.Errorf("risky service principals: %w", err))
 		}
@@ -297,16 +302,17 @@ func isForbidden(err error) bool {
 // No advanced $filter/$search is used here (the whole collection is fetched
 // and aggregated client-side), so no ConsistencyLevel header is required —
 // collectors.GetAllValues is called with nil headers.
-func (c *Collector) collectHalf(ctx context.Context, e telemetry.Emitter, h half, deletedIDs map[string]bool) error {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+h.path, nil)
+func (c *Collector) collectHalf(ctx context.Context, e telemetry.Emitter, h half, deletedIDs map[string]bool, outcomes *recordoutcome.Recorder) error {
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+h.path, nil, outcomes)
 	if err != nil {
 		return err
 	}
 
 	counts := map[[2]string]int64{}
-	for _, raw := range raws {
+	for i, raw := range raws {
 		var item riskyEntity
 		if err := json.Unmarshal(raw, &item); err != nil {
+			entraoutcome.Errored(outcomes, uint64(len(raws))-uint64(i), recordoutcome.CauseDecodeError)
 			return fmt.Errorf("decode %s: %w", h.path, err)
 		}
 		// riskLevel/riskState become metric labels below with no bucketing, so a
@@ -336,6 +342,7 @@ func (c *Collector) collectHalf(ctx context.Context, e telemetry.Emitter, h half
 		if !c.suppressedTwins[h.eventName] {
 			e.LogEvent(logTwin(item, h, deleted))
 		}
+		entraoutcome.Emitted(outcomes, 1)
 	}
 
 	points := make([]telemetry.GaugePoint, 0, len(counts))
@@ -360,25 +367,30 @@ const deletedUsersPath = "/directory/deletedItems/microsoft.graph.user?$select=i
 // gauge) and omits is_deleted rather than guessing. An empty (non-nil) set means
 // the fetch succeeded and no users are deleted — every user is emitted with
 // is_deleted=false.
-func (c *Collector) fetchDeletedUserIDs(ctx context.Context) map[string]bool {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+deletedUsersPath, nil)
+func (c *Collector) fetchDeletedUserIDs(ctx context.Context, outcomes *recordoutcome.Recorder) map[string]bool {
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+deletedUsersPath, nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		c.logger.Warn("risky-user deletion reconciliation unavailable this cycle; gauge may over-count deleted users",
 			"collector", collectorName, "error", err)
 		return nil
 	}
 	ids := make(map[string]bool, len(raws))
-	for _, raw := range raws {
+	for i, raw := range raws {
 		var o struct {
 			ID string `json:"id"`
 		}
 		if err := json.Unmarshal(raw, &o); err != nil {
+			entraoutcome.Errored(outcomes, uint64(len(raws))-uint64(i), recordoutcome.CauseDecodeError)
 			c.logger.Warn("risky-user deletion reconciliation unavailable this cycle: decoding a deleted-user record failed",
 				"collector", collectorName, "error", err)
 			return nil
 		}
 		if o.ID != "" {
 			ids[o.ID] = true
+			entraoutcome.Filtered(outcomes, 1)
+		} else {
+			entraoutcome.Dropped(outcomes, 1, recordoutcome.CauseMappingError)
 		}
 	}
 	return ids

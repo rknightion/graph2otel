@@ -19,6 +19,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -125,15 +126,21 @@ func orUnknown(s string) string {
 // Collect fetches the single settings object and emits the bounded posture
 // gauges plus the full-config log twin. /admin/sharepoint/settings is a single
 // resource (not a collection), so it is read with RawGet directly.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	raw, err := c.g.RawGet(ctx, c.baseURL+"/admin/sharepoint/settings")
 	if err != nil {
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		return fmt.Errorf("sharepointsettings: fetch settings: %w", err)
 	}
+	outcomes.Add(recordoutcome.OutcomeFetched, 1)
 	var s settings
 	if err := json.Unmarshal(raw, &s); err != nil {
+		outcomes.Add(recordoutcome.OutcomeErrored, 1)
+		outcomes.Cause(recordoutcome.CauseDecodeError)
 		return fmt.Errorf("sharepointsettings: decode settings: %w", err)
 	}
+	outcomes.Add(recordoutcome.OutcomeMapped, 1)
+	outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 
 	// Bounded security-posture gauges. sharingCapability + the domain-restriction
 	// mode are a small closed enum set, so they ride a constant-1 info gauge as

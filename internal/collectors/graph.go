@@ -3,9 +3,12 @@ package collectors
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 )
 
 // EventualHeaders returns the header set every Microsoft Graph advanced query
@@ -103,6 +106,22 @@ type odataPage struct {
 	NextLink string            `json:"@odata.nextLink"`
 }
 
+func (p *odataPage) UnmarshalJSON(data []byte) error {
+	var wire struct {
+		Value    *[]json.RawMessage `json:"value"`
+		NextLink string             `json:"@odata.nextLink"`
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if wire.Value == nil {
+		return errors.New(`graph collection response is missing a non-null "value" field`)
+	}
+	p.Value = *wire.Value
+	p.NextLink = wire.NextLink
+	return nil
+}
+
 // GetAllValues fetches a Graph collection, following `@odata.nextLink` until
 // exhausted, and returns every element as a raw JSON message for the caller to
 // unmarshal into its own type. headers (may be nil) is sent on every page
@@ -111,6 +130,20 @@ type odataPage struct {
 // exceeds maxPages, since that signals a wrong (full-collection) use of a
 // helper meant for small collections.
 func GetAllValues(ctx context.Context, g GraphClient, url string, headers map[string]string) ([]json.RawMessage, error) {
+	return GetAllValuesRecorded(ctx, g, url, headers, nil)
+}
+
+// GetAllValuesRecorded is GetAllValues with partial-walk outcome accounting.
+// Rows buffered before a later-page failure are retryable rather than usable,
+// so they close the reconciliation equation as fetched+errored and are not
+// returned to the caller.
+func GetAllValuesRecorded(
+	ctx context.Context,
+	g GraphClient,
+	url string,
+	headers map[string]string,
+	outcomes *recordoutcome.Recorder,
+) ([]json.RawMessage, error) {
 	// Ask Graph for its largest page size on every request (the nextLink
 	// carries its own $skiptoken, but re-sending Prefer is harmless and keeps
 	// the header uniform across pages). Merged once, before the loop.
@@ -119,18 +152,32 @@ func GetAllValues(ctx context.Context, g GraphClient, url string, headers map[st
 	next := url
 	for pages := 0; next != ""; pages++ {
 		if pages >= maxPages {
-			return nil, fmt.Errorf("collectors: pagination exceeded %d pages for %q (unbounded collection?)", maxPages, url)
+			err := fmt.Errorf("collectors: pagination exceeded %d pages for %q (unbounded collection?)", maxPages, url)
+			recordPartialPageFailure(outcomes, uint64(len(out)), recordoutcome.CauseSourceError)
+			return nil, err
 		}
 		body, err := g.RawGetWithHeaders(ctx, next, reqHeaders)
 		if err != nil {
+			recordPartialPageFailure(outcomes, uint64(len(out)), recordoutcome.CauseForError(err))
 			return nil, err
 		}
 		var page odataPage
 		if err := json.Unmarshal(body, &page); err != nil {
+			recordPartialPageFailure(outcomes, uint64(len(out)), recordoutcome.CauseDecodeError)
 			return nil, fmt.Errorf("collectors: decode page from %q: %w", next, err)
 		}
 		out = append(out, page.Value...)
 		next = page.NextLink
 	}
 	return out, nil
+}
+
+func recordPartialPageFailure(
+	outcomes *recordoutcome.Recorder,
+	buffered uint64,
+	cause recordoutcome.Cause,
+) {
+	outcomes.Add(recordoutcome.OutcomeFetched, buffered)
+	outcomes.Add(recordoutcome.OutcomeErrored, buffered)
+	outcomes.Cause(cause)
 }

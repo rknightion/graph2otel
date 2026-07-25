@@ -71,7 +71,7 @@ func TestCollectEmitsOneBoundedSeriesPerSlice(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := New(g, nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -101,7 +101,7 @@ func TestCollectEmitsRoleAssignableAsSingleGauge(t *testing.T) {
 	g := &fakeGraph{bodies: allCounts()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -121,7 +121,7 @@ func TestCollectSetsConsistencyLevelOnEveryRequest(t *testing.T) {
 	g := &fakeGraph{bodies: allCounts()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if len(g.seenHeaders) == 0 {
@@ -147,7 +147,7 @@ func TestCollectIsResilientToPerSliceError(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Error("expected Collect to surface the per-slice failure as an error")
 	}
@@ -172,7 +172,7 @@ func TestCollectIsResilientToRoleAssignableError(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Error("expected Collect to surface the role-assignable failure as an error")
 	}

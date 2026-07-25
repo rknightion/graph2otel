@@ -177,7 +177,7 @@ func collect(t *testing.T, exo *fakeEXO) *telemetrytest.Recorder {
 	rec := telemetrytest.New()
 	c := New(collectors.EXODeps{Client: exo})
 	c.now = func() time.Time { return fixedNow }
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	return rec
@@ -448,7 +448,7 @@ func TestCollect_EmptyTenantStillSeeds(t *testing.T) {
 func TestCollect_ErrorPropagates(t *testing.T) {
 	rec := telemetrytest.New()
 	c := New(collectors.EXODeps{Client: &fakeEXO{err: errors.New("403")}})
-	if err := c.Collect(context.Background(), rec.Emitter()); err == nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err == nil {
 		t.Fatal("want error when a cmdlet fails")
 	}
 }

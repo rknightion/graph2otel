@@ -29,7 +29,7 @@ func TestSignalGolden(t *testing.T) {
 	}
 	emitter := telemetry.WithTenant(rec.Emitter(), "fixture-tenant")
 
-	if _, err := Poll(context.Background(), cfg, cp, from, to, onePageFetcher(records), emitter); err != nil {
+	if _, err := Poll(context.Background(), cfg, cp, from, to, onePageFetcher(records), emitter, nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 

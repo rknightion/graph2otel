@@ -582,6 +582,146 @@ groups:
           summary: "Collector {{ $labels.collector }} failing to persist its checkpoint (tenant {{ $labels.tenant_id }})"
           description: "Companion to g2o-collector-staleness: a WindowCollector's high-water mark isn't reaching disk, so a restart re-polls (or drops, depending on store) an already-processed window. Even one increment is worth knowing about — for is 0m. Paused by default — enable once you've picked a notification channel for it."
         isPaused: true
+      - uid: "g2o-record-integrity-loss"
+        title: "graph2otel dropped or errored source records"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: "grafanacloud-prom"
+            model:
+              datasource:
+                type: "prometheus"
+                uid: "grafanacloud-prom"
+              editorMode: "code"
+              expr: "sum by (tenant_id, collector, ingest_transport) (increase(graph2otel_record_outcomes_total{outcome=~\"dropped|errored\"}[15m]))"
+              instant: false
+              range: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: "__expr__"
+            model:
+              datasource:
+                type: "__expr__"
+                uid: "__expr__"
+              expression: "A"
+              reducer: "last"
+              type: "reduce"
+              refId: "B"
+          - refId: "C"
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: "__expr__"
+            model:
+              datasource:
+                type: "__expr__"
+                uid: "__expr__"
+              expression: "B"
+              type: "threshold"
+              conditions:
+                - type: "query"
+                  evaluator:
+                    type: "gt"
+                    params:
+                      - 0
+                  operator:
+                    type: "and"
+                  query:
+                    params:
+                      - "C"
+                  reducer:
+                    type: "last"
+                    params: []
+              refId: "C"
+        noDataState: "OK"
+        execErrState: "OK"
+        for: "0m"
+        labels:
+          severity: "warning"
+          category: "record-integrity"
+          source: "graph2otel"
+        annotations:
+          summary: "Collector {{ $labels.collector }} lost source records on {{ $labels.ingest_transport }} (tenant {{ $labels.tenant_id }})"
+          description: "At least one source record was dropped or errored in the last 15m. `dropped` covers deliberate rejection such as an unparseable event timestamp; `errored` covers decode or processing failure. This is default-enabled because either outcome means fetched source data did not become useful telemetry."
+        isPaused: false
+      - uid: "g2o-payload-type-mismatch"
+        title: "graph2otel payload JSON type changed"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: "grafanacloud-prom"
+            model:
+              datasource:
+                type: "prometheus"
+                uid: "grafanacloud-prom"
+              editorMode: "code"
+              expr: "sum by (tenant_id, collector, ingest_transport, field, expected_type, actual_type) (increase(graph2otel_payload_type_mismatches_total[15m]))"
+              instant: false
+              range: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: "A"
+          - refId: "B"
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: "__expr__"
+            model:
+              datasource:
+                type: "__expr__"
+                uid: "__expr__"
+              expression: "A"
+              reducer: "last"
+              type: "reduce"
+              refId: "B"
+          - refId: "C"
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: "__expr__"
+            model:
+              datasource:
+                type: "__expr__"
+                uid: "__expr__"
+              expression: "B"
+              type: "threshold"
+              conditions:
+                - type: "query"
+                  evaluator:
+                    type: "gt"
+                    params:
+                      - 0
+                  operator:
+                    type: "and"
+                  query:
+                    params:
+                      - "C"
+                  reducer:
+                    type: "last"
+                    params: []
+              refId: "C"
+        noDataState: "OK"
+        execErrState: "OK"
+        for: "0m"
+        labels:
+          severity: "warning"
+          category: "record-integrity"
+          source: "graph2otel"
+        annotations:
+          summary: "Payload type changed for {{ $labels.collector }} field {{ $labels.field }} (tenant {{ $labels.tenant_id }})"
+          description: "A source-controlled optional field arrived with a different JSON type. The otherwise-usable record was still emitted. Paused initially until the tenant's normal payload-shape baseline is established; labels never contain field values."
+        isPaused: true
       - uid: "g2o-throttle-saturation"
         title: "graph2otel sustained Graph API throttling"
         condition: "C"

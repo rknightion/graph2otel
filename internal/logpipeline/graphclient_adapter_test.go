@@ -168,7 +168,7 @@ func TestPollRejectsForeignNextLinkWithoutSideEffects(t *testing.T) {
 		Map:             mapByID,
 	}
 
-	highWater, err := Poll(context.Background(), cfg, cp, from, to, NewGraphPageFetcher(client), recorder.Emitter())
+	highWater, err := Poll(context.Background(), cfg, cp, from, to, NewGraphPageFetcher(client), recorder.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected Poll to reject a foreign @odata.nextLink")
 	}

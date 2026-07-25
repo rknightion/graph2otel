@@ -148,7 +148,7 @@ func TestCollectEmitsBoundedPostureCounts(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := New(g, nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -196,7 +196,7 @@ func TestCollectEmitsNoPerDomainSeries(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{domainsURL: fourDomainsBody}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -217,7 +217,7 @@ func TestCollectEmitsLogTwinPerDomain(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{domainsURL: fourDomainsBody}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -267,7 +267,7 @@ func TestCollectLogTwinSeverityEscalatesForUnverifiedOrFederatedDomain(t *testin
 	g := &fakeGraph{bodies: map[string]string{domainsURL: fourDomainsBody}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -297,7 +297,7 @@ func TestCollectSetsNoConsistencyLevelHeader(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{domainsURL: fourDomainsBody}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	cl, seen := g.seenHeaders[domainsURL]
@@ -320,7 +320,7 @@ func TestCollectIsResilientToMalformedDomainEntry(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{domainsURL: body}}
 	rec := telemetrytest.New()
 
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Error("expected Collect to surface the malformed-entry failure as an error")
 	}
@@ -335,7 +335,7 @@ func TestCollectPropagatesListFailure(t *testing.T) {
 	g := &fakeGraph{errs: map[string]error{domainsURL: errors.New("throttled")}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err == nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err == nil {
 		t.Error("expected Collect to return an error when listing domains fails")
 	}
 
@@ -358,7 +358,7 @@ func TestCollectorEmitsLiveRecordEndToEnd(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{domainsURL: liveDomains}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

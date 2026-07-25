@@ -127,7 +127,7 @@ func TestCollectEmitsPopulationGaugesWithCorrectAttrs(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := New(g, license.Capabilities{}, nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -161,7 +161,7 @@ func TestCollectEmitsJointPopulationGauge(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := New(g, license.Capabilities{}, nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -195,7 +195,7 @@ func TestCollectJointPopulationRequestsAreCorrectlyEncoded(t *testing.T) {
 	g := &fakeGraph{bodies: allPopulationCounts()}
 	rec := telemetrytest.New()
 
-	if err := New(g, license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -223,7 +223,7 @@ func TestCollectJointPopulationDoesNotAffectTotalMetric(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := New(g, license.Capabilities{}, nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -257,7 +257,7 @@ func TestCollectSetsConsistencyLevelOnEveryPopulationRequest(t *testing.T) {
 	g := &fakeGraph{bodies: allPopulationCounts()}
 	rec := telemetrytest.New()
 
-	if err := New(g, license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	wantRequests := len(populationFilters) + len(jointPopulationFilters)
@@ -279,7 +279,7 @@ func TestCollectWithoutP1SkipsStaleAndStillEmitsPopulation(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&logBuf, nil))
 
 	c := New(g, license.Capabilities{}, logger) // empty caps: no P1, no P2
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -314,7 +314,7 @@ func TestCollectEmitsStaleGaugeUnderEntraP1(t *testing.T) {
 	c := New(g, license.Capabilities{license.CapEntraP1: true}, nil)
 	c.now = func() time.Time { return now }
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -348,7 +348,7 @@ func TestCollectEmitsStaleGaugeUnderEntraP2Only(t *testing.T) {
 	c := New(g, license.Capabilities{license.CapEntraP2: true}, nil)
 	c.now = func() time.Time { return now }
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if pts := rec.MetricPoints(metricStale); len(pts) != 2 {
@@ -365,7 +365,7 @@ func TestCollectIsResilientToPerBucketError(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := New(g, license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Error("expected Collect to surface the per-bucket failure as an error")
 	}
@@ -401,7 +401,7 @@ func TestCollectNeverEmitsPerUserSeries(t *testing.T) {
 	c := New(g, license.Capabilities{license.CapEntraP1: true}, nil)
 	c.now = func() time.Time { return now }
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

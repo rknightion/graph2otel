@@ -33,6 +33,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -184,10 +186,11 @@ type namedResource struct {
 // Collector polls the Windows Update ring subset of deviceConfigurations
 // (v1.0) and the feature/quality/driver update profile families (beta).
 type Collector struct {
-	g       collectors.GraphClient
-	baseURL string
-	betaURL string
-	logger  *slog.Logger
+	outcomes *outcome.Recorder
+	g        collectors.GraphClient
+	baseURL  string
+	betaURL  string
+	logger   *slog.Logger
 	// now returns the current time; overridable in tests so pause-expiry and
 	// staleness countdowns are deterministic and assertable.
 	now func() time.Time
@@ -222,7 +225,11 @@ func (c *Collector) RequiredPermissions() []string {
 // Collect fetches update rings and the beta profile families. Each section
 // is independently resilient: a failure in one is logged and joined into the
 // returned error, but every other section's metrics still emit.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
+	local := *c
+	local.outcomes = outcomes
+	c = &local
 	var errs []error
 
 	if err := c.collectRings(ctx, e); err != nil {
@@ -253,7 +260,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // partition this collector owns), fetches each kept ring's
 // deviceStatusOverview, and emits the pause/expiry/rollback/status gauges.
 func (c *Collector) collectRings(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/deviceConfigurations", nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceManagement/deviceConfigurations", nil, c.outcomes)
 	if err != nil {
 		return err
 	}
@@ -265,17 +272,21 @@ func (c *Collector) collectRings(ctx context.Context, e telemetry.Emitter) error
 		var typed odataTyped
 		if err := json.Unmarshal(r, &typed); err != nil {
 			c.logger.Warn("updates: skipping unparseable deviceConfigurations element", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
 		if typed.ODataType != windowsUpdateForBusinessODataType {
+			outcome.Filtered(c.outcomes, 1)
 			continue // owned by #53's config-profiles collector, not this one
 		}
 
 		var ring updateRingConfig
 		if err := json.Unmarshal(r, &ring); err != nil {
 			c.logger.Warn("updates: skipping unparseable update ring element", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		name := ring.DisplayName
 
 		pauseState = append(pauseState,
@@ -301,14 +312,20 @@ func (c *Collector) collectRings(ctx context.Context, e telemetry.Emitter) error
 
 		body, err := c.g.RawGet(ctx, c.baseURL+"/deviceManagement/deviceConfigurations/"+typed.ID+"/deviceStatusOverview")
 		if err != nil {
+			outcome.RecordError(c.outcomes, err)
+			if strings.Contains(err.Error(), "status 403") {
+				c.outcomes.Cause(recordoutcome.CausePermissionDenied)
+			}
 			c.logger.Warn("updates: deviceStatusOverview fetch failed, skipping ring status", "collector", collectorName, "ring", name, "error", err)
 			continue
 		}
 		var overview deviceStatusOverview
 		if err := json.Unmarshal(body, &overview); err != nil {
 			c.logger.Warn("updates: skipping unparseable deviceStatusOverview", "collector", collectorName, "ring", name, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		status = append(status, overview.points(name)...)
 	}
 
@@ -323,7 +340,7 @@ func (c *Collector) collectRings(ctx context.Context, e telemetry.Emitter) error
 // and emits the end-of-support countdown gauge. Unavailable on this tenant
 // (403/404) is skipped-and-logged, not an error.
 func (c *Collector) collectFeatureProfiles(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.betaURL+"/deviceManagement/windowsFeatureUpdateProfiles", nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.betaURL+"/deviceManagement/windowsFeatureUpdateProfiles", nil, c.outcomes)
 	if err != nil {
 		if isUnavailable(err) {
 			c.logger.Info("updates: windowsFeatureUpdateProfiles unavailable on this tenant; skipping", "collector", collectorName, "error", err)
@@ -339,11 +356,14 @@ func (c *Collector) collectFeatureProfiles(ctx context.Context, e telemetry.Emit
 		var p featureUpdateProfile
 		if err := json.Unmarshal(r, &p); err != nil {
 			c.logger.Warn("updates: skipping unparseable feature update profile", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
 		if p.EndOfSupportDate.IsZero() {
+			outcome.Filtered(c.outcomes, 1)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		points = append(points, telemetry.GaugePoint{
 			Value: p.EndOfSupportDate.Sub(now).Seconds(),
 			Attrs: telemetry.Attrs{semconv.AttrProfileName: p.DisplayName, semconv.AttrFeatureUpdateVersion: p.FeatureUpdateVersion},
@@ -382,7 +402,7 @@ func (c *Collector) collectQualityConfigs(ctx context.Context, e telemetry.Emitt
 // with a nil error signals the endpoint is unavailable on this tenant
 // (403/404) and was skipped-and-logged.
 func (c *Collector) countNamedResources(ctx context.Context, url string) (int, error) {
-	raw, err := collectors.GetAllValues(ctx, c.g, url, nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, url, nil, c.outcomes)
 	if err != nil {
 		if isUnavailable(err) {
 			c.logger.Info("updates: quality update resource unavailable on this tenant; skipping", "collector", collectorName, "url", url, "error", err)
@@ -395,8 +415,10 @@ func (c *Collector) countNamedResources(ctx context.Context, url string) (int, e
 		var res namedResource
 		if err := json.Unmarshal(r, &res); err != nil {
 			c.logger.Warn("updates: skipping unparseable quality update resource", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		n++
 	}
 	return n, nil
@@ -408,7 +430,7 @@ func (c *Collector) countNamedResources(ctx context.Context, url string) (int, e
 // syncInventory/executeAction calls. Unavailable (403/404) is
 // skipped-and-logged, not an error.
 func (c *Collector) collectDriverProfiles(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.betaURL+"/deviceManagement/windowsDriverUpdateProfiles", nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.betaURL+"/deviceManagement/windowsDriverUpdateProfiles", nil, c.outcomes)
 	if err != nil {
 		if isUnavailable(err) {
 			c.logger.Info("updates: windowsDriverUpdateProfiles unavailable on this tenant; skipping", "collector", collectorName, "error", err)
@@ -425,8 +447,10 @@ func (c *Collector) collectDriverProfiles(ctx context.Context, e telemetry.Emitt
 		var p driverUpdateProfile
 		if err := json.Unmarshal(r, &p); err != nil {
 			c.logger.Warn("updates: skipping unparseable driver update profile", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		pending = append(pending, telemetry.GaugePoint{
 			Value: float64(p.NewUpdates),
 			Attrs: telemetry.Attrs{semconv.AttrProfileName: p.DisplayName},

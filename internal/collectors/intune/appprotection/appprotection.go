@@ -59,6 +59,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -205,9 +207,10 @@ type managedAppRegistration struct {
 // Collector polls the Intune MAM app protection / configuration surface and
 // the legacy WIP policy surface.
 type Collector struct {
-	g       collectors.GraphClient
-	baseURL string
-	logger  *slog.Logger
+	outcomes *outcome.Recorder
+	g        collectors.GraphClient
+	baseURL  string
+	logger   *slog.Logger
 }
 
 // New builds the app protection collector. A nil logger falls back to the
@@ -243,7 +246,11 @@ func (c *Collector) RequiredPermissions() []string {
 // three bounded gauges described in the package doc. Each source is
 // independently resilient: a failure fetching one is logged and joined into
 // the returned error, but every other metric still emits.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
+	local := *c
+	local.outcomes = outcomes
+	c = &local
 	var errs []error
 
 	if err := c.collectPolicyCounts(ctx, e); err != nil {
@@ -277,7 +284,7 @@ func (c *Collector) collectPolicyCounts(ctx context.Context, e telemetry.Emitter
 	counts := map[policyBucketKey]int64{}
 
 	for _, src := range policySources {
-		raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+src.path+"?$select=isAssigned", nil)
+		raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+src.path+"?$select=isAssigned", nil, c.outcomes)
 		if err != nil {
 			c.logger.Warn("appprotection: policy list fetch failed", "collector", collectorName, "platform", src.platform, "error", err)
 			errs = append(errs, fmt.Errorf("%s policies: %w", src.platform, err))
@@ -287,8 +294,10 @@ func (c *Collector) collectPolicyCounts(ctx context.Context, e telemetry.Emitter
 			var p assignablePolicy
 			if err := json.Unmarshal(r, &p); err != nil {
 				c.logger.Warn("appprotection: skipping malformed policy element", "collector", collectorName, "platform", src.platform, "error", err)
+				outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 				continue
 			}
+			outcome.Emitted(c.outcomes, 1)
 			counts[policyBucketKey{platform: src.platform, assigned: p.IsAssigned}]++
 		}
 	}
@@ -322,7 +331,7 @@ type registrationBucketKey struct {
 // and skipped rather than failing the whole aggregate.
 func (c *Collector) collectFlaggedRegistrations(ctx context.Context, e telemetry.Emitter) error {
 	url := c.baseURL + "/deviceAppManagement/managedAppRegistrations?$select=flaggedReasons,appIdentifier,userId,deviceTag&$top=999"
-	raw, err := collectors.GetAllValues(ctx, c.g, url, nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, url, nil, c.outcomes)
 	if err != nil {
 		c.logger.Warn("appprotection: managedAppRegistrations fetch failed", "collector", collectorName, "error", err)
 		return fmt.Errorf("managed app registrations: %w", err)
@@ -333,8 +342,10 @@ func (c *Collector) collectFlaggedRegistrations(ctx context.Context, e telemetry
 		var reg managedAppRegistration
 		if err := json.Unmarshal(r, &reg); err != nil {
 			c.logger.Warn("appprotection: skipping malformed managedAppRegistration element", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		platform := "other"
 		if reg.AppIdentifier != nil {
 			platform = registrationPlatformFor(reg.AppIdentifier.ODataType)
@@ -427,6 +438,22 @@ type wipPolicyPage struct {
 	NextLink string             `json:"@odata.nextLink"`
 }
 
+func (p *wipPolicyPage) UnmarshalJSON(data []byte) error {
+	var wire struct {
+		Value    *[]assignablePolicy `json:"value"`
+		NextLink string              `json:"@odata.nextLink"`
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if wire.Value == nil {
+		return errors.New(`wip collection response is missing a non-null "value" field`)
+	}
+	p.Value = *wire.Value
+	p.NextLink = wire.NextLink
+	return nil
+}
+
 // fetchWIPPolicies pages a WIP policy list endpoint via RawGet (not
 // collectors.GetAllValues) so it can tolerate an empty response body as an
 // empty page rather than a JSON decode error. windowsInformationProtectionPolicies
@@ -437,25 +464,29 @@ type wipPolicyPage struct {
 // is treated as "zero WIP policies" here, not a fetch failure. A non-empty
 // but unparseable body (or a transport/HTTP error) is still a real failure
 // and is returned as such; the caller decides how to degrade.
-func (c *Collector) fetchWIPPolicies(ctx context.Context, url string) ([]assignablePolicy, error) {
+func (c *Collector) fetchWIPPolicies(ctx context.Context, url string) ([]assignablePolicy, recordoutcome.Cause, error) {
 	var out []assignablePolicy
 	next := url
 	for next != "" {
 		body, err := c.g.RawGet(ctx, next)
 		if err != nil {
-			return nil, err
+			cause := recordoutcome.CauseForError(err)
+			if strings.Contains(err.Error(), "status 403") {
+				cause = recordoutcome.CausePermissionDenied
+			}
+			return out, cause, err
 		}
 		if len(bytes.TrimSpace(body)) == 0 {
 			break
 		}
 		var page wipPolicyPage
 		if err := json.Unmarshal(body, &page); err != nil {
-			return nil, fmt.Errorf("decode page from %q: %w", next, err)
+			return out, recordoutcome.CauseDecodeError, fmt.Errorf("decode page from %q: %w", next, err)
 		}
 		out = append(out, page.Value...)
 		next = page.NextLink
 	}
-	return out, nil
+	return out, recordoutcome.CauseNone, nil
 }
 
 // collectWIPPolicyCounts fetches both legacy WIP policy list endpoints and
@@ -474,16 +505,24 @@ func (c *Collector) fetchWIPPolicies(ctx context.Context, url string) ([]assigna
 // never appended to the collector's returned error.
 func (c *Collector) collectWIPPolicyCounts(ctx context.Context, e telemetry.Emitter) error {
 	counts := map[bool]int64{}
+	var policies []assignablePolicy
 
 	for _, path := range wipPolicyPaths {
-		list, err := c.fetchWIPPolicies(ctx, c.baseURL+path+"?$select=isAssigned")
+		list, cause, err := c.fetchWIPPolicies(ctx, c.baseURL+path+"?$select=isAssigned")
+		policies = append(policies, list...)
 		if err != nil {
+			n := uint64(len(policies))
+			c.outcomes.Add(recordoutcome.OutcomeFetched, n)
+			c.outcomes.Add(recordoutcome.OutcomeErrored, n)
+			c.outcomes.Cause(cause)
 			c.logger.Info("appprotection: WIP policies unavailable (deprecated endpoint); skipping WIP metrics", "collector", collectorName, "path", path, "error", err)
 			return nil
 		}
-		for _, p := range list {
-			counts[p.IsAssigned]++
-		}
+	}
+
+	outcome.Emitted(c.outcomes, uint64(len(policies)))
+	for _, p := range policies {
+		counts[p.IsAssigned]++
 	}
 
 	points := make([]telemetry.GaugePoint, 0, len(counts))

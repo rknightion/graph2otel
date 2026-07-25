@@ -8,6 +8,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
@@ -135,7 +136,7 @@ func TestCollectReportsUnmappedRiskEnum(t *testing.T) {
 		deletedUsersURL: `{"value":[]}`,
 	}}
 	rec := telemetrytest.New()
-	if err := New(g, bothCaps(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, bothCaps(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -157,7 +158,7 @@ func TestCollectBothLicensedEmitsBothMetrics(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := New(g, bothCaps(), nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -193,7 +194,7 @@ func TestCollectNoPerEntitySeries(t *testing.T) {
 	g := fullFixture()
 	rec := telemetrytest.New()
 
-	if err := New(g, bothCaps(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, bothCaps(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -257,7 +258,7 @@ func TestLogTwinEmitsIsProcessingFromLiveRiskyUser(t *testing.T) {
 // (#112).
 func TestCollectLiveRecordKeepsGaugeBounded(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(liveFixture(), bothCaps(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(liveFixture(), bothCaps(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -289,7 +290,7 @@ func TestCollectExcludesDeletedUserFromGaugeAndMarksTwin(t *testing.T) {
 		deletedUsersURL: `{"value":[{"id":"u1"}]}`, // u1 is a tombstone
 	}}
 	rec := telemetrytest.New()
-	if err := New(g, license.Capabilities{license.CapEntraP2: true}, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, license.Capabilities{license.CapEntraP2: true}, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -356,7 +357,7 @@ func TestReconciliationFailsOpenWhenDeletedItemsFails(t *testing.T) {
 		errs:   map[string]error{deletedUsersURL: errors.New("deletedItems 503")},
 	}
 	rec := telemetrytest.New()
-	if err := New(g, license.Capabilities{license.CapEntraP2: true}, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, license.Capabilities{license.CapEntraP2: true}, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -393,7 +394,7 @@ func decodeFirstUser(t *testing.T, body string) riskyEntity {
 // would be graph2otel asserting a fact the wire never stated.
 func TestLogTwinOmitsIsProcessingWhenAbsentFromWire(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(fullFixture(), bothCaps(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(fullFixture(), bothCaps(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -423,7 +424,7 @@ func logsNamed(recs []telemetrytest.LogRecord, name string) []telemetrytest.LogR
 // but never "which user" — the question an analyst actually asks.
 func TestCollectEmitsRiskyUserLogTwin(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(fullFixture(), bothCaps(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(fullFixture(), bothCaps(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -485,7 +486,7 @@ func TestLogTwinSeverityTracksRiskLevel(t *testing.T) {
 // half, whose per-entity shape differs (appId/displayName, no UPN).
 func TestCollectEmitsRiskyServicePrincipalLogTwin(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(fullFixture(), bothCaps(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(fullFixture(), bothCaps(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -515,7 +516,7 @@ func TestCollectEmitsRiskyServicePrincipalLogTwin(t *testing.T) {
 // riskDetail) omits those attributes rather than emitting empty strings.
 func TestLogTwinOmitsAbsentAttrs(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(fullFixture(), bothCaps(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(fullFixture(), bothCaps(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -550,7 +551,7 @@ func spForbiddenFixture() *fakeGraph {
 func TestServicePrincipalsEmitWithoutWIPCapability(t *testing.T) {
 	rec := telemetrytest.New()
 	caps := license.Capabilities{license.CapEntraP2: true} // NO WorkloadIdentitiesPremium
-	if err := New(fullFixture(), caps, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(fullFixture(), caps, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if pts := rec.MetricPoints(metricRiskyServicePrincipals); len(pts) == 0 {
@@ -566,7 +567,8 @@ func TestServicePrincipalsEmitWithoutWIPCapability(t *testing.T) {
 // returned — not a collection failure or a 15-min WARN loop.
 func TestServicePrincipalHalf403IsGracefulSkip(t *testing.T) {
 	rec := telemetrytest.New()
-	err := New(spForbiddenFixture(), bothCaps(), nil).Collect(context.Background(), rec.Emitter())
+	outcomes := recordoutcome.NewRecorder()
+	err := New(spForbiddenFixture(), bothCaps(), nil).Collect(context.Background(), rec.Emitter(), outcomes)
 	if err != nil {
 		t.Fatalf("Collect returned %v, want nil (a 403 on the SP half is a graceful skip)", err)
 	}
@@ -580,12 +582,15 @@ func TestServicePrincipalHalf403IsGracefulSkip(t *testing.T) {
 	if pts := rec.MetricPoints(metricRiskyUsers); len(pts) == 0 {
 		t.Error("risky-user series should still emit when only the SP half 403s")
 	}
+	if got := outcomes.Snapshot().Summarize(nil, false); got.Result != recordoutcome.ResultPartial || got.Cause != recordoutcome.CausePermissionDenied {
+		t.Errorf("outcome = %+v, want partial/%s", got, recordoutcome.CausePermissionDenied)
+	}
 }
 
 func TestCollectOnlyP2StillEmitsUsers(t *testing.T) {
 	rec := telemetrytest.New()
 	caps := license.Capabilities{license.CapEntraP2: true}
-	if err := New(spForbiddenFixture(), caps, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(spForbiddenFixture(), caps, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if pts := rec.MetricPoints(metricRiskyUsers); len(pts) == 0 {
@@ -601,7 +606,7 @@ func TestCollectOnlyP2StillEmitsUsers(t *testing.T) {
 func TestCollectOnlyP2WithReachableSPEndpointEmitsBoth(t *testing.T) {
 	rec := telemetrytest.New()
 	caps := license.Capabilities{license.CapEntraP2: true}
-	if err := New(fullFixture(), caps, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(fullFixture(), caps, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	// Users gated on P2 (present); SP not gated → both emit when reachable.
@@ -619,7 +624,7 @@ func TestCollectNeitherLicenseSkipsBothWithoutError(t *testing.T) {
 	// capability-gated, so "skips both" here means P2-off + SP-403, not two caps.
 	rec := telemetrytest.New()
 
-	err := New(spForbiddenFixture(), license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter())
+	err := New(spForbiddenFixture(), license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err != nil {
 		t.Fatalf("Collect: %v, want nil (users gated off, SP 403 graceful-skipped)", err)
 	}
@@ -637,7 +642,7 @@ func TestCollectNilCapabilitiesSkipsBothWithoutError(t *testing.T) {
 	// A nil Capabilities map (Has is documented safe on nil) must behave like the
 	// empty set: users half skipped, SP half graceful-skipped on its 403, no panic,
 	// no error.
-	err := New(spForbiddenFixture(), nil, nil).Collect(context.Background(), rec.Emitter())
+	err := New(spForbiddenFixture(), nil, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err != nil {
 		t.Fatalf("Collect: %v, want nil", err)
 	}
@@ -648,7 +653,7 @@ func TestCollectSurfacesPerHalfFailureButOtherHalfStillEmits(t *testing.T) {
 	g.errs = map[string]error{usersURL: errors.New("throttled")}
 	rec := telemetrytest.New()
 
-	err := New(g, bothCaps(), nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, bothCaps(), nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected Collect to surface the risky-users failure")
 	}

@@ -128,7 +128,7 @@ func TestCollectEmitsDeviceCountForEveryAppGroupedByPlatform(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{listURL: body}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -169,7 +169,7 @@ func TestCollectEmitsCatalogSizeForEveryEntry(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{listURL: body}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -203,7 +203,7 @@ func TestCollectEmitsLiveCatalogEndToEnd(t *testing.T) {
 	}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -233,7 +233,7 @@ func TestCollectSkipsUnparseableEntriesWithoutFailing(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{listURL: body}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect should tolerate one bad entry, got: %v", err)
 	}
 	got := map[string]float64{}
@@ -251,7 +251,7 @@ func TestCollectGracefulOn403(t *testing.T) {
 	}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Errorf("Collect should swallow a 403 as skip-and-log, got: %v", err)
 	}
 	if len(rec.MetricNames()) != 0 {
@@ -264,7 +264,7 @@ func TestCollectSurfacesNon4xxError(t *testing.T) {
 		listURL: errors.New("graphclient: GET " + listURL + ": status 500: server error"),
 	}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err == nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err == nil {
 		t.Error("a 500 should surface as a collector error, not be swallowed")
 	}
 }

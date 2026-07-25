@@ -89,7 +89,7 @@ func graphWith(fics string) *fakeGraph {
 // apps + one owned synthetic) and the Warn-on-ownerless twin.
 func TestAppOwnershipCountsAndWarn(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(graphWith(liveFICsEmpty), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(graphWith(liveFICsEmpty), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	got := map[string]float64{}
@@ -120,7 +120,7 @@ func TestAppOwnershipCountsAndWarn(t *testing.T) {
 // TestSPOwnershipCounts pins the service-principal ownership gauge by type.
 func TestSPOwnershipCounts(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(graphWith(liveFICsEmpty), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(graphWith(liveFICsEmpty), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	got := map[string]float64{}
@@ -136,7 +136,7 @@ func TestSPOwnershipCounts(t *testing.T) {
 // and a zero-series gauge — an empty collection is not a bug.
 func TestFICEmptyOnTenant(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(graphWith(liveFICsEmpty), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(graphWith(liveFICsEmpty), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	for _, r := range rec.LogRecords() {
@@ -150,7 +150,7 @@ func TestFICEmptyOnTenant(t *testing.T) {
 // FICs) and its issuer_host gauge bucket.
 func TestFICTwinFromGitHubOIDC(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(graphWith(ficsWithGitHub), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(graphWith(ficsWithGitHub), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	var fic *telemetrytest.LogRecord

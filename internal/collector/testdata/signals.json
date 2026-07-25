@@ -21,6 +21,32 @@
       ]
     },
     {
+      "Name": "graph2otel.payload.type_mismatches",
+      "Unit": "{record}",
+      "Kind": "sum",
+      "Description": "Count of payload fields whose JSON type differed from the expected type.",
+      "AttrKeys": [
+        "actual_type",
+        "collector",
+        "expected_type",
+        "field",
+        "ingest_transport",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.record.outcomes",
+      "Unit": "{record}",
+      "Kind": "sum",
+      "Description": "Count of source records by processing outcome.",
+      "AttrKeys": [
+        "collector",
+        "ingest_transport",
+        "outcome",
+        "tenant_id"
+      ]
+    },
+    {
       "Name": "graph2otel.scrape.budget",
       "Unit": "1",
       "Kind": "gauge",
@@ -62,6 +88,18 @@
       ]
     },
     {
+      "Name": "graph2otel.scrape.outcomes",
+      "Unit": "{run}",
+      "Kind": "sum",
+      "Description": "Count of collector runs by reconciled record outcome.",
+      "AttrKeys": [
+        "collector",
+        "ingest_transport",
+        "result",
+        "tenant_id"
+      ]
+    },
+    {
       "Name": "graph2otel.scrape.staleness",
       "Unit": "s",
       "Kind": "gauge",
@@ -75,7 +113,7 @@
       "Name": "graph2otel.scrape.success",
       "Unit": "1",
       "Kind": "gauge",
-      "Description": "1 if the last scrape for that collector succeeded, else 0.",
+      "Description": "1 if the last scrape result was empty or success; 0 for partial or failure.",
       "AttrKeys": [
         "collector",
         "tenant_id"

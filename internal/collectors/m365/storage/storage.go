@@ -31,6 +31,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -83,6 +84,7 @@ var (
 const reportCount = 4
 
 var (
+	errReportDecode = errors.New("decode usage report")
 
 	// The full (drive_type, quota_state) grid, so every bucket reports an explicit
 	// count each cycle — healthy states report 0 for stable alert baselines.
@@ -122,7 +124,7 @@ func (c *Collector) RequiredPermissions() []string {
 // Collect fetches the usage reports and emits tenant aggregates + per-drive twins.
 // Each report is best-effort: a report that is unavailable (e.g. usage reports do
 // not exist in sovereign clouds) is skipped with a warning, not fatal.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	concealed, settingKnown := c.readConcealment(ctx)
 
 	// Fetch all four reports, tracking which FAILED (as opposed to being
@@ -147,11 +149,20 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	} {
 		if fe.err != nil {
 			fetchErrs = append(fetchErrs, fmt.Errorf("%s: %w", fe.fn, fe.err))
+			if errors.Is(fe.err, errReportDecode) {
+				outcomes.Cause(recordoutcome.CauseDecodeError)
+			} else {
+				outcomes.Cause(recordoutcome.CauseSourceError)
+			}
 		}
 	}
 
 	spUsed, spUsedOK := latestTenantUsed(spStorageRows)
 	odUsed, odUsedOK := latestTenantUsed(odStorageRows)
+	recordTenantUsageOutcomes(spStorageRows, spUsedOK, outcomes)
+	recordTenantUsageOutcomes(odStorageRows, odUsedOK, outcomes)
+	recordDetailOutcomes(spRows, outcomes)
+	recordDetailOutcomes(odRows, outcomes)
 
 	// Heuristic concealment detection when the setting itself is unreadable: if
 	// every detail row has the zeroed Site Id, names are concealed.
@@ -331,9 +342,32 @@ func (c *Collector) fetch(ctx context.Context, r report) ([]map[string]string, e
 	if err != nil {
 		c.logger.Warn("m365.storage: report parse failed, skipping",
 			"collector", collectorName, "report", r.fn, "error", err)
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", errReportDecode, err)
 	}
 	return rows, nil
+}
+
+// recordTenantUsageOutcomes accounts for a usage-timeseries report. Exactly one
+// latest "All" row contributes the aggregate metric; every other fetched row is
+// intentionally filtered.
+func recordTenantUsageOutcomes(rows []map[string]string, emitted bool, outcomes *recordoutcome.Recorder) {
+	outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(rows)))
+	if !emitted {
+		outcomes.Add(recordoutcome.OutcomeFiltered, uint64(len(rows)))
+		return
+	}
+	outcomes.Add(recordoutcome.OutcomeMapped, 1)
+	outcomes.Add(recordoutcome.OutcomeEmitted, 1)
+	outcomes.Add(recordoutcome.OutcomeFiltered, uint64(len(rows))-1)
+}
+
+// recordDetailOutcomes accounts for detail-report rows. Every parsed row emits
+// one drive log twin and contributes to the bounded quota-state aggregate.
+func recordDetailOutcomes(rows []map[string]string, outcomes *recordoutcome.Recorder) {
+	n := uint64(len(rows))
+	outcomes.Add(recordoutcome.OutcomeFetched, n)
+	outcomes.Add(recordoutcome.OutcomeMapped, n)
+	outcomes.Add(recordoutcome.OutcomeEmitted, n)
 }
 
 // parseCSV parses a usage-report CSV into header-keyed rows. It strips a leading

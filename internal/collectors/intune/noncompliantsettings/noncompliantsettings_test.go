@@ -108,7 +108,7 @@ func TestCollectCountsRowsByOsAndStatus(t *testing.T) {
 	c := New(runner, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -155,7 +155,7 @@ func TestMetricNameAndUnitPinned(t *testing.T) {
 	c := New(&fakeRunner{rows: liveRows()}, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -184,7 +184,7 @@ func TestMetricCarriesOnlyBoundedDimensions(t *testing.T) {
 	c := New(&fakeRunner{rows: rows}, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -212,7 +212,7 @@ func TestCollectEmitsOneLogTwinPerRow(t *testing.T) {
 	c := New(runner, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -273,7 +273,7 @@ func TestUnknownStatusBucketsKeepsRawCodeAndWarns(t *testing.T) {
 	c := New(&fakeRunner{rows: []exportjob.Row{unknownRow()}}, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -333,7 +333,7 @@ func findings(rec *telemetrytest.Recorder) map[string]float64 {
 func TestLiveRowsReportNothingUnexpected(t *testing.T) {
 	c := New(&fakeRunner{rows: liveRows()}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 	if got := findings(rec); len(got) != 0 {
@@ -350,7 +350,7 @@ func TestUnknownStatusCodeIsReported(t *testing.T) {
 	c := New(&fakeRunner{rows: []exportjob.Row{unknownRow()}}, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -375,7 +375,7 @@ func TestEmptyStatusCodeIsNeverReported(t *testing.T) {
 	c := New(&fakeRunner{rows: []exportjob.Row{emptyRow}}, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 	if got := findings(rec); len(got) != 0 {
@@ -401,7 +401,7 @@ func TestCollectSkipsWhenExportRunnerIsNil(t *testing.T) {
 	c := New(nil, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error, want nil (skip-and-log): %v", err)
 	}
 	if points := rec.MetricPoints(countMetricName); len(points) != 0 {
@@ -426,7 +426,7 @@ func TestCollectSkipsAndLogsOnExportError(t *testing.T) {
 			c := New(&fakeRunner{err: tc.err}, nil)
 			rec := telemetrytest.New()
 
-			if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+			if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 				t.Fatalf("Collect returned error, want nil (skip-and-log): %v", err)
 			}
 			if points := rec.MetricPoints(countMetricName); len(points) != 0 {
@@ -469,7 +469,7 @@ func TestCollectStampsReportExportTransport(t *testing.T) {
 	c := New(&fakeRunner{rows: liveRows()}, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

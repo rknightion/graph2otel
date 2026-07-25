@@ -41,6 +41,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -93,9 +95,10 @@ const securityBaselineFilter = "isof('microsoft.graph.securityBaselineTemplate')
 // Collector polls Settings Catalog configurationPolicies, template-based
 // intents, and security-baseline templates.
 type Collector struct {
-	g       collectors.GraphClient
-	baseURL string
-	logger  *slog.Logger
+	outcomes *outcome.Recorder
+	g        collectors.GraphClient
+	baseURL  string
+	logger   *slog.Logger
 }
 
 // New builds the settings-catalog collector. A nil logger falls back to the
@@ -140,7 +143,11 @@ func (c *Collector) RequiredPermissions() []string {
 // combination; any other error is logged and joined into the returned error,
 // but does not prevent the other two surfaces (or, within the intents/
 // baselines fan-outs, any other item) from still emitting.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
+	local := *c
+	local.outcomes = outcomes
+	c = &local
 	var errs []error
 
 	policyTemplateIDs, err := c.collectConfigurationPolicies(ctx, e)
@@ -221,7 +228,7 @@ type configurationPolicy struct {
 // uses to avoid double-counting a migrated intent against its Settings
 // Catalog twin.
 func (c *Collector) collectConfigurationPolicies(ctx context.Context, e telemetry.Emitter) (map[string]struct{}, error) {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/configurationPolicies", nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceManagement/configurationPolicies", nil, c.outcomes)
 	if err != nil {
 		return nil, err
 	}
@@ -234,8 +241,10 @@ func (c *Collector) collectConfigurationPolicies(ctx context.Context, e telemetr
 		var p configurationPolicy
 		if err := json.Unmarshal(r, &p); err != nil {
 			c.logger.Warn("settingscatalog: skipping unparseable configurationPolicy", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		family := "none"
 		if p.TemplateReference != nil {
 			family = orUnknown(p.TemplateReference.TemplateFamily)
@@ -270,7 +279,7 @@ type intent struct {
 // listIntents fetches the template-based intent inventory (unbounded by
 // device/user count - bounded by admin-configured intent count).
 func (c *Collector) listIntents(ctx context.Context) ([]intent, error) {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/intents", nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceManagement/intents", nil, c.outcomes)
 	if err != nil {
 		return nil, err
 	}
@@ -279,12 +288,15 @@ func (c *Collector) listIntents(ctx context.Context) ([]intent, error) {
 		var it intent
 		if err := json.Unmarshal(r, &it); err != nil {
 			c.logger.Warn("settingscatalog: skipping unparseable intent", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
 		if it.ID == "" {
 			c.logger.Warn("settingscatalog: skipping intent with empty id", "collector", collectorName)
+			outcome.Dropped(c.outcomes, 1, recordoutcome.CauseMappingError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		out = append(out, it)
 	}
 	return out, nil
@@ -355,6 +367,10 @@ func (c *Collector) emitIntentCountsAndDeviceStates(ctx context.Context, e telem
 		case err == nil:
 			devicePoints = append(devicePoints, summary.points(name)...)
 		case isUnavailable(err) || isSummaryUnavailable(err):
+			outcome.RecordError(c.outcomes, err)
+			if strings.Contains(err.Error(), "status 403") {
+				c.outcomes.Cause(recordoutcome.CausePermissionDenied)
+			}
 			c.logger.Info("settingscatalog: intent deviceStateSummary unavailable; skipping",
 				"collector", collectorName, "intent_name", name, "error", err)
 		default:
@@ -387,8 +403,10 @@ func (c *Collector) fetchIntentDeviceStateSummary(ctx context.Context, id string
 	}
 	var s intentDeviceStateSummary
 	if err := json.Unmarshal(body, &s); err != nil {
+		outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 		return intentDeviceStateSummary{}, fmt.Errorf("decode intent deviceStateSummary: %w", err)
 	}
+	outcome.Emitted(c.outcomes, 1)
 	return s, nil
 }
 
@@ -405,7 +423,7 @@ type baselineTemplate struct {
 // platform/version, not tenant size).
 func (c *Collector) listSecurityBaselineTemplates(ctx context.Context) ([]baselineTemplate, error) {
 	u := c.baseURL + "/deviceManagement/templates?$filter=" + encodeFilter(securityBaselineFilter)
-	raw, err := collectors.GetAllValues(ctx, c.g, u, nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, u, nil, c.outcomes)
 	if err != nil {
 		return nil, err
 	}
@@ -414,12 +432,15 @@ func (c *Collector) listSecurityBaselineTemplates(ctx context.Context) ([]baseli
 		var t baselineTemplate
 		if err := json.Unmarshal(r, &t); err != nil {
 			c.logger.Warn("settingscatalog: skipping unparseable security baseline template", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
 		if t.ID == "" {
 			c.logger.Warn("settingscatalog: skipping security baseline template with empty id", "collector", collectorName)
+			outcome.Dropped(c.outcomes, 1, recordoutcome.CauseMappingError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		out = append(out, t)
 	}
 	return out, nil
@@ -478,6 +499,10 @@ func (c *Collector) emitSecurityBaselineDeviceStates(ctx context.Context, e tele
 		case err == nil:
 			points = append(points, summary.points(name)...)
 		case isUnavailable(err) || isSummaryUnavailable(err):
+			outcome.RecordError(c.outcomes, err)
+			if strings.Contains(err.Error(), "status 403") {
+				c.outcomes.Cause(recordoutcome.CausePermissionDenied)
+			}
 			c.logger.Info("settingscatalog: security baseline deviceStateSummary unavailable; skipping",
 				"collector", collectorName, "baseline_name", name, "error", err)
 		default:
@@ -507,8 +532,10 @@ func (c *Collector) fetchBaselineDeviceStateSummary(ctx context.Context, id stri
 	}
 	var s baselineDeviceStateSummary
 	if err := json.Unmarshal(body, &s); err != nil {
+		outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 		return baselineDeviceStateSummary{}, fmt.Errorf("decode security baseline deviceStateSummary: %w", err)
 	}
+	outcome.Emitted(c.outcomes, 1)
 	return s, nil
 }
 

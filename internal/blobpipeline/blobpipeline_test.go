@@ -105,7 +105,7 @@ func TestPollEmitsEveryRecordAndAdvancesTheCursor(t *testing.T) {
 	r := telemetrytest.New()
 	cur := newCursor()
 
-	if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 
@@ -156,7 +156,7 @@ func TestPollDropsUndatedRecords(t *testing.T) {
 	r := telemetrytest.New()
 	cur := newCursor()
 
-	if err := Poll(context.Background(), cfg, cur, src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), cfg, cur, src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 	if got, want := bodies(r), []string{"wire-time", "mapper-fallback"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
@@ -191,7 +191,7 @@ func TestPollIsIdempotentWhenNothingGrew(t *testing.T) {
 	cur := newCursor()
 
 	for i := 0; i < 3; i++ {
-		if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil); err != nil {
+		if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 			t.Fatalf("Poll %d: %v", i, err)
 		}
 	}
@@ -213,12 +213,12 @@ func TestPollReadsOnlyTheNewBytesWhenAClosedBlobGrows(t *testing.T) {
 	r := telemetrytest.New()
 	cur := newCursor()
 
-	if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll 1: %v", err)
 	}
 	// Azure appends to the long-closed hour.
 	src.blobs[name] = rec("a") + rec("b")
-	if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll 2: %v", err)
 	}
 
@@ -242,7 +242,7 @@ func TestPollResumesFromAPersistedCursor(t *testing.T) {
 	cur := newCursor()
 	cur.Offsets[name] = int64(len(rec("a")))
 
-	if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 	got := bodies(r)
@@ -260,7 +260,7 @@ func TestPollNeverEmitsOrSkipsAPartialTrailingLine(t *testing.T) {
 	r := telemetrytest.New()
 	cur := newCursor()
 
-	if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 	if got := bodies(r); len(got) != 1 || got[0] != "a" {
@@ -273,7 +273,7 @@ func TestPollNeverEmitsOrSkipsAPartialTrailingLine(t *testing.T) {
 
 	// The record completes; the next poll picks it up whole, exactly once.
 	src.blobs[name] = rec("a") + rec("b")
-	if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll 2: %v", err)
 	}
 	if got := bodies(r); len(got) != 2 || got[1] != "b" {
@@ -290,7 +290,7 @@ func TestPollLeavesAShortPartialAppendPending(t *testing.T) {
 	r := telemetrytest.New()
 	cur := newCursor()
 
-	if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll: %v — a short unfinished append must remain pending", err)
 	}
 	if got := bodies(r); len(got) != 0 {
@@ -311,7 +311,7 @@ func TestPollReturnsDegradedErrorForCapSizedNewlineFreeRecord(t *testing.T) {
 	cfg := testConfig()
 	cfg.MaxBytesPerTick = 10
 
-	err := Poll(context.Background(), cfg, newCursor(), src, r.Emitter(), discardLogger(), nil)
+	err := Poll(context.Background(), cfg, newCursor(), src, r.Emitter(), discardLogger(), nil, nil)
 	if err == nil {
 		t.Fatal("Poll returned nil for a cap-sized newline-free record; it would retry forever as a healthy tick")
 	}
@@ -329,7 +329,7 @@ func TestPollPrunesCursorEntriesForDeletedBlobs(t *testing.T) {
 	cur := newCursor()
 	cur.Offsets["tenantId=t1/y=2026/m=07/d=01/h=00/m=00/PT1H.json"] = 500 // lifecycle-deleted
 
-	if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 	if _, ok := cur.Offsets["tenantId=t1/y=2026/m=07/d=01/h=00/m=00/PT1H.json"]; ok {
@@ -358,7 +358,7 @@ func TestPollSavesPruneOnlyCursorMutation(t *testing.T) {
 		return nil
 	}
 
-	if err := Poll(context.Background(), testConfig(), cur, src, telemetrytest.New().Emitter(), discardLogger(), save); err != nil {
+	if err := Poll(context.Background(), testConfig(), cur, src, telemetrytest.New().Emitter(), discardLogger(), save, nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 	if persisted == nil {
@@ -381,7 +381,7 @@ func TestPollDoesNotSaveAnUnchangedCursor(t *testing.T) {
 	saves := 0
 	save := func(*checkpoint.BlobCursor) error { saves++; return nil }
 
-	if err := Poll(context.Background(), testConfig(), cur, src, telemetrytest.New().Emitter(), discardLogger(), save); err != nil {
+	if err := Poll(context.Background(), testConfig(), cur, src, telemetrytest.New().Emitter(), discardLogger(), save, nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 	if saves != 0 {
@@ -399,7 +399,7 @@ func TestPollResetsWhenABlobIsSmallerThanTheStoredOffset(t *testing.T) {
 	cur := newCursor()
 	cur.Offsets[name] = 99999 // stale: far beyond the blob's current size
 
-	if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 	if got := bodies(r); len(got) != 1 || got[0] != "a" {
@@ -420,7 +420,7 @@ func TestPollPacesALargeBlobAcrossTicksWithoutLoss(t *testing.T) {
 	cfg.MaxBytesPerTick = int64(len(rec("a"))) + 5 // one record plus a partial second
 
 	for i := 0; i < 3; i++ {
-		if err := Poll(context.Background(), cfg, cur, src, r.Emitter(), discardLogger(), nil); err != nil {
+		if err := Poll(context.Background(), cfg, cur, src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 			t.Fatalf("Poll %d: %v", i, err)
 		}
 	}
@@ -450,7 +450,7 @@ func TestPollConsumesRecordsTheMapperRejects(t *testing.T) {
 		return ev, true
 	}
 
-	if err := Poll(context.Background(), cfg, cur, src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), cfg, cur, src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 	if got := bodies(r); len(got) != 1 || got[0] != "a" {
@@ -469,7 +469,7 @@ func TestPollSkipsAMalformedLineAndKeepsGoing(t *testing.T) {
 	r := telemetrytest.New()
 	cur := newCursor()
 
-	if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), testConfig(), cur, src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 	if got := bodies(r); len(got) != 1 || got[0] != "a" {
@@ -482,7 +482,7 @@ func TestPollSkipsAMalformedLineAndKeepsGoing(t *testing.T) {
 func TestPollReturnsListErrors(t *testing.T) {
 	src := &fakeSource{listErr: errors.New("boom")}
 	r := telemetrytest.New()
-	if err := Poll(context.Background(), testConfig(), newCursor(), src, r.Emitter(), discardLogger(), nil); err == nil {
+	if err := Poll(context.Background(), testConfig(), newCursor(), src, r.Emitter(), discardLogger(), nil, nil); err == nil {
 		t.Fatal("Poll returned nil on a List failure; the tick would look successful")
 	}
 }
@@ -507,7 +507,7 @@ func TestPollReturnsDegradedErrorAfterMixedReadFailure(t *testing.T) {
 	saves := 0
 	save := func(*checkpoint.BlobCursor) error { saves++; return nil }
 
-	err := Poll(context.Background(), cfg, cur, src, r.Emitter(), discardLogger(), save)
+	err := Poll(context.Background(), cfg, cur, src, r.Emitter(), discardLogger(), save, nil)
 	if !errors.Is(err, readErr) {
 		t.Fatalf("Poll error = %v, want joined read failure %v", err, readErr)
 	}
@@ -543,7 +543,7 @@ func TestPollReturnsDegradedErrorWhenAllReadsFail(t *testing.T) {
 		readErr: map[string]error{first: firstErr, second: secondErr},
 	}
 
-	err := Poll(context.Background(), testConfig(), newCursor(), src, telemetrytest.New().Emitter(), discardLogger(), nil)
+	err := Poll(context.Background(), testConfig(), newCursor(), src, telemetrytest.New().Emitter(), discardLogger(), nil, nil)
 	if !errors.Is(err, firstErr) || !errors.Is(err, secondErr) {
 		t.Fatalf("Poll error = %v, want joined failures %v and %v", err, firstErr, secondErr)
 	}
@@ -556,7 +556,7 @@ func TestPollReadsBlobsInChronologicalNameOrder(t *testing.T) {
 		"tenantId=t1/y=2026/m=07/d=16/h=02/m=00/PT1H.json": rec("earlier"),
 	}}
 	r := telemetrytest.New()
-	if err := Poll(context.Background(), testConfig(), newCursor(), src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), testConfig(), newCursor(), src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 	got := bodies(r)
@@ -576,7 +576,7 @@ func TestPollSavesTheCursorPerAdvancedBlob(t *testing.T) {
 	saves := 0
 	save := func(*checkpoint.BlobCursor) error { saves++; return nil }
 
-	if err := Poll(context.Background(), testConfig(), newCursor(), src, r.Emitter(), discardLogger(), save); err != nil {
+	if err := Poll(context.Background(), testConfig(), newCursor(), src, r.Emitter(), discardLogger(), save, nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 	if saves != 2 {
@@ -595,7 +595,7 @@ func TestPollReturnsDegradedErrorWhenTheCursorSaveFails(t *testing.T) {
 	saveErr := errors.New("disk full")
 	save := func(*checkpoint.BlobCursor) error { return saveErr }
 
-	err := Poll(context.Background(), testConfig(), newCursor(), src, r.Emitter(), discardLogger(), save)
+	err := Poll(context.Background(), testConfig(), newCursor(), src, r.Emitter(), discardLogger(), save, nil)
 	if !errors.Is(err, saveErr) {
 		t.Fatalf("Poll error = %v, want joined cursor save failure %v", err, saveErr)
 	}
@@ -618,7 +618,7 @@ func TestPollStampsBlobTransport(t *testing.T) {
 	}}
 	r := telemetrytest.New()
 
-	if err := Poll(context.Background(), testConfig(), newCursor(), src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), testConfig(), newCursor(), src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 
@@ -673,7 +673,7 @@ func TestPollExcludesSelfAuthoredRecordsButNotThirdParty(t *testing.T) {
 	cur := newCursor()
 	cfg := selfTestConfig(true, "POLLER", propsAppID)
 
-	if err := Poll(context.Background(), cfg, cur, src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), cfg, cur, src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 
@@ -699,7 +699,7 @@ func TestPollDoesNotFilterWhenExcludeSelfIsOff(t *testing.T) {
 	r := telemetrytest.New()
 	cfg := selfTestConfig(false, "POLLER", propsAppID)
 
-	if err := Poll(context.Background(), cfg, newCursor(), src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), cfg, newCursor(), src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 
@@ -723,7 +723,7 @@ func TestPollCountsEverySelfExclusionPerCollector(t *testing.T) {
 	r := telemetrytest.New()
 	cfg := selfTestConfig(true, "POLLER", propsAppID)
 
-	if err := Poll(context.Background(), cfg, newCursor(), src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), cfg, newCursor(), src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 
@@ -753,7 +753,7 @@ func TestPollNeverFiltersWhenSelfAppIDIsNil(t *testing.T) {
 	r := telemetrytest.New()
 	cfg := selfTestConfig(true, "POLLER", nil)
 
-	if err := Poll(context.Background(), cfg, newCursor(), src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), cfg, newCursor(), src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 	if got := bodies(r); len(got) != 2 {
@@ -775,7 +775,7 @@ func TestPollNeverFiltersWhenSelfClientIDIsEmpty(t *testing.T) {
 	r := telemetrytest.New()
 	cfg := selfTestConfig(true, "", propsAppID)
 
-	if err := Poll(context.Background(), cfg, newCursor(), src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), cfg, newCursor(), src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 	if got := bodies(r); len(got) != 2 {

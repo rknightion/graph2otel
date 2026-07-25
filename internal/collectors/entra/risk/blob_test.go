@@ -86,7 +86,7 @@ func TestSuppressedTwinKeepsGaugeDropsLog(t *testing.T) {
 	rec := telemetrytest.New()
 	c := New(liveFixture(), bothCaps(), nil)
 	c.suppressedTwins = map[string]bool{eventRiskyUser: true}
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -107,7 +107,7 @@ func TestSuppressedTwinKeepsGaugeDropsLog(t *testing.T) {
 func TestUnsuppressedTwinStillEmits(t *testing.T) {
 	rec := telemetrytest.New()
 	c := New(liveFixture(), bothCaps(), nil) // suppressedTwins nil
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	saw := false

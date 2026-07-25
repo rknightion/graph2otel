@@ -46,6 +46,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -122,9 +123,10 @@ func (c *CasesCollector) RequiredPermissions() []string {
 // is a real misconfiguration, not an expected steady state. A 401 in particular
 // means the S&C registration is missing despite the scope being granted; the
 // error names that fix so the next reader does not re-run #102's investigation.
-func (c *CasesCollector) Collect(ctx context.Context, e telemetry.Emitter) error {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/security/cases/ediscoveryCases", nil)
+func (c *CasesCollector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/security/cases/ediscoveryCases", nil, outcomes)
 	if err != nil {
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		if strings.Contains(err.Error(), "status 401") {
 			return fmt.Errorf("%s: list: eDiscovery.Read.All is granted but the app's service principal must ALSO be registered in the Security & Compliance data plane (a 401 here is that missing registration, not a Graph scope gap) — see docs/data-plane-registration.md: %w",
 				casesName, err)
@@ -132,13 +134,18 @@ func (c *CasesCollector) Collect(ctx context.Context, e telemetry.Emitter) error
 		return fmt.Errorf("%s: list: %w", casesName, err)
 	}
 
+	outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(raws)))
 	byStatus := map[string]int64{}
 	for _, raw := range raws {
 		var ec ediscoveryCase
 		if err := json.Unmarshal(raw, &ec); err != nil {
+			outcomes.Add(recordoutcome.OutcomeErrored, 1)
+			outcomes.Cause(recordoutcome.CauseDecodeError)
 			c.logger.Warn("ediscovery cases: skipping unparseable entry", "collector", casesName, "error", err)
 			continue
 		}
+		outcomes.Add(recordoutcome.OutcomeMapped, 1)
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 		status := ec.Status
 		if status == "" {
 			status = "unknown"

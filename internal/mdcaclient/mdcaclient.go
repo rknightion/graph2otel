@@ -43,6 +43,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -162,6 +163,35 @@ type GovernancePage struct {
 	Records []map[string]any
 }
 
+// bufferedRecordsError preserves how many complete records were fetched before
+// a later page failed. Governance still returns a nil page so callers cannot
+// consume an incomplete snapshot; record-outcome accounting can read the count
+// through BufferedRecords.
+type bufferedRecordsError struct {
+	count uint64
+	err   error
+}
+
+func (e *bufferedRecordsError) Error() string { return e.err.Error() }
+func (e *bufferedRecordsError) Unwrap() error { return e.err }
+
+// BufferedRecords returns the number of complete governance records fetched
+// before err stopped the page walk. Errors before the first page return zero.
+func BufferedRecords(err error) uint64 {
+	var partial *bufferedRecordsError
+	if errors.As(err, &partial) {
+		return partial.count
+	}
+	return 0
+}
+
+func withBufferedRecords(err error, count uint64) error {
+	if err == nil || count == 0 {
+		return err
+	}
+	return &bufferedRecordsError{count: count, err: err}
+}
+
 // governanceBody is the request payload. filters is omitted entirely when no
 // timestamp filter applies, matching the API's "no filters" form.
 type governanceBody struct {
@@ -174,6 +204,25 @@ type governanceBody struct {
 type governanceResponse struct {
 	Total int              `json:"total"`
 	Data  []map[string]any `json:"data"`
+}
+
+func (r *governanceResponse) UnmarshalJSON(data []byte) error {
+	var wire struct {
+		Total *int              `json:"total"`
+		Data  *[]map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if wire.Total == nil {
+		return errors.New(`governance response is missing a non-null "total" field`)
+	}
+	if wire.Data == nil {
+		return errors.New(`governance response is missing a non-null "data" field`)
+	}
+	r.Total = *wire.Total
+	r.Data = *wire.Data
+	return nil
 }
 
 // Governance fetches every governance-log record matching q, paging internally
@@ -195,16 +244,16 @@ func (c *Client) Governance(ctx context.Context, q GovernanceQuery) (*Governance
 		}
 		raw, err := json.Marshal(body)
 		if err != nil {
-			return nil, fmt.Errorf("mdcaclient: marshal governance body: %w", err)
+			return nil, withBufferedRecords(fmt.Errorf("mdcaclient: marshal governance body: %w", err), uint64(len(records)))
 		}
 
 		respBody, err := c.do(ctx, http.MethodPost, c.baseURL+governancePath, raw)
 		if err != nil {
-			return nil, err
+			return nil, withBufferedRecords(err, uint64(len(records)))
 		}
 		var gr governanceResponse
 		if err := json.Unmarshal(respBody, &gr); err != nil {
-			return nil, fmt.Errorf("mdcaclient: decode governance response: %w", err)
+			return nil, withBufferedRecords(fmt.Errorf("mdcaclient: decode governance response: %w", err), uint64(len(records)))
 		}
 		total = gr.Total
 		records = append(records, gr.Data...)
@@ -217,7 +266,10 @@ func (c *Client) Governance(ctx context.Context, q GovernanceQuery) (*Governance
 			return &GovernancePage{Total: total, Records: records}, nil
 		}
 	}
-	return nil, fmt.Errorf("mdcaclient: governance pagination cap reached after %d pages: collected %d of reported %d records", maxPages, len(records), total)
+	return nil, withBufferedRecords(
+		fmt.Errorf("mdcaclient: governance pagination cap reached after %d pages: collected %d of reported %d records", maxPages, len(records), total),
+		uint64(len(records)),
+	)
 }
 
 // checkHost refuses to send the token anywhere but this client's own endpoint.

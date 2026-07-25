@@ -107,7 +107,7 @@ func TestCollect_Gauges(t *testing.T) {
 		twins:       map[string][]map[string]any{},
 	}
 	rec := telemetrytest.New()
-	if err := New(collectors.HuntDeps{Client: f}).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(collectors.HuntDeps{Client: f}).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -144,7 +144,7 @@ func TestCollect_Twin(t *testing.T) {
 		twins:       map[string][]map[string]any{"Network": rows(t, liveTwinNoncompliant)},
 	}
 	rec := telemetrytest.New()
-	if err := New(collectors.HuntDeps{Client: f}).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(collectors.HuntDeps{Client: f}).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	var twin *telemetrytest.LogRecord
@@ -186,7 +186,7 @@ func TestConfigTwin_Severity(t *testing.T) {
 
 func TestCollect_SummaryFailureIsFatal(t *testing.T) {
 	f := &fakeHunt{err: errors.New("403")}
-	if err := New(collectors.HuntDeps{Client: f}).Collect(context.Background(), telemetrytest.New().Emitter()); err == nil {
+	if err := New(collectors.HuntDeps{Client: f}).Collect(context.Background(), telemetrytest.New().Emitter(), nil); err == nil {
 		t.Fatal("summary failure should be fatal")
 	}
 }

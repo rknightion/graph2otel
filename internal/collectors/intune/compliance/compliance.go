@@ -26,6 +26,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -55,9 +57,10 @@ const defaultBaseURL = "https://graph.microsoft.com/v1.0"
 
 // Collector polls the Intune device-compliance summary/overview endpoints.
 type Collector struct {
-	g       collectors.GraphClient
-	baseURL string
-	logger  *slog.Logger
+	outcomes *outcome.Recorder
+	g        collectors.GraphClient
+	baseURL  string
+	logger   *slog.Logger
 }
 
 // New builds the compliance collector. A nil logger falls back to the slog
@@ -102,11 +105,17 @@ func (c *Collector) RequiredPermissions() []string {
 // Overview counts lag real client check-in by minutes to hours; a transient
 // mismatch against a device's actual last-known state is expected, not a
 // bug.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
+	local := *c
+	local.outcomes = outcomes
+	c = &local
 	var errs []error
 
 	if err := c.collectDeviceStateSummary(ctx, e); err != nil {
 		if isForbidden(err) {
+			outcome.RecordError(c.outcomes, err)
+			outcomes.Cause(recordoutcome.CausePermissionDenied)
 			c.logger.Info("compliance: device state summary unavailable on this tenant; skipping",
 				"collector", collectorName, "error", err)
 		} else {
@@ -118,6 +127,8 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	policies, err := c.collectPolicies(ctx, e)
 	if err != nil {
 		if isForbidden(err) {
+			outcome.RecordError(c.outcomes, err)
+			outcomes.Cause(recordoutcome.CausePermissionDenied)
 			c.logger.Info("compliance: policy list unavailable on this tenant; skipping",
 				"collector", collectorName, "error", err)
 		} else {
@@ -133,6 +144,8 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 
 	if err := c.collectSettingStateSummaries(ctx, e); err != nil {
 		if isForbidden(err) {
+			outcome.RecordError(c.outcomes, err)
+			outcomes.Cause(recordoutcome.CausePermissionDenied)
 			c.logger.Info("compliance: setting state summaries unavailable on this tenant; skipping",
 				"collector", collectorName, "error", err)
 		} else {
@@ -170,8 +183,10 @@ func (c *Collector) collectDeviceStateSummary(ctx context.Context, e telemetry.E
 	}
 	var s deviceStateSummary
 	if err := json.Unmarshal(body, &s); err != nil {
+		outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 		return fmt.Errorf("decode deviceCompliancePolicyDeviceStateSummary: %w", err)
 	}
+	outcome.Emitted(c.outcomes, 1)
 
 	points := []telemetry.GaugePoint{
 		{Value: float64(s.CompliantDeviceCount), Attrs: telemetry.Attrs{semconv.AttrState: "compliant"}},
@@ -212,7 +227,7 @@ type policyRef struct {
 // change-detection, and returns the (id, name) pairs the per-policy overview
 // fan-out needs.
 func (c *Collector) collectPolicies(ctx context.Context, e telemetry.Emitter) ([]policyRef, error) {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/deviceCompliancePolicies", nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceManagement/deviceCompliancePolicies", nil, c.outcomes)
 	if err != nil {
 		return nil, err
 	}
@@ -223,12 +238,15 @@ func (c *Collector) collectPolicies(ctx context.Context, e telemetry.Emitter) ([
 		var p policySummary
 		if err := json.Unmarshal(r, &p); err != nil {
 			c.logger.Warn("compliance: skipping unparseable deviceCompliancePolicy", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
 		if p.ID == "" {
 			c.logger.Warn("compliance: skipping deviceCompliancePolicy with empty id", "collector", collectorName)
+			outcome.Dropped(c.outcomes, 1, recordoutcome.CauseMappingError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		name := orUnknown(p.DisplayName)
 		refs = append(refs, policyRef{id: p.ID, name: name})
 		points = append(points, telemetry.GaugePoint{
@@ -274,8 +292,10 @@ func (c *Collector) fetchStatusOverview(ctx context.Context, url string) (status
 	}
 	var o statusOverview
 	if err := json.Unmarshal(body, &o); err != nil {
+		outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 		return statusOverview{}, fmt.Errorf("decode status overview from %q: %w", url, err)
 	}
+	outcome.Emitted(c.outcomes, 1)
 	return o, nil
 }
 
@@ -296,6 +316,8 @@ func (c *Collector) collectPolicyOverviews(ctx context.Context, e telemetry.Emit
 		case err == nil:
 			devicePoints = append(devicePoints, devOverview.points(p.name)...)
 		case isForbidden(err):
+			outcome.RecordError(c.outcomes, err)
+			c.outcomes.Cause(recordoutcome.CausePermissionDenied)
 			c.logger.Info("compliance: deviceStatusOverview unavailable; skipping policy",
 				"collector", collectorName, "policy_name", p.name, "error", err)
 		default:
@@ -309,6 +331,8 @@ func (c *Collector) collectPolicyOverviews(ctx context.Context, e telemetry.Emit
 		case err == nil:
 			userPoints = append(userPoints, userOverview.points(p.name)...)
 		case isForbidden(err):
+			outcome.RecordError(c.outcomes, err)
+			c.outcomes.Cause(recordoutcome.CausePermissionDenied)
 			c.logger.Info("compliance: userStatusOverview unavailable; skipping policy",
 				"collector", collectorName, "policy_name", p.name, "error", err)
 		default:
@@ -356,7 +380,7 @@ type settingStateKey struct {
 // setting; Graph does not expose which policy contributed which count, so
 // this deliberately never implies a per-policy attribution for this metric.
 func (c *Collector) collectSettingStateSummaries(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/deviceCompliancePolicySettingStateSummaries", nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceManagement/deviceCompliancePolicySettingStateSummaries", nil, c.outcomes)
 	if err != nil {
 		return err
 	}
@@ -373,8 +397,10 @@ func (c *Collector) collectSettingStateSummaries(ctx context.Context, e telemetr
 		var s settingStateSummary
 		if err := json.Unmarshal(r, &s); err != nil {
 			c.logger.Warn("compliance: skipping unparseable setting state summary", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		add(s.SettingName, s.PlatformType, "compliant", s.CompliantDeviceCount)
 		add(s.SettingName, s.PlatformType, "non_compliant", s.NonCompliantDeviceCount)
 		add(s.SettingName, s.PlatformType, "remediated", s.RemediatedDeviceCount)

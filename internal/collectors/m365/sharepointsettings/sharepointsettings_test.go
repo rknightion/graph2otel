@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -47,7 +48,7 @@ const liveSettings = `{
 func TestCollectEmitsPostureGaugesAndTwin(t *testing.T) {
 	rec := telemetrytest.New()
 	c := New(&fakeGraph{body: liveSettings}, nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -94,13 +95,26 @@ func TestCollectEmitsPostureGaugesAndTwin(t *testing.T) {
 	}
 }
 
+func TestCollectAccountsSettingsObjectOnce(t *testing.T) {
+	outcomes := recordoutcome.NewRecorder()
+	c := New(&fakeGraph{body: liveSettings}, nil)
+	if err := c.Collect(context.Background(), telemetrytest.New().Emitter(), outcomes); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	got := outcomes.Snapshot().Summarize(nil, false)
+	want := recordoutcome.Counts{Fetched: 1, Mapped: 1, Emitted: 1}
+	if got.Result != recordoutcome.ResultSuccess || got.Counts != want {
+		t.Errorf("outcome = %#v, want success/%#v", got, want)
+	}
+}
+
 // TestCollectReportsUnmappedSharingEnum proves #234: sharingCapability and
 // sharingDomainRestrictionMode are metric labels passed raw, so a value outside
 // the CSDL-declared set must fire the graph2otel.api.unexpected watchdog.
 func TestCollectReportsUnmappedSharingEnum(t *testing.T) {
 	body := `{"sharingCapability":"cosmicSharing","sharingDomainRestrictionMode":"quantumList"}`
 	rec := telemetrytest.New()
-	if err := New(&fakeGraph{body: body}, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(&fakeGraph{body: body}, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	fields := map[string]bool{}
@@ -120,7 +134,7 @@ func TestCollectWarnsOnLegacyAuth(t *testing.T) {
 	rec := telemetrytest.New()
 	body := strings.Replace(liveSettings, `"isLegacyAuthProtocolsEnabled": false`, `"isLegacyAuthProtocolsEnabled": true`, 1)
 	c := New(&fakeGraph{body: body}, nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if la := rec.MetricPoints(metricLegacyAuth); len(la) != 1 || la[0].Value != 1 {

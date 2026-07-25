@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
@@ -95,7 +96,7 @@ func collect(t *testing.T, recs []map[string]any) *telemetrytest.Recorder {
 	t.Helper()
 	rec := telemetrytest.New()
 	c := New(collectors.EXODeps{Client: &fakeEXO{recs: recs}})
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	return rec
@@ -132,6 +133,19 @@ func TestCollect_PostureGauge(t *testing.T) {
 		if v != w {
 			t.Errorf("setting %s = %v, want %v", setting, v, w)
 		}
+	}
+}
+
+func TestCollect_AccountsSingletonRecord(t *testing.T) {
+	outcomes := recordoutcome.NewRecorder()
+	c := New(collectors.EXODeps{Client: &fakeEXO{recs: recordsFrom(t, liveOrgConfig)}})
+	if err := c.Collect(context.Background(), telemetrytest.New().Emitter(), outcomes); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	got := outcomes.Snapshot().Summarize(nil, false)
+	want := recordoutcome.Counts{Fetched: 1, Mapped: 1, Emitted: 1}
+	if got.Result != recordoutcome.ResultSuccess || got.Counts != want {
+		t.Errorf("outcome = %#v, want success/%#v", got, want)
 	}
 }
 
@@ -239,7 +253,7 @@ func TestCollect_EmptyResult_NoEmit(t *testing.T) {
 func TestCollect_ErrorPropagates(t *testing.T) {
 	rec := telemetrytest.New()
 	c := New(collectors.EXODeps{Client: &fakeEXO{err: errors.New("403")}})
-	if err := c.Collect(context.Background(), rec.Emitter()); err == nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err == nil {
 		t.Fatal("want error when the cmdlet fails")
 	}
 }

@@ -14,12 +14,13 @@ Two files:
   group has somewhere to attach. **Replace it** with your own receiver before
   relying on these alerts to page anyone. Hand-authored, not generated.
 
-Twelve rule objects across five alert categories, matching the four bullets in
+Fourteen rule objects across six alert categories, matching the four bullets in
 tracking issue #30 (credential/token expiry, compliance drop, collector
 staleness, throttle saturation) plus MDCA Cloud Discovery parse health added by
-#145. Each category ships one **primary** rule (`isPaused: false`) plus one or
-more **companion** rules (`isPaused: true`) — a different source metric or
-severity tier for the same failure mode; the MDCA category ships two
+#145 and record-integrity accounting added by #269. Each category ships one
+**primary** rule (`isPaused: false`) plus one or more **companion** rules
+(`isPaused: true`) — a different source metric or severity tier for the same
+failure mode; the MDCA category ships two
 default-enabled rules instead, since neither covers the other's failure mode
 (see doc block 5). This mirrors the default-disabled pattern in the sibling
 `tailscale2otel` repo's `deploy/alerts/tailscale2otel.grafana-rules.yaml`:
@@ -270,6 +271,47 @@ opt-in and `Experimental`, since the MDCA portal API is a legacy surface with
 no Graph successor. `input_stream_id` and `template` are the only labels, both
 tenant-shaped and bounded.
 
+## Doc block 6 — End-to-end record integrity
+
+**Rules:** `g2o-record-integrity-loss` (default-enabled),
+`g2o-payload-type-mismatch` (paused companion).
+
+**What/why:** every collector run reconciles source records through
+`fetched = mapped + filtered + dropped + errored` and
+`mapped = emitted + deduped`. One source record counts once even when it emits
+several metric points and a log twin. The primary rule watches
+`graph2otel_record_outcomes_total{outcome=~"dropped|errored"}`: either outcome
+means graph2otel fetched a record that did not become useful telemetry.
+
+`dropped` is a deliberate rejection, most importantly a record with no
+parseable event time — graph2otel drops it instead of silently claiming it
+happened now. `errored` is decode or processing failure. Intentional filters
+and overlap dedupe are separate outcomes and do not fire this rule.
+
+The companion watches `graph2otel_payload_type_mismatches_total`. It is
+report-only: an otherwise usable record is still emitted, while the metric
+names the source-controlled field and the expected/actual JSON types. Field
+values never enter labels or logs through this signal.
+
+**Threshold rationale:** the integrity-loss primary fires on the first dropped
+or errored record in a 15-minute window (`gt 0`, `for: 0m`). Record loss is not
+a normal steady state, so it is enabled by default. The type-mismatch companion
+uses the same threshold but is paused until the tenant's ordinary payload-shape
+baseline is established; optional fields can vary across Microsoft workloads
+without making an otherwise usable record wrong.
+
+**False positive looks like:** a deliberately tolerated malformed source row
+still appears as loss because graph2otel cannot turn it into truthful
+telemetry. That is not a false measurement, but an operator may choose a wider
+window or routing policy for a chronically noisy upstream. A type-mismatch alert
+can be noisy if a field legitimately has several wire shapes; keep it paused,
+measure the live payload, then correct the collector's expected-type set.
+
+**Applicability:** the primary applies to every running collector and groups by
+tenant, collector, and ingest transport. The companion appears only where a
+collector has an explicit type expectation and observes a mismatch. Neither
+metric contains source record identifiers or values.
+
 ## Validating
 
 ```bash
@@ -285,9 +327,11 @@ apply here since this is the Grafana-managed provisioning schema, not
 Prometheus ruler YAML. Import the file into a real Grafana Cloud instance
 (file provisioning path, or the HTTP provisioning API,
 `POST /api/v1/provisioning/alert-rules`) to confirm each rule evaluates and
-the four primary rules provably fire under a synthetic bad-state condition —
-that step is **not done here** and is called out as outstanding in issue #30's
-acceptance criteria.
+the seven default-enabled rules provably fire under a synthetic bad-state
+condition: credential expiry, compliance ratio, collector staleness, record
+integrity loss, throttle saturation, MDCA upload stoppage, and MDCA parse
+failure. That step is **not done here** and is called out as outstanding in
+issue #30's acceptance criteria.
 
 ## Loading
 
@@ -301,6 +345,7 @@ acceptance criteria.
   API.
 
 Wire the `severity` (`critical`/`warning`) and `category`
-(`credential-expiry`/`compliance`/`self-observability`/`throttle`) labels
+(`credential-expiry`/`compliance`/`self-observability`/`record-integrity`/
+`throttle`/`mdca-discovery`) labels
 into your own notification policy routes once you replace the no-op contact
 point.

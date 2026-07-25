@@ -52,6 +52,8 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -181,24 +183,24 @@ func (c *Collector) RequiredPermissions() []string {
 // one is logged and joined into the returned error, but does not stop the
 // others from emitting — and a failed half short-circuits before its twin, so
 // a skipped/failed fetch emits zero logs for that half, never partial ones.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	var errs []error
 
-	if pts, err := c.spStaleCounts(ctx, e); err != nil {
+	if pts, err := c.spStaleCounts(ctx, e, outcomes); err != nil {
 		errs = append(errs, fmt.Errorf("service principals: %w", err))
 	} else {
 		e.GaugeSnapshot(spStaleMetric, "{service_principal}",
 			"Service principals with no sign-in within the threshold.", pts)
 	}
 
-	if pts, err := c.credStaleCounts(ctx, e); err != nil {
+	if pts, err := c.credStaleCounts(ctx, e, outcomes); err != nil {
 		errs = append(errs, fmt.Errorf("app credentials: %w", err))
 	} else {
 		e.GaugeSnapshot(credStaleMetric, "{credential}",
 			"App credentials with no sign-in within the threshold.", pts)
 	}
 
-	if pts, err := c.appSummary(ctx); err != nil {
+	if pts, err := c.appSummary(ctx, outcomes); err != nil {
 		errs = append(errs, fmt.Errorf("app sign-in summary: %w", err))
 	} else {
 		e.GaugeSnapshot(summaryMetric, "{signin}", "App sign-ins over the last 7 days by result.", pts)
@@ -287,21 +289,24 @@ func setSignInActivity(attrs telemetry.Attrs, a signInActivity) {
 // sides of the cardinality boundary from that single fetch: the bounded
 // stale-count gauge, and one entra.app_signin_activity log record per service
 // principal — see the package doc.
-func (c *Collector) spStaleCounts(ctx context.Context, e telemetry.Emitter) ([]telemetry.GaugePoint, error) {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/reports/servicePrincipalSignInActivities", nil)
+func (c *Collector) spStaleCounts(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) ([]telemetry.GaugePoint, error) {
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/reports/servicePrincipalSignInActivities", nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return nil, err
 	}
 	now := c.now()
 	counts := make(map[int]int, len(staleThresholdsDays))
-	for _, r := range raw {
+	for i, r := range raw {
 		var item spActivity
 		if err := json.Unmarshal(r, &item); err != nil {
+			entraoutcome.Errored(outcomes, uint64(len(raw))-uint64(i), recordoutcome.CauseDecodeError)
 			return nil, fmt.Errorf("decode servicePrincipalSignInActivity: %w", err)
 		}
 		age := ageInDays(now, item.LastSignInActivity.LastSignInDateTime)
 		bucketStale(counts, age)
 		e.LogEvent(spLogTwin(item, age))
+		entraoutcome.Emitted(outcomes, 1)
 	}
 	return staleGaugePoints(counts), nil
 }
@@ -310,21 +315,24 @@ func (c *Collector) spStaleCounts(ctx context.Context, e telemetry.Emitter) ([]t
 // sides of the cardinality boundary from that single fetch: the bounded
 // stale-count gauge, and one entra.app_signin_activity log record per app
 // credential — see the package doc.
-func (c *Collector) credStaleCounts(ctx context.Context, e telemetry.Emitter) ([]telemetry.GaugePoint, error) {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/reports/appCredentialSignInActivities", nil)
+func (c *Collector) credStaleCounts(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) ([]telemetry.GaugePoint, error) {
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/reports/appCredentialSignInActivities", nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return nil, err
 	}
 	now := c.now()
 	counts := make(map[int]int, len(staleThresholdsDays))
-	for _, r := range raw {
+	for i, r := range raw {
 		var item credActivity
 		if err := json.Unmarshal(r, &item); err != nil {
+			entraoutcome.Errored(outcomes, uint64(len(raw))-uint64(i), recordoutcome.CauseDecodeError)
 			return nil, fmt.Errorf("decode appCredentialSignInActivity: %w", err)
 		}
 		age := ageInDays(now, item.SignInActivity.LastSignInDateTime)
 		bucketStale(counts, age)
 		e.LogEvent(credLogTwin(item, age))
+		entraoutcome.Emitted(outcomes, 1)
 	}
 	return staleGaugePoints(counts), nil
 }
@@ -379,20 +387,23 @@ func credLogTwin(item credActivity, age float64) telemetry.Event {
 
 // appSummary sums the per-app D7 sign-in summary into tenant-wide success and
 // failure totals (never a per-app series).
-func (c *Collector) appSummary(ctx context.Context) ([]telemetry.GaugePoint, error) {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/reports/getAzureADApplicationSignInSummary(period='D7')", nil)
+func (c *Collector) appSummary(ctx context.Context, outcomes *recordoutcome.Recorder) ([]telemetry.GaugePoint, error) {
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/reports/getAzureADApplicationSignInSummary(period='D7')", nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return nil, err
 	}
 	var success, failure int64
 	for _, r := range raw {
 		var s appSummary
 		if err := json.Unmarshal(r, &s); err != nil {
+			entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			c.logger.Warn("signinactivity: skipping unparseable summary", "collector", collectorName, "error", err)
 			continue
 		}
 		success += s.SuccessfulSignInCount
 		failure += s.FailedSignInCount
+		entraoutcome.Emitted(outcomes, 1)
 	}
 	return []telemetry.GaugePoint{
 		{Value: float64(success), Attrs: telemetry.Attrs{semconv.AttrResult: "success"}},

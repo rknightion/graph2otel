@@ -61,6 +61,8 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/collectors/entra/risk"
 	"github.com/rknightion/graph2otel/internal/graphclient"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -122,14 +124,14 @@ func (c *Collector) RequiredPermissions() []string {
 // riskyAgent is the riskyAgentIdentity list-response shape. RiskLevel/RiskState
 // bucket the gauge; everything else is per-entity and goes to the log twin only.
 type riskyAgent struct {
-	ID                       string `json:"id"`
-	IdentityType             string `json:"identityType"`
-	BlueprintID              string `json:"blueprintId"`
-	AgentDisplayName         string `json:"agentDisplayName"`
-	RiskLevel                string `json:"riskLevel"`
-	RiskState                string `json:"riskState"`
-	RiskDetail               string `json:"riskDetail"`
-	RiskLastModifiedDateTime string `json:"riskLastModifiedDateTime"`
+	ID                       string          `json:"id"`
+	IdentityType             string          `json:"identityType"`
+	BlueprintID              json.RawMessage `json:"blueprintId"`
+	AgentDisplayName         string          `json:"agentDisplayName"`
+	RiskLevel                string          `json:"riskLevel"`
+	RiskState                string          `json:"riskState"`
+	RiskDetail               string          `json:"riskDetail"`
+	RiskLastModifiedDateTime string          `json:"riskLastModifiedDateTime"`
 
 	// The three bool flags are POINTERS so "the wire said false" is distinct from
 	// "the wire said nothing": false is a real answer (settled/enabled/live) worth
@@ -145,21 +147,24 @@ type riskyAgent struct {
 // (riskLevel, riskState) GaugeSnapshot, and one log record per risky agent. A
 // 403 is a graceful info-skip (the tenant lacks the agent-risk feature), not a
 // failure.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+riskyAgentsPath, nil)
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+riskyAgentsPath, nil, outcomes)
 	if err != nil {
 		if isForbidden(err) {
+			outcomes.Cause(recordoutcome.CausePermissionDenied)
 			c.logger.Info("skipping risky agents: endpoint returned 403 (agent-risk feature not enabled on this tenant)",
 				"collector", collectorName, "error", graphclient.FormatODataError(err))
 			return nil
 		}
+		entraoutcome.SourceError(outcomes)
 		return err
 	}
 
 	counts := map[[2]string]int64{}
-	for _, raw := range raws {
+	for i, raw := range raws {
 		var item riskyAgent
 		if err := json.Unmarshal(raw, &item); err != nil {
+			entraoutcome.Errored(outcomes, uint64(len(raws))-uint64(i), recordoutcome.CauseDecodeError)
 			return fmt.Errorf("decode %s: %w", riskyAgentsPath, err)
 		}
 		// riskLevel/riskState are metric labels passed raw — the same Identity
@@ -167,7 +172,9 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		c.watch.Value(e, semconv.AttrRiskLevel, item.RiskLevel, risk.KnownRiskLevels)
 		c.watch.Value(e, semconv.AttrRiskState, item.RiskState, risk.KnownRiskStates)
 		counts[[2]string{item.RiskLevel, item.RiskState}]++
-		e.LogEvent(logTwin(item))
+		blueprintID := optionalString(item.BlueprintID, "blueprintId", outcomes)
+		e.LogEvent(logTwin(item, blueprintID))
+		entraoutcome.Emitted(outcomes, 1)
 	}
 
 	points := make([]telemetry.GaugePoint, 0, len(counts))
@@ -204,11 +211,11 @@ func isForbidden(err error) bool {
 // same agent re-emits every cycle, so stamping the assessment time would pile
 // every repeat onto one instant and make "which agent was risky at 14:00"
 // unanswerable. The assessment time rides the risk_last_updated attribute.
-func logTwin(item riskyAgent) telemetry.Event {
+func logTwin(item riskyAgent, blueprintID string) telemetry.Event {
 	attrs := telemetry.Attrs{}
 	telemetry.SetStr(attrs, semconv.AttrId, item.ID)
 	telemetry.SetStr(attrs, semconv.AttrIdentityType, item.IdentityType)
-	telemetry.SetStr(attrs, semconv.AttrBlueprintId, item.BlueprintID)
+	telemetry.SetStr(attrs, semconv.AttrBlueprintId, blueprintID)
 	telemetry.SetStr(attrs, semconv.AttrAgentDisplayName, item.AgentDisplayName)
 	telemetry.SetStr(attrs, semconv.AttrRiskLevel, item.RiskLevel)
 	telemetry.SetStr(attrs, semconv.AttrRiskState, item.RiskState)
@@ -239,6 +246,45 @@ func logTwin(item riskyAgent) telemetry.Event {
 		Body:     fmt.Sprintf("risky agent %s: risk_level=%s risk_state=%s", displayOf(item), item.RiskLevel, item.RiskState),
 		Severity: sev,
 		Attrs:    attrs,
+	}
+}
+
+// optionalString decodes one optional, non-load-bearing string field without
+// letting a shape drift discard an otherwise useful agent record. The raw
+// value is never returned for a mismatched type.
+func optionalString(raw json.RawMessage, field string, outcomes *recordoutcome.Recorder) string {
+	if len(raw) == 0 || string(raw) == "null" {
+		return ""
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err == nil {
+		return value
+	}
+
+	var decoded any
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return ""
+	}
+	outcomes.TypeMismatch(field, "string", jsonType(decoded))
+	return ""
+}
+
+func jsonType(value any) string {
+	switch value.(type) {
+	case nil:
+		return "null"
+	case bool:
+		return "boolean"
+	case float64:
+		return "number"
+	case string:
+		return "string"
+	case []any:
+		return "array"
+	case map[string]any:
+		return "object"
+	default:
+		return "object"
 	}
 }
 

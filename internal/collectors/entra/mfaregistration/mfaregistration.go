@@ -111,6 +111,8 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -271,9 +273,10 @@ func (c *Collector) RequiredCapability() license.Capability { return license.Cap
 // same decoded rows, carrying the per-user identity the metrics above can
 // never carry — see the package doc's "Log twin" section. Every row is
 // twinned, not just posture failures (the #114 maintainer decision).
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+requestPath, nil)
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+requestPath, nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return fmt.Errorf("mfa registration: fetch userRegistrationDetails: %w", err)
 	}
 
@@ -288,6 +291,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for _, r := range raw {
 		var u userRegistrationDetail
 		if err := json.Unmarshal(r, &u); err != nil {
+			entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			c.logger.Warn("mfa registration: skipping unparseable user registration record", "collector", collectorName, "error", err)
 			continue
 		}
@@ -314,6 +318,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		}
 
 		e.LogEvent(logTwin(u))
+		entraoutcome.Emitted(outcomes, 1)
 	}
 
 	// user_type (#173) zero-fills per status for every distinct userType

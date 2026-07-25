@@ -27,6 +27,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -114,9 +116,10 @@ type postureKey struct {
 // returned error) without discarding the rest of the snapshot; a failure to
 // list the collection at all aborts before emitting anything, since there is
 // no partial data to report in that case.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+domainsPath, nil)
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+domainsPath, nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return fmt.Errorf("entra.domains: list domains: %w", err)
 	}
 
@@ -127,6 +130,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for _, r := range raw {
 		var d domain
 		if err := json.Unmarshal(r, &d); err != nil {
+			entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			c.logger.Warn("domain decode failed", "collector", collectorName, "error", err)
 			errs = append(errs, fmt.Errorf("decode domain: %w", err))
 			continue
@@ -137,6 +141,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			federated++
 		}
 		e.LogEvent(domainLogTwin(d, authType))
+		entraoutcome.Emitted(outcomes, 1)
 	}
 
 	points := make([]telemetry.GaugePoint, 0, len(counts))

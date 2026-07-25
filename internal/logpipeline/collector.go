@@ -7,6 +7,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collector"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -104,7 +105,12 @@ func (c *LogCollector) Lag() time.Duration { return c.LagValue }
 // cheap (dedup, not re-emission). `from` is used only on a genuine cold
 // start (no watermark yet), where it carries the collector's configured
 // InitialLookback.
-func (c *LogCollector) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter) (time.Time, error) {
+func (c *LogCollector) CollectWindow(
+	ctx context.Context,
+	from, to time.Time,
+	e telemetry.Emitter,
+	outcomes *recordoutcome.Recorder,
+) (time.Time, error) {
 	cfg := c.Config.withDefaults()
 
 	cp, err := c.Store.Load(c.TenantID, cfg.checkpointKey())
@@ -117,7 +123,7 @@ func (c *LogCollector) CollectWindow(ctx context.Context, from, to time.Time, e 
 		resumeFrom = cp.Watermark.Add(-cfg.Overlap)
 	}
 
-	hw, err := Poll(ctx, cfg, cp, resumeFrom, to, c.Fetcher, e)
+	hw, err := Poll(ctx, cfg, cp, resumeFrom, to, c.Fetcher, e, outcomes)
 	if err != nil {
 		return cp.Watermark, fmt.Errorf("logpipeline: %s: poll: %w", c.NameField, err)
 	}

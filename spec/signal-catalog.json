@@ -1690,6 +1690,23 @@
       ]
     },
     {
+      "name": "graph2otel.event.lag",
+      "prometheus_name": "graph2otel_event_lag_seconds",
+      "unit": "s",
+      "kind": "histogram",
+      "description": "Age of a source event when graph2otel handed its log record to the telemetry emitter.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector",
+        "ingest_transport",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/telemetry"
+      ]
+    },
+    {
       "name": "graph2otel.exo.http.client.request.duration",
       "prometheus_name": "graph2otel_exo_http_client_request_duration_seconds",
       "unit": "s",
@@ -2100,6 +2117,44 @@
       ]
     },
     {
+      "name": "graph2otel.payload.type_mismatches",
+      "prometheus_name": "graph2otel_payload_type_mismatches_total",
+      "unit": "{record}",
+      "kind": "sum",
+      "description": "Count of payload fields whose JSON type differed from the expected type.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "actual_type",
+        "collector",
+        "expected_type",
+        "field",
+        "ingest_transport",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/collector"
+      ]
+    },
+    {
+      "name": "graph2otel.record.outcomes",
+      "prometheus_name": "graph2otel_record_outcomes_total",
+      "unit": "{record}",
+      "kind": "sum",
+      "description": "Count of source records by processing outcome.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector",
+        "ingest_transport",
+        "outcome",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/collector"
+      ]
+    },
+    {
       "name": "graph2otel.scrape.budget",
       "prometheus_name": "graph2otel_scrape_budget_ratio",
       "unit": "1",
@@ -2165,6 +2220,24 @@
       ]
     },
     {
+      "name": "graph2otel.scrape.outcomes",
+      "prometheus_name": "graph2otel_scrape_outcomes_total",
+      "unit": "{run}",
+      "kind": "sum",
+      "description": "Count of collector runs by reconciled record outcome.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector",
+        "ingest_transport",
+        "result",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/collector"
+      ]
+    },
+    {
       "name": "graph2otel.scrape.staleness",
       "prometheus_name": "graph2otel_scrape_staleness_seconds",
       "unit": "s",
@@ -2185,7 +2258,7 @@
       "prometheus_name": "graph2otel_scrape_success_ratio",
       "unit": "1",
       "kind": "gauge",
-      "description": "1 if the last scrape for that collector succeeded, else 0.",
+      "description": "1 if the last scrape result was empty or success; 0 for partial or failure.",
       "additive": false,
       "domain": "graph2otel",
       "attr_keys": [

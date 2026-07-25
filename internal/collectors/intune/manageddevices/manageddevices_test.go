@@ -257,7 +257,7 @@ func TestCollectEmitsOverviewScalarGauges(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixtureBodies()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -281,7 +281,7 @@ func TestCollectEmitsOverviewOSBreakdown(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixtureBodies()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -309,7 +309,7 @@ func TestCollectAggregatesFleetCountByComplianceAndOS(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixtureBodies()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -337,7 +337,7 @@ func TestCollectAggregatesEncryptedByOS(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixtureBodies()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -363,7 +363,7 @@ func TestCollectBucketsStaleness(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixtureBodies()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -403,7 +403,7 @@ func TestCollectEmitsOsVersionCounts(t *testing.T) {
 	}}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -437,7 +437,7 @@ func TestCollectCountMetricAttrKeysUnchanged(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixtureBodies()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -471,7 +471,7 @@ func TestLogTwinCarriesOsVersion(t *testing.T) {
 	}}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -531,7 +531,7 @@ func TestCollectPagesFleetToExhaustion(t *testing.T) {
 	}}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -554,7 +554,7 @@ func TestCollectSkipsHardwareInformationSweepByDefault(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixtureBodies()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	// fullFixtureBodies maps exactly the overview singleton and the one-page
@@ -570,7 +570,7 @@ func TestCollectIsResilientToOverviewFailure(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := newTestCollector(g).Collect(context.Background(), rec.Emitter())
+	err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected Collect to surface the overview failure as an error")
 	}
@@ -591,7 +591,7 @@ func TestCollectIsResilientToFleetFailure(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := newTestCollector(g).Collect(context.Background(), rec.Emitter())
+	err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected Collect to surface the fleet-list failure as an error")
 	}
@@ -608,7 +608,7 @@ func TestNoPerDeviceAttributes(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixtureBodies()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -648,7 +648,7 @@ func TestCollectEmitsOneLogTwinPerDevice(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixtureBodies()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -681,7 +681,7 @@ func TestLogTwinCarriesDeviceIdentityAndState(t *testing.T) {
 
 	c := New(g, nil)
 	c.now = func() time.Time { return liveNow }
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -736,7 +736,7 @@ func TestCollectEmitsLiveFleetEndToEnd(t *testing.T) {
 
 	c := New(g, nil)
 	c.now = func() time.Time { return liveNow }
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -903,7 +903,7 @@ func TestLogTwinSeverityEscalatesForNoncompliantUnencryptedOrStale(t *testing.T)
 			}}
 			rec := telemetrytest.New()
 
-			if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+			if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 				t.Fatalf("Collect: %v", err)
 			}
 
@@ -928,7 +928,7 @@ func TestLogTwinSeverityIsInfoForHealthyCompliantEncryptedFreshDevice(t *testing
 	}}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	logs := rec.LogRecords()
@@ -1008,7 +1008,7 @@ func TestLiveFleetReportsNothingUnexpected(t *testing.T) {
 	rec := telemetrytest.New()
 	c := New(g, nil)
 	c.now = func() time.Time { return liveNow }
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if got := findings(rec); len(got) != 0 {
@@ -1025,7 +1025,7 @@ func TestUnmappedComplianceStateIsReported(t *testing.T) {
 		),
 	}}
 	rec := telemetrytest.New()
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	key := wirecheck.KindUnmappedValue + "/" + semconv.AttrComplianceState
@@ -1056,7 +1056,7 @@ func TestCaseVariantComplianceStateBucketsAndIsNotReported(t *testing.T) {
 		),
 	}}
 	rec := telemetrytest.New()
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if got := findings(rec); len(got) != 0 {

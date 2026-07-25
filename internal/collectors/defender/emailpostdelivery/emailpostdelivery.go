@@ -83,6 +83,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/collectors/defender"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -250,10 +251,10 @@ type blobCollector struct {
 // Collect binds the tick's emitter for the duration of the poll, so findings
 // raised inside the mapper reach the counter, then delegates to the generic
 // collector. See the watcher type for why the emitter has to travel this way.
-func (c blobCollector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c blobCollector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	c.watch.bind(e)
 	defer c.watch.bind(nil)
-	return c.BlobCollector.Collect(ctx, e)
+	return c.BlobCollector.Collect(ctx, e, outcomes)
 }
 
 func newBlobCollector(d collectors.BlobDeps) collector.SnapshotCollector {

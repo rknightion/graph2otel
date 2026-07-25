@@ -100,7 +100,7 @@ func settingMap(t *testing.T, rec *telemetrytest.Recorder) map[string]float64 {
 // TestSettingsMapFromLiveWire pins each 0/1 setting against the verbatim wire.
 func TestSettingsMapFromLiveWire(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	got := settingMap(t, rec)
@@ -134,7 +134,7 @@ func TestGuestInviteRestrictedFlipsWhenEveryone(t *testing.T) {
 	g := liveGraph()
 	g.bodies[base+"/policies/authorizationPolicy"] = `{"allowInvitesFrom":"everyone","defaultUserRolePermissions":{}}`
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if settingMap(t, rec)["guest_invite_restricted"] != 0 {
@@ -146,7 +146,7 @@ func TestGuestInviteRestrictedFlipsWhenEveryone(t *testing.T) {
 // gauge cannot express.
 func TestTwinCarriesRawFields(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	var twin *telemetrytest.LogRecord
@@ -176,7 +176,7 @@ func TestTwinCarriesRawFields(t *testing.T) {
 // TestScopedPolicyCounts pins the count gauge over the three empty collections.
 func TestScopedPolicyCounts(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	got := map[string]float64{}
@@ -200,7 +200,7 @@ func TestResilientToOneSingletonFailure(t *testing.T) {
 	g := liveGraph()
 	g.errs = map[string]error{base + "/policies/adminConsentRequestPolicy": errors.New("throttled")}
 	rec := telemetrytest.New()
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected the adminConsentRequestPolicy failure surfaced as an error")
 	}

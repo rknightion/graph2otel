@@ -33,6 +33,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -115,47 +117,56 @@ type defaultAppManagementPolicy struct {
 // Collect fetches the three data-bearing singletons and the three scoped-policy
 // collections, emitting the bounded setting gauge, the scoped-policy counts, and
 // the raw twin. Each singleton fetch is independent.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	var errs []error
 
 	settings := map[string]float64{}
 	twin := telemetry.Attrs{}
 
 	if ap, err := c.getObject(ctx, "/policies/authorizationPolicy"); err != nil {
+		entraoutcome.SourceError(outcomes)
 		errs = append(errs, fmt.Errorf("authorizationPolicy: %w", err))
 	} else {
 		var p authorizationPolicy
 		if err := json.Unmarshal(ap, &p); err != nil {
+			entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			errs = append(errs, fmt.Errorf("decode authorizationPolicy: %w", err))
 		} else {
 			c.applyAuthorizationPolicy(p, settings, twin)
+			entraoutcome.Emitted(outcomes, 1)
 		}
 	}
 
 	if acp, err := c.getObject(ctx, "/policies/adminConsentRequestPolicy"); err != nil {
+		entraoutcome.SourceError(outcomes)
 		errs = append(errs, fmt.Errorf("adminConsentRequestPolicy: %w", err))
 	} else {
 		var p adminConsentRequestPolicy
 		if err := json.Unmarshal(acp, &p); err != nil {
+			entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			errs = append(errs, fmt.Errorf("decode adminConsentRequestPolicy: %w", err))
 		} else {
 			settings["admin_consent_workflow_enabled"] = b2f(p.IsEnabled)
 			twin[semconv.AttrAdminConsentReviewerCount] = int64(len(p.Reviewers))
 			twin[semconv.AttrAdminConsentRequestDuration] = int64(p.RequestDurationInDays)
+			entraoutcome.Emitted(outcomes, 1)
 		}
 	}
 
 	if damp, err := c.getObject(ctx, "/policies/defaultAppManagementPolicy"); err != nil {
+		entraoutcome.SourceError(outcomes)
 		errs = append(errs, fmt.Errorf("defaultAppManagementPolicy: %w", err))
 	} else {
 		var p defaultAppManagementPolicy
 		if err := json.Unmarshal(damp, &p); err != nil {
+			entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			errs = append(errs, fmt.Errorf("decode defaultAppManagementPolicy: %w", err))
 		} else {
 			settings["app_management_policy_enabled"] = b2f(p.IsEnabled)
 			restricted := len(p.ApplicationRestrictions.PasswordCredentials) > 0
 			settings["app_password_credentials_restricted"] = b2f(restricted)
 			telemetry.SetBool(twin, semconv.AttrAppPasswordCredsRestricted, restricted)
+			entraoutcome.Emitted(outcomes, 1)
 		}
 	}
 
@@ -178,7 +189,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		})
 	}
 
-	c.collectScopedPolicies(ctx, e, &errs)
+	c.collectScopedPolicies(ctx, e, outcomes, &errs)
 
 	return errors.Join(errs...)
 }
@@ -220,11 +231,12 @@ var scopedPolicies = []scopedPolicy{
 // collectScopedPolicies emits a bounded count per scoped-policy kind. These are
 // empty on m7kni; the count makes "someone added a custom scoped policy" visible
 // without a docs-written field mapper.
-func (c *Collector) collectScopedPolicies(ctx context.Context, e telemetry.Emitter, errs *[]error) {
+func (c *Collector) collectScopedPolicies(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder, errs *[]error) {
 	points := make([]telemetry.GaugePoint, 0, len(scopedPolicies))
 	for _, sp := range scopedPolicies {
-		raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+sp.path, nil)
+		raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+sp.path, nil, outcomes)
 		if err != nil {
+			entraoutcome.SourceError(outcomes)
 			*errs = append(*errs, fmt.Errorf("%s: %w", sp.kind, err))
 			continue
 		}
@@ -232,6 +244,7 @@ func (c *Collector) collectScopedPolicies(ctx context.Context, e telemetry.Emitt
 			Value: float64(len(raws)),
 			Attrs: telemetry.Attrs{semconv.AttrKind: sp.kind},
 		})
+		entraoutcome.Emitted(outcomes, uint64(len(raws)))
 	}
 	if len(points) > 0 {
 		e.GaugeSnapshot(metricScopedPolicies, "{policy}", "Count of scoped tenant policies, by kind.", points)

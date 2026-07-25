@@ -4,6 +4,7 @@ import (
 	"flag"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/signalcapture"
@@ -40,6 +41,16 @@ func TestSignalGolden(t *testing.T) {
 
 	provider := telemetry.NewSelfObsProviderForTest(selfObs.Emitter(), card, limiter)
 	provider.ReportSelfObs()
+	telemetry.WithEventLag(
+		telemetry.WithTenant(metricOnlyEmitter{Emitter: selfObs.Emitter()}, "tenant-capture"),
+		"entra.capture",
+		"tenant-capture",
+		telemetry.TransportGraph,
+		func() time.Time { return time.Unix(100, 0) },
+	).LogEvent(telemetry.Event{
+		Name:      "entra.capture",
+		Timestamp: time.Unix(99, 0),
+	})
 
 	if err := signalcapture.GoldenAt(
 		filepath.Join("testdata", "signals.json"),
@@ -49,3 +60,9 @@ func TestSignalGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// metricOnlyEmitter lets this package's golden exercise the production
+// event-lag metric without registering its test seed as a production log name.
+type metricOnlyEmitter struct{ telemetry.Emitter }
+
+func (metricOnlyEmitter) LogEvent(telemetry.Event) {}

@@ -52,6 +52,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -235,20 +237,20 @@ func (c *Collector) RequiredPermissions() []string {
 // one source (grants, or one resource app's lookup/listing) is logged and
 // joined into the returned error, but does not prevent the other sources'
 // counts from being emitted.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	counts := map[string]map[string]int64{
 		consentTypeDelegated:   {privilegeHigh: 0, privilegeStandard: 0},
 		consentTypeApplication: {privilegeHigh: 0, privilegeStandard: 0},
 	}
 	var errs []error
 
-	if err := c.collectDelegatedGrants(ctx, e, counts[consentTypeDelegated]); err != nil {
+	if err := c.collectDelegatedGrants(ctx, e, counts[consentTypeDelegated], outcomes); err != nil {
 		c.logger.Warn("oauth2PermissionGrants collection failed", "collector", collectorName, "error", err)
 		errs = append(errs, fmt.Errorf("oauth2PermissionGrants: %w", err))
 	}
 
 	for _, ra := range resourceApps {
-		if err := c.collectResourceAppRoleAssignments(ctx, e, ra, counts[consentTypeApplication]); err != nil {
+		if err := c.collectResourceAppRoleAssignments(ctx, e, ra, counts[consentTypeApplication], outcomes); err != nil {
 			c.logger.Warn("app role assignment collection failed", "collector", collectorName, "resource", ra.label, "error", err)
 			errs = append(errs, fmt.Errorf("%s: %w", ra.label, err))
 		}
@@ -281,14 +283,16 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // directorycounts collector, classifying by scope content requires reading
 // every grant's `scope` field, so there is no cheaper aggregate-only Graph
 // query available today.
-func (c *Collector) collectDelegatedGrants(ctx context.Context, e telemetry.Emitter, tally map[string]int64) error {
-	grants, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/oauth2PermissionGrants", nil)
+func (c *Collector) collectDelegatedGrants(ctx context.Context, e telemetry.Emitter, tally map[string]int64, outcomes *recordoutcome.Recorder) error {
+	grants, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/oauth2PermissionGrants", nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return err
 	}
-	for _, raw := range grants {
+	for i, raw := range grants {
 		var g oauth2Grant
 		if err := json.Unmarshal(raw, &g); err != nil {
+			entraoutcome.Errored(outcomes, uint64(len(grants))-uint64(i), recordoutcome.CauseDecodeError)
 			return fmt.Errorf("decode oauth2PermissionGrant: %w", err)
 		}
 		if grantHasHighPrivilegeScope(g.Scope) {
@@ -297,6 +301,7 @@ func (c *Collector) collectDelegatedGrants(ctx context.Context, e telemetry.Emit
 		} else {
 			tally[privilegeStandard]++
 		}
+		entraoutcome.Emitted(outcomes, 1)
 	}
 	return nil
 }
@@ -313,9 +318,10 @@ func (c *Collector) collectDelegatedGrants(ctx context.Context, e telemetry.Emit
 // the work to len(resourceApps) resolutions plus one paged list per resolved
 // resource, scaling with the number of apps granted a role on that resource
 // rather than with total tenant service principal count.
-func (c *Collector) collectResourceAppRoleAssignments(ctx context.Context, e telemetry.Emitter, ra resourceApp, tally map[string]int64) error {
-	sp, err := c.resolveResourceServicePrincipal(ctx, ra.appID)
+func (c *Collector) collectResourceAppRoleAssignments(ctx context.Context, e telemetry.Emitter, ra resourceApp, tally map[string]int64, outcomes *recordoutcome.Recorder) error {
+	sp, err := c.resolveResourceServicePrincipal(ctx, ra.appID, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return err
 	}
 	if sp == nil {
@@ -327,13 +333,14 @@ func (c *Collector) collectResourceAppRoleAssignments(ctx context.Context, e tel
 		roleNames[role.ID] = role.Value
 	}
 
-	assignments, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/servicePrincipals/"+sp.ID+"/appRoleAssignedTo", nil)
+	assignments, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/servicePrincipals/"+sp.ID+"/appRoleAssignedTo", nil, outcomes)
 	if err != nil {
 		return err
 	}
-	for _, raw := range assignments {
+	for i, raw := range assignments {
 		var a appRoleAssignment
 		if err := json.Unmarshal(raw, &a); err != nil {
+			entraoutcome.Errored(outcomes, uint64(len(assignments))-uint64(i), recordoutcome.CauseDecodeError)
 			return fmt.Errorf("decode appRoleAssignment: %w", err)
 		}
 		roleValue := roleNames[a.AppRoleID]
@@ -343,6 +350,7 @@ func (c *Collector) collectResourceAppRoleAssignments(ctx context.Context, e tel
 		} else {
 			tally[privilegeStandard]++
 		}
+		entraoutcome.Emitted(outcomes, 1)
 	}
 	return nil
 }
@@ -353,14 +361,15 @@ func (c *Collector) collectResourceAppRoleAssignments(ctx context.Context, e tel
 // returns its object ID plus app-role GUID-to-name map. A tenant where the
 // resource isn't provisioned (e.g. no Exchange Online) returns (nil, nil),
 // not an error.
-func (c *Collector) resolveResourceServicePrincipal(ctx context.Context, appID string) (*servicePrincipalLookup, error) {
+func (c *Collector) resolveResourceServicePrincipal(ctx context.Context, appID string, outcomes *recordoutcome.Recorder) (*servicePrincipalLookup, error) {
 	// The $filter value ("appId eq '<guid>'") contains spaces and quotes, which
 	// must be percent-encoded or Graph rejects the request as malformed (HTTP
 	// 400) — verified live. Encode the query value, don't inline it raw.
 	filter := fmt.Sprintf("appId eq '%s'", appID)
 	url := c.baseURL + "/servicePrincipals?$filter=" + neturl.QueryEscape(filter) + "&$select=id,appRoles"
-	values, err := collectors.GetAllValues(ctx, c.g, url, nil)
+	values, err := collectors.GetAllValuesRecorded(ctx, c.g, url, nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return nil, err
 	}
 	if len(values) == 0 {
@@ -368,8 +377,10 @@ func (c *Collector) resolveResourceServicePrincipal(ctx context.Context, appID s
 	}
 	var sp servicePrincipalLookup
 	if err := json.Unmarshal(values[0], &sp); err != nil {
+		entraoutcome.Errored(outcomes, uint64(len(values)), recordoutcome.CauseDecodeError)
 		return nil, fmt.Errorf("decode service principal: %w", err)
 	}
+	entraoutcome.Filtered(outcomes, uint64(len(values)))
 	return &sp, nil
 }
 

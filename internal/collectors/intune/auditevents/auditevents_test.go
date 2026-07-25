@@ -522,7 +522,7 @@ func TestCollectorEmitsFullRecordsEndToEnd(t *testing.T) {
 	// (2026-07); this endpoint is server-filtered, so the fetcher's records are
 	// emitted regardless of the window bounds.
 	from := time.Date(2025, 9, 1, 0, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 
@@ -633,7 +633,7 @@ func TestFirstPageURLIsV1AndUsesActivityDateTimeNoOrderBy(t *testing.T) {
 	c := newCollector(depsWith(t, f))
 
 	from := time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), telemetrytest.New().Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), telemetrytest.New().Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 	if len(f.seenURLs) == 0 {
@@ -670,7 +670,7 @@ func TestCollectorSortsOutOfOrderArrivalsClientSide(t *testing.T) {
 	rec := telemetrytest.New()
 	c := newCollector(collectors.WindowDeps{TenantID: "t1", Fetcher: f, Store: store})
 
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 	if got := len(rec.LogRecords()); got != 2 {
@@ -704,11 +704,11 @@ func TestCollectorDedupesByID(t *testing.T) {
 	}}
 	c := newCollector(collectors.WindowDeps{TenantID: "t1", Fetcher: f, Store: store})
 
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow (first poll): %v", err)
 	}
 	// Second, overlapping poll returns the SAME record again.
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(2*time.Hour), rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(2*time.Hour), rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow (second poll): %v", err)
 	}
 

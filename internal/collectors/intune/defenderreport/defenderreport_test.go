@@ -127,7 +127,7 @@ func TestCollectEmitsBoundedSignalGaugesAndUnhealthyLogsOnly(t *testing.T) {
 	c := New(runner, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -227,7 +227,7 @@ func TestCollectSkipsAndLogsOnExportError(t *testing.T) {
 			c := New(runner, nil)
 			rec := telemetrytest.New()
 
-			if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+			if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 				t.Fatalf("Collect returned error, want nil (skip-and-log): %v", err)
 			}
 			if points := rec.MetricPoints(signalCountMetricName); len(points) != 0 {
@@ -244,7 +244,7 @@ func TestCollectSkipsWhenExportRunnerIsNil(t *testing.T) {
 	c := New(nil, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error, want nil: %v", err)
 	}
 	if points := rec.MetricPoints(signalCountMetricName); len(points) != 0 {
@@ -445,7 +445,7 @@ func TestProductStatusNeverBucketsWholeFleetToOther(t *testing.T) {
 	}}
 	c := New(runner, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -505,7 +505,7 @@ func TestCollectStampsReportExportTransport(t *testing.T) {
 	}}, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

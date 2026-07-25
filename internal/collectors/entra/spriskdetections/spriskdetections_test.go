@@ -116,7 +116,7 @@ func TestCollectorEmitsLiveRecordEndToEnd(t *testing.T) {
 	c := newCollector(collectors.WindowDeps{TenantID: "t1", Fetcher: f, Store: checkpoint.NewStore(t.TempDir())})
 
 	from := time.Date(2026, 7, 19, 18, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 	logs := rec.LogRecords()

@@ -35,6 +35,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/exportjob"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
 	"github.com/rknightion/graph2otel/internal/preflight"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
@@ -87,7 +88,8 @@ func (c *Collector) RequiredPermissions() []string {
 // PolicyInstallStatus into the bounded gauge, and emits one twin per (device,
 // script) row. Export failures are logged and swallowed, never surfaced to the
 // scheduler. Zero rows emit nothing and is a valid steady state.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
 	// This collector names its own transport (#141): exportjob never calls LogEvent.
 	e = telemetry.WithTransport(e, telemetry.TransportReportExport)
 
@@ -103,8 +105,10 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	}, e)
 	if err != nil {
 		logExportFailure(c.logger, err)
+		outcome.RecordError(outcomes, err)
 		return nil
 	}
+	outcome.Emitted(outcomes, uint64(len(rows)))
 
 	counts := map[string]float64{}
 	for _, row := range rows {

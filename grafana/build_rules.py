@@ -342,6 +342,37 @@ RULES = [
         "Paused by default — enable once you've picked a notification channel for it.",
         True,
     ),
+    # --- End-to-end record integrity (#269; alerts/README.md doc block 6) ---
+    _alert(
+        "g2o-record-integrity-loss",
+        "graph2otel dropped or errored source records",
+        f'sum by (tenant_id, collector, ingest_transport) '
+        f'(increase({_m("graph2otel.record.outcomes")}'
+        f'{{outcome=~"dropped|errored"}}[15m]))',
+        "gt", [0], "0m",
+        {"severity": "warning", "category": "record-integrity", "source": "graph2otel"},
+        "Collector {{ $labels.collector }} lost source records on "
+        "{{ $labels.ingest_transport }} (tenant {{ $labels.tenant_id }})",
+        "At least one source record was dropped or errored in the last 15m. `dropped` "
+        "covers deliberate rejection such as an unparseable event timestamp; `errored` "
+        "covers decode or processing failure. This is default-enabled because either "
+        "outcome means fetched source data did not become useful telemetry.",
+        False,
+    ),
+    _alert(
+        "g2o-payload-type-mismatch",
+        "graph2otel payload JSON type changed",
+        f'sum by (tenant_id, collector, ingest_transport, field, expected_type, actual_type) '
+        f'(increase({_m("graph2otel.payload.type_mismatches")}[15m]))',
+        "gt", [0], "0m",
+        {"severity": "warning", "category": "record-integrity", "source": "graph2otel"},
+        "Payload type changed for {{ $labels.collector }} field {{ $labels.field }} "
+        "(tenant {{ $labels.tenant_id }})",
+        "A source-controlled optional field arrived with a different JSON type. The "
+        "otherwise-usable record was still emitted. Paused initially until the tenant's "
+        "normal payload-shape baseline is established; labels never contain field values.",
+        True,
+    ),
     # --- Throttle saturation (alerts/README.md doc block 4) -----------------
     _alert(
         "g2o-throttle-saturation",

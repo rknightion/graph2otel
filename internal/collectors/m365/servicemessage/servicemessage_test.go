@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -62,7 +63,7 @@ func newFixtureCollector() *Collector {
 
 func TestCollectCountsByCategoryAndTwinsEveryMessage(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := newFixtureCollector().Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newFixtureCollector().Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -82,9 +83,21 @@ func TestCollectCountsByCategoryAndTwinsEveryMessage(t *testing.T) {
 	}
 }
 
+func TestCollectAccountsEachMessageOnce(t *testing.T) {
+	outcomes := recordoutcome.NewRecorder()
+	if err := newFixtureCollector().Collect(context.Background(), telemetrytest.New().Emitter(), outcomes); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	got := outcomes.Snapshot().Summarize(nil, false)
+	want := recordoutcome.Counts{Fetched: 3, Mapped: 3, Emitted: 3}
+	if got.Result != recordoutcome.ResultSuccess || got.Counts != want {
+		t.Errorf("outcome = %#v, want success/%#v", got, want)
+	}
+}
+
 func TestMetricsCarryNoPerMessageAttribute(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := newFixtureCollector().Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newFixtureCollector().Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	allowed := map[string]bool{"category": true, "severity": true, "tenant_id": true}
@@ -99,7 +112,7 @@ func TestMetricsCarryNoPerMessageAttribute(t *testing.T) {
 
 func TestTwinCarriesDetailAndHandlesNullActionDate(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := newFixtureCollector().Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newFixtureCollector().Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	byID := map[string]telemetrytest.LogRecord{}

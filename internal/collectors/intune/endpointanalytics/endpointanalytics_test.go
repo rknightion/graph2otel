@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
@@ -218,7 +219,7 @@ func TestCollectEmitsDeviceScoresAsBoundedAggregatesExcludingSentinel(t *testing
 	g := &fakeGraph{bodies: allEndpoints(map[string]string{deviceScoresURL: body})}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -259,7 +260,7 @@ func TestDeviceScoresEmitPerDeviceLogTwinOmittingSentinel(t *testing.T) {
 	]}`
 	g := &fakeGraph{bodies: allEndpoints(map[string]string{deviceScoresURL: body})}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -306,7 +307,7 @@ func TestCollectTreatsInsufficientDataAsNormalNotError(t *testing.T) {
 	g := &fakeGraph{bodies: allEndpoints(map[string]string{deviceScoresURL: body})}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect should treat insufficientData as normal, got error: %v", err)
 	}
 	counts := map[string]float64{}
@@ -331,7 +332,7 @@ func TestCollectAggregatesStartupHistoriesIntoBootAndLoginHistograms(t *testing.
 	g := &fakeGraph{bodies: allEndpoints(map[string]string{startupURL: body})}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -384,7 +385,7 @@ func TestStartupHistoriesExcludeInsufficientDataSentinel(t *testing.T) {
 	g := &fakeGraph{bodies: allEndpoints(map[string]string{startupURL: body})}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -418,7 +419,7 @@ func TestStartupHistoriesExcludeInsufficientDataSentinel(t *testing.T) {
 	allSentinel := `{"value":[{"totalBootTimeInMs":-1,"totalLoginTimeInMs":-1,"restartCategory":"update"}]}`
 	g2 := &fakeGraph{bodies: allEndpoints(map[string]string{startupURL: allSentinel})}
 	rec2 := telemetrytest.New()
-	if err := New(g2, nil).Collect(context.Background(), rec2.Emitter()); err != nil {
+	if err := New(g2, nil).Collect(context.Background(), rec2.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if pts := rec2.MetricPoints(bootTimeMetric); len(pts) != 0 {
@@ -467,7 +468,7 @@ func TestScoreSubFetchesExcludeInsufficientDataSentinel(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			g := &fakeGraph{bodies: allEndpoints(map[string]string{tc.url: tc.body})}
 			rec := telemetrytest.New()
-			if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+			if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 				t.Fatalf("Collect: %v", err)
 			}
 
@@ -532,7 +533,7 @@ const liveBatteryRow = `{"id":"b740c02b-b0bf-4f9a-8e4d-c4c9d3278675","deviceId":
 func TestBatteryHealthEmitsPerDeviceTwin(t *testing.T) {
 	g := &fakeGraph{bodies: allEndpoints(map[string]string{batteryURL: `{"value":[` + liveBatteryRow + `]}`})}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -579,7 +580,7 @@ func TestStartupHistoryEmitsPerBootTwinStampedWithStartTime(t *testing.T) {
 	]}`
 	g := &fakeGraph{bodies: allEndpoints(map[string]string{startupURL: body})}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -680,7 +681,7 @@ func TestStartupProcessesFanOutOverEveryKnownDeviceNotTheBareList(t *testing.T) 
 		startupProcFilterURL(startupProcDeviceC): emptyPage,
 	})}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -715,6 +716,21 @@ func TestStartupProcessesFanOutOverEveryKnownDeviceNotTheBareList(t *testing.T) 
 	}
 }
 
+func TestStartupProcessEmbeddedPageRequiresValue(t *testing.T) {
+	c := New(&fakeGraph{}, nil)
+	outcomes := recordoutcome.NewRecorder()
+	rec := telemetrytest.New()
+
+	c.emitStartupProcesses(context.Background(), rec.Emitter(), outcomes, startupProcDeviceA, json.RawMessage(`{}`))
+
+	if len(logsNamed(rec, eventStartupProcess)) != 0 {
+		t.Fatal("embedded page without value emitted startup-process rows")
+	}
+	if got := outcomes.Snapshot().Summarize(nil, false); got.Result != recordoutcome.ResultFailure || got.Cause != recordoutcome.CauseDecodeError {
+		t.Fatalf("outcome = %+v, want failure/%s", got, recordoutcome.CauseDecodeError)
+	}
+}
+
 // TestStartupProcessFanOutFailsTheSubFetchWhenTheBatchPostFails pins that a
 // transport failure is reported, not swallowed. Every other outcome here degrades
 // to a per-device warning; a dead POST means the whole chunk was never asked, and
@@ -725,7 +741,7 @@ func TestStartupProcessFanOutFailsTheSubFetchWhenTheBatchPostFails(t *testing.T)
 		postErr: errors.New("status 503 service unavailable"),
 	}
 	rec := telemetrytest.New()
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil || !strings.Contains(err.Error(), "503") {
 		t.Fatalf("Collect error = %v, want the $batch transport failure surfaced", err)
 	}
@@ -747,7 +763,7 @@ func TestStartupProcessFanOutChunksAtGraphsBatchCeiling(t *testing.T) {
 	}
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -771,7 +787,7 @@ func TestStartupProcessFanOutAllForbiddenStaysAQuietTenantGap(t *testing.T) {
 		subStatus: 403,
 	}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v — an all-403 fan-out is an unlicensed tenant, not a collection failure", err)
 	}
 	if got := len(logsNamed(rec, eventStartupProcess)); got != 0 {
@@ -807,7 +823,7 @@ func TestStartupProcessFanOutFailsLoudlyWithoutAPostCapableClient(t *testing.T) 
 		deviceScoresURL: deviceScoresWithIDs(startupProcDeviceA),
 	})}
 	rec := telemetrytest.New()
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil || !strings.Contains(err.Error(), "$batch") {
 		t.Fatalf("Collect error = %v, want one naming the impossible $batch fan-out", err)
 	}
@@ -830,7 +846,7 @@ func TestStartupProcessesEmitTwinOnlyNeverAMetric(t *testing.T) {
 		startupProcFilterURL(startupProcDeviceA): body,
 	})}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -865,7 +881,7 @@ func TestAppHealthDevicePerformanceEmitsCountsAndTwin(t *testing.T) {
 		`"deviceId":"d5900d67-e50c-44ef-9d5c-6a2f891099c6","deviceDisplayName":"LAPHAM"}]}`
 	g := &fakeGraph{bodies: allEndpoints(map[string]string{appHealthDevURL: body})}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -901,7 +917,7 @@ func TestEndpointAnalyticsTwinsCarryNoPerEntityMetricLabels(t *testing.T) {
 		appHealthDevURL: `{"value":[{"deviceId":"d1","deviceDisplayName":"LAPHAM","healthStatus":"meetingGoals"}]}`,
 	})}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -939,7 +955,7 @@ func TestCollectEmitsAppCrashCountForEveryExecutable(t *testing.T) {
 	g := &fakeGraph{bodies: allEndpoints(map[string]string{appHealthURL: body})}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -975,7 +991,7 @@ func TestCollectAggregatesBatteryHealthByHealthState(t *testing.T) {
 	g := &fakeGraph{bodies: allEndpoints(map[string]string{batteryURL: body})}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -1001,7 +1017,7 @@ func TestCollectAggregatesResourcePerformanceByHealthState(t *testing.T) {
 	g := &fakeGraph{bodies: allEndpoints(map[string]string{resourcePerfURL: body})}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -1022,7 +1038,7 @@ func TestCollectEmitsBaselineScorePerBaseline(t *testing.T) {
 	g := &fakeGraph{bodies: allEndpoints(map[string]string{baselineURL: body})}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -1048,7 +1064,7 @@ func TestCollectEmitsAppHealthOSVersionAsBoundedAggregates(t *testing.T) {
 	]}`
 	g := &fakeGraph{bodies: allEndpoints(map[string]string{appHealthOSURL: body})}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -1107,7 +1123,7 @@ func TestCollectEmitsModelScoresAsBoundedAggregates(t *testing.T) {
 	]}`
 	g := &fakeGraph{bodies: allEndpoints(map[string]string{modelScoresURL: body})}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -1170,7 +1186,7 @@ func TestCollectEmitsModelScoresAsBoundedAggregates(t *testing.T) {
 func TestResourcePerformanceTwinDistinguishesUnreportedZeroFromRealZero(t *testing.T) {
 	g := &fakeGraph{bodies: allEndpoints(map[string]string{resourcePerfURL: `{"value":[` + resourcePerfLiveRow + `]}`})}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -1224,7 +1240,7 @@ func TestDeviceScoresMapTheSixthScoreCategory(t *testing.T) {
 	body := `{"value":[{"id":"4ada2149","deviceName":"wintest","model":"Virtual Machine","endpointAnalyticsScore":96.88,"startupPerformanceScore":-1.0,"appReliabilityScore":-1.0,"workFromAnywhereScore":93.75,"meanResourceSpikeTimeScore":100.0,"batteryHealthScore":-1.0,"healthStatus":"meetingGoals"}]}`
 	g := &fakeGraph{bodies: allEndpoints(map[string]string{deviceScoresURL: body})}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -1263,7 +1279,7 @@ func TestScoreFieldsAbsentFromTheWireAreOmittedNotZero(t *testing.T) {
 	devices := `{"value":[{"deviceName":"wintest","endpointAnalyticsScore":96.88,"startupPerformanceScore":-1.0,"appReliabilityScore":-1.0,"workFromAnywhereScore":93.75,"batteryHealthScore":-1.0,"healthStatus":"meetingGoals"}]}`
 	g := &fakeGraph{bodies: allEndpoints(map[string]string{modelScoresURL: models, deviceScoresURL: devices})}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -1310,7 +1326,7 @@ func TestCollectSkipsUnavailableSubEndpointGracefully(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Errorf("a 403 on one sub-fetch should be skipped, not surfaced: %v", err)
 	}
 	if len(rec.MetricPoints(batteryDeviceCountMetric)) != 0 {
@@ -1331,7 +1347,7 @@ func TestCollectSurfacesNon4xxSubEndpointError(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err == nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err == nil {
 		t.Error("a 500 from a sub-fetch should surface as a collector error")
 	}
 }
@@ -1349,7 +1365,7 @@ func TestCollectSurfacesWrongEndpoint400AsBug(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err == nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err == nil {
 		t.Error("a 400 'not found for segment' is a wrong-URL bug and must surface, not be swallowed as a tenant gap")
 	}
 	if len(rec.MetricPoints(deviceScoreCountMetric)) != 0 {
@@ -1371,7 +1387,7 @@ func TestCollectSurfacesPlainMalformed400(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err == nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err == nil {
 		t.Error("a plain malformed-query 400 should surface as a collector error, not be swallowed")
 	}
 }
@@ -1403,7 +1419,7 @@ func TestCollectEmitsAnomalyCountBySeverity(t *testing.T) {
 			g := &fakeGraph{bodies: allEndpoints(map[string]string{anomalyURL: tc.body})}
 			rec := telemetrytest.New()
 
-			if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+			if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 				t.Fatalf("Collect: %v", err)
 			}
 
@@ -1435,7 +1451,7 @@ func TestCollectSkipsUnavailableAnomalyOverviewGracefully(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Errorf("a 403 on the anomaly overview should be skipped, not surfaced: %v", err)
 	}
 	if len(rec.MetricPoints(anomalyCountMetric)) != 0 {
@@ -1463,7 +1479,7 @@ func TestCollectWorkFromAnywhereReadiness(t *testing.T) {
 		wfaURL: `{"value":[` + wfaLiveRow + `,` + wfaNotCapableRow + `]}`,
 	})}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -1563,7 +1579,7 @@ func TestAppHealthApplicationEmitsTwinForEveryRow(t *testing.T) {
 	]}`
 	g := &fakeGraph{bodies: allEndpoints(map[string]string{appHealthURL: body})}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

@@ -29,6 +29,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/exportjob"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
 	"github.com/rknightion/graph2otel/internal/preflight"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
@@ -115,7 +116,8 @@ func (c *Collector) RequiredPermissions() []string {
 // log twin per row carrying the per-entity detail. Any export failure is
 // logged and swallowed rather than treated as a scheduler-visible error —
 // see logExportFailure and the exportjob sentinels.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
 	// This collector names its own transport because no engine can (#141):
 	// internal/exportjob creates/polls/downloads the job and hands rows back
 	// without ever calling LogEvent, so there is no engine seam to stamp from.
@@ -133,8 +135,10 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	}, e)
 	if err != nil {
 		logExportFailure(c.logger, err)
+		outcome.RecordError(outcomes, err)
 		return nil
 	}
+	outcome.Emitted(outcomes, uint64(len(rows)))
 
 	counts := map[string]float64{}
 	for _, row := range rows {

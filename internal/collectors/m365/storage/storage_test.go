@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
@@ -17,6 +18,7 @@ type fakeGraph struct {
 	spStorage, odStorage, spDetail, odDetail string
 	reportSettings                           string
 	reportSettingsErr                        error
+	odDetailErr                              error
 	// reportsErr, when set, is returned for ALL four usage-report URLs — the
 	// #240 total-failure condition.
 	reportsErr error
@@ -42,6 +44,9 @@ func (f *fakeGraph) RawGet(_ context.Context, url string) ([]byte, error) {
 	case strings.Contains(url, "getOneDriveUsageAccountDetail"):
 		if f.reportsErr != nil {
 			return nil, f.reportsErr
+		}
+		if f.odDetailErr != nil {
+			return nil, f.odDetailErr
 		}
 		return []byte(f.odDetail), nil
 	case strings.HasSuffix(url, "/admin/reportSettings"):
@@ -105,7 +110,7 @@ func liveFake() *fakeGraph {
 func TestCollectEmitsTenantTotalsByDriveType(t *testing.T) {
 	rec := telemetrytest.New()
 	c := New(liveFake(), nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -134,10 +139,22 @@ func TestCollectEmitsTenantTotalsByDriveType(t *testing.T) {
 	}
 }
 
+func TestCollectAccountsEveryReportRowOnce(t *testing.T) {
+	outcomes := recordoutcome.NewRecorder()
+	if err := New(liveFake(), nil).Collect(context.Background(), telemetrytest.New().Emitter(), outcomes); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	got := outcomes.Snapshot().Summarize(nil, false)
+	want := recordoutcome.Counts{Fetched: 10, Mapped: 7, Emitted: 7, Filtered: 3}
+	if got.Result != recordoutcome.ResultSuccess || got.Cause != recordoutcome.CauseNone || got.Counts != want {
+		t.Errorf("outcome = %#v, want success/none/%#v", got, want)
+	}
+}
+
 func TestCollectBucketsDrivesByDerivedQuotaState(t *testing.T) {
 	rec := telemetrytest.New()
 	c := New(liveFake(), nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -170,7 +187,7 @@ func TestCollectBucketsDrivesByDerivedQuotaState(t *testing.T) {
 func TestCollectEmitsOneLogTwinPerDrive(t *testing.T) {
 	rec := telemetrytest.New()
 	c := New(liveFake(), nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -206,7 +223,7 @@ func TestCollectEmitsOneLogTwinPerDrive(t *testing.T) {
 func TestMetricsCarryNoPerEntityIdentity(t *testing.T) {
 	rec := telemetrytest.New()
 	c := New(liveFake(), nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	for _, name := range []string{metricUsed, metricTotal, metricDrives} {
@@ -225,7 +242,7 @@ func TestMetricsCarryNoPerEntityIdentity(t *testing.T) {
 func TestConcealmentReflectedOnTwin(t *testing.T) {
 	rec := telemetrytest.New()
 	c := New(liveFake(), nil) // reportSettings says concealed
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	for _, l := range rec.LogRecords() {
@@ -243,7 +260,7 @@ func TestConcealmentDetectedHeuristicallyWhenSettingUnreadable(t *testing.T) {
 	f.reportSettingsErr = context.DeadlineExceeded // e.g. 403 without ReportSettings.Read.All
 	rec := telemetrytest.New()
 	c := New(f, nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	// Setting unreadable, but every Site Id is zeroed -> heuristic concludes concealed.
@@ -272,7 +289,7 @@ func TestUnconcealedPassesRealIdentityThrough(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 	c := New(f, nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	var twin *telemetrytest.LogRecord
@@ -302,7 +319,7 @@ func TestParsesReportWithBOM(t *testing.T) {
 	f.spStorage = "\ufeff" + liveSPStorage
 	rec := telemetrytest.New()
 	c := New(f, nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	for _, p := range rec.MetricPoints(metricUsed) {
@@ -320,7 +337,7 @@ func TestSkipsUnavailableReportWithoutFailing(t *testing.T) {
 	f.odDetail = ""  // and its detail too
 	rec := telemetrytest.New()
 	c := New(f, nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect must not fail when one report is unavailable: %v", err)
 	}
 	// SP still emitted.
@@ -342,12 +359,17 @@ func TestCollectErrorsWhenAllReportsFail(t *testing.T) {
 	g := &fakeGraph{reportsErr: errors.New("429 ServiceThrottleThresholdExceeded")}
 	rec := telemetrytest.New()
 
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	outcomes := recordoutcome.NewRecorder()
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), outcomes)
 	if err == nil {
 		t.Fatal("Collect returned nil despite all four reports failing (the #240 false-success bug)")
 	}
 	if !strings.Contains(err.Error(), "all storage reports failed") {
 		t.Errorf("error = %q, want it to name the all-reports-failed condition", err.Error())
+	}
+	got := outcomes.Snapshot().Summarize(err, false)
+	if got.Result != recordoutcome.ResultFailure || got.Cause != recordoutcome.CauseSourceError {
+		t.Errorf("outcome = %#v, want failure/source_error", got)
 	}
 }
 
@@ -357,8 +379,13 @@ func TestCollectSucceedsWhenReportsEmpty(t *testing.T) {
 	g := &fakeGraph{} // all report bodies empty, no error
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	outcomes := recordoutcome.NewRecorder()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), outcomes); err != nil {
 		t.Fatalf("Collect errored on legitimately-empty reports, want nil: %v", err)
+	}
+	got := outcomes.Snapshot().Summarize(nil, false)
+	if got.Result != recordoutcome.ResultEmpty || got.Cause != recordoutcome.CauseNone {
+		t.Errorf("outcome = %#v, want empty/none", got)
 	}
 }
 
@@ -368,8 +395,27 @@ func TestCollectSurvivesPartialReportFailure(t *testing.T) {
 	// A fake that fails ONLY the OneDrive detail report, others succeed empty.
 	g := &partialFailGraph{}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	outcomes := recordoutcome.NewRecorder()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), outcomes); err != nil {
 		t.Fatalf("Collect errored on a single-report failure, want non-fatal: %v", err)
+	}
+	got := outcomes.Snapshot().Summarize(nil, false)
+	if got.Result != recordoutcome.ResultFailure || got.Cause != recordoutcome.CauseSourceError {
+		t.Errorf("outcome = %#v, want failure/source_error with no usable records", got)
+	}
+}
+
+func TestCollectClassifiesPartialFailureWhenOtherReportsEmit(t *testing.T) {
+	g := liveFake()
+	g.odDetailErr = errors.New("404 not found in this cloud")
+	outcomes := recordoutcome.NewRecorder()
+	if err := New(g, nil).Collect(context.Background(), telemetrytest.New().Emitter(), outcomes); err != nil {
+		t.Fatalf("Collect errored on a single-report failure, want non-fatal: %v", err)
+	}
+	got := outcomes.Snapshot().Summarize(nil, false)
+	want := recordoutcome.Counts{Fetched: 7, Mapped: 4, Emitted: 4, Filtered: 3}
+	if got.Result != recordoutcome.ResultPartial || got.Cause != recordoutcome.CauseSourceError || got.Counts != want {
+		t.Errorf("outcome = %#v, want partial/source_error/%#v", got, want)
 	}
 }
 

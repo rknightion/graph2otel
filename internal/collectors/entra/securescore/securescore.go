@@ -38,6 +38,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -129,15 +131,15 @@ func (c *Collector) RequiredPermissions() []string { return []string{"SecurityEv
 // Collect fetches the latest secure score and the control-profile catalog
 // independently: a failure in one is logged and surfaced as a non-fatal
 // aggregated error, but does not prevent the other from emitting.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	var errs []error
 
-	if err := c.collectScore(ctx, e); err != nil {
+	if err := c.collectScore(ctx, e, outcomes); err != nil {
 		c.logger.Warn("secure score fetch failed", "collector", collectorName, "error", err)
 		errs = append(errs, fmt.Errorf("secure score: %w", err))
 	}
 
-	if err := c.collectControlProfiles(ctx, e); err != nil {
+	if err := c.collectControlProfiles(ctx, e, outcomes); err != nil {
 		c.logger.Warn("secure score control profiles fetch failed", "collector", collectorName, "error", err)
 		errs = append(errs, fmt.Errorf("control profiles: %w", err))
 	}
@@ -193,13 +195,15 @@ type comparativeScore struct {
 // Graph for exactly that) and emits current/max/percentage gauges. It
 // deliberately reads only value[0] even if the response somehow carries more
 // than one entry, so a full retained series is never mistaken for "latest".
-func (c *Collector) collectScore(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) collectScore(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	body, err := c.g.RawGet(ctx, c.baseURL+"/security/secureScores?$top=1")
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return err
 	}
 	var resp secureScoresResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
+		entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 		return fmt.Errorf("decode secureScores response: %w", err)
 	}
 	if len(resp.Value) == 0 {
@@ -207,6 +211,9 @@ func (c *Collector) collectScore(ctx context.Context, e telemetry.Emitter) error
 		return nil
 	}
 	latest := resp.Value[0]
+	if len(resp.Value) > 1 {
+		entraoutcome.Filtered(outcomes, uint64(len(resp.Value))-1)
+	}
 
 	e.Gauge(metricCurrent, "{score}", "Latest Microsoft Secure Score for the tenant.", latest.CurrentScore, nil)
 	e.Gauge(metricMax, "{score}", "Maximum attainable Microsoft Secure Score for the tenant.", latest.MaxScore, nil)
@@ -217,6 +224,7 @@ func (c *Collector) collectScore(ctx context.Context, e telemetry.Emitter) error
 
 	c.emitControlScores(e, latest.ControlScores)
 	c.emitPeerAverages(e, latest.AverageComparativeScores)
+	entraoutcome.Emitted(outcomes, 1)
 	return nil
 }
 
@@ -331,18 +339,20 @@ type controlStateUpdate struct {
 // bounded collection — GetAllValues is safe here) and emits two GaugeSnapshot
 // series sets: counts by control category and counts by the tenant's stated
 // implementation status for each control. It never emits a per-control gauge.
-func (c *Collector) collectControlProfiles(ctx context.Context, e telemetry.Emitter) error {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/security/secureScoreControlProfiles", nil)
+func (c *Collector) collectControlProfiles(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/security/secureScoreControlProfiles", nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return err
 	}
 
 	byCategory := map[string]int64{}
 	byStatus := map[string]int64{}
 	maxByCategory := map[string]float64{}
-	for _, raw := range raws {
+	for i, raw := range raws {
 		var p controlProfile
 		if err := json.Unmarshal(raw, &p); err != nil {
+			entraoutcome.Errored(outcomes, uint64(len(raws))-uint64(i), recordoutcome.CauseDecodeError)
 			return fmt.Errorf("decode secureScoreControlProfile: %w", err)
 		}
 		state := latestState(p.ControlStateUpdates)
@@ -354,6 +364,7 @@ func (c *Collector) collectControlProfiles(ctx context.Context, e telemetry.Emit
 		byStatus[normalizeStatus(state)]++
 		maxByCategory[cat] += p.MaxScore
 		e.LogEvent(profileTwin(p))
+		entraoutcome.Emitted(outcomes, 1)
 	}
 
 	catPoints := make([]telemetry.GaugePoint, 0, len(byCategory))

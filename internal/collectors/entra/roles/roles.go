@@ -47,6 +47,8 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -281,16 +283,16 @@ func (c *Collector) RequiredPermissions() []string {
 // the PIM half is skipped entirely (not emitted as an empty snapshot) and
 // logged at info level, matching license.SkipReason's spirit for a
 // partially-degraded (not fully gated) collector.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	var errs []error
 
-	if err := c.collectStandingMembers(ctx, e); err != nil {
+	if err := c.collectStandingMembers(ctx, e, outcomes); err != nil {
 		errs = append(errs, err)
 	}
 
 	if !c.caps.Has(license.CapEntraP2) {
 		c.logger.Info("skipping PIM assignment counts: requires entra_p2", "collector", collectorName)
-	} else if err := c.collectPIMAssignments(ctx, e); err != nil {
+	} else if err := c.collectPIMAssignments(ctx, e, outcomes); err != nil {
 		errs = append(errs, err)
 	}
 
@@ -302,9 +304,10 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // fetching the catalog itself drops the whole snapshot (nothing to iterate);
 // a failure on one role's member count is logged and that role is dropped
 // from the snapshot, but the others still emit.
-func (c *Collector) collectStandingMembers(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/directoryRoles", nil)
+func (c *Collector) collectStandingMembers(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/directoryRoles", nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		c.logger.Warn("directoryRoles fetch failed", "collector", collectorName, "error", err)
 		return fmt.Errorf("directoryRoles: %w", err)
 	}
@@ -314,17 +317,20 @@ func (c *Collector) collectStandingMembers(ctx context.Context, e telemetry.Emit
 	for _, r := range raw {
 		var role directoryRole
 		if err := json.Unmarshal(r, &role); err != nil {
+			entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			c.logger.Warn("skipping unparseable directoryRole", "collector", collectorName, "error", err)
 			errs = append(errs, fmt.Errorf("decode directoryRole: %w", err))
 			continue
 		}
 		if role.ID == "" || role.DisplayName == "" {
+			entraoutcome.Dropped(outcomes, 1, recordoutcome.CauseMappingError)
 			c.logger.Warn("skipping directoryRole with empty id/displayName", "collector", collectorName)
 			continue
 		}
 
-		members, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/directoryRoles/"+role.ID+"/members", nil)
+		members, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/directoryRoles/"+role.ID+"/members", nil, outcomes)
 		if err != nil {
+			entraoutcome.Errored(outcomes, 1, recordoutcome.CauseSourceError)
 			c.logger.Warn("directoryRole members fetch failed", "collector", collectorName, "role", role.DisplayName, "error", err)
 			errs = append(errs, fmt.Errorf("members(%s): %w", role.DisplayName, err))
 			continue
@@ -337,15 +343,18 @@ func (c *Collector) collectStandingMembers(ctx context.Context, e telemetry.Emit
 			var member roleMember
 			if err := json.Unmarshal(m, &member); err != nil {
 				c.logger.Warn("skipping unparseable directoryRole member", "collector", collectorName, "role", role.DisplayName, "error", err)
+				entraoutcome.Emitted(outcomes, 1)
 				continue
 			}
 			e.LogEvent(memberLogTwin(member, role))
+			entraoutcome.Emitted(outcomes, 1)
 		}
 
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(len(members)),
 			Attrs: telemetry.Attrs{semconv.AttrRoleName: role.DisplayName},
 		})
+		entraoutcome.Emitted(outcomes, 1)
 	}
 
 	e.GaugeSnapshot(membersMetricName, "{member}", "Standing (non-PIM) Entra directory-role membership count, per role.", points)
@@ -356,19 +365,21 @@ func (c *Collector) collectStandingMembers(ctx context.Context, e telemetry.Emit
 // schedule instances and emits the per-role active/eligible counts plus the
 // per-role permanent (no end time) active-assignment count. Neither endpoint
 // supports delta queries, so this is a full read every cycle.
-func (c *Collector) collectPIMAssignments(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) collectPIMAssignments(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	var errs []error
 
 	activeByRole := map[string]int64{}
 	permanentByRole := map[string]int64{}
-	active, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/roleManagement/directory/roleAssignmentScheduleInstances?"+expandRoleDefinitionQuery, nil)
+	active, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/roleManagement/directory/roleAssignmentScheduleInstances?"+expandRoleDefinitionQuery, nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		c.logger.Warn("roleAssignmentScheduleInstances fetch failed", "collector", collectorName, "error", err)
 		errs = append(errs, fmt.Errorf("roleAssignmentScheduleInstances: %w", err))
 	} else {
 		for _, r := range active {
 			var inst scheduleInstance
 			if err := json.Unmarshal(r, &inst); err != nil {
+				entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 				c.logger.Warn("skipping unparseable roleAssignmentScheduleInstance", "collector", collectorName, "error", err)
 				continue
 			}
@@ -378,23 +389,27 @@ func (c *Collector) collectPIMAssignments(ctx context.Context, e telemetry.Emitt
 				permanentByRole[name]++
 			}
 			e.LogEvent(pimLogTwin(inst, "active"))
+			entraoutcome.Emitted(outcomes, 1)
 		}
 	}
 
 	eligibleByRole := map[string]int64{}
-	eligible, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/roleManagement/directory/roleEligibilityScheduleInstances?"+expandRoleDefinitionQuery, nil)
+	eligible, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/roleManagement/directory/roleEligibilityScheduleInstances?"+expandRoleDefinitionQuery, nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		c.logger.Warn("roleEligibilityScheduleInstances fetch failed", "collector", collectorName, "error", err)
 		errs = append(errs, fmt.Errorf("roleEligibilityScheduleInstances: %w", err))
 	} else {
 		for _, r := range eligible {
 			var inst scheduleInstance
 			if err := json.Unmarshal(r, &inst); err != nil {
+				entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 				c.logger.Warn("skipping unparseable roleEligibilityScheduleInstance", "collector", collectorName, "error", err)
 				continue
 			}
 			eligibleByRole[inst.roleName()]++
 			e.LogEvent(pimLogTwin(inst, "eligible"))
+			entraoutcome.Emitted(outcomes, 1)
 		}
 	}
 

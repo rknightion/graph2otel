@@ -113,7 +113,7 @@ func TestCollectEmitsStandingMemberCountsOnFreeTier(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := New(g, license.Capabilities{}, nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -140,7 +140,7 @@ func TestCollectSkipsPIMHalfAndLogsOnFreeTier(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&logBuf, nil))
 
 	c := New(g, license.Capabilities{}, logger)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -166,7 +166,7 @@ func TestCollectEmitsPIMCountsOnP2Tenant(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := New(g, capsWithP2(), nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -209,7 +209,7 @@ func TestCollectNeverEmitsPerPrincipalSeries(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := New(g, capsWithP2(), nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -250,7 +250,7 @@ func byPrincipal(recs []telemetrytest.LogRecord) map[string]telemetrytest.LogRec
 // Global Admin" must be answerable from the logs.
 func TestStandingMembersEmitLogTwin(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(&fakeGraph{bodies: allBodies()}, license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(&fakeGraph{bodies: allBodies()}, license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -322,7 +322,7 @@ func TestStandingMembersEmitLogTwin(t *testing.T) {
 // for Global Admin" was equally unanswerable.
 func TestPIMAssignmentsEmitLogTwin(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(&fakeGraph{bodies: allBodies()}, capsWithP2(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(&fakeGraph{bodies: allBodies()}, capsWithP2(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -374,7 +374,7 @@ func TestPIMAssignmentsEmitLogTwin(t *testing.T) {
 // too — a Free tenant emits standing twins but no PIM ones.
 func TestFreeTierEmitsNoPIMTwin(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(&fakeGraph{bodies: allBodies()}, license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(&fakeGraph{bodies: allBodies()}, license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	for _, r := range logsNamed(rec.LogRecords(), eventRoleMember) {
@@ -392,7 +392,7 @@ func TestCollectIsResilientToPerRoleMemberError(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := New(g, license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Error("expected Collect to surface the per-role member-count failure as an error")
 	}
@@ -410,7 +410,7 @@ func TestCollectSurfacesDirectoryRolesFetchError(t *testing.T) {
 	g := &fakeGraph{errs: map[string]error{directoryRolesURL: errors.New("throttled")}}
 	rec := telemetrytest.New()
 
-	err := New(g, license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected Collect to surface the directoryRoles fetch error")
 	}
@@ -432,7 +432,7 @@ func TestCollectUnresolvedRoleDefinitionBucketsAsUnknown(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, capsWithP2(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, capsWithP2(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -922,7 +922,7 @@ func liveGraphFromCapture(t *testing.T) *fakeGraph {
 // principal.
 func TestCollectorEmitsLiveStandingMembersEndToEnd(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(liveGraphFromCapture(t), license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(liveGraphFromCapture(t), license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -1028,7 +1028,7 @@ func TestCollectorEmitsLiveStandingMembersEndToEnd(t *testing.T) {
 // on real records by design (#112), not by oversight.
 func TestLiveGuestMemberEmitsExtUpnNotMail(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(liveGraphFromCapture(t), license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(liveGraphFromCapture(t), license.Capabilities{}, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

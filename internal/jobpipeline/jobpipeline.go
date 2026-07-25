@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -292,7 +293,7 @@ func ctxSleep(ctx context.Context, d time.Duration) error {
 // On a failed/cancelled query, or any create/poll/page error, Run returns the
 // current watermark unchanged (wrapped error) so the window is retried next
 // tick rather than silently skipped.
-func Run(ctx context.Context, cfg QueryConfig, cp *checkpoint.Checkpoint, from, to time.Time, client JobClient, e telemetry.Emitter) (highWater time.Time, err error) {
+func Run(ctx context.Context, cfg QueryConfig, cp *checkpoint.Checkpoint, from, to time.Time, client JobClient, e telemetry.Emitter, outcomes *recordoutcome.Recorder) (highWater time.Time, err error) {
 	cfg = cfg.withDefaults()
 	if cfg.BuildRequest == nil || cfg.Map == nil {
 		return cp.Watermark, fmt.Errorf("jobpipeline: %s: BuildRequest and Map are required", cfg.CreatePath)
@@ -301,13 +302,14 @@ func Run(ctx context.Context, cfg QueryConfig, cp *checkpoint.Checkpoint, from, 
 	// Name the transport once per cycle rather than per record (#141).
 	e = telemetry.WithTransport(e, telemetry.TransportAuditQuery)
 
-	queryID, windowTo, err := resumeOrCreate(ctx, cfg, cp, from, to, client)
+	queryID, windowTo, err := resumeOrCreate(ctx, cfg, cp, from, to, client, outcomes)
 	if err != nil {
 		return cp.Watermark, err
 	}
 
 	queryURL := cfg.baseURL() + cfg.CreatePath + "/" + queryID
 	if err := pollToSucceeded(ctx, cfg, client, queryURL); err != nil {
+		outcomes.Cause(recordoutcome.CauseForError(err))
 		// A failed/cancelled query can never succeed, so keeping its id would only
 		// waste the next tick re-polling it. Every other poll failure is transient
 		// by assumption and KEEPS the id — that is the resume path, and clearing it
@@ -331,15 +333,17 @@ func Run(ctx context.Context, cfg QueryConfig, cp *checkpoint.Checkpoint, from, 
 	// it and re-drains rather than re-running the whole query server-side. No
 	// records were emitted (drainRecords collects every page before emitAndAdvance
 	// runs), so nothing is duplicated by doing so.
-	records, err := drainRecords(ctx, cfg, client, queryURL)
+	records, err := drainRecords(ctx, cfg, client, queryURL, outcomes)
 	if err != nil {
+		outcomes.Add(recordoutcome.OutcomeErrored, uint64(len(records)))
+		outcomes.Cause(recordoutcome.CauseForError(err))
 		return cp.Watermark, fmt.Errorf("jobpipeline: %s: page records: %w", cfg.CreatePath, err)
 	}
 
 	cp.InFlight = nil
 	// windowTo, not `to`: an adopted query covers only as far as its own window,
 	// which may be behind this tick's `to`. Advancing to `to` would skip the gap.
-	return emitAndAdvance(cfg, cp, records, windowTo, e), nil
+	return emitAndAdvance(cfg, cp, records, windowTo, e, outcomes), nil
 }
 
 // adoptable reports whether cp's in-flight job should be resumed for a tick
@@ -401,7 +405,7 @@ func (cfg QueryConfig) adoptable(cp *checkpoint.Checkpoint, from, to time.Time) 
 // cp's in-flight query when it is still adoptable, otherwise a newly created one.
 // A newly created id is persisted before returning, so a caller killed during the
 // poll loop leaves an adoptable record behind.
-func resumeOrCreate(ctx context.Context, cfg QueryConfig, cp *checkpoint.Checkpoint, from, to time.Time, client JobClient) (queryID string, windowTo time.Time, err error) {
+func resumeOrCreate(ctx context.Context, cfg QueryConfig, cp *checkpoint.Checkpoint, from, to time.Time, client JobClient, outcomes *recordoutcome.Recorder) (queryID string, windowTo time.Time, err error) {
 	if j := cp.InFlight; j != nil {
 		if cfg.adoptable(cp, from, to) {
 			return j.ID, j.WindowTo, nil
@@ -416,6 +420,7 @@ func resumeOrCreate(ctx context.Context, cfg QueryConfig, cp *checkpoint.Checkpo
 
 	id, err := createWithBackoff(ctx, cfg, client, body)
 	if err != nil {
+		outcomes.Cause(recordoutcome.CauseForError(err))
 		return "", time.Time{}, fmt.Errorf("jobpipeline: %s: create query: %w", cfg.CreatePath, err)
 	}
 
@@ -509,24 +514,25 @@ func pollToSucceeded(ctx context.Context, cfg QueryConfig, client JobClient, que
 
 // drainRecords pages the query's /records collection to exhaustion, following
 // @odata.nextLink.
-func drainRecords(ctx context.Context, cfg QueryConfig, client JobClient, queryURL string) ([]map[string]any, error) {
+func drainRecords(ctx context.Context, cfg QueryConfig, client JobClient, queryURL string, outcomes *recordoutcome.Recorder) ([]map[string]any, error) {
 	var out []map[string]any
 	pageURL := queryURL + "/records?$top=" + strconv.Itoa(cfg.PageSize)
 	seenPages := make(map[string]struct{})
 	pages := 0
 	for pageURL != "" {
 		if _, seen := seenPages[pageURL]; seen {
-			return nil, fmt.Errorf("repeated records page %q for %q", pageURL, queryURL)
+			return out, fmt.Errorf("repeated records page %q for %q", pageURL, queryURL)
 		}
 		if pages >= maxRecordPages {
-			return nil, fmt.Errorf("records pagination exceeded %d pages for %q", maxRecordPages, queryURL)
+			return out, fmt.Errorf("records pagination exceeded %d pages for %q", maxRecordPages, queryURL)
 		}
 		seenPages[pageURL] = struct{}{}
 		pages++
 		records, next, err := client.FetchRecordsPage(ctx, pageURL)
 		if err != nil {
-			return nil, err
+			return out, err
 		}
+		outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(records)))
 		out = append(out, records...)
 		pageURL = next
 	}
@@ -537,7 +543,7 @@ func drainRecords(ctx context.Context, cfg QueryConfig, client JobClient, queryU
 // records against cp.SeenIDs, emits each newly-seen one as an OTLP log, and
 // advances the watermark to (to - SafetyLag) — the window [from, to] is
 // confirmed drained, so it is never re-submitted.
-func emitAndAdvance(cfg QueryConfig, cp *checkpoint.Checkpoint, records []map[string]any, to time.Time, e telemetry.Emitter) time.Time {
+func emitAndAdvance(cfg QueryConfig, cp *checkpoint.Checkpoint, records []map[string]any, to time.Time, e telemetry.Emitter, outcomes *recordoutcome.Recorder) time.Time {
 	type drained struct {
 		id string
 		ev telemetry.Event
@@ -546,7 +552,16 @@ func emitAndAdvance(cfg QueryConfig, cp *checkpoint.Checkpoint, records []map[st
 	all := make([]drained, 0, len(records))
 	undated := 0
 	for _, rec := range records {
-		id, ev := cfg.Map(rec)
+		id, ev, panicValue := mapRecord(cfg.Map, rec)
+		if panicValue != nil {
+			// Mapping is an all-or-nothing phase: emission starts only after the
+			// whole drained batch has mapped and sorted. Preserve the panic for
+			// the scheduler recovery boundary, but classify every fetched row
+			// as errored because none can reach emission on this run.
+			outcomes.Add(recordoutcome.OutcomeErrored, uint64(len(records)))
+			outcomes.Cause(recordoutcome.CauseMappingError)
+			panic(panicValue)
+		}
 		t, ok := recordTime(rec, cfg.TimeField)
 		if !ok {
 			if !ev.Timestamp.IsZero() {
@@ -565,6 +580,11 @@ func emitAndAdvance(cfg QueryConfig, cp *checkpoint.Checkpoint, records []map[st
 		}
 		all = append(all, drained{id: id, ev: ev, t: t})
 	}
+	outcomes.Add(recordoutcome.OutcomeMapped, uint64(len(all)))
+	outcomes.Add(recordoutcome.OutcomeDropped, uint64(undated))
+	if undated > 0 {
+		outcomes.Cause(recordoutcome.CauseMissingEventTime)
+	}
 	for range undated {
 		wirecheck.Shared(cfg.CollectorName).MissingField(e, "event_time")
 	}
@@ -581,12 +601,15 @@ func emitAndAdvance(cfg QueryConfig, cp *checkpoint.Checkpoint, records []map[st
 			// watchdog rather than recover from it silently.
 			wirecheck.Shared(cfg.CollectorName).MissingField(e, semconv.AttrId)
 			e.LogEvent(d.ev)
+			outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 			continue
 		}
 		if cp.SeenIDs.Has(d.id) {
+			outcomes.Add(recordoutcome.OutcomeDeduped, 1)
 			continue
 		}
 		e.LogEvent(d.ev)
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 		cp.SeenIDs.Add(d.id, d.t)
 	}
 
@@ -598,6 +621,17 @@ func emitAndAdvance(cfg QueryConfig, cp *checkpoint.Checkpoint, records []map[st
 	cp.OverlapWindow = cfg.Overlap
 	cp.EvictStale()
 	return hw
+}
+
+// mapRecord isolates recovery to the mapper call. Emitter/checkpoint panics
+// remain distinguishable at the scheduler boundary and must not be mislabeled
+// as a payload mapping failure.
+func mapRecord(mapper func(map[string]any) (string, telemetry.Event), record map[string]any) (id string, ev telemetry.Event, panicValue any) {
+	defer func() {
+		panicValue = recover()
+	}()
+	id, ev = mapper(record)
+	return id, ev, nil
 }
 
 // recordTime extracts and parses record[timeField] as an RFC3339 timestamp. ok

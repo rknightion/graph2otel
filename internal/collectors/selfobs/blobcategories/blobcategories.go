@@ -44,6 +44,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -131,16 +132,22 @@ type logCategory struct {
 
 // Collect reads the aadiam diagnostic settings and emits the census gauge plus
 // one twin per category. A nil ARM reader (no blob ingest) is a no-op.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(
+	ctx context.Context,
+	e telemetry.Emitter,
+	outcomes *recordoutcome.Recorder,
+) error {
 	if c.arm == nil {
 		return nil
 	}
 	body, err := c.arm.RawGet(ctx, aadiamURL)
 	if err != nil {
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		return fmt.Errorf("read aadiam diagnostic settings: %w", err)
 	}
 	var resp diagnosticSettingsResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
+		outcomes.Cause(recordoutcome.CauseDecodeError)
 		return fmt.Errorf("decode aadiam diagnostic settings: %w", err)
 	}
 
@@ -154,12 +161,19 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	seen := map[string]bool{}
 	for _, s := range resp.Value {
 		if s.Properties.StorageAccountID == "" {
+			outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(s.Properties.Logs)))
+			outcomes.Add(recordoutcome.OutcomeFiltered, uint64(len(s.Properties.Logs)))
 			continue
 		}
 		for _, l := range s.Properties.Logs {
+			outcomes.Add(recordoutcome.OutcomeFetched, 1)
 			if l.Category == "" {
+				outcomes.Add(recordoutcome.OutcomeDropped, 1)
+				outcomes.Cause(recordoutcome.CauseMappingError)
 				continue
 			}
+			outcomes.Add(recordoutcome.OutcomeMapped, 1)
+			outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 			seen[l.Category] = true
 			if l.Enabled {
 				enabled[l.Category] = true

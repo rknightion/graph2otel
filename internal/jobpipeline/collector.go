@@ -7,6 +7,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collector"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -102,7 +103,7 @@ func (c *JobCollector) Lag() time.Duration { return c.LagValue }
 // persists the updated checkpoint, and returns the new high-water mark. `from`
 // is used only on a cold start (no watermark yet). Mirrors
 // logpipeline.LogCollector.CollectWindow exactly.
-func (c *JobCollector) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter) (time.Time, error) {
+func (c *JobCollector) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter, outcomes *recordoutcome.Recorder) (time.Time, error) {
 	cfg := c.Config.withDefaults()
 
 	cp, err := c.Store.Load(c.TenantID, cfg.checkpointKey())
@@ -121,7 +122,7 @@ func (c *JobCollector) CollectWindow(ctx context.Context, from, to time.Time, e 
 	// the only write, and a Run that never returns never reaches it.
 	cfg.Persist = func(cp *checkpoint.Checkpoint) error { return c.Store.Save(cp) }
 
-	hw, err := Run(ctx, cfg, cp, resumeFrom, to, c.Client, e)
+	hw, err := Run(ctx, cfg, cp, resumeFrom, to, c.Client, e, outcomes)
 	if err != nil {
 		return cp.Watermark, fmt.Errorf("jobpipeline: %s: run: %w", c.NameField, err)
 	}

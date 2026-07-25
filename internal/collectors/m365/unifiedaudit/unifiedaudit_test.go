@@ -684,7 +684,7 @@ func TestClientIPFromAuditDataReachesEmitterForInScopeRecord(t *testing.T) {
 
 	from := time.Date(2026, 7, 16, 9, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 7, 16, 9, 30, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 
@@ -945,7 +945,7 @@ func TestQuarantineFieldsReachEmitterEndToEnd(t *testing.T) {
 	// (2026-07-22T10:43:06Z).
 	from := time.Date(2026, 7, 22, 10, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 7, 22, 11, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 
@@ -1046,7 +1046,7 @@ func TestCollectWindowEndToEnd(t *testing.T) {
 
 	from := time.Date(2026, 7, 16, 8, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 7, 16, 9, 30, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 
@@ -1109,7 +1109,7 @@ func TestCollectorEmitsFullRecordEndToEnd(t *testing.T) {
 	// window moves to it rather than the record being re-dated to the window.
 	from := time.Date(2026, 7, 17, 8, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 7, 17, 9, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 
@@ -1219,7 +1219,7 @@ func collectRecords(t *testing.T, raws ...string) *telemetrytest.Recorder {
 	// The window brackets every captured record's createdDateTime.
 	from := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	to := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 	return rec

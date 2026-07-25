@@ -42,6 +42,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -322,11 +324,12 @@ var settingBuckets = []struct {
 // Collector polls Windows Autopilot device identities (v1.0) and deployment
 // profiles + assignments (beta).
 type Collector struct {
-	g       collectors.GraphClient
-	baseURL string
-	betaURL string
-	logger  *slog.Logger
-	watch   *wirecheck.Reporter
+	outcomes *outcome.Recorder
+	g        collectors.GraphClient
+	baseURL  string
+	betaURL  string
+	logger   *slog.Logger
+	watch    *wirecheck.Reporter
 	// now returns the current time; overridable in tests so stale-contact
 	// bucketing is deterministic and assertable.
 	now func() time.Time
@@ -371,7 +374,11 @@ func (c *Collector) RequiredPermissions() []string {
 // doc. The two fetches are independently resilient: a failure in one is
 // logged and joined into the returned error, but the other's metrics still
 // emit.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
+	local := *c
+	local.outcomes = outcomes
+	c = &local
 	var errs []error
 
 	if err := c.collectDevices(ctx, e); err != nil {
@@ -403,7 +410,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // hardware unless explicitly deleted, so it can exceed the live device
 // fleet - that's expected, not a bug.
 func (c *Collector) collectDevices(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/windowsAutopilotDeviceIdentities", nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceManagement/windowsAutopilotDeviceIdentities", nil, c.outcomes)
 	if err != nil {
 		if isUnavailable(err) {
 			c.logger.Info("autopilot: device identities endpoint unavailable; skipping",
@@ -426,8 +433,10 @@ func (c *Collector) collectDevices(ctx context.Context, e telemetry.Emitter) err
 		var d deviceIdentity
 		if err := json.Unmarshal(r, &d); err != nil {
 			c.logger.Warn("autopilot: skipping unparseable device identity", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		norm := normGroupTag(d.GroupTag)
 		tagTotals[norm]++
 		stale := d.LastContactedDateTime != nil && now.Sub(*d.LastContactedDateTime) > staleContactThreshold
@@ -475,7 +484,7 @@ func (c *Collector) collectDevices(ctx context.Context, e telemetry.Emitter) err
 // per-profile assignments failure is logged and that profile's assignment
 // count is dropped, but every other profile's gauges still emit.
 func (c *Collector) collectProfiles(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.betaURL+"/deviceManagement/windowsAutopilotDeploymentProfiles", nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.betaURL+"/deviceManagement/windowsAutopilotDeploymentProfiles", nil, c.outcomes)
 	if err != nil {
 		if isUnavailable(err) {
 			c.logger.Info("autopilot: deployment profiles endpoint unavailable; skipping",
@@ -495,8 +504,10 @@ func (c *Collector) collectProfiles(ctx context.Context, e telemetry.Emitter) er
 		var p deploymentProfile
 		if err := json.Unmarshal(r, &p); err != nil {
 			c.logger.Warn("autopilot: skipping unparseable deployment profile", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 
 		c.watch.Value(e, semconv.AttrDeviceType, p.DeviceType, knownDeviceTypes)
 		countBuckets[[2]string{deviceTypeBucketFor(p.DeviceType), boolAttr(p.PreprovisioningAllowed)}]++
@@ -550,10 +561,11 @@ func (c *Collector) collectProfiles(ctx context.Context, e telemetry.Emitter) er
 // returns its length. The collection is small and bounded (group
 // assignments), so no per-item decoding is needed - only the count.
 func (c *Collector) assignmentCount(ctx context.Context, profileID string) (int, error) {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.betaURL+"/deviceManagement/windowsAutopilotDeploymentProfiles/"+profileID+"/assignments", nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.betaURL+"/deviceManagement/windowsAutopilotDeploymentProfiles/"+profileID+"/assignments", nil, c.outcomes)
 	if err != nil {
 		return 0, err
 	}
+	outcome.Emitted(c.outcomes, uint64(len(raw)))
 	return len(raw), nil
 }
 
@@ -582,6 +594,10 @@ func (c *Collector) collectSyncSettings(ctx context.Context, e telemetry.Emitter
 	body, err := c.g.RawGet(ctx, c.betaURL+"/deviceManagement/windowsAutopilotSettings")
 	if err != nil {
 		if isUnavailable(err) {
+			outcome.RecordError(c.outcomes, err)
+			if strings.Contains(err.Error(), "status 403") {
+				c.outcomes.Cause(recordoutcome.CausePermissionDenied)
+			}
 			c.logger.Info("autopilot: windows autopilot settings endpoint unavailable; skipping sync staleness",
 				"collector", collectorName, "error", err)
 			return nil
@@ -590,8 +606,10 @@ func (c *Collector) collectSyncSettings(ctx context.Context, e telemetry.Emitter
 	}
 	var s autopilotSyncSettings
 	if err := json.Unmarshal(body, &s); err != nil {
+		outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 		return fmt.Errorf("decode windowsAutopilotSettings: %w", err)
 	}
+	outcome.Emitted(c.outcomes, 1)
 
 	if !s.LastSyncDateTime.IsZero() {
 		age := c.now().Sub(s.LastSyncDateTime).Seconds()

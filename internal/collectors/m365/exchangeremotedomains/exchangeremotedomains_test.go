@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
@@ -110,7 +111,7 @@ func collect(t *testing.T, recs []map[string]any) *telemetrytest.Recorder {
 	t.Helper()
 	rec := telemetrytest.New()
 	c := New(collectors.EXODeps{Client: &fakeEXO{recs: recs}})
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	return rec
@@ -136,6 +137,20 @@ func TestCollect_DomainsGauge(t *testing.T) {
 	}
 	if len(got) != 2 {
 		t.Errorf("domains series = %d, want 2", len(got))
+	}
+}
+
+func TestCollect_AccountsEveryDomainOnce(t *testing.T) {
+	outcomes := recordoutcome.NewRecorder()
+	recs := recordsFrom(t, liveDefaultDomain, namedForwarding, noForwarding)
+	c := New(collectors.EXODeps{Client: &fakeEXO{recs: recs}})
+	if err := c.Collect(context.Background(), telemetrytest.New().Emitter(), outcomes); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	got := outcomes.Snapshot().Summarize(nil, false)
+	want := recordoutcome.Counts{Fetched: 3, Mapped: 3, Emitted: 3}
+	if got.Result != recordoutcome.ResultSuccess || got.Counts != want {
+		t.Errorf("outcome = %#v, want success/%#v", got, want)
 	}
 }
 
@@ -246,7 +261,7 @@ func TestCollect_NoDomainsStillSeeds(t *testing.T) {
 func TestCollect_ErrorPropagates(t *testing.T) {
 	rec := telemetrytest.New()
 	c := New(collectors.EXODeps{Client: &fakeEXO{err: errors.New("403")}})
-	if err := c.Collect(context.Background(), rec.Emitter()); err == nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err == nil {
 		t.Fatal("want error when the cmdlet fails")
 	}
 }

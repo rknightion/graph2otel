@@ -15,6 +15,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -116,26 +118,30 @@ func (c *Collector) RequiredPermissions() []string { return []string{"Group.Read
 // other series still emits; the aggregated error is returned so partial
 // failure is visible in scrape self-obs without hiding the data that did
 // succeed.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	points := make([]telemetry.GaugePoint, 0, len(groupSlices))
 	var errs []error
 
 	for _, s := range groupSlices {
 		n, err := collectors.Count(ctx, c.g, filterCountURL(c.baseURL, s.filter))
 		if err != nil {
+			entraoutcome.SourceError(outcomes)
 			c.logger.Warn("group count failed", "collector", collectorName, "slice", s.label, "error", err)
 			errs = append(errs, fmt.Errorf("%s: %w", s.label, err))
 			continue
 		}
 		points = append(points, telemetry.GaugePoint{Value: float64(n), Attrs: s.attrs})
+		entraoutcome.Emitted(outcomes, 1)
 	}
 	e.GaugeSnapshot(totalMetricName, "{group}", "Total Entra groups, sliced by bounded population dimensions (group_type, membership_type, security_enabled, mail_enabled).", points)
 
 	if n, err := collectors.Count(ctx, c.g, filterCountURL(c.baseURL, roleAssignableFilter)); err != nil {
+		entraoutcome.SourceError(outcomes)
 		c.logger.Warn("role-assignable group count failed", "collector", collectorName, "error", err)
 		errs = append(errs, fmt.Errorf("role_assignable: %w", err))
 	} else {
 		e.Gauge(roleAssignableMetricName, "{group}", "Total Entra groups assignable to a directory role.", float64(n), nil)
+		entraoutcome.Emitted(outcomes, 1)
 	}
 
 	return errors.Join(errs...)

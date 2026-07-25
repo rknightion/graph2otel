@@ -54,7 +54,7 @@ func TestActivityCollectorCollectWindowDrainsTheFeed(t *testing.T) {
 	recorder := telemetrytest.New()
 
 	to := base.Add(time.Hour)
-	if _, err := c.CollectWindow(context.Background(), base.Add(-time.Hour), to, recorder.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), base.Add(-time.Hour), to, recorder.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 
@@ -79,7 +79,7 @@ func TestActivityCollectorReturnsToAsHighWaterMark(t *testing.T) {
 	c := newActivityCollectorForTest(t, f, o365activityclient.ContentExchange)
 
 	to := base.Add(time.Hour)
-	hwm, err := c.CollectWindow(context.Background(), base.Add(-time.Hour), to, telemetrytest.New().Emitter())
+	hwm, err := c.CollectWindow(context.Background(), base.Add(-time.Hour), to, telemetrytest.New().Emitter(), nil)
 	if err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestActivityCollectorReturnsZeroHighWaterMarkOnError(t *testing.T) {
 	})
 	c := newActivityCollectorForTest(t, f, o365activityclient.ContentExchange)
 
-	hwm, err := c.CollectWindow(context.Background(), base.Add(-time.Hour), base.Add(time.Hour), telemetrytest.New().Emitter())
+	hwm, err := c.CollectWindow(context.Background(), base.Add(-time.Hour), base.Add(time.Hour), telemetrytest.New().Emitter(), nil)
 	if err == nil {
 		t.Fatal("CollectWindow returned nil error on a failing blob fetch")
 	}

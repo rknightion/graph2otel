@@ -72,6 +72,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -218,7 +219,7 @@ func (c *Collector) RequiredPermissions() []string { return nil }
 
 // Collect runs the cmdlet and emits the census, the posture gauge and a twin per
 // mailbox.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	// Stamp the transport HERE: with no ingest engine on this path the Scheduler
 	// baseline is TransportGraph.
 	e = telemetry.WithTransport(e, telemetry.TransportExchangeOnline)
@@ -226,8 +227,10 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	// ResultSize is load-bearing — see the package doc.
 	recs, err := c.c.Invoke(ctx, cmdlet, map[string]any{paramResultSize: resultSizeUnlimited})
 	if err != nil {
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		return fmt.Errorf("%s: %w", cmdlet, err)
 	}
+	outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(recs)))
 
 	census := map[censusKey]float64{}
 	settings := make(map[string]float64, len(protectionSettings))
@@ -247,6 +250,8 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			}
 		}
 		e.LogEvent(mailboxTwin(r))
+		outcomes.Add(recordoutcome.OutcomeMapped, 1)
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 	}
 
 	censusPts := make([]telemetry.GaugePoint, 0, len(census))

@@ -37,6 +37,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -133,7 +135,7 @@ func (c *Collector) RequiredPermissions() []string { return []string{"Directory.
 // log twin per recoverable object. A per-type fetch error is logged and joined,
 // never fatal to the other types (a missing scope on one cast must not blind the
 // rest).
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	now := c.now()
 	// counts is keyed by (object_type, near_purge) so one GaugeSnapshot carries
 	// every type. A (type) with an empty bin contributes no point — an empty
@@ -143,21 +145,24 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 
 	for _, k := range kinds {
 		url := c.baseURL + "/directory/deletedItems/" + k.segment + "?$select=" + k.selectQ
-		raws, err := collectors.GetAllValues(ctx, c.g, url, nil)
+		raws, err := collectors.GetAllValuesRecorded(ctx, c.g, url, nil, outcomes)
 		if err != nil {
+			entraoutcome.SourceError(outcomes)
 			c.logger.Warn("deleted-items census failed for a type",
 				"collector", collectorName, "object_type", k.typeName, "error", err)
 			errs = append(errs, fmt.Errorf("%s: %w", k.typeName, err))
 			continue
 		}
-		for _, raw := range raws {
+		for i, raw := range raws {
 			var o deletedObject
 			if err := json.Unmarshal(raw, &o); err != nil {
+				entraoutcome.Errored(outcomes, uint64(len(raws))-uint64(i), recordoutcome.CauseDecodeError)
 				return fmt.Errorf("decode %s: %w", k.typeName, err)
 			}
 			near := isNearPurge(o.DeletedDateTime, now)
 			counts[[2]string{k.typeName, boolStr(near)}]++
 			e.LogEvent(logTwin(o, k.typeName, near))
+			entraoutcome.Emitted(outcomes, 1)
 		}
 	}
 

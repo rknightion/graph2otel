@@ -33,6 +33,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -134,13 +136,14 @@ type policyAssignment struct {
 
 // Collect fetches the policies and their role assignments, emits the bounded
 // requirement gauge, and one twin per policy.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+policiesPath, nil)
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+policiesPath, nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return fmt.Errorf("role management policies: %w", err)
 	}
 
-	roleByPolicy := c.fetchRoleAssignments(ctx)
+	roleByPolicy := c.fetchRoleAssignments(ctx, outcomes)
 
 	// counts[[3]string{requirement, enabled, caller}] = number of policies.
 	counts := map[[3]string]int64{}
@@ -148,11 +151,13 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for _, raw := range raws {
 		var p roleManagementPolicy
 		if err := json.Unmarshal(raw, &p); err != nil {
+			entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			errs = append(errs, fmt.Errorf("decode policy: %w", err))
 			continue
 		}
 		c.tally(p, counts)
 		e.LogEvent(c.twin(p, roleByPolicy[p.ID]))
+		entraoutcome.Emitted(outcomes, 1)
 	}
 
 	points := make([]telemetry.GaugePoint, 0, len(counts))
@@ -174,9 +179,10 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // fetchRoleAssignments builds the policyId -> roleDefinitionId map, or nil when
 // the fetch fails (the twin then omits role_definition_id rather than blocking
 // the whole collection on a secondary fetch).
-func (c *Collector) fetchRoleAssignments(ctx context.Context) map[string]string {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+assignmentsPath, nil)
+func (c *Collector) fetchRoleAssignments(ctx context.Context, outcomes *recordoutcome.Recorder) map[string]string {
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+assignmentsPath, nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		c.logger.Warn("PIM policy->role assignment map unavailable this cycle; twins omit role_definition_id",
 			"collector", collectorName, "error", err)
 		return nil
@@ -184,8 +190,13 @@ func (c *Collector) fetchRoleAssignments(ctx context.Context) map[string]string 
 	out := make(map[string]string, len(raws))
 	for _, raw := range raws {
 		var a policyAssignment
-		if err := json.Unmarshal(raw, &a); err == nil && a.PolicyID != "" {
+		if err := json.Unmarshal(raw, &a); err != nil {
+			entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
+		} else if a.PolicyID != "" {
 			out[a.PolicyID] = a.RoleDefinitionID
+			entraoutcome.Filtered(outcomes, 1)
+		} else {
+			entraoutcome.Dropped(outcomes, 1, recordoutcome.CauseMappingError)
 		}
 	}
 	return out

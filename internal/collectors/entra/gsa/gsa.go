@@ -50,6 +50,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -145,12 +147,12 @@ func (c *Collector) RequiredPermissions() []string { return []string{"Policy.Rea
 // Collect issues the six independent fetches. Each is guarded on its own: a
 // failure is logged and folded into a non-fatal aggregated error, and never
 // prevents the others from emitting.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	var errs []error
 
 	steps := []struct {
 		name string
-		fn   func(context.Context, telemetry.Emitter) error
+		fn   func(context.Context, telemetry.Emitter, *recordoutcome.Recorder) error
 	}{
 		{"tenant status", c.collectTenantStatus},
 		{"forwarding profiles", c.collectForwardingProfiles},
@@ -160,7 +162,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		{"remote networks", c.collectRemoteNetworks},
 	}
 	for _, s := range steps {
-		if err := s.fn(ctx, e); err != nil {
+		if err := s.fn(ctx, e, outcomes); err != nil {
 			c.logger.Warn("GSA fetch failed", "collector", collectorName, "step", s.name, "error", err)
 			errs = append(errs, fmt.Errorf("%s: %w", s.name, err))
 		}
@@ -175,18 +177,21 @@ type tenantStatus struct {
 }
 
 // collectTenantStatus emits the numeric onboarding-status enum gauge.
-func (c *Collector) collectTenantStatus(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) collectTenantStatus(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	body, err := c.g.RawGet(ctx, c.baseURL+pathTenantStatus)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return err
 	}
 	var ts tenantStatus
 	if err := json.Unmarshal(body, &ts); err != nil {
+		entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 		return fmt.Errorf("decode tenantStatus: %w", err)
 	}
 	e.Gauge(metricOnboardingStatus, "1",
 		"Global Secure Access onboarding status (0 = onboarded, 1 = in progress, 2 = error/offboarded, -1 = unmapped). See docs/signals.md.",
 		statusValue(ts.OnboardingStatus), nil)
+	entraoutcome.Emitted(outcomes, 1)
 	return nil
 }
 
@@ -209,19 +214,22 @@ type forwardingProfile struct {
 
 // collectForwardingProfiles emits the profile-count gauge keyed by
 // (traffic_forwarding_type, state) and one twin per profile.
-func (c *Collector) collectForwardingProfiles(ctx context.Context, e telemetry.Emitter) error {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+pathForwardingProfiles, nil)
+func (c *Collector) collectForwardingProfiles(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+pathForwardingProfiles, nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return err
 	}
 	counts := map[[2]string]int64{}
-	for _, raw := range raws {
+	for i, raw := range raws {
 		var p forwardingProfile
 		if err := json.Unmarshal(raw, &p); err != nil {
+			entraoutcome.Errored(outcomes, uint64(len(raws))-uint64(i), recordoutcome.CauseDecodeError)
 			return fmt.Errorf("decode forwardingProfile: %w", err)
 		}
 		counts[[2]string{p.TrafficForwardingType, p.State}]++
 		e.LogEvent(forwardingProfileTwin(p))
+		entraoutcome.Emitted(outcomes, 1)
 	}
 	points := make([]telemetry.GaugePoint, 0, len(counts))
 	for k, n := range counts {
@@ -278,19 +286,22 @@ type filteringPolicy struct {
 
 // collectFilteringPolicies emits the policy-count gauge keyed by action and one
 // twin per policy.
-func (c *Collector) collectFilteringPolicies(ctx context.Context, e telemetry.Emitter) error {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+pathFilteringPolicies, nil)
+func (c *Collector) collectFilteringPolicies(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+pathFilteringPolicies, nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return err
 	}
 	byAction := map[string]int64{}
-	for _, raw := range raws {
+	for i, raw := range raws {
 		var p filteringPolicy
 		if err := json.Unmarshal(raw, &p); err != nil {
+			entraoutcome.Errored(outcomes, uint64(len(raws))-uint64(i), recordoutcome.CauseDecodeError)
 			return fmt.Errorf("decode filteringPolicy: %w", err)
 		}
 		byAction[p.Action]++
 		e.LogEvent(filteringPolicyTwin(p))
+		entraoutcome.Emitted(outcomes, 1)
 	}
 	points := make([]telemetry.GaugePoint, 0, len(byAction))
 	for action, n := range byAction {
@@ -336,18 +347,21 @@ type conditionalAccessSettings struct {
 }
 
 // collectConditionalAccess emits the 0/1 data-plane-signaling posture flag.
-func (c *Collector) collectConditionalAccess(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) collectConditionalAccess(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	body, err := c.g.RawGet(ctx, c.baseURL+pathConditionalAccess)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return err
 	}
 	var s conditionalAccessSettings
 	if err := json.Unmarshal(body, &s); err != nil {
+		entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 		return fmt.Errorf("decode conditionalAccess settings: %w", err)
 	}
 	e.Gauge(metricSignalingEnabled, "{setting}",
 		"Whether Global Secure Access data-plane signaling to Conditional Access is enabled (1) or not (0).",
 		boolTo01(s.SignalingStatus == "enabled"), nil)
+	entraoutcome.Emitted(outcomes, 1)
 	return nil
 }
 
@@ -359,32 +373,37 @@ type crossTenantAccessSettings struct {
 }
 
 // collectCrossTenantAccess emits the 0/1 network-packet-tagging posture flag.
-func (c *Collector) collectCrossTenantAccess(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) collectCrossTenantAccess(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	body, err := c.g.RawGet(ctx, c.baseURL+pathCrossTenantAccess)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return err
 	}
 	var s crossTenantAccessSettings
 	if err := json.Unmarshal(body, &s); err != nil {
+		entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 		return fmt.Errorf("decode crossTenantAccess settings: %w", err)
 	}
 	e.Gauge(metricPacketTaggingEnabled, "{setting}",
 		"Whether Global Secure Access cross-tenant network packet tagging is enabled (1) or not (0).",
 		boolTo01(s.NetworkPacketTaggingStatus == "enabled"), nil)
+	entraoutcome.Emitted(outcomes, 1)
 	return nil
 }
 
 // collectRemoteNetworks emits the remote-network count gauge. m7kni has none
 // (empty collection, live 2026-07-23), so no per-network twin is emitted — the
 // count is the whole signal, and a twin has no live shape to map against.
-func (c *Collector) collectRemoteNetworks(ctx context.Context, e telemetry.Emitter) error {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+pathRemoteNetworks, nil)
+func (c *Collector) collectRemoteNetworks(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+pathRemoteNetworks, nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return err
 	}
 	e.Gauge(metricRemoteNetworks, "{network}",
 		"Count of Global Secure Access remote networks configured for the tenant.",
 		float64(len(raws)), nil)
+	entraoutcome.Emitted(outcomes, uint64(len(raws)))
 	return nil
 }
 

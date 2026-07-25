@@ -46,6 +46,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -138,10 +140,11 @@ type ndesConnector struct {
 
 // Collector polls the Exchange, MTD, and (beta) NDES connector endpoints.
 type Collector struct {
-	g       collectors.GraphClient
-	baseURL string
-	betaURL string
-	logger  *slog.Logger
+	outcomes *outcome.Recorder
+	g        collectors.GraphClient
+	baseURL  string
+	betaURL  string
+	logger   *slog.Logger
 	// now returns the current time; overridable in tests so heartbeat-age
 	// values are deterministic and assertable.
 	now func() time.Time
@@ -183,7 +186,11 @@ func (c *Collector) RequiredPermissions() []string {
 // every scrape. Only a genuine error (5xx other than 501, auth failure, bad
 // JSON at the transport level, ...) is logged at WARN and joined into the
 // returned error.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
+	local := *c
+	local.outcomes = outcomes
+	c = &local
 	var errs []error
 	var statePoints []telemetry.GaugePoint
 	var heartbeatPoints []telemetry.GaugePoint
@@ -244,6 +251,10 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	amsPoints, amsAge, err := c.androidManagedStoreSnapshot(ctx, now, e)
 	if err != nil {
 		if isUnavailable(err) {
+			outcome.RecordError(c.outcomes, err)
+			if strings.Contains(err.Error(), "status 403") {
+				c.outcomes.Cause(recordoutcome.CausePermissionDenied)
+			}
 			c.logger.Info("connectors: android managed store settings endpoint unavailable on this tenant; skipping managed google play metrics",
 				"collector", collectorName, "error", err)
 		} else {
@@ -273,7 +284,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // points plus the heartbeat-age point (nil if no instance has a non-zero
 // lastSyncDateTime).
 func (c *Collector) exchangeSnapshot(ctx context.Context, now time.Time) ([]telemetry.GaugePoint, *telemetry.GaugePoint, error) {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/exchangeConnectors", nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceManagement/exchangeConnectors", nil, c.outcomes)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -285,8 +296,10 @@ func (c *Collector) exchangeSnapshot(ctx context.Context, now time.Time) ([]tele
 		var conn exchangeConnector
 		if err := json.Unmarshal(r, &conn); err != nil {
 			c.logger.Warn("connectors: skipping unparseable exchange connector", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		byState[orUnknown(conn.Status)]++
 		if !conn.LastSyncDateTime.IsZero() {
 			if age := now.Sub(conn.LastSyncDateTime).Seconds(); !haveAge || age > maxAge {
@@ -312,7 +325,7 @@ func (c *Collector) exchangeSnapshot(ctx context.Context, now time.Time) ([]tele
 // MTD partner configured gets no mtd_platform series at all rather than a
 // spurious all-zero one.
 func (c *Collector) mtdSnapshot(ctx context.Context, now time.Time) ([]telemetry.GaugePoint, *telemetry.GaugePoint, []telemetry.GaugePoint, error) {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/mobileThreatDefenseConnectors", nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceManagement/mobileThreatDefenseConnectors", nil, c.outcomes)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -327,8 +340,10 @@ func (c *Collector) mtdSnapshot(ctx context.Context, now time.Time) ([]telemetry
 		var conn mtdConnector
 		if err := json.Unmarshal(r, &conn); err != nil {
 			c.logger.Warn("connectors: skipping unparseable mtd connector", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		instances++
 		byState[orUnknown(conn.PartnerState)]++
 		if !conn.LastHeartbeatDateTime.IsZero() {
@@ -368,7 +383,7 @@ func (c *Collector) mtdSnapshot(ctx context.Context, now time.Time) ([]telemetry
 // 403/404) for Collect to classify; this function has no opinion on whether a
 // given error is "unavailable" vs. real.
 func (c *Collector) ndesSnapshot(ctx context.Context, now time.Time) ([]telemetry.GaugePoint, *telemetry.GaugePoint, error) {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.betaURL+"/deviceManagement/ndesConnectors", nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.betaURL+"/deviceManagement/ndesConnectors", nil, c.outcomes)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -380,8 +395,10 @@ func (c *Collector) ndesSnapshot(ctx context.Context, now time.Time) ([]telemetr
 		var conn ndesConnector
 		if err := json.Unmarshal(r, &conn); err != nil {
 			c.logger.Warn("connectors: skipping unparseable ndes connector", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		byState[orUnknown(conn.State)]++
 		if !conn.LastConnectionDateTime.IsZero() {
 			if age := now.Sub(conn.LastConnectionDateTime).Seconds(); !haveAge || age > maxAge {
@@ -431,8 +448,10 @@ func (c *Collector) androidManagedStoreSnapshot(ctx context.Context, now time.Ti
 	}
 	var s androidManagedStoreSettings
 	if err := json.Unmarshal(body, &s); err != nil {
+		outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 		return nil, nil, fmt.Errorf("decode androidManagedStoreAccountEnterpriseSettings: %w", err)
 	}
+	outcome.Emitted(c.outcomes, 1)
 
 	points := []telemetry.GaugePoint{{
 		Value: 1,

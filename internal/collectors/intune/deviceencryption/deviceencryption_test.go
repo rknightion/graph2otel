@@ -60,7 +60,7 @@ func liveGraph() *fakeGraph {
 func collect(t *testing.T, g *fakeGraph) *telemetrytest.Recorder {
 	t.Helper()
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	return rec
@@ -121,7 +121,7 @@ func TestCollectReportsUnmappedStateEnums(t *testing.T) {
 	body := `{"value":[{"id":"d1","encryptionState":"quantumEncrypted","encryptionReadinessState":"maybe","deviceType":"flyingToaster","encryptionPolicySettingState":"schrodinger"}]}`
 	g := &fakeGraph{bodies: map[string]string{listURL(): body}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	fields := map[string]bool{}
@@ -346,7 +346,7 @@ func TestCollectFollowsNextLink(t *testing.T) {
 func TestForbiddenSkipsGracefully(t *testing.T) {
 	g := &fakeGraph{errs: map[string]error{listURL(): errors.New("graphclient: GET ...: status 403: forbidden")}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("403 should be a graceful skip, got: %v", err)
 	}
 	if len(rec.MetricPoints(devicesMetricName)) != 0 || len(rec.LogRecords()) != 0 {
@@ -357,7 +357,7 @@ func TestForbiddenSkipsGracefully(t *testing.T) {
 func TestListErrorIsSurfaced(t *testing.T) {
 	g := &fakeGraph{errs: map[string]error{listURL(): errors.New("boom")}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err == nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err == nil {
 		t.Error("a non-403 list error must be surfaced")
 	}
 }

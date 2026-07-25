@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collector"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -16,9 +17,11 @@ type fakeCollector struct {
 	def  time.Duration
 }
 
-func (f fakeCollector) Name() string                                     { return f.name }
-func (f fakeCollector) DefaultInterval() time.Duration                   { return f.def }
-func (f fakeCollector) Collect(context.Context, telemetry.Emitter) error { return nil }
+func (f fakeCollector) Name() string                   { return f.name }
+func (f fakeCollector) DefaultInterval() time.Duration { return f.def }
+func (f fakeCollector) Collect(context.Context, telemetry.Emitter, *recordoutcome.Recorder) error {
+	return nil
+}
 
 func TestRegistry_UsesDefaultIntervalWhenUnset(t *testing.T) {
 	r := collector.NewRegistry()

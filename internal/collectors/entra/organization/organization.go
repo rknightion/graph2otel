@@ -19,6 +19,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -106,18 +108,23 @@ func (c *Collector) RequiredPermissions() []string { return []string{"Organizati
 // /organization returns a collection with exactly one element (verified
 // against current Graph docs), so GetAllValues — meant for small, bounded
 // collections — is the right helper; element [0] is the tenant.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/organization", nil)
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/organization", nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return fmt.Errorf("organization: fetch organization: %w", err)
 	}
 	if len(raw) == 0 {
 		c.logger.Warn("organization: /organization returned an empty collection; skipping this cycle", "collector", collectorName)
 		return nil
 	}
+	if len(raw) > 1 {
+		entraoutcome.Filtered(outcomes, uint64(len(raw))-1)
+	}
 
 	var org graphOrganization
 	if err := json.Unmarshal(raw[0], &org); err != nil {
+		entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 		return fmt.Errorf("organization: decode organization: %w", err)
 	}
 
@@ -155,6 +162,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	e.Gauge(infoMetricName, semconv.UnitDimensionless,
 		"Constant 1 gauge carrying bounded tenant posture (tenant type) as an attribute.",
 		1, telemetry.Attrs{semconv.AttrTenantType: tenantType})
+	entraoutcome.Emitted(outcomes, 1)
 
 	return nil
 }

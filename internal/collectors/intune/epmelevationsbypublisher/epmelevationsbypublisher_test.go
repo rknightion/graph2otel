@@ -44,7 +44,7 @@ func TestCollectSumsElevationCountByType(t *testing.T) {
 	runner := &fakeRunner{rows: liveRows()}
 	c := New(runner, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if runner.lastReq.ReportName != "EpmAggregationReportByPublisher" {
@@ -74,7 +74,7 @@ func TestGaugeSumsAcrossTypes(t *testing.T) {
 	)
 	c := New(&fakeRunner{rows: rows}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	got := map[string]float64{}
@@ -89,7 +89,7 @@ func TestGaugeSumsAcrossTypes(t *testing.T) {
 func TestMetricNameAndUnitPinned(t *testing.T) {
 	c := New(&fakeRunner{rows: liveRows()}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	points := rec.MetricPoints("intune.epm_elevations_by_publisher.count")
@@ -113,7 +113,7 @@ func TestMetricNeverCarriesPublisher(t *testing.T) {
 	}
 	c := New(&fakeRunner{rows: rows}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	points := rec.MetricPoints(metricName)
@@ -135,7 +135,7 @@ func TestMetricNeverCarriesPublisher(t *testing.T) {
 func TestCollectEmitsTwinPerPublisher(t *testing.T) {
 	c := New(&fakeRunner{rows: liveRows()}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	logs := rec.LogRecords()
@@ -167,7 +167,7 @@ func TestManagedElevationIsInfo(t *testing.T) {
 		"CompanyName": "Contoso Ltd", "ElevationType": "ManagedElevation", "ElevationCount": "1",
 	}}}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if got := rec.LogRecords()[0].SeverityText; got != "INFO" {
@@ -188,7 +188,7 @@ func TestCollectSkipsAndLogsOnExportError(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			c := New(&fakeRunner{err: tc.err}, nil)
 			rec := telemetrytest.New()
-			if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+			if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 				t.Fatalf("Collect returned error, want nil: %v", err)
 			}
 			if len(rec.MetricPoints(metricName)) != 0 || len(rec.LogRecords()) != 0 {
@@ -201,7 +201,7 @@ func TestCollectSkipsAndLogsOnExportError(t *testing.T) {
 func TestCollectSkipsWhenExportRunnerIsNil(t *testing.T) {
 	c := New(nil, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if len(rec.MetricPoints(metricName)) != 0 || len(rec.LogRecords()) != 0 {
@@ -235,7 +235,7 @@ func TestCollectorContract(t *testing.T) {
 func TestCollectStampsReportExportTransport(t *testing.T) {
 	c := New(&fakeRunner{rows: liveRows()}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	for i, l := range rec.LogRecords() {

@@ -199,7 +199,7 @@ func TestCollectEmitsLiveRecordsEndToEnd(t *testing.T) {
 	rec := telemetrytest.New()
 	c := withFixedClock(New(g, nil))
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -308,7 +308,7 @@ func TestCollectBucketsCredentialsByOwnerTypeCredentialTypeAndWindow(t *testing.
 	rec := telemetrytest.New()
 	c := withFixedClock(New(g, nil))
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -382,7 +382,7 @@ func TestCollectMetricsNeverCarryPerEntityAttrs(t *testing.T) {
 	rec := telemetrytest.New()
 	c := withFixedClock(New(g, nil))
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -433,7 +433,7 @@ func TestCollectIsResilientToPerOwnerTypeError(t *testing.T) {
 	rec := telemetrytest.New()
 	c := withFixedClock(New(g, nil))
 
-	err := c.Collect(context.Background(), rec.Emitter())
+	err := c.Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Error("expected Collect to surface the servicePrincipals failure as an error")
 	}
@@ -463,7 +463,7 @@ func TestCollectSkipsUnparsableEndDateTimeWithoutFailingOrLogging(t *testing.T) 
 	rec := telemetrytest.New()
 	c := withFixedClock(New(g, nil))
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -492,7 +492,7 @@ func TestCollectSendsNoConsistencyLevelHeader(t *testing.T) {
 	rec := telemetrytest.New()
 	c := withFixedClock(New(g, nil))
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	for url, h := range g.seenHeaders {
@@ -526,7 +526,7 @@ func TestCollectEmitsLiveSecretLogTwinShape(t *testing.T) {
 	rec := telemetrytest.New()
 	c := withFixedClock(New(g, nil))
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -587,7 +587,7 @@ func TestCollectEmitsSyntheticCertificateLogTwin(t *testing.T) {
 	rec := telemetrytest.New()
 	c := withFixedClock(New(g, nil))
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

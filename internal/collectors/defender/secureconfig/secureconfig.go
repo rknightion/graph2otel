@@ -48,6 +48,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/tvm"
@@ -121,17 +122,22 @@ func (c *Collector) RequiredPermissions() []string {
 // Collect runs the two summary queries, emits the bounded gauges, then fetches
 // the per-entity twins per category in row-cap-safe partitions. A summary failure
 // is fatal to the tick; a twin partition failure is non-fatal and aggregated.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	assessments, err := c.c.Query(ctx, "secureconfig_assessments", assessmentsQuery)
 	if err != nil {
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		return fmt.Errorf("%s: assessments query: %w", collectorName, err)
 	}
+	outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(assessments)))
 	risk, err := c.c.Query(ctx, "secureconfig_risk", riskQuery)
 	if err != nil {
+		outcomes.Add(recordoutcome.OutcomeErrored, uint64(len(assessments)))
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		return fmt.Errorf("%s: risk query: %w", collectorName, err)
 	}
+	outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(risk)))
 
-	perCategory := c.emitGauges(e, assessments, risk)
+	perCategory := c.emitGauges(e, assessments, risk, outcomes)
 
 	var errs []error
 	for _, cat := range perCategory {
@@ -139,18 +145,23 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			query := fmt.Sprintf(twinQueryBase, cat.category) + p.Predicate("DeviceId")
 			rows, qerr := c.c.Query(ctx, "secureconfig_twin_"+cat.category, query)
 			if qerr != nil {
+				outcomes.Cause(recordoutcome.CauseSourceError)
 				c.logger.Warn("secure config twin partition failed",
 					"collector", collectorName, "category", cat.category, "error", qerr)
 				errs = append(errs, fmt.Errorf("twin %s: %w", cat.category, qerr))
 				continue
 			}
+			outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(rows)))
 			if len(rows) >= tvm.HardRowCap {
+				outcomes.Cause(recordoutcome.CauseSourceError)
 				c.logger.Error("secure config twin partition hit the hunting row cap; some rows were not emitted",
 					"collector", collectorName, "category", cat.category, "rows", len(rows))
 				errs = append(errs, fmt.Errorf("twin %s: hit row cap %d", cat.category, tvm.HardRowCap))
 			}
 			for _, r := range rows {
 				e.LogEvent(configTwin(r))
+				outcomes.Add(recordoutcome.OutcomeMapped, 1)
+				outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 			}
 		}
 	}
@@ -165,13 +176,15 @@ type categoryCount struct {
 
 // emitGauges emits the three bounded gauges and returns per-category applicable
 // totals for partition planning.
-func (c *Collector) emitGauges(e telemetry.Emitter, assessments, risk []map[string]any) []categoryCount {
+func (c *Collector) emitGauges(e telemetry.Emitter, assessments, risk []map[string]any, outcomes *recordoutcome.Recorder) []categoryCount {
 	var assessPts, devPts, impactPts []telemetry.GaugePoint
 	totals := map[string]int64{}
 
 	for _, r := range assessments {
 		cat, _ := r["ConfigurationCategory"].(string)
 		if cat == "" {
+			outcomes.Add(recordoutcome.OutcomeDropped, 1)
+			outcomes.Cause(recordoutcome.CauseMappingError)
 			continue
 		}
 		compliant, _ := tvm.SByteBool(r, "IsCompliant")
@@ -183,15 +196,21 @@ func (c *Collector) emitGauges(e telemetry.Emitter, assessments, risk []map[stri
 		if n, ok := r["assessments"].(float64); ok {
 			totals[cat] += int64(n)
 		}
+		outcomes.Add(recordoutcome.OutcomeMapped, 1)
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 	}
 	for _, r := range risk {
 		cat, _ := r["ConfigurationCategory"].(string)
 		if cat == "" {
+			outcomes.Add(recordoutcome.OutcomeDropped, 1)
+			outcomes.Cause(recordoutcome.CauseMappingError)
 			continue
 		}
 		attrs := telemetry.Attrs{semconv.AttrConfigurationCategory: cat}
 		devPts = appendNumPoint(devPts, r, "noncompliant_devices", attrs)
 		impactPts = appendNumPoint(impactPts, r, "impact_at_risk", attrs)
+		outcomes.Add(recordoutcome.OutcomeMapped, 1)
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 	}
 
 	e.GaugeSnapshot(metricAssessments, unitAssessment,

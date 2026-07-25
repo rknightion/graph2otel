@@ -51,6 +51,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -454,10 +456,11 @@ func (s deviceOSSummary) points() []telemetry.GaugePoint {
 // Collector polls the Intune managedDevices fleet inventory and the
 // managedDeviceOverview singleton.
 type Collector struct {
-	g       collectors.GraphClient
-	baseURL string
-	logger  *slog.Logger
-	watch   *wirecheck.Reporter
+	outcomes *outcome.Recorder
+	g        collectors.GraphClient
+	baseURL  string
+	logger   *slog.Logger
+	watch    *wirecheck.Reporter
 	// fleet fetches the managedDevices list. Defaults to an uncached
 	// DirectFleetFetcher over g (so unit tests are unchanged); the composition
 	// root injects a shared CachingFleetFetcher via the factory so this and
@@ -528,7 +531,11 @@ func (c *Collector) RequiredPermissions() []string {
 // collector framework has no per-collector config-flag plumbing yet to gate
 // it safely opt-in/default-off. Deferred rather than shipped enabled - see
 // the tracking issue for the follow-up.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
+	local := *c
+	local.outcomes = outcomes
+	c = &local
 	var errs []error
 
 	if err := c.collectOverview(ctx, e); err != nil {
@@ -554,8 +561,10 @@ func (c *Collector) collectOverview(ctx context.Context, e telemetry.Emitter) er
 	}
 	var ov managedDeviceOverview
 	if err := json.Unmarshal(body, &ov); err != nil {
+		outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 		return fmt.Errorf("decode managedDeviceOverview: %w", err)
 	}
+	outcome.Emitted(c.outcomes, 1)
 
 	e.Gauge(overviewEnrolledMetricName, "{device}", "Total enrolled Intune device count (managedDeviceOverview cross-check, may lag the live count).", float64(ov.EnrolledDeviceCount), nil)
 	e.Gauge(overviewMdmMetricName, "{device}", "Devices enrolled in MDM (managedDeviceOverview cross-check, may lag the live count).", float64(ov.MdmEnrolledCount), nil)
@@ -570,7 +579,7 @@ func (c *Collector) collectOverview(ctx context.Context, e telemetry.Emitter) er
 // single malformed element is logged and skipped rather than failing the
 // whole aggregate.
 func (c *Collector) collectFleet(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := c.fleet.ManagedDevices(ctx)
+	raw, err := c.fleet.ManagedDevices(ctx, c.outcomes)
 	if err != nil {
 		return err
 	}
@@ -585,8 +594,10 @@ func (c *Collector) collectFleet(ctx context.Context, e telemetry.Emitter) error
 		var d managedDevice
 		if err := json.Unmarshal(r, &d); err != nil {
 			c.logger.Warn("manageddevices: skipping malformed managedDevice element", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		c.watch.Value(e, semconv.AttrComplianceState, canonicalComplianceState(d.ComplianceState), knownComplianceStates)
 		compliance := complianceBucketFor(d.ComplianceState)
 		os := osBucketFor(d.OperatingSystem)

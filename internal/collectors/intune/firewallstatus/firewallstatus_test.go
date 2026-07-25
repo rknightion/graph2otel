@@ -75,7 +75,7 @@ func TestCollectCountsByFirewallStatus(t *testing.T) {
 	runner := &fakeRunner{rows: liveRows()}
 	c := New(runner, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if runner.lastReq.ReportName != reportName {
@@ -112,7 +112,7 @@ func TestMetricCarriesOnlyBoundedDimensions(t *testing.T) {
 	}
 	c := New(&fakeRunner{rows: rows}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	points := rec.MetricPoints(metricName)
@@ -131,7 +131,7 @@ func TestMetricCarriesOnlyBoundedDimensions(t *testing.T) {
 func TestCollectEmitsTwinPerRow(t *testing.T) {
 	c := New(&fakeRunner{rows: liveRows()}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	logs := rec.LogRecords()
@@ -170,7 +170,7 @@ func TestCollectEmitsTwinPerRow(t *testing.T) {
 func TestWarnWhenFirewallNotEnabled(t *testing.T) {
 	c := New(&fakeRunner{rows: []exportjob.Row{warnRow()}}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	logs := rec.LogRecords()
@@ -197,7 +197,7 @@ func TestCollectSkipsAndLogsOnExportError(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			c := New(&fakeRunner{err: tc.err}, nil)
 			rec := telemetrytest.New()
-			if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+			if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 				t.Fatalf("Collect returned error, want nil: %v", err)
 			}
 			if len(rec.MetricPoints(metricName)) != 0 || len(rec.LogRecords()) != 0 {
@@ -210,7 +210,7 @@ func TestCollectSkipsAndLogsOnExportError(t *testing.T) {
 func TestCollectSkipsWhenExportRunnerIsNil(t *testing.T) {
 	c := New(nil, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if len(rec.MetricPoints(metricName)) != 0 || len(rec.LogRecords()) != 0 {
@@ -223,7 +223,7 @@ func TestCollectSkipsWhenExportRunnerIsNil(t *testing.T) {
 func TestCollectEmptyReportEmitsNothing(t *testing.T) {
 	c := New(&fakeRunner{rows: nil}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if len(rec.MetricPoints(metricName)) != 0 || len(rec.LogRecords()) != 0 {
@@ -254,7 +254,7 @@ func TestCollectorContract(t *testing.T) {
 func TestCollectStampsReportExportTransport(t *testing.T) {
 	c := New(&fakeRunner{rows: liveRows()}, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	for i, l := range rec.LogRecords() {

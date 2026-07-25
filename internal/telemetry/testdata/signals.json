@@ -1,6 +1,17 @@
 {
   "Metrics": [
     {
+      "Name": "graph2otel.event.lag",
+      "Unit": "s",
+      "Kind": "histogram",
+      "Description": "Age of a source event when graph2otel handed its log record to the telemetry emitter.",
+      "AttrKeys": [
+        "collector",
+        "ingest_transport",
+        "tenant_id"
+      ]
+    },
+    {
       "Name": "graph2otel.series.active",
       "Unit": "{series}",
       "Kind": "gauge",

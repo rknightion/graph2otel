@@ -55,7 +55,9 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/graphclient"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
 	"github.com/rknightion/graph2otel/internal/preflight"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -101,10 +103,11 @@ const (
 
 // Collector polls the beta managedDeviceEncryptionStates collection.
 type Collector struct {
-	g       collectors.GraphClient
-	baseURL string
-	logger  *slog.Logger
-	watch   *wirecheck.Reporter
+	outcomes *outcome.Recorder
+	g        collectors.GraphClient
+	baseURL  string
+	logger   *slog.Logger
+	watch    *wirecheck.Reporter
 }
 
 // New builds the collector. A nil logger falls back to slog.Default().
@@ -153,12 +156,18 @@ type encryptionState struct {
 // gauges, and emits one twin per device row. A 403 (missing scope, or the
 // surface absent on this tenant) is a graceful info-level skip rather than a
 // collection failure.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+listPath, nil)
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
+	local := *c
+	local.outcomes = outcomes
+	c = &local
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+listPath, nil, c.outcomes)
 	if err != nil {
 		if isForbidden(err) {
+			outcome.RecordError(c.outcomes, err)
 			c.logger.Info("deviceencryption: managedDeviceEncryptionStates forbidden (missing scope?); skipping",
 				"collector", collectorName, "error", graphclient.FormatODataError(err))
+			outcomes.Cause(recordoutcome.CausePermissionDenied)
 			return nil
 		}
 		return fmt.Errorf("%s: list encryption states: %w", collectorName, err)
@@ -169,8 +178,10 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for _, raw := range raws {
 		var st encryptionState
 		if err := json.Unmarshal(raw, &st); err != nil {
+			outcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			return fmt.Errorf("%s: decode encryption state: %w", collectorName, err)
 		}
+		outcome.Emitted(outcomes, 1)
 		// The four State fields are metric labels passed raw — watch each against
 		// its CSDL set so a new Microsoft member surfaces rather than folding into
 		// a series nobody inspects (#234).

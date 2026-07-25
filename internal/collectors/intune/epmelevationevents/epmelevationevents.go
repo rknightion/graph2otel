@@ -41,7 +41,9 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/exportjob"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
 	"github.com/rknightion/graph2otel/internal/preflight"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -130,7 +132,8 @@ func (c *Collector) RequiredPermissions() []string {
 // with its own EventDateTime, and increments a bounded counter by
 // (elevation_type, result). Export failures are logged and swallowed, never
 // surfaced to the scheduler.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
 	// This collector names its own transport (#141): exportjob never calls LogEvent.
 	e = telemetry.WithTransport(e, telemetry.TransportReportExport)
 
@@ -146,9 +149,9 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	}, e)
 	if err != nil {
 		logExportFailure(c.logger, err)
+		outcome.RecordError(outcomes, err)
 		return nil
 	}
-
 	cp, err := c.store.Load(c.tenantID, endpoint)
 	if err != nil {
 		// Corrupt/unreadable checkpoint: degrade to an empty one (a single cold
@@ -174,22 +177,31 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			// No immutable id ⇒ undedupeable ⇒ would re-emit every poll. Drop it
 			// (loudly), rather than dup-storm the backend.
 			c.logger.Warn("epmelevationevents: elevation row has no Id; dropping (undedupeable)", "collector", collectorName)
+			outcome.Dropped(outcomes, 1, recordoutcome.CauseMappingError)
 			continue
 		}
 		t, ok := parseEventTime(row["EventDateTime"])
 		if !ok {
 			// No parseable event time ⇒ emitting would stamp "now" and misdate it.
 			c.logger.Warn("epmelevationevents: unparseable EventDateTime; dropping row", "collector", collectorName, "id", id, "value", row["EventDateTime"])
+			outcome.Dropped(outcomes, 1, recordoutcome.CauseMissingEventTime)
 			continue
 		}
 		if t.Before(cutoff) {
+			outcomes.Add(recordoutcome.OutcomeFetched, 1)
+			outcomes.Add(recordoutcome.OutcomeMapped, 1)
+			outcomes.Add(recordoutcome.OutcomeDeduped, 1)
 			continue // older than the overlap window: emitted on a prior poll and evicted.
 		}
 		if cp.SeenIDs.Has(id) {
+			outcomes.Add(recordoutcome.OutcomeFetched, 1)
+			outcomes.Add(recordoutcome.OutcomeMapped, 1)
+			outcomes.Add(recordoutcome.OutcomeDeduped, 1)
 			continue // already emitted within the current overlap window.
 		}
 
 		e.LogEvent(elevationEvent(row, t))
+		outcome.Emitted(outcomes, 1)
 		cp.SeenIDs.Add(id, t)
 		counts[[2]string{row["ElevationType"], clean(row["Result"])}]++
 		if !sawAny || t.After(newest) {

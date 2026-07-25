@@ -13,6 +13,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/exoclient"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
@@ -210,7 +211,7 @@ func newCollector(t *testing.T, f *fakeEXO) *Collector {
 func collect(t *testing.T, c *Collector) (*telemetrytest.Recorder, []telemetrytest.LogRecord) {
 	t.Helper()
 	rec := telemetrytest.New()
-	if _, err := c.CollectWindow(context.Background(), windowFrom, windowTo, rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), windowFrom, windowTo, rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 	return rec, rec.LogRecords()
@@ -449,7 +450,7 @@ func TestDedupesAcrossTicks(t *testing.T) {
 	c := newCollector(t, f)
 	rec := telemetrytest.New()
 
-	if _, err := c.CollectWindow(context.Background(), windowFrom, windowTo, rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), windowFrom, windowTo, rec.Emitter(), nil); err != nil {
 		t.Fatalf("first tick: %v", err)
 	}
 	if got := len(rec.LogRecords()); got != 1 {
@@ -458,7 +459,7 @@ func TestDedupesAcrossTicks(t *testing.T) {
 
 	// The scheduler's next window starts where this one ended.
 	next := telemetrytest.New()
-	if _, err := c.CollectWindow(context.Background(), windowTo, windowTo.Add(10*time.Minute), next.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), windowTo, windowTo.Add(10*time.Minute), next.Emitter(), nil); err != nil {
 		t.Fatalf("second tick: %v", err)
 	}
 	if len(f.calls) < 2 {
@@ -742,8 +743,43 @@ func TestCheckpointStateReportsProgress(t *testing.T) {
 func TestCollectErrorDoesNotAdvance(t *testing.T) {
 	f := &fakeEXO{err: errors.New("boom")}
 	rec := telemetrytest.New()
-	if _, err := newCollector(t, f).CollectWindow(context.Background(), windowFrom, windowTo, rec.Emitter()); err == nil {
+	if _, err := newCollector(t, f).CollectWindow(context.Background(), windowFrom, windowTo, rec.Emitter(), nil); err == nil {
 		t.Fatal("CollectWindow returned nil error on a failing cmdlet")
+	}
+}
+
+func TestCollectWindowAccountsFetchedMappedEmittedAndDeduped(t *testing.T) {
+	dup := row("d1", at(3), "rob@m7kni.io", "Delivered")
+	f := &fakeEXO{rows: []map[string]any{dup, row("d2", at(2), "rob@m7kni.io", "Delivered"), dup}}
+	outcomes := recordoutcome.NewRecorder()
+
+	if _, err := newCollector(t, f).CollectWindow(
+		context.Background(), windowFrom, windowTo, telemetrytest.New().Emitter(), outcomes,
+	); err != nil {
+		t.Fatalf("CollectWindow: %v", err)
+	}
+
+	got := outcomes.Snapshot().Summarize(nil, false)
+	want := recordoutcome.Counts{Fetched: 3, Mapped: 3, Emitted: 2, Deduped: 1}
+	if got.Result != recordoutcome.ResultSuccess || got.Cause != recordoutcome.CauseNone || got.Counts != want {
+		t.Errorf("outcome = %#v, want success/none/%#v", got, want)
+	}
+}
+
+func TestCollectWindowAccountsUndatedRecordAsDropped(t *testing.T) {
+	f := &fakeEXO{rows: []map[string]any{row("bad-time", "not-a-time", "rob@m7kni.io", "Delivered")}}
+	outcomes := recordoutcome.NewRecorder()
+
+	if _, err := newCollector(t, f).CollectWindow(
+		context.Background(), windowFrom, windowTo, telemetrytest.New().Emitter(), outcomes,
+	); err != nil {
+		t.Fatalf("CollectWindow: %v", err)
+	}
+
+	got := outcomes.Snapshot().Summarize(nil, false)
+	want := recordoutcome.Counts{Fetched: 1, Dropped: 1}
+	if got.Result != recordoutcome.ResultFailure || got.Cause != recordoutcome.CauseMissingEventTime || got.Counts != want {
+		t.Errorf("outcome = %#v, want failure/missing_event_time/%#v", got, want)
 	}
 }
 

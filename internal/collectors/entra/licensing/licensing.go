@@ -63,6 +63,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -191,9 +193,10 @@ func (c *Collector) RequiredPermissions() []string {
 // support, so GetAllValues (not Count) is the right helper here. It then
 // fetches the bounded hasMembersWithLicenseErrors group filter (#122) and
 // emits its scalar count plus one log twin per affected group.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/subscribedSkus", nil)
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/subscribedSkus", nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return fmt.Errorf("licensing: fetch subscribedSkus: %w", err)
 	}
 
@@ -204,10 +207,12 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for _, r := range raw {
 		var sku subscribedSku
 		if err := json.Unmarshal(r, &sku); err != nil {
+			entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			c.logger.Warn("licensing: skipping unparseable subscribedSku", "collector", collectorName, "error", err)
 			continue
 		}
 		if sku.SkuPartNumber == "" {
+			entraoutcome.Dropped(outcomes, 1, recordoutcome.CauseMappingError)
 			c.logger.Warn("licensing: skipping subscribedSku with empty skuPartNumber", "collector", collectorName)
 			continue
 		}
@@ -226,6 +231,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			Value: 1,
 			Attrs: telemetry.Attrs{semconv.AttrSku: sku.SkuPartNumber, semconv.AttrStatus: strings.ToLower(sku.CapabilityStatus)},
 		})
+		entraoutcome.Emitted(outcomes, 1)
 	}
 
 	e.GaugeSnapshot(consumedMetricName, "{unit}", "Consumed license units per Entra subscribed SKU.", consumed)
@@ -233,7 +239,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	e.GaugeSnapshot(unitsMetricName, "{unit}", "Prepaid license units per Entra subscribed SKU, by unit state (enabled/suspended/warning/locked_out).", units)
 	e.GaugeSnapshot(capabilityStatusMetricName, "{sku}", "Current Graph capabilityStatus per Entra subscribed SKU (value is always 1; status is the label).", capabilityStatus)
 
-	if err := c.collectGroupsWithErrors(ctx, e); err != nil {
+	if err := c.collectGroupsWithErrors(ctx, e, outcomes); err != nil {
 		c.logger.Warn("licensing: groups-with-license-errors collection failed", "collector", collectorName, "error", err)
 		return fmt.Errorf("licensing: fetch groups with license errors: %w", err)
 	}
@@ -245,10 +251,11 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // count (explicit 0 when none) and one log twin per affected group (none when
 // the count is 0 — see the package doc for why this is a different, bounded
 // path from the per-user detection #45 rejected).
-func (c *Collector) collectGroupsWithErrors(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) collectGroupsWithErrors(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	groupsURL := c.baseURL + "/groups?$filter=" + url.QueryEscape(groupsWithLicenseErrorsFilter) + "&$select=id,displayName"
-	raw, err := collectors.GetAllValues(ctx, c.g, groupsURL, collectors.EventualHeaders())
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, groupsURL, collectors.EventualHeaders(), outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return err
 	}
 
@@ -256,6 +263,7 @@ func (c *Collector) collectGroupsWithErrors(ctx context.Context, e telemetry.Emi
 	for _, r := range raw {
 		var g erroredGroup
 		if err := json.Unmarshal(r, &g); err != nil {
+			entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			c.logger.Warn("licensing: skipping unparseable errored group", "collector", collectorName, "error", err)
 			continue
 		}
@@ -275,6 +283,7 @@ func (c *Collector) collectGroupsWithErrors(ctx context.Context, e telemetry.Emi
 			Severity: telemetry.SeverityWarn,
 			Attrs:    attrs,
 		})
+		entraoutcome.Emitted(outcomes, 1)
 	}
 
 	e.Gauge(groupsWithErrorsMetricName, "{group}", "Total Entra groups with at least one member whose license assignment failed.", float64(affected), nil)

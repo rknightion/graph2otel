@@ -71,7 +71,13 @@ Ported from `tailscale2otel`. Two collector shapes:
 A `Registry` holds every enabled collector; a goroutine-per-collector `Scheduler` drives
 each on its own ticker, staggered so a large collector set doesn't all fire in the same
 instant. Every collector run reports self-observability (`graph2otel.scrape.*`) through
-the same `telemetry.Emitter` collectors use for domain data.
+the same `telemetry.Emitter` collectors use for domain data. The Scheduler also supplies
+one concurrency-safe outcome recorder per run. Collectors reconcile source records as
+`fetched = mapped + filtered + dropped + errored` and
+`mapped = emitted + deduped`; the Scheduler turns the immutable summary into explicit
+empty/success/partial/failure status and bounded `graph2otel.record.outcomes` /
+`graph2otel.scrape.outcomes` metrics. A telemetry decorator measures event lag at the
+final log-emission boundary, after an engine has stamped the authoritative transport.
 
 ### Log-stream engine (`internal/logpipeline`)
 

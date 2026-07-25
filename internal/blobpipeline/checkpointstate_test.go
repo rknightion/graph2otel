@@ -78,7 +78,7 @@ func TestBlobCollectorCheckpointStateDoesNotRestorePrunedBlobAfterRestart(t *tes
 
 	c := NewBlobCollector("test.blob", time.Minute, "t1", testConfig(),
 		&fakeSource{blobs: map[string]string{live: rec("a")}}, store, discardLogger())
-	if err := c.Collect(t.Context(), telemetrytest.New().Emitter()); err != nil {
+	if err := c.Collect(t.Context(), telemetrytest.New().Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

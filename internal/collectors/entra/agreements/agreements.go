@@ -57,6 +57,8 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -157,9 +159,10 @@ func (c *Collector) RequiredCapability() license.Capability { return license.Cap
 // agreements.total gauge -- still emits; the aggregated error is returned so
 // the partial failure is visible in scrape self-observability without hiding
 // the data that did succeed.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
-	rawAgreements, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/identityGovernance/termsOfUse/agreements", nil)
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	rawAgreements, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/identityGovernance/termsOfUse/agreements", nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		c.logger.Warn("agreements: fetch agreements failed", "collector", collectorName, "error", err)
 		return fmt.Errorf("fetch agreements: %w", err)
 	}
@@ -168,14 +171,17 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for _, raw := range rawAgreements {
 		var a agreement
 		if err := json.Unmarshal(raw, &a); err != nil {
+			entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			c.logger.Warn("agreements: skipping unparseable agreement", "collector", collectorName, "error", err)
 			continue
 		}
 		if a.ID == "" {
+			entraoutcome.Dropped(outcomes, 1, recordoutcome.CauseMappingError)
 			c.logger.Warn("agreements: skipping agreement with empty id", "collector", collectorName)
 			continue
 		}
 		ids = append(ids, a.ID)
+		entraoutcome.Emitted(outcomes, 1)
 	}
 
 	e.Gauge(agreementsMetricName, "{agreement}",
@@ -185,8 +191,9 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	var errs []error
 	points := make([]telemetry.GaugePoint, 0, len(ids)*len(acceptanceStates))
 	for _, id := range ids {
-		acceptancePoints, err := c.collectAcceptances(ctx, id)
+		acceptancePoints, err := c.collectAcceptances(ctx, id, outcomes)
 		if err != nil {
+			entraoutcome.SourceError(outcomes)
 			c.logger.Warn("agreements: fetch acceptances failed", "collector", collectorName, "agreement", id, "error", err)
 			errs = append(errs, fmt.Errorf("agreement %s acceptances: %w", id, err))
 			continue
@@ -204,8 +211,8 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // zero-filled (agreement, state) gauge points. An acceptance with an
 // unrecognized state (a future Graph addition beyond accepted/declined) is
 // logged and excluded from the count, never mapped to some catch-all bucket.
-func (c *Collector) collectAcceptances(ctx context.Context, agreementID string) ([]telemetry.GaugePoint, error) {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/identityGovernance/termsOfUse/agreements/"+agreementID+"/acceptances", nil)
+func (c *Collector) collectAcceptances(ctx context.Context, agreementID string, outcomes *recordoutcome.Recorder) ([]telemetry.GaugePoint, error) {
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/identityGovernance/termsOfUse/agreements/"+agreementID+"/acceptances", nil, outcomes)
 	if err != nil {
 		return nil, err
 	}
@@ -218,14 +225,17 @@ func (c *Collector) collectAcceptances(ctx context.Context, agreementID string) 
 	for _, r := range raw {
 		var acc agreementAcceptance
 		if err := json.Unmarshal(r, &acc); err != nil {
+			entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			c.logger.Warn("agreements: skipping unparseable acceptance", "collector", collectorName, "agreement", agreementID, "error", err)
 			continue
 		}
 		if _, ok := counts[acc.State]; !ok {
+			entraoutcome.Dropped(outcomes, 1, recordoutcome.CauseMappingError)
 			c.logger.Warn("agreements: skipping acceptance with unrecognized state", "collector", collectorName, "agreement", agreementID, "state", acc.State)
 			continue
 		}
 		counts[acc.State]++
+		entraoutcome.Emitted(outcomes, 1)
 	}
 
 	points := make([]telemetry.GaugePoint, 0, len(acceptanceStates))

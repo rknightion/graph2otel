@@ -13,6 +13,8 @@ package logpipeline
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"sort"
@@ -20,6 +22,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -209,7 +212,15 @@ type PageFetcher interface {
 // it — the caller owns persistence (checkpoint.Store.Save), so Poll stays
 // testable without a filesystem. LogCollector.CollectWindow (collector.go)
 // is the convenience that Loads, Polls, and Saves for a WindowCollector.
-func Poll(ctx context.Context, cfg EndpointConfig, cp *checkpoint.Checkpoint, from, to time.Time, fetcher PageFetcher, e telemetry.Emitter) (highWater time.Time, err error) {
+func Poll(
+	ctx context.Context,
+	cfg EndpointConfig,
+	cp *checkpoint.Checkpoint,
+	from, to time.Time,
+	fetcher PageFetcher,
+	e telemetry.Emitter,
+	outcomes *recordoutcome.Recorder,
+) (highWater time.Time, err error) {
 	cfg = cfg.withDefaults()
 
 	// Name the transport once per cycle rather than per record: every record
@@ -222,60 +233,81 @@ func Poll(ctx context.Context, cfg EndpointConfig, cp *checkpoint.Checkpoint, fr
 		t  time.Time
 	}
 
+	var rawRecords []map[string]any
 	var all []drainedRecord
 	selfExcluded := 0
 	undated := 0
+	var fetched uint64
 	pageURL := buildFirstURL(cfg, from, to)
 	seenURLs := make(map[string]struct{})
 	pages := 0
 	for pageURL != "" {
 		if _, seen := seenURLs[pageURL]; seen {
+			failFetchedRecords(outcomes, fetched, recordoutcome.CauseSourceError)
 			return cp.Watermark, fmt.Errorf("logpipeline: %s: repeated pagination URL %q", cfg.Path, pageURL)
 		}
 		seenURLs[pageURL] = struct{}{}
 		if pages >= maxPages {
+			failFetchedRecords(outcomes, fetched, recordoutcome.CauseSourceError)
 			return cp.Watermark, fmt.Errorf("logpipeline: %s: pagination exceeded %d pages at %q", cfg.Path, maxPages, pageURL)
 		}
 		pages++
 
 		records, next, ferr := fetcher.FetchPage(ctx, pageURL)
+		n := uint64(len(records))
+		fetched += n
+		outcomes.Add(recordoutcome.OutcomeFetched, n)
 		if ferr != nil {
+			failFetchedRecords(outcomes, fetched, fetchFailureCause(ferr))
 			return cp.Watermark, fmt.Errorf("logpipeline: %s: fetch page: %w", cfg.Path, ferr)
 		}
-		for _, rec := range records {
-			if cfg.ExcludeSelf && cfg.SelfAppID != nil && cfg.SelfClientID != "" && cfg.SelfAppID(rec) == cfg.SelfClientID {
-				// graph2otel's own polling exhaust (#176). Keep the counter local
-				// until the whole page walk succeeds: a failed walk is retried, so
-				// emitting it here would double-count the same self-authored record.
-				selfExcluded++
-				continue
-			}
-			id, ev := cfg.Map(rec)
-			t, ok := recordTime(rec, cfg.TimeField)
-			if !ok {
-				t = ev.Timestamp
-			}
-			if ev.Timestamp.IsZero() {
-				ev.Timestamp = t
-			}
-			if t.IsZero() {
-				// A zero event time would become arrival time at the OTEL boundary,
-				// silently inventing when this event happened (#275). The raw wire
-				// field and mapper fallback have both failed, so drop before it can
-				// affect emission, dedupe, or the watermark.
-				undated++
-				continue
-			}
-			// With no server-side $filter, the endpoint returns its whole
-			// collection, so bound the window client-side: drop records outside
-			// [from, to]. This keeps newest <= to (watermark invariant) and
-			// stops events inside the SafetyLag tail from emitting early.
-			if cfg.NoServerFilter && (t.Before(from) || t.After(to)) {
-				continue
-			}
-			all = append(all, drainedRecord{id: id, ev: ev, t: t})
-		}
+		rawRecords = append(rawRecords, records...)
 		pageURL = next
+	}
+
+	// Map only after the complete page walk succeeds. The engine deliberately
+	// buffers before emission/checkpoint mutation; deferring mapping to the same
+	// commit point means a later-page failure classifies every fetched row as
+	// errored instead of claiming mapped work that is intentionally retried.
+	for _, rec := range rawRecords {
+		if cfg.ExcludeSelf && cfg.SelfAppID != nil && cfg.SelfClientID != "" && cfg.SelfAppID(rec) == cfg.SelfClientID {
+			selfExcluded++
+			outcomes.Add(recordoutcome.OutcomeFiltered, 1)
+			continue
+		}
+		id, ev, mapped := mapRecord(cfg.Map, rec)
+		if !mapped {
+			outcomes.Add(recordoutcome.OutcomeErrored, 1)
+			outcomes.Cause(recordoutcome.CauseMappingError)
+			continue
+		}
+		t, ok := recordTime(rec, cfg.TimeField)
+		if !ok {
+			t = ev.Timestamp
+		}
+		if ev.Timestamp.IsZero() {
+			ev.Timestamp = t
+		}
+		if t.IsZero() {
+			// A zero event time would become arrival time at the OTEL boundary,
+			// silently inventing when this event happened (#275). The raw wire
+			// field and mapper fallback have both failed, so drop before it can
+			// affect emission, dedupe, or the watermark.
+			undated++
+			outcomes.Add(recordoutcome.OutcomeDropped, 1)
+			outcomes.Cause(recordoutcome.CauseMissingEventTime)
+			continue
+		}
+		// With no server-side $filter, the endpoint returns its whole
+		// collection, so bound the window client-side: drop records outside
+		// [from, to]. This keeps newest <= to (watermark invariant) and
+		// stops events inside the SafetyLag tail from emitting early.
+		if cfg.NoServerFilter && (t.Before(from) || t.After(to)) {
+			outcomes.Add(recordoutcome.OutcomeFiltered, 1)
+			continue
+		}
+		outcomes.Add(recordoutcome.OutcomeMapped, 1)
+		all = append(all, drainedRecord{id: id, ev: ev, t: t})
 	}
 
 	// $orderby is not honored (or not trusted) server-side for this
@@ -305,6 +337,7 @@ func Poll(ctx context.Context, cfg EndpointConfig, cp *checkpoint.Checkpoint, fr
 			// seen record for watermark advancement.
 			wirecheck.Shared(cfg.CollectorName).MissingField(e, semconv.AttrId)
 			e.LogEvent(d.ev)
+			outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 			if !sawAny || d.t.After(newest) {
 				newest = d.t
 			}
@@ -312,9 +345,11 @@ func Poll(ctx context.Context, cfg EndpointConfig, cp *checkpoint.Checkpoint, fr
 			continue
 		}
 		if cp.SeenIDs.Has(d.id) {
+			outcomes.Add(recordoutcome.OutcomeDeduped, 1)
 			continue
 		}
 		e.LogEvent(d.ev)
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 		cp.SeenIDs.Add(d.id, d.t)
 		if !sawAny || d.t.After(newest) {
 			newest = d.t
@@ -345,6 +380,46 @@ func Poll(ctx context.Context, cfg EndpointConfig, cp *checkpoint.Checkpoint, fr
 	cp.EvictStale()
 
 	return highWater, nil
+}
+
+// mapRecord contains a mapper panic to the source record that caused it. A
+// malformed row may be unusable while its siblings are valid; converting that
+// one panic to a bounded mapping_error preserves partial progress without
+// leaking the panic text or record contents into telemetry.
+func mapRecord(mapper func(map[string]any) (string, telemetry.Event), record map[string]any) (id string, ev telemetry.Event, ok bool) {
+	defer func() {
+		if recover() != nil {
+			id = ""
+			ev = telemetry.Event{}
+			ok = false
+		}
+	}()
+	id, ev = mapper(record)
+	return id, ev, true
+}
+
+// failFetchedRecords closes the reconciliation equation when a page walk
+// aborts before its buffered records can be committed. Every row returned in
+// this attempt remains retryable and is therefore errored, never mapped.
+func failFetchedRecords(outcomes *recordoutcome.Recorder, fetched uint64, cause recordoutcome.Cause) {
+	outcomes.Add(recordoutcome.OutcomeErrored, fetched)
+	outcomes.Cause(cause)
+}
+
+// fetchFailureCause reduces fetch/decode errors to the frozen bounded causes.
+// Raw error strings remain in the returned Poll error for operator logs only;
+// they never become a metric dimension.
+func fetchFailureCause(err error) recordoutcome.Cause {
+	var syntaxErr *json.SyntaxError
+	var typeErr *json.UnmarshalTypeError
+	switch {
+	case errors.As(err, &syntaxErr), errors.As(err, &typeErr):
+		return recordoutcome.CauseDecodeError
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
+		return recordoutcome.CauseTimeout
+	default:
+		return recordoutcome.CauseSourceError
+	}
 }
 
 // buildFirstURL builds the first page URL for cfg's time window [from, to]:

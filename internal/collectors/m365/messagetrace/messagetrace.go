@@ -96,6 +96,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/exoclient"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -341,7 +342,7 @@ type message struct {
 // what was already shipped while still never reading the hole, and would leave
 // the collector permanently behind. So the window advances and the loss is made
 // loud rather than silent.
-func (c *Collector) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter) (time.Time, error) {
+func (c *Collector) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter, outcomes *recordoutcome.Recorder) (time.Time, error) {
 	// Stamp the transport HERE: with no ingest engine on this path the
 	// Scheduler's baseline is TransportGraph, so without this every record from
 	// the Exchange Online admin API would claim to be a Graph poll.
@@ -349,6 +350,7 @@ func (c *Collector) CollectWindow(ctx context.Context, from, to time.Time, e tel
 
 	cp, err := c.store.Load(c.tenantID, checkpointKey)
 	if err != nil {
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		return time.Time{}, err //nolint:wrapcheck // the store's error is already specific
 	}
 	cp.OverlapWindow = overlapWindow
@@ -370,15 +372,20 @@ func (c *Collector) CollectWindow(ctx context.Context, from, to time.Time, e tel
 
 		res, err := c.c.InvokeFull(ctx, cmdletMessageTrace, params)
 		if err != nil {
+			outcomes.Cause(recordoutcome.CauseSourceError)
 			return time.Time{}, fmt.Errorf("%s page %d: %w", cmdletMessageTrace, pages, err)
 		}
+		outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(res.Records)))
 
 		var last cursor
 		for _, r := range res.Records {
 			m, ok := c.mapRecord(e, r)
 			if !ok {
+				outcomes.Add(recordoutcome.OutcomeDropped, 1)
+				outcomes.Cause(recordoutcome.CauseMissingEventTime)
 				continue
 			}
+			outcomes.Add(recordoutcome.OutcomeMapped, 1)
 			last = cursor{received: m.received, recipient: m.recipient}
 
 			// An undedupeable record is DEGRADED, not wrong, so it still ships:
@@ -386,12 +393,14 @@ func (c *Collector) CollectWindow(ctx context.Context, from, to time.Time, e tel
 			// record that cannot be dated is dropped (see mapRecord).
 			if m.traceID != "" {
 				if cp.SeenIDs.Has(m.traceID) {
+					outcomes.Add(recordoutcome.OutcomeDeduped, 1)
 					continue
 				}
 				cp.SeenIDs.Add(m.traceID, m.eventTime)
 			}
 
 			e.LogEvent(logTwin(m))
+			outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 			counts[m.status]++
 			// Seed the byte total even for a record with no Size, so the two
 			// counters always carry the same status label set and "average size"
@@ -411,11 +420,13 @@ func (c *Collector) CollectWindow(ctx context.Context, from, to time.Time, e tel
 			break
 		}
 		if last.received == "" {
+			outcomes.Cause(recordoutcome.CauseSourceError)
 			c.watch.Invariant(e, ruleTruncationCursor,
 				"the service reported more results but the page carried no record to continue from")
 			break
 		}
 		if last == cur {
+			outcomes.Cause(recordoutcome.CauseSourceError)
 			c.watch.Invariant(e, ruleCursorStall,
 				fmt.Sprintf("the continuation did not advance past %s/%s; stopping rather than re-requesting the identical page",
 					cur.received, cur.recipient))
@@ -424,6 +435,7 @@ func (c *Collector) CollectWindow(ctx context.Context, from, to time.Time, e tel
 		cur = last
 	}
 	if pages > maxPages {
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		c.watch.Invariant(e, rulePageCap,
 			fmt.Sprintf("stopped the keyset walk at %d pages with the cursor at %s; records older than that within [%s, %s] were not read and the window advances past them",
 				maxPages, cur.received, since, end))
@@ -436,6 +448,7 @@ func (c *Collector) CollectWindow(ctx context.Context, from, to time.Time, e tel
 	cp.Watermark = to
 	cp.EvictStale()
 	if err := c.store.Save(cp); err != nil {
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		return time.Time{}, err //nolint:wrapcheck // the store's error is already specific
 	}
 

@@ -3,9 +3,11 @@ package riskyagents
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -67,7 +69,7 @@ func liveFixture() *fakeGraph {
 // the verbatim row.
 func TestCollectEmitsBoundedGauge(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(liveFixture(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(liveFixture(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	pts := rec.MetricPoints(metricRiskyAgents)
@@ -90,7 +92,7 @@ func TestCollectReportsUnmappedRiskEnum(t *testing.T) {
 		agentsURL: `{"value":[{"id":"a1","riskLevel":"apocalyptic","riskState":"quantumFlux"}]}`,
 	}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	fields := map[string]bool{}
@@ -103,9 +105,62 @@ func TestCollectReportsUnmappedRiskEnum(t *testing.T) {
 	}
 }
 
+func TestCollectReportsOptionalBlueprintTypeMismatchWithoutDroppingOrLeakingValue(t *testing.T) {
+	const sentinel = "8675309"
+	g := &fakeGraph{bodies: map[string]string{
+		agentsURL: `{"value":[{
+			"id":"a1",
+			"blueprintId":8675309,
+			"agentDisplayName":"usable-agent",
+			"riskLevel":"high",
+			"riskState":"atRisk"
+		}]}`,
+	}}
+	rec := telemetrytest.New()
+	outcomes := recordoutcome.NewRecorder()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), outcomes); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	snapshot := outcomes.Snapshot()
+	wantCounts := recordoutcome.Counts{Fetched: 1, Mapped: 1, Emitted: 1}
+	if snapshot.Counts != wantCounts {
+		t.Fatalf("counts = %+v, want %+v", snapshot.Counts, wantCounts)
+	}
+	wantMismatch := recordoutcome.TypeMismatch{
+		Field:        "blueprintId",
+		ExpectedType: "string",
+		ActualType:   "number",
+		Count:        1,
+	}
+	if len(snapshot.TypeMismatches) != 1 || snapshot.TypeMismatches[0] != wantMismatch {
+		t.Fatalf("type mismatches = %+v, want [%+v]", snapshot.TypeMismatches, wantMismatch)
+	}
+	for _, name := range rec.MetricNames() {
+		for _, point := range rec.MetricPoints(name) {
+			for key, value := range point.Attrs {
+				if strings.Contains(value, sentinel) {
+					t.Fatalf("raw mismatched value leaked in metric %s attr %q=%q", name, key, value)
+				}
+			}
+		}
+	}
+	for _, log := range rec.LogRecords() {
+		if strings.Contains(log.Body, sentinel) {
+			t.Fatalf("raw mismatched value leaked in log body: %q", log.Body)
+		}
+		for key, value := range log.Attrs {
+			if strings.Contains(value, sentinel) {
+				t.Fatalf("raw mismatched value leaked in log attr %q=%q", key, value)
+			}
+		}
+	}
+}
+
 func TestCollectNoPerEntitySeries(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(liveFixture(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(liveFixture(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	for _, p := range rec.MetricPoints(metricRiskyAgents) {
@@ -120,7 +175,7 @@ func TestCollectNoPerEntitySeries(t *testing.T) {
 // TestCollectEmitsRiskyAgentLogTwin pins the per-entity twin against the row.
 func TestCollectEmitsRiskyAgentLogTwin(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(liveFixture(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(liveFixture(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	var twin *telemetrytest.LogRecord
@@ -171,7 +226,7 @@ func TestLogTwinBoolFlagsAndOmittedBlueprint(t *testing.T) {
 		t.Fatalf("a bool flag decoded to nil from a live record that carries it: enabled=%v deleted=%v processing=%v",
 			item.IsEnabled, item.IsDeleted, item.IsProcessing)
 	}
-	ev := logTwin(item)
+	ev := logTwin(item, "")
 	for k, want := range map[string]bool{"is_enabled": true, "is_deleted": false, "is_processing": false} {
 		got, ok := ev.Attrs[k]
 		if !ok {
@@ -193,11 +248,17 @@ func TestLogTwinBoolFlagsAndOmittedBlueprint(t *testing.T) {
 func TestForbiddenIsGracefulSkip(t *testing.T) {
 	g := &fakeGraph{errs: map[string]error{agentsURL: errForbidden{}}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	outcomes := recordoutcome.NewRecorder()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), outcomes); err != nil {
 		t.Fatalf("Collect returned error on 403, want graceful skip: %v", err)
 	}
 	if len(rec.MetricPoints(metricRiskyAgents)) != 0 || len(rec.LogRecords()) != 0 {
 		t.Errorf("expected no emission on 403 skip")
+	}
+	got := outcomes.Snapshot()
+	summary := got.Summarize(nil, false)
+	if summary.Result != recordoutcome.ResultFailure || summary.Cause != recordoutcome.CausePermissionDenied {
+		t.Errorf("summary = %+v, want failure/%s", summary, recordoutcome.CausePermissionDenied)
 	}
 }
 

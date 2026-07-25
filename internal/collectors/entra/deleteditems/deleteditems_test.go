@@ -78,7 +78,7 @@ func newCollector(g collectors.GraphClient) *Collector {
 // type-specific identifier mapped.
 func TestCollectCensusGaugeAndTwinsEndToEnd(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := newCollector(liveGraph()).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(liveGraph()).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -178,7 +178,7 @@ func TestEmptyBinEmitsNothing(t *testing.T) {
 		empty.bodies[urlFor(k.segment, k.selectQ)] = `{"value":[]}`
 	}
 	rec := telemetrytest.New()
-	if err := newCollector(empty).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(empty).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if pts := rec.MetricPoints(metricDeletedItems); len(pts) != 0 {
@@ -198,7 +198,7 @@ func TestOneTypeErrorDoesNotBlindTheRest(t *testing.T) {
 		urlFor("microsoft.graph.device", "id,displayName,deletedDateTime,deviceId"): errors.New("403 Forbidden"),
 	}
 	rec := telemetrytest.New()
-	err := newCollector(g).Collect(context.Background(), rec.Emitter())
+	err := newCollector(g).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatalf("Collect err = nil, want the joined device error")
 	}
@@ -214,7 +214,7 @@ func TestOneTypeErrorDoesNotBlindTheRest(t *testing.T) {
 // carries only object_type and near_purge — never an id/UPN/appId/deviceId.
 func TestNoPerEntityMetricLabels(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := newCollector(liveGraph()).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(liveGraph()).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	banned := []string{semconv.AttrId, semconv.AttrUserPrincipalName, semconv.AttrAppId, semconv.AttrDeviceId, semconv.AttrDisplayName}

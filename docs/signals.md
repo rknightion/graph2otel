@@ -515,6 +515,36 @@ Why this does not violate the cardinality rule: `tenant_id` grows with the numbe
 an operator **deliberately configured**, not with tenant size. The [cardinality
 rule](#cardinality-shape) forbids the latter.
 
+## End-to-end record outcome accounting
+
+Every collector run reconciles source records through two conservation equations:
+
+```text
+fetched = mapped + filtered + dropped + errored
+mapped  = emitted + deduped
+```
+
+A source record counts once even when it produces several metric points and a log twin.
+`emitted` means graph2otel handed useful telemetry to its emitter; backend delivery and
+acceptance are separate OTLP concerns. Intentional filters and overlap dedupe are visible
+without being treated as loss. A failed reconciliation is itself a failed run with cause
+`accounting_mismatch`.
+
+Four self-observability metrics expose the result:
+
+| Metric | Meaning |
+| --- | --- |
+| `graph2otel.record.outcomes{tenant_id,collector,ingest_transport,outcome}` | Source-record totals for `fetched`, `mapped`, `emitted`, `deduped`, `filtered`, `dropped`, and `errored` |
+| `graph2otel.scrape.outcomes{tenant_id,collector,ingest_transport,result}` | Run totals for `empty`, `success`, `partial`, and `failure`; a healthy empty collection is explicitly `empty`, not generic success |
+| `graph2otel.event.lag{tenant_id,collector,ingest_transport}` | Histogram of source-event timestamp to emitter time for timestamped log records; it does not measure OTLP delivery or backend acceptance |
+| `graph2otel.payload.type_mismatches{tenant_id,collector,ingest_transport,field,expected_type,actual_type}` | Report-only JSON shape drift on otherwise usable records. Types are restricted to `null`/`boolean`/`number`/`string`/`array`/`object`; field values are never labels |
+
+`graph2otel.scrape.success` is `1` for `empty` and `success`, and `0` for
+`partial` and `failure`. A nonzero `dropped` or `errored` outcome means fetched source data
+did not become useful telemetry and is default-alerted. A type mismatch keeps the usable
+record, emits the mismatch counter, and marks the run partial so drift cannot look fully
+healthy.
+
 ## MDCA Cloud Discovery parse health: `ingest_transport="mdca"`
 
 `mdca.discovery_parse` (#145) is the one signal reached over neither Graph, Azure Storage,

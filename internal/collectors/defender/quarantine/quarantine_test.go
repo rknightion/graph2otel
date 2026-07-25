@@ -126,7 +126,7 @@ func newCollector(t *testing.T, f *fakeEXO) *Collector {
 func TestCollectRequestsHeldMessagesOnly(t *testing.T) {
 	f := &fakeEXO{pages: [][]map[string]any{{decode(t, liveRecord)}}}
 	rec := telemetrytest.New()
-	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if len(f.cmdlets) != 1 {
@@ -162,7 +162,7 @@ func TestCollectRequestsHeldMessagesOnly(t *testing.T) {
 func TestCollectEmitsBoundedGauge(t *testing.T) {
 	f := &fakeEXO{pages: [][]map[string]any{{decode(t, liveRecord)}}}
 	rec := telemetrytest.New()
-	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	pts := rec.MetricPoints(metricHeld)
@@ -198,7 +198,7 @@ func TestCollectEmitsBoundedGauge(t *testing.T) {
 func TestCollectEmitsPerMessageLogTwin(t *testing.T) {
 	f := &fakeEXO{pages: [][]map[string]any{{decode(t, liveRecord)}}}
 	rec := telemetrytest.New()
-	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	logs := rec.LogRecords()
@@ -249,7 +249,7 @@ func TestCollectEmitsPerMessageLogTwin(t *testing.T) {
 func TestLogTwinIsStampedAtPollTime(t *testing.T) {
 	f := &fakeEXO{pages: [][]map[string]any{{decode(t, liveRecord)}}}
 	rec := telemetrytest.New()
-	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if ts := rec.LogRecords()[0].Timestamp; !ts.IsZero() {
@@ -268,7 +268,7 @@ func TestLogTwinIsStampedAtPollTime(t *testing.T) {
 func TestPermissionFlagsAreEmitted(t *testing.T) {
 	f := &fakeEXO{pages: [][]map[string]any{{decode(t, liveRecord)}}}
 	rec := telemetrytest.New()
-	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	attrs := rec.LogRecords()[0].Attrs
@@ -292,7 +292,7 @@ func TestCollectPagesUntilShortPage(t *testing.T) {
 	}
 	f := &fakeEXO{pages: [][]map[string]any{full, {decode(t, liveRecord)}}}
 	rec := telemetrytest.New()
-	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if len(f.params) != 2 {
@@ -312,7 +312,7 @@ func TestCollectPagesUntilShortPage(t *testing.T) {
 func TestEmptyQuarantineIsNotAnError(t *testing.T) {
 	f := &fakeEXO{pages: [][]map[string]any{{}}}
 	rec := telemetrytest.New()
-	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect over an empty quarantine: %v", err)
 	}
 	if got := len(rec.LogRecords()); got != 0 {
@@ -332,7 +332,7 @@ func TestCollectPropagatesClientError(t *testing.T) {
 	sentinel := errors.New("403: missing directory role")
 	f := &fakeEXO{err: sentinel}
 	rec := telemetrytest.New()
-	err := newCollector(t, f).Collect(context.Background(), rec.Emitter())
+	err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil)
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("Collect error = %v, want it to wrap %v", err, sentinel)
 	}
@@ -346,7 +346,7 @@ func TestRecordsWithoutIdentityAreStillCounted(t *testing.T) {
 	delete(rec0, "Identity")
 	f := &fakeEXO{pages: [][]map[string]any{{rec0}}}
 	rec := telemetrytest.New()
-	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	pts := rec.MetricPoints(metricHeld)
@@ -369,7 +369,7 @@ func TestRecordsAreStampedWithTheExchangeOnlineTransport(t *testing.T) {
 	f := &fakeEXO{pages: [][]map[string]any{{decode(t, liveRecord)}}}
 	rec := telemetrytest.New()
 	c := newCollector(t, f)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if got := rec.LogRecords()[0].Attrs[semconv.AttrIngestTransport]; got != string(telemetry.TransportExchangeOnline) {
@@ -411,7 +411,7 @@ func TestCleanRecordReportsNothingUnexpected(t *testing.T) {
 	r["ReleaseStatus"] = "NOTRELEASED"
 	f := &fakeEXO{pages: [][]map[string]any{{r}}}
 	rec := telemetrytest.New()
-	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if got := findings(rec); len(got) != 0 {
@@ -434,7 +434,7 @@ func TestUnknownEnumValuesAreReported(t *testing.T) {
 			r[tc.src] = tc.value
 			f := &fakeEXO{pages: [][]map[string]any{{r}}}
 			rec := telemetrytest.New()
-			if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+			if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 				t.Fatalf("Collect: %v", err)
 			}
 			key := wirecheck.KindUnmappedValue + "/" + tc.field
@@ -461,7 +461,7 @@ func TestReleasedRowInHeldOnlyQueryIsReportedAsAnInvariantBreak(t *testing.T) {
 	r["ReleaseStatus"] = "RELEASED"
 	f := &fakeEXO{pages: [][]map[string]any{{r}}}
 	rec := telemetrytest.New()
-	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	key := wirecheck.KindInvariant + "/" + ruleHeldOnly
@@ -489,7 +489,7 @@ func TestUnparseableIdentityIsReported(t *testing.T) {
 			}
 			f := &fakeEXO{pages: [][]map[string]any{{r}}}
 			rec := telemetrytest.New()
-			if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+			if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 				t.Fatalf("Collect: %v", err)
 			}
 			key := wirecheck.KindMissingField + "/" + semconv.AttrNetworkMessageId

@@ -24,6 +24,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -138,10 +140,11 @@ var statusBuckets = []struct {
 // Collector polls the Intune mobile app catalog and app-configuration
 // device-status summaries.
 type Collector struct {
-	g       collectors.GraphClient
-	baseURL string
-	logger  *slog.Logger
-	watch   *wirecheck.Reporter
+	outcomes *outcome.Recorder
+	g        collectors.GraphClient
+	baseURL  string
+	logger   *slog.Logger
+	watch    *wirecheck.Reporter
 }
 
 // New builds the mobile apps collector. A nil logger falls back to the slog
@@ -176,7 +179,11 @@ func (c *Collector) RequiredPermissions() []string {
 // tenant) is skipped-and-logged, not treated as a failure; any other error
 // is logged, aggregated via errors.Join, and returned so partial failure
 // stays visible in scrape self-observability.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
+	local := *c
+	local.outcomes = outcomes
+	c = &local
 	var errs []error
 
 	appPoints, err := c.appsSnapshot(ctx, e)
@@ -202,9 +209,11 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // $expand=assignments on the list, which Microsoft's docs mark deprecated
 // for this collection.
 func (c *Collector) appsSnapshot(ctx context.Context, e telemetry.Emitter) ([]telemetry.GaugePoint, error) {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceAppManagement/mobileApps", nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceAppManagement/mobileApps", nil, c.outcomes)
 	if err != nil {
 		if isForbidden(err) {
+			outcome.RecordError(c.outcomes, err)
+			c.outcomes.Cause(recordoutcome.CausePermissionDenied)
 			c.logger.Info("mobile apps: catalog endpoint forbidden (missing DeviceManagementApps.Read.All or unlicensed); skipping",
 				"collector", collectorName, "error", err)
 			return nil, nil
@@ -219,8 +228,10 @@ func (c *Collector) appsSnapshot(ctx context.Context, e telemetry.Emitter) ([]te
 		var a mobileApp
 		if err := json.Unmarshal(r, &a); err != nil {
 			c.logger.Warn("mobile apps: skipping unparseable app", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		// publishing_state is a metric label passed raw — watch it against its CSDL
 		// set (#234). app_type is deliberately unwatched (see knownPublishingStates).
 		c.watch.Value(e, semconv.AttrPublishingState, a.PublishingState, knownPublishingStates)
@@ -243,9 +254,11 @@ func (c *Collector) appsSnapshot(ctx context.Context, e telemetry.Emitter) ([]te
 // independently resilient - a failure on one policy is logged and that
 // policy is dropped from the snapshot, but every other policy still emits.
 func (c *Collector) configStatusSnapshot(ctx context.Context) ([]telemetry.GaugePoint, error) {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceAppManagement/mobileAppConfigurations", nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceAppManagement/mobileAppConfigurations", nil, c.outcomes)
 	if err != nil {
 		if isForbidden(err) {
+			outcome.RecordError(c.outcomes, err)
+			c.outcomes.Cause(recordoutcome.CausePermissionDenied)
 			c.logger.Info("mobile app config: policies endpoint forbidden (missing DeviceManagementApps.Read.All or unlicensed); skipping",
 				"collector", collectorName, "error", err)
 			return nil, nil
@@ -260,12 +273,15 @@ func (c *Collector) configStatusSnapshot(ctx context.Context) ([]telemetry.Gauge
 		var cfg mobileAppConfiguration
 		if err := json.Unmarshal(r, &cfg); err != nil {
 			c.logger.Warn("mobile app config: skipping unparseable policy", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
 		if cfg.ID == "" {
 			c.logger.Warn("mobile app config: skipping policy with empty id", "collector", collectorName)
+			outcome.Dropped(c.outcomes, 1, recordoutcome.CauseMappingError)
 			continue
 		}
+		outcome.Filtered(c.outcomes, 1)
 		policyName := cfg.DisplayName
 		if policyName == "" {
 			policyName = cfg.ID
@@ -291,6 +307,8 @@ func (c *Collector) deviceStatusSummaryPoints(ctx context.Context, id, policyNam
 	body, err := c.g.RawGet(ctx, c.baseURL+"/deviceAppManagement/mobileAppConfigurations/"+id+"/deviceStatusSummary")
 	if err != nil {
 		if isForbidden(err) {
+			outcome.RecordError(c.outcomes, err)
+			c.outcomes.Cause(recordoutcome.CausePermissionDenied)
 			c.logger.Info("mobile app config: deviceStatusSummary forbidden; skipping policy",
 				"collector", collectorName, "policy", id, "error", err)
 			return nil, nil
@@ -300,8 +318,10 @@ func (c *Collector) deviceStatusSummaryPoints(ctx context.Context, id, policyNam
 
 	var resp deviceStatusSummaryResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
+		outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 		return nil, fmt.Errorf("decode deviceStatusSummary: %w", err)
 	}
+	outcome.Emitted(c.outcomes, 1)
 	fields := resp.fields()
 
 	points := make([]telemetry.GaugePoint, 0, len(statusBuckets))

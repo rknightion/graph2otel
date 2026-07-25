@@ -137,6 +137,64 @@ class TestSelfObservabilityScopeGate(unittest.TestCase):
         self.assertNotIn(TENANT_SEL, exprs[0])
 
 
+class TestOutcomeAccountingPanels(unittest.TestCase):
+    def setUp(self):
+        board = next(b for name, b in BUILT
+                     if name == "graph2otel-self-observability.json")
+        self.panels = {
+            item["spec"]["title"]: item["spec"]
+            for item in board._panels
+            if item.get("spec")
+        }
+
+    def test_record_outcomes_do_not_stack_overlapping_lifecycle_stages(self):
+        panel = self.panels["Source-record rate by outcome"]
+        self.assertNotIn(
+            "stacking", panel["fieldConfig"]["defaults"]["custom"],
+        )
+        expr = panel["targets"][0]["expr"]
+        self.assertIn("graph2otel_record_outcomes_total", expr)
+        self.assertIn("outcome", expr)
+        self.assertIn("ingest_transport", expr)
+
+    def test_outcome_panels_preserve_tenant_identity(self):
+        expected_groupings = {
+            "Collector runs by reconciled result":
+                "sum by (tenant_id, collector, ingest_transport, result)",
+            "Source-record rate by outcome":
+                "sum by (tenant_id, collector, ingest_transport, outcome)",
+            "Dropped / errored source records":
+                "sum by (tenant_id, collector, ingest_transport, outcome)",
+            "Payload type mismatches":
+                "sum by (tenant_id, collector, ingest_transport, field, "
+                "expected_type, actual_type)",
+        }
+        for title, grouping in expected_groupings.items():
+            with self.subTest(panel=title):
+                panel = self.panels[title]
+                self.assertIn(grouping, panel["targets"][0]["expr"])
+
+    def test_event_lag_has_p50_and_p95_queries(self):
+        panel = self.panels["Source-event lag at emission"]
+        exprs = [target["expr"] for target in panel["targets"]]
+        self.assertEqual(len(exprs), 2)
+        self.assertTrue(any("histogram_quantile(0.50" in expr for expr in exprs))
+        self.assertTrue(any("histogram_quantile(0.95" in expr for expr in exprs))
+        self.assertTrue(all("graph2otel_event_lag_seconds_bucket" in expr for expr in exprs))
+        self.assertTrue(all(
+            "sum by (le, tenant_id, collector, ingest_transport)" in expr
+            for expr in exprs
+        ))
+        self.assertTrue(all(
+            "{{tenant_id}}" in target["legendFormat"]
+            for target in panel["targets"]
+        ))
+
+    def test_loss_and_payload_drift_are_visible(self):
+        self.assertIn("Dropped / errored source records", self.panels)
+        self.assertIn("Payload type mismatches", self.panels)
+
+
 class TestLogPanels(unittest.TestCase):
     def test_every_domain_with_a_log_signal_has_a_log_panel(self):
         self.assertEqual(build_dashboard.log_coverage(CAT, LOG_DOMAINS), [])

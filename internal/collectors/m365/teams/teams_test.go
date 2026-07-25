@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
@@ -136,7 +137,7 @@ func gaugeScalar(t *testing.T, rec *telemetrytest.Recorder, name string) float64
 
 func TestCollectBucketsVisibilityMembershipOwnerlessGuests(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(sample(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(sample(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -165,9 +166,23 @@ func TestCollectBucketsVisibilityMembershipOwnerlessGuests(t *testing.T) {
 	}
 }
 
+func TestCollectAccountsTeamsAppsAndChannelsOnce(t *testing.T) {
+	outcomes := recordoutcome.NewRecorder()
+	if err := New(appsChannelsSample(), nil).Collect(
+		context.Background(), telemetrytest.New().Emitter(), outcomes,
+	); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	got := outcomes.Snapshot().Summarize(nil, false)
+	want := recordoutcome.Counts{Fetched: 6, Mapped: 6, Emitted: 6}
+	if got.Result != recordoutcome.ResultSuccess || got.Counts != want {
+		t.Errorf("outcome = %#v, want success/%#v", got, want)
+	}
+}
+
 func TestCollectEmitsOneLogTwinPerTeam(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(sample(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(sample(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	logs := rec.LogRecords()
@@ -183,7 +198,7 @@ func TestCollectEmitsOneLogTwinPerTeam(t *testing.T) {
 
 func TestOwnerlessTwinIsWarn_ArchivedIsNot(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(sample(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(sample(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	sev := map[string]string{}
@@ -208,11 +223,25 @@ func TestCollectForbiddenDegradesGracefully(t *testing.T) {
 		listURL: errors.New("graphclient: GET " + listURL + ": status 403: Forbidden"),
 	}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect on 403 = %v, want nil (graceful skip)", err)
 	}
 	if len(rec.LogRecords()) != 0 {
 		t.Error("a 403 skip must emit no twins")
+	}
+}
+
+func TestCollectForbiddenRecordsPermissionFailure(t *testing.T) {
+	g := &fakeGraph{errs: map[string]error{
+		listURL: errors.New("graphclient: GET " + listURL + ": status 403: Forbidden"),
+	}}
+	outcomes := recordoutcome.NewRecorder()
+	if err := New(g, nil).Collect(context.Background(), telemetrytest.New().Emitter(), outcomes); err != nil {
+		t.Fatalf("Collect on 403 = %v, want nil (graceful skip)", err)
+	}
+	got := outcomes.Snapshot().Summarize(nil, false)
+	if got.Result != recordoutcome.ResultFailure || got.Cause != recordoutcome.CausePermissionDenied {
+		t.Errorf("outcome = %#v, want failure/permission_denied", got)
 	}
 }
 
@@ -243,7 +272,7 @@ func TestNameAndPermissions(t *testing.T) {
 // 2 store/no-RSC apps + 1 synthetic sideloaded/RSC app, all bounded labels.
 func TestInstalledAppsGaugeBucketsDistributionAndRSC(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(appsChannelsSample(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(appsChannelsSample(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	g := gaugeByTwo(t, rec, metricInstalledApps, semconv.AttrDistributionMethod, semconv.AttrHasRscPermissions)
@@ -261,7 +290,7 @@ func TestInstalledAppsGaugeBucketsDistributionAndRSC(t *testing.T) {
 
 func TestChannelsGaugeBucketsMembershipAndArchived(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(appsChannelsSample(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(appsChannelsSample(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	g := gaugeByTwo(t, rec, metricChannels, semconv.AttrMembershipType, semconv.AttrIsArchived)
@@ -280,7 +309,7 @@ func TestChannelsGaugeBucketsMembershipAndArchived(t *testing.T) {
 // any RSC grant), and that the RSC grant list is carried as a log attribute.
 func TestAppTwins(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(appsChannelsSample(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(appsChannelsSample(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	var apps int
@@ -317,7 +346,7 @@ func TestAppTwins(t *testing.T) {
 
 func TestChannelTwins(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(appsChannelsSample(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(appsChannelsSample(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	var chans int
@@ -361,7 +390,7 @@ func TestForbiddenSubResourceSkipsGauge(t *testing.T) {
 		channelsURL(m7kni):      errors.New("graphclient: GET x: status 403: Forbidden"),
 	}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect on sub-resource 403 = %v, want nil", err)
 	}
 	if len(rec.MetricPoints(metricInstalledApps)) != 0 {
@@ -381,11 +410,11 @@ func TestForbiddenSubResourceSkipsGauge(t *testing.T) {
 // enforces this over the whole package too).
 func TestNoPerEntityMetricLabels(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(sample(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(sample(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	rec2 := telemetrytest.New()
-	if err := New(appsChannelsSample(), nil).Collect(context.Background(), rec2.Emitter()); err != nil {
+	if err := New(appsChannelsSample(), nil).Collect(context.Background(), rec2.Emitter(), nil); err != nil {
 		t.Fatalf("Collect(apps): %v", err)
 	}
 	checks := []struct {

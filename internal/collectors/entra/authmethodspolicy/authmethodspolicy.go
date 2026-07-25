@@ -29,6 +29,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -140,14 +142,16 @@ func (c *Collector) RequiredPermissions() []string {
 // singleton resource — a plain RawGet is the right tool, not
 // collectors.GetAllValues (a "value"-wrapped collection helper) or
 // collectors.Count ($count only).
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	body, err := c.g.RawGet(ctx, c.baseURL+policyPath)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return fmt.Errorf("authmethodspolicy: fetch authenticationMethodsPolicy: %w", err)
 	}
 
 	var policy authenticationMethodsPolicy
 	if err := json.Unmarshal(body, &policy); err != nil {
+		entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 		return fmt.Errorf("authmethodspolicy: decode authenticationMethodsPolicy: %w", err)
 	}
 
@@ -186,6 +190,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	e.Gauge(legacyEnabledMetric, "{method}",
 		"Count of legacy authentication methods (SMS, voice) currently enabled tenant-wide.",
 		float64(legacyEnabled), nil)
+	entraoutcome.Emitted(outcomes, 1)
 
 	return nil
 }

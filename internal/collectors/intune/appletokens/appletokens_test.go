@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -160,7 +161,7 @@ func TestCollectEmitsDaysUntilExpiryForAllThreeTypes(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -208,7 +209,7 @@ func TestCollectEmitsDEPSyncedDeviceCount(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -235,7 +236,7 @@ func TestCollectDEPBetaFailureDoesNotDropAPNSOrVPP(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := newTestCollector(g).Collect(context.Background(), rec.Emitter())
+	err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Error("a DEP 500 should surface as a Collect error")
 	}
@@ -254,7 +255,7 @@ func TestCollectDEPBetaFailureDoesNotDropAPNSOrVPP(t *testing.T) {
 	}
 }
 
-func TestCollectGracefulOn403ForOneSource(t *testing.T) {
+func TestCollectRecordsSourceErrorForUnavailableAPNSSource(t *testing.T) {
 	bodies := fullFixture()
 	delete(bodies, apnsURL)
 	g := &fakeGraph{
@@ -264,12 +265,16 @@ func TestCollectGracefulOn403ForOneSource(t *testing.T) {
 		},
 	}
 	rec := telemetrytest.New()
+	outcomes := recordoutcome.NewRecorder()
 
 	// A 404 (no APNS cert configured on this tenant) must be skipped-and-logged,
 	// not surfaced as a collector error, and must not prevent vpp/dep from
 	// emitting.
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), outcomes); err != nil {
 		t.Errorf("Collect should swallow a 404 as skip-and-log, got: %v", err)
+	}
+	if got := outcomes.Snapshot().Summarize(nil, false).Cause; got != recordoutcome.CauseSourceError {
+		t.Errorf("outcome cause = %q, want %q", got, recordoutcome.CauseSourceError)
 	}
 
 	for _, p := range rec.MetricPoints(daysUntilExpiryMetric) {
@@ -282,6 +287,25 @@ func TestCollectGracefulOn403ForOneSource(t *testing.T) {
 	}
 }
 
+func TestCollectRecordsPermissionDeniedForUnavailableAPNSSource(t *testing.T) {
+	bodies := fullFixture()
+	delete(bodies, apnsURL)
+	g := &fakeGraph{
+		bodies: bodies,
+		errs: map[string]error{
+			apnsURL: errors.New("graphclient: GET " + apnsURL + ": status 403: {\"error\":{\"code\":\"Authorization_RequestDenied\"}}"),
+		},
+	}
+	outcomes := recordoutcome.NewRecorder()
+
+	if err := newTestCollector(g).Collect(context.Background(), telemetrytest.New().Emitter(), outcomes); err != nil {
+		t.Fatalf("Collect should swallow a 403 as skip-and-log, got: %v", err)
+	}
+	if got := outcomes.Snapshot().Summarize(nil, false).Cause; got != recordoutcome.CausePermissionDenied {
+		t.Errorf("outcome cause = %q, want %q", got, recordoutcome.CausePermissionDenied)
+	}
+}
+
 func TestCollectSkipsMissingExpirationWithoutError(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{
 		apnsURL: `{"certificateUploadStatus":"Valid"}`, // no expirationDateTime
@@ -290,7 +314,7 @@ func TestCollectSkipsMissingExpirationWithoutError(t *testing.T) {
 	}}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if points := rec.MetricPoints(daysUntilExpiryMetric); len(points) != 0 {

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collector"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/signalcapture"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
@@ -18,13 +19,27 @@ import (
 var updateSignalGolden = flag.Bool("update", false, "rewrite testdata/signals.json")
 
 type captureSnapshot struct {
-	name string
-	err  error
+	name         string
+	err          error
+	record       bool
+	typeMismatch bool
 }
 
 func (c captureSnapshot) Name() string                 { return c.name }
 func (captureSnapshot) DefaultInterval() time.Duration { return time.Minute }
-func (c captureSnapshot) Collect(context.Context, telemetry.Emitter) error {
+func (c captureSnapshot) Collect(
+	_ context.Context,
+	_ telemetry.Emitter,
+	outcomes *recordoutcome.Recorder,
+) error {
+	if c.record {
+		outcomes.Add(recordoutcome.OutcomeFetched, 1)
+		outcomes.Add(recordoutcome.OutcomeMapped, 1)
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
+	}
+	if c.typeMismatch {
+		outcomes.TypeMismatch("capture_field", "string", "array")
+	}
 	return c.err
 }
 
@@ -38,6 +53,7 @@ func (captureWindow) CollectWindow(
 	time.Time,
 	time.Time,
 	telemetry.Emitter,
+	*recordoutcome.Recorder,
 ) (time.Time, error) {
 	return time.Unix(1_700_000_001, 0).UTC(), nil
 }
@@ -67,7 +83,7 @@ func TestSignalGolden(t *testing.T) {
 	successScheduler := newScheduler(success, collector.NewMemoryStore())
 	successLast := now.Add(-time.Minute)
 	successScheduler.RunTick(context.Background(), collector.Entry{
-		Collector: captureSnapshot{name: "capture.success"},
+		Collector: captureSnapshot{name: "capture.success", record: true},
 		Interval:  time.Minute,
 	}, &successLast)
 
@@ -78,6 +94,14 @@ func TestSignalGolden(t *testing.T) {
 		Collector: captureSnapshot{name: "capture.failure", err: errors.New("graph unavailable")},
 		Interval:  time.Minute,
 	}, &failureLast)
+
+	mismatch := telemetrytest.New()
+	mismatchScheduler := newScheduler(mismatch, collector.NewMemoryStore())
+	mismatchLast := now.Add(-time.Minute)
+	mismatchScheduler.RunTick(context.Background(), collector.Entry{
+		Collector: captureSnapshot{name: "capture.mismatch", record: true, typeMismatch: true},
+		Interval:  time.Minute,
+	}, &mismatchLast)
 
 	checkpoint := telemetrytest.New()
 	checkpointScheduler := newScheduler(checkpoint, failingCheckpointStore{})
@@ -96,6 +120,7 @@ func TestSignalGolden(t *testing.T) {
 		*updateSignalGolden,
 		success,
 		failure,
+		mismatch,
 		checkpoint,
 		build,
 	); err != nil {

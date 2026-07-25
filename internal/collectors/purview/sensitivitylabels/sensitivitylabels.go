@@ -102,6 +102,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -208,9 +209,10 @@ func (c *SensitivityCollector) RequiredCapability() license.Capability {
 // particular means missing admin consent, which is operator-fixable and must be
 // loud: swallowing it is how #109 mistook a missing scope for a permanent
 // product gap.
-func (c *SensitivityCollector) Collect(ctx context.Context, e telemetry.Emitter) error {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/security/dataSecurityAndGovernance/sensitivityLabels", nil)
+func (c *SensitivityCollector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/security/dataSecurityAndGovernance/sensitivityLabels", nil, outcomes)
 	if err != nil {
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		if strings.Contains(err.Error(), "status 403") {
 			// Name the fix in the error itself, so the next reader does not
 			// re-run #109's investigation from a bare "status 403".
@@ -220,13 +222,18 @@ func (c *SensitivityCollector) Collect(ctx context.Context, e telemetry.Emitter)
 		return fmt.Errorf("%s: list: %w", sensitivityName, err)
 	}
 
+	outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(raws)))
 	byTarget := map[string]int64{}
 	for _, raw := range raws {
 		var l sensitivityLabel
 		if err := json.Unmarshal(raw, &l); err != nil {
+			outcomes.Add(recordoutcome.OutcomeErrored, 1)
+			outcomes.Cause(recordoutcome.CauseDecodeError)
 			c.logger.Warn("sensitivity labels: skipping unparseable entry", "collector", sensitivityName, "error", err)
 			continue
 		}
+		outcomes.Add(recordoutcome.OutcomeMapped, 1)
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 		c.watchTargets(e, l.ApplicableTo)
 		for _, t := range applicableTargets(l.ApplicableTo) {
 			byTarget[t]++

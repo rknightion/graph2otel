@@ -52,6 +52,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -194,7 +195,7 @@ func (c *Collector) IngestTransport() telemetry.Transport {
 func (c *Collector) RequiredPermissions() []string { return nil }
 
 // Collect runs the five cmdlets and emits the four gauges plus a twin per entry.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	// Stamp the transport HERE: with no ingest engine on this path the Scheduler
 	// baseline is TransportGraph, so without this every record would claim to be
 	// a Graph poll.
@@ -224,9 +225,11 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for _, lt := range listTypes {
 		recs, err := c.c.Invoke(ctx, itemsCmdlet, map[string]any{paramListType: lt})
 		if err != nil {
+			outcomes.Cause(recordoutcome.CauseSourceError)
 			errs = append(errs, fmt.Errorf("%s -%s %s: %w", itemsCmdlet, paramListType, lt, err))
 			continue
 		}
+		outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(recs)))
 		for _, r := range recs {
 			action := str(r, fieldAction)
 			subtype := str(r, fieldListSubType)
@@ -247,16 +250,22 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			}
 
 			e.LogEvent(entryTwin(r, lt, now))
+			outcomes.Add(recordoutcome.OutcomeMapped, 1)
+			outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 		}
 	}
 
 	spoofRecs, err := c.c.Invoke(ctx, spoofCmdlet, nil)
 	if err != nil {
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		errs = append(errs, fmt.Errorf("%s: %w", spoofCmdlet, err))
 	}
+	outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(spoofRecs)))
 	for _, r := range spoofRecs {
 		spoofCounts[[2]string{str(r, fieldSpoofType), str(r, fieldAction)}]++
 		e.LogEvent(spoofTwin(r))
+		outcomes.Add(recordoutcome.OutcomeMapped, 1)
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 	}
 
 	emitEntries(e, counts)

@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -194,8 +195,8 @@ func (c ContainerConfig) maxBytes() int64 {
 // never a gap). A List failure fails the tick, because a tick that saw nothing
 // must not look successful. Per-blob read failures and failed cursor saves are
 // logged and do not stop the remaining blobs from draining, but they make the
-// completed tick degraded. Malformed JSON lines remain logged and consumed
-// without degrading the tick.
+// completed tick degraded. Malformed JSON lines remain logged and consumed;
+// outcome accounting marks the run partial without wedging the byte cursor.
 func Poll(
 	ctx context.Context,
 	cfg ContainerConfig,
@@ -204,6 +205,7 @@ func Poll(
 	e telemetry.Emitter,
 	log *slog.Logger,
 	save SaveFunc,
+	outcomes *recordoutcome.Recorder,
 ) error {
 	// Name the transport once per cycle rather than per record (#141). This is
 	// the stamp that makes a blob-ingested record distinguishable from its
@@ -213,6 +215,7 @@ func Poll(
 
 	blobs, err := src.List(ctx, cfg.Container, cfg.Prefix)
 	if err != nil {
+		outcomes.Cause(recordoutcome.CauseForError(err))
 		return fmt.Errorf("blobpipeline: list %s/%s: %w", cfg.Container, cfg.Prefix, err)
 	}
 	sort.Slice(blobs, func(i, j int) bool { return blobs[i].Name < blobs[j].Name })
@@ -226,8 +229,9 @@ func Poll(
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		advanced, err := consumeBlob(ctx, cfg, cur, src, e, &stats, log, b)
+		advanced, err := consumeBlob(ctx, cfg, cur, src, e, &stats, log, b, outcomes)
 		if err != nil {
+			outcomes.Cause(recordoutcome.CauseForError(err))
 			// One unreadable blob must not cost us the other 167.
 			log.Warn("blob read failed; skipping until next tick",
 				"container", cfg.Container, "blob", b.Name, "error", err)
@@ -325,6 +329,7 @@ func consumeBlob(
 	stats *gateStats,
 	log *slog.Logger,
 	b BlobInfo,
+	outcomes *recordoutcome.Recorder,
 ) (bool, error) {
 	off := cur.Offsets[b.Name]
 	if off > b.Size {
@@ -364,7 +369,7 @@ func consumeBlob(
 	}
 	complete := chunk[:nl+1]
 
-	emitLines(complete, cfg, e, stats, log, b.Name)
+	emitLines(complete, cfg, e, stats, log, b.Name, outcomes)
 	cur.Offsets[b.Name] = off + int64(len(complete))
 	return true, nil
 }
@@ -374,17 +379,28 @@ func consumeBlob(
 // a container with a Derive it additionally routes each valid record's bounded
 // metric increments, gated by RecencyWindow so a backfilled event never touches
 // a counter (#128). stats accumulates the gate decisions for the per-tick summary.
-func emitLines(data []byte, cfg ContainerConfig, e telemetry.Emitter, stats *gateStats, log *slog.Logger, blob string) {
+func emitLines(
+	data []byte,
+	cfg ContainerConfig,
+	e telemetry.Emitter,
+	stats *gateStats,
+	log *slog.Logger,
+	blob string,
+	outcomes *recordoutcome.Recorder,
+) {
 	for _, line := range bytes.Split(data, []byte("\n")) {
 		line = bytes.TrimSpace(line) // drops the \r of the blobs' CRLF terminator
 		if len(line) == 0 {
 			continue
 		}
+		outcomes.Add(recordoutcome.OutcomeFetched, 1)
 		var rec map[string]any
 		if err := json.Unmarshal(line, &rec); err != nil {
 			// A data defect, not a reason to stop: skip it and keep the blob
 			// moving. The bytes are still consumed, so this never wedges.
 			log.Warn("skipping malformed record", "container", cfg.Container, "blob", blob, "error", err)
+			outcomes.Add(recordoutcome.OutcomeErrored, 1)
+			outcomes.Cause(recordoutcome.CauseDecodeError)
 			continue
 		}
 		if cfg.ExcludeSelf && cfg.SelfAppID != nil && cfg.SelfClientID != "" && cfg.SelfAppID(rec) == cfg.SelfClientID {
@@ -398,10 +414,20 @@ func emitLines(data []byte, cfg ContainerConfig, e telemetry.Emitter, stats *gat
 			e.Counter(metricSelfExcluded, "{record}",
 				"Blob records dropped by exclude_self because their appId matched this tenant's own poller client_id (#154).",
 				1, telemetry.Attrs{semconv.AttrCollector: cfg.CollectorName})
+			outcomes.Add(recordoutcome.OutcomeFiltered, 1)
 			continue
 		}
-		ev, ok := cfg.Map(rec)
+		ev, ok, panicked := mapRecord(cfg.Map, rec)
+		if panicked {
+			log.Warn("skipping record after mapper panic",
+				"container", cfg.Container, "blob", blob)
+			outcomes.Add(recordoutcome.OutcomeErrored, 1)
+			outcomes.Cause(recordoutcome.CauseMappingError)
+			continue
+		}
 		if !ok {
+			outcomes.Add(recordoutcome.OutcomeDropped, 1)
+			outcomes.Cause(recordoutcome.CauseMappingError)
 			continue
 		}
 		if ev.Timestamp.IsZero() {
@@ -411,9 +437,13 @@ func emitLines(data []byte, cfg ContainerConfig, e telemetry.Emitter, stats *gat
 			// consumed by consumeBlob, preserving the offset cursor's progress.
 			stats.dropped++
 			wirecheck.Shared(cfg.CollectorName).MissingField(e, "event_time")
+			outcomes.Add(recordoutcome.OutcomeDropped, 1)
+			outcomes.Cause(recordoutcome.CauseMissingEventTime)
 			continue
 		}
+		outcomes.Add(recordoutcome.OutcomeMapped, 1)
 		e.LogEvent(ev)
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 
 		if cfg.Derive == nil {
 			continue
@@ -447,4 +477,22 @@ func emitLines(data []byte, cfg ContainerConfig, e telemetry.Emitter, stats *gat
 			}
 		}
 	}
+}
+
+// mapRecord contains a mapper panic to the source record that caused it. The
+// caller consumes that poison record, records a bounded mapping error, and
+// continues so one malformed row cannot wedge the blob cursor indefinitely.
+func mapRecord(
+	mapper func(map[string]any) (telemetry.Event, bool),
+	record map[string]any,
+) (ev telemetry.Event, ok, panicked bool) {
+	defer func() {
+		if recover() != nil {
+			ev = telemetry.Event{}
+			ok = false
+			panicked = true
+		}
+	}()
+	ev, ok = mapper(record)
+	return ev, ok, false
 }

@@ -88,7 +88,7 @@ func collectLive(t *testing.T) *telemetrytest.Recorder {
 	t.Helper()
 	f := liveFake(t)
 	rec := telemetrytest.New()
-	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect over the live samples: %v", err)
 	}
 	return rec
@@ -99,7 +99,7 @@ func collectLive(t *testing.T) *telemetrytest.Recorder {
 func TestCollectInvokesEveryCmdletWithNoParams(t *testing.T) {
 	f := liveFake(t)
 	rec := telemetrytest.New()
-	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if len(f.calls) != len(cmdletSample) {
@@ -183,7 +183,7 @@ func TestProtectionCountsDisabledToggle(t *testing.T) {
 		r["ZapEnabled"] = false
 	}
 	rec := telemetrytest.New()
-	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	got := map[protKey]float64{}
@@ -292,7 +292,7 @@ func TestTwinWarnsWhenZapOff(t *testing.T) {
 		}
 	}
 	rec := telemetrytest.New()
-	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	sev := map[string]string{}
@@ -344,7 +344,7 @@ func TestRecordsAreStampedWithTheExchangeOnlineTransport(t *testing.T) {
 	f := liveFake(t)
 	rec := telemetrytest.New()
 	c := newCollector(t, f)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	for _, r := range rec.LogRecords() {
@@ -370,7 +370,7 @@ func TestCollectAggregatesCmdletFailures(t *testing.T) {
 	sentinel := errors.New("403: missing directory role")
 	f.errs = map[string]error{"Get-AntiPhishPolicy": sentinel}
 	rec := telemetrytest.New()
-	err := newCollector(t, f).Collect(context.Background(), rec.Emitter())
+	err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil)
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("Collect error = %v, want it to wrap %v", err, sentinel)
 	}
@@ -392,7 +392,7 @@ func TestCollectAggregatesCmdletFailures(t *testing.T) {
 func TestEmptyResultIsNotAnError(t *testing.T) {
 	f := &fakeEXO{byCmdlet: map[string][]map[string]any{}}
 	rec := telemetrytest.New()
-	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newCollector(t, f).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect over empty results: %v", err)
 	}
 	if pts := rec.MetricPoints(metricPolicies); len(pts) != 0 {

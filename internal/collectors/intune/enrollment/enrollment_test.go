@@ -162,7 +162,7 @@ func TestCollectEmitsCountByConfigType(t *testing.T) {
 	g := &fakeGraph{bodies: fixture()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -193,7 +193,7 @@ func TestCollectEmitsPriorityByTypeAndName(t *testing.T) {
 	g := &fakeGraph{bodies: fixture()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -226,7 +226,7 @@ func TestCollectEmitsVersionByConfigName(t *testing.T) {
 	g := &fakeGraph{bodies: fixture()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -255,7 +255,7 @@ func TestCollectIsResilientToFetchError(t *testing.T) {
 	g := &fakeGraph{errs: map[string]error{enrollmentsURL: errors.New("403 Forbidden: missing scope")}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err == nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err == nil {
 		t.Error("expected Collect to surface the fetch failure as an error")
 	}
 
@@ -276,7 +276,7 @@ func TestCollectSkipsUnparseableEntryButEmitsTheRest(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Error("expected Collect to surface the decode failure as an error")
 	}
@@ -357,7 +357,7 @@ func findings(rec *telemetrytest.Recorder) map[string]float64 {
 func TestLiveCaptureReportsNothingUnexpected(t *testing.T) {
 	g := &fakeGraph{bodies: fixture()}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if got := findings(rec); len(got) != 0 {
@@ -378,7 +378,7 @@ func TestUnrecognizedConfigTypeIsReportedAndStillBucketed(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -404,7 +404,7 @@ func TestMissingODataTypeIsNeverReported(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if got := findings(rec); len(got) != 0 {
@@ -430,7 +430,7 @@ func TestNoPerEntitySeries(t *testing.T) {
 	g := &fakeGraph{bodies: fixture()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

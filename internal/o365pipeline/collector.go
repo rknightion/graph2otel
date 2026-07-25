@@ -7,6 +7,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/o365activityclient"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -125,9 +126,14 @@ func (c *ActivityCollector) Lag() time.Duration { return c.LagValue }
 // equally safe today. Zero is returned anyway because a high-water mark for a
 // window that was not drained is a claim that is simply untrue, and relying on a
 // caller to ignore an untrue value is a worse contract than not making it.
-func (c *ActivityCollector) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter) (time.Time, error) {
+func (c *ActivityCollector) CollectWindow(
+	ctx context.Context,
+	from, to time.Time,
+	e telemetry.Emitter,
+	outcomes *recordoutcome.Recorder,
+) (time.Time, error) {
 	// Collect is the embedded Collector's method, not this type's.
-	if err := c.Collect(ctx, from, to, e); err != nil {
+	if err := c.Collect(ctx, from, to, e, outcomes); err != nil {
 		return time.Time{}, err
 	}
 	return to, nil

@@ -90,7 +90,7 @@ func TestCollectBucketsRowsByReportStatusAndPlatform(t *testing.T) {
 	c := New(runner, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 	if !runner.callSeen {
@@ -133,7 +133,7 @@ func TestMetricNameAndUnitPinned(t *testing.T) {
 	c := New(&fakeRunner{rows: liveFixture()}, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -159,7 +159,7 @@ func TestMetricUsesVerbatimNonLocalizedColumns(t *testing.T) {
 	c := New(&fakeRunner{rows: []exportjob.Row{r}}, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -192,7 +192,7 @@ func TestMetricCarriesOnlyBoundedDimensions(t *testing.T) {
 	c := New(&fakeRunner{rows: rows}, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -223,7 +223,7 @@ func TestCollectEmitsOneLogTwinPerRow(t *testing.T) {
 	c := New(runner, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -272,7 +272,7 @@ func TestLogTwinSeverity(t *testing.T) {
 	c := New(runner, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -309,7 +309,7 @@ func TestSelectOmitted(t *testing.T) {
 	c := New(runner, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -322,7 +322,7 @@ func TestCollectSkipsWhenExportRunnerIsNil(t *testing.T) {
 	c := New(nil, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error, want nil: %v", err)
 	}
 	if points := rec.MetricPoints(metricName); len(points) != 0 {
@@ -347,7 +347,7 @@ func TestCollectSkipsAndLogsOnExportError(t *testing.T) {
 			c := New(&fakeRunner{err: tc.err}, nil)
 			rec := telemetrytest.New()
 
-			if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+			if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 				t.Fatalf("Collect returned error, want nil (skip-and-log): %v", err)
 			}
 			if points := rec.MetricPoints(metricName); len(points) != 0 {
@@ -387,7 +387,7 @@ func TestCollectStampsReportExportTransport(t *testing.T) {
 	c := New(&fakeRunner{rows: liveFixture()}, nil)
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

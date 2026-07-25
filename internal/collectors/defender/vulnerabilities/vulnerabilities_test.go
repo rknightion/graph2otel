@@ -111,7 +111,7 @@ func TestCollect_Gauges(t *testing.T) {
 	f := &fakeHunt{summary: rowsFromArray(t, liveSummary), twins: map[string][]map[string]any{}}
 	rec := telemetrytest.New()
 	c := New(collectors.HuntDeps{Client: f})
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -167,7 +167,7 @@ func TestCollect_Twins(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 	c := New(collectors.HuntDeps{Client: f})
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -230,7 +230,7 @@ func TestCollect_SummaryFailureIsFatal(t *testing.T) {
 	f := &fakeHunt{err: errors.New("403")}
 	rec := telemetrytest.New()
 	c := New(collectors.HuntDeps{Client: f})
-	if err := c.Collect(context.Background(), rec.Emitter()); err == nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err == nil {
 		t.Fatal("summary failure should be fatal to the tick")
 	}
 }
@@ -239,7 +239,7 @@ func TestCollect_TwinFailureIsNonFatal(t *testing.T) {
 	f := &fakeHunt{summary: rowsFromArray(t, liveSummary), twinErr: errors.New("throttled")}
 	rec := telemetrytest.New()
 	c := New(collectors.HuntDeps{Client: f})
-	err := c.Collect(context.Background(), rec.Emitter())
+	err := c.Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("a twin partition failure should surface an aggregated error")
 	}
@@ -267,7 +267,7 @@ func TestPartitioning_NoTruncation(t *testing.T) {
 	c := New(collectors.HuntDeps{Client: f})
 	c.rowCap = 2 // force sharding
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	logs := rec.LogRecords()

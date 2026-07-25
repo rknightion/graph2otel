@@ -164,7 +164,7 @@ func TestCollectorEmitsLiveRecordEndToEnd(t *testing.T) {
 		Logger:   slog.New(slog.DiscardHandler),
 	})
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	logs := rec.LogRecords()
@@ -183,7 +183,7 @@ func TestCollectorEmitsLiveRecordEndToEnd(t *testing.T) {
 	}
 
 	// Cursor persisted: a second tick over the unchanged blob emits nothing new.
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("second Collect: %v", err)
 	}
 	if got := len(rec.LogRecords()); got != 1 {

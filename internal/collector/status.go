@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/ringbuf"
 )
 
@@ -20,8 +21,12 @@ type CollectorRun struct {
 	LastFinished time.Time     // wall-clock finish of the most recent run
 	LastDuration time.Duration // duration of the most recent run
 	LastSuccess  bool          // whether the most recent run succeeded
-	Failures     int64         // total failed runs over the process lifetime
-	LastError    string        // most recent run's error ("" when the last run succeeded)
+	// LastOutcome is the immutable record-accounting summary for the most recent
+	// run. The admin availability model consumes this value directly rather
+	// than reconstructing a run from cumulative metrics.
+	LastOutcome recordoutcome.Summary
+	Failures    int64  // total failed runs over the process lifetime
+	LastError   string // most recent run's error ("" when the last run succeeded)
 	// ConsecutiveFailures is the length of the current unbroken run of failures
 	// ending at the most recent run. It resets to 0 on any success.
 	ConsecutiveFailures int64
@@ -60,9 +65,16 @@ func NewStatusTracker() *StatusTracker {
 	}
 }
 
-// record updates the run record for the named collector. errStr is "" on success
-// and the failure message otherwise.
-func (t *StatusTracker) record(name string, started, finished time.Time, dur time.Duration, errStr string) {
+// record updates the run record for the named collector. outcome is the
+// authoritative health classification; errStr retains the human-readable
+// failure message (or bounded outcome cause when no error was returned).
+func (t *StatusTracker) record(
+	name string,
+	started, finished time.Time,
+	dur time.Duration,
+	errStr string,
+	outcome recordoutcome.Summary,
+) {
 	if t == nil {
 		return
 	}
@@ -77,8 +89,10 @@ func (t *StatusTracker) record(name string, started, finished time.Time, dur tim
 	r.LastStarted = started
 	r.LastFinished = finished
 	r.LastDuration = dur
-	r.LastSuccess = errStr == ""
-	if errStr == "" {
+	r.LastOutcome = outcome
+	r.LastSuccess = outcome.Result == recordoutcome.ResultEmpty ||
+		outcome.Result == recordoutcome.ResultSuccess
+	if r.LastSuccess {
 		r.ConsecutiveFailures = 0
 	} else {
 		r.Failures++
@@ -95,7 +109,7 @@ func (t *StatusTracker) record(name string, started, finished time.Time, dur tim
 		t.hist[name] = h
 	}
 	h.durMs.Add(dur.Milliseconds())
-	h.outcomes.Add(errStr == "")
+	h.outcomes.Add(r.LastSuccess)
 }
 
 // Snapshot returns a copy of the per-collector run records keyed by collector

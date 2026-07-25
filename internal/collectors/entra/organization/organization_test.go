@@ -200,7 +200,7 @@ func TestCollectEmitsSyncEnabledAndAgeWhenHybridSyncActive(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := newCollectorAt(g, fixedNow)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -234,7 +234,7 @@ func TestCollectOmitsSyncAgeWhenSyncDisabled(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := newCollectorAt(g, fixedNow)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -263,7 +263,7 @@ func TestCollectOmitsSyncAgeWhenNeverSynced(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := newCollectorAt(g, fixedNow)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -293,7 +293,7 @@ func TestCollectOmitsSyncAgeWhenEnabledButLastSyncMissing(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := newCollectorAt(g, fixedNow)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if age := rec.MetricPoints(syncAgeMetricName); len(age) != 0 {
@@ -306,7 +306,7 @@ func TestCollectEmitsAgeDaysFromCreatedDateTime(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := newCollectorAt(g, fixedNow)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -325,7 +325,7 @@ func TestCollectEmitsVerifiedDomainsTotal(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := newCollectorAt(g, fixedNow)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -340,7 +340,7 @@ func TestCollectEmitsInfoGaugeWithBoundedTenantType(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := newCollectorAt(g, fixedNow)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -358,7 +358,7 @@ func TestCollectHandlesEmptyOrganizationCollection(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := newCollectorAt(g, fixedNow)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if names := rec.MetricNames(); len(names) != 0 {
@@ -371,7 +371,7 @@ func TestCollectSurfacesGraphFetchError(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := newCollectorAt(g, fixedNow)
-	if err := c.Collect(context.Background(), rec.Emitter()); err == nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err == nil {
 		t.Fatal("expected Collect to surface the /organization fetch error")
 	}
 	if names := rec.MetricNames(); len(names) != 0 {
@@ -404,7 +404,7 @@ func TestCollectNeverEmitsHighCardinalityLabels(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := newCollectorAt(g, fixedNow)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -439,7 +439,7 @@ func TestCollectorEmitsLiveRecordEndToEnd(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := newCollectorAt(g, fixedNow)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

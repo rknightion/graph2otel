@@ -98,7 +98,7 @@ func TestSyncDisabledNoOps(t *testing.T) {
 			g := &fakeGraph{bodies: map[string]string{orgURL: orgBody(enabled)}}
 			rec := telemetrytest.New()
 
-			if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+			if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 				t.Fatalf("Collect: %v", err)
 			}
 			if g.requested(usersURL) {
@@ -122,7 +122,7 @@ func TestSyncEnabledBucketsErrorsAndTwins(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{orgURL: orgBody("true"), usersURL: twoErroredUsers}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -175,7 +175,7 @@ func TestMetricCarriesNoPerEntityData(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{orgURL: orgBody("true"), usersURL: twoErroredUsers}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	allowed := map[string]bool{"object_type": true, "category": true, "property_causing_error": true}
@@ -195,7 +195,7 @@ func TestZeroCaseEmitsExplicitZero(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{orgURL: orgBody("true"), usersURL: noErroredUsers}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	pts := rec.MetricPoints(metricSyncErrors)

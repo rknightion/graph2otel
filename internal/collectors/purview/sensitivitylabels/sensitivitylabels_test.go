@@ -8,6 +8,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -63,9 +64,14 @@ func TestSensitivityCollectBucketsByApplicableTo(t *testing.T) {
 	]}`
 	g := &fakeGraph{bodies: map[string]string{sensitivityURL: body}}
 	rec := telemetrytest.New()
+	outcomes := recordoutcome.NewRecorder()
 
-	if err := NewSensitivity(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := NewSensitivity(g, nil).Collect(context.Background(), rec.Emitter(), outcomes); err != nil {
 		t.Fatalf("Collect: %v", err)
+	}
+	wantOutcomes := recordoutcome.Counts{Fetched: 5, Mapped: 5, Emitted: 5}
+	if got := outcomes.Snapshot().Counts; got != wantOutcomes {
+		t.Errorf("outcome counts = %+v, want %+v", got, wantOutcomes)
 	}
 
 	got := map[string]float64{}
@@ -88,7 +94,7 @@ func TestSensitivityNoPIIInLabels(t *testing.T) {
 	body := `{"value":[{"applicableTo":"file","name":"` + piiLabelName + `","priority":9,"tooltip":"secret finance"}]}`
 	g := &fakeGraph{bodies: map[string]string{sensitivityURL: body}}
 	rec := telemetrytest.New()
-	if err := NewSensitivity(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := NewSensitivity(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -162,7 +168,7 @@ func TestSensitivityErrorsAlwaysFail(t *testing.T) {
 				sensitivityURL: errors.New("graphclient: GET " + sensitivityURL + ": " + tc.err),
 			}}
 			rec := telemetrytest.New()
-			err := NewSensitivity(g, nil).Collect(context.Background(), rec.Emitter())
+			err := NewSensitivity(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 			if err == nil {
 				t.Fatalf("Collect returned nil: a sensitivity-label fetch failure must never be swallowed (#126); error was %q", tc.err)
 			}
@@ -185,7 +191,7 @@ func TestSensitivityForbiddenErrorNamesTheMissingScope(t *testing.T) {
 		sensitivityURL: errors.New("graphclient: GET " + sensitivityURL +
 			`: status 403: {"error":{"code":"InsufficientGraphPermissions"}}`),
 	}}
-	err := NewSensitivity(g, nil).Collect(context.Background(), telemetrytest.New().Emitter())
+	err := NewSensitivity(g, nil).Collect(context.Background(), telemetrytest.New().Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected a 403 to fail the collector")
 	}
@@ -209,7 +215,7 @@ func TestSensitivityCollectEmitsLogTwin(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{sensitivityURL: body}}
 	rec := telemetrytest.New()
 
-	if err := NewSensitivity(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := NewSensitivity(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -298,7 +304,7 @@ func TestSensitivityMappedTargetsReportNothingUnexpected(t *testing.T) {
 	]}`
 	g := &fakeGraph{bodies: map[string]string{sensitivityURL: body}}
 	rec := telemetrytest.New()
-	if err := NewSensitivity(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := NewSensitivity(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if got := findings(rec); len(got) != 0 {
@@ -313,7 +319,7 @@ func TestSensitivityUnmappedTargetIsReported(t *testing.T) {
 	]}`
 	g := &fakeGraph{bodies: map[string]string{sensitivityURL: body}}
 	rec := telemetrytest.New()
-	if err := NewSensitivity(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := NewSensitivity(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	key := wirecheck.KindUnmappedValue + "/" + semconv.AttrApplicableTo

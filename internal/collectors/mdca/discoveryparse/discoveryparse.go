@@ -40,6 +40,9 @@ package discoveryparse
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -47,6 +50,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/mdcaclient"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -191,11 +195,17 @@ type taskMeta struct {
 // CollectWindow implements collector.WindowCollector. It stamps its transport
 // inline (no engine), fetches the governance window, maps + dedupes each task,
 // and emits the per-stream parse-health gauges from persistent state every tick.
-func (c *Collector) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter) (time.Time, error) {
+func (c *Collector) CollectWindow(
+	ctx context.Context,
+	from, to time.Time,
+	e telemetry.Emitter,
+	outcomes *recordoutcome.Recorder,
+) (time.Time, error) {
 	e = telemetry.WithTransport(e, telemetry.TransportMDCA)
 
 	cp, err := c.store.Load(c.tenantID, checkpointKey)
 	if err != nil {
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		return time.Time{}, err //nolint:wrapcheck // the store's error is already specific
 	}
 	if cp.ParseHealth == nil {
@@ -215,26 +225,38 @@ func (c *Collector) CollectWindow(ctx context.Context, from, to time.Time, e tel
 
 	page, err := c.client.Governance(ctx, mdcaclient.GovernanceQuery{SinceMillis: since.UnixMilli()})
 	if err != nil {
+		if buffered := mdcaclient.BufferedRecords(err); buffered > 0 {
+			outcomes.Add(recordoutcome.OutcomeFetched, buffered)
+			outcomes.Add(recordoutcome.OutcomeErrored, buffered)
+		}
+		outcomes.Cause(governanceFailureCause(err))
 		return time.Time{}, err //nolint:wrapcheck // mdcaclient's error is already specific
 	}
 
 	hwm := cp.Watermark
 	for _, rec := range page.Records {
+		outcomes.Add(recordoutcome.OutcomeFetched, 1)
 		// CLIENT-SIDE taskName filter — a server-side one returns empty silently.
 		if str(rec, "taskName") != taskNameFilter {
+			outcomes.Add(recordoutcome.OutcomeFiltered, 1)
 			continue
 		}
 		m, ok := parseTask(rec)
 		if !ok {
+			outcomes.Add(recordoutcome.OutcomeDropped, 1)
+			outcomes.Cause(recordoutcome.CauseMissingEventTime)
 			continue // no usable timestamp: drop rather than mis-date (#135)
 		}
+		outcomes.Add(recordoutcome.OutcomeMapped, 1)
 		dedupeKey := m.id + ":" + strconv.FormatInt(m.updateMillis, 10)
 		if cp.SeenIDs.Has(dedupeKey) {
+			outcomes.Add(recordoutcome.OutcomeDeduped, 1)
 			continue
 		}
 		cp.SeenIDs.Add(dedupeKey, m.createdTime)
 
 		e.LogEvent(logTwin(m))
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 
 		if m.terminal {
 			e.Counter(metricTasks, semconv.UnitDimensionless,
@@ -260,11 +282,31 @@ func (c *Collector) CollectWindow(ctx context.Context, from, to time.Time, e tel
 	cp.Watermark = hwm
 	cp.EvictStale()
 	if err := c.store.Save(cp); err != nil {
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		return time.Time{}, err //nolint:wrapcheck // the store's error is already specific
 	}
 
 	c.emitHealthGauges(e, cp.ParseHealth)
 	return to, nil
+}
+
+// governanceFailureCause reduces raw MDCA client errors to the frozen bounded
+// cause set. Error text stays on the returned error for operator logs only.
+func governanceFailureCause(err error) recordoutcome.Cause {
+	var apiErr *mdcaclient.APIError
+	var syntaxErr *json.SyntaxError
+	var typeErr *json.UnmarshalTypeError
+	switch {
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
+		return recordoutcome.CauseTimeout
+	case errors.As(err, &apiErr) &&
+		(apiErr.Status == http.StatusUnauthorized || apiErr.Status == http.StatusForbidden):
+		return recordoutcome.CausePermissionDenied
+	case errors.As(err, &syntaxErr), errors.As(err, &typeErr):
+		return recordoutcome.CauseDecodeError
+	default:
+		return recordoutcome.CauseSourceError
+	}
 }
 
 // emitHealthGauges snapshots the per-stream parse-health metrics from persistent

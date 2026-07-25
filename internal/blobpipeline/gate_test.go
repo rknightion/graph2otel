@@ -52,7 +52,7 @@ func TestPoll_GateRoutesMetricsByAge(t *testing.T) {
 		"tenantId=t1/h=00/b": tsRec(5*time.Minute, "new") + tsRec(2*time.Hour, "old"),
 	}}
 	r := telemetrytest.New()
-	if err := Poll(context.Background(), gatedConfig(20*time.Minute), newCursor(), src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), gatedConfig(20*time.Minute), newCursor(), src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 
@@ -78,7 +78,7 @@ func TestPoll_NoDeriveIsLogOnly(t *testing.T) {
 	cfg := gatedConfig(20 * time.Minute)
 	cfg.Derive = nil
 	r := telemetrytest.New()
-	if err := Poll(context.Background(), cfg, newCursor(), src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), cfg, newCursor(), src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 	if got := len(r.LogRecords()); got != 2 {
@@ -101,11 +101,11 @@ func TestPoll_ReReadNoDoubleCount(t *testing.T) {
 	cur := newCursor()
 	cfg := gatedConfig(20 * time.Minute)
 
-	if err := Poll(context.Background(), cfg, cur, src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), cfg, cur, src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll 1: %v", err)
 	}
 	src.blobs[name] = a + tsRec(5*time.Minute, "b") // Azure appends a second record
-	if err := Poll(context.Background(), cfg, cur, src, r.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), cfg, cur, src, r.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll 2: %v", err)
 	}
 
@@ -128,11 +128,11 @@ func TestPoll_RestartNoDoubleCount(t *testing.T) {
 	cur := newCursor() // the persisted cursor; the same offsets survive the "restart"
 
 	before := telemetrytest.New()
-	if err := Poll(context.Background(), cfg, cur, src, before.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), cfg, cur, src, before.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll before restart: %v", err)
 	}
 	after := telemetrytest.New() // fresh process: new meter, counter resets to 0
-	if err := Poll(context.Background(), cfg, cur, src, after.Emitter(), discardLogger(), nil); err != nil {
+	if err := Poll(context.Background(), cfg, cur, src, after.Emitter(), discardLogger(), nil, nil); err != nil {
 		t.Fatalf("Poll after restart: %v", err)
 	}
 

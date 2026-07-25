@@ -40,6 +40,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -151,20 +152,24 @@ func (c *Collector) RequiredPermissions() []string {
 
 // Collect fetches the one folded request and emits the three bounded gauges plus
 // one log per unresolved issue.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+overviewsPath, nil)
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+overviewsPath, nil, outcomes)
 	if err != nil {
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		return err
 	}
+	outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(raws)))
 
 	servicesByStatus := map[string]int64{}
 	statusPoints := make([]telemetry.GaugePoint, 0, len(raws))
 	issuesByClassStatus := map[[2]string]int64{}
 	seenIssues := map[string]bool{}
 
-	for _, raw := range raws {
+	for i, raw := range raws {
 		var ov overview
 		if err := json.Unmarshal(raw, &ov); err != nil {
+			outcomes.Add(recordoutcome.OutcomeErrored, uint64(len(raws))-uint64(i))
+			outcomes.Cause(recordoutcome.CauseDecodeError)
 			return fmt.Errorf("decode healthOverview: %w", err)
 		}
 		servicesByStatus[ov.Status]++
@@ -185,6 +190,8 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 				e.LogEvent(issueTwin(is))
 			}
 		}
+		outcomes.Add(recordoutcome.OutcomeMapped, 1)
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 	}
 
 	servicePoints := make([]telemetry.GaugePoint, 0, len(servicesByStatus))

@@ -77,7 +77,7 @@ func TestSignalGate(t *testing.T) {
 	)
 
 	if err := Poll(
-		context.Background(), cfg, newCursor(), src, emitter, discardLogger(), nil,
+		context.Background(), cfg, newCursor(), src, emitter, discardLogger(), nil, nil,
 	); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}

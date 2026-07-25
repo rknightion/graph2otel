@@ -55,7 +55,7 @@ func TestRun_PersistsInFlightBeforePolling(t *testing.T) {
 	}
 
 	cp := newCheckpoint("t1", cfg.CreatePath)
-	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter()); err != nil {
+	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
@@ -90,7 +90,7 @@ func TestRun_ClearsInFlightOnSuccess(t *testing.T) {
 	}
 
 	cp := newCheckpoint("t1", cfg.CreatePath)
-	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter()); err != nil {
+	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if cp.InFlight != nil {
@@ -112,7 +112,7 @@ func TestRun_KeepsInFlightOnPollError(t *testing.T) {
 	client := &fakeJobClient{statusErr: errors.New("graph: status 429")}
 
 	cp := newCheckpoint("t1", cfg.CreatePath)
-	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter()); err == nil {
+	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), nil); err == nil {
 		t.Fatal("Run: want an error when the status poll fails")
 	}
 	if cp.InFlight == nil {
@@ -148,7 +148,7 @@ func TestRun_ClearsInFlightOnTerminalFailure(t *testing.T) {
 			client := &fakeJobClient{statuses: []string{tt.status}}
 
 			cp := newCheckpoint("t1", cfg.CreatePath)
-			_, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter())
+			_, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), nil)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("Run error = %v, want %v", err, tt.wantErr)
 			}
@@ -183,7 +183,7 @@ func TestRun_TerminalClearFailureJoinsQueryAndPersistErrors(t *testing.T) {
 	client := &fakeJobClient{statuses: []string{StatusFailed}}
 	cp := newCheckpoint("t1", cfg.CreatePath)
 
-	_, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter())
+	_, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), nil)
 	if !errors.Is(err, ErrJobFailed) {
 		t.Fatalf("Run error = %v, want ErrJobFailed", err)
 	}
@@ -210,7 +210,7 @@ func TestJobCollector_TerminalClearPreventsFreshInstanceAdoption(t *testing.T) {
 	cfg.Now = fixedNow(to)
 	first := NewJobCollector("m365.unified_audit", 30*time.Minute, 15*time.Minute, "t1", cfg,
 		&fakeJobClient{statuses: []string{StatusFailed}}, store)
-	if _, err := first.CollectWindow(context.Background(), from, to, telemetrytest.New().Emitter()); !errors.Is(err, ErrJobFailed) {
+	if _, err := first.CollectWindow(context.Background(), from, to, telemetrytest.New().Emitter(), nil); !errors.Is(err, ErrJobFailed) {
 		t.Fatalf("first CollectWindow error = %v, want ErrJobFailed", err)
 	}
 
@@ -221,7 +221,7 @@ func TestJobCollector_TerminalClearPreventsFreshInstanceAdoption(t *testing.T) {
 		},
 	}
 	second := NewJobCollector("m365.unified_audit", 30*time.Minute, 15*time.Minute, "t1", cfg, secondClient, store)
-	if _, err := second.CollectWindow(context.Background(), from, to, telemetrytest.New().Emitter()); err != nil {
+	if _, err := second.CollectWindow(context.Background(), from, to, telemetrytest.New().Emitter(), nil); err != nil {
 		t.Fatalf("second CollectWindow: %v", err)
 	}
 	if secondClient.createCalls != 1 {
@@ -263,7 +263,7 @@ func TestRun_AdoptsInFlightRatherThanCreating(t *testing.T) {
 		WindowTo:   jobTo,
 	}
 
-	hw, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter())
+	hw, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -321,7 +321,7 @@ func TestRun_DiscardsStaleInFlight(t *testing.T) {
 		WindowTo:   to,
 	}
 
-	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter()); err != nil {
+	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if client.createCalls != 1 {
@@ -371,7 +371,7 @@ func TestRun_DiscardsInFlightWhenWindowMovedOn(t *testing.T) {
 		WindowTo:   from.Add(-2 * time.Hour),
 	}
 
-	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter()); err != nil {
+	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if client.createCalls != 1 {
@@ -419,7 +419,7 @@ func TestRun_ColdCheckpointAdoptsJobStartingBeforeThisTicksFrom(t *testing.T) {
 		WindowTo:   jobTo,
 	}
 
-	hw, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter())
+	hw, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -472,7 +472,7 @@ func TestRun_ColdCheckpointDiscardsJobThatWouldLeaveAGap(t *testing.T) {
 		WindowTo:   to,
 	}
 
-	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter()); err != nil {
+	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if client.createCalls != 1 {
@@ -514,7 +514,7 @@ func TestRun_ColdCheckpointDiscardsJobEndingAfterThisTicksTo(t *testing.T) {
 		WindowTo:   to.Add(time.Minute), // beyond the requested `to`
 	}
 
-	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter()); err != nil {
+	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if client.createCalls != 1 {
@@ -549,7 +549,7 @@ func TestRun_NegativeJobMaxAgeDisablesAdoption(t *testing.T) {
 	// A perfectly adoptable job: fresh, exact window.
 	cp.InFlight = &checkpoint.InFlightJob{ID: "query-adoptable", CreatedAt: to.Add(-time.Minute), WindowFrom: from, WindowTo: to}
 
-	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter()); err != nil {
+	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if client.createCalls != 1 {
@@ -582,7 +582,7 @@ func TestRun_AdoptedJobSkipsBuildRequest(t *testing.T) {
 	cp := newCheckpoint("t1", cfg.CreatePath)
 	cp.InFlight = &checkpoint.InFlightJob{ID: "query-9", CreatedAt: to.Add(-time.Minute), WindowFrom: from, WindowTo: to}
 
-	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter()); err != nil {
+	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if built != 0 {
@@ -608,7 +608,7 @@ func TestJobCollector_RestartAdoptsInFlightQuery(t *testing.T) {
 	// --- process A: creates the query, then dies while polling it.
 	clientA := &fakeJobClient{statusErr: errors.New("process is going away")}
 	collA := NewJobCollector("m365.unified_audit", 30*time.Minute, 15*time.Minute, "t1", cfg, clientA, store)
-	if _, err := collA.CollectWindow(context.Background(), from, to, telemetrytest.New().Emitter()); err == nil {
+	if _, err := collA.CollectWindow(context.Background(), from, to, telemetrytest.New().Emitter(), nil); err == nil {
 		t.Fatal("CollectWindow: want an error when the poll never completes")
 	}
 	if clientA.createCalls != 1 {
@@ -641,7 +641,7 @@ func TestJobCollector_RestartAdoptsInFlightQuery(t *testing.T) {
 		},
 	}
 	collB := NewJobCollector("m365.unified_audit", 30*time.Minute, 15*time.Minute, "t1", cfgB, clientB, store)
-	if _, err := collB.CollectWindow(context.Background(), from, toB, rec.Emitter()); err != nil {
+	if _, err := collB.CollectWindow(context.Background(), from, toB, rec.Emitter(), nil); err != nil {
 		t.Fatalf("process B CollectWindow: %v", err)
 	}
 
@@ -704,7 +704,7 @@ func TestJobCollector_ColdCheckpointRestartAdoptsInFlightQuery(t *testing.T) {
 
 	clientA := &fakeJobClient{statusErr: errors.New("process is going away")}
 	collA := NewJobCollector("m365.unified_audit", 30*time.Minute, lag, "t1", cfgA, clientA, store)
-	if _, err := collA.CollectWindow(context.Background(), fromA, toA, telemetrytest.New().Emitter()); err == nil {
+	if _, err := collA.CollectWindow(context.Background(), fromA, toA, telemetrytest.New().Emitter(), nil); err == nil {
 		t.Fatal("CollectWindow: want an error when the poll never completes")
 	}
 	if clientA.createCalls != 1 {
@@ -747,7 +747,7 @@ func TestJobCollector_ColdCheckpointRestartAdoptsInFlightQuery(t *testing.T) {
 		},
 	}
 	collB := NewJobCollector("m365.unified_audit", 30*time.Minute, lag, "t1", cfgB, clientB, store)
-	hw, err := collB.CollectWindow(context.Background(), fromB, toB, rec.Emitter())
+	hw, err := collB.CollectWindow(context.Background(), fromB, toB, rec.Emitter(), nil)
 	if err != nil {
 		t.Fatalf("process B CollectWindow: %v", err)
 	}
@@ -812,7 +812,7 @@ func TestJobCollector_StaleInFlightDoesNotWedge(t *testing.T) {
 		},
 	}
 	coll := NewJobCollector("m365.unified_audit", 30*time.Minute, 15*time.Minute, "t1", cfg, client, store)
-	if _, err := coll.CollectWindow(context.Background(), from, to, rec.Emitter()); err != nil {
+	if _, err := coll.CollectWindow(context.Background(), from, to, rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 
@@ -855,7 +855,7 @@ func TestRun_PersistErrorDoesNotAbandonTheCreatedJob(t *testing.T) {
 	}
 
 	cp := newCheckpoint("t1", cfg.CreatePath)
-	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter()); err != nil {
+	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), nil); err != nil {
 		t.Fatalf("Run: %v — a persist failure must not abandon the query it just created", err)
 	}
 	if logs := rec.LogRecords(); len(logs) != 1 {

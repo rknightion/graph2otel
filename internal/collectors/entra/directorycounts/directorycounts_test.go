@@ -55,7 +55,7 @@ func TestCollectEmitsOneSeriesPerType(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := New(g, nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -81,7 +81,7 @@ func TestCollectSetsConsistencyLevelOnEveryRequest(t *testing.T) {
 	g := &fakeGraph{bodies: allCounts()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	for url, cl := range g.seenHeaders {
@@ -103,7 +103,7 @@ func TestCollectIsResilientToPerTypeError(t *testing.T) {
 
 	// A single type failing must surface as a (non-fatal) error but MUST NOT
 	// stop the other types from being emitted.
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Error("expected Collect to surface the per-type failure as an error")
 	}

@@ -107,7 +107,9 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/graphclient"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
 	"github.com/rknightion/graph2otel/internal/preflight"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -168,9 +170,10 @@ const (
 
 // Collector polls the beta Cloud PKI certification authorities and their leaves.
 type Collector struct {
-	g       collectors.GraphClient
-	baseURL string
-	logger  *slog.Logger
+	outcomes *outcome.Recorder
+	g        collectors.GraphClient
+	baseURL  string
+	logger   *slog.Logger
 	// now returns the instant expiry is computed relative to. Tests override it
 	// only indirectly, by minting certificates relative to the same clock.
 	now func() time.Time
@@ -281,14 +284,20 @@ type validity struct {
 // three bounded gauges plus a twin per CA and per leaf. A 403 on the CA
 // collection (missing scope, or Cloud PKI not licensed on this tenant) is a
 // graceful info-level skip rather than a collection failure.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
+	local := *c
+	local.outcomes = outcomes
+	c = &local
 	now := c.now()
 
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+authoritiesPath, nil)
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+authoritiesPath, nil, c.outcomes)
 	if err != nil {
 		if isForbidden(err) {
+			outcome.RecordError(c.outcomes, err)
 			c.logger.Info("cloudpki: cloudCertificationAuthority forbidden (missing scope or unlicensed); skipping",
 				"collector", collectorName, "error", graphclient.FormatODataError(err))
+			outcomes.Cause(recordoutcome.CausePermissionDenied)
 			return nil
 		}
 		return fmt.Errorf("%s: list certification authorities: %w", collectorName, err)
@@ -301,8 +310,10 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for _, raw := range raws {
 		var ca authority
 		if err := json.Unmarshal(raw, &ca); err != nil {
+			outcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			return fmt.Errorf("%s: decode certification authority: %w", collectorName, err)
 		}
+		outcome.Emitted(outcomes, 1)
 
 		v := resolveValidity(&ca)
 		caCounts[[2]string{orUnknown(ca.Type), orUnknown(ca.Status)}]++
@@ -326,6 +337,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			// never take the CA expiry signal down with it.
 			c.logger.Warn("cloudpki: leaf certificate fetch failed; that authority's leaves are omitted this cycle",
 				"collector", collectorName, "certification_authority_id", ca.ID, "error", lerr)
+			outcome.RecordError(outcomes, lerr)
 			continue
 		}
 		for i := range leaves {
@@ -373,7 +385,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // listLeaves walks one CA's issued-leaf navigation.
 func (c *Collector) listLeaves(ctx context.Context, caID string) ([]leafCertificate, error) {
 	url := c.baseURL + authoritiesPath + "/" + caID + leafCertificatesSegment
-	raws, err := collectors.GetAllValues(ctx, c.g, url, nil)
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, url, nil, c.outcomes)
 	if err != nil {
 		return nil, err
 	}
@@ -381,8 +393,10 @@ func (c *Collector) listLeaves(ctx context.Context, caID string) ([]leafCertific
 	for _, raw := range raws {
 		var leaf leafCertificate
 		if err := json.Unmarshal(raw, &leaf); err != nil {
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			return nil, fmt.Errorf("decode leaf certificate: %w", err)
 		}
+		outcome.Emitted(c.outcomes, 1)
 		out = append(out, leaf)
 	}
 	return out, nil

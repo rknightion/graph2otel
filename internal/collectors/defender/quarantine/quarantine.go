@@ -67,6 +67,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -206,7 +207,7 @@ type gaugeKey struct {
 // Grafana Cloud's forced cumulative temporality. The corollary is that an empty
 // quarantine emits NO series at all rather than a zero — so alert on the series
 // exceeding a threshold, never on its absence.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	// Stamp the transport HERE, not just in IngestTransport(). There is no
 	// ingest engine on this path to do it, and the Scheduler's baseline is
 	// telemetry.TransportGraph — so without this wrapper every record from the
@@ -226,8 +227,10 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			"ReleaseStatus": heldOnly,
 		})
 		if err != nil {
+			outcomes.Cause(recordoutcome.CauseSourceError)
 			return fmt.Errorf("%s page %d: %w", cmdlet, page, err)
 		}
+		outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(recs)))
 		for _, r := range recs {
 			c.checkWireAssumptions(e, r)
 			counts[gaugeKey{
@@ -236,6 +239,8 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 				entityType:     str(r, "EntityType"),
 			}]++
 			e.LogEvent(logTwin(r))
+			outcomes.Add(recordoutcome.OutcomeMapped, 1)
+			outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 		}
 		// A short page is the end of the result set. The API exposes no total
 		// count and no next-link, so this is the only termination signal.

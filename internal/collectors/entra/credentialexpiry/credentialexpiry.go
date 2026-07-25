@@ -43,6 +43,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -199,15 +201,16 @@ func (c *Collector) RequiredPermissions() []string { return []string{"Applicatio
 // (see ownerEntity/credential above) but flow ONLY into the log twin
 // (credentialLogTwin) — never into a telemetry.GaugePoint. See the package
 // doc and TestCollectMetricsNeverCarryPerEntityAttrs.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	now := c.now()
 	counts := map[bucketKey]int64{}
 	var errs []error
 
 	for _, ot := range ownerTypes {
 		url := c.baseURL + ot.path + "?" + selectQuery
-		items, err := collectors.GetAllValues(ctx, c.g, url, nil)
+		items, err := collectors.GetAllValuesRecorded(ctx, c.g, url, nil, outcomes)
 		if err != nil {
+			entraoutcome.SourceError(outcomes)
 			c.logger.Warn("credential list failed", "collector", collectorName, "owner_type", ot.attr, "error", err)
 			errs = append(errs, fmt.Errorf("%s: %w", ot.attr, err))
 			continue
@@ -225,14 +228,24 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		for _, raw := range items {
 			var ent ownerEntity
 			if err := json.Unmarshal(raw, &ent); err != nil {
+				entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 				c.logger.Warn("credential entry decode failed", "collector", collectorName, "owner_type", ot.attr, "error", err)
 				continue
 			}
+			emitted := false
 			for _, cred := range ent.KeyCredentials {
-				c.processCredential(e, counts, ot, "certificate", ent, cred, now)
+				emitted = c.processCredential(e, counts, ot, "certificate", ent, cred, now) || emitted
 			}
 			for _, cred := range ent.PasswordCredentials {
-				c.processCredential(e, counts, ot, "secret", ent, cred, now)
+				emitted = c.processCredential(e, counts, ot, "secret", ent, cred, now) || emitted
+			}
+			switch {
+			case emitted:
+				entraoutcome.Emitted(outcomes, 1)
+			case len(ent.KeyCredentials)+len(ent.PasswordCredentials) == 0:
+				entraoutcome.Filtered(outcomes, 1)
+			default:
+				entraoutcome.Dropped(outcomes, 1, recordoutcome.CauseMappingError)
 			}
 		}
 	}
@@ -260,16 +273,17 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // expiry_bucket (a field on every log record) cannot be computed for it, and
 // this is a single malformed data point, not a Graph API failure, so it does
 // not surface as a Collect error.
-func (c *Collector) processCredential(e telemetry.Emitter, counts map[bucketKey]int64, owner ownerType, credType string, ent ownerEntity, cred credential, now time.Time) {
+func (c *Collector) processCredential(e telemetry.Emitter, counts map[bucketKey]int64, owner ownerType, credType string, ent ownerEntity, cred credential, now time.Time) bool {
 	end, err := parseEndDateTime(cred.EndDateTime)
 	if err != nil {
 		c.logger.Warn("credential endDateTime unparsable, skipping",
 			"collector", collectorName, "owner_type", owner.attr, "credential_type", credType, "error", err)
-		return
+		return false
 	}
 	bucket := expiryBucketFor(now, end)
 	counts[bucketKey{owner.attr, credType, bucket}]++
 	e.LogEvent(credentialLogTwin(owner, credType, ent, cred, bucket))
+	return true
 }
 
 // parseEndDateTime accepts either RFC3339 or RFC3339Nano, matching the two

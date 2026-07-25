@@ -459,7 +459,7 @@ func TestSensitivityCollectFromLiveCapture(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{sensitivityURL: liveSensitivityLabels}}
 	rec := telemetrytest.New()
 
-	if err := NewSensitivity(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := NewSensitivity(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

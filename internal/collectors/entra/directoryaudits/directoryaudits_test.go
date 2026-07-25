@@ -608,7 +608,7 @@ func TestFirstPageURLIsV1AndUsesActivityDateTime(t *testing.T) {
 	c := newCollector(depsWith(t, f))
 
 	from := time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), telemetrytest.New().Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), telemetrytest.New().Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 	if len(f.seenURLs) == 0 {
@@ -641,7 +641,7 @@ func TestCollectorEmitsLiveRecordEndToEnd(t *testing.T) {
 	c := newCollector(depsWith(t, f))
 
 	from := time.Date(2026, 7, 17, 13, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 
@@ -701,7 +701,7 @@ func TestCollectorEmitsRoleAndScopeEndToEnd(t *testing.T) {
 	c := newCollector(depsWith(t, f))
 
 	from := time.Date(2026, 7, 17, 10, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(48*time.Hour), rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(48*time.Hour), rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 
@@ -739,7 +739,7 @@ func TestCollectorDrainsEmitsAndPersistsWatermark(t *testing.T) {
 	rec := telemetrytest.New()
 	c := newCollector(collectors.WindowDeps{TenantID: "t1", Fetcher: f, Store: store})
 
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 	if got := len(rec.LogRecords()); got != 2 {

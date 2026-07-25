@@ -248,7 +248,7 @@ func TestEndpointIsAlertsV2NotLegacy(t *testing.T) {
 	}
 
 	from := time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), telemetrytest.New().Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), telemetrytest.New().Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 	if len(f.seenURLs) == 0 {
@@ -279,7 +279,7 @@ func TestCollectorDrainsEmitsAndPersistsWatermark(t *testing.T) {
 	rec := telemetrytest.New()
 	c := newCollector(collectors.WindowDeps{TenantID: "t1", Fetcher: f, Store: store})
 
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 	if got := len(rec.LogRecords()); got != 2 {
@@ -342,7 +342,7 @@ func TestCollectorEmitsFullRecordEndToEnd(t *testing.T) {
 	// hand-written fixture carried, so the engine sees a record its window
 	// actually contains.
 	from := time.Date(2026, 5, 2, 18, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(3*time.Hour), rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(3*time.Hour), rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 

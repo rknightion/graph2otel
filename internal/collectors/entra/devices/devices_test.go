@@ -119,7 +119,7 @@ func TestCollectEmitsTrustTypeBreakdownWithUnknownLeftover(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -143,7 +143,7 @@ func TestCollectEmitsComplianceBreakdown(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -164,7 +164,7 @@ func TestCollectEmitsManagedBreakdown(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -185,7 +185,7 @@ func TestCollectEmitsOSBreakdownWithOtherBucket(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -217,7 +217,7 @@ func TestCollectClampsNegativeOtherToZero(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -233,7 +233,7 @@ func TestCollectEmitsStaleGaugeWithThresholdAttr(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -253,7 +253,7 @@ func TestCollectSetsConsistencyLevelOnEveryRequest(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if len(g.seenHeaders) == 0 {
@@ -274,7 +274,7 @@ func TestCollectIsResilientToPerBucketError(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := newTestCollector(g).Collect(context.Background(), rec.Emitter())
+	err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected Collect to surface the per-bucket failure as an error")
 	}
@@ -306,7 +306,7 @@ func TestCollectOmitsUnknownAndOtherLeftoverWhenTotalCountFails(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := newTestCollector(g).Collect(context.Background(), rec.Emitter())
+	err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected Collect to surface the total-count failure as an error")
 	}
@@ -333,7 +333,7 @@ func TestNoPerDeviceSeries(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

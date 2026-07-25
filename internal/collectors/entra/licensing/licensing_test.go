@@ -239,7 +239,7 @@ func TestCollectEmitsPerSKUConsumedAndEnabledGauges(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := New(g, nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -302,7 +302,7 @@ func TestCollectFollowsPagination(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := New(g, nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -317,7 +317,7 @@ func TestCollectSurfacesGraphError(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := New(g, nil)
-	err := c.Collect(context.Background(), rec.Emitter())
+	err := c.Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected Collect to surface the subscribedSkus fetch error")
 	}
@@ -334,7 +334,7 @@ func TestCollectHandlesEmptyTenant(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := New(g, nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if len(rec.MetricPoints(consumedMetricName)) != 0 {
@@ -354,7 +354,7 @@ func TestCollectNeverEmitsPerUserOrAssignmentErrorSeries(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := New(g, nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -404,7 +404,7 @@ func TestCollectSkipsMalformedSKUButEmitsOthers(t *testing.T) {
 	rec := telemetrytest.New()
 
 	c := New(g, nil)
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -447,7 +447,7 @@ func TestCollectEmitsUnitStatesAndCapabilityStatus(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{skusURL: body, groupsURL: noGroupErrors}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -484,7 +484,7 @@ func TestCollectEmitsGroupsWithErrors(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{skusURL: `{"value":[]}`, groupsURL: twoErroredGroupsBody}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -517,7 +517,7 @@ func TestZeroGroupsEmitsExplicitZeroNoLogs(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{skusURL: `{"value":[]}`, groupsURL: noGroupErrors}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	pts := rec.MetricPoints(groupsWithErrorsMetricName)

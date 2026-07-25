@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -372,7 +373,7 @@ func TestCollectEmitsLiveSnapshotEndToEnd(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -463,7 +464,7 @@ func TestCollectSurfacesPolicyVersionBumpBetweenPolls(t *testing.T) {
 	rec := telemetrytest.New()
 	c := New(g, nil)
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("first Collect: %v", err)
 	}
 	first := rec.MetricPoints(policyVersionMetricName)
@@ -474,7 +475,7 @@ func TestCollectSurfacesPolicyVersionBumpBetweenPolls(t *testing.T) {
 	// Second poll: the policy's version has bumped, simulating a
 	// policy-content change between collection cycles.
 	g.bodies[policiesURL] = `{"value":[{"id":"p1","displayName":"Windows Baseline","version":4}]}`
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("second Collect: %v", err)
 	}
 	second := rec.MetricPoints(policyVersionMetricName)
@@ -492,7 +493,7 @@ func TestCollectNeverFetchesPerDeviceStatusChildren(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -515,9 +516,13 @@ func TestCollectGracefullySkipsForbiddenDeviceStateSummary(t *testing.T) {
 		errs:   map[string]error{stateSummaryURL: forbidden403(stateSummaryURL)},
 	}
 	rec := telemetrytest.New()
+	outcomes := recordoutcome.NewRecorder()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), outcomes); err != nil {
 		t.Fatalf("Collect should gracefully skip a 403, not surface an error: %v", err)
+	}
+	if got := outcomes.Snapshot().Summarize(nil, false).Cause; got != recordoutcome.CausePermissionDenied {
+		t.Errorf("outcome cause = %q, want %q", got, recordoutcome.CausePermissionDenied)
 	}
 	if pts := rec.MetricPoints(devicesMetricName); len(pts) != 0 {
 		t.Errorf("expected no devices series when the state summary is forbidden, got %+v", pts)
@@ -532,7 +537,7 @@ func TestCollectGracefullySkipsForbiddenPolicyList(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect should gracefully skip a 403, not surface an error: %v", err)
 	}
 	if pts := rec.MetricPoints(policyVersionMetricName); len(pts) != 0 {
@@ -556,7 +561,7 @@ func TestCollectIsResilientToOnePolicyOverviewFailure(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected Collect to surface the per-policy overview failure as an error")
 	}
@@ -578,6 +583,29 @@ func TestCollectIsResilientToOnePolicyOverviewFailure(t *testing.T) {
 	}
 }
 
+func TestCollectRecordsPermissionDeniedForForbiddenPolicyOverview(t *testing.T) {
+	bodies := merge(emptyEndpoints(), map[string]string{
+		policiesURL: `{"value":[
+			{"id":"p1","displayName":"Windows Baseline","version":1}
+		]}`,
+		userOverviewURL("p1"): `{}`,
+	})
+	g := &fakeGraph{
+		bodies: bodies,
+		errs: map[string]error{
+			deviceOverviewURL("p1"): forbidden403(deviceOverviewURL("p1")),
+		},
+	}
+	outcomes := recordoutcome.NewRecorder()
+
+	if err := New(g, nil).Collect(context.Background(), telemetrytest.New().Emitter(), outcomes); err != nil {
+		t.Fatalf("Collect should gracefully skip a forbidden policy overview, got: %v", err)
+	}
+	if got := outcomes.Snapshot().Summarize(nil, false).Cause; got != recordoutcome.CausePermissionDenied {
+		t.Errorf("outcome cause = %q, want %q", got, recordoutcome.CausePermissionDenied)
+	}
+}
+
 func TestNoPerDeviceOrPerUserAttribute(t *testing.T) {
 	bodies := merge(emptyEndpoints(), map[string]string{
 		policiesURL:             `{"value":[{"id":"p1","displayName":"Windows Baseline","version":1}]}`,
@@ -588,7 +616,7 @@ func TestNoPerDeviceOrPerUserAttribute(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

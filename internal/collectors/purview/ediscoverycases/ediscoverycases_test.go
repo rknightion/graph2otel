@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -58,7 +59,7 @@ const liveCase = `{"value":[{
 func TestCollectAgainstLiveCase(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{casesURL: liveCase}}
 	rec := telemetrytest.New()
-	if err := NewCases(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := NewCases(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -106,7 +107,7 @@ func TestBucketsByStatusAndEmitsRealDates(t *testing.T) {
 	]}`
 	g := &fakeGraph{bodies: map[string]string{casesURL: body}}
 	rec := telemetrytest.New()
-	if err := NewCases(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := NewCases(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -140,6 +141,32 @@ func TestBucketsByStatusAndEmitsRealDates(t *testing.T) {
 	}
 }
 
+func TestCollectAccountsDecodedAndMalformedRows(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		casesURL: `{"value":[{"id":"a","displayName":"Case A","status":"active"},42]}`,
+	}}
+	otel := telemetrytest.New()
+	outcomes := recordoutcome.NewRecorder()
+
+	if err := NewCases(g, nil).Collect(context.Background(), otel.Emitter(), outcomes); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	snapshot := outcomes.Snapshot()
+	want := recordoutcome.Counts{
+		Fetched: 2,
+		Mapped:  1,
+		Emitted: 1,
+		Errored: 1,
+	}
+	if snapshot.Counts != want {
+		t.Errorf("outcome counts = %+v, want %+v", snapshot.Counts, want)
+	}
+	if len(snapshot.Causes) != 1 || snapshot.Causes[0] != recordoutcome.CauseDecodeError {
+		t.Errorf("outcome causes = %v, want [%s]", snapshot.Causes, recordoutcome.CauseDecodeError)
+	}
+}
+
 // TestUnregisteredDataPlaneFailsLoud pins that a 401 (the S&C data-plane
 // registration missing, despite eDiscovery.Read.All being granted) fails the
 // collector loudly and names the fix, rather than skipping silently — the
@@ -149,7 +176,8 @@ func TestUnregisteredDataPlaneFailsLoud(t *testing.T) {
 		casesURL: errors.New(`status 401: {"error":{"code":"Authentication_MissingOrMalformed","message":"Access token validation failure."}}`),
 	}}
 	rec := telemetrytest.New()
-	err := NewCases(g, nil).Collect(context.Background(), rec.Emitter())
+	outcomes := recordoutcome.NewRecorder()
+	err := NewCases(g, nil).Collect(context.Background(), rec.Emitter(), outcomes)
 	if err == nil {
 		t.Fatal("expected an error on 401, got nil")
 	}
@@ -161,6 +189,13 @@ func TestUnregisteredDataPlaneFailsLoud(t *testing.T) {
 	}
 	if n := len(rec.MetricPoints(casesMetric)); n != 0 {
 		t.Errorf("emitted %d metric points on error, want 0", n)
+	}
+	got := outcomes.Snapshot()
+	if got.Counts != (recordoutcome.Counts{}) {
+		t.Errorf("source-failure counts = %+v, want zero", got.Counts)
+	}
+	if len(got.Causes) != 1 || got.Causes[0] != recordoutcome.CauseSourceError {
+		t.Errorf("source-failure causes = %v, want [%s]", got.Causes, recordoutcome.CauseSourceError)
 	}
 }
 

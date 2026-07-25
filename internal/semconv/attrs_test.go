@@ -12,6 +12,12 @@ func TestSelfObsConstants(t *testing.T) {
 	if UnitDimensionless != "1" {
 		t.Errorf("UnitDimensionless = %q, want %q", UnitDimensionless, "1")
 	}
+	if UnitRecords != "{record}" {
+		t.Errorf("UnitRecords = %q, want %q", UnitRecords, "{record}")
+	}
+	if UnitRuns != "{run}" {
+		t.Errorf("UnitRuns = %q, want %q", UnitRuns, "{run}")
+	}
 }
 
 func TestCollectorConstants(t *testing.T) {

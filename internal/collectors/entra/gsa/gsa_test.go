@@ -168,7 +168,7 @@ func logsByEvent(rec *telemetrytest.Recorder, name string) []telemetrytest.LogRe
 // label.
 func TestOnboardingStatusGauge(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	pts := rec.MetricPoints(metricOnboardingStatus)
@@ -205,7 +205,7 @@ func TestOnboardingStatusEnumMapping(t *testing.T) {
 // (traffic_forwarding_type, state): three disabled profiles, one per type.
 func TestForwardingProfilesGauge(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	got := map[[2]string]float64{}
@@ -231,7 +231,7 @@ func TestForwardingProfilesGauge(t *testing.T) {
 // carrying the per-entity detail the gauge cannot, at Info severity.
 func TestForwardingProfileTwins(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	logs := logsByEvent(rec, eventForwardingProfile)
@@ -279,7 +279,7 @@ func TestForwardingProfileTwins(t *testing.T) {
 // TestFilteringPoliciesGauge pins the policy-count gauge keyed by action.
 func TestFilteringPoliciesGauge(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	got := map[string]float64{}
@@ -294,7 +294,7 @@ func TestFilteringPoliciesGauge(t *testing.T) {
 // TestFilteringPolicyTwin pins the per-policy twin.
 func TestFilteringPolicyTwin(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	logs := logsByEvent(rec, eventFilteringPolicy)
@@ -323,7 +323,7 @@ func TestFilteringPolicyTwin(t *testing.T) {
 // enabled (1) and packet tagging disabled (0).
 func TestSignalingAndPacketTaggingFlags(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	sig := rec.MetricPoints(metricSignalingEnabled)
@@ -340,7 +340,7 @@ func TestSignalingAndPacketTaggingFlags(t *testing.T) {
 // label, and no per-network twin is emitted.
 func TestRemoteNetworksCount(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	pts := rec.MetricPoints(metricRemoteNetworks)
@@ -359,7 +359,7 @@ func TestCollectIsResilientToOneFailure(t *testing.T) {
 	g.errs = map[string]error{urlTenantStatus: errors.New("throttled")}
 	rec := telemetrytest.New()
 
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected Collect to surface the tenant-status failure as an error")
 	}

@@ -78,7 +78,7 @@ func TestCollectEmitsAgreementsTotal(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -95,7 +95,7 @@ func TestCollectEmitsPerAgreementAcceptanceCounts(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -128,7 +128,7 @@ func TestCollectSetsConsistencyLevelHeaderIsNotRequired(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	for url, cl := range g.seenHeaders {
@@ -145,7 +145,7 @@ func TestCollectIsResilientToPerAgreementAcceptanceFetchError(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected Collect to surface the per-agreement acceptance failure as an error")
 	}
@@ -180,7 +180,7 @@ func TestCollectSurfacesAgreementsFetchFailure(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected Collect to surface the agreements list fetch failure as an error")
 	}
@@ -203,7 +203,7 @@ func TestCollectSkipsUnrecognizedAcceptanceState(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -249,7 +249,7 @@ func TestNoPerUserSeries(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

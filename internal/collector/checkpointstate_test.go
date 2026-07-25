@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -14,18 +15,22 @@ type checkpointReporterStub struct {
 	state *CheckpointState
 }
 
-func (checkpointReporterStub) Name() string                                     { return "stub" }
-func (checkpointReporterStub) DefaultInterval() time.Duration                   { return time.Hour }
-func (checkpointReporterStub) Collect(context.Context, telemetry.Emitter) error { return nil }
-func (s checkpointReporterStub) CheckpointState() *CheckpointState              { return s.state }
+func (checkpointReporterStub) Name() string                   { return "stub" }
+func (checkpointReporterStub) DefaultInterval() time.Duration { return time.Hour }
+func (checkpointReporterStub) Collect(context.Context, telemetry.Emitter, *recordoutcome.Recorder) error {
+	return nil
+}
+func (s checkpointReporterStub) CheckpointState() *CheckpointState { return s.state }
 
 // plainNoStateStub is a Collector that persists no cursor (an inline snapshot
 // collector), so it is not a CheckpointReporter.
 type plainNoStateStub struct{}
 
-func (plainNoStateStub) Name() string                                     { return "plain" }
-func (plainNoStateStub) DefaultInterval() time.Duration                   { return time.Hour }
-func (plainNoStateStub) Collect(context.Context, telemetry.Emitter) error { return nil }
+func (plainNoStateStub) Name() string                   { return "plain" }
+func (plainNoStateStub) DefaultInterval() time.Duration { return time.Hour }
+func (plainNoStateStub) Collect(context.Context, telemetry.Emitter, *recordoutcome.Recorder) error {
+	return nil
+}
 
 func TestCheckpointStateOf(t *testing.T) {
 	want := &CheckpointState{Kind: CheckpointKindWindow, SeenIDs: 3}

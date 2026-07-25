@@ -158,7 +158,7 @@ func liveGraph(t *testing.T, issuerExpiresIn time.Duration) *fakeGraph {
 func collect(t *testing.T, g *fakeGraph) *telemetrytest.Recorder {
 	t.Helper()
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	return rec
@@ -511,7 +511,7 @@ func TestLeafFetchFailureDoesNotDropAuthorities(t *testing.T) {
 func TestForbiddenSkipsGracefully(t *testing.T) {
 	g := &fakeGraph{errs: map[string]error{authoritiesURL(): errors.New("graphclient: GET ...: status 403: forbidden")}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("403 should be a graceful skip, got: %v", err)
 	}
 	if len(rec.LogRecords()) != 0 {
@@ -521,7 +521,7 @@ func TestForbiddenSkipsGracefully(t *testing.T) {
 
 func TestListErrorIsSurfaced(t *testing.T) {
 	g := &fakeGraph{errs: map[string]error{authoritiesURL(): errors.New("boom")}}
-	if err := New(g, nil).Collect(context.Background(), telemetrytest.New().Emitter()); err == nil {
+	if err := New(g, nil).Collect(context.Background(), telemetrytest.New().Emitter(), nil); err == nil {
 		t.Error("a non-403 list error must be surfaced")
 	}
 }

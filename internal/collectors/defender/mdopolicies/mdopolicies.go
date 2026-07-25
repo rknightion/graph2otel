@@ -59,6 +59,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -221,7 +222,7 @@ type protKey struct {
 // tick drops out of the export instead of ghosting forever under Grafana Cloud's
 // forced cumulative temporality. Alert on a series crossing a threshold, never on
 // its absence.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	// Stamp the transport HERE, not just in IngestTransport(). There is no ingest
 	// engine on this path, and the Scheduler's baseline is telemetry.TransportGraph
 	// — so without this wrapper every record from the Exchange Online admin API
@@ -237,11 +238,13 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for _, pt := range policyTypes {
 		recs, err := c.c.Invoke(ctx, pt.cmdlet, nil)
 		if err != nil {
+			outcomes.Cause(recordoutcome.CauseSourceError)
 			c.logger.Warn("mdo policy fetch failed",
 				"collector", collectorName, "cmdlet", pt.cmdlet, "error", err)
 			errs = append(errs, fmt.Errorf("%s: %w", pt.cmdlet, err))
 			continue
 		}
+		outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(recs)))
 		for _, r := range recs {
 			policyCounts[pt.name]++
 			for _, p := range pt.protections {
@@ -259,6 +262,8 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 				}
 			}
 			e.LogEvent(policyTwin(pt.name, r))
+			outcomes.Add(recordoutcome.OutcomeMapped, 1)
+			outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 		}
 	}
 

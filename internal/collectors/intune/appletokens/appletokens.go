@@ -24,6 +24,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -79,9 +81,10 @@ type depOnboardingSettingResource struct {
 // Collector polls the Apple MDM integration tokens: APNS certificate, VPP
 // tokens, and DEP onboarding settings.
 type Collector struct {
-	g       collectors.GraphClient
-	baseURL string
-	logger  *slog.Logger
+	outcomes *outcome.Recorder
+	g        collectors.GraphClient
+	baseURL  string
+	logger   *slog.Logger
 	// now returns the current time; overridable in tests so days-until-expiry
 	// is computed against a deterministic clock.
 	now func() time.Time
@@ -119,7 +122,11 @@ func (c *Collector) RequiredPermissions() []string {
 // logged and joined into the returned error, but every other source's points
 // still emit. This is deliberate for DEP in particular: its beta endpoint
 // must never be able to take down the v1.0 APNS/VPP gauges.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
+	local := *c
+	local.outcomes = outcomes
+	c = &local
 	now := c.now()
 	var errs []error
 	var expiry []telemetry.GaugePoint
@@ -170,13 +177,16 @@ func (c *Collector) apnsPoint(ctx context.Context, now time.Time) (telemetry.Gau
 	}
 	var cert applePushCert
 	if err := json.Unmarshal(body, &cert); err != nil {
+		outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 		return telemetry.GaugePoint{}, false, fmt.Errorf("decode apns certificate: %w", err)
 	}
 	days, ok := daysUntil(cert.ExpirationDateTime, now)
 	if !ok {
 		c.logger.Info("apple_tokens: apns certificate has no expirationDateTime yet, skipping", "collector", collectorName)
+		outcome.Filtered(c.outcomes, 1)
 		return telemetry.GaugePoint{}, false, nil
 	}
+	outcome.Emitted(c.outcomes, 1)
 	return telemetry.GaugePoint{
 		Value: days,
 		Attrs: telemetry.Attrs{semconv.AttrType: "apns", semconv.AttrState: orUnknown(cert.CertificateUploadStatus), semconv.AttrTokenName: ""},
@@ -187,7 +197,7 @@ func (c *Collector) apnsPoint(ctx context.Context, now time.Time) (telemetry.Gau
 // typically 1-5 tokens) and returns one point per token with a parseable
 // expirationDateTime.
 func (c *Collector) vppPoints(ctx context.Context, now time.Time) ([]telemetry.GaugePoint, error) {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceAppManagement/vppTokens", nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceAppManagement/vppTokens", nil, c.outcomes)
 	if err != nil {
 		return nil, err
 	}
@@ -196,14 +206,17 @@ func (c *Collector) vppPoints(ctx context.Context, now time.Time) ([]telemetry.G
 		var tok vppTokenResource
 		if err := json.Unmarshal(r, &tok); err != nil {
 			c.logger.Warn("apple_tokens: skipping unparseable vpp token", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
 		days, ok := daysUntil(tok.ExpirationDateTime, now)
 		if !ok {
 			c.logger.Info("apple_tokens: vpp token has no expirationDateTime, skipping",
 				"collector", collectorName, "organization", tok.OrganizationName)
+			outcome.Filtered(c.outcomes, 1)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		points = append(points, telemetry.GaugePoint{
 			Value: days,
 			Attrs: telemetry.Attrs{semconv.AttrType: "vpp", semconv.AttrState: orUnknown(tok.State), semconv.AttrTokenName: tok.OrganizationName},
@@ -216,7 +229,7 @@ func (c *Collector) vppPoints(ctx context.Context, now time.Time) ([]telemetry.G
 // admin-configured - typically 1-3 settings) and returns the
 // days-until-expiry points plus the synced-device-count points.
 func (c *Collector) depPoints(ctx context.Context, now time.Time) ([]telemetry.GaugePoint, []telemetry.GaugePoint, error) {
-	raw, err := collectors.GetAllValues(ctx, c.g, betaBaseURL+"/deviceManagement/depOnboardingSettings", nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, betaBaseURL+"/deviceManagement/depOnboardingSettings", nil, c.outcomes)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -226,8 +239,10 @@ func (c *Collector) depPoints(ctx context.Context, now time.Time) ([]telemetry.G
 		var setting depOnboardingSettingResource
 		if err := json.Unmarshal(r, &setting); err != nil {
 			c.logger.Warn("apple_tokens: skipping unparseable dep onboarding setting", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		state := "ok"
 		if setting.LastSyncErrorCode != 0 {
 			state = "sync_error"
@@ -256,6 +271,10 @@ func (c *Collector) depPoints(ctx context.Context, now time.Time) ([]telemetry.G
 // still surfaces via errors.Join for self-obs visibility.
 func (c *Collector) handleFetchErr(source string, err error) error {
 	if isUnavailable(err) {
+		outcome.RecordError(c.outcomes, err)
+		if strings.Contains(err.Error(), "status 403") {
+			c.outcomes.Cause(recordoutcome.CausePermissionDenied)
+		}
 		c.logger.Info("apple_tokens: "+source+" unavailable on this tenant; skipping",
 			"collector", collectorName, "error", err)
 		return nil

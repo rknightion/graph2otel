@@ -78,6 +78,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/exportjob"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -345,7 +346,8 @@ func (c *Collector) RequiredPermissions() []string {
 // expired, ...) is logged and treated as a graceful skip for this cycle —
 // never a returned error — since the underlying report is opt-in and
 // best-effort.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
 	// Stamped here because no engine can: internal/exportjob never calls
 	// LogEvent, so report_export has no engine seam (#141). See
 	// appinstallreport.Collect for the full reasoning.
@@ -364,8 +366,10 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	rows, err := c.export.Export(ctx, req, e)
 	if err != nil {
 		c.logger.Warn("cert_inventory: export failed; skipping this cycle", "collector", collectorName, "error", err)
+		outcome.RecordError(outcomes, err)
 		return nil
 	}
+	outcome.Emitted(outcomes, uint64(len(rows)))
 
 	now := c.now()
 	issuers := newValueCapper()

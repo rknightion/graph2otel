@@ -190,7 +190,7 @@ func TestCollectorEmitsLiveRecordsEndToEnd(t *testing.T) {
 		Logger:   slog.New(slog.DiscardHandler),
 	})
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	logs := rec.LogRecords()
@@ -204,7 +204,7 @@ func TestCollectorEmitsLiveRecordsEndToEnd(t *testing.T) {
 		t.Errorf("first record entity_type = %q, want %q", got, "User")
 	}
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("second Collect: %v", err)
 	}
 	if got := len(rec.LogRecords()); got != 2 {

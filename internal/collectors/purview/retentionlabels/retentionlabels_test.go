@@ -8,6 +8,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/collectors/purview/sensitivitylabels"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -133,13 +134,13 @@ func TestForbiddenSkipIsRetentionOnly(t *testing.T) {
 		eventTypesURL: wrap(eventTypesURL),
 	}}
 	retRec := telemetrytest.New()
-	if err := NewRetention(retG, nil).Collect(context.Background(), retRec.Emitter()); err != nil {
+	if err := NewRetention(retG, nil).Collect(context.Background(), retRec.Emitter(), nil); err != nil {
 		t.Errorf("retention: DataInsights-Forbidden is a documented permanent app-only gap (Application: Not supported) and must still skip, got: %v", err)
 	}
 
 	senG := &fakeGraph{errs: map[string]error{sensitivityURL: wrap(sensitivityURL)}}
 	senRec := telemetrytest.New()
-	if err := sensitivitylabels.NewSensitivity(senG, nil).Collect(context.Background(), senRec.Emitter()); err == nil {
+	if err := sensitivitylabels.NewSensitivity(senG, nil).Collect(context.Background(), senRec.Emitter(), nil); err == nil {
 		t.Error("sensitivity: the retention data-plane's skip signature must NOT be honored here — this endpoint is GA and app-only-capable with SensitivityLabel.Read (#126)")
 	}
 	if len(senRec.MetricNames()) != 0 || len(senRec.LogRecords()) != 0 {
@@ -179,9 +180,14 @@ func TestRetentionCollectBucketsAndCountsEventTypes(t *testing.T) {
 	]}`
 	g := &fakeGraph{bodies: map[string]string{retentionURL: rl, eventTypesURL: et}}
 	rec := telemetrytest.New()
+	outcomes := recordoutcome.NewRecorder()
 
-	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter(), outcomes); err != nil {
 		t.Fatalf("Collect: %v", err)
+	}
+	wantOutcomes := recordoutcome.Counts{Fetched: 7, Mapped: 7, Emitted: 7}
+	if got := outcomes.Snapshot().Counts; got != wantOutcomes {
+		t.Errorf("outcome counts = %+v, want %+v", got, wantOutcomes)
 	}
 
 	// combo counts
@@ -214,7 +220,7 @@ func TestRetentionNoPIIInLabels(t *testing.T) {
 	et := `{"value":[{"displayName":"` + piiEventTypeName + `"}]}`
 	g := &fakeGraph{bodies: map[string]string{retentionURL: rl, eventTypesURL: et}}
 	rec := telemetrytest.New()
-	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -247,7 +253,7 @@ func TestRetentionEventTypesFailureDoesNotBlockLabels(t *testing.T) {
 		errs:   map[string]error{eventTypesURL: errors.New("graphclient: GET " + eventTypesURL + ": status 500: boom")},
 	}
 	rec := telemetrytest.New()
-	err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter())
+	err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected an error from the failing event-types fetch")
 	}
@@ -270,11 +276,25 @@ func TestRetentionUnavailableIsSkipped(t *testing.T) {
 		eventTypesURL: errors.New("graphclient: GET " + eventTypesURL + ": status 404: not found"),
 	}}
 	rec := telemetrytest.New()
-	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect on 404 should skip gracefully, got: %v", err)
 	}
 	if len(rec.LogRecords()) != 0 {
 		t.Error("expected no log twin records when both endpoints are unavailable")
+	}
+}
+
+func TestRetentionForbiddenReportsPermissionDenied(t *testing.T) {
+	g := &fakeGraph{errs: map[string]error{
+		retentionURL:  errors.New("graphclient: GET " + retentionURL + ": status 403: forbidden"),
+		eventTypesURL: errors.New("graphclient: GET " + eventTypesURL + ": status 403: forbidden"),
+	}}
+	outcomes := recordoutcome.NewRecorder()
+	if err := NewRetention(g, nil).Collect(context.Background(), telemetrytest.New().Emitter(), outcomes); err != nil {
+		t.Fatalf("Collect on 403 should skip gracefully, got: %v", err)
+	}
+	if got := outcomes.Snapshot().Summarize(nil, false); got.Result != recordoutcome.ResultFailure || got.Cause != recordoutcome.CausePermissionDenied {
+		t.Errorf("outcome = %+v, want failure/%s", got, recordoutcome.CausePermissionDenied)
 	}
 }
 
@@ -291,7 +311,7 @@ func TestRetentionDataInsightsForbiddenIsSkipped(t *testing.T) {
 		eventTypesURL: errors.New("graphclient: GET " + eventTypesURL + ": " + dataInsightsForbidden),
 	}}
 	rec := telemetrytest.New()
-	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect on DataInsights Forbidden 500 should skip gracefully, got: %v", err)
 	}
 	if len(rec.LogRecords()) != 0 {
@@ -316,7 +336,7 @@ func TestRetentionCollectEmitsLogTwins(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{retentionURL: rl, eventTypesURL: et}}
 	rec := telemetrytest.New()
 
-	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -437,7 +457,7 @@ func TestRetentionMappedEnumsReportNothingUnexpected(t *testing.T) {
 	et := `{"value":[]}`
 	g := &fakeGraph{bodies: map[string]string{retentionURL: rl, eventTypesURL: et}}
 	rec := telemetrytest.New()
-	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if got := findings(rec); len(got) != 0 {
@@ -455,7 +475,7 @@ func TestRetentionUnmappedEnumsAreReported(t *testing.T) {
 	et := `{"value":[]}`
 	g := &fakeGraph{bodies: map[string]string{retentionURL: rl, eventTypesURL: et}}
 	rec := telemetrytest.New()
-	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	got := findings(rec)

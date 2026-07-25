@@ -80,7 +80,7 @@ func liveGraph() *fakeGraph {
 func TestCollectEmitsBoundedGaugeAndTwinPerRunState(t *testing.T) {
 	c := New(liveGraph(), nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -150,7 +150,7 @@ func TestCollectReportsUnmappedStateEnums(t *testing.T) {
 		runURL(rem): `{"value":[{"id":"` + rem + `:dev1","detectionState":"teleported","remediationState":"summoned"}]}`,
 	}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	fields := map[string]bool{}
@@ -169,7 +169,7 @@ func TestCollectReportsUnmappedStateEnums(t *testing.T) {
 func TestSuccessfulDetectionIsInfo(t *testing.T) {
 	c := New(liveGraph(), nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	for _, l := range rec.LogRecords() {
@@ -190,7 +190,7 @@ func TestScriptErrorEscalatesToWarn(t *testing.T) {
 	}}
 	c := New(g, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	logs := rec.LogRecords()
@@ -208,7 +208,7 @@ func TestPerRemediationFetchErrorSkipsOnlyThatOne(t *testing.T) {
 	g.errs = map[string]error{runURL(remPendingReboot): errors.New("boom")}
 	c := New(g, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error, want nil: %v", err)
 	}
 	if n := len(rec.LogRecords()); n != 1 {
@@ -220,7 +220,7 @@ func TestListForbiddenSkipsGracefully(t *testing.T) {
 	g := &fakeGraph{errs: map[string]error{listURL(): errors.New("graphclient: GET ...: status 403: forbidden")}}
 	c := New(g, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("403 should be a graceful skip, got: %v", err)
 	}
 	if len(rec.MetricPoints(metricName)) != 0 || len(rec.LogRecords()) != 0 {
@@ -232,7 +232,7 @@ func TestListErrorIsSurfaced(t *testing.T) {
 	g := &fakeGraph{errs: map[string]error{listURL(): errors.New("boom")}}
 	c := New(g, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err == nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err == nil {
 		t.Error("a non-403 list error must be surfaced")
 	}
 }
@@ -241,7 +241,7 @@ func TestEmptyTenantEmitsEmptyGauge(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{listURL(): `{"value":[]}`}}
 	c := New(g, nil)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if len(rec.LogRecords()) != 0 {

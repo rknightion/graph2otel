@@ -54,6 +54,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -169,20 +170,25 @@ func (c *Collector) IngestTransport() telemetry.Transport {
 func (c *Collector) RequiredPermissions() []string { return nil }
 
 // Collect runs the cmdlet and emits the posture gauge plus the config twin.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	// Stamp the transport HERE: with no ingest engine on this path the Scheduler
 	// baseline is TransportGraph.
 	e = telemetry.WithTransport(e, telemetry.TransportExchangeOnline)
 
 	recs, err := c.c.Invoke(ctx, cmdlet, nil)
 	if err != nil {
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		return fmt.Errorf("%s: %w", cmdlet, err)
 	}
+	outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(recs)))
 	if len(recs) == 0 {
 		// No config object returned — emit nothing rather than a misleading zero.
 		return nil
 	}
 	r := recs[0]
+	outcomes.Add(recordoutcome.OutcomeMapped, 1)
+	outcomes.Add(recordoutcome.OutcomeEmitted, 1)
+	outcomes.Add(recordoutcome.OutcomeFiltered, uint64(len(recs))-1)
 
 	pts := make([]telemetry.GaugePoint, 0, len(booleanSettings))
 	for _, s := range booleanSettings {

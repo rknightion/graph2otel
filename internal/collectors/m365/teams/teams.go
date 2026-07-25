@@ -85,6 +85,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -245,15 +246,18 @@ type channel struct {
 // no-ops rather than erroring the whole scrape, exactly as entra/risk degrades
 // when a capability is absent. That is the graceful path for a tenant that
 // enabled the collector before granting Team.ReadBasic.All.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+teamsListPath, nil)
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+teamsListPath, nil, outcomes)
 	if err != nil {
 		if isForbidden(err) {
+			outcomes.Cause(recordoutcome.CausePermissionDenied)
 			c.logger.Info("skipping teams inventory: Team.ReadBasic.All not granted", "collector", collectorName)
 			return nil
 		}
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		return fmt.Errorf("teams: list: %w", err)
 	}
+	outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(raws)))
 
 	// Aggregates (bounded), seeded to the full grid so every bucket reports each
 	// cycle.
@@ -287,7 +291,14 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 
 	for _, raw := range raws {
 		var t team
-		if err := json.Unmarshal(raw, &t); err != nil || t.ID == "" {
+		if err := json.Unmarshal(raw, &t); err != nil {
+			outcomes.Add(recordoutcome.OutcomeErrored, 1)
+			outcomes.Cause(recordoutcome.CauseDecodeError)
+			continue
+		}
+		if t.ID == "" {
+			outcomes.Add(recordoutcome.OutcomeDropped, 1)
+			outcomes.Cause(recordoutcome.CauseMappingError)
 			continue
 		}
 		det, err := c.fetchDetail(ctx, t.ID)
@@ -296,6 +307,8 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			// skip it (it is absent from the aggregates this cycle, which the
 			// GaugeSnapshot semantics make self-healing next cycle).
 			c.logger.Warn("teams: summary fetch failed", "collector", collectorName, "team", t.ID, "error", err)
+			outcomes.Add(recordoutcome.OutcomeErrored, 1)
+			outcomes.Cause(recordoutcome.CauseSourceError)
 			continue
 		}
 
@@ -320,10 +333,12 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		}
 
 		e.LogEvent(logTwin(t, det))
+		outcomes.Add(recordoutcome.OutcomeMapped, 1)
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 
 		// #247: installed apps + channels ride this same per-team fan-out.
-		c.collectInstalledApps(ctx, e, t, appsGrid, &appsForbidden)
-		c.collectChannels(ctx, e, t, channelsGrid, &channelsForbidden)
+		c.collectInstalledApps(ctx, e, t, appsGrid, &appsForbidden, outcomes)
+		c.collectChannels(ctx, e, t, channelsGrid, &channelsForbidden, outcomes)
 	}
 
 	emitVisibilityGauge(e, byVisibility)
@@ -351,58 +366,77 @@ type chanKey struct{ membership, archived string }
 // buckets each into the bounded grid, and emits one m365.teams_app twin per app.
 // A 403 latches appsForbidden so the rest of the cycle skips the call; any other
 // error skips this team's apps only.
-func (c *Collector) collectInstalledApps(ctx context.Context, e telemetry.Emitter, t team, grid map[appKey]int64, forbidden *bool) {
+func (c *Collector) collectInstalledApps(ctx context.Context, e telemetry.Emitter, t team, grid map[appKey]int64, forbidden *bool, outcomes *recordoutcome.Recorder) {
 	if *forbidden {
 		return
 	}
 	// installedApps REJECTS $top — page via the nextLink walk, never $top.
 	url := c.betaURL + "/teams/" + t.ID + "/installedApps?$expand=teamsApp"
-	raws, err := collectors.GetAllValues(ctx, c.g, url, nil)
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, url, nil, outcomes)
 	if err != nil {
 		if isForbidden(err) {
 			*forbidden = true
+			outcomes.Cause(recordoutcome.CausePermissionDenied)
 			c.logger.Info("skipping installed-apps: TeamsAppInstallation.Read.All not granted", "collector", collectorName)
 			return
 		}
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		c.logger.Warn("teams: installedApps fetch failed", "collector", collectorName, "team", t.ID, "error", err)
 		return
 	}
+	outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(raws)))
 	for _, raw := range raws {
 		var a installedApp
 		if err := json.Unmarshal(raw, &a); err != nil {
+			outcomes.Add(recordoutcome.OutcomeErrored, 1)
+			outcomes.Cause(recordoutcome.CauseDecodeError)
 			continue
 		}
 		hasRSC := len(a.GrantedRSC) > 0
 		grid[appKey{a.TeamsApp.DistributionMethod, strconv.FormatBool(hasRSC)}]++
 		e.LogEvent(appTwin(t, a, hasRSC))
+		outcomes.Add(recordoutcome.OutcomeMapped, 1)
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 	}
 }
 
 // collectChannels fetches one team's channels (beta), buckets each into the
 // bounded grid, and emits one m365.team_channel twin per channel. Same 403
 // latching / per-team skip discipline as collectInstalledApps.
-func (c *Collector) collectChannels(ctx context.Context, e telemetry.Emitter, t team, grid map[chanKey]int64, forbidden *bool) {
+func (c *Collector) collectChannels(ctx context.Context, e telemetry.Emitter, t team, grid map[chanKey]int64, forbidden *bool, outcomes *recordoutcome.Recorder) {
 	if *forbidden {
 		return
 	}
 	url := c.betaURL + "/teams/" + t.ID + "/channels"
-	raws, err := collectors.GetAllValues(ctx, c.g, url, nil)
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, url, nil, outcomes)
 	if err != nil {
 		if isForbidden(err) {
 			*forbidden = true
+			outcomes.Cause(recordoutcome.CausePermissionDenied)
 			c.logger.Info("skipping channels: Channel.ReadBasic.All not granted", "collector", collectorName)
 			return
 		}
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		c.logger.Warn("teams: channels fetch failed", "collector", collectorName, "team", t.ID, "error", err)
 		return
 	}
+	outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(raws)))
 	for _, raw := range raws {
 		var ch channel
-		if err := json.Unmarshal(raw, &ch); err != nil || ch.ID == "" {
+		if err := json.Unmarshal(raw, &ch); err != nil {
+			outcomes.Add(recordoutcome.OutcomeErrored, 1)
+			outcomes.Cause(recordoutcome.CauseDecodeError)
+			continue
+		}
+		if ch.ID == "" {
+			outcomes.Add(recordoutcome.OutcomeDropped, 1)
+			outcomes.Cause(recordoutcome.CauseMappingError)
 			continue
 		}
 		grid[chanKey{ch.MembershipType, strconv.FormatBool(ch.IsArchived)}]++
 		e.LogEvent(channelTwin(t, ch))
+		outcomes.Add(recordoutcome.OutcomeMapped, 1)
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 	}
 }
 

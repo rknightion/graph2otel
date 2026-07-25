@@ -51,6 +51,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/defender/productstatus"
 	"github.com/rknightion/graph2otel/internal/exportjob"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
 	"github.com/rknightion/graph2otel/internal/preflight"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
@@ -404,7 +405,8 @@ func (c *Collector) RequiredPermissions() []string {
 // job that reports failed, or a SAS url that expired before download) is
 // logged and swallowed rather than treated as a scheduler-visible error -
 // see the package doc and the exportjob seam's sentinel errors.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
 	// Stamped here because no engine can: internal/exportjob never calls
 	// LogEvent, so report_export has no engine seam (#141). See
 	// appinstallreport.Collect for the full reasoning.
@@ -422,8 +424,10 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	}, e)
 	if err != nil {
 		logExportFailure(c.logger, err)
+		outcome.RecordError(outcomes, err)
 		return nil
 	}
+	outcome.Emitted(outcomes, uint64(len(rows)))
 
 	counts := map[string]int64{}
 	statusCounts := map[string]int64{}

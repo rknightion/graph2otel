@@ -59,6 +59,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/o365activityclient"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -198,7 +199,12 @@ func New(c *o365activityclient.Client, store *checkpoint.Store, cfg EndpointConf
 //
 // The checkpoint is persisted even when a content type fails, so partial
 // progress survives; the failure is still returned.
-func (c *Collector) Collect(ctx context.Context, from, to time.Time, e telemetry.Emitter) error {
+func (c *Collector) Collect(
+	ctx context.Context,
+	from, to time.Time,
+	e telemetry.Emitter,
+	outcomes *recordoutcome.Recorder,
+) error {
 	// Name the transport once per cycle rather than per record (#141).
 	e = telemetry.WithTransport(e, telemetry.TransportO365Activity)
 
@@ -216,8 +222,9 @@ func (c *Collector) Collect(ctx context.Context, from, to time.Time, e telemetry
 	var errs []error
 	var maxConsumed, earliestFailed time.Time
 	for _, ct := range c.cfg.ContentTypes {
-		consumed, failed, cerr := c.collectContentType(ctx, ct, cp, resumeFrom, to, e)
+		consumed, failed, cerr := c.collectContentType(ctx, ct, cp, resumeFrom, to, e, outcomes)
 		if cerr != nil {
+			outcomes.Cause(recordoutcome.CauseForError(cerr))
 			errs = append(errs, cerr)
 			// A failure before listing (including subscription start) has no
 			// contentCreated timestamp to bound the shared watermark. Cap it at
@@ -295,6 +302,7 @@ func (c *Collector) collectContentType(
 	cp *checkpoint.Checkpoint,
 	from, to time.Time,
 	e telemetry.Emitter,
+	outcomes *recordoutcome.Recorder,
 ) (consumed, failed time.Time, err error) {
 	if err := c.ensureSubscription(ctx, ct); err != nil {
 		return time.Time{}, time.Time{}, err
@@ -310,7 +318,7 @@ func (c *Collector) collectContentType(
 	sort.Slice(blobs, func(i, j int) bool { return blobs[i].ContentCreated.Before(blobs[j].ContentCreated) })
 
 	for _, b := range blobs {
-		if err := c.consume(ctx, b, cp, e); err != nil {
+		if err := c.consume(ctx, b, cp, e, outcomes); err != nil {
 			if failed.IsZero() || b.ContentCreated.Before(failed) {
 				failed = b.ContentCreated
 			}
@@ -351,7 +359,13 @@ func (c *Collector) list(ctx context.Context, ct o365activityclient.ContentType,
 
 // consume fetches one blob and emits its new records, unless the blob was
 // already consumed on an earlier tick.
-func (c *Collector) consume(ctx context.Context, b o365activityclient.ContentBlob, cp *checkpoint.Checkpoint, e telemetry.Emitter) error {
+func (c *Collector) consume(
+	ctx context.Context,
+	b o365activityclient.ContentBlob,
+	cp *checkpoint.Checkpoint,
+	e telemetry.Emitter,
+	outcomes *recordoutcome.Recorder,
+) error {
 	if cp.SeenIDs.Has(contentIDPrefix + b.ContentID) {
 		// Already drained on an earlier tick; the overlap window re-listed it.
 		// Skipping here is what makes the overlap cheap — no fetch is spent.
@@ -366,6 +380,7 @@ func (c *Collector) consume(ctx context.Context, b o365activityclient.ContentBlo
 		// malformed-request 400, a 5xx — is returned, because blanket-swallowing a
 		// status is how a genuine bug hides.
 		if o365activityclient.IsContentExpired(err) {
+			outcomes.Cause(recordoutcome.CauseSourceError)
 			slog.Info("content blob expired before it could be fetched; skipping it",
 				"collector", c.cfg.CollectorName, "tenant_id", c.client.TenantID,
 				"content_id", b.ContentID, "content_created", b.ContentCreated.Format(time.RFC3339))
@@ -376,19 +391,30 @@ func (c *Collector) consume(ctx context.Context, b o365activityclient.ContentBlo
 	}
 
 	for _, raw := range records {
-		id, ev, ok := c.cfg.Map(raw)
-		if !ok {
+		outcomes.Add(recordoutcome.OutcomeFetched, 1)
+		id, ev, ok, panicked := mapRecord(c.cfg.Map, raw)
+		if panicked {
+			outcomes.Add(recordoutcome.OutcomeErrored, 1)
+			outcomes.Cause(recordoutcome.CauseMappingError)
 			continue
 		}
+		if !ok {
+			outcomes.Add(recordoutcome.OutcomeDropped, 1)
+			outcomes.Cause(recordoutcome.CauseMissingEventTime)
+			continue
+		}
+		outcomes.Add(recordoutcome.OutcomeMapped, 1)
 		if id != "" && cp.SeenIDs.Has(recordIDPrefix+id) {
 			// The same record reached us in a different blob. contentId dedupe
 			// cannot catch this — the blob ids differ.
+			outcomes.Add(recordoutcome.OutcomeDeduped, 1)
 			continue
 		}
 		if ev.Name == "" {
 			ev.Name = c.cfg.EventName
 		}
 		e.LogEvent(ev)
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 		if id != "" {
 			cp.SeenIDs.Add(recordIDPrefix+id, b.ContentCreated)
 		}
@@ -396,6 +422,26 @@ func (c *Collector) consume(ctx context.Context, b o365activityclient.ContentBlo
 
 	cp.SeenIDs.Add(contentIDPrefix+b.ContentID, b.ContentCreated)
 	return nil
+}
+
+// mapRecord contains a mapper panic to the source record that caused it. A
+// malformed row may be unusable while its siblings are valid; converting that
+// one panic to a bounded mapping_error preserves partial progress without
+// leaking the panic text or record contents into telemetry.
+func mapRecord(
+	mapper func(map[string]any) (string, telemetry.Event, bool),
+	raw map[string]any,
+) (id string, ev telemetry.Event, ok, panicked bool) {
+	defer func() {
+		if recover() != nil {
+			id = ""
+			ev = telemetry.Event{}
+			ok = false
+			panicked = true
+		}
+	}()
+	id, ev, ok = mapper(raw)
+	return id, ev, ok, false
 }
 
 // ensureSubscription starts ct's subscription once per process.

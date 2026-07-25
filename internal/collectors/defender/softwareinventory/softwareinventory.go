@@ -50,6 +50,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/tvm"
@@ -128,13 +129,15 @@ type statusCount struct {
 // Collect runs the summary query, emits the bounded gauges, then fetches the
 // per-entity twins per status in row-cap-safe partitions. A summary failure is
 // fatal to the tick; a twin partition failure is non-fatal and aggregated.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	summary, err := c.c.Query(ctx, "software_summary", summaryQuery)
 	if err != nil {
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		return fmt.Errorf("%s: summary query: %w", collectorName, err)
 	}
+	outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(summary)))
 
-	perStatus := c.emitGauges(e, summary)
+	perStatus := c.emitGauges(e, summary, outcomes)
 
 	var errs []error
 	for _, sc := range perStatus {
@@ -142,18 +145,23 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			query := fmt.Sprintf(twinQueryBase, sc.status) + p.Predicate("DeviceId")
 			rows, qerr := c.c.Query(ctx, "software_twin", query)
 			if qerr != nil {
+				outcomes.Cause(recordoutcome.CauseSourceError)
 				c.logger.Warn("software inventory twin partition failed",
 					"collector", collectorName, "status", sc.status, "error", qerr)
 				errs = append(errs, fmt.Errorf("twin %q: %w", sc.status, qerr))
 				continue
 			}
+			outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(rows)))
 			if len(rows) >= tvm.HardRowCap {
+				outcomes.Cause(recordoutcome.CauseSourceError)
 				c.logger.Error("software inventory twin partition hit the hunting row cap; some rows were not emitted",
 					"collector", collectorName, "status", sc.status, "rows", len(rows))
 				errs = append(errs, fmt.Errorf("twin %q: hit row cap %d", sc.status, tvm.HardRowCap))
 			}
 			for _, r := range rows {
 				e.LogEvent(softwareTwin(r))
+				outcomes.Add(recordoutcome.OutcomeMapped, 1)
+				outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 			}
 		}
 	}
@@ -162,7 +170,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 
 // emitGauges emits the three bounded gauges and returns per-status install totals
 // for partition planning.
-func (c *Collector) emitGauges(e telemetry.Emitter, summary []map[string]any) []statusCount {
+func (c *Collector) emitGauges(e telemetry.Emitter, summary []map[string]any, outcomes *recordoutcome.Recorder) []statusCount {
 	var installPts, devPts, prodPts []telemetry.GaugePoint
 	var out []statusCount
 
@@ -171,6 +179,8 @@ func (c *Collector) emitGauges(e telemetry.Emitter, summary []map[string]any) []
 		// the other collectors' severity/category we do NOT skip the empty value.
 		status, ok := r["EndOfSupportStatus"].(string)
 		if !ok {
+			outcomes.Add(recordoutcome.OutcomeDropped, 1)
+			outcomes.Cause(recordoutcome.CauseMappingError)
 			continue
 		}
 		attrs := telemetry.Attrs{semconv.AttrEndOfSupportStatus: status}
@@ -180,6 +190,8 @@ func (c *Collector) emitGauges(e telemetry.Emitter, summary []map[string]any) []
 		if n, ok := r["installs"].(float64); ok {
 			out = append(out, statusCount{status: status, count: int64(n)})
 		}
+		outcomes.Add(recordoutcome.OutcomeMapped, 1)
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 	}
 
 	e.GaugeSnapshot(metricInstalls, unitInstall,

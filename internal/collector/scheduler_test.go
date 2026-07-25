@@ -1,13 +1,17 @@
 package collector_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collector"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
@@ -25,25 +29,43 @@ func (c *int32Counter) get() int32 { return c.v.Load() }
 type snapFunc struct {
 	name string
 	def  time.Duration
-	fn   func(context.Context, telemetry.Emitter) error
+	fn   func(context.Context, telemetry.Emitter, *recordoutcome.Recorder) error
 }
 
-func (s snapFunc) Name() string                                           { return s.name }
-func (s snapFunc) DefaultInterval() time.Duration                         { return s.def }
-func (s snapFunc) Collect(ctx context.Context, e telemetry.Emitter) error { return s.fn(ctx, e) }
+type transportedSnap struct {
+	snapFunc
+	transport telemetry.Transport
+}
+
+func (s transportedSnap) IngestTransport() telemetry.Transport { return s.transport }
+
+func (s snapFunc) Name() string                   { return s.name }
+func (s snapFunc) DefaultInterval() time.Duration { return s.def }
+func (s snapFunc) Collect(
+	ctx context.Context,
+	e telemetry.Emitter,
+	outcomes *recordoutcome.Recorder,
+) error {
+	return s.fn(ctx, e, outcomes)
+}
 
 type winFunc struct {
 	name string
 	def  time.Duration
 	lag  time.Duration
-	fn   func(context.Context, time.Time, time.Time, telemetry.Emitter) (time.Time, error)
+	fn   func(context.Context, time.Time, time.Time, telemetry.Emitter, *recordoutcome.Recorder) (time.Time, error)
 }
 
 func (w winFunc) Name() string                   { return w.name }
 func (w winFunc) DefaultInterval() time.Duration { return w.def }
 func (w winFunc) Lag() time.Duration             { return w.lag }
-func (w winFunc) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter) (time.Time, error) {
-	return w.fn(ctx, from, to, e)
+func (w winFunc) CollectWindow(
+	ctx context.Context,
+	from, to time.Time,
+	e telemetry.Emitter,
+	outcomes *recordoutcome.Recorder,
+) (time.Time, error) {
+	return w.fn(ctx, from, to, e, outcomes)
 }
 
 func waitFor(t *testing.T, cond func() bool, timeout time.Duration) {
@@ -78,11 +100,11 @@ func TestScheduler_IndependentFailureIsolation(t *testing.T) {
 	rec := telemetrytest.New()
 	var okTicks, badTicks int32Counter
 	r := collector.NewRegistry()
-	r.Register(snapFunc{name: "ok", def: 5 * time.Millisecond, fn: func(context.Context, telemetry.Emitter) error {
+	r.Register(snapFunc{name: "ok", def: 5 * time.Millisecond, fn: func(context.Context, telemetry.Emitter, *recordoutcome.Recorder) error {
 		okTicks.inc()
 		return nil
 	}}, 5*time.Millisecond)
-	r.Register(snapFunc{name: "bad", def: 5 * time.Millisecond, fn: func(context.Context, telemetry.Emitter) error {
+	r.Register(snapFunc{name: "bad", def: 5 * time.Millisecond, fn: func(context.Context, telemetry.Emitter, *recordoutcome.Recorder) error {
 		badTicks.inc()
 		return errors.New("boom")
 	}}, 5*time.Millisecond)
@@ -99,7 +121,7 @@ func TestScheduler_PanicIsRecoveredAndCollectorKeepsTicking(t *testing.T) {
 	rec := telemetrytest.New()
 	var ticks int32Counter
 	r := collector.NewRegistry()
-	r.Register(snapFunc{name: "boom", def: 5 * time.Millisecond, fn: func(context.Context, telemetry.Emitter) error {
+	r.Register(snapFunc{name: "boom", def: 5 * time.Millisecond, fn: func(context.Context, telemetry.Emitter, *recordoutcome.Recorder) error {
 		ticks.inc()
 		panic("kaboom")
 	}}, 5*time.Millisecond)
@@ -116,7 +138,7 @@ func TestScheduler_StaggerAppliesWithinWindow(t *testing.T) {
 	rec := telemetrytest.New()
 	started := make(chan time.Time, 1)
 	r := collector.NewRegistry()
-	r.Register(snapFunc{name: "staggered", def: time.Hour, fn: func(context.Context, telemetry.Emitter) error {
+	r.Register(snapFunc{name: "staggered", def: time.Hour, fn: func(context.Context, telemetry.Emitter, *recordoutcome.Recorder) error {
 		select {
 		case started <- time.Now():
 		default:
@@ -149,7 +171,7 @@ func TestScheduler_StaggerAppliesWithinWindow(t *testing.T) {
 func TestScheduler_UnregisteredCollectorNeverTicks(t *testing.T) {
 	rec := telemetrytest.New()
 	var disabledTicks int32Counter
-	disabled := snapFunc{name: "disabled", def: 5 * time.Millisecond, fn: func(context.Context, telemetry.Emitter) error {
+	disabled := snapFunc{name: "disabled", def: 5 * time.Millisecond, fn: func(context.Context, telemetry.Emitter, *recordoutcome.Recorder) error {
 		disabledTicks.inc()
 		return nil
 	}}
@@ -170,7 +192,7 @@ func TestScheduler_UnregisteredCollectorNeverTicks(t *testing.T) {
 func TestScheduler_SnapshotCollectorEmitsToRecorder(t *testing.T) {
 	rec := telemetrytest.New()
 	r := collector.NewRegistry()
-	r.Register(snapFunc{name: "devices", def: 5 * time.Millisecond, fn: func(_ context.Context, e telemetry.Emitter) error {
+	r.Register(snapFunc{name: "devices", def: 5 * time.Millisecond, fn: func(_ context.Context, e telemetry.Emitter, _ *recordoutcome.Recorder) error {
 		e.Gauge("entra.devices.count", "{device}", "device count", 42, telemetry.Attrs{})
 		return nil
 	}}, 5*time.Millisecond)
@@ -196,7 +218,7 @@ func TestScheduler_WindowCollectorAdvancesAndPersistsCheckpoint(t *testing.T) {
 		name: "auditlogs",
 		def:  5 * time.Millisecond,
 		lag:  0,
-		fn: func(_ context.Context, from, to time.Time, e telemetry.Emitter) (time.Time, error) {
+		fn: func(_ context.Context, from, to time.Time, e telemetry.Emitter, _ *recordoutcome.Recorder) (time.Time, error) {
 			return hwm, nil
 		},
 	}, 5*time.Millisecond, time.Hour, 0)
@@ -218,7 +240,7 @@ func TestScheduler_SuccessfulTickEmitsScrapeSuccessAndDuration(t *testing.T) {
 	rec := telemetrytest.New()
 	s := collector.NewScheduler(rec.Emitter(), collector.NewMemoryStore(), collector.WithTenant("acme"))
 	e := collector.Entry{
-		Collector: snapFunc{name: "devices", def: time.Second, fn: func(context.Context, telemetry.Emitter) error { return nil }},
+		Collector: snapFunc{name: "devices", def: time.Second, fn: func(context.Context, telemetry.Emitter, *recordoutcome.Recorder) error { return nil }},
 		Interval:  time.Second,
 	}
 	var lastSuccess time.Time
@@ -237,6 +259,58 @@ func TestScheduler_SuccessfulTickEmitsScrapeSuccessAndDuration(t *testing.T) {
 	}
 }
 
+func TestScheduler_RecordsEventLagWithCollectorAndActualTransport(t *testing.T) {
+	rec := telemetrytest.New()
+	now := time.Date(2026, time.July, 25, 12, 0, 0, 0, time.UTC)
+	s := collector.NewScheduler(
+		telemetry.WithTenant(rec.Emitter(), "acme"),
+		collector.NewMemoryStore(),
+		collector.WithTenant("acme"),
+		collector.WithClock(func() time.Time { return now }),
+	)
+	entry := collector.Entry{
+		Collector: transportedSnap{
+			snapFunc: snapFunc{
+				name: "activity",
+				def:  time.Minute,
+				fn: func(_ context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+					telemetry.WithTransport(e, telemetry.TransportBlob).LogEvent(telemetry.Event{
+						Name:      "m365.activity",
+						Timestamp: now.Add(-2 * time.Minute),
+					})
+					outcomes.Add(recordoutcome.OutcomeFetched, 1)
+					outcomes.Add(recordoutcome.OutcomeMapped, 1)
+					outcomes.Add(recordoutcome.OutcomeEmitted, 1)
+					return nil
+				},
+			},
+			transport: telemetry.TransportO365Activity,
+		},
+		Interval: time.Minute,
+	}
+	var lastSuccess time.Time
+
+	s.RunTick(context.Background(), entry, &lastSuccess)
+
+	points := rec.MetricPoints("graph2otel.event.lag")
+	if len(points) != 1 {
+		t.Fatalf("event lag points = %d, want 1", len(points))
+	}
+	if points[0].Value != 120 {
+		t.Errorf("event lag = %v, want 120", points[0].Value)
+	}
+	wantAttrs := map[string]string{
+		semconv.AttrCollector:       "activity",
+		semconv.AttrTenantID:        "acme",
+		semconv.AttrIngestTransport: string(telemetry.TransportBlob),
+	}
+	for key, want := range wantAttrs {
+		if got := points[0].Attrs[key]; got != want {
+			t.Errorf("event lag attribute %q = %q, want %q", key, got, want)
+		}
+	}
+}
+
 // TestScheduler_FailedTickSetsSuccessZeroAndStalenessGrows pins that a failing
 // tick sets graph2otel.scrape.success=0 and does NOT reset last-success, so
 // graph2otel.scrape.staleness keeps increasing across subsequent failures.
@@ -245,7 +319,7 @@ func TestScheduler_FailedTickSetsSuccessZeroAndStalenessGrows(t *testing.T) {
 	now := time.Unix(1_000_000, 0).UTC()
 	s := collector.NewScheduler(rec.Emitter(), collector.NewMemoryStore(), collector.WithClock(func() time.Time { return now }))
 	e := collector.Entry{
-		Collector: snapFunc{name: "devices", def: time.Second, fn: func(context.Context, telemetry.Emitter) error {
+		Collector: snapFunc{name: "devices", def: time.Second, fn: func(context.Context, telemetry.Emitter, *recordoutcome.Recorder) error {
 			return errors.New("boom")
 		}},
 		Interval: time.Second,
@@ -253,6 +327,11 @@ func TestScheduler_FailedTickSetsSuccessZeroAndStalenessGrows(t *testing.T) {
 	lastSuccess := now
 	s.RunTick(context.Background(), e, &lastSuccess)
 	assertGaugeAttrs(t, rec, collector.MetricScrapeSuccess, 0, map[string]string{semconv.AttrCollector: "devices"})
+	assertMetricSeries(t, rec, collector.MetricScrapeOutcomes, 1, map[string]string{
+		semconv.AttrCollector:       "devices",
+		semconv.AttrIngestTransport: "graph",
+		"result":                    "failure",
+	})
 	staleness1 := rec.MetricPoints(collector.MetricScrapeStaleness)[0].Value
 	if staleness1 != 0 {
 		t.Fatalf("first-failure staleness = %v, want 0 (clock unchanged since lastSuccess)", staleness1)
@@ -265,6 +344,11 @@ func TestScheduler_FailedTickSetsSuccessZeroAndStalenessGrows(t *testing.T) {
 	// lastSuccess was never reset by the earlier failure.
 	now = now.Add(30 * time.Second)
 	s.RunTick(context.Background(), e, &lastSuccess)
+	assertMetricSeries(t, rec, collector.MetricScrapeOutcomes, 2, map[string]string{
+		semconv.AttrCollector:       "devices",
+		semconv.AttrIngestTransport: "graph",
+		"result":                    "failure",
+	})
 	staleness2 := rec.MetricPoints(collector.MetricScrapeStaleness)[0].Value
 	if staleness2 != 30 {
 		t.Fatalf("second-failure staleness = %v, want 30 (seconds elapsed since last success)", staleness2)
@@ -277,6 +361,339 @@ func TestScheduler_FailedTickSetsSuccessZeroAndStalenessGrows(t *testing.T) {
 	}
 	if errPoints[0].Value != 2 {
 		t.Fatalf("MetricScrapeErrors value = %v, want 2 (two failed ticks)", errPoints[0].Value)
+	}
+}
+
+func TestScheduler_EmptyRunIsHealthyAndEmitsExplicitOutcome(t *testing.T) {
+	rec := telemetrytest.New()
+	s := collector.NewScheduler(
+		rec.Emitter(),
+		collector.NewMemoryStore(),
+		collector.WithTenant("acme"),
+	)
+	entry := collector.Entry{
+		Collector: snapFunc{
+			name: "devices",
+			def:  time.Minute,
+			fn: func(context.Context, telemetry.Emitter, *recordoutcome.Recorder) error {
+				return nil
+			},
+		},
+		Interval: time.Minute,
+	}
+	var lastSuccess time.Time
+
+	s.RunTick(context.Background(), entry, &lastSuccess)
+
+	assertGaugeAttrs(t, rec, collector.MetricScrapeSuccess, 1, map[string]string{
+		semconv.AttrCollector: "devices",
+		semconv.AttrTenantID:  "acme",
+	})
+	assertMetricSeries(t, rec, collector.MetricScrapeOutcomes, 1, map[string]string{
+		semconv.AttrCollector:       "devices",
+		semconv.AttrTenantID:        "acme",
+		semconv.AttrIngestTransport: "graph",
+		"result":                    "empty",
+	})
+}
+
+func TestScheduler_BalancedRunEmitsRecordAndScrapeOutcomes(t *testing.T) {
+	rec := telemetrytest.New()
+	s := collector.NewScheduler(
+		rec.Emitter(),
+		collector.NewMemoryStore(),
+		collector.WithTenant("acme"),
+	)
+	entry := collector.Entry{
+		Collector: snapFunc{
+			name: "devices",
+			def:  time.Minute,
+			fn: func(_ context.Context, _ telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+				outcomes.Add(recordoutcome.OutcomeFetched, 2)
+				outcomes.Add(recordoutcome.OutcomeMapped, 2)
+				outcomes.Add(recordoutcome.OutcomeEmitted, 1)
+				outcomes.Add(recordoutcome.OutcomeDeduped, 1)
+				return nil
+			},
+		},
+		Interval: time.Minute,
+	}
+	var lastSuccess time.Time
+
+	s.RunTick(context.Background(), entry, &lastSuccess)
+
+	for outcome, want := range map[string]float64{
+		"fetched": 2,
+		"mapped":  2,
+		"emitted": 1,
+		"deduped": 1,
+	} {
+		assertMetricSeries(t, rec, collector.MetricRecordOutcomes, want, map[string]string{
+			semconv.AttrCollector:       "devices",
+			semconv.AttrTenantID:        "acme",
+			semconv.AttrIngestTransport: "graph",
+			"outcome":                   outcome,
+		})
+	}
+	assertMetricSeries(t, rec, collector.MetricScrapeOutcomes, 1, map[string]string{
+		semconv.AttrCollector:       "devices",
+		semconv.AttrTenantID:        "acme",
+		semconv.AttrIngestTransport: "graph",
+		"result":                    "success",
+	})
+	assertGaugeAttrs(t, rec, collector.MetricScrapeSuccess, 1, map[string]string{
+		semconv.AttrCollector: "devices",
+		semconv.AttrTenantID:  "acme",
+	})
+}
+
+func TestScheduler_OutcomeMetricsUseCollectorsDeclaredTransport(t *testing.T) {
+	rec := telemetrytest.New()
+	s := collector.NewScheduler(rec.Emitter(), collector.NewMemoryStore())
+	entry := collector.Entry{
+		Collector: transportedSnap{
+			snapFunc: snapFunc{
+				name: "blob.devices",
+				def:  time.Minute,
+				fn: func(_ context.Context, _ telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+					outcomes.Add(recordoutcome.OutcomeFetched, 1)
+					outcomes.Add(recordoutcome.OutcomeMapped, 1)
+					outcomes.Add(recordoutcome.OutcomeEmitted, 1)
+					return nil
+				},
+			},
+			transport: telemetry.TransportBlob,
+		},
+		Interval: time.Minute,
+	}
+	var lastSuccess time.Time
+
+	s.RunTick(context.Background(), entry, &lastSuccess)
+
+	assertMetricSeries(t, rec, collector.MetricRecordOutcomes, 1, map[string]string{
+		semconv.AttrCollector:       "blob.devices",
+		semconv.AttrIngestTransport: "blob",
+		"outcome":                   "fetched",
+	})
+	assertMetricSeries(t, rec, collector.MetricScrapeOutcomes, 1, map[string]string{
+		semconv.AttrCollector:       "blob.devices",
+		semconv.AttrIngestTransport: "blob",
+		"result":                    "success",
+	})
+}
+
+func TestScheduler_PartialRunIsUnhealthyAndDoesNotResetStaleness(t *testing.T) {
+	rec := telemetrytest.New()
+	now := time.Unix(1_000_000, 0).UTC()
+	s := collector.NewScheduler(
+		rec.Emitter(),
+		collector.NewMemoryStore(),
+		collector.WithClock(func() time.Time { return now }),
+	)
+	entry := collector.Entry{
+		Collector: snapFunc{
+			name: "devices",
+			def:  time.Minute,
+			fn: func(_ context.Context, _ telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+				outcomes.Add(recordoutcome.OutcomeFetched, 2)
+				outcomes.Add(recordoutcome.OutcomeMapped, 1)
+				outcomes.Add(recordoutcome.OutcomeEmitted, 1)
+				outcomes.Add(recordoutcome.OutcomeErrored, 1)
+				outcomes.Cause(recordoutcome.CauseSourceError)
+				return errors.New("page 2 failed")
+			},
+		},
+		Interval: time.Minute,
+	}
+	lastSuccess := now.Add(-30 * time.Second)
+
+	s.RunTick(context.Background(), entry, &lastSuccess)
+
+	assertMetricSeries(t, rec, collector.MetricScrapeOutcomes, 1, map[string]string{
+		semconv.AttrCollector:       "devices",
+		semconv.AttrIngestTransport: "graph",
+		"result":                    "partial",
+	})
+	assertGaugeAttrs(t, rec, collector.MetricScrapeSuccess, 0, map[string]string{
+		semconv.AttrCollector: "devices",
+	})
+	assertGaugeAttrs(t, rec, collector.MetricScrapeStaleness, 30, map[string]string{
+		semconv.AttrCollector: "devices",
+	})
+	if got := lastSuccess; !got.Equal(now.Add(-30 * time.Second)) {
+		t.Fatalf("lastSuccess = %v, want unchanged after partial run", got)
+	}
+}
+
+func TestScheduler_PanicRetainsRecordedProgress(t *testing.T) {
+	rec := telemetrytest.New()
+	status := collector.NewStatusTracker()
+	s := collector.NewScheduler(
+		rec.Emitter(),
+		collector.NewMemoryStore(),
+		collector.WithStatusTracker(status),
+	)
+	entry := collector.Entry{
+		Collector: snapFunc{
+			name: "devices",
+			def:  time.Minute,
+			fn: func(_ context.Context, _ telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+				outcomes.Add(recordoutcome.OutcomeFetched, 1)
+				outcomes.Add(recordoutcome.OutcomeMapped, 1)
+				outcomes.Add(recordoutcome.OutcomeEmitted, 1)
+				panic("mapper bug")
+			},
+		},
+		Interval: time.Minute,
+	}
+	var lastSuccess time.Time
+
+	s.RunTick(context.Background(), entry, &lastSuccess)
+
+	assertMetricSeries(t, rec, collector.MetricRecordOutcomes, 1, map[string]string{
+		semconv.AttrCollector:       "devices",
+		semconv.AttrIngestTransport: "graph",
+		"outcome":                   "emitted",
+	})
+	assertMetricSeries(t, rec, collector.MetricScrapeOutcomes, 1, map[string]string{
+		semconv.AttrCollector:       "devices",
+		semconv.AttrIngestTransport: "graph",
+		"result":                    "partial",
+	})
+	run := status.Snapshot()["devices"]
+	if run.LastOutcome.Result != recordoutcome.ResultPartial ||
+		run.LastOutcome.Cause != recordoutcome.CausePanic {
+		t.Fatalf("LastOutcome = %+v, want partial/panic", run.LastOutcome)
+	}
+}
+
+func TestScheduler_AccountingMismatchBecomesFailure(t *testing.T) {
+	rec := telemetrytest.New()
+	status := collector.NewStatusTracker()
+	s := collector.NewScheduler(
+		rec.Emitter(),
+		collector.NewMemoryStore(),
+		collector.WithStatusTracker(status),
+	)
+	entry := collector.Entry{
+		Collector: snapFunc{
+			name: "devices",
+			def:  time.Minute,
+			fn: func(_ context.Context, _ telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+				outcomes.Add(recordoutcome.OutcomeFetched, 1)
+				return nil
+			},
+		},
+		Interval: time.Minute,
+	}
+	var lastSuccess time.Time
+
+	s.RunTick(context.Background(), entry, &lastSuccess)
+
+	assertMetricSeries(t, rec, collector.MetricScrapeOutcomes, 1, map[string]string{
+		semconv.AttrCollector:       "devices",
+		semconv.AttrIngestTransport: "graph",
+		"result":                    "failure",
+	})
+	run := status.Snapshot()["devices"]
+	if run.LastOutcome.Result != recordoutcome.ResultFailure ||
+		run.LastOutcome.Cause != recordoutcome.CauseAccountingMismatch {
+		t.Fatalf("LastOutcome = %+v, want failure/accounting_mismatch", run.LastOutcome)
+	}
+}
+
+func TestScheduler_EmitsBoundedPayloadTypeMismatch(t *testing.T) {
+	rec := telemetrytest.New()
+	s := collector.NewScheduler(rec.Emitter(), collector.NewMemoryStore())
+	entry := collector.Entry{
+		Collector: snapFunc{
+			name: "devices",
+			def:  time.Minute,
+			fn: func(_ context.Context, _ telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+				outcomes.TypeMismatch("operatingSystem", "string", "array")
+				outcomes.TypeMismatch("operatingSystem", "string", "array")
+				return nil
+			},
+		},
+		Interval: time.Minute,
+	}
+	var lastSuccess time.Time
+
+	s.RunTick(context.Background(), entry, &lastSuccess)
+
+	assertMetricSeries(t, rec, collector.MetricPayloadTypeMismatches, 2, map[string]string{
+		semconv.AttrCollector:       "devices",
+		semconv.AttrIngestTransport: "graph",
+		"field":                     "operatingSystem",
+		"expected_type":             "string",
+		"actual_type":               "array",
+	})
+}
+
+func TestScheduler_WithTenantStampsEventLagWithoutCallerEmitterDecorator(t *testing.T) {
+	now := time.Date(2026, time.July, 25, 12, 0, 0, 0, time.UTC)
+	rec := telemetrytest.New()
+	s := collector.NewScheduler(
+		rec.Emitter(),
+		collector.NewMemoryStore(),
+		collector.WithTenant("tenant-a"),
+		collector.WithClock(func() time.Time { return now }),
+	)
+	entry := collector.Entry{
+		Collector: snapFunc{
+			name: "devices",
+			def:  time.Minute,
+			fn: func(_ context.Context, e telemetry.Emitter, _ *recordoutcome.Recorder) error {
+				e.LogEvent(telemetry.Event{
+					Name:      "intune.device",
+					Timestamp: now.Add(-30 * time.Second),
+				})
+				return nil
+			},
+		},
+		Interval: time.Minute,
+	}
+	var lastSuccess time.Time
+
+	s.RunTick(context.Background(), entry, &lastSuccess)
+
+	assertMetricSeries(t, rec, "graph2otel.event.lag", 30, map[string]string{
+		semconv.AttrTenantID:        "tenant-a",
+		semconv.AttrCollector:       "devices",
+		semconv.AttrIngestTransport: "graph",
+	})
+}
+
+func TestScheduler_LogsLegitimateLossAsDegradedOutcome(t *testing.T) {
+	var logs bytes.Buffer
+	s := collector.NewScheduler(
+		telemetrytest.New().Emitter(),
+		collector.NewMemoryStore(),
+		collector.WithLogger(slog.New(slog.NewTextHandler(&logs, nil))),
+	)
+	entry := collector.Entry{
+		Collector: snapFunc{
+			name: "devices",
+			def:  time.Minute,
+			fn: func(_ context.Context, _ telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+				outcomes.Add(recordoutcome.OutcomeFetched, 1)
+				outcomes.Add(recordoutcome.OutcomeDropped, 1)
+				outcomes.Cause(recordoutcome.CauseMissingEventTime)
+				return nil
+			},
+		},
+		Interval: time.Minute,
+	}
+	var lastSuccess time.Time
+
+	s.RunTick(context.Background(), entry, &lastSuccess)
+
+	got := logs.String()
+	if !strings.Contains(got, "collector completed with degraded outcome") {
+		t.Fatalf("logs = %q, want degraded-outcome warning", got)
+	}
+	if strings.Contains(got, "outcome accounting failed") {
+		t.Fatalf("logs = %q, legitimate loss must not be called an accounting failure", got)
 	}
 }
 
@@ -305,7 +722,7 @@ func TestSelfObsMetrics_OnlyBoundedAttrs(t *testing.T) {
 	rec := telemetrytest.New()
 	s := collector.NewScheduler(rec.Emitter(), collector.NewMemoryStore(), collector.WithTenant("acme"))
 	e := collector.Entry{
-		Collector: snapFunc{name: "devices", def: time.Second, fn: func(context.Context, telemetry.Emitter) error {
+		Collector: snapFunc{name: "devices", def: time.Second, fn: func(context.Context, telemetry.Emitter, *recordoutcome.Recorder) error {
 			return errors.New("boom")
 		}},
 		Interval: time.Second,
@@ -344,4 +761,30 @@ func assertGaugeAttrs(t *testing.T, rec *telemetrytest.Recorder, name string, wa
 			t.Errorf("%s attrs[%q] = %q, want %q (attrs=%v)", name, k, points[0].Attrs[k], v, points[0].Attrs)
 		}
 	}
+}
+
+func assertMetricSeries(
+	t *testing.T,
+	rec *telemetrytest.Recorder,
+	name string,
+	wantValue float64,
+	wantAttrs map[string]string,
+) {
+	t.Helper()
+	for _, point := range rec.MetricPoints(name) {
+		matches := true
+		for key, value := range wantAttrs {
+			if point.Attrs[key] != value {
+				matches = false
+				break
+			}
+		}
+		if matches {
+			if point.Value != wantValue {
+				t.Fatalf("%s matching series value = %v, want %v (attrs=%v)", name, point.Value, wantValue, point.Attrs)
+			}
+			return
+		}
+	}
+	t.Fatalf("%s has no series matching attrs %v; points=%v", name, wantAttrs, rec.MetricPoints(name))
 }

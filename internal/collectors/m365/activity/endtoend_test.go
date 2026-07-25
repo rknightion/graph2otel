@@ -153,7 +153,7 @@ func TestConfiguredContentTypesOverrideTheDefault(t *testing.T) {
 	c := newTestCollector(t, api, o365activityclient.ContentGeneral)
 
 	from, to := window()
-	if _, err := c.CollectWindow(context.Background(), from, to, telemetrytest.New().Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, to, telemetrytest.New().Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 
@@ -182,7 +182,7 @@ func TestEmptyContentTypesFallsBackToTheDefault(t *testing.T) {
 	c := newTestCollector(t, api) // no content types configured
 
 	from, to := window()
-	if _, err := c.CollectWindow(context.Background(), from, to, telemetrytest.New().Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, to, telemetrytest.New().Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 
@@ -216,7 +216,7 @@ func TestCollectWindowEndToEnd(t *testing.T) {
 	rec := telemetrytest.New()
 
 	from, to := window()
-	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 
@@ -272,7 +272,7 @@ func TestEndToEndEmitsNoMetrics(t *testing.T) {
 	rec := telemetrytest.New()
 
 	from, to := window()
-	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 
@@ -297,7 +297,7 @@ func TestSubscriptionIsStartedLazily(t *testing.T) {
 	}
 
 	from, to := window()
-	if _, err := c.CollectWindow(context.Background(), from, to, telemetrytest.New().Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, to, telemetrytest.New().Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 

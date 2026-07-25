@@ -67,7 +67,7 @@ func TestPollExcludesSelfSignInsButNotThirdParty(t *testing.T) {
 	}
 	cfg := selfExcludeConfig(true, "POLLER", flatAppID)
 	cp := newCheckpoint("t1", cfg.Path)
-	if _, err := Poll(context.Background(), cfg, cp, from, to, onePageFetcher(recs), rec.Emitter()); err != nil {
+	if _, err := Poll(context.Background(), cfg, cp, from, to, onePageFetcher(recs), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 	logs := rec.LogRecords()
@@ -87,7 +87,7 @@ func TestPollDoesNotFilterWhenExcludeSelfIsOff(t *testing.T) {
 	}
 	cfg := selfExcludeConfig(false, "POLLER", flatAppID)
 	cp := newCheckpoint("t1", cfg.Path)
-	if _, err := Poll(context.Background(), cfg, cp, from, to, onePageFetcher(recs), rec.Emitter()); err != nil {
+	if _, err := Poll(context.Background(), cfg, cp, from, to, onePageFetcher(recs), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 	if logs := rec.LogRecords(); len(logs) != 2 {
@@ -111,7 +111,7 @@ func TestPollCountsEverySelfExclusionPerCollector(t *testing.T) {
 	}
 	cfg := selfExcludeConfig(true, "POLLER", flatAppID)
 	cp := newCheckpoint("t1", cfg.Path)
-	if _, err := Poll(context.Background(), cfg, cp, from, to, onePageFetcher(recs), rec.Emitter()); err != nil {
+	if _, err := Poll(context.Background(), cfg, cp, from, to, onePageFetcher(recs), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 	pts := rec.MetricPoints(metricSelfExcluded)
@@ -142,7 +142,7 @@ func TestPollNeverFiltersWhenSelfAppIDIsNil(t *testing.T) {
 	}
 	cfg := selfExcludeConfig(true, "POLLER", nil)
 	cp := newCheckpoint("t1", cfg.Path)
-	if _, err := Poll(context.Background(), cfg, cp, from, to, onePageFetcher(recs), rec.Emitter()); err != nil {
+	if _, err := Poll(context.Background(), cfg, cp, from, to, onePageFetcher(recs), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 	if logs := rec.LogRecords(); len(logs) != 2 {
@@ -165,7 +165,7 @@ func TestPollNeverFiltersWhenSelfClientIDIsEmpty(t *testing.T) {
 	}
 	cfg := selfExcludeConfig(true, "", flatAppID)
 	cp := newCheckpoint("t1", cfg.Path)
-	if _, err := Poll(context.Background(), cfg, cp, from, to, onePageFetcher(recs), rec.Emitter()); err != nil {
+	if _, err := Poll(context.Background(), cfg, cp, from, to, onePageFetcher(recs), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Poll: %v", err)
 	}
 	if logs := rec.LogRecords(); len(logs) != 2 {

@@ -91,6 +91,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -212,7 +213,7 @@ func (c *Collector) IngestTransport() telemetry.Transport {
 func (c *Collector) RequiredPermissions() []string { return nil }
 
 // Collect runs both cmdlets and emits the gauges plus a twin per connector.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	// Stamp the transport HERE: with no ingest engine on this path the Scheduler
 	// baseline is TransportGraph.
 	e = telemetry.WithTransport(e, telemetry.TransportExchangeOnline)
@@ -236,14 +237,18 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	} {
 		recs, err := c.c.Invoke(ctx, side.cmdlet, nil)
 		if err != nil {
+			outcomes.Cause(recordoutcome.CauseSourceError)
 			return fmt.Errorf("%s: %w", side.cmdlet, err)
 		}
+		outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(recs)))
 		for _, r := range recs {
 			counts[[2]string{side.direction, boolStr(boolVal(r, fieldEnabled))}]++
 			if !hasTLS(r, side.direction) {
 				noTLS[side.direction]++
 			}
 			e.LogEvent(connectorTwin(r, side.direction))
+			outcomes.Add(recordoutcome.OutcomeMapped, 1)
+			outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 		}
 	}
 

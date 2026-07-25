@@ -9,6 +9,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -132,7 +133,7 @@ func TestCollectEmitsConfigurationPolicyCounts(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -167,7 +168,7 @@ func TestCollectEmitsIntentCountsByMigratingFlagAndDeviceStates(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -218,7 +219,7 @@ func TestCollectReconciliationExcludesMigratedIntentFromCountButKeepsDeviceState
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -260,7 +261,7 @@ func TestCollectEmitsSecurityBaselineDevices(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -307,7 +308,7 @@ func TestCollectSkipsUnavailableEndpointsWithoutFailing(t *testing.T) {
 	g := &fakeGraph{bodies: bodies, errs: errs}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: expected nil error on a 404 skip, got %v", err)
 	}
 }
@@ -322,7 +323,7 @@ func TestCollectJoinsRealErrorsButKeepsOtherMetrics(t *testing.T) {
 	g := &fakeGraph{bodies: bodies, errs: errs}
 	rec := telemetrytest.New()
 
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected a joined error for the failed deviceStateSummary fetch")
 	}
@@ -342,7 +343,7 @@ func TestCollectConfigurationPoliciesForbiddenIsSkippedNotFailed(t *testing.T) {
 	g := &fakeGraph{bodies: bodies, errs: errs}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: expected nil error on a 403 skip, got %v", err)
 	}
 	if pts := rec.MetricPoints(policyCountMetricName); len(pts) != 0 {
@@ -429,7 +430,7 @@ func TestCollectAgainstLiveCaptures(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect against live captures: %v", err)
 	}
 
@@ -553,9 +554,13 @@ func TestCollectSkipsSummaryNotFoundSegmentWithoutFailing(t *testing.T) {
 	}
 	g := &fakeGraph{bodies: bodies, errs: errs}
 	rec := telemetrytest.New()
+	outcomes := recordoutcome.NewRecorder()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), outcomes); err != nil {
 		t.Fatalf("Collect: expected nil error when a summary sub-fetch 400s with a not-found-segment message, got %v", err)
+	}
+	if got := outcomes.Snapshot().Summarize(nil, false).Cause; got != recordoutcome.CauseSourceError {
+		t.Errorf("outcome cause = %q, want %q", got, recordoutcome.CauseSourceError)
 	}
 
 	if pts := rec.MetricPoints(policyCountMetricName); len(pts) != 1 || pts[0].Value != 1 {
@@ -573,5 +578,27 @@ func TestCollectSkipsSummaryNotFoundSegmentWithoutFailing(t *testing.T) {
 	}
 	if pts := rec.MetricPoints(baselineDevicesMetricName); len(pts) != 0 {
 		t.Errorf("expected no baseline device-state points, got %+v", pts)
+	}
+}
+
+func TestCollectRecordsPermissionDeniedForUnavailableIntentSummary(t *testing.T) {
+	bodies := merge(emptyEndpoints(), map[string]string{
+		intentsURL: `{"value":[
+			{"id":"i1","displayName":"Defender AV","templateId":"","isMigratingToConfigurationPolicy":false}
+		]}`,
+	})
+	g := &fakeGraph{
+		bodies: bodies,
+		errs: map[string]error{
+			intentSummaryURL("i1"): forbidden403(intentSummaryURL("i1")),
+		},
+	}
+	outcomes := recordoutcome.NewRecorder()
+
+	if err := New(g, nil).Collect(context.Background(), telemetrytest.New().Emitter(), outcomes); err != nil {
+		t.Fatalf("Collect: expected nil error for unavailable intent summary, got %v", err)
+	}
+	if got := outcomes.Snapshot().Summarize(nil, false).Cause; got != recordoutcome.CausePermissionDenied {
+		t.Errorf("outcome cause = %q, want %q", got, recordoutcome.CausePermissionDenied)
 	}
 }

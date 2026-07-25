@@ -349,7 +349,7 @@ func TestCollectorEmitsLiveRecordEndToEnd(t *testing.T) {
 		telemetry.WithTransport(rec.Emitter(), telemetry.TransportBlob),
 		tenant,
 	)
-	if err := c.Collect(context.Background(), emitter); err != nil {
+	if err := c.Collect(context.Background(), emitter, nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -501,7 +501,7 @@ func TestCollectorDerivesRequestCounterForFreshRecord(t *testing.T) {
 		telemetry.WithTransport(rec.Emitter(), telemetry.TransportBlob),
 		tenant,
 	)
-	if err := c.Collect(context.Background(), emitter); err != nil {
+	if err := c.Collect(context.Background(), emitter, nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

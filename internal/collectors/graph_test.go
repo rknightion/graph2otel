@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 )
 
 // fakeGraph is an in-memory GraphClient: it maps request URLs to canned
@@ -114,6 +116,63 @@ func TestGetAllValuesFollowsNextLink(t *testing.T) {
 	}
 	if got[0] != "a" || got[1] != "b" || got[2] != "c" {
 		t.Errorf("element order = %v, want [a b c]", got)
+	}
+}
+
+func TestGetAllValuesRecordedAccountsBufferedRowsOnLaterPageFailure(t *testing.T) {
+	const page1 = "https://graph.microsoft.com/v1.0/users"
+	const page2 = "https://graph.microsoft.com/v1.0/users?$skiptoken=next"
+	g := &fakeGraph{
+		bodies: map[string]string{
+			page1: `{"value":[{"id":"a"},{"id":"b"}],"@odata.nextLink":"` + page2 + `"}`,
+		},
+		errs: map[string]error{page2: errors.New("second page failed")},
+	}
+	outcomes := recordoutcome.NewRecorder()
+
+	values, err := GetAllValuesRecorded(context.Background(), g, page1, nil, outcomes)
+	if err == nil {
+		t.Fatal("GetAllValuesRecorded error = nil, want later-page failure")
+	}
+	if values != nil {
+		t.Fatalf("values = %v, want nil so an incomplete collection cannot be consumed", values)
+	}
+	got := outcomes.Snapshot()
+	want := recordoutcome.Counts{Fetched: 2, Errored: 2}
+	if got.Counts != want {
+		t.Fatalf("counts = %+v, want %+v", got.Counts, want)
+	}
+	if len(got.Causes) != 1 || got.Causes[0] != recordoutcome.CauseSourceError {
+		t.Fatalf("causes = %v, want [%q]", got.Causes, recordoutcome.CauseSourceError)
+	}
+	if err := got.Validate(); err != nil {
+		t.Fatalf("partial page failure did not reconcile: %v", err)
+	}
+}
+
+func TestGetAllValuesRecordedRejectsMissingCollectionOnLaterPage(t *testing.T) {
+	const page1 = "https://graph.microsoft.com/v1.0/users"
+	const page2 = "https://graph.microsoft.com/v1.0/users?$skiptoken=next"
+	g := &fakeGraph{bodies: map[string]string{
+		page1: `{"value":[{"id":"a"},{"id":"b"}],"@odata.nextLink":"` + page2 + `"}`,
+		page2: `{}`,
+	}}
+	outcomes := recordoutcome.NewRecorder()
+
+	values, err := GetAllValuesRecorded(context.Background(), g, page1, nil, outcomes)
+	if err == nil {
+		t.Fatal("GetAllValuesRecorded error = nil, want structurally invalid later-page failure")
+	}
+	if values != nil {
+		t.Fatalf("values = %v, want nil so an incomplete collection cannot be consumed", values)
+	}
+	got := outcomes.Snapshot()
+	want := recordoutcome.Counts{Fetched: 2, Errored: 2}
+	if got.Counts != want {
+		t.Fatalf("counts = %+v, want %+v", got.Counts, want)
+	}
+	if len(got.Causes) != 1 || got.Causes[0] != recordoutcome.CauseDecodeError {
+		t.Fatalf("causes = %v, want [%q]", got.Causes, recordoutcome.CauseDecodeError)
 	}
 }
 

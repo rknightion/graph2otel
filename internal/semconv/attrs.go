@@ -80,6 +80,8 @@ const (
 // UCUM units used by the telemetry package's self-observability metrics.
 const (
 	UnitSeries        = "{series}"
+	UnitRecords       = "{record}"
+	UnitRuns          = "{run}"
 	UnitDimensionless = "1"
 	// UnitSeconds is used by the collector self-obs duration/staleness/budget gauges.
 	UnitSeconds = "s"

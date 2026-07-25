@@ -234,7 +234,7 @@ func TestCollectorEmitsLiveInteractiveRecordEndToEnd(t *testing.T) {
 	c := newCollector(specByName(t, "entra.signins.interactive"), depsWith(t, f))
 
 	from := time.Date(2026, 7, 17, 14, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 
@@ -309,7 +309,7 @@ func TestServicePrincipalStreamExcludesSelfWhenEnabled(t *testing.T) {
 	c := newCollector(specByName(t, "entra.signins.service_principal"), depsSelf(t, f, true, "POLLER"))
 
 	from := time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(2*time.Hour), rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(2*time.Hour), rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 	logs := rec.LogRecords()
@@ -328,7 +328,7 @@ func TestServicePrincipalStreamKeepsSelfWhenDisabled(t *testing.T) {
 	c := newCollector(specByName(t, "entra.signins.service_principal"), depsSelf(t, f, false, "POLLER"))
 
 	from := time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(2*time.Hour), rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(2*time.Hour), rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 	if logs := rec.LogRecords(); len(logs) != 2 {
@@ -348,7 +348,7 @@ func TestNonServicePrincipalStreamsIgnoreExcludeSelf(t *testing.T) {
 			c := newCollector(specByName(t, name), depsSelf(t, f, true, "POLLER"))
 
 			from := time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC)
-			if _, err := c.CollectWindow(context.Background(), from, from.Add(2*time.Hour), rec.Emitter()); err != nil {
+			if _, err := c.CollectWindow(context.Background(), from, from.Add(2*time.Hour), rec.Emitter(), nil); err != nil {
 				t.Fatalf("CollectWindow: %v", err)
 			}
 			if logs := rec.LogRecords(); len(logs) != 1 {
@@ -467,7 +467,7 @@ func TestInteractiveIsV1AndDefaultOn(t *testing.T) {
 	}
 
 	from := time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), telemetrytest.New().Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), telemetrytest.New().Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 	if len(f.seenURLs) == 0 {
@@ -499,7 +499,7 @@ func TestBetaStreamsUseBetaEndpointAndEventTypeFilter(t *testing.T) {
 				t.Error("beta signInEventTypes stream must be Experimental (opt-in)")
 			}
 			from := time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC)
-			if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), telemetrytest.New().Emitter()); err != nil {
+			if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), telemetrytest.New().Emitter(), nil); err != nil {
 				t.Fatalf("CollectWindow: %v", err)
 			}
 			u := f.seenURLs[0]
@@ -525,7 +525,7 @@ func TestStreamsHaveIndependentCheckpoints(t *testing.T) {
 		f := &recordingFetcher{records: []map[string]any{{"id": "shared", "createdDateTime": "2026-07-01T09:30:00Z"}}}
 		d := collectors.WindowDeps{TenantID: "t1", Fetcher: f, Store: store}
 		c := newCollector(s, d)
-		if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter()); err != nil {
+		if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter(), nil); err != nil {
 			t.Fatalf("%s CollectWindow: %v", s.name, err)
 		}
 	}
@@ -548,7 +548,7 @@ func TestCollectorDrainsEmitsAndPersistsWatermark(t *testing.T) {
 	rec := telemetrytest.New()
 	c := newCollector(specByName(t, "entra.signins.interactive"), collectors.WindowDeps{TenantID: "t1", Fetcher: f, Store: store})
 
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 	if got := len(rec.LogRecords()); got != 2 {

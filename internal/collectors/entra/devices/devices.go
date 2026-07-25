@@ -24,6 +24,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -141,33 +143,37 @@ func (c *Collector) RequiredPermissions() []string { return []string{"Device.Rea
 // per-bucket errors are aggregated via errors.Join and returned so partial
 // failure stays visible in scrape self-obs without hiding the data that did
 // succeed.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	var errs []error
 
 	total, err := collectors.Count(ctx, c.g, c.baseURL+"/devices/$count")
 	haveTotal := err == nil
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		c.logger.Warn("devices: total device count failed", "collector", collectorName, "error", err)
 		errs = append(errs, fmt.Errorf("total count: %w", err))
 	}
+	if haveTotal {
+		entraoutcome.Emitted(outcomes, 1)
+	}
 
-	trustPoints, trustErrs := c.trustTypeSnapshot(ctx, total, haveTotal)
+	trustPoints, trustErrs := c.trustTypeSnapshot(ctx, total, haveTotal, outcomes)
 	errs = append(errs, trustErrs...)
 	e.GaugeSnapshot(totalMetricName, "{device}", "Total Entra directory devices, by trust type.", trustPoints)
 
-	compliancePoints, complianceErrs := c.boolSnapshot(ctx, "isCompliant", semconv.AttrIsCompliant)
+	compliancePoints, complianceErrs := c.boolSnapshot(ctx, "isCompliant", semconv.AttrIsCompliant, outcomes)
 	errs = append(errs, complianceErrs...)
 	e.GaugeSnapshot(complianceMetricName, "{device}", "Total Entra directory devices, by MDM compliance state.", compliancePoints)
 
-	managedPoints, managedErrs := c.boolSnapshot(ctx, "isManaged", semconv.AttrIsManaged)
+	managedPoints, managedErrs := c.boolSnapshot(ctx, "isManaged", semconv.AttrIsManaged, outcomes)
 	errs = append(errs, managedErrs...)
 	e.GaugeSnapshot(managedMetricName, "{device}", "Total Entra directory devices, by MDM-managed state.", managedPoints)
 
-	osPoints, osErrs := c.osSnapshot(ctx, total, haveTotal)
+	osPoints, osErrs := c.osSnapshot(ctx, total, haveTotal, outcomes)
 	errs = append(errs, osErrs...)
 	e.GaugeSnapshot(osMetricName, "{device}", "Total Entra directory devices, by operating system.", osPoints)
 
-	stalePoints, staleErrs := c.staleSnapshot(ctx)
+	stalePoints, staleErrs := c.staleSnapshot(ctx, outcomes)
 	errs = append(errs, staleErrs...)
 	e.GaugeSnapshot(staleMetricName, "{device}", "Entra directory devices whose last sign-in is older than the staleness threshold.", stalePoints)
 
@@ -180,7 +186,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // null trustType). The leftover is clamped to zero to guard against a
 // negative value if the total and per-bucket counts were read at slightly
 // different instants against a live, changing directory.
-func (c *Collector) trustTypeSnapshot(ctx context.Context, total int64, haveTotal bool) ([]telemetry.GaugePoint, []error) {
+func (c *Collector) trustTypeSnapshot(ctx context.Context, total int64, haveTotal bool, outcomes *recordoutcome.Recorder) ([]telemetry.GaugePoint, []error) {
 	points := make([]telemetry.GaugePoint, 0, len(trustTypeBuckets)+1)
 	var errs []error
 	var knownSum int64
@@ -188,6 +194,7 @@ func (c *Collector) trustTypeSnapshot(ctx context.Context, total int64, haveTota
 	for _, b := range trustTypeBuckets {
 		n, err := collectors.Count(ctx, c.g, filterCountURL(c.baseURL+"/devices/$count", "trustType eq '"+b.value+"'"))
 		if err != nil {
+			entraoutcome.SourceError(outcomes)
 			c.logger.Warn("devices: trust_type count failed", "collector", collectorName, "trust_type", b.attr, "error", err)
 			errs = append(errs, fmt.Errorf("trust_type=%s: %w", b.attr, err))
 			ok = false
@@ -195,6 +202,7 @@ func (c *Collector) trustTypeSnapshot(ctx context.Context, total int64, haveTota
 		}
 		knownSum += n
 		points = append(points, telemetry.GaugePoint{Value: float64(n), Attrs: telemetry.Attrs{semconv.AttrTrustType: b.attr}})
+		entraoutcome.Emitted(outcomes, 1)
 	}
 	if haveTotal && ok {
 		points = append(points, telemetry.GaugePoint{Value: float64(clampNonNegative(total - knownSum)), Attrs: telemetry.Attrs{semconv.AttrTrustType: "unknown"}})
@@ -206,7 +214,7 @@ func (c *Collector) trustTypeSnapshot(ctx context.Context, total int64, haveTota
 // isCompliant and isManaged are non-nullable in current Graph documentation
 // (they default false rather than null when Intune hasn't set them), so
 // true+false always accounts for every device - no leftover bucket needed.
-func (c *Collector) boolSnapshot(ctx context.Context, field, attrKey string) ([]telemetry.GaugePoint, []error) {
+func (c *Collector) boolSnapshot(ctx context.Context, field, attrKey string, outcomes *recordoutcome.Recorder) ([]telemetry.GaugePoint, []error) {
 	points := make([]telemetry.GaugePoint, 0, 2)
 	var errs []error
 	for _, v := range []bool{true, false} {
@@ -216,11 +224,13 @@ func (c *Collector) boolSnapshot(ctx context.Context, field, attrKey string) ([]
 		}
 		n, err := collectors.Count(ctx, c.g, filterCountURL(c.baseURL+"/devices/$count", field+" eq "+lit))
 		if err != nil {
+			entraoutcome.SourceError(outcomes)
 			c.logger.Warn("devices: bool count failed", "collector", collectorName, "field", field, "value", v, "error", err)
 			errs = append(errs, fmt.Errorf("%s=%t: %w", field, v, err))
 			continue
 		}
 		points = append(points, telemetry.GaugePoint{Value: float64(n), Attrs: telemetry.Attrs{attrKey: v}})
+		entraoutcome.Emitted(outcomes, 1)
 	}
 	return points, errs
 }
@@ -231,7 +241,7 @@ func (c *Collector) boolSnapshot(ctx context.Context, field, attrKey string) ([]
 // known prefixes - see the osBucket doc comment for why that leftover
 // approach, rather than an exhaustive literal value list, is the bounded and
 // correct choice here.
-func (c *Collector) osSnapshot(ctx context.Context, total int64, haveTotal bool) ([]telemetry.GaugePoint, []error) {
+func (c *Collector) osSnapshot(ctx context.Context, total int64, haveTotal bool, outcomes *recordoutcome.Recorder) ([]telemetry.GaugePoint, []error) {
 	points := make([]telemetry.GaugePoint, 0, len(osBuckets)+1)
 	var errs []error
 	var knownSum int64
@@ -239,6 +249,7 @@ func (c *Collector) osSnapshot(ctx context.Context, total int64, haveTotal bool)
 	for _, b := range osBuckets {
 		n, err := collectors.Count(ctx, c.g, filterCountURL(c.baseURL+"/devices/$count", "startswith(operatingSystem,'"+b.prefix+"')"))
 		if err != nil {
+			entraoutcome.SourceError(outcomes)
 			c.logger.Warn("devices: os count failed", "collector", collectorName, "operating_system", b.attr, "error", err)
 			errs = append(errs, fmt.Errorf("operating_system=%s: %w", b.attr, err))
 			ok = false
@@ -246,6 +257,7 @@ func (c *Collector) osSnapshot(ctx context.Context, total int64, haveTotal bool)
 		}
 		knownSum += n
 		points = append(points, telemetry.GaugePoint{Value: float64(n), Attrs: telemetry.Attrs{semconv.AttrOperatingSystem: b.attr}})
+		entraoutcome.Emitted(outcomes, 1)
 	}
 	if haveTotal && ok {
 		points = append(points, telemetry.GaugePoint{Value: float64(clampNonNegative(total - knownSum)), Attrs: telemetry.Attrs{semconv.AttrOperatingSystem: "other"}})
@@ -260,13 +272,15 @@ func (c *Collector) osSnapshot(ctx context.Context, total int64, haveTotal bool)
 // an untested compound `or ... eq null` advanced-query expression. That is a
 // known v1 limitation (documented here, not silently dropped): a tenant with
 // many never-signed-in stale devices will undercount this gauge.
-func (c *Collector) staleSnapshot(ctx context.Context) ([]telemetry.GaugePoint, []error) {
+func (c *Collector) staleSnapshot(ctx context.Context, outcomes *recordoutcome.Recorder) ([]telemetry.GaugePoint, []error) {
 	cutoff := c.now().UTC().Add(-staleThresholdDays * 24 * time.Hour).Format(time.RFC3339)
 	n, err := collectors.Count(ctx, c.g, filterCountURL(c.baseURL+"/devices/$count", "approximateLastSignInDateTime le "+cutoff))
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		c.logger.Warn("devices: stale device count failed", "collector", collectorName, "error", err)
 		return nil, []error{fmt.Errorf("stale count: %w", err)}
 	}
+	entraoutcome.Emitted(outcomes, 1)
 	return []telemetry.GaugePoint{{
 		Value: float64(n),
 		Attrs: telemetry.Attrs{semconv.AttrThresholdDays: staleThresholdDays},

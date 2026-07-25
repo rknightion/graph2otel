@@ -43,7 +43,9 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/graphclient"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
 	"github.com/rknightion/graph2otel/internal/preflight"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -80,10 +82,11 @@ const (
 
 // Collector polls the beta deviceHealthScripts run-state endpoints.
 type Collector struct {
-	g       collectors.GraphClient
-	baseURL string
-	logger  *slog.Logger
-	watch   *wirecheck.Reporter
+	outcomes *outcome.Recorder
+	g        collectors.GraphClient
+	baseURL  string
+	logger   *slog.Logger
+	watch    *wirecheck.Reporter
 }
 
 // New builds the collector. A nil logger falls back to slog.Default().
@@ -138,11 +141,17 @@ type runState struct {
 // emits one twin per (remediation, device). A per-remediation fetch failure is
 // logged and skipped so one bad remediation never drops the others; a 403 (scope
 // or feature absent) is a graceful info-level skip.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+listPath, nil)
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
+	local := *c
+	local.outcomes = outcomes
+	c = &local
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+listPath, nil, c.outcomes)
 	if err != nil {
 		if isForbidden(err) {
+			outcome.RecordError(c.outcomes, err)
 			c.logger.Info("remediationrunstates: deviceHealthScripts forbidden (missing scope?); skipping", "collector", collectorName, "error", graphclient.FormatODataError(err))
+			outcomes.Cause(recordoutcome.CausePermissionDenied)
 			return nil
 		}
 		return fmt.Errorf("%s: list remediations: %w", collectorName, err)
@@ -152,25 +161,33 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for _, raw := range raws {
 		var rem remediation
 		if err := json.Unmarshal(raw, &rem); err != nil {
+			outcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			return fmt.Errorf("%s: decode remediation: %w", collectorName, err)
 		}
 		if rem.ID == "" {
+			outcome.Dropped(outcomes, 1, recordoutcome.CauseMappingError)
 			continue
 		}
-		states, ferr := collectors.GetAllValues(ctx, c.g, c.baseURL+fmt.Sprintf(runStatesTmpl, rem.ID), nil)
+		outcome.Filtered(outcomes, 1)
+		states, ferr := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+fmt.Sprintf(runStatesTmpl, rem.ID), nil, c.outcomes)
 		if ferr != nil {
 			if isForbidden(ferr) {
+				outcome.RecordError(c.outcomes, ferr)
 				c.logger.Info("remediationrunstates: deviceRunStates forbidden; skipping remediation", "collector", collectorName, "remediation", rem.DisplayName, "error", graphclient.FormatODataError(ferr))
+				outcomes.Cause(recordoutcome.CausePermissionDenied)
 				continue
 			}
 			c.logger.Warn("remediationrunstates: fetching deviceRunStates failed; skipping remediation", "collector", collectorName, "remediation", rem.DisplayName, "error", ferr)
+			outcome.RecordError(outcomes, ferr)
 			continue
 		}
 		for _, sraw := range states {
 			var rs runState
 			if err := json.Unmarshal(sraw, &rs); err != nil {
+				outcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 				return fmt.Errorf("%s: decode run state: %w", collectorName, err)
 			}
+			outcome.Emitted(outcomes, 1)
 			// detectionState/remediationState are metric labels passed raw — watch
 			// each against its CSDL set so a new Microsoft member surfaces (#234).
 			c.watch.Value(e, semconv.AttrDetectionState, rs.DetectionState, knownDetectionStates)

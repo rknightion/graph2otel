@@ -29,6 +29,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -141,10 +143,11 @@ type groupPolicyConfiguration struct {
 // Collector polls the beta groupPolicyMigrationReports and
 // groupPolicyConfigurations endpoints.
 type Collector struct {
-	g       collectors.GraphClient
-	baseURL string
-	logger  *slog.Logger
-	watch   *wirecheck.Reporter
+	outcomes *outcome.Recorder
+	g        collectors.GraphClient
+	baseURL  string
+	logger   *slog.Logger
+	watch    *wirecheck.Reporter
 }
 
 // New builds the gpoanalytics collector. A nil logger falls back to the slog
@@ -179,7 +182,11 @@ func (c *Collector) RequiredPermissions() []string {
 // unlicensed on the tenant) is skipped-and-logged, any other error is logged
 // and joined into the returned error, but the other fetch's metrics still
 // emit.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
+	local := *c
+	local.outcomes = outcomes
+	c = &local
 	var errs []error
 
 	if err := c.collectMigrationReports(ctx, e); err != nil {
@@ -209,7 +216,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // imported-GPO count, not device count) and emits one migration_readiness
 // point plus one supported_settings_percent point per report.
 func (c *Collector) collectMigrationReports(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/groupPolicyMigrationReports", nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceManagement/groupPolicyMigrationReports", nil, c.outcomes)
 	if err != nil {
 		return err
 	}
@@ -220,8 +227,10 @@ func (c *Collector) collectMigrationReports(ctx context.Context, e telemetry.Emi
 		var rep groupPolicyMigrationReport
 		if err := json.Unmarshal(r, &rep); err != nil {
 			c.logger.Warn("gpoanalytics: skipping unparseable migration report", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		name := orUnknown(rep.DisplayName)
 		c.watch.Value(e, semconv.AttrReadiness, rep.MigrationReadiness, knownReadinessValues)
 		readiness = append(readiness, telemetry.GaugePoint{
@@ -243,7 +252,7 @@ func (c *Collector) collectMigrationReports(ctx context.Context, e telemetry.Emi
 // admin-configured config count, not device count) and emits the count by
 // ingestion type.
 func (c *Collector) collectConfigurations(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/groupPolicyConfigurations", nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceManagement/groupPolicyConfigurations", nil, c.outcomes)
 	if err != nil {
 		return err
 	}
@@ -253,8 +262,10 @@ func (c *Collector) collectConfigurations(ctx context.Context, e telemetry.Emitt
 		var cfg groupPolicyConfiguration
 		if err := json.Unmarshal(r, &cfg); err != nil {
 			c.logger.Warn("gpoanalytics: skipping unparseable configuration", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		c.watch.Value(e, semconv.AttrIngestionType, cfg.PolicyConfigurationIngestionType, knownIngestionTypes)
 		counts[ingestionTypeBucketFor(cfg.PolicyConfigurationIngestionType)]++
 	}

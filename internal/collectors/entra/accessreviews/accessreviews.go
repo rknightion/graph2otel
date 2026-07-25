@@ -94,6 +94,8 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/graphclient"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -269,14 +271,16 @@ func (c *Collector) RequiredPermissions() []string {
 // one fetch: the bounded per-status gauge and one twin per definition. A 403 is a
 // graceful info-skip (no governance feature, or the scope not consented); a bad
 // row is skipped with its error aggregated rather than taking the poll down.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+definitionsPath, nil)
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+definitionsPath, nil, outcomes)
 	if err != nil {
 		if isForbidden(err) {
+			outcomes.Cause(recordoutcome.CausePermissionDenied)
 			c.logger.Info("skipping access reviews: endpoint returned 403 (governance feature or scope unavailable on this tenant)",
 				"collector", collectorName, "error", graphclient.FormatODataError(err))
 			return nil
 		}
+		entraoutcome.SourceError(outcomes)
 		return fmt.Errorf("fetch access review definitions: %w", err)
 	}
 
@@ -285,15 +289,18 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for _, raw := range raws {
 		var d accessReviewScheduleDefinition
 		if err := json.Unmarshal(raw, &d); err != nil {
+			entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			errs = append(errs, fmt.Errorf("decode access review definition: %w", err))
 			continue
 		}
 		if d.ID == "" {
+			entraoutcome.Dropped(outcomes, 1, recordoutcome.CauseMappingError)
 			c.logger.Warn("access reviews: skipping definition with empty id", "collector", collectorName)
 			continue
 		}
 		byStatus[d.Status]++
 		e.LogEvent(c.twin(e, d))
+		entraoutcome.Emitted(outcomes, 1)
 	}
 
 	points := make([]telemetry.GaugePoint, 0, len(byStatus))

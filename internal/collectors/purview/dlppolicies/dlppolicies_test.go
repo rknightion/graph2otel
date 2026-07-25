@@ -11,6 +11,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -67,7 +68,7 @@ func collectLive(t *testing.T) (*Collector, *telemetrytest.Recorder) {
 	// 22:13:57Z) so the age gauge is deterministic (100s).
 	c.now = func() time.Time { return mustTime(t, "2026-07-16 22:15:37Z") }
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	return c, rec
@@ -108,6 +109,25 @@ func TestPoliciesByModeGauge(t *testing.T) {
 		if got[m] != v {
 			t.Errorf("byMode[%s] = %v, want %v", m, got[m], v)
 		}
+	}
+}
+
+func TestCollectAccountsPolicyFileRows(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{policyFilesURL: livePolicyFiles(t)}}
+	outcomes := recordoutcome.NewRecorder()
+
+	if err := New(g, nil, "", nil).Collect(context.Background(), telemetrytest.New().Emitter(), outcomes); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	want := recordoutcome.Counts{
+		Fetched:  3,
+		Mapped:   1,
+		Emitted:  1,
+		Filtered: 2,
+	}
+	if got := outcomes.Snapshot().Counts; got != want {
+		t.Errorf("outcome counts = %+v, want %+v", got, want)
 	}
 }
 
@@ -345,11 +365,11 @@ func TestParseSkipReusesCacheWhenVersionUnchanged(t *testing.T) {
 	c := New(g, nil, "", nil)
 
 	rec1 := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec1.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec1.Emitter(), nil); err != nil {
 		t.Fatalf("Collect #1: %v", err)
 	}
 	rec2 := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec2.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec2.Emitter(), nil); err != nil {
 		t.Fatalf("Collect #2: %v", err)
 	}
 
@@ -370,7 +390,7 @@ func TestPersistsVersionToStore(t *testing.T) {
 	c := New(g, store, "tenant-1", nil)
 
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -389,11 +409,16 @@ func TestPersistsVersionToStore(t *testing.T) {
 func TestForbiddenSkipsGracefully(t *testing.T) {
 	g := &fakeGraph{errs: map[string]error{policyFilesURL: errors.New("graph: status 403 Forbidden")}}
 	rec := telemetrytest.New()
-	if err := New(g, nil, "", nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	outcomes := recordoutcome.NewRecorder()
+	if err := New(g, nil, "", nil).Collect(context.Background(), rec.Emitter(), outcomes); err != nil {
 		t.Fatalf("Collect should swallow 403, got %v", err)
 	}
 	if pts := rec.MetricPoints(metricPolicies); len(pts) != 0 {
 		t.Errorf("emitted %d policy series on a 403, want 0", len(pts))
+	}
+	got := outcomes.Snapshot()
+	if len(got.Causes) != 1 || got.Causes[0] != recordoutcome.CausePermissionDenied {
+		t.Errorf("causes = %v, want [%s]", got.Causes, recordoutcome.CausePermissionDenied)
 	}
 }
 
@@ -403,7 +428,7 @@ func TestNoDlpRow(t *testing.T) {
 	const body = `{"value":[{"id":"DataCollectionPolicy","fileType":"dataCollectionPolicy","status":"noContent","content":null}]}`
 	g := &fakeGraph{bodies: map[string]string{policyFilesURL: body}}
 	rec := telemetrytest.New()
-	if err := New(g, nil, "", nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil, "", nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if pts := rec.MetricPoints(metricPolicies); len(pts) != 0 {

@@ -88,6 +88,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -146,6 +147,10 @@ func isRetentionUnavailable(err error) bool {
 		return true
 	}
 	return strings.Contains(s, "DataInsightsRequestError") && strings.Contains(s, "Forbidden")
+}
+
+func isRetentionForbidden(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "status 403")
 }
 
 // retentionLabel mirrors the retentionLabel fields this package uses: the
@@ -234,13 +239,13 @@ func (c *RetentionCollector) RequiredCapability() license.Capability {
 // The two sub-fetches are independent: a 403/404 (unavailable) on either is
 // skipped-and-logged; a genuine failure on either is logged and joined into
 // the returned error while the other still emits.
-func (c *RetentionCollector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *RetentionCollector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	var errs []error
 
-	if err := c.collectLabels(ctx, e); err != nil {
+	if err := c.collectLabels(ctx, e, outcomes); err != nil {
 		errs = append(errs, err)
 	}
-	if err := c.collectEventTypes(ctx, e); err != nil {
+	if err := c.collectEventTypes(ctx, e, outcomes); err != nil {
 		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
@@ -254,25 +259,34 @@ func (c *RetentionCollector) Collect(ctx context.Context, e telemetry.Emitter) e
 // enum product (not tenant size) and its sum equals the label count. A
 // 403/404/DataInsights-Forbidden (endpoint unavailable) is skipped-and-logged
 // before either the metric or the log twin emits anything.
-func (c *RetentionCollector) collectLabels(ctx context.Context, e telemetry.Emitter) error {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/security/labels/retentionLabels", nil)
+func (c *RetentionCollector) collectLabels(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/security/labels/retentionLabels", nil, outcomes)
 	if err != nil {
 		if isRetentionUnavailable(err) {
+			if isRetentionForbidden(err) {
+				outcomes.Cause(recordoutcome.CausePermissionDenied)
+			}
 			c.logger.Info("retention labels endpoint unavailable on this tenant; skipping",
 				"collector", retentionName, "error", err)
 			return nil
 		}
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		return fmt.Errorf("%s: retention labels: %w", retentionName, err)
 	}
 
+	outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(raws)))
 	type combo struct{ behavior, action, trigger string }
 	counts := map[combo]int64{}
 	for _, raw := range raws {
 		var l retentionLabel
 		if err := json.Unmarshal(raw, &l); err != nil {
+			outcomes.Add(recordoutcome.OutcomeErrored, 1)
+			outcomes.Cause(recordoutcome.CauseDecodeError)
 			c.logger.Warn("retention labels: skipping unparseable entry", "collector", retentionName, "error", err)
 			continue
 		}
+		outcomes.Add(recordoutcome.OutcomeMapped, 1)
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 		c.watch.Value(e, semconv.AttrBehaviorDuringRetention, strings.ToLower(l.BehaviorDuringRetentionPeriod), knownBehaviors)
 		c.watch.Value(e, semconv.AttrActionAfterRetention, strings.ToLower(l.ActionAfterRetentionPeriod), knownActions)
 		c.watch.Value(e, semconv.AttrRetentionTrigger, strings.ToLower(l.RetentionTrigger), knownTriggers)
@@ -321,16 +335,21 @@ func (c *RetentionCollector) collectLabels(ctx context.Context, e telemetry.Emit
 // id/displayName/description/timestamps), so a bounded metric can only be a
 // count — never a per-event-type series; the id/name/description detail goes
 // entirely into the log twin instead.
-func (c *RetentionCollector) collectEventTypes(ctx context.Context, e telemetry.Emitter) error {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/security/triggerTypes/retentionEventTypes", nil)
+func (c *RetentionCollector) collectEventTypes(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/security/triggerTypes/retentionEventTypes", nil, outcomes)
 	if err != nil {
 		if isRetentionUnavailable(err) {
+			if isRetentionForbidden(err) {
+				outcomes.Cause(recordoutcome.CausePermissionDenied)
+			}
 			c.logger.Info("retention event types endpoint unavailable on this tenant; skipping",
 				"collector", retentionName, "error", err)
 			return nil
 		}
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		return fmt.Errorf("%s: retention event types: %w", retentionName, err)
 	}
+	outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(raws)))
 	e.Gauge(retentionEventTypesMetric, "{event_type}",
 		"Purview retention event types configured for the tenant.",
 		float64(len(raws)), nil)
@@ -338,9 +357,13 @@ func (c *RetentionCollector) collectEventTypes(ctx context.Context, e telemetry.
 	for _, raw := range raws {
 		var et retentionEventType
 		if err := json.Unmarshal(raw, &et); err != nil {
+			outcomes.Add(recordoutcome.OutcomeErrored, 1)
+			outcomes.Cause(recordoutcome.CauseDecodeError)
 			c.logger.Warn("retention event types: skipping unparseable entry", "collector", retentionName, "error", err)
 			continue
 		}
+		outcomes.Add(recordoutcome.OutcomeMapped, 1)
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 		attrs := telemetry.Attrs{}
 		telemetry.SetStr(attrs, semconv.AttrId, et.ID)
 		telemetry.SetStr(attrs, semconv.AttrName, et.DisplayName)

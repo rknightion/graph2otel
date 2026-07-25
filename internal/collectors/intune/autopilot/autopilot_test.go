@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -265,7 +266,7 @@ func TestCollectEmitsLiveCaptureEndToEnd(t *testing.T) {
 	g := &fakeGraph{bodies: baseFixtures()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -334,7 +335,7 @@ func TestCollectEmitsDeviceGaugesByStateAndGroupTag(t *testing.T) {
 	)}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -367,7 +368,7 @@ func TestCollectCountsStaleContacts(t *testing.T) {
 	)}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -412,7 +413,7 @@ func TestCollectCapsGroupTagCardinality(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -439,7 +440,7 @@ func TestCollectEmitsProfileCountByDeviceTypeAndPreprovisioning(t *testing.T) {
 	g := &fakeGraph{bodies: baseFixtures()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -478,7 +479,7 @@ func TestCollectEmitsProfileSettingGauges(t *testing.T) {
 	g := &fakeGraph{bodies: syntheticProfileFixture()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -514,7 +515,7 @@ func TestCollectEmitsProfileEspTimeout(t *testing.T) {
 	g := &fakeGraph{bodies: syntheticProfileFixture()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -534,7 +535,7 @@ func TestCollectEmitsProfileAssignmentCounts(t *testing.T) {
 	g := &fakeGraph{bodies: baseFixtures()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -561,7 +562,7 @@ func TestCollectPagesDeviceIdentitiesToExhaustion(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -582,7 +583,7 @@ func TestCollectIsResilientToDeviceIdentitiesFailure(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := newTestCollector(g).Collect(context.Background(), rec.Emitter())
+	err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected Collect to surface the device identities failure as an error")
 	}
@@ -603,7 +604,7 @@ func TestCollectIsResilientToProfilesFailure(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := newTestCollector(g).Collect(context.Background(), rec.Emitter())
+	err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected Collect to surface the profiles failure as an error")
 	}
@@ -628,7 +629,7 @@ func TestCollectSkipsUnavailableProfilesEndpoint(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect should skip-and-log an unavailable beta endpoint, got error: %v", err)
 	}
 	if len(rec.MetricPoints(profileCountMetricName)) != 0 {
@@ -648,7 +649,7 @@ func TestNoPerDeviceAttributes(t *testing.T) {
 	g := &fakeGraph{bodies: baseFixtures()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -677,7 +678,7 @@ func TestCollectEmitsLiveSyncSettingsEndToEnd(t *testing.T) {
 	c.now = func() time.Time { return liveSyncNow }
 	rec := telemetrytest.New()
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -711,7 +712,7 @@ func TestCollectEmitsSyncTwinWhenSyncNotCompleted(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -750,15 +751,34 @@ func TestCollectSkipsUnavailableSyncSettingsEndpoint(t *testing.T) {
 		errs:   map[string]error{syncSettingsURL(): errors.New("graph request failed: status 404")},
 	}
 	rec := telemetrytest.New()
+	outcomes := recordoutcome.NewRecorder()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), outcomes); err != nil {
 		t.Fatalf("Collect should skip-and-log an unavailable beta sync endpoint, got error: %v", err)
+	}
+	if got := outcomes.Snapshot().Summarize(nil, false).Cause; got != recordoutcome.CauseSourceError {
+		t.Errorf("outcome cause = %q, want %q", got, recordoutcome.CauseSourceError)
 	}
 	if len(rec.MetricPoints(syncAgeMetricName)) != 0 || len(rec.MetricPoints(syncStatusMetricName)) != 0 {
 		t.Error("sync signals should be absent when the endpoint is unavailable")
 	}
 	if len(rec.MetricPoints(devicesMetricName)) == 0 {
 		t.Error("device series should still emit despite the sync endpoint being unavailable")
+	}
+}
+
+func TestCollectRecordsPermissionDeniedForUnavailableSyncSettingsEndpoint(t *testing.T) {
+	g := &fakeGraph{
+		bodies: baseFixtures(),
+		errs:   map[string]error{syncSettingsURL(): errors.New("graph request failed: status 403")},
+	}
+	outcomes := recordoutcome.NewRecorder()
+
+	if err := newTestCollector(g).Collect(context.Background(), telemetrytest.New().Emitter(), outcomes); err != nil {
+		t.Fatalf("Collect should skip-and-log an unavailable beta sync endpoint, got error: %v", err)
+	}
+	if got := outcomes.Snapshot().Summarize(nil, false).Cause; got != recordoutcome.CausePermissionDenied {
+		t.Errorf("outcome cause = %q, want %q", got, recordoutcome.CausePermissionDenied)
 	}
 }
 
@@ -771,7 +791,7 @@ func TestCollectIsResilientToSyncSettingsFailure(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := newTestCollector(g).Collect(context.Background(), rec.Emitter())
+	err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected Collect to surface the sync settings failure as an error")
 	}
@@ -837,7 +857,7 @@ func findings(rec *telemetrytest.Recorder) map[string]float64 {
 func TestLiveCaptureReportsNothingUnexpected(t *testing.T) {
 	g := &fakeGraph{bodies: baseFixtures()}
 	rec := telemetrytest.New()
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if got := findings(rec); len(got) != 0 {
@@ -864,7 +884,7 @@ func TestUnmappedEnumsOnMetricLabelsAreReported(t *testing.T) {
 				t.Fatalf("no fixture contains %q — the test is not exercising what it claims", tc.from)
 			}
 			rec := telemetrytest.New()
-			if err := newTestCollector(&fakeGraph{bodies: bodies}).Collect(context.Background(), rec.Emitter()); err != nil {
+			if err := newTestCollector(&fakeGraph{bodies: bodies}).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 				t.Fatalf("Collect: %v", err)
 			}
 			key := wirecheck.KindUnmappedValue + "/" + tc.field

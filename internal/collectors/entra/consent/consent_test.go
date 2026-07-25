@@ -349,7 +349,7 @@ func liveGraph() *fakeGraph {
 // old graph-sp-id/role-directory-rw placeholders faked.
 func TestCollectorEmitsLiveConsentSurfaceEndToEnd(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -443,7 +443,7 @@ func TestCollectClassifiesDelegatedGrantsByPrivilege(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -474,7 +474,7 @@ func TestCollectClassifiesAppRoleAssignmentsByPrivilege(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -498,7 +498,7 @@ func TestCollectSkipsResourceNotProvisionedInTenant(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err != nil {
 		t.Fatalf("Collect: %v, want nil (unprovisioned resource is not a failure)", err)
 	}
@@ -516,7 +516,7 @@ func TestCollectIsResilientToPartialFailure(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Error("expected Collect to surface the oauth2PermissionGrants failure as an error")
 	}
@@ -545,7 +545,7 @@ func TestCollectEmitsOnlyBoundedSeriesRegardlessOfGrantVolume(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	pts := rec.MetricPoints(metricName)
@@ -585,7 +585,7 @@ func TestCollectTwinsOnlyHighPrivilegeDelegatedGrants(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -639,7 +639,7 @@ func TestCollectTwinsOnlyHighPrivilegeAppRoleAssignments(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -696,7 +696,7 @@ func TestLogTwinNeverReachesMetricAttrs(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

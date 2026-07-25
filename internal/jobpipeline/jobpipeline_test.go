@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
@@ -105,6 +106,32 @@ func baseConfig() QueryConfig {
 	}
 }
 
+func TestRunClassifiesDeadlineAsTimeout(t *testing.T) {
+	from := time.Date(2026, 7, 25, 10, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+	cfg := baseConfig()
+	cfg.CreateMaxRetries = -1
+	outcomes := recordoutcome.NewRecorder()
+
+	_, err := Run(
+		context.Background(),
+		cfg,
+		newCheckpoint("t1", cfg.CreatePath),
+		from,
+		to,
+		&fakeJobClient{createErrs: []error{context.DeadlineExceeded}},
+		telemetrytest.New().Emitter(),
+		outcomes,
+	)
+	if err == nil {
+		t.Fatal("Run error = nil, want deadline")
+	}
+	got := outcomes.Snapshot().Causes
+	if len(got) != 1 || got[0] != recordoutcome.CauseTimeout {
+		t.Fatalf("causes = %v, want [%q]", got, recordoutcome.CauseTimeout)
+	}
+}
+
 // TestRunDropsUndatedRecords keeps #275's boundary at the job engine. The
 // query window's end is an ingest boundary, not an event time: it must never
 // replace an absent timestamp. A valid wire time and mapper fallback still
@@ -135,8 +162,9 @@ func TestRunDropsUndatedRecords(t *testing.T) {
 		}}},
 	}
 	cp := newCheckpoint("t1", cfg.CreatePath)
+	outcomes := recordoutcome.NewRecorder()
 
-	hw, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter())
+	hw, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), outcomes)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -162,6 +190,17 @@ func TestRunDropsUndatedRecords(t *testing.T) {
 	points := rec.MetricPoints(wirecheck.MetricUnexpected)
 	if len(points) != 1 || points[0].Value != 2 || points[0].Attrs[semconv.AttrField] != "event_time" || points[0].Attrs[semconv.AttrKind] != wirecheck.KindMissingField {
 		t.Errorf("undated watchdog = %+v, want two missing event_time findings", points)
+	}
+	if got, want := outcomes.Snapshot().Counts, (recordoutcome.Counts{
+		Fetched: 4,
+		Mapped:  2,
+		Emitted: 2,
+		Dropped: 2,
+	}); got != want {
+		t.Errorf("record outcomes = %+v, want %+v", got, want)
+	}
+	if got := outcomes.Snapshot().Causes; len(got) != 1 || got[0] != recordoutcome.CauseMissingEventTime {
+		t.Errorf("record outcome causes = %v, want [%q]", got, recordoutcome.CauseMissingEventTime)
 	}
 }
 
@@ -195,7 +234,8 @@ func TestRun_EmptyIDRecordsAllEmitted(t *testing.T) {
 	}
 
 	cp := newCheckpoint("t1", cfg.CreatePath)
-	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter()); err != nil {
+	outcomes := recordoutcome.NewRecorder()
+	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), outcomes); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
@@ -207,6 +247,13 @@ func TestRun_EmptyIDRecordsAllEmitted(t *testing.T) {
 	}
 	if pts := rec.MetricPoints(wirecheck.MetricUnexpected); len(pts) == 0 {
 		t.Errorf("expected the %s watchdog counter to fire for the empty-id condition, got none", wirecheck.MetricUnexpected)
+	}
+	if got, want := outcomes.Snapshot().Counts, (recordoutcome.Counts{
+		Fetched: 3,
+		Mapped:  3,
+		Emitted: 3,
+	}); got != want {
+		t.Errorf("record outcomes = %+v, want %+v — empty IDs are undedupeable, not deduped", got, want)
 	}
 }
 
@@ -238,7 +285,7 @@ func TestRun_SubmitPollPageEmits(t *testing.T) {
 	}
 
 	cp := newCheckpoint("t1", cfg.CreatePath)
-	hw, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter())
+	hw, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -294,8 +341,9 @@ func TestRun_RepeatedNextLinkFailsBeforeEmission(t *testing.T) {
 	}
 	cp := newCheckpoint("t1", cfg.CreatePath)
 	cp.InFlight = &checkpoint.InFlightJob{ID: "query-loop", CreatedAt: to.Add(-time.Minute), WindowFrom: from, WindowTo: to}
+	outcomes := recordoutcome.NewRecorder()
 
-	_, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter())
+	_, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), outcomes)
 	if err == nil || !strings.Contains(err.Error(), "repeated records page") {
 		t.Fatalf("Run error = %v, want repeated records page error", err)
 	}
@@ -307,6 +355,15 @@ func TestRun_RepeatedNextLinkFailsBeforeEmission(t *testing.T) {
 	}
 	if !cp.Watermark.IsZero() || cp.InFlight == nil || cp.InFlight.ID != "query-loop" {
 		t.Errorf("checkpoint changed after cursor failure: %+v", cp)
+	}
+	if got, want := outcomes.Snapshot().Counts, (recordoutcome.Counts{
+		Fetched: 1,
+		Errored: 1,
+	}); got != want {
+		t.Errorf("record outcomes = %+v, want %+v — the buffered record could not be committed after paging failed", got, want)
+	}
+	if got := outcomes.Snapshot().Causes; len(got) != 1 || got[0] != recordoutcome.CauseSourceError {
+		t.Errorf("record outcome causes = %v, want [%q]", got, recordoutcome.CauseSourceError)
 	}
 }
 
@@ -337,7 +394,7 @@ func TestRun_RepeatedNextLinkAtPageCapReportsRepeat(t *testing.T) {
 		WindowTo:   to,
 	}
 
-	_, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter())
+	_, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), nil)
 	if err == nil || !strings.Contains(err.Error(), "repeated records page") {
 		t.Fatalf("Run error = %v, want repeated records page error at the page-cap boundary", err)
 	}
@@ -378,7 +435,7 @@ func TestRun_RecordPageCapFailsBeforeEmission(t *testing.T) {
 	cp := newCheckpoint("t1", cfg.CreatePath)
 	cp.InFlight = &checkpoint.InFlightJob{ID: "query-many-pages", CreatedAt: to.Add(-time.Minute), WindowFrom: from, WindowTo: to}
 
-	_, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter())
+	_, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), nil)
 	if err == nil || !strings.Contains(err.Error(), "records pagination exceeded") {
 		t.Fatalf("Run error = %v, want records pagination exceeded error", err)
 	}
@@ -418,13 +475,75 @@ func TestRun_DedupesAcrossWindows(t *testing.T) {
 	cp := newCheckpoint("t1", cfg.CreatePath)
 	cp.OverlapWindow = cfg.Overlap
 	cp.SeenIDs.Add("dup", from.Add(5*time.Minute)) // already emitted last window
+	outcomes := recordoutcome.NewRecorder()
 
-	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter()); err != nil {
+	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), outcomes); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	logs := rec.LogRecords()
 	if len(logs) != 1 || logs[0].Attrs["id"] != "new" {
 		t.Fatalf("emitted %v, want exactly the 'new' record (dup deduped)", logs)
+	}
+	if got, want := outcomes.Snapshot().Counts, (recordoutcome.Counts{
+		Fetched: 2,
+		Mapped:  2,
+		Emitted: 1,
+		Deduped: 1,
+	}); got != want {
+		t.Errorf("record outcomes = %+v, want %+v", got, want)
+	}
+}
+
+// TestRun_MapperPanicAccountsTheBufferedBatch catches a mapper failure after
+// the job's result pages have already been drained. Run deliberately preserves
+// the panic for the scheduler's recovery boundary, but every fetched record in
+// the all-or-nothing mapping batch must still reconcile as errored: none can be
+// called mapped because emission never starts until the whole batch is mapped.
+func TestRun_MapperPanicAccountsTheBufferedBatch(t *testing.T) {
+	rec := telemetrytest.New()
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+	cfg := baseConfig()
+	cfg.Map = func(record map[string]any) (string, telemetry.Event) {
+		id, _ := record["id"].(string)
+		if id == "boom" {
+			panic("mapper failed")
+		}
+		return mapByID(record)
+	}
+	client := &fakeJobClient{
+		statuses: []string{StatusSucceeded},
+		pages: map[string]fakePage{
+			recordsURL("query-1", DefaultPageSize): {records: []map[string]any{
+				{"id": "before", "createdDateTime": from.Add(time.Minute).Format(time.RFC3339)},
+				{"id": "boom", "createdDateTime": from.Add(2 * time.Minute).Format(time.RFC3339)},
+				{"id": "after", "createdDateTime": from.Add(3 * time.Minute).Format(time.RFC3339)},
+			}},
+		},
+	}
+	cp := newCheckpoint("t1", cfg.CreatePath)
+	outcomes := recordoutcome.NewRecorder()
+
+	var panicValue any
+	func() {
+		defer func() { panicValue = recover() }()
+		_, _ = Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), outcomes)
+	}()
+
+	if panicValue != "mapper failed" {
+		t.Fatalf("panic = %v, want mapper failed preserved for scheduler recovery", panicValue)
+	}
+	if logs := rec.LogRecords(); len(logs) != 0 {
+		t.Fatalf("emitted %d records before the mapping batch completed, want 0", len(logs))
+	}
+	if got, want := outcomes.Snapshot().Counts, (recordoutcome.Counts{
+		Fetched: 3,
+		Errored: 3,
+	}); got != want {
+		t.Errorf("record outcomes = %+v, want %+v", got, want)
+	}
+	if got := outcomes.Snapshot().Causes; len(got) != 1 || got[0] != recordoutcome.CauseMappingError {
+		t.Errorf("record outcome causes = %v, want [%q]", got, recordoutcome.CauseMappingError)
 	}
 }
 
@@ -442,7 +561,7 @@ func TestRun_FailedStatusReturnsSentinel(t *testing.T) {
 	cp := newCheckpoint("t1", cfg.CreatePath)
 	cp.Watermark = from // pre-existing watermark
 
-	hw, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter())
+	hw, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), nil)
 	if !errors.Is(err, ErrJobFailed) {
 		t.Fatalf("err = %v, want ErrJobFailed", err)
 	}
@@ -466,7 +585,7 @@ func TestRun_CancelledStatusReturnsSentinel(t *testing.T) {
 
 	client := &fakeJobClient{statuses: []string{StatusCancelled}}
 	cp := newCheckpoint("t1", cfg.CreatePath)
-	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter()); !errors.Is(err, ErrJobCancelled) {
+	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), nil); !errors.Is(err, ErrJobCancelled) {
 		t.Fatalf("err = %v, want ErrJobCancelled", err)
 	}
 }
@@ -491,7 +610,7 @@ func TestRun_CreateRetriesOnErrorThenSucceeds(t *testing.T) {
 		pages:      map[string]fakePage{pageURL: {}},
 	}
 
-	if _, err := Run(context.Background(), cfg, newCheckpoint("t1", cfg.CreatePath), from, to, client, rec.Emitter()); err != nil {
+	if _, err := Run(context.Background(), cfg, newCheckpoint("t1", cfg.CreatePath), from, to, client, rec.Emitter(), nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if client.createCalls != 3 {
@@ -516,7 +635,7 @@ func TestRun_CreateGivesUpAfterMaxRetries(t *testing.T) {
 	boom := errors.New("nope")
 	client := &fakeJobClient{createErrs: []error{boom, boom, boom}}
 	cp := newCheckpoint("t1", cfg.CreatePath)
-	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter()); err == nil {
+	if _, err := Run(context.Background(), cfg, cp, from, to, client, rec.Emitter(), nil); err == nil {
 		t.Fatal("Run returned nil error after create exhausted retries")
 	}
 	if client.createCalls != 3 { // 1 + 2 retries
@@ -546,7 +665,7 @@ func TestRunStampsAuditQueryTransport(t *testing.T) {
 		},
 	}
 
-	if _, err := Run(context.Background(), cfg, newCheckpoint("t1", cfg.CreatePath), from, to, client, rec.Emitter()); err != nil {
+	if _, err := Run(context.Background(), cfg, newCheckpoint("t1", cfg.CreatePath), from, to, client, rec.Emitter(), nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 

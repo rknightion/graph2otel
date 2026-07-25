@@ -99,7 +99,9 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/graphclient"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
 	"github.com/rknightion/graph2otel/internal/preflight"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -210,7 +212,8 @@ type batchSubResponse struct {
 
 // Collector polls the beta managedDevices fleet for per-device hardware inventory.
 type Collector struct {
-	g collectors.GraphClient
+	outcomes *outcome.Recorder
+	g        collectors.GraphClient
 	// poster is g asserted to batchPoster; nil when the injected client cannot
 	// POST, which Collect reports as an error rather than emitting an empty fleet.
 	poster  batchPoster
@@ -329,7 +332,11 @@ type listEntry struct {
 //     gauges are a fleet snapshot; publishing one that silently omits a chunk of
 //     twenty would read on a dashboard as twenty devices vanishing. Nothing is
 //     emitted until every chunk has been fetched.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
+	local := *c
+	local.outcomes = outcomes
+	c = &local
 	if c.poster == nil {
 		return fmt.Errorf("%s: Graph client cannot POST, so the required $batch fetch is impossible", collectorName)
 	}
@@ -337,6 +344,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	entries, err := c.listDevices(ctx)
 	if err != nil {
 		if isForbidden(err) {
+			outcome.RecordError(c.outcomes, err)
 			c.logger.Info("hardwareinventory: managedDevices forbidden (missing scope?); skipping",
 				"collector", collectorName, "error", graphclient.FormatODataError(err))
 			return nil
@@ -358,7 +366,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 
 // listDevices pages the fleet for ids (plus deviceName, for skip diagnostics).
 func (c *Collector) listDevices(ctx context.Context) ([]listEntry, error) {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+listPath, nil)
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+listPath, nil, c.outcomes)
 	if err != nil {
 		return nil, err
 	}
@@ -366,11 +374,14 @@ func (c *Collector) listDevices(ctx context.Context) ([]listEntry, error) {
 	for _, raw := range raws {
 		var le listEntry
 		if err := json.Unmarshal(raw, &le); err != nil {
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			return nil, fmt.Errorf("decode managedDevice list element: %w", err)
 		}
 		if le.ID == "" {
+			outcome.Dropped(c.outcomes, 1, recordoutcome.CauseMappingError)
 			continue
 		}
+		outcome.Filtered(c.outcomes, 1)
 		out = append(out, le)
 	}
 	return out, nil
@@ -414,20 +425,24 @@ func (c *Collector) fetchHardware(ctx context.Context, entries []listEntry) ([]d
 			if !ok {
 				c.logger.Warn("hardwareinventory: no $batch sub-response for device; skipping",
 					"collector", collectorName, "device_id", entry.ID, "device_name", entry.DeviceName)
+				c.outcomes.Cause(recordoutcome.CauseSourceError)
 				continue
 			}
 			if sub.Status != 200 {
 				c.logger.Warn("hardwareinventory: device hardware sub-request failed; skipping device",
 					"collector", collectorName, "device_id", entry.ID, "device_name", entry.DeviceName,
 					"status", sub.Status, "body", string(sub.Body))
+				c.outcomes.Cause(recordoutcome.CauseSourceError)
 				continue
 			}
 			var row deviceRow
 			if err := json.Unmarshal(sub.Body, &row); err != nil {
 				c.logger.Warn("hardwareinventory: undecodable device hardware body; skipping device",
 					"collector", collectorName, "device_id", entry.ID, "device_name", entry.DeviceName, "error", err)
+				outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 				continue
 			}
+			outcome.Emitted(c.outcomes, 1)
 			if row.ID == "" {
 				row.ID = entry.ID
 			}

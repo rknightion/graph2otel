@@ -38,6 +38,8 @@ EXPECTED_PAUSED = {
     "g2o-intune-compliance-noncompliant-spike": True,  # companion
     "g2o-collector-staleness": False,                # primary, doc block 3
     "g2o-checkpoint-persist-errors": True,           # companion
+    "g2o-record-integrity-loss": False,               # primary, doc block 6
+    "g2o-payload-type-mismatch": True,                # companion, doc block 6
     "g2o-throttle-saturation": False,                # primary, doc block 4
     "g2o-throttle-budget-consumption": True,         # companion
     "g2o-mdca-uploads-stopped": False,               # default-enabled, doc block 5
@@ -58,8 +60,8 @@ class TestRuleIdentity(unittest.TestCase):
         actual = {r["uid"]: r["isPaused"] for r in build_rules.RULES}
         self.assertEqual(actual, EXPECTED_PAUSED)
 
-    def test_twelve_alert_rules_two_recording_rules(self):
-        self.assertEqual(len(build_rules.RULES), 12)
+    def test_fourteen_alert_rules_two_recording_rules(self):
+        self.assertEqual(len(build_rules.RULES), 14)
         self.assertEqual(len(build_rules.RECORDING), 2)
 
 
@@ -116,6 +118,14 @@ class TestReverseValidation(unittest.TestCase):
         # assertNotIn would false-fail; require it never appears un-suffixed.
         self.assertIsNone(re.search(r"graph2otel_throttle_limit_percentage(?!_percent)", expr))
 
+    def test_record_integrity_alert_uses_only_dropped_and_errored_outcomes(self):
+        rule = next(r for r in build_rules.RULES
+                    if r["uid"] == "g2o-record-integrity-loss")
+        expr = rule["data"][0]["model"]["expr"]
+        self.assertIn('outcome=~"dropped|errored"', expr)
+        self.assertIn("increase(graph2otel_record_outcomes_total", expr)
+        self.assertIn("tenant_id, collector, ingest_transport", expr)
+
     def test_every_recording_rule_event_name_resolves(self):
         # _record() already calls cat.log() at build time (KeyError on a typo);
         # this re-asserts the event names it validated are real, current ones.
@@ -167,7 +177,7 @@ class TestYamlRoundTrips(unittest.TestCase):
         doc = yaml.safe_load(build_rules.render_alerts(build_rules.RULES))
         self.assertEqual(doc["apiVersion"], 1)
         rules = doc["groups"][0]["rules"]
-        self.assertEqual(len(rules), 12)
+        self.assertEqual(len(rules), 14)
         uids = {r["uid"] for r in rules}
         self.assertEqual(uids, set(EXPECTED_PAUSED))
 

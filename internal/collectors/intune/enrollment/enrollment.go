@@ -28,6 +28,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -113,10 +115,11 @@ type enrollmentConfiguration struct {
 
 // Collector polls the bounded deviceEnrollmentConfigurations collection.
 type Collector struct {
-	g       collectors.GraphClient
-	baseURL string
-	logger  *slog.Logger
-	watch   *wirecheck.Reporter
+	outcomes *outcome.Recorder
+	g        collectors.GraphClient
+	baseURL  string
+	logger   *slog.Logger
+	watch    *wirecheck.Reporter
 }
 
 // New builds the enrollment configuration collector. A nil logger falls back
@@ -154,8 +157,12 @@ func (c *Collector) RequiredPermissions() []string {
 // than reporting an optimistic success. An entry that fails to decode is
 // logged and skipped (aggregated into the returned error) without discarding
 // the rest of the snapshot.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+enrollmentConfigurationsPath, nil)
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
+	local := *c
+	local.outcomes = outcomes
+	c = &local
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+enrollmentConfigurationsPath, nil, c.outcomes)
 	if err != nil {
 		return fmt.Errorf("intune.enrollment: list device enrollment configurations: %w", err)
 	}
@@ -170,8 +177,10 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		if err := json.Unmarshal(r, &cfg); err != nil {
 			c.logger.Warn("intune.enrollment: skipping unparseable configuration", "collector", collectorName, "error", err)
 			errs = append(errs, fmt.Errorf("decode enrollment configuration: %w", err))
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 
 		c.watch.Value(e, semconv.AttrConfigType, cfg.ODataType, knownConfigTypes)
 		typ := configType(cfg.ODataType)

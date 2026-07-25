@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -194,8 +195,9 @@ func isShutdownCancellation(ctx context.Context, err error) bool {
 
 // runTick executes one collection, recovering from panics so a single bad
 // collector run never crashes the scheduler. The whole run is timed and, when
-// self-obs is enabled, the per-collector scrape.* metrics are emitted — even on
-// the panic-recovery path, which records success=0 plus an errors{panic} count.
+// self-obs is enabled, the per-collector scrape.* and record-outcome metrics are
+// emitted — even on the panic-recovery path, which preserves recorder progress
+// and records success=0 plus an errors{panic} count.
 // A run interrupted purely by shutdown cancellation (see isShutdownCancellation)
 // is treated as neither success nor failure: it is skipped entirely from
 // scrape.* metrics, the StatusTracker, and WARN logging, so a routine shutdown
@@ -215,6 +217,14 @@ func (s *Scheduler) runTick(ctx context.Context, e Entry, lastSuccess *time.Time
 	ctx, span := tr.Start(ctx, "scrape "+e.Collector.Name(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(attribute.String(semconv.AttrCollector, e.Collector.Name())))
+	outcomes := recordoutcome.NewRecorder()
+	runEmitter := telemetry.WithEventLag(
+		s.emitter,
+		e.Collector.Name(),
+		s.tenant,
+		TransportOf(e.Collector),
+		s.now,
+	)
 
 	var runErr error
 	panicked := false
@@ -225,6 +235,10 @@ func (s *Scheduler) runTick(ctx context.Context, e Entry, lastSuccess *time.Time
 			panicVal = r
 			s.logger.Error("collector panicked", "collector", e.Collector.Name(), "panic", r)
 		}
+		outcomeSnapshot := outcomes.Snapshot()
+		outcome := outcomeSnapshot.Summarize(runErr, panicked)
+		healthy := outcome.Result == recordoutcome.ResultEmpty ||
+			outcome.Result == recordoutcome.ResultSuccess
 		// Finalize the scrape span before emitting metrics so the span is ended
 		// (and therefore visible to any span processor) prior to the scrape metrics.
 		switch {
@@ -233,6 +247,8 @@ func (s *Scheduler) runTick(ctx context.Context, e Entry, lastSuccess *time.Time
 		case runErr != nil:
 			span.RecordError(runErr)
 			span.SetStatus(codes.Error, runErr.Error())
+		case !healthy:
+			span.SetStatus(codes.Error, string(outcome.Cause))
 		}
 		span.End()
 
@@ -246,8 +262,7 @@ func (s *Scheduler) runTick(ctx context.Context, e Entry, lastSuccess *time.Time
 
 		duration := time.Since(started)
 		finishedWall := s.now()
-		failed := panicked || runErr != nil
-		if !failed {
+		if healthy {
 			*lastSuccess = finishedWall
 		}
 		staleness := finishedWall.Sub(*lastSuccess)
@@ -264,7 +279,16 @@ func (s *Scheduler) runTick(ctx context.Context, e Entry, lastSuccess *time.Time
 				staleness:  staleness,
 				err:        runErr,
 				panicked:   panicked,
+				outcome:    outcome,
 			})
+			emitOutcomeMetrics(
+				s.emitter,
+				e.Collector.Name(),
+				s.tenant,
+				TransportOf(e.Collector),
+				outcomeSnapshot,
+				outcome,
+			)
 		}
 		if s.status != nil {
 			errStr := ""
@@ -273,15 +297,24 @@ func (s *Scheduler) runTick(ctx context.Context, e Entry, lastSuccess *time.Time
 				errStr = fmt.Sprintf("panic: %v", panicVal)
 			case runErr != nil:
 				errStr = runErr.Error()
+			case !healthy:
+				errStr = string(outcome.Cause)
 			}
-			s.status.record(e.Collector.Name(), startedWall, finishedWall, duration, errStr)
+			s.status.record(e.Collector.Name(), startedWall, finishedWall, duration, errStr, outcome)
+		}
+		if !panicked && runErr == nil && !healthy {
+			message := "collector completed with degraded outcome"
+			if outcome.Cause == recordoutcome.CauseAccountingMismatch {
+				message = "collector outcome accounting failed"
+			}
+			s.logger.Warn(message, "collector", e.Collector.Name(), "cause", outcome.Cause)
 		}
 	}()
 	switch c := e.Collector.(type) {
 	case WindowCollector:
-		runErr = s.runWindow(ctx, c, e)
+		runErr = s.runWindow(ctx, c, e, runEmitter, outcomes)
 	case SnapshotCollector:
-		runErr = c.Collect(ctx, s.emitter)
+		runErr = c.Collect(ctx, runEmitter, outcomes)
 		if runErr != nil && !isShutdownCancellation(ctx, runErr) {
 			s.logger.Warn("collector failed", "collector", c.Name(), "error", runErr)
 		}
@@ -298,13 +331,19 @@ func (s *Scheduler) runTick(ctx context.Context, e Entry, lastSuccess *time.Time
 // runWindow polls a window collector's next [from, to] range and advances the
 // checkpoint on success. It returns the collector's error (nil on success or
 // when there is no new window to poll) so the caller can record scrape metrics.
-func (s *Scheduler) runWindow(ctx context.Context, c WindowCollector, e Entry) error {
+func (s *Scheduler) runWindow(
+	ctx context.Context,
+	c WindowCollector,
+	e Entry,
+	emitter telemetry.Emitter,
+	outcomes *recordoutcome.Recorder,
+) error {
 	last, hasLast := s.store.Get(s.checkpointKey(c.Name()))
 	from, to, ok := nextWindow(last, hasLast, s.now(), c.Lag(), e.InitialLookback, e.MaxWindow)
 	if !ok {
 		return nil
 	}
-	hwm, err := c.CollectWindow(ctx, from, to, s.emitter)
+	hwm, err := c.CollectWindow(ctx, from, to, emitter, outcomes)
 	if err != nil {
 		// Do not advance the checkpoint: the next tick retries the same window
 		// (at-least-once, no gaps).

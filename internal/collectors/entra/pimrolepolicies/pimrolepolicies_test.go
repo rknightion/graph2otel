@@ -97,7 +97,7 @@ func twinFor(rec *telemetrytest.Recorder, roleDefID string) *telemetrytest.LogRe
 // live policy0 (Justification-only, no approval) escalates to WARN.
 func TestWarnsWhenActivationNeedsNeitherMfaNorApproval(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	w := twinFor(rec, "92ed04bf-c94a-4b82-9729-b799a7a4c178")
@@ -117,7 +117,7 @@ func TestWarnsWhenActivationNeedsNeitherMfaNorApproval(t *testing.T) {
 // detail the bounded gauge cannot carry.
 func TestTwinCarriesJoinedRoleAndActivationDetail(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	w := twinFor(rec, "92ed04bf-c94a-4b82-9729-b799a7a4c178")
@@ -145,7 +145,7 @@ func TestTwinCarriesJoinedRoleAndActivationDetail(t *testing.T) {
 // its cross-policy counts.
 func TestRequirementGaugeCountsAreBounded(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(liveGraph(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	// key: requirement|enabled|caller -> count

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -313,7 +314,7 @@ func TestCollectEmitsStatusPriorityAndImpactedCounts(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{listURL: liveRecommendations}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -355,14 +356,18 @@ func TestCollectGracefulOn403(t *testing.T) {
 		listURL: errors.New("graphclient: GET " + listURL + ": status 403: {\"error\":{\"code\":\"Authorization_RequestDenied\"}}"),
 	}}
 	rec := telemetrytest.New()
+	outcomes := recordoutcome.NewRecorder()
 
 	// A 403 (endpoint unavailable / unlicensed) must be skipped-and-logged, not
 	// surfaced as a collector error.
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), outcomes); err != nil {
 		t.Errorf("Collect should swallow a 403 as skip-and-log, got: %v", err)
 	}
 	if len(rec.MetricNames()) != 0 {
 		t.Errorf("no metrics should be emitted on a 403, got %v", rec.MetricNames())
+	}
+	if got := outcomes.Snapshot().Summarize(nil, false); got.Result != recordoutcome.ResultFailure || got.Cause != recordoutcome.CausePermissionDenied {
+		t.Errorf("outcome = %+v, want failure/%s", got, recordoutcome.CausePermissionDenied)
 	}
 }
 
@@ -371,7 +376,7 @@ func TestCollectSurfacesNon4xxError(t *testing.T) {
 		listURL: errors.New("graphclient: GET " + listURL + ": status 500: server error"),
 	}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err == nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err == nil {
 		t.Error("a 500 should surface as a collector error, not be swallowed")
 	}
 }
@@ -385,7 +390,7 @@ func TestCollectReportsUnmappedEnums(t *testing.T) {
 		listURL: `{"value":[{"status":"levitating","priority":"catastrophic","recommendationType":"summonKraken"}]}`,
 	}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	fields := map[string]bool{}

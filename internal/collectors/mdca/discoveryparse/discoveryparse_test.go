@@ -67,6 +67,9 @@ func record(id string, tsMillis, updMillis int64, status map[string]any) map[str
 
 func govBody(t *testing.T, recs ...map[string]any) string {
 	t.Helper()
+	if recs == nil {
+		recs = []map[string]any{}
+	}
 	b, err := json.Marshal(map[string]any{"total": len(recs), "data": recs})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -101,7 +104,7 @@ func newRec() *telemetrytest.Recorder { return telemetrytest.New() }
 func runCollect(t *testing.T, c *Collector) []telemetrytest.LogRecord {
 	t.Helper()
 	rec := newRec()
-	if _, err := c.CollectWindow(context.Background(), fixedNow.Add(-4*time.Hour), fixedNow, rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), fixedNow.Add(-4*time.Hour), fixedNow, rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 	return rec.LogRecords()
@@ -253,7 +256,7 @@ func TestLastSuccessAgeGaugeClimbsWhenSilent(t *testing.T) {
 	_ = srv
 
 	rec := newRec()
-	if _, err := c.CollectWindow(context.Background(), fixedNow.Add(-4*time.Hour), fixedNow, rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), fixedNow.Add(-4*time.Hour), fixedNow, rec.Emitter(), nil); err != nil {
 		t.Fatalf("tick1: %v", err)
 	}
 	age1 := gaugeValue(t, rec, metricLastSuccessAge, "stream-1")
@@ -262,7 +265,7 @@ func TestLastSuccessAgeGaugeClimbsWhenSilent(t *testing.T) {
 	}
 
 	rec2 := newRec()
-	if _, err := c.CollectWindow(context.Background(), fixedNow.Add(-1*time.Hour), fixedNow, rec2.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), fixedNow.Add(-1*time.Hour), fixedNow, rec2.Emitter(), nil); err != nil {
 		t.Fatalf("tick2: %v", err)
 	}
 	age2 := gaugeValue(t, rec2, metricLastSuccessAge, "stream-1")

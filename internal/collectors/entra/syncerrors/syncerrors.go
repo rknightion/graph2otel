@@ -42,6 +42,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -127,9 +129,10 @@ func (c *Collector) RequiredPermissions() []string {
 // Collect probes the tenant's on-prem sync state and, only if hybrid sync is
 // enabled, pages /users for provisioning errors — emitting the bounded gauge and
 // one log twin per errored object. A cloud-only tenant no-ops without paging.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
-	enabled, err := c.syncEnabled(ctx)
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	enabled, err := c.syncEnabled(ctx, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return err
 	}
 	if !enabled {
@@ -137,7 +140,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		return nil
 	}
 
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+usersSelectPath, nil)
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+usersSelectPath, nil, outcomes)
 	if err != nil {
 		return fmt.Errorf("syncerrors: page users: %w", err)
 	}
@@ -148,17 +151,20 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	// or proxy-address conflict); the rare multi-error object surfaces its first
 	// error and is counted once — matching "N users are not syncing".
 	counts := map[[3]string]int64{}
-	for _, raw := range raws {
+	for i, raw := range raws {
 		var u userRecord
 		if err := json.Unmarshal(raw, &u); err != nil {
+			entraoutcome.Errored(outcomes, uint64(len(raws))-uint64(i), recordoutcome.CauseDecodeError)
 			return fmt.Errorf("syncerrors: decode user: %w", err)
 		}
 		if len(u.OnPremisesProvisioningErrors) == 0 {
+			entraoutcome.Emitted(outcomes, 1)
 			continue
 		}
 		pe := u.OnPremisesProvisioningErrors[0]
 		counts[[3]string{"user", pe.Category, pe.PropertyCausingError}]++
 		e.LogEvent(logTwin(u, pe))
+		entraoutcome.Emitted(outcomes, 1)
 	}
 
 	points := make([]telemetry.GaugePoint, 0, len(counts)+1)
@@ -195,9 +201,10 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // syncEnabled reports whether the tenant is currently synced from on-premises AD.
 // The probe is one small request (a single-element collection) and is the free
 // guard that skips the whole user page-walk for cloud-only tenants.
-func (c *Collector) syncEnabled(ctx context.Context) (bool, error) {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+orgSelectPath, nil)
+func (c *Collector) syncEnabled(ctx context.Context, outcomes *recordoutcome.Recorder) (bool, error) {
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+orgSelectPath, nil, outcomes)
 	if err != nil {
+		entraoutcome.SourceError(outcomes)
 		return false, fmt.Errorf("syncerrors: probe organization sync state: %w", err)
 	}
 	if len(raws) == 0 {
@@ -206,7 +213,12 @@ func (c *Collector) syncEnabled(ctx context.Context) (bool, error) {
 	}
 	var org orgSync
 	if err := json.Unmarshal(raws[0], &org); err != nil {
+		entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 		return false, fmt.Errorf("syncerrors: decode organization: %w", err)
+	}
+	entraoutcome.Filtered(outcomes, 1)
+	if len(raws) > 1 {
+		entraoutcome.Filtered(outcomes, uint64(len(raws))-1)
 	}
 	return org.OnPremisesSyncEnabled != nil && *org.OnPremisesSyncEnabled, nil
 }

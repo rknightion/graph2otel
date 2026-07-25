@@ -352,7 +352,7 @@ func TestCollectEmitsBoundedStaleAndSummaryAggregates(t *testing.T) {
 	c := New(g, p2caps(), nil)
 	c.now = func() time.Time { return now }
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -394,7 +394,7 @@ func TestCollectNoPerEntitySeries(t *testing.T) {
 	rec := telemetrytest.New()
 	c := New(g, p2caps(), nil)
 	c.now = func() time.Time { return now }
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	allowed := map[string]bool{"threshold_days": true, "result": true}
@@ -438,7 +438,7 @@ func TestCollectResilientToPerEndpointError(t *testing.T) {
 	c.now = func() time.Time { return now }
 	// The credential half fails, but SP stale + summary must still emit and the
 	// error is surfaced.
-	if err := c.Collect(context.Background(), rec.Emitter()); err == nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err == nil {
 		t.Error("expected the per-endpoint failure to surface as an error")
 	}
 	if len(rec.MetricPoints(spStaleMetric)) == 0 {
@@ -475,7 +475,7 @@ func TestCollectEmitsLogTwinPerEntity(t *testing.T) {
 	c := New(g, p2caps(), nil)
 	c.now = func() time.Time { return now }
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -647,7 +647,7 @@ func TestSignInActivityLogTwinTimestampIsZero(t *testing.T) {
 	c := New(g, p2caps(), nil)
 	c.now = func() time.Time { return now }
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

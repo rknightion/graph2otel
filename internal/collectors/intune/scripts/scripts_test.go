@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -95,7 +96,7 @@ func pointsByKey(pts []telemetrytest.MetricPoint, keys ...string) map[string]flo
 
 func TestCollectEmitsScriptRunSummaryAcrossOSAndTarget(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(fullFixture(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(fullFixture(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -116,7 +117,7 @@ func TestCollectEmitsScriptRunSummaryAcrossOSAndTarget(t *testing.T) {
 
 func TestCollectKeepsDetectionAndRemediationPhasesSeparate(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(fullFixture(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(fullFixture(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -157,7 +158,7 @@ func TestCollectKeepsDetectionAndRemediationPhasesSeparate(t *testing.T) {
 
 func TestCollectEmitsCumulativeRemediatedAsSeparateMetric(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(fullFixture(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(fullFixture(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	pts := rec.MetricPoints(remediationCumulativeMetric)
@@ -171,7 +172,7 @@ func TestCollectEmitsCumulativeRemediatedAsSeparateMetric(t *testing.T) {
 
 func TestCollectEmitsRemediationOverviewCrossCheck(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := New(fullFixture(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(fullFixture(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	scriptCount := rec.MetricPoints(remediationOverviewScriptCountName)
@@ -190,7 +191,7 @@ func TestCollectNeverFetchesScriptContentOrDeviceRunStates(t *testing.T) {
 	// deviceRunStates collection would miss the fixture and surface as an
 	// error, so a clean Collect proves those are never fetched.
 	rec := telemetrytest.New()
-	if err := New(fullFixture(), nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(fullFixture(), nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v (a request outside id/displayName + runSummary would 404 against the fixture)", err)
 	}
 }
@@ -203,7 +204,7 @@ func TestCollectGracefulOn403PerSurface(t *testing.T) {
 		windowsListURL: errors.New("graphclient: GET " + windowsListURL + ": status 403: {\"error\":{\"code\":\"Authorization_RequestDenied\"}}"),
 	}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Errorf("a 403 on one surface should be skipped-and-logged, not fail Collect: %v", err)
 	}
 	pts := pointsByKey(rec.MetricPoints(scriptRunSummaryMetric), "script_name", "os")
@@ -218,13 +219,43 @@ func TestCollectGracefulOn403PerSurface(t *testing.T) {
 	}
 }
 
+func TestCollectRecordsPermissionDeniedForUnavailableRunSummary(t *testing.T) {
+	g := fullFixture()
+	g.errs = map[string]error{
+		winRunSummaryURL: errors.New("graphclient: GET " + winRunSummaryURL + ": status 403: forbidden"),
+	}
+	outcomes := recordoutcome.NewRecorder()
+
+	if err := New(g, nil).Collect(context.Background(), telemetrytest.New().Emitter(), outcomes); err != nil {
+		t.Fatalf("Collect should skip unavailable runSummary, got: %v", err)
+	}
+	if got := outcomes.Snapshot().Summarize(nil, false).Cause; got != recordoutcome.CausePermissionDenied {
+		t.Errorf("outcome cause = %q, want %q", got, recordoutcome.CausePermissionDenied)
+	}
+}
+
+func TestCollectRecordsSourceErrorForUnavailableRemediationSummary(t *testing.T) {
+	g := fullFixture()
+	g.errs = map[string]error{
+		remediationSumURL: errors.New("graphclient: GET " + remediationSumURL + ": status 404: not found"),
+	}
+	outcomes := recordoutcome.NewRecorder()
+
+	if err := New(g, nil).Collect(context.Background(), telemetrytest.New().Emitter(), outcomes); err != nil {
+		t.Fatalf("Collect should skip unavailable remediation summary, got: %v", err)
+	}
+	if got := outcomes.Snapshot().Summarize(nil, false).Cause; got != recordoutcome.CauseSourceError {
+		t.Errorf("outcome cause = %q, want %q", got, recordoutcome.CauseSourceError)
+	}
+}
+
 func TestCollectSurfacesNon4xxError(t *testing.T) {
 	g := fullFixture()
 	g.errs = map[string]error{
 		windowsListURL: errors.New("graphclient: GET " + windowsListURL + ": status 500: server error"),
 	}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err == nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err == nil {
 		t.Error("a 500 should surface as a collector error, not be swallowed")
 	}
 }
@@ -309,7 +340,7 @@ func TestCollectAgainstLiveCapturesDecodesTopLevelCounts(t *testing.T) {
 	}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect against live captures: %v", err)
 	}
 

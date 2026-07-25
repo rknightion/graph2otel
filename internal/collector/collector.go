@@ -7,6 +7,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -24,7 +25,7 @@ type Collector interface {
 // objects, device compliance, license SKUs, and other inventory-shaped data).
 type SnapshotCollector interface {
 	Collector
-	Collect(ctx context.Context, e telemetry.Emitter) error
+	Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error
 }
 
 // WindowCollector fetches a time window [from, to] on each tick (sign-in
@@ -33,7 +34,12 @@ type SnapshotCollector interface {
 // consumed so the scheduler can persist it as the next window's start.
 type WindowCollector interface {
 	Collector
-	CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter) (highWaterMark time.Time, err error)
+	CollectWindow(
+		ctx context.Context,
+		from, to time.Time,
+		e telemetry.Emitter,
+		outcomes *recordoutcome.Recorder,
+	) (highWaterMark time.Time, err error)
 	// Lag is the trailing safety margin; the scheduler sets to = now - Lag()
 	// so it never queries up to "now" (where late records may still arrive).
 	Lag() time.Duration

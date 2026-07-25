@@ -38,6 +38,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -132,29 +134,33 @@ type federatedCred struct {
 
 // Collect fetches ownership (v1.0) and federated credentials (beta), emitting the
 // bounded gauges and per-entity twins. The three fetches are independent.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	var errs []error
-	if err := c.collectAppOwnership(ctx, e); err != nil {
+	if err := c.collectAppOwnership(ctx, e, outcomes); err != nil {
+		entraoutcome.SourceError(outcomes)
 		errs = append(errs, fmt.Errorf("application ownership: %w", err))
 	}
-	if err := c.collectSPOwnership(ctx, e); err != nil {
+	if err := c.collectSPOwnership(ctx, e, outcomes); err != nil {
+		entraoutcome.SourceError(outcomes)
 		errs = append(errs, fmt.Errorf("service principal ownership: %w", err))
 	}
-	if err := c.collectFICs(ctx, e); err != nil {
+	if err := c.collectFICs(ctx, e, outcomes); err != nil {
+		entraoutcome.SourceError(outcomes)
 		errs = append(errs, fmt.Errorf("federated identity credentials: %w", err))
 	}
 	return errors.Join(errs...)
 }
 
-func (c *Collector) collectAppOwnership(ctx context.Context, e telemetry.Emitter) error {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+appsOwnersPath, nil)
+func (c *Collector) collectAppOwnership(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+appsOwnersPath, nil, outcomes)
 	if err != nil {
 		return err
 	}
 	counts := map[[2]string]int64{}
-	for _, raw := range raws {
+	for i, raw := range raws {
 		var a application
 		if err := json.Unmarshal(raw, &a); err != nil {
+			entraoutcome.Errored(outcomes, uint64(len(raws))-uint64(i), recordoutcome.CauseDecodeError)
 			return fmt.Errorf("decode application: %w", err)
 		}
 		hasOwner := len(a.Owners) > 0
@@ -178,38 +184,46 @@ func (c *Collector) collectAppOwnership(ctx context.Context, e telemetry.Emitter
 			Severity: sev,
 			Attrs:    attrs,
 		})
+		entraoutcome.Emitted(outcomes, 1)
 	}
 	e.GaugeSnapshot(metricAppOwnership, "{application}", "Applications by whether they have an owner and by sign-in audience.", ownershipPoints(counts, semconv.AttrSignInAudience))
 	return nil
 }
 
-func (c *Collector) collectSPOwnership(ctx context.Context, e telemetry.Emitter) error {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+spsOwnersPath, nil)
+func (c *Collector) collectSPOwnership(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+spsOwnersPath, nil, outcomes)
 	if err != nil {
 		return err
 	}
 	counts := map[[2]string]int64{}
-	for _, raw := range raws {
+	for i, raw := range raws {
 		var s servicePrincipal
 		if err := json.Unmarshal(raw, &s); err != nil {
+			entraoutcome.Errored(outcomes, uint64(len(raws))-uint64(i), recordoutcome.CauseDecodeError)
 			return fmt.Errorf("decode service principal: %w", err)
 		}
 		counts[[2]string{boolStr(len(s.Owners) > 0), s.ServicePrincipalType}]++
+		entraoutcome.Emitted(outcomes, 1)
 	}
 	e.GaugeSnapshot(metricSPOwnership, "{service_principal}", "Service principals by whether they have an owner and by type.", ownershipPoints(counts, semconv.AttrServicePrincipalType))
 	return nil
 }
 
-func (c *Collector) collectFICs(ctx context.Context, e telemetry.Emitter) error {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.betaURL+appsFICPath, nil)
+func (c *Collector) collectFICs(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.betaURL+appsFICPath, nil, outcomes)
 	if err != nil {
 		return err
 	}
 	byHost := map[string]int64{}
-	for _, raw := range raws {
+	for i, raw := range raws {
 		var a application
 		if err := json.Unmarshal(raw, &a); err != nil {
+			entraoutcome.Errored(outcomes, uint64(len(raws))-uint64(i), recordoutcome.CauseDecodeError)
 			return fmt.Errorf("decode application FICs: %w", err)
+		}
+		if len(a.FICs) == 0 {
+			entraoutcome.Filtered(outcomes, 1)
+			continue
 		}
 		for _, fic := range a.FICs {
 			byHost[issuerHost(fic.Issuer)]++
@@ -230,6 +244,7 @@ func (c *Collector) collectFICs(ctx context.Context, e telemetry.Emitter) error 
 				Attrs:    attrs,
 			})
 		}
+		entraoutcome.Emitted(outcomes, 1)
 	}
 	points := make([]telemetry.GaugePoint, 0, len(byHost))
 	for host, n := range byHost {

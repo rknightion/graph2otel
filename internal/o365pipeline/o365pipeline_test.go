@@ -58,7 +58,7 @@ func TestCollectEmitsEveryMappedRecord(t *testing.T) {
 	rc := telemetrytest.New()
 	c := New(api.client(t), newStore(t), testConfig(o365activityclient.ContentExchange))
 
-	if err := c.Collect(context.Background(), base, base.Add(3*time.Hour), rc.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), base, base.Add(3*time.Hour), rc.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -95,7 +95,7 @@ func TestCollectDedupesByContentID(t *testing.T) {
 	for i := range 2 {
 		rc := telemetrytest.New()
 		c := New(client, store, cfg)
-		if err := c.Collect(context.Background(), base, base.Add(3*time.Hour), rc.Emitter()); err != nil {
+		if err := c.Collect(context.Background(), base, base.Add(3*time.Hour), rc.Emitter(), nil); err != nil {
 			t.Fatalf("Collect %d: %v", i, err)
 		}
 		if i == 1 {
@@ -137,7 +137,7 @@ func TestCollectDedupesByRecordID(t *testing.T) {
 
 	rc := telemetrytest.New()
 	c := New(api.client(t), newStore(t), testConfig(o365activityclient.ContentExchange))
-	if err := c.Collect(context.Background(), base, base.Add(3*time.Hour), rc.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), base, base.Add(3*time.Hour), rc.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -180,7 +180,7 @@ func TestCollectAdvancesWatermarkToMaxProcessedNotTo(t *testing.T) {
 	store := newStore(t)
 	rc := telemetrytest.New()
 	c := New(api.client(t), store, testConfig(o365activityclient.ContentExchange))
-	if err := c.Collect(context.Background(), base, to, rc.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), base, to, rc.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -223,7 +223,7 @@ func TestCollectBoundsSeenSetsByOverlapWindow(t *testing.T) {
 	store := newStore(t)
 	rc := telemetrytest.New()
 	c := New(api.client(t), store, testConfig(o365activityclient.ContentExchange))
-	if err := c.Collect(context.Background(), base, base.Add(6*time.Hour), rc.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), base, base.Add(6*time.Hour), rc.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -276,7 +276,7 @@ func TestRecordIDsEvictedOnBlobTimeNotEventTime(t *testing.T) {
 	cfg := testConfig(o365activityclient.ContentExchange)
 
 	rc1 := telemetrytest.New()
-	if err := New(client, store, cfg).Collect(context.Background(), base, base.Add(2*time.Hour), rc1.Emitter()); err != nil {
+	if err := New(client, store, cfg).Collect(context.Background(), base, base.Add(2*time.Hour), rc1.Emitter(), nil); err != nil {
 		t.Fatalf("Collect 1: %v", err)
 	}
 	if got := bodies(rc1.LogRecords()); !reflect.DeepEqual(got, []string{"ancient"}) {
@@ -304,7 +304,7 @@ func TestRecordIDsEvictedOnBlobTimeNotEventTime(t *testing.T) {
 	api.mu.Unlock()
 
 	rc2 := telemetrytest.New()
-	if err := New(client, store, cfg).Collect(context.Background(), base, base.Add(2*time.Hour), rc2.Emitter()); err != nil {
+	if err := New(client, store, cfg).Collect(context.Background(), base, base.Add(2*time.Hour), rc2.Emitter(), nil); err != nil {
 		t.Fatalf("Collect 2: %v", err)
 	}
 	if got := bodies(rc2.LogRecords()); len(got) != 0 {
@@ -328,7 +328,7 @@ func TestCollectStartsSubscriptionsLazilyOncePerContentType(t *testing.T) {
 	c := New(client, newStore(t), cfg)
 
 	rc := telemetrytest.New()
-	if err := c.Collect(context.Background(), base, base.Add(2*time.Hour), rc.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), base, base.Add(2*time.Hour), rc.Emitter(), nil); err != nil {
 		t.Fatalf("Collect 1: %v", err)
 	}
 	want := []string{"Audit.Exchange", "Audit.SharePoint"}
@@ -336,7 +336,7 @@ func TestCollectStartsSubscriptionsLazilyOncePerContentType(t *testing.T) {
 		t.Fatalf("starts after first Collect = %v, want %v", got, want)
 	}
 
-	if err := c.Collect(context.Background(), base, base.Add(2*time.Hour), rc.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), base, base.Add(2*time.Hour), rc.Emitter(), nil); err != nil {
 		t.Fatalf("Collect 2: %v", err)
 	}
 	if got := api.recordedStarts(); !reflect.DeepEqual(got, want) {
@@ -362,7 +362,7 @@ func TestCollectRestartsSubscriptionAfterNoSubscription(t *testing.T) {
 
 	// First tick subscribes and drains normally.
 	rc := telemetrytest.New()
-	if err := c.Collect(context.Background(), base, base.Add(2*time.Hour), rc.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), base, base.Add(2*time.Hour), rc.Emitter(), nil); err != nil {
 		t.Fatalf("Collect 1: %v", err)
 	}
 
@@ -370,7 +370,7 @@ func TestCollectRestartsSubscriptionAfterNoSubscription(t *testing.T) {
 	api.blockSubscription(o365activityclient.ContentExchange)
 
 	rc2 := telemetrytest.New()
-	if err := c.Collect(context.Background(), base, base.Add(2*time.Hour), rc2.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), base, base.Add(2*time.Hour), rc2.Emitter(), nil); err != nil {
 		t.Fatalf("Collect 2 should recover from AF20022, got: %v", err)
 	}
 	if got := api.recordedStarts(); len(got) != 2 {
@@ -400,7 +400,7 @@ func TestCollectSkipsExpiredBlob(t *testing.T) {
 
 	rc := telemetrytest.New()
 	c := New(api.client(t), newStore(t), testConfig(o365activityclient.ContentExchange))
-	if err := c.Collect(context.Background(), base, base.Add(3*time.Hour), rc.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), base, base.Add(3*time.Hour), rc.Emitter(), nil); err != nil {
 		t.Fatalf("an expired blob must not fail the tick, got: %v", err)
 	}
 	if got := bodies(rc.LogRecords()); !reflect.DeepEqual(got, []string{"r1"}) {
@@ -431,7 +431,7 @@ func TestCollectSurfacesThrottling(t *testing.T) {
 
 	rc := telemetrytest.New()
 	c := New(api.client(t), newStore(t), testConfig(o365activityclient.ContentExchange))
-	err := c.Collect(context.Background(), base, base.Add(2*time.Hour), rc.Emitter())
+	err := c.Collect(context.Background(), base, base.Add(2*time.Hour), rc.Emitter(), nil)
 	if err == nil {
 		t.Fatal("Collect swallowed a throttle; it must surface")
 	}
@@ -456,7 +456,7 @@ func TestCollectSurfacesAMalformedRequestError(t *testing.T) {
 
 	rc := telemetrytest.New()
 	c := New(api.client(t), newStore(t), testConfig(o365activityclient.ContentExchange))
-	err := c.Collect(context.Background(), base, base.Add(2*time.Hour), rc.Emitter())
+	err := c.Collect(context.Background(), base, base.Add(2*time.Hour), rc.Emitter(), nil)
 	if err == nil {
 		t.Fatal("Collect swallowed AF20052; a malformed-request 400 must surface")
 	}
@@ -500,7 +500,7 @@ func TestCollectDoesNotAdvanceWatermarkPastAnotherTypesFailedBlob(t *testing.T) 
 	store := newStore(t)
 	rc := telemetrytest.New()
 	c := New(api.client(t), store, testConfig(o365activityclient.ContentExchange, o365activityclient.ContentSharePoint))
-	if err := c.Collect(context.Background(), base, base.Add(3*time.Hour), rc.Emitter()); err == nil {
+	if err := c.Collect(context.Background(), base, base.Add(3*time.Hour), rc.Emitter(), nil); err == nil {
 		t.Fatal("Collect must surface the fetch failure")
 	}
 	// The healthy content type still ships: one type's failure must not gate another's.
@@ -553,7 +553,7 @@ func TestCollectRetainsCycleWatermarkOnAnotherTypesListFailure(t *testing.T) {
 
 	rc := telemetrytest.New()
 	c := New(api.client(t), store, testConfig(o365activityclient.ContentExchange, o365activityclient.ContentSharePoint))
-	if err := c.Collect(context.Background(), boundary, base.Add(6*time.Hour), rc.Emitter()); err == nil {
+	if err := c.Collect(context.Background(), boundary, base.Add(6*time.Hour), rc.Emitter(), nil); err == nil {
 		t.Fatal("Collect must surface the pre-list failure")
 	}
 	if got := bodies(rc.LogRecords()); !reflect.DeepEqual(got, []string{"r-sp"}) {
@@ -578,7 +578,7 @@ func TestCollectRetainsCycleWatermarkOnAnotherTypesListFailure(t *testing.T) {
 	// If the first tick had advanced to blob-sp, this later recovery could no
 	// longer list blob-ex; retaining the cycle boundary keeps it reachable.
 	rc = telemetrytest.New()
-	if err := c.Collect(context.Background(), boundary, base.Add(6*time.Hour), rc.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), boundary, base.Add(6*time.Hour), rc.Emitter(), nil); err != nil {
 		t.Fatalf("recovery Collect: %v", err)
 	}
 	if got := bodies(rc.LogRecords()); !reflect.DeepEqual(got, []string{"r-ex"}) {
@@ -613,7 +613,7 @@ func TestCollectRetainsCycleWatermarkOnAnotherTypesSubscriptionStartFailure(t *t
 
 	rc := telemetrytest.New()
 	c := New(api.client(t), store, testConfig(o365activityclient.ContentExchange, o365activityclient.ContentSharePoint))
-	if err := c.Collect(context.Background(), boundary, base.Add(3*time.Hour), rc.Emitter()); err == nil {
+	if err := c.Collect(context.Background(), boundary, base.Add(3*time.Hour), rc.Emitter(), nil); err == nil {
 		t.Fatal("Collect must surface the subscription-start failure")
 	}
 	if got := bodies(rc.LogRecords()); !reflect.DeepEqual(got, []string{"r-sp"}) {
@@ -647,12 +647,12 @@ func TestCollectRestartsDisabledSubscriptionOnce(t *testing.T) {
 		records:     []map[string]any{rec("r1", base.Add(50*time.Minute))},
 	})
 	c := New(api.client(t), newStore(t), testConfig(o365activityclient.ContentExchange))
-	if err := c.Collect(context.Background(), base, base.Add(2*time.Hour), telemetrytest.New().Emitter()); err != nil {
+	if err := c.Collect(context.Background(), base, base.Add(2*time.Hour), telemetrytest.New().Emitter(), nil); err != nil {
 		t.Fatalf("initial Collect: %v", err)
 	}
 
 	api.disableSubscription(o365activityclient.ContentExchange)
-	if err := c.Collect(context.Background(), base, base.Add(2*time.Hour), telemetrytest.New().Emitter()); err != nil {
+	if err := c.Collect(context.Background(), base, base.Add(2*time.Hour), telemetrytest.New().Emitter(), nil); err != nil {
 		t.Fatalf("Collect should recover from AF20023, got: %v", err)
 	}
 	if got := api.recordedStarts(); len(got) != 2 {
@@ -670,12 +670,12 @@ func TestCollectSurfacesRepeatedDisabledSubscriptionWithoutLoop(t *testing.T) {
 	base := testBase()
 	api := newFakeAPI(t)
 	c := New(api.client(t), newStore(t), testConfig(o365activityclient.ContentExchange))
-	if err := c.Collect(context.Background(), base, base.Add(2*time.Hour), telemetrytest.New().Emitter()); err != nil {
+	if err := c.Collect(context.Background(), base, base.Add(2*time.Hour), telemetrytest.New().Emitter(), nil); err != nil {
 		t.Fatalf("initial Collect: %v", err)
 	}
 
 	api.persistentlyDisableSubscription(o365activityclient.ContentExchange)
-	err := c.Collect(context.Background(), base, base.Add(2*time.Hour), telemetrytest.New().Emitter())
+	err := c.Collect(context.Background(), base, base.Add(2*time.Hour), telemetrytest.New().Emitter(), nil)
 	if err == nil {
 		t.Fatal("Collect must surface a repeated AF20023 after one retry")
 	}
@@ -714,7 +714,7 @@ func TestCollectEmitsEveryRecordTheMapperAccepts(t *testing.T) {
 
 	rc := telemetrytest.New()
 	if err := New(api.client(t), newStore(t), cfg).Collect(
-		context.Background(), base, base.Add(2*time.Hour), rc.Emitter()); err != nil {
+		context.Background(), base, base.Add(2*time.Hour), rc.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if got := bodies(rc.LogRecords()); !reflect.DeepEqual(got, []string{"keep-1", "keep-2"}) {
@@ -759,7 +759,7 @@ func TestRecordsWithEmptyIDAreEmittedAndDoNotPoisonTheSeenSet(t *testing.T) {
 	store := newStore(t)
 	rc := telemetrytest.New()
 	if err := New(api.client(t), store, cfg).Collect(
-		context.Background(), base, base.Add(2*time.Hour), rc.Emitter()); err != nil {
+		context.Background(), base, base.Add(2*time.Hour), rc.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -805,7 +805,7 @@ func TestCollectAppliesEventNameDefault(t *testing.T) {
 
 	rc := telemetrytest.New()
 	if err := New(api.client(t), newStore(t), cfg).Collect(
-		context.Background(), base, base.Add(2*time.Hour), rc.Emitter()); err != nil {
+		context.Background(), base, base.Add(2*time.Hour), rc.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -836,7 +836,7 @@ func TestCollectResumesFromWatermarkMinusOverlap(t *testing.T) {
 	client := api.client(t)
 	cfg := testConfig(o365activityclient.ContentExchange)
 	rc := telemetrytest.New()
-	if err := New(client, store, cfg).Collect(context.Background(), base, base.Add(5*time.Hour), rc.Emitter()); err != nil {
+	if err := New(client, store, cfg).Collect(context.Background(), base, base.Add(5*time.Hour), rc.Emitter(), nil); err != nil {
 		t.Fatalf("Collect 1: %v", err)
 	}
 	cp, err := store.Load(testTenantID, "o365/activity")
@@ -851,7 +851,7 @@ func TestCollectResumesFromWatermarkMinusOverlap(t *testing.T) {
 	// Second tick: the caller passes a `from` at the watermark itself. The engine
 	// must still reach back a full overlap window behind it.
 	rc2 := telemetrytest.New()
-	if err := New(client, store, cfg).Collect(context.Background(), cp.Watermark, base.Add(5*time.Hour), rc2.Emitter()); err != nil {
+	if err := New(client, store, cfg).Collect(context.Background(), cp.Watermark, base.Add(5*time.Hour), rc2.Emitter(), nil); err != nil {
 		t.Fatalf("Collect 2: %v", err)
 	}
 
@@ -876,7 +876,7 @@ func TestColdStartUsesCallerFromVerbatim(t *testing.T) {
 
 	rc := telemetrytest.New()
 	if err := New(api.client(t), newStore(t), testConfig(o365activityclient.ContentExchange)).Collect(
-		context.Background(), from, base.Add(5*time.Hour), rc.Emitter()); err != nil {
+		context.Background(), from, base.Add(5*time.Hour), rc.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -933,7 +933,7 @@ func TestCheckpointSchemaTolerance(t *testing.T) {
 	})
 	rc := telemetrytest.New()
 	c := New(api.client(t), store, testConfig(o365activityclient.ContentExchange))
-	if err := c.Collect(context.Background(), base, base.Add(3*time.Hour), rc.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), base, base.Add(3*time.Hour), rc.Emitter(), nil); err != nil {
 		t.Fatalf("Collect over a foreign-schema checkpoint: %v", err)
 	}
 	if got := bodies(rc.LogRecords()); !reflect.DeepEqual(got, []string{"r1"}) {
@@ -988,7 +988,7 @@ func TestCollectToleratesAnAlreadyEnabledSubscription(t *testing.T) {
 		o365activityclient.ContentExchange, o365activityclient.ContentSharePoint))
 
 	rc := telemetrytest.New()
-	if err := c.Collect(context.Background(), base, base.Add(2*time.Hour), rc.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), base, base.Add(2*time.Hour), rc.Emitter(), nil); err != nil {
 		t.Fatalf("Collect failed against already-enabled subscriptions: %v\n"+
 			"AF20024 means the desired state ALREADY HOLDS — it is success, not failure", err)
 	}
@@ -1014,7 +1014,7 @@ func TestCollectStampsO365ActivityTransport(t *testing.T) {
 	rc := telemetrytest.New()
 	c := New(api.client(t), newStore(t), testConfig(o365activityclient.ContentExchange))
 
-	if err := c.Collect(context.Background(), base, base.Add(3*time.Hour), rc.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), base, base.Add(3*time.Hour), rc.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

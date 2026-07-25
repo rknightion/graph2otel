@@ -36,6 +36,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -66,9 +68,10 @@ type detectedApp struct {
 
 // Collector polls the Intune detectedApps catalog.
 type Collector struct {
-	g       collectors.GraphClient
-	baseURL string
-	logger  *slog.Logger
+	outcomes *outcome.Recorder
+	g        collectors.GraphClient
+	baseURL  string
+	logger   *slog.Logger
 }
 
 // New builds the detected-apps collector. A nil logger falls back to the
@@ -104,10 +107,15 @@ func (c *Collector) RequiredPermissions() []string {
 // anyone queries. A 403 (Intune unlicensed/unavailable on the tenant) is
 // skipped-and-logged rather than treated as a failure; any other error is
 // surfaced.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/detectedApps", nil)
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
+	local := *c
+	local.outcomes = outcomes
+	c = &local
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceManagement/detectedApps", nil, c.outcomes)
 	if err != nil {
 		if isForbidden(err) {
+			outcome.RecordError(c.outcomes, err)
 			c.logger.Info("detectedApps endpoint unavailable on this tenant; skipping",
 				"collector", collectorName, "error", err)
 			return nil
@@ -137,8 +145,10 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		var app detectedApp
 		if err := json.Unmarshal(r, &app); err != nil {
 			c.logger.Warn("detected_apps: skipping unparseable catalog entry", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		name := strings.TrimSpace(app.DisplayName)
 		if name == "" {
 			// An unnamed catalog row cannot be attributed to anything; it still

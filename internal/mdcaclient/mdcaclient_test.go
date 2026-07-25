@@ -182,6 +182,69 @@ func TestGovernanceErrorsWhenPaginationCapLeavesRecordsUndiscovered(t *testing.T
 	if page != nil {
 		t.Errorf("Governance page = %+v, want nil so partial rows cannot be consumed", page)
 	}
+	if got := BufferedRecords(err); got != maxPages*defaultPageLimit {
+		t.Errorf("BufferedRecords(error) = %d, want %d", got, maxPages*defaultPageLimit)
+	}
+}
+
+func TestGovernanceReportsBufferedRecordsOnLaterPageFailure(t *testing.T) {
+	var requests int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests++
+		if requests == 1 {
+			records := make([]map[string]any, defaultPageLimit)
+			for i := range records {
+				records[i] = map[string]any{"_id": fmt.Sprintf("id-%d", i)}
+			}
+			resp, _ := json.Marshal(governanceResponse{Total: defaultPageLimit + 1, Data: records})
+			_, _ = w.Write(resp)
+			return
+		}
+		_, _ = io.WriteString(w, `{"total":`)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	page, err := c.Governance(context.Background(), GovernanceQuery{})
+	if err == nil {
+		t.Fatal("Governance returned nil error, want later-page decode error")
+	}
+	if page != nil {
+		t.Errorf("Governance page = %+v, want nil so partial rows cannot be consumed", page)
+	}
+	if got := BufferedRecords(err); got != defaultPageLimit {
+		t.Errorf("BufferedRecords(error) = %d, want %d", got, defaultPageLimit)
+	}
+	if requests != 2 {
+		t.Errorf("requests = %d, want 2", requests)
+	}
+}
+
+func TestGovernanceRejectsMissingEnvelopeFieldsOnLaterPage(t *testing.T) {
+	var requests int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests++
+		if requests == 1 {
+			records := make([]map[string]any, defaultPageLimit)
+			resp, _ := json.Marshal(governanceResponse{Total: defaultPageLimit + 1, Data: records})
+			_, _ = w.Write(resp)
+			return
+		}
+		_, _ = io.WriteString(w, `{}`)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	page, err := c.Governance(context.Background(), GovernanceQuery{})
+	if err == nil {
+		t.Fatal("Governance returned nil error, want structurally invalid later-page failure")
+	}
+	if page != nil {
+		t.Errorf("Governance page = %+v, want nil so partial rows cannot be consumed", page)
+	}
+	if got := BufferedRecords(err); got != defaultPageLimit {
+		t.Errorf("BufferedRecords(error) = %d, want %d", got, defaultPageLimit)
+	}
 }
 
 func TestGovernanceErrorsWhenFinalPermittedPageIsShortAndIncomplete(t *testing.T) {
@@ -218,6 +281,9 @@ func TestGovernanceErrorsWhenFinalPermittedPageIsShortAndIncomplete(t *testing.T
 	}
 	if page != nil {
 		t.Errorf("Governance page = %+v, want nil so partial rows cannot be consumed", page)
+	}
+	if got := BufferedRecords(err); got != maxPages*defaultPageLimit-1 {
+		t.Errorf("BufferedRecords(error) = %d, want %d", got, maxPages*defaultPageLimit-1)
 	}
 	if requests != maxPages {
 		t.Errorf("requests = %d, want %d", requests, maxPages)

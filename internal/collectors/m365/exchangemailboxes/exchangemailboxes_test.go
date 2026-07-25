@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
@@ -191,7 +192,7 @@ func collectWith(t *testing.T, exo *fakeEXO) *telemetrytest.Recorder {
 	t.Helper()
 	rec := telemetrytest.New()
 	c := New(collectors.EXODeps{Client: exo})
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	return rec
@@ -219,6 +220,19 @@ func TestCollect_AsksForEveryMailbox(t *testing.T) {
 	collectWith(t, exo)
 	if got := exo.params[paramResultSize]; got != resultSizeUnlimited {
 		t.Errorf("%s = %v, want %q", paramResultSize, got, resultSizeUnlimited)
+	}
+}
+
+func TestCollect_AccountsEveryMailboxOnce(t *testing.T) {
+	outcomes := recordoutcome.NewRecorder()
+	c := New(collectors.EXODeps{Client: &fakeEXO{recs: liveTenant(t)}})
+	if err := c.Collect(context.Background(), telemetrytest.New().Emitter(), outcomes); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	got := outcomes.Snapshot().Summarize(nil, false)
+	want := recordoutcome.Counts{Fetched: 3, Mapped: 3, Emitted: 3}
+	if got.Result != recordoutcome.ResultSuccess || got.Counts != want {
+		t.Errorf("outcome = %#v, want success/%#v", got, want)
 	}
 }
 
@@ -404,7 +418,7 @@ func TestCollect_NoMailboxesStillSeedsProtection(t *testing.T) {
 func TestCollect_ErrorPropagates(t *testing.T) {
 	rec := telemetrytest.New()
 	c := New(collectors.EXODeps{Client: &fakeEXO{err: errors.New("403")}})
-	if err := c.Collect(context.Background(), rec.Emitter()); err == nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err == nil {
 		t.Fatal("want error when the cmdlet fails")
 	}
 }

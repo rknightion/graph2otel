@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
@@ -163,7 +164,7 @@ func collectWith(t *testing.T, f *fakeEXO) *telemetrytest.Recorder {
 	t.Helper()
 	rec := telemetrytest.New()
 	c := New(collectors.EXODeps{Client: f})
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	return rec
@@ -193,6 +194,20 @@ func TestCollect_RunsBothCmdlets(t *testing.T) {
 		if !called {
 			t.Errorf("cmdlet %q was never run — a connector on that side would be invisible", c)
 		}
+	}
+}
+
+func TestCollect_AccountsRecordsAcrossBothCmdlets(t *testing.T) {
+	outcomes := recordoutcome.NewRecorder()
+	if err := New(collectors.EXODeps{Client: liveTenant(t)}).Collect(
+		context.Background(), telemetrytest.New().Emitter(), outcomes,
+	); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	got := outcomes.Snapshot().Summarize(nil, false)
+	want := recordoutcome.Counts{Fetched: 2, Mapped: 2, Emitted: 2}
+	if got.Result != recordoutcome.ResultSuccess || got.Counts != want {
+		t.Errorf("outcome = %#v, want success/%#v", got, want)
 	}
 }
 
@@ -567,7 +582,7 @@ func TestCollect_EmptyTenantEmitsNoTwins(t *testing.T) {
 func TestCollect_ErrorPropagates(t *testing.T) {
 	rec := telemetrytest.New()
 	c := New(collectors.EXODeps{Client: &fakeEXO{err: errors.New("403")}})
-	if err := c.Collect(context.Background(), rec.Emitter()); err == nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err == nil {
 		t.Fatal("want error when a cmdlet fails")
 	}
 }

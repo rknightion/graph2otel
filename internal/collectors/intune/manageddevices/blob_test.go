@@ -161,7 +161,7 @@ func TestDeviceTwinSuppressedKeepsGauges(t *testing.T) {
 	c := newTestCollector(g)
 	c.suppressedTwins = map[string]bool{eventManagedDevice: true}
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	// Fleet count gauge is unaffected.

@@ -54,6 +54,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -630,6 +632,22 @@ type odataPage struct {
 	NextLink string            `json:"@odata.nextLink"`
 }
 
+func (p *odataPage) UnmarshalJSON(data []byte) error {
+	var wire struct {
+		Value    *[]json.RawMessage `json:"value"`
+		NextLink string             `json:"@odata.nextLink"`
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if wire.Value == nil {
+		return errors.New(`endpoint analytics collection response is missing a non-null "value" field`)
+	}
+	p.Value = *wire.Value
+	p.NextLink = wire.NextLink
+	return nil
+}
+
 // Collector polls Intune Endpoint Analytics (User Experience Analytics).
 type Collector struct {
 	g collectors.GraphClient
@@ -679,7 +697,8 @@ func (c *Collector) RequiredPermissions() []string {
 // configured on this tenant) is skipped-and-logged, any other error is joined
 // into the returned error, and every other sub-fetch's metrics still emit
 // regardless of one failing.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
 	// The managed-device ids this cycle's device-scores fetch reported. The
 	// startup-process fan-out keys off them, which is why ORDER MATTERS in the
 	// slice below: "device scores" must run before "startup processes". The two
@@ -705,10 +724,10 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 
 	fetchers := []struct {
 		name string
-		fn   func(context.Context, telemetry.Emitter) error
+		fn   func(context.Context, telemetry.Emitter, *outcome.Recorder) error
 	}{
-		{"device scores", func(ctx context.Context, e telemetry.Emitter) error {
-			return c.collectDeviceScores(ctx, e, &deviceIDs)
+		{"device scores", func(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) error {
+			return c.collectDeviceScores(ctx, e, outcomes, &deviceIDs)
 		}},
 		{"model scores", c.collectModelScores},
 		{"startup histories", c.collectStartupHistories},
@@ -720,17 +739,18 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		{"work from anywhere readiness", c.collectWorkFromAnywhere},
 		{"app health os version", c.collectAppHealthOSVersion},
 		{"app health device performance", c.collectAppHealthDevicePerformance},
-		{"startup processes", func(ctx context.Context, e telemetry.Emitter) error {
-			return c.collectStartupProcesses(ctx, e, deviceIDs)
+		{"startup processes", func(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) error {
+			return c.collectStartupProcesses(ctx, e, outcomes, deviceIDs)
 		}},
 	}
 
 	var errs []error
 	for _, f := range fetchers {
-		if err := f.fn(ctx, e); err != nil {
+		if err := f.fn(ctx, e, outcomes); err != nil {
 			if isNotLicensed(err) {
 				c.logger.Info("endpoint analytics sub-endpoint not licensed on this tenant; skipping",
 					"collector", collectorName, "endpoint", f.name, "error", err)
+				outcomes.Cause(recordoutcome.CausePermissionDenied)
 				continue
 			}
 			// A wrong/dead route segment is graph2otel asking for a URL that does
@@ -759,8 +779,8 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // deviceIDs, when non-nil, collects every managed-device id this fetch sees, for
 // the startup-process fan-out (#255). See Collect for why this segment is the id
 // source.
-func (c *Collector) collectDeviceScores(ctx context.Context, e telemetry.Emitter, deviceIDs *[]string) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/userExperienceAnalyticsDeviceScores", nil)
+func (c *Collector) collectDeviceScores(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder, deviceIDs *[]string) error {
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceManagement/userExperienceAnalyticsDeviceScores", nil, outcomes)
 	if err != nil {
 		return err
 	}
@@ -769,8 +789,10 @@ func (c *Collector) collectDeviceScores(ctx context.Context, e telemetry.Emitter
 		var d deviceScore
 		if err := json.Unmarshal(r, &d); err != nil {
 			c.logger.Warn("endpoint_analytics: skipping malformed device score row", "collector", collectorName, "error", err)
+			outcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(outcomes, 1)
 		if deviceIDs != nil && d.ID != "" {
 			*deviceIDs = append(*deviceIDs, d.ID)
 		}
@@ -834,8 +856,8 @@ func (c *Collector) collectDeviceScores(ctx context.Context, e telemetry.Emitter
 // twin — a model bucket is an aggregate, not an entity (#192). The -1
 // "not enough data" sentinel is excluded per field, exactly as on the per-device
 // sibling: on the first live row four of the six categories carry it.
-func (c *Collector) collectModelScores(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/userExperienceAnalyticsModelScores", nil)
+func (c *Collector) collectModelScores(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) error {
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceManagement/userExperienceAnalyticsModelScores", nil, outcomes)
 	if err != nil {
 		return err
 	}
@@ -845,8 +867,10 @@ func (c *Collector) collectModelScores(ctx context.Context, e telemetry.Emitter)
 		var m modelScore
 		if err := json.Unmarshal(r, &m); err != nil {
 			c.logger.Warn("endpoint_analytics: skipping malformed model score row", "collector", collectorName, "error", err)
+			outcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(outcomes, 1)
 		state := healthStateBucketFor(m.HealthStatus)
 		base := telemetry.Attrs{semconv.AttrHealthState: state}
 		telemetry.SetStr(base, semconv.AttrModel, m.Model)
@@ -883,8 +907,8 @@ func (c *Collector) collectModelScores(ctx context.Context, e telemetry.Emitter)
 	return nil
 }
 
-func (c *Collector) collectStartupHistories(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/userExperienceAnalyticsDeviceStartupHistory", nil)
+func (c *Collector) collectStartupHistories(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) error {
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceManagement/userExperienceAnalyticsDeviceStartupHistory", nil, outcomes)
 	if err != nil {
 		return err
 	}
@@ -892,8 +916,10 @@ func (c *Collector) collectStartupHistories(ctx context.Context, e telemetry.Emi
 		var h startupHistory
 		if err := json.Unmarshal(r, &h); err != nil {
 			c.logger.Warn("endpoint_analytics: skipping malformed startup history row", "collector", collectorName, "error", err)
+			outcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(outcomes, 1)
 		bucket := restartCategoryBucketFor(h.RestartCategory)
 		attrs := telemetry.Attrs{semconv.AttrRestartCategory: bucket}
 		// Per-FIELD sentinel guard, not per-row (#224): a live row routinely
@@ -1012,7 +1038,7 @@ func startupProcessSubURL(deviceID string) string {
 // Endpoint Analytics license answers 403 on EVERY sub-request instead of on a
 // list GET, so an all-403 sweep is folded back into the quiet skip Collect
 // already gives an unlicensed sub-endpoint.
-func (c *Collector) collectStartupProcesses(ctx context.Context, e telemetry.Emitter, deviceIDs []string) error {
+func (c *Collector) collectStartupProcesses(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder, deviceIDs []string) error {
 	ids := dedupe(deviceIDs)
 	if len(ids) == 0 {
 		// Deliberately NOT a fall back to the bare list: emitting one arbitrary
@@ -1064,6 +1090,7 @@ func (c *Collector) collectStartupProcesses(ctx context.Context, e telemetry.Emi
 			if !ok {
 				c.logger.Warn("endpoint_analytics: no $batch sub-response for device; its startup processes are missing from this cycle",
 					"collector", collectorName, "device_id", id)
+				outcomes.Cause(recordoutcome.CauseSourceError)
 				continue
 			}
 			if sub.Status == 403 {
@@ -1073,9 +1100,10 @@ func (c *Collector) collectStartupProcesses(ctx context.Context, e telemetry.Emi
 			if sub.Status != 200 {
 				c.logger.Warn("endpoint_analytics: startup-process sub-request failed; skipping device",
 					"collector", collectorName, "device_id", id, "status", sub.Status, "body", string(sub.Body))
+				outcomes.Cause(recordoutcome.CauseSourceError)
 				continue
 			}
-			c.emitStartupProcesses(ctx, e, id, sub.Body)
+			c.emitStartupProcesses(ctx, e, outcomes, id, sub.Body)
 		}
 	}
 	if forbidden == len(ids) {
@@ -1086,6 +1114,7 @@ func (c *Collector) collectStartupProcesses(ctx context.Context, e telemetry.Emi
 		return fmt.Errorf("status 403 on every startup-process sub-request (%d devices)", len(ids))
 	}
 	if forbidden > 0 {
+		outcomes.Cause(recordoutcome.CausePermissionDenied)
 		c.logger.Warn("endpoint_analytics: startup-process sub-requests forbidden for some devices",
 			"collector", collectorName, "forbidden", forbidden, "devices", len(ids))
 	}
@@ -1097,19 +1126,21 @@ func (c *Collector) collectStartupProcesses(ctx context.Context, e telemetry.Emi
 // has never been observed to carry one, but the whole point of #255 is that a
 // truncation nothing signals is invisible — so a failure to follow is logged
 // loudly rather than dropping rows quietly.
-func (c *Collector) emitStartupProcesses(ctx context.Context, e telemetry.Emitter, deviceID string, body json.RawMessage) {
+func (c *Collector) emitStartupProcesses(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder, deviceID string, body json.RawMessage) {
 	var page odataPage
 	if err := json.Unmarshal(body, &page); err != nil {
 		c.logger.Warn("endpoint_analytics: undecodable startup-process page; skipping device",
 			"collector", collectorName, "device_id", deviceID, "error", err)
+		outcomes.Cause(recordoutcome.CauseDecodeError)
 		return
 	}
 	rows := page.Value
 	if page.NextLink != "" {
-		more, err := collectors.GetAllValues(ctx, c.g, page.NextLink, nil)
+		more, err := collectors.GetAllValuesRecorded(ctx, c.g, page.NextLink, nil, outcomes)
 		if err != nil {
 			c.logger.Warn("endpoint_analytics: startup-process page for device is truncated and the nextLink failed; some rows are missing from this cycle",
 				"collector", collectorName, "device_id", deviceID, "error", err)
+			outcomes.Cause(recordoutcome.CauseSourceError)
 		} else {
 			rows = append(rows, more...)
 		}
@@ -1118,8 +1149,10 @@ func (c *Collector) emitStartupProcesses(ctx context.Context, e telemetry.Emitte
 		var p startupProcess
 		if err := json.Unmarshal(r, &p); err != nil {
 			c.logger.Warn("endpoint_analytics: skipping malformed startup process row", "collector", collectorName, "error", err)
+			outcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(outcomes, 1)
 		attrs := telemetry.Attrs{}
 		// managedDeviceId is echoed on every observed row, but the filtered device
 		// id is the authoritative fallback: a row that lost it must still be
@@ -1167,8 +1200,8 @@ func dedupe(ids []string) []string {
 // (#225). On a tenant under the 5-device Endpoint Analytics floor this is the
 // only live source of appHangCount and meanTimeToFailureInMinutes, which #194
 // parked because the application-level segment is empty there.
-func (c *Collector) collectAppHealthDevicePerformance(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.beta+"/deviceManagement/userExperienceAnalyticsAppHealthDevicePerformance", nil)
+func (c *Collector) collectAppHealthDevicePerformance(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) error {
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.beta+"/deviceManagement/userExperienceAnalyticsAppHealthDevicePerformance", nil, outcomes)
 	if err != nil {
 		return err
 	}
@@ -1177,8 +1210,10 @@ func (c *Collector) collectAppHealthDevicePerformance(ctx context.Context, e tel
 		var a appHealthDevicePerformance
 		if err := json.Unmarshal(r, &a); err != nil {
 			c.logger.Warn("endpoint_analytics: skipping malformed app health device row", "collector", collectorName, "error", err)
+			outcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(outcomes, 1)
 		state := healthStateBucketFor(a.HealthStatus)
 		counts[state]++
 
@@ -1233,8 +1268,8 @@ func severityIf(warn bool) telemetry.Severity {
 	return telemetry.SeverityInfo
 }
 
-func (c *Collector) collectAppHealth(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/userExperienceAnalyticsAppHealthApplicationPerformance", nil)
+func (c *Collector) collectAppHealth(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) error {
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceManagement/userExperienceAnalyticsAppHealthApplicationPerformance", nil, outcomes)
 	if err != nil {
 		return err
 	}
@@ -1243,8 +1278,10 @@ func (c *Collector) collectAppHealth(ctx context.Context, e telemetry.Emitter) e
 		var a appHealthPerformance
 		if err := json.Unmarshal(r, &a); err != nil {
 			c.logger.Warn("endpoint_analytics: skipping malformed app health row", "collector", collectorName, "error", err)
+			outcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(outcomes, 1)
 		// The twin is emitted for EVERY row, before any allow-list gating. The
 		// allow-list below bounds the METRIC (application names are unbounded, so
 		// a series per app would scale with the tenant, #112) — it is not a
@@ -1293,8 +1330,8 @@ func (c *Collector) collectAppHealth(ctx context.Context, e telemetry.Emitter) e
 	return nil
 }
 
-func (c *Collector) collectBatteryHealth(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.beta+"/deviceManagement/userExperienceAnalyticsBatteryHealthDevicePerformance", nil)
+func (c *Collector) collectBatteryHealth(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) error {
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.beta+"/deviceManagement/userExperienceAnalyticsBatteryHealthDevicePerformance", nil, outcomes)
 	if err != nil {
 		return err
 	}
@@ -1303,8 +1340,10 @@ func (c *Collector) collectBatteryHealth(ctx context.Context, e telemetry.Emitte
 		var b batteryHealthPerformance
 		if err := json.Unmarshal(r, &b); err != nil {
 			c.logger.Warn("endpoint_analytics: skipping malformed battery health row", "collector", collectorName, "error", err)
+			outcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(outcomes, 1)
 		state := healthStateBucketFor(b.HealthStatus)
 		counts[state]++
 		// -1 = "not enough data yet" (#224). The device still counts under its
@@ -1360,8 +1399,8 @@ func (c *Collector) collectBatteryHealth(ctx context.Context, e telemetry.Emitte
 	return nil
 }
 
-func (c *Collector) collectResourcePerformance(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.beta+"/deviceManagement/userExperienceAnalyticsResourcePerformance", nil)
+func (c *Collector) collectResourcePerformance(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) error {
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.beta+"/deviceManagement/userExperienceAnalyticsResourcePerformance", nil, outcomes)
 	if err != nil {
 		return err
 	}
@@ -1370,8 +1409,10 @@ func (c *Collector) collectResourcePerformance(ctx context.Context, e telemetry.
 		var rp resourcePerformance
 		if err := json.Unmarshal(r, &rp); err != nil {
 			c.logger.Warn("endpoint_analytics: skipping malformed resource performance row", "collector", collectorName, "error", err)
+			outcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(outcomes, 1)
 		state := healthStateBucketFor(rp.HealthStatus)
 		counts[state]++
 		// -1 = "not enough data yet" (#224); see collectBatteryHealth.
@@ -1445,8 +1486,8 @@ func (c *Collector) collectResourcePerformance(ctx context.Context, e telemetry.
 	return nil
 }
 
-func (c *Collector) collectBaselines(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.beta+"/deviceManagement/userExperienceAnalyticsBaselines", nil)
+func (c *Collector) collectBaselines(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) error {
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.beta+"/deviceManagement/userExperienceAnalyticsBaselines", nil, outcomes)
 	if err != nil {
 		return err
 	}
@@ -1455,8 +1496,10 @@ func (c *Collector) collectBaselines(ctx context.Context, e telemetry.Emitter) e
 		var b baseline
 		if err := json.Unmarshal(r, &b); err != nil {
 			c.logger.Warn("endpoint_analytics: skipping malformed baseline row", "collector", collectorName, "error", err)
+			outcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(outcomes, 1)
 		points = append(points, telemetry.GaugePoint{
 			Value: float64(b.OverallScore),
 			Attrs: telemetry.Attrs{semconv.AttrBaselineName: orUnknown(b.DisplayName), semconv.AttrIsBuiltIn: fmt.Sprintf("%t", b.IsBuiltIn)},
@@ -1473,15 +1516,17 @@ func (c *Collector) collectBaselines(ctx context.Context, e telemetry.Emitter) e
 // - it is a tenant-wide aggregate with no per-entity rows. Errors are returned
 // unwrapped so Collect's shared skip-and-log path handles them exactly like the
 // other beta sub-fetches (a 403 on an unlicensed tenant is a quiet skip).
-func (c *Collector) collectAnomalySeverityOverview(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) collectAnomalySeverityOverview(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) error {
 	body, err := c.g.RawGet(ctx, c.beta+"/deviceManagement/userExperienceAnalyticsAnomalySeverityOverview")
 	if err != nil {
 		return err
 	}
 	var o anomalySeverityOverview
 	if err := json.Unmarshal(body, &o); err != nil {
+		outcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 		return fmt.Errorf("unmarshal anomaly severity overview: %w", err)
 	}
+	outcome.Emitted(outcomes, 1)
 	points := []telemetry.GaugePoint{
 		{Value: float64(o.LowSeverityAnomalyCount), Attrs: telemetry.Attrs{semconv.AttrAnomalySeverity: "low"}},
 		{Value: float64(o.MediumSeverityAnomalyCount), Attrs: telemetry.Attrs{semconv.AttrAnomalySeverity: "medium"}},
@@ -1500,8 +1545,8 @@ func (c *Collector) collectAnomalySeverityOverview(ctx context.Context, e teleme
 // the failures are the actionable signal, and this keeps a clean device's twin
 // lean; the score fields are omitted when the device has not been assessed
 // (null on the wire). Severity escalates to WARN for a notCapable device.
-func (c *Collector) collectWorkFromAnywhere(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.beta+"/deviceManagement/userExperienceAnalyticsWorkFromAnywhereMetrics/allDevices/metricDevices", nil)
+func (c *Collector) collectWorkFromAnywhere(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) error {
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.beta+"/deviceManagement/userExperienceAnalyticsWorkFromAnywhereMetrics/allDevices/metricDevices", nil, outcomes)
 	if err != nil {
 		return err
 	}
@@ -1514,8 +1559,10 @@ func (c *Collector) collectWorkFromAnywhere(ctx context.Context, e telemetry.Emi
 		var d wfaMetricDevice
 		if err := json.Unmarshal(r, &d); err != nil {
 			c.logger.Warn("endpoint_analytics: skipping malformed work-from-anywhere row", "collector", collectorName, "error", err)
+			outcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(outcomes, 1)
 		eligibility := orUnknown(d.UpgradeEligibility)
 		state := healthStateBucketFor(d.HealthStatus)
 		counts[wfaKey{eligibility: eligibility, state: state}]++
@@ -1596,8 +1643,8 @@ func (c *Collector) collectWorkFromAnywhere(ctx context.Context, e telemetry.Emi
 // minutes. No log twin — this is an OS-version aggregate, not a per-device row
 // (#192). The int32-max "no failures" MTTF sentinel is excluded so it never
 // reads as a real ~4085-year mean time to failure.
-func (c *Collector) collectAppHealthOSVersion(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/userExperienceAnalyticsAppHealthOSVersionPerformance", nil)
+func (c *Collector) collectAppHealthOSVersion(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) error {
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceManagement/userExperienceAnalyticsAppHealthOSVersionPerformance", nil, outcomes)
 	if err != nil {
 		return err
 	}
@@ -1608,8 +1655,10 @@ func (c *Collector) collectAppHealthOSVersion(ctx context.Context, e telemetry.E
 		var a appHealthOSVersionPerformance
 		if err := json.Unmarshal(r, &a); err != nil {
 			c.logger.Warn("endpoint_analytics: skipping malformed app health os-version row", "collector", collectorName, "error", err)
+			outcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
+		outcome.Emitted(outcomes, 1)
 		osv := orUnknown(a.OSVersion)
 		scorePoints = append(scorePoints, telemetry.GaugePoint{
 			Value: a.OSVersionAppHealthScore,

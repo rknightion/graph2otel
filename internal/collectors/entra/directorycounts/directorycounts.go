@@ -14,6 +14,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -77,12 +79,13 @@ func (c *Collector) RequiredPermissions() []string { return []string{"Directory.
 // snapshot. A failure on one type is logged and that type is dropped from the
 // snapshot, but the others still emit; the aggregated error is returned so the
 // partial failure is visible in scrape self-obs without hiding the data.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	points := make([]telemetry.GaugePoint, 0, len(objectTypes))
 	var errs []error
 	for _, ot := range objectTypes {
 		n, err := collectors.Count(ctx, c.g, c.baseURL+ot.path)
 		if err != nil {
+			entraoutcome.SourceError(outcomes)
 			c.logger.Warn("directory count failed", "collector", collectorName, "type", ot.attr, "error", err)
 			errs = append(errs, fmt.Errorf("%s: %w", ot.attr, err))
 			continue
@@ -91,6 +94,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			Value: float64(n),
 			Attrs: telemetry.Attrs{semconv.AttrType: ot.attr},
 		})
+		entraoutcome.Emitted(outcomes, 1)
 	}
 	e.GaugeSnapshot(metricName, "{object}", "Total Entra directory objects, by object type.", points)
 	return errors.Join(errs...)

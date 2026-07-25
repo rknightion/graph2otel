@@ -113,6 +113,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/jobpipeline"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -349,10 +350,10 @@ type collectorImpl struct {
 // findings raised inside the mapper reach the counter, then delegates to the
 // generic collector. See the watcher type for why the emitter has to travel this
 // way.
-func (c *collectorImpl) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter) (time.Time, error) {
+func (c *collectorImpl) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter, outcomes *recordoutcome.Recorder) (time.Time, error) {
 	c.watch.bind(e)
 	defer c.watch.bind(nil)
-	return c.JobCollector.CollectWindow(ctx, from, to, e)
+	return c.JobCollector.CollectWindow(ctx, from, to, e, outcomes)
 }
 
 // Experimental marks the collector opt-in (beta/licensing-gated surface); the

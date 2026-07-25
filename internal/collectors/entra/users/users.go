@@ -19,6 +19,8 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -162,7 +164,7 @@ func (c *Collector) RequiredPermissions() []string {
 // failure is logged and that bucket is dropped from its snapshot, but the
 // others still emit; the aggregated error is returned so the partial failure
 // is visible in scrape self-observability without hiding the data.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	var errs []error
 
 	points := make([]telemetry.GaugePoint, 0, 6)
@@ -170,6 +172,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		for _, v := range ax.values {
 			n, err := c.count(ctx, v.filter)
 			if err != nil {
+				entraoutcome.SourceError(outcomes)
 				c.logger.Warn("user population count failed",
 					"collector", collectorName, "attr", ax.attr, "value", v.value, "error", err)
 				errs = append(errs, fmt.Errorf("%s=%s: %w", ax.attr, v.value, err))
@@ -179,6 +182,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 				Value: float64(n),
 				Attrs: telemetry.Attrs{ax.attr: v.value},
 			})
+			entraoutcome.Emitted(outcomes, 1)
 		}
 	}
 	e.GaugeSnapshot(metricPopulation, "{user}",
@@ -189,6 +193,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for _, js := range jointPopulationSlices {
 		n, err := c.count(ctx, js.filter)
 		if err != nil {
+			entraoutcome.SourceError(outcomes)
 			c.logger.Warn("joint user population count failed",
 				"collector", collectorName, "user_type", js.userType, "account_enabled", js.accountEnabled, "error", err)
 			errs = append(errs, fmt.Errorf("user_type=%s,account_enabled=%s: %w", js.userType, js.accountEnabled, err))
@@ -201,6 +206,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 				semconv.AttrAccountEnabled: js.accountEnabled,
 			},
 		})
+		entraoutcome.Emitted(outcomes, 1)
 	}
 	e.GaugeSnapshot(metricJointPopulation, "{user}",
 		"Entra users jointly sliced by user_type and account_enabled (e.g. disabled guests), one series per combination.",
@@ -218,6 +224,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		filter := fmt.Sprintf("signInActivity/lastSignInDateTime le %s", cutoff)
 		n, err := c.countStale(ctx, filter)
 		if err != nil {
+			entraoutcome.SourceError(outcomes)
 			c.logger.Warn("stale user count failed",
 				"collector", collectorName, "threshold_days", days, "error", err)
 			errs = append(errs, fmt.Errorf("stale threshold_days=%d: %w", days, err))
@@ -227,6 +234,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			Value: float64(n),
 			Attrs: telemetry.Attrs{semconv.AttrThresholdDays: days},
 		})
+		entraoutcome.Emitted(outcomes, 1)
 	}
 	e.GaugeSnapshot(metricStale, "{user}",
 		"Count of Entra users whose last sign-in is older than threshold_days. Requires Entra ID P1 or P2 (signInActivity).",

@@ -30,6 +30,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -130,10 +132,11 @@ var knownODataTypes = func() wirecheck.Enum {
 // Collector polls the Intune deviceConfigurations inventory and its
 // per-profile deviceStatusOverview singletons.
 type Collector struct {
-	g       collectors.GraphClient
-	baseURL string
-	logger  *slog.Logger
-	watch   *wirecheck.Reporter
+	outcomes *outcome.Recorder
+	g        collectors.GraphClient
+	baseURL  string
+	logger   *slog.Logger
+	watch    *wirecheck.Reporter
 }
 
 // New builds the configuration-profiles collector. A nil logger falls back
@@ -175,12 +178,18 @@ func (c *Collector) RequiredPermissions() []string {
 //
 // Overview counts lag real client check-in by minutes to hours; a transient
 // mismatch against a device's actual last-known state is expected, not a bug.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
+	local := *c
+	local.outcomes = outcomes
+	c = &local
 	var errs []error
 
 	profiles, err := c.collectProfiles(ctx, e)
 	if err != nil {
 		if isForbidden(err) {
+			outcome.RecordError(c.outcomes, err)
+			outcomes.Cause(recordoutcome.CausePermissionDenied)
 			c.logger.Info("configprofiles: profile list unavailable on this tenant; skipping",
 				"collector", collectorName, "error", err)
 		} else {
@@ -223,7 +232,7 @@ type profileRef struct {
 // constant) - it is never counted, version-tracked, or returned for the
 // status-overview fan-out.
 func (c *Collector) collectProfiles(ctx context.Context, e telemetry.Emitter) ([]profileRef, error) {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceManagement/deviceConfigurations", nil)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceManagement/deviceConfigurations", nil, c.outcomes)
 	if err != nil {
 		return nil, err
 	}
@@ -236,17 +245,21 @@ func (c *Collector) collectProfiles(ctx context.Context, e telemetry.Emitter) ([
 		var p configProfile
 		if err := json.Unmarshal(r, &p); err != nil {
 			c.logger.Warn("configprofiles: skipping unparseable deviceConfiguration", "collector", collectorName, "error", err)
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			continue
 		}
 		if p.ODataType == windowsUpdateForBusinessODataType {
 			// Group B: owned by the update-rings collector (#59) - never
 			// counted, version-tracked, or fanned out to here.
+			outcome.Filtered(c.outcomes, 1)
 			continue
 		}
 		if p.ID == "" {
 			c.logger.Warn("configprofiles: skipping deviceConfiguration with empty id", "collector", collectorName)
+			outcome.Dropped(c.outcomes, 1, recordoutcome.CauseMappingError)
 			continue
 		}
+		outcome.Emitted(c.outcomes, 1)
 		name := orUnknown(p.DisplayName)
 		c.watch.Value(e, semconv.AttrOdataType, p.ODataType, knownODataTypes)
 		bucket := odataTypeBucketFor(p.ODataType)
@@ -307,8 +320,10 @@ func (c *Collector) fetchStatusOverview(ctx context.Context, url string) (status
 	}
 	var o statusOverview
 	if err := json.Unmarshal(body, &o); err != nil {
+		outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 		return statusOverview{}, fmt.Errorf("decode status overview from %q: %w", url, err)
 	}
+	outcome.Emitted(c.outcomes, 1)
 	return o, nil
 }
 
@@ -327,6 +342,8 @@ func (c *Collector) collectStatusOverviews(ctx context.Context, e telemetry.Emit
 		case err == nil:
 			points = append(points, ov.points(p.name)...)
 		case isForbidden(err):
+			outcome.RecordError(c.outcomes, err)
+			c.outcomes.Cause(recordoutcome.CausePermissionDenied)
 			c.logger.Info("configprofiles: deviceStatusOverview unavailable; skipping profile",
 				"collector", collectorName, "profile_name", p.name, "error", err)
 		default:

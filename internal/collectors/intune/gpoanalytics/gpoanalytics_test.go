@@ -107,7 +107,7 @@ func TestCollectEmitsMigrationReadiness(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixtureBodies()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -137,7 +137,7 @@ func TestCollectComputesPercentFromCounts(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixtureBodies()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -166,7 +166,7 @@ func TestCollectAggregatesConfigCountFromLiveCapture(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixtureBodies()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -204,7 +204,7 @@ func TestCollectMapsKnownIngestionTypeBuckets(t *testing.T) {
 	}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -239,7 +239,7 @@ func TestCollectBucketsUnknownReadinessAndIngestionType(t *testing.T) {
 	}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -268,7 +268,7 @@ func TestCollectPagesMigrationReportsToExhaustion(t *testing.T) {
 	}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -285,7 +285,7 @@ func TestCollectGracefulOn403(t *testing.T) {
 	}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Errorf("Collect should swallow a 403 as skip-and-log, got: %v", err)
 	}
 	if len(rec.MetricNames()) != 0 {
@@ -300,7 +300,7 @@ func TestCollectGracefulOn404(t *testing.T) {
 	}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Errorf("Collect should swallow a 404 as skip-and-log, got: %v", err)
 	}
 }
@@ -311,7 +311,7 @@ func TestCollectSurfacesNon4xxError(t *testing.T) {
 		configurationsURL:   errors.New("graphclient: GET " + configurationsURL + ": status 500: server error"),
 	}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err == nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err == nil {
 		t.Error("a 500 should surface as a collector error, not be swallowed")
 	}
 }
@@ -325,7 +325,7 @@ func TestCollectIsResilientToOneFetchFailure(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected Collect to surface the migration-reports failure as an error")
 	}
@@ -345,7 +345,7 @@ func TestNeverEmitsRawGPOContent(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixtureBodies()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -383,7 +383,7 @@ func findings(rec *telemetrytest.Recorder) map[string]float64 {
 func TestLiveCaptureReportsNothingUnexpected(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixtureBodies()}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if got := findings(rec); len(got) != 0 {
@@ -401,7 +401,7 @@ func TestUnrecognizedReadinessAndIngestionTypeAreReported(t *testing.T) {
 		configurationsURL:   `{"value":[{"displayName":"Weird Config","policyConfigurationIngestionType":"somethingElse"}]}`,
 	}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

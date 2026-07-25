@@ -12,6 +12,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/blobpipeline"
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
@@ -223,8 +224,13 @@ func TestCollectorEmitsLiveRecordEndToEnd(t *testing.T) {
 		Logger:   slog.New(slog.DiscardHandler),
 	})
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	outcomes := recordoutcome.NewRecorder()
+	if err := c.Collect(context.Background(), rec.Emitter(), outcomes); err != nil {
 		t.Fatalf("Collect: %v", err)
+	}
+	wantCounts := recordoutcome.Counts{Fetched: 1, Mapped: 1, Emitted: 1}
+	if got := outcomes.Snapshot().Counts; got != wantCounts {
+		t.Fatalf("record outcomes = %+v, want %+v", got, wantCounts)
 	}
 	logs := rec.LogRecords()
 	if len(logs) != 1 {
@@ -242,8 +248,12 @@ func TestCollectorEmitsLiveRecordEndToEnd(t *testing.T) {
 	}
 
 	// Cursor persisted: a second tick over the unchanged blob emits nothing new.
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	secondOutcomes := recordoutcome.NewRecorder()
+	if err := c.Collect(context.Background(), rec.Emitter(), secondOutcomes); err != nil {
 		t.Fatalf("second Collect: %v", err)
+	}
+	if got := secondOutcomes.Snapshot().Counts; got != (recordoutcome.Counts{}) {
+		t.Fatalf("second tick record outcomes = %+v, want empty", got)
 	}
 	if got := len(rec.LogRecords()); got != 1 {
 		t.Errorf("after a second tick over an unchanged blob: %d records, want 1", got)
@@ -276,7 +286,7 @@ func collectRaw(t *testing.T, raw string) *telemetrytest.Recorder {
 		Store:    checkpoint.NewStore(t.TempDir()),
 		Logger:   slog.New(slog.DiscardHandler),
 	})
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	return rec

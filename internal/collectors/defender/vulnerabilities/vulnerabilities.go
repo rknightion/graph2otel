@@ -61,6 +61,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/tvm"
@@ -159,13 +160,15 @@ type severityCount struct {
 // posture to report and no partition plan. A twin partition failure is non-fatal
 // and aggregated — the gauges and the other partitions still emit — the
 // securescore shape rather than quarantine's single-query fail-fast.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	summary, err := c.c.Query(ctx, "vuln_summary", summaryQuery)
 	if err != nil {
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		return fmt.Errorf("%s: summary query: %w", collectorName, err)
 	}
+	outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(summary)))
 
-	perSeverity := c.emitGauges(e, summary)
+	perSeverity := c.emitGauges(e, summary, outcomes)
 
 	var errs []error
 	for _, sc := range perSeverity {
@@ -174,12 +177,15 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			query := fmt.Sprintf(twinQueryBase, sc.severity) + p.Predicate("DeviceId")
 			rows, qerr := c.c.Query(ctx, label, query)
 			if qerr != nil {
+				outcomes.Cause(recordoutcome.CauseSourceError)
 				c.logger.Warn("vulnerability twin partition failed",
 					"collector", collectorName, "severity", sc.severity, "error", qerr)
 				errs = append(errs, fmt.Errorf("twin %s: %w", sc.severity, qerr))
 				continue
 			}
+			outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(rows)))
 			if len(rows) >= hardRowCap {
+				outcomes.Cause(recordoutcome.CauseSourceError)
 				// A partition came back at the hard cap: the shard math under-
 				// counted (the table grew, or a single DeviceId hashed heavily).
 				// Emit what we have but say so loudly — silent truncation is the
@@ -190,6 +196,8 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			}
 			for _, r := range rows {
 				e.LogEvent(vulnTwin(r))
+				outcomes.Add(recordoutcome.OutcomeMapped, 1)
+				outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 			}
 		}
 	}
@@ -211,13 +219,15 @@ func appendNumPoint(pts []telemetry.GaugePoint, r map[string]any, src string, at
 // emitGauges emits the five bounded gauges from the summary rows and returns the
 // per-severity instance totals (summed across the exploit dimension) for
 // partition planning.
-func (c *Collector) emitGauges(e telemetry.Emitter, summary []map[string]any) []severityCount {
+func (c *Collector) emitGauges(e telemetry.Emitter, summary []map[string]any, outcomes *recordoutcome.Recorder) []severityCount {
 	var instPts, devPts, cvePts, cvssPts, epssPts []telemetry.GaugePoint
 	totals := map[string]int64{}
 
 	for _, r := range summary {
 		sev, _ := r["VulnerabilitySeverityLevel"].(string)
 		if sev == "" {
+			outcomes.Add(recordoutcome.OutcomeDropped, 1)
+			outcomes.Cause(recordoutcome.CauseMappingError)
 			continue
 		}
 		exploit, _ := tvm.SByteBool(r, "IsExploitAvailable")
@@ -233,6 +243,8 @@ func (c *Collector) emitGauges(e telemetry.Emitter, summary []map[string]any) []
 		if n, ok := r["instances"].(float64); ok {
 			totals[sev] += int64(n)
 		}
+		outcomes.Add(recordoutcome.OutcomeMapped, 1)
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 	}
 
 	e.GaugeSnapshot(metricInstances, unitVuln,

@@ -86,7 +86,9 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/graphclient"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
 	"github.com/rknightion/graph2otel/internal/preflight"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -218,20 +220,21 @@ type alertConfiguration struct {
 // on one surface, so a failure on any of them means the cycle's picture is
 // incomplete, and a partial picture of "what Microsoft thinks is wrong with your
 // privileged access" is worse than a loud failure.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
-	alerts, err := fetch[alert](ctx, c, alertsPath)
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	alerts, err := fetch[alert](ctx, c, alertsPath, outcomes)
 	if err != nil {
-		return c.skipOrFail("alerts", err)
+		return c.outcomeForFetchError("alerts", err, outcomes)
 	}
-	definitions, err := fetch[alertDefinition](ctx, c, definitionsPath)
+	definitions, err := fetch[alertDefinition](ctx, c, definitionsPath, outcomes)
 	if err != nil {
-		return c.skipOrFail("alertDefinitions", err)
+		entraoutcome.Errored(outcomes, uint64(len(alerts)), recordoutcome.CauseSourceError)
+		return c.outcomeForFetchError("alertDefinitions", err, outcomes)
 	}
-	configurations, err := fetch[alertConfiguration](ctx, c, configurationsPath)
+	configurations, err := fetch[alertConfiguration](ctx, c, configurationsPath, outcomes)
 	if err != nil {
-		return c.skipOrFail("alertConfigurations", err)
+		entraoutcome.Errored(outcomes, uint64(len(alerts)+len(definitions)), recordoutcome.CauseSourceError)
+		return c.outcomeForFetchError("alertConfigurations", err, outcomes)
 	}
-
 	definitionByID := make(map[string]alertDefinition, len(definitions))
 	for _, d := range definitions {
 		definitionByID[d.ID] = d
@@ -243,9 +246,13 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 
 	alertPoints := make([]telemetry.GaugePoint, 0, len(alerts))
 	incidentPoints := make([]telemetry.GaugePoint, 0, len(alerts))
+	usedDefinitions := make(map[string]bool, len(alerts))
 	for _, a := range alerts {
 		typ := alertType(a.ID)
 		def := definitionByID[a.AlertDefinitionID]
+		if a.AlertDefinitionID != "" {
+			usedDefinitions[a.AlertDefinitionID] = true
+		}
 		cfg := configByID[a.AlertDefinitionID]
 
 		alertPoints = append(alertPoints, telemetry.GaugePoint{
@@ -269,6 +276,14 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			})
 		}
 		e.LogEvent(twin(a, typ, def, cfg))
+		entraoutcome.Emitted(outcomes, 1)
+	}
+	for _, definition := range definitions {
+		if usedDefinitions[definition.ID] {
+			entraoutcome.Emitted(outcomes, 1)
+		} else {
+			entraoutcome.Filtered(outcomes, 1)
+		}
 	}
 	e.GaugeSnapshot(alertsMetricName, "{alert}",
 		"Microsoft's pre-computed PIM privileged-access findings, one series per alert type, labeled by Microsoft's severity and whether the finding is currently active. Microsoft's description, security impact and mitigation steps are on the entra.pim_alert log twin.",
@@ -286,6 +301,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 				semconv.AttrIsEnabled: boolLabel(cfg.IsEnabled),
 			},
 		})
+		entraoutcome.Emitted(outcomes, 1)
 	}
 	e.GaugeSnapshot(configurationsMetricName, "{configuration}",
 		"PIM alert configurations by whether the alert is switched ON. A disabled alert reports itself inactive forever and is otherwise indistinguishable from a healthy one, so is_enabled=false is itself a finding.",
@@ -386,8 +402,8 @@ func (cfg alertConfiguration) joinKey() string {
 
 // fetch pages one segment with the mandatory scope filter attached and decodes
 // its rows.
-func fetch[T any](ctx context.Context, c *Collector, path string) ([]T, error) {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+path+scopeFilter, nil)
+func fetch[T any](ctx context.Context, c *Collector, path string, outcomes *recordoutcome.Recorder) ([]T, error) {
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+path+scopeFilter, nil, outcomes)
 	if err != nil {
 		return nil, err
 	}
@@ -395,11 +411,23 @@ func fetch[T any](ctx context.Context, c *Collector, path string) ([]T, error) {
 	for _, raw := range raws {
 		var row T
 		if err := json.Unmarshal(raw, &row); err != nil {
+			entraoutcome.Errored(outcomes, uint64(len(raws)), recordoutcome.CauseDecodeError)
 			return nil, fmt.Errorf("decode row: %w", err)
 		}
 		out = append(out, row)
 	}
 	return out, nil
+}
+
+func (c *Collector) outcomeForFetchError(segment string, err error, outcomes *recordoutcome.Recorder) error {
+	result := c.skipOrFail(segment, err)
+	if result == nil && isForbidden(err) {
+		outcomes.Cause(recordoutcome.CausePermissionDenied)
+	}
+	if result != nil {
+		entraoutcome.SourceError(outcomes)
+	}
+	return result
 }
 
 // skipOrFail turns a fetch error into either a graceful skip (nil) or a wrapped

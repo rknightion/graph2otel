@@ -9,18 +9,27 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 )
 
 // countingGraph is a collectors.GraphClient that records every RawGet URL, so a
 // test can assert how many times the managedDevices fleet was actually paged.
 type countingGraph struct {
-	urls []string
-	body []byte
-	err  error
+	urls   []string
+	body   []byte
+	err    error
+	bodies map[string][]byte
+	errs   map[string]error
 }
 
 func (c *countingGraph) RawGet(_ context.Context, url string) ([]byte, error) {
 	c.urls = append(c.urls, url)
+	if err, ok := c.errs[url]; ok {
+		return nil, err
+	}
+	if body, ok := c.bodies[url]; ok {
+		return body, nil
+	}
 	if c.err != nil {
 		return nil, c.err
 	}
@@ -56,11 +65,11 @@ func TestCachingFleetFetcher_SharesOneFetchWithinTTL(t *testing.T) {
 	collectors.SetFleetClock(f, func() time.Time { return now })
 
 	// Two callers within the TTL: intune.devices then intune.malware.
-	r1, err := f.ManagedDevices(context.Background())
+	r1, err := f.ManagedDevices(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("first ManagedDevices: %v", err)
 	}
-	r2, err := f.ManagedDevices(context.Background())
+	r2, err := f.ManagedDevices(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("second ManagedDevices: %v", err)
 	}
@@ -77,7 +86,7 @@ func TestCachingFleetFetcher_SharesOneFetchWithinTTL(t *testing.T) {
 
 	// After the TTL, the next caller re-fetches.
 	now = now.Add(31 * time.Minute)
-	if _, err := f.ManagedDevices(context.Background()); err != nil {
+	if _, err := f.ManagedDevices(context.Background(), nil); err != nil {
 		t.Fatalf("post-TTL ManagedDevices: %v", err)
 	}
 	if got := g.managedDevicesCalls(); got != 2 {
@@ -91,17 +100,53 @@ func TestCachingFleetFetcher_DoesNotCacheErrors(t *testing.T) {
 	g := &countingGraph{err: errors.New("boom")}
 	f := collectors.NewCachingFleetFetcher(g, "https://graph.microsoft.com/v1.0", time.Hour)
 
-	if _, err := f.ManagedDevices(context.Background()); err == nil {
+	if _, err := f.ManagedDevices(context.Background(), nil); err == nil {
 		t.Fatal("want error on first fetch")
 	}
 	// Recover: subsequent call succeeds (error was not cached).
 	g.err = nil
 	g.body = onePage()
-	if _, err := f.ManagedDevices(context.Background()); err != nil {
+	if _, err := f.ManagedDevices(context.Background(), nil); err != nil {
 		t.Fatalf("retry after error: %v", err)
 	}
 	if got := g.managedDevicesCalls(); got != 2 {
 		t.Fatalf("fleet paged %d times, want 2 (error not cached → retry)", got)
+	}
+}
+
+func TestCachingFleetFetcher_AccountsAndDoesNotCachePartialPageFailure(t *testing.T) {
+	const (
+		baseURL = "https://graph.microsoft.com/v1.0"
+		page2   = baseURL + "/deviceManagement/managedDevices?$skiptoken=next"
+	)
+	page1 := baseURL + "/deviceManagement/managedDevices" + collectors.ManagedDevicesUnionSelect
+	g := &countingGraph{
+		bodies: map[string][]byte{
+			page1: []byte(`{"value":[{"id":"d1"},{"id":"d2"}],"@odata.nextLink":"` + page2 + `"}`),
+		},
+		errs: map[string]error{page2: errors.New("later page failed")},
+	}
+	f := collectors.NewCachingFleetFetcher(g, baseURL, time.Hour)
+	outcomes := recordoutcome.NewRecorder()
+
+	if got, err := f.ManagedDevices(context.Background(), outcomes); err == nil || got != nil {
+		t.Fatalf("first ManagedDevices = (%v, %v), want nil rows and later-page error", got, err)
+	}
+	if got := outcomes.Snapshot().Counts; got != (recordoutcome.Counts{Fetched: 2, Errored: 2}) {
+		t.Fatalf("outcomes = %+v, want fetched=2 errored=2", got)
+	}
+
+	delete(g.errs, page2)
+	g.bodies[page2] = []byte(`{"value":[{"id":"d3"}]}`)
+	got, err := f.ManagedDevices(context.Background(), recordoutcome.NewRecorder())
+	if err != nil {
+		t.Fatalf("retry after partial-page failure: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("retry returned %d devices, want all 3", len(got))
+	}
+	if calls := g.managedDevicesCalls(); calls != 4 {
+		t.Fatalf("managedDevices page requests = %d, want 4 across failed and retried walks", calls)
 	}
 }
 
@@ -112,7 +157,7 @@ func TestDirectFleetFetcher_PagesGivenURL(t *testing.T) {
 	g := &countingGraph{body: onePage()}
 	url := "https://graph.microsoft.com/v1.0/deviceManagement/managedDevices?$select=id,operatingSystem"
 	f := &collectors.DirectFleetFetcher{G: g, URL: url}
-	got, err := f.ManagedDevices(context.Background())
+	got, err := f.ManagedDevices(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("ManagedDevices: %v", err)
 	}

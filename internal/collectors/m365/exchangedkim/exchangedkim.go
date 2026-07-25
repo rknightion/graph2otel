@@ -65,6 +65,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -139,7 +140,7 @@ type gaugeKey struct {
 // later tick drops out of the export instead of ghosting forever under Grafana
 // Cloud's forced cumulative temporality. An empty result (a tenant with no
 // accepted domains) emits NO series at all rather than a zero.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	// Stamp the transport HERE, not just in IngestTransport(). There is no ingest
 	// engine on this path to do it, and the Scheduler's baseline is
 	// telemetry.TransportGraph — so without this wrapper every record from the
@@ -149,8 +150,10 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 
 	recs, err := c.c.Invoke(ctx, cmdlet, nil)
 	if err != nil {
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		return fmt.Errorf("%s: %w", cmdlet, err)
 	}
+	outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(recs)))
 
 	counts := map[gaugeKey]int64{}
 	for _, r := range recs {
@@ -159,6 +162,8 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			status:  str(r, "Status"),
 		}]++
 		e.LogEvent(logTwin(r))
+		outcomes.Add(recordoutcome.OutcomeMapped, 1)
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 	}
 
 	points := make([]telemetry.GaugePoint, 0, len(counts))

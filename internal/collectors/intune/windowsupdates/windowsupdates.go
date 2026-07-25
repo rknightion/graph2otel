@@ -105,7 +105,9 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/graphclient"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
 	"github.com/rknightion/graph2otel/internal/preflight"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -154,9 +156,10 @@ const (
 
 // Collector polls the beta Windows Update for Business deployment service.
 type Collector struct {
-	g       collectors.GraphClient
-	baseURL string
-	logger  *slog.Logger
+	outcomes *outcome.Recorder
+	g        collectors.GraphClient
+	baseURL  string
+	logger   *slog.Logger
 }
 
 // New builds the collector. A nil logger falls back to slog.Default().
@@ -191,7 +194,11 @@ func (c *Collector) RequiredPermissions() []string {
 // snapshot would claim the tenant has none of them. A 403 (missing scope, or the
 // deployment service not onboarded on this tenant) is a graceful info-level skip
 // rather than a collection failure.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
+	local := *c
+	local.outcomes = outcomes
+	c = &local
 	var errs []error
 
 	if raws, ok, err := c.fetch(ctx, updatePoliciesPath); err != nil {
@@ -216,9 +223,10 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // fetch pages one segment. ok=false with a nil error means "403, skip this
 // segment" — the caller must then emit nothing for it, not an empty snapshot.
 func (c *Collector) fetch(ctx context.Context, path string) ([]json.RawMessage, bool, error) {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+path, nil)
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+path, nil, c.outcomes)
 	if err != nil {
 		if isForbidden(err) {
+			outcome.RecordError(c.outcomes, err)
 			c.logger.Info("windowsupdates: segment forbidden (missing scope?); skipping",
 				"collector", collectorName, "path", path, "error", graphclient.FormatODataError(err))
 			return nil, false, nil
@@ -297,8 +305,10 @@ func (c *Collector) collectPolicies(e telemetry.Emitter, raws []json.RawMessage)
 	for _, raw := range raws {
 		var p updatePolicy
 		if err := json.Unmarshal(raw, &p); err != nil {
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			return fmt.Errorf("%s: decode update policy: %w", collectorName, err)
 		}
+		outcome.Emitted(c.outcomes, 1)
 		if len(p.AutoEnrollmentUpdateCategories) == 0 {
 			counts[noneValue]++
 		}
@@ -432,8 +442,10 @@ func (c *Collector) collectDeployments(e telemetry.Emitter, raws []json.RawMessa
 	for _, raw := range raws {
 		var d deployment
 		if err := json.Unmarshal(raw, &d); err != nil {
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			return fmt.Errorf("%s: decode deployment: %w", collectorName, err)
 		}
+		outcome.Emitted(c.outcomes, 1)
 		effective, requested := unknownValue, unknownValue
 		if d.State != nil {
 			effective = orUnknown(d.State.EffectiveValue)

@@ -469,7 +469,7 @@ func TestCollectEmitsPolicyCountsByState(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -499,7 +499,7 @@ func TestCollectEmitsNamedLocationCountsByTypeAndTrust(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -539,7 +539,7 @@ func TestCollectSkipsUnrecognizedPolicyStateAndLocationType(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -569,7 +569,7 @@ func TestCollectSetsConsistencyLevelHeaderIsNotRequired(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	for url, cl := range g.seenHeaders {
@@ -586,7 +586,7 @@ func TestCollectIsResilientToPolicyFetchError(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Error("expected Collect to surface the policies fetch failure as an error")
 	}
@@ -607,7 +607,7 @@ func TestCollectIsResilientToNamedLocationsFetchError(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Error("expected Collect to surface the named locations fetch failure as an error")
 	}
@@ -645,7 +645,7 @@ func TestNoPerEntitySeries(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -698,7 +698,7 @@ func findings(rec *telemetrytest.Recorder) map[string]float64 {
 func TestLiveCaptureReportsNothingUnexpected(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixture()}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if got := findings(rec); len(got) != 0 {
@@ -723,7 +723,7 @@ func TestUnrecognizedValuesAreReportedAndStillSkipped(t *testing.T) {
 		`),
 	}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

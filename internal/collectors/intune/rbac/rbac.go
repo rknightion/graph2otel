@@ -96,7 +96,9 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/graphclient"
+	outcome "github.com/rknightion/graph2otel/internal/outcomehelper"
 	"github.com/rknightion/graph2otel/internal/preflight"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -138,9 +140,10 @@ const (
 
 // Collector polls the Intune role definitions and role assignments.
 type Collector struct {
-	g       collectors.GraphClient
-	baseURL string
-	logger  *slog.Logger
+	outcomes *outcome.Recorder
+	g        collectors.GraphClient
+	baseURL  string
+	logger   *slog.Logger
 }
 
 // New builds the collector. A nil logger falls back to slog.Default().
@@ -210,12 +213,18 @@ type roleAssignment struct {
 // them, then emits both bounded gauges and a twin per definition and per
 // assignment. A 403 on the catalog (missing scope, or Intune absent on this
 // tenant) is a graceful info-level skip rather than a collection failure.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *outcome.Recorder) (err error) {
+	defer func() { outcome.RecordError(outcomes, err) }()
+	local := *c
+	local.outcomes = outcomes
+	c = &local
 	defs, err := c.listDefinitions(ctx)
 	if err != nil {
 		if isForbidden(err) {
+			outcome.RecordError(c.outcomes, err)
 			c.logger.Info("rbac: roleDefinitions forbidden (missing scope?); skipping",
 				"collector", collectorName, "error", graphclient.FormatODataError(err))
+			outcomes.Cause(recordoutcome.CausePermissionDenied)
 			return nil
 		}
 		return fmt.Errorf("%s: list role definitions: %w", collectorName, err)
@@ -237,6 +246,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		if lerr != nil {
 			c.logger.Warn("rbac: role definition assignments navigation failed; its assignments stay unresolved",
 				"collector", collectorName, "role_definition_id", def.ID, "error", lerr)
+			outcome.RecordError(outcomes, lerr)
 			continue
 		}
 		assignmentsPerDef[def.ID] = len(ids)
@@ -276,7 +286,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 
 // listDefinitions pages the role-definition catalog.
 func (c *Collector) listDefinitions(ctx context.Context) ([]roleDefinition, error) {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+roleDefinitionsPath, nil)
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+roleDefinitionsPath, nil, c.outcomes)
 	if err != nil {
 		return nil, err
 	}
@@ -284,8 +294,10 @@ func (c *Collector) listDefinitions(ctx context.Context) ([]roleDefinition, erro
 	for _, raw := range raws {
 		var d roleDefinition
 		if err := json.Unmarshal(raw, &d); err != nil {
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			return nil, fmt.Errorf("decode role definition: %w", err)
 		}
+		outcome.Emitted(c.outcomes, 1)
 		defs = append(defs, d)
 	}
 	return defs, nil
@@ -294,7 +306,7 @@ func (c *Collector) listDefinitions(ctx context.Context) ([]roleDefinition, erro
 // listAssignments pages the top-level assignment collection — the only form
 // that carries members, scopeType and scopeMembers.
 func (c *Collector) listAssignments(ctx context.Context) ([]roleAssignment, error) {
-	raws, err := collectors.GetAllValues(ctx, c.g, c.baseURL+roleAssignmentsPath, nil)
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+roleAssignmentsPath, nil, c.outcomes)
 	if err != nil {
 		return nil, err
 	}
@@ -302,8 +314,10 @@ func (c *Collector) listAssignments(ctx context.Context) ([]roleAssignment, erro
 	for _, raw := range raws {
 		var a roleAssignment
 		if err := json.Unmarshal(raw, &a); err != nil {
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			return nil, fmt.Errorf("decode role assignment: %w", err)
 		}
+		outcome.Emitted(c.outcomes, 1)
 		out = append(out, a)
 	}
 	return out, nil
@@ -315,7 +329,7 @@ func (c *Collector) listAssignments(ctx context.Context) ([]roleAssignment, erro
 // a worse copy of what the top-level list already has.
 func (c *Collector) listAssignmentIDs(ctx context.Context, defID string) ([]string, error) {
 	url := c.baseURL + roleDefinitionsPath + "/" + defID + roleAssignmentsSegment
-	raws, err := collectors.GetAllValues(ctx, c.g, url, nil)
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, url, nil, c.outcomes)
 	if err != nil {
 		return nil, err
 	}
@@ -325,8 +339,10 @@ func (c *Collector) listAssignmentIDs(ctx context.Context, defID string) ([]stri
 			ID string `json:"id"`
 		}
 		if err := json.Unmarshal(raw, &a); err != nil {
+			outcome.Errored(c.outcomes, 1, recordoutcome.CauseDecodeError)
 			return nil, fmt.Errorf("decode linked role assignment: %w", err)
 		}
+		outcome.Emitted(c.outcomes, 1)
 		if a.ID != "" {
 			ids = append(ids, a.ID)
 		}

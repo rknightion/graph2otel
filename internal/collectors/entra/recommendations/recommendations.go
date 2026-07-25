@@ -18,6 +18,8 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	entraoutcome "github.com/rknightion/graph2otel/internal/outcomehelper"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
@@ -102,14 +104,18 @@ func (c *Collector) RequiredPermissions() []string {
 // per-type impacted-resource counts. Because coverage is license-dependent and
 // the endpoint is beta, a 4xx (unavailable/unlicensed) is skipped-and-logged,
 // not surfaced as an error.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
-	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/directory/recommendations", nil)
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/directory/recommendations", nil, outcomes)
 	if err != nil {
 		if isUnavailable(err) {
+			if strings.Contains(err.Error(), "status 403") {
+				outcomes.Cause(recordoutcome.CausePermissionDenied)
+			}
 			c.logger.Info("recommendations endpoint unavailable on this tenant; skipping",
 				"collector", collectorName, "error", err)
 			return nil
 		}
+		entraoutcome.SourceError(outcomes)
 		return fmt.Errorf("recommendations: list: %w", err)
 	}
 
@@ -118,6 +124,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	for _, r := range raw {
 		var rec recommendation
 		if err := json.Unmarshal(r, &rec); err != nil {
+			entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
 			c.logger.Warn("recommendations: skipping unparseable entry", "collector", collectorName, "error", err)
 			continue
 		}
@@ -132,6 +139,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		if rec.RecommendationType != "" {
 			impactedByType[rec.RecommendationType] += len(rec.ImpactedResources)
 		}
+		entraoutcome.Emitted(outcomes, 1)
 	}
 
 	total := make([]telemetry.GaugePoint, 0, len(byStatusPriority))

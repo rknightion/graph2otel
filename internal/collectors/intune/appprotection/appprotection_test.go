@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
@@ -41,6 +42,9 @@ func newTestCollector(g collectors.GraphClient) *Collector {
 }
 
 func page(items ...map[string]any) string {
+	if items == nil {
+		items = []map[string]any{}
+	}
 	b, err := json.Marshal(map[string]any{"value": items})
 	if err != nil {
 		panic(err)
@@ -127,7 +131,7 @@ func TestCollectEmitsPolicyCountByPlatformAndAssigned(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixtureBodies()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -155,7 +159,7 @@ func TestCollectEmitsFlaggedRegistrationsByReasonAndPlatform(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixtureBodies()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -193,7 +197,7 @@ func TestCollectEmitsWIPPolicyCountByAssigned(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixtureBodies()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -225,7 +229,7 @@ func TestWIPEmptyBodyBucketsAsZeroKnownPolicies(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v, want nil", err)
 	}
 
@@ -252,7 +256,7 @@ func TestWIPDecodeErrorDropsSeriesButNotCollector(t *testing.T) {
 	g := &fakeGraph{bodies: bodies}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v, want nil (a WIP decode failure must never fail the collector)", err)
 	}
 
@@ -279,7 +283,7 @@ func TestWIPFetchErrorDropsSeriesButNotCollector(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v, want nil (a WIP fetch failure must never fail the collector)", err)
 	}
 
@@ -288,6 +292,56 @@ func TestWIPFetchErrorDropsSeriesButNotCollector(t *testing.T) {
 	}
 	if len(rec.MetricPoints(policyCountMetricName)) == 0 {
 		t.Error("policy count metric should still emit despite the WIP failure")
+	}
+}
+
+func TestWIPSecondEndpointFailureAccountsBufferedRowsAsErrored(t *testing.T) {
+	g := &fakeGraph{
+		bodies: map[string]string{
+			wipPoliciesURL(): page(assignable(true), assignable(false)),
+		},
+		errs: map[string]error{mdmWipPoliciesURL(): errors.New("status 503 unavailable")},
+	}
+	c := newTestCollector(g)
+	outcomes := recordoutcome.NewRecorder()
+	c.outcomes = outcomes
+	rec := telemetrytest.New()
+
+	if err := c.collectWIPPolicyCounts(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("collectWIPPolicyCounts: %v", err)
+	}
+	if pts := rec.MetricPoints(wipPolicyCountMetricName); len(pts) != 0 {
+		t.Fatalf("partial WIP snapshot emitted %d points, want zero", len(pts))
+	}
+	got := outcomes.Snapshot()
+	if got.Counts != (recordoutcome.Counts{Fetched: 2, Errored: 2}) {
+		t.Fatalf("counts = %+v, want fetched=2 errored=2", got.Counts)
+	}
+	if summary := got.Summarize(nil, false); summary.Result != recordoutcome.ResultFailure || summary.Cause != recordoutcome.CauseSourceError {
+		t.Fatalf("summary = %+v, want failure/%s", summary, recordoutcome.CauseSourceError)
+	}
+}
+
+func TestWIPForbiddenAccountsPermissionDenied(t *testing.T) {
+	g := &fakeGraph{
+		errs: map[string]error{
+			wipPoliciesURL(): errors.New("graphclient: GET x: status 403: forbidden"),
+		},
+	}
+	c := newTestCollector(g)
+	outcomes := recordoutcome.NewRecorder()
+	c.outcomes = outcomes
+	rec := telemetrytest.New()
+
+	if err := c.collectWIPPolicyCounts(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("collectWIPPolicyCounts: %v", err)
+	}
+	if pts := rec.MetricPoints(wipPolicyCountMetricName); len(pts) != 0 {
+		t.Fatalf("forbidden WIP snapshot emitted %d points, want zero", len(pts))
+	}
+	got := outcomes.Snapshot().Summarize(nil, false)
+	if got.Result != recordoutcome.ResultFailure || got.Cause != recordoutcome.CausePermissionDenied {
+		t.Fatalf("summary = %+v, want failure/%s", got, recordoutcome.CausePermissionDenied)
 	}
 }
 
@@ -303,7 +357,7 @@ func TestCollectIsResilientToPartialFailure(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := newTestCollector(g).Collect(context.Background(), rec.Emitter())
+	err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("Collect: want non-nil error from the failed android fetch, got nil")
 	}
@@ -344,7 +398,7 @@ func TestCollectTwinsOnlyFlaggedRegistrations(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixtureBodies()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -379,7 +433,7 @@ func TestFlaggedRegistrationLogTwinCarriesIdentityAndSeverity(t *testing.T) {
 	}}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -435,7 +489,7 @@ func TestFlaggedRegistrationLogTwinCarriesAppIdentifier(t *testing.T) {
 			}}
 			rec := telemetrytest.New()
 
-			if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+			if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 				t.Fatalf("Collect: %v", err)
 			}
 
@@ -483,7 +537,7 @@ func TestUnrecognizedFlaggedReasonStaysInfo(t *testing.T) {
 	}}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -504,7 +558,7 @@ func TestNoPerRegistrationAttributesOnMetrics(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixtureBodies()}
 	rec := telemetrytest.New()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

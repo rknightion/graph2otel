@@ -106,6 +106,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/graphclient"
 	"github.com/rknightion/graph2otel/internal/preflight"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -209,39 +210,50 @@ type policyFileRow struct {
 // Collect fetches the policyFiles set, decodes the DlpPolicy content (skipping
 // the parse when the version hash is unchanged), and emits the bounded posture
 // gauges plus one log twin per policy and per rule.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	body, err := c.g.RawGet(ctx, c.baseURL+policyFilesPath)
 	if err != nil {
 		if isForbidden(err) {
+			outcomes.Cause(recordoutcome.CausePermissionDenied)
 			c.logger.Info("skipping DLP policies: endpoint returned 403 (surface/scope not available on this tenant)",
 				"collector", collectorName, "error", graphclient.FormatODataError(err))
 			return nil
 		}
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		return err
 	}
 
 	var resp policyFilesResp
 	if err := json.Unmarshal(body, &resp); err != nil {
+		outcomes.Cause(recordoutcome.CauseDecodeError)
 		return fmt.Errorf("decode policyFiles response: %w", err)
 	}
+	outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(resp.Value)))
 
 	row, ok := dlpRow(resp.Value)
 	if !ok {
+		outcomes.Add(recordoutcome.OutcomeFiltered, uint64(len(resp.Value)))
 		// No DlpPolicy row at all: nothing to inventory.
 		c.logger.Info("no DlpPolicy row in policyFiles response; nothing to emit", "collector", collectorName)
 		return nil
 	}
+	outcomes.Add(recordoutcome.OutcomeFiltered, uint64(len(resp.Value))-1)
 
 	policies, err := c.policiesFor(row)
 	if err != nil {
+		outcomes.Add(recordoutcome.OutcomeErrored, 1)
+		outcomes.Cause(recordoutcome.CauseDecodeError)
 		return err
 	}
 	if len(policies) == 0 {
+		outcomes.Add(recordoutcome.OutcomeFiltered, 1)
 		// The row carried no parseable/present content and we have no cache: a
 		// tenant with DLP configured but no policy payload this cycle.
 		return nil
 	}
 
+	outcomes.Add(recordoutcome.OutcomeMapped, 1)
+	outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 	c.emit(e, policies)
 	return nil
 }

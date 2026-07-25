@@ -110,7 +110,7 @@ func liveGraph(t *testing.T) *fakeGraph {
 func collect(t *testing.T, g *fakeGraph) *telemetrytest.Recorder {
 	t.Helper()
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	return rec
@@ -666,7 +666,7 @@ func TestBatchPostFailureFailsTheCollection(t *testing.T) {
 		errs:   map[string]error{batchURL(): errors.New("boom")},
 	}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err == nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err == nil {
 		t.Fatal("a $batch POST failure must be surfaced")
 	}
 	if len(rec.LogRecords()) != 0 || len(rec.MetricPoints(devicesMetricName)) != 0 {
@@ -677,7 +677,7 @@ func TestBatchPostFailureFailsTheCollection(t *testing.T) {
 func TestForbiddenListSkipsGracefully(t *testing.T) {
 	g := &fakeGraph{errs: map[string]error{listURL(): errors.New("graphclient: GET ...: status 403: forbidden")}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("403 should be a graceful skip, got: %v", err)
 	}
 	if len(rec.LogRecords()) != 0 || len(rec.MetricPoints(devicesMetricName)) != 0 {
@@ -688,7 +688,7 @@ func TestForbiddenListSkipsGracefully(t *testing.T) {
 func TestListErrorIsSurfaced(t *testing.T) {
 	g := &fakeGraph{errs: map[string]error{listURL(): errors.New("boom")}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err == nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err == nil {
 		t.Error("a non-403 list error must be surfaced")
 	}
 }
@@ -708,7 +708,7 @@ func TestEmptyFleetSendsNoBatchAndEmitsNoTwins(t *testing.T) {
 // Failing loudly beats a silent empty snapshot.
 func TestMissingPosterIsAnError(t *testing.T) {
 	rec := telemetrytest.New()
-	err := New(getOnlyGraph{}, nil).Collect(context.Background(), rec.Emitter())
+	err := New(getOnlyGraph{}, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("a GraphClient without RawPost must fail the collection, not emit an empty snapshot")
 	}

@@ -353,7 +353,7 @@ func TestBlobCollectorDrainsARealRecordEndToEnd(t *testing.T) {
 		Logger:   slog.New(slog.DiscardHandler),
 	})
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -369,7 +369,7 @@ func TestBlobCollectorDrainsARealRecordEndToEnd(t *testing.T) {
 
 	// A second Collect against an unchanged blob must emit nothing: the cursor
 	// persisted, so a restart does not re-ship what it already has.
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("second Collect: %v", err)
 	}
 	if got := len(rec.LogRecords()); got != 1 {
@@ -533,7 +533,7 @@ func TestManagedIdentityBlobCollectorDrainsEndToEnd(t *testing.T) {
 		Store:    checkpoint.NewStore(t.TempDir()),
 		Logger:   slog.New(slog.DiscardHandler),
 	})
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	logs := rec.LogRecords()
@@ -589,7 +589,7 @@ func TestBlobAndPolledSignInDifferOnlyByIngestTransport(t *testing.T) {
 		Store:  checkpoint.NewStore(t.TempDir()),
 		Logger: slog.New(slog.DiscardHandler),
 	})
-	if err := bc.Collect(context.Background(), blobRec.Emitter()); err != nil {
+	if err := bc.Collect(context.Background(), blobRec.Emitter(), nil); err != nil {
 		t.Fatalf("blob Collect: %v", err)
 	}
 
@@ -609,7 +609,7 @@ func TestBlobAndPolledSignInDifferOnlyByIngestTransport(t *testing.T) {
 		return []map[string]any{inner}, "", nil
 	})
 	cp := &checkpoint.Checkpoint{TenantID: tenant, Endpoint: cfg.Path, SeenIDs: checkpoint.NewSeenIDs()}
-	if _, err := logpipeline.Poll(context.Background(), cfg, cp, from, from.Add(time.Hour), fetcher, polledRec.Emitter()); err != nil {
+	if _, err := logpipeline.Poll(context.Background(), cfg, cp, from, from.Add(time.Hour), fetcher, polledRec.Emitter(), nil); err != nil {
 		t.Fatalf("polled Poll: %v", err)
 	}
 
@@ -769,7 +769,7 @@ func TestCollectorDerivesSigninCounterForFreshRecord(t *testing.T) {
 		Logger:              slog.New(slog.DiscardHandler),
 		MetricRecencyWindow: 20 * time.Minute,
 	})
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 

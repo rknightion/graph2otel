@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -64,7 +65,7 @@ func newFixtureCollector() *Collector {
 
 func TestCollectEmitsBoundedServiceAndIssueGauges(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := newFixtureCollector().Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newFixtureCollector().Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -103,9 +104,21 @@ func TestCollectEmitsBoundedServiceAndIssueGauges(t *testing.T) {
 	}
 }
 
+func TestCollectAccountsEachOverviewOnce(t *testing.T) {
+	outcomes := recordoutcome.NewRecorder()
+	if err := newFixtureCollector().Collect(context.Background(), telemetrytest.New().Emitter(), outcomes); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	got := outcomes.Snapshot().Summarize(nil, false)
+	want := recordoutcome.Counts{Fetched: 3, Mapped: 3, Emitted: 3}
+	if got.Result != recordoutcome.ResultSuccess || got.Counts != want {
+		t.Errorf("outcome = %#v, want success/%#v", got, want)
+	}
+}
+
 func TestMetricsCarryNoPerIssueAttribute(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := newFixtureCollector().Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newFixtureCollector().Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	allowed := map[string]map[string]bool{
@@ -126,7 +139,7 @@ func TestMetricsCarryNoPerIssueAttribute(t *testing.T) {
 
 func TestOnlyUnresolvedIssuesAreTwinned(t *testing.T) {
 	rec := telemetrytest.New()
-	if err := newFixtureCollector().Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := newFixtureCollector().Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	logs := rec.LogRecords()
@@ -164,7 +177,7 @@ func TestNoIssuesEmitsNoTwins(t *testing.T) {
 	body := `{"value":[{"id":"Teams","service":"Microsoft Teams","status":"serviceOperational","issues":[]}]}`
 	g := &fakeGraph{bodies: map[string]string{overviewsURL: body}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if n := len(rec.LogRecords()); n != 0 {

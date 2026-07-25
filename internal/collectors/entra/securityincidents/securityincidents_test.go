@@ -459,7 +459,7 @@ func TestEndpointAndQueryShape(t *testing.T) {
 	}
 
 	from := time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), telemetrytest.New().Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), telemetrytest.New().Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 	if len(f.seenURLs) == 0 {
@@ -498,7 +498,7 @@ func TestCollectorReEmitsAcrossPolls(t *testing.T) {
 	c := newCollector(collectors.WindowDeps{TenantID: "t1", Fetcher: f, Store: store})
 
 	to := time.Date(2026, 7, 1, 10, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter(), nil); err != nil {
 		t.Fatalf("poll1: %v", err)
 	}
 	if got := len(rec.LogRecords()); got != 1 {
@@ -511,7 +511,7 @@ func TestCollectorReEmitsAcrossPolls(t *testing.T) {
 	incV2 := map[string]any{"id": "inc-x", "lastUpdateDateTime": "2026-07-01T12:00:00Z", "displayName": "X", "severity": "medium", "status": "resolved"}
 	f.records = []map[string]any{incV2}
 	to2 := time.Date(2026, 7, 1, 13, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), to, to2, rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), to, to2, rec.Emitter(), nil); err != nil {
 		t.Fatalf("poll2: %v", err)
 	}
 	if got := len(rec.LogRecords()); got != 2 {
@@ -521,7 +521,7 @@ func TestCollectorReEmitsAcrossPolls(t *testing.T) {
 	// Poll 3: no change — the identical incV2 is deduped, nothing new emitted.
 	f.records = []map[string]any{clone(incV2)}
 	to3 := time.Date(2026, 7, 1, 14, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), to2, to3, rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), to2, to3, rec.Emitter(), nil); err != nil {
 		t.Fatalf("poll3: %v", err)
 	}
 	if got := len(rec.LogRecords()); got != 2 {
@@ -545,7 +545,7 @@ func TestEmitsNoMetrics(t *testing.T) {
 	var _ collector.WindowCollector = c
 
 	from := time.Date(2026, 7, 1, 8, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(4*time.Hour), rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(4*time.Hour), rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 	if got := len(rec.LogRecords()); got != 2 {
@@ -596,7 +596,7 @@ func TestCollectorEmitsFullRecordEndToEnd(t *testing.T) {
 	// bounds are strict. The live record is one of the two in the capture where
 	// those two timestamps differ, so the distinction is load-bearing here.
 	from := time.Date(2026, 7, 13, 19, 30, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 

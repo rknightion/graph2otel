@@ -255,7 +255,7 @@ func TestCollectorIsExperimentalAndUsesBetaEndpointWithNoServerFilter(t *testing
 	}
 
 	from := time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), telemetrytest.New().Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(time.Hour), telemetrytest.New().Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 	if len(f.seenURLs) == 0 {
@@ -294,7 +294,7 @@ func TestCollectorEmitsFullRecordsEndToEnd(t *testing.T) {
 	// this endpoint is NoServerFilter, so the engine bounds the window
 	// client-side and drops anything outside it.
 	from := time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC)
-	if _, err := c.CollectWindow(context.Background(), from, from.Add(2*time.Hour), rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, from.Add(2*time.Hour), rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 
@@ -361,7 +361,7 @@ func TestCollectorDrainsEmitsAndPersistsWatermark(t *testing.T) {
 	rec := telemetrytest.New()
 	c := newCollector(collectors.WindowDeps{TenantID: "t1", Fetcher: f, Store: store})
 
-	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter()); err != nil {
+	if _, err := c.CollectWindow(context.Background(), from, to, rec.Emitter(), nil); err != nil {
 		t.Fatalf("CollectWindow: %v", err)
 	}
 	if got := len(rec.LogRecords()); got != 2 {

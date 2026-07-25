@@ -468,7 +468,7 @@ func TestByCategoryGaugeSumsControlScores(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{scoreURL: liveScores, profilesURL: emptyProfiles}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -488,7 +488,7 @@ func TestPeerAverageGaugeFromComparativeScores(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{scoreURL: liveScores, profilesURL: emptyProfiles}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -508,7 +508,7 @@ func TestControlScoresEmitPerControlTwin(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{scoreURL: liveScores, profilesURL: emptyProfiles}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -555,7 +555,7 @@ func TestControlTwinWarnsBelow100(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{scoreURL: scoresWithFailingControl, profilesURL: emptyProfiles}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -582,7 +582,7 @@ func TestMaxByCategoryGaugeFromProfiles(t *testing.T) {
 	}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -607,7 +607,7 @@ func TestControlProfilesEmitTwin(t *testing.T) {
 	}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -655,7 +655,7 @@ func TestCollectEmitsScoreGaugesFromLiveRecord(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{scoreURL: liveScores, profilesURL: emptyProfiles}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -677,7 +677,7 @@ func TestCollectAggregatesLiveControlProfiles(t *testing.T) {
 	}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -702,7 +702,7 @@ func TestCollectOnlyEmitsLatestScoreNotFullSeries(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{scoreURL: twoScores, profilesURL: emptyProfiles}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -719,7 +719,7 @@ func TestCollectSkipsPercentageWhenMaxScoreZero(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{scoreURL: zeroMaxScore, profilesURL: emptyProfiles}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if pts := rec.MetricPoints(metricPercentage); len(pts) != 0 {
@@ -731,7 +731,7 @@ func TestCollectHandlesNoPublishedScoreYet(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{scoreURL: emptyScores, profilesURL: emptyProfiles}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if pts := rec.MetricPoints(metricCurrent); len(pts) != 0 {
@@ -743,7 +743,7 @@ func TestCollectEmitsControlProfileCountsByCategoryAndStatus(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{scoreURL: emptyScores, profilesURL: mixedProfiles}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -786,7 +786,7 @@ func TestNoUnboundedLabelsFromUnknownCategoryOrState(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{scoreURL: emptyScores, profilesURL: mixedProfiles}}
 	rec := telemetrytest.New()
 
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	for _, p := range rec.MetricPoints(metricByCategory) {
@@ -808,7 +808,7 @@ func TestCollectIsResilientToSecureScoreFailure(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected Collect to surface the secure score failure as an error")
 	}
@@ -828,7 +828,7 @@ func TestCollectIsResilientToControlProfilesFailure(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 
-	err := New(g, nil).Collect(context.Background(), rec.Emitter())
+	err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil)
 	if err == nil {
 		t.Fatal("expected Collect to surface the control-profiles failure as an error")
 	}
@@ -902,7 +902,7 @@ func TestLiveCaptureReportsNothingUnexpected(t *testing.T) {
 		profilesNextURL: emptyProfiles,
 	}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if got := findings(rec); len(got) != 0 {
@@ -915,7 +915,7 @@ func TestLiveCaptureReportsNothingUnexpected(t *testing.T) {
 func TestUnmappedCategoryAndStatusAreReported(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{scoreURL: emptyScores, profilesURL: mixedProfiles}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	got := findings(rec)

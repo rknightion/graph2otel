@@ -56,6 +56,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/tvm"
@@ -121,13 +122,15 @@ func (c *Collector) RequiredPermissions() []string {
 
 // Collect runs the summary query, emits the bounded gauges, then fetches the
 // per-entity twins per privilege level in row-cap-safe partitions.
-func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	summary, err := c.c.Query(ctx, "oauth_summary", summaryQuery)
 	if err != nil {
+		outcomes.Cause(recordoutcome.CauseSourceError)
 		return fmt.Errorf("%s: summary query: %w", collectorName, err)
 	}
+	outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(summary)))
 
-	perPrivilege := c.emitGauges(e, summary)
+	perPrivilege := c.emitGauges(e, summary, outcomes)
 
 	var errs []error
 	for _, pc := range perPrivilege {
@@ -135,18 +138,23 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			query := fmt.Sprintf(twinQueryBase, pc.privilege) + p.Predicate("OAuthAppId")
 			rows, qerr := c.c.Query(ctx, "oauth_twin_"+pc.privilege, query)
 			if qerr != nil {
+				outcomes.Cause(recordoutcome.CauseSourceError)
 				c.logger.Warn("oauth app twin partition failed",
 					"collector", collectorName, "privilege", pc.privilege, "error", qerr)
 				errs = append(errs, fmt.Errorf("twin %s: %w", pc.privilege, qerr))
 				continue
 			}
+			outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(rows)))
 			if len(rows) >= tvm.HardRowCap {
+				outcomes.Cause(recordoutcome.CauseSourceError)
 				c.logger.Error("oauth app twin partition hit the hunting row cap; some rows were not emitted",
 					"collector", collectorName, "privilege", pc.privilege, "rows", len(rows))
 				errs = append(errs, fmt.Errorf("twin %s: hit row cap %d", pc.privilege, tvm.HardRowCap))
 			}
 			for _, r := range rows {
 				e.LogEvent(appTwin(r))
+				outcomes.Add(recordoutcome.OutcomeMapped, 1)
+				outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 			}
 		}
 	}
@@ -163,7 +171,7 @@ type privilegeCount struct {
 // partition planning. The apps gauge keeps all four categorical dimensions; the
 // max-risk and consented-users gauges are collapsed to privilege level
 // collector-side (max-of-maxes, sum-of-sums).
-func (c *Collector) emitGauges(e telemetry.Emitter, summary []map[string]any) []privilegeCount {
+func (c *Collector) emitGauges(e telemetry.Emitter, summary []map[string]any, outcomes *recordoutcome.Recorder) []privilegeCount {
 	var appPts []telemetry.GaugePoint
 	appsByPriv := map[string]int64{}
 	maxRiskByPriv := map[string]float64{}
@@ -172,6 +180,8 @@ func (c *Collector) emitGauges(e telemetry.Emitter, summary []map[string]any) []
 	for _, r := range summary {
 		priv, _ := r["PrivilegeLevel"].(string)
 		if priv == "" {
+			outcomes.Add(recordoutcome.OutcomeDropped, 1)
+			outcomes.Cause(recordoutcome.CauseMappingError)
 			continue
 		}
 		consented, _ := tvm.SByteBool(r, "IsAdminConsented")
@@ -192,6 +202,8 @@ func (c *Collector) emitGauges(e telemetry.Emitter, summary []map[string]any) []
 		if v, ok := r["consented_users"].(float64); ok {
 			usersByPriv[priv] += v
 		}
+		outcomes.Add(recordoutcome.OutcomeMapped, 1)
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 	}
 
 	e.GaugeSnapshot(metricApps, unitApp,

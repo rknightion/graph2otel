@@ -8,6 +8,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collector"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -112,12 +113,16 @@ func (c *BlobCollector) CheckpointState() *collector.CheckpointState {
 // cursor would re-emit every byte of every retained blob (up to a week per
 // category), so a duplicate storm is a much worse outcome than a failed tick
 // the scheduler retries.
-func (c *BlobCollector) Collect(ctx context.Context, e telemetry.Emitter) error {
+func (c *BlobCollector) Collect(
+	ctx context.Context,
+	e telemetry.Emitter,
+	outcomes *recordoutcome.Recorder,
+) error {
 	cur, err := c.Store.LoadCursor(c.TenantID, c.Config.cursorKey())
 	if err != nil {
 		return fmt.Errorf("blobpipeline: %s: load cursor: %w", c.NameField, err)
 	}
-	if err := Poll(ctx, c.Config, cur, c.Source, e, c.Logger, c.Store.SaveCursor); err != nil {
+	if err := Poll(ctx, c.Config, cur, c.Source, e, c.Logger, c.Store.SaveCursor, outcomes); err != nil {
 		return fmt.Errorf("blobpipeline: %s: %w", c.NameField, err)
 	}
 	return nil

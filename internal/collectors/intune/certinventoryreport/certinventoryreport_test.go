@@ -95,7 +95,7 @@ func TestCollectAggregatesDaysUntilExpiryByIssuer(t *testing.T) {
 	rec := telemetrytest.New()
 	c := newTestCollector(&fakeRunner{rows: rows})
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -129,7 +129,7 @@ func TestCollectAggregatesStateAcrossIssuers(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 	c := newTestCollector(&fakeRunner{rows: rows})
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -172,7 +172,7 @@ func TestCollectCollapsesCertificateStatusEnumToBoundedBuckets(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 	c := newTestCollector(&fakeRunner{rows: rows})
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -205,7 +205,7 @@ func TestCollectEmitsPerCertificateLogEvents(t *testing.T) {
 	rows := []exportjob.Row{row("Contoso Issuing CA", "issued", daysFromNow(10))}
 	rec := telemetrytest.New()
 	c := newTestCollector(&fakeRunner{rows: rows})
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -250,7 +250,7 @@ func TestCollectEscalatesSeverityForFailedOrRevoked(t *testing.T) {
 	rows := []exportjob.Row{row("Contoso Issuing CA", "revoked", nil)}
 	rec := telemetrytest.New()
 	c := newTestCollector(&fakeRunner{rows: rows})
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	logs := rec.LogRecords()
@@ -274,7 +274,7 @@ func TestCollectDoesNotEscalateSeverityForHealthy(t *testing.T) {
 	rows := []exportjob.Row{row("Contoso Issuing CA", "issued", nil)}
 	rec := telemetrytest.New()
 	c := newTestCollector(&fakeRunner{rows: rows})
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	logs := rec.LogRecords()
@@ -291,7 +291,7 @@ func TestCollectSkipsGracefullyWhenExportRunnerNil(t *testing.T) {
 	c := New(nil, nil)
 	c.now = fixedClock
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect with nil runner returned error %v, want nil (graceful skip)", err)
 	}
 	if pts := rec.MetricPoints(stateMetricName); len(pts) != 0 {
@@ -306,7 +306,7 @@ func TestCollectSkipsGracefullyOnExportError(t *testing.T) {
 	rec := telemetrytest.New()
 	c := newTestCollector(&fakeRunner{err: errors.New("boom: permission denied")})
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect on export error returned %v, want nil (graceful skip)", err)
 	}
 	if pts := rec.MetricPoints(stateMetricName); len(pts) != 0 {
@@ -321,7 +321,7 @@ func TestCollectCapsIssuerCardinality(t *testing.T) {
 	}
 	rec := telemetrytest.New()
 	c := newTestCollector(&fakeRunner{rows: rows})
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
@@ -390,7 +390,7 @@ func TestUnmappedCertificateStatusIsAnnounced(t *testing.T) {
 	rows := []exportjob.Row{row("Contoso Issuing CA", "3", daysFromNow(30))}
 	c := New(&fakeRunner{rows: rows}, logger)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -425,7 +425,7 @@ func TestMappedCertificateStatusIsNotAnnounced(t *testing.T) {
 	rows := []exportjob.Row{row("Contoso Issuing CA", "issued", daysFromNow(30))}
 	c := New(&fakeRunner{rows: rows}, logger)
 	rec := telemetrytest.New()
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -447,7 +447,7 @@ func TestMappedCertificateStatusIsNotAnnounced(t *testing.T) {
 func TestUnmappedCertificateStatusIsCounted(t *testing.T) {
 	rows := []exportjob.Row{row("Contoso Issuing CA", "3", daysFromNow(30))}
 	rec := telemetrytest.New()
-	if err := New(&fakeRunner{rows: rows}, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := New(&fakeRunner{rows: rows}, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect returned error: %v", err)
 	}
 
@@ -477,7 +477,7 @@ func TestCollectStampsReportExportTransport(t *testing.T) {
 		row("Contoso Issuing CA", "issued", daysFromNow(120)),
 	}})
 
-	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
