@@ -1,8 +1,16 @@
 # graph2otel
 
+<!-- The two version badges are maintained by release-please: it bumps the ONE
+     semver on each annotated line at release time (its generic updater replaces
+     only the first match per line, so version-bearing text and URL must each sit
+     on their own line and carry the version exactly once — here, only in the URL).
+     helm-docs regenerates these same lines from Chart.yaml, so the two converge.
+     The Type badge is static and stays outside the block. -->
 <!-- x-release-please-start-version -->
-![Version: 0.1.0](https://img.shields.io/badge/Version-0.1.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.1.0](https://img.shields.io/badge/AppVersion-0.1.0-informational?style=flat-square)
+![Version](https://img.shields.io/badge/Version-0.1.0-informational?style=flat-square)
+![AppVersion](https://img.shields.io/badge/AppVersion-0.1.0-informational?style=flat-square)
 <!-- x-release-please-end -->
+![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square)
 
 Poll the Microsoft Graph API (Entra ID + Intune) and export OpenTelemetry-native metrics + logs (OTLP). Optimized for Grafana Cloud.
 

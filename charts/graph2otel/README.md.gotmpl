@@ -2,9 +2,17 @@
 
 {{ template "chart.deprecationWarning" . }}
 
+<!-- The two version badges are maintained by release-please: it bumps the ONE
+     semver on each annotated line at release time (its generic updater replaces
+     only the first match per line, so version-bearing text and URL must each sit
+     on their own line and carry the version exactly once — here, only in the URL).
+     helm-docs regenerates these same lines from Chart.yaml, so the two converge.
+     The Type badge is static and stays outside the block. -->
 <!-- x-release-please-start-version -->
-{{ template "chart.badgesSection" . }}
+![Version](https://img.shields.io/badge/Version-{{ .Version }}-informational?style=flat-square)
+![AppVersion](https://img.shields.io/badge/AppVersion-{{ .AppVersion }}-informational?style=flat-square)
 <!-- x-release-please-end -->
+![Type: {{ .Type }}](https://img.shields.io/badge/Type-{{ .Type }}-informational?style=flat-square)
 
 {{ template "chart.description" . }}
 
