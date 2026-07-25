@@ -46,6 +46,20 @@ import (
 	"github.com/rknightion/graph2otel/internal/preflight"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
+)
+
+// detectionState and remediationState are METRIC LABELS passed raw, so a value
+// Microsoft adds silently moves series membership (#234). No in-repo bucket map
+// exists — the row carries the wire value verbatim — so each is declared from
+// the Graph BETA CSDL EnumType the deviceHealthScriptDeviceState property
+// references (`GET /beta/$metadata`, fetched 2026-07-25): detectionState is
+// `runState`, remediationState is `remediationState`. `unknownFutureValue`
+// (present only on remediationState) is EXCLUDED so its appearance fires the
+// watchdog; `runState` has no such member, so its set is complete.
+var (
+	knownDetectionStates   = wirecheck.NewEnum("unknown", "success", "fail", "scriptError", "pending", "notApplicable")
+	knownRemediationStates = wirecheck.NewEnum("unknown", "skipped", "success", "remediationFailed", "scriptError")
 )
 
 const (
@@ -69,6 +83,7 @@ type Collector struct {
 	g       collectors.GraphClient
 	baseURL string
 	logger  *slog.Logger
+	watch   *wirecheck.Reporter
 }
 
 // New builds the collector. A nil logger falls back to slog.Default().
@@ -76,7 +91,7 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Collector{g: g, baseURL: defaultBaseURL, logger: logger}
+	return &Collector{g: g, baseURL: defaultBaseURL, logger: logger, watch: wirecheck.New(collectorName, logger)}
 }
 
 func (c *Collector) Name() string { return collectorName }
@@ -156,6 +171,10 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			if err := json.Unmarshal(sraw, &rs); err != nil {
 				return fmt.Errorf("%s: decode run state: %w", collectorName, err)
 			}
+			// detectionState/remediationState are metric labels passed raw — watch
+			// each against its CSDL set so a new Microsoft member surfaces (#234).
+			c.watch.Value(e, semconv.AttrDetectionState, rs.DetectionState, knownDetectionStates)
+			c.watch.Value(e, semconv.AttrRemediationState, rs.RemediationState, knownRemediationStates)
 			counts[[3]string{rem.DisplayName, rs.DetectionState, rs.RemediationState}]++
 			e.LogEvent(runStateTwin(rem, rs))
 		}

@@ -58,6 +58,23 @@ import (
 	"github.com/rknightion/graph2otel/internal/preflight"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
+)
+
+// The four State fields are METRIC LABELS passed raw (orUnknown only guards the
+// empty case), so a value Microsoft adds silently moves series membership (#234).
+// There is no in-repo bucket map to derive them from — the row carries the wire
+// value verbatim — so each is declared from the Graph BETA CSDL EnumType the
+// managedDeviceEncryptionState property references (`GET /beta/$metadata`,
+// fetched 2026-07-25): encryptionState, encryptionReadinessState, the plural
+// `deviceTypes` enum (windowsRT/macMDM observed live 2026-07-21), and
+// complianceStatus for the policy-setting state. No `unknownFutureValue` member
+// exists on any of these four, so nothing is excluded — the sets are complete.
+var (
+	knownEncryptionStates    = wirecheck.NewEnum("notEncrypted", "encrypted")
+	knownReadinessStates     = wirecheck.NewEnum("notReady", "ready")
+	knownDeviceTypes         = wirecheck.NewEnum("desktop", "windowsRT", "winMO6", "nokia", "windowsPhone", "mac", "winCE", "winEmbedded", "iPhone", "iPad", "iPod", "android", "iSocConsumer", "unix", "macMDM", "holoLens", "surfaceHub", "androidForWork", "androidEnterprise", "blackberry", "palm", "unknown")
+	knownPolicySettingStates = wirecheck.NewEnum("unknown", "notApplicable", "compliant", "remediated", "nonCompliant", "error", "conflict", "notAssigned")
 )
 
 const (
@@ -87,6 +104,7 @@ type Collector struct {
 	g       collectors.GraphClient
 	baseURL string
 	logger  *slog.Logger
+	watch   *wirecheck.Reporter
 }
 
 // New builds the collector. A nil logger falls back to slog.Default().
@@ -94,7 +112,7 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Collector{g: g, baseURL: defaultBaseURL, logger: logger}
+	return &Collector{g: g, baseURL: defaultBaseURL, logger: logger, watch: wirecheck.New(collectorName, logger)}
 }
 
 func (c *Collector) Name() string { return collectorName }
@@ -153,6 +171,13 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		if err := json.Unmarshal(raw, &st); err != nil {
 			return fmt.Errorf("%s: decode encryption state: %w", collectorName, err)
 		}
+		// The four State fields are metric labels passed raw — watch each against
+		// its CSDL set so a new Microsoft member surfaces rather than folding into
+		// a series nobody inspects (#234).
+		c.watch.Value(e, semconv.AttrEncryptionState, st.EncryptionState, knownEncryptionStates)
+		c.watch.Value(e, semconv.AttrEncryptionReadinessState, st.EncryptionReadinessState, knownReadinessStates)
+		c.watch.Value(e, semconv.AttrDeviceType, st.DeviceType, knownDeviceTypes)
+		c.watch.Value(e, semconv.AttrEncryptionPolicySettingState, st.EncryptionPolicySettingState, knownPolicySettingStates)
 		deviceCounts[[3]string{
 			orUnknown(st.EncryptionState),
 			orUnknown(st.EncryptionReadinessState),

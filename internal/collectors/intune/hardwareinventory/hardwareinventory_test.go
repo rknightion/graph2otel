@@ -14,6 +14,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // fakeGraph is the GET+POST double this collector needs: GET for the id-listing
@@ -252,6 +253,37 @@ func TestStorageGaugeSumsBytesByOsAndState(t *testing.T) {
 // identity ride the twin, never a metric label. signalcapture.Main covers a
 // fixed banned list; this pins THIS collector's per-entity fields, most of which
 // are not on that list.
+// TestCollectReportsUnmappedDeviceGuardStates proves #234: vbs_state and
+// credential_guard_state are metric labels passed raw, so a value outside the
+// CSDL-declared set fires the graph2otel.api.unexpected watchdog. manufacturer,
+// tpm_specification_version and operating_system are deliberately unwatched free
+// text and must NOT fire.
+func TestCollectReportsUnmappedDeviceGuardStates(t *testing.T) {
+	g := &fakeGraph{
+		bodies: map[string]string{listURL(): `{"value":[{"id":"a","deviceName":"alpha"}]}`},
+		batchReply: func(_ int, req batchRequest) ([]byte, error) {
+			return fmt.Appendf(nil, `{"responses":[{"id":%q,"status":200,"body":{"id":"a","deviceName":"alpha","operatingSystem":"Windows","hardwareInformation":{"manufacturer":"ACME","deviceGuardVirtualizationBasedSecurityState":"quantumRunning","deviceGuardLocalSystemAuthorityCredentialGuardState":"maybe"}}}]}`, req.Requests[0].ID), nil
+		},
+	}
+	rec := collect(t, g)
+	fields := map[string]bool{}
+	for _, p := range rec.MetricPoints(wirecheck.MetricUnexpected) {
+		fields[p.Attrs[semconv.AttrField]] = true
+	}
+	if !fields[semconv.AttrVbsState] || !fields[semconv.AttrCredentialGuardState] {
+		t.Errorf("expected %s to fire for both %s and %s; got %v",
+			wirecheck.MetricUnexpected, semconv.AttrVbsState, semconv.AttrCredentialGuardState, fields)
+	}
+	for _, f := range []string{semconv.AttrManufacturer, semconv.AttrTpmSpecificationVersion, semconv.AttrOperatingSystem} {
+		if fields[f] {
+			t.Errorf("%s is deliberately unwatched free text but %s fired for it", f, wirecheck.MetricUnexpected)
+		}
+	}
+	if len(rec.MetricPoints(deviceGuardMetricName)) == 0 {
+		t.Error("the device-guard gauge must still emit (report-only)")
+	}
+}
+
 func TestPerEntityFieldsNeverBecomeMetricLabels(t *testing.T) {
 	rec := collect(t, liveGraph(t))
 

@@ -638,27 +638,40 @@ measure, then update the known set (and the ledger entry in
 
 ### Which collectors are watched, and which deliberately are not
 
-**20 collectors declare watched value sets** (#233, #254, #234): `defender.quarantine`,
+**25 collectors declare watched value sets** (#233, #254, #234): `defender.quarantine`,
 `m365.message_trace`, `intune.autopilot`, `intune.devices`, `intune.certificates`,
 `intune.cert_inventory`, `intune.app_install_status`, `intune.malware`,
 `entra.secure_score`, `purview.retention_labels`, `purview.sensitivity_labels`,
 `entra.access_reviews`, `entra.conditional_access`, `intune.gpo_analytics`,
 `intune.config_profiles`, `intune.enrollment`, `intune.noncompliant_settings`,
-`entra.risk`, `entra.risky_agents` and `m365.sharepoint_settings`.
+`entra.risk`, `entra.risky_agents`, `m365.sharepoint_settings`, `entra.recommendations`,
+`intune.device_encryption`, `intune.remediation_run_states`, `intune.mobile_apps` and
+`intune.hardware_inventory`.
 
 `entra.risky_agents` reuses `entra.risk`'s exported `KnownRiskLevels`/`KnownRiskStates`
 directly — it is the agent analog on the identical Identity Protection enums, so the two
 cannot drift.
 
 Most derive their `Enum` from a bucket map the collector already keys on, so the watched
-set cannot drift from the mapped set. Two are declared explicitly from the Graph v1.0 CSDL
-`$metadata` (the API's own schema, not documentation), cross-checked against live values:
-`entra.risk`'s `riskLevel`/`riskState` and `m365.sharepoint_settings`'
-`sharingCapability`/`sharingDomainRestrictionMode` — all four are raw-passthrough metric
-labels with no bucket map to derive from, and the SharePoint set was confirmed by cycling
-the live tenant setting through every member (`live-measured 2026-07-25`). In every set
-`unknownFutureValue` is deliberately excluded, so Microsoft's evolvable-enum sentinel
-fires the watchdog rather than being silently accepted.
+set cannot drift from the mapped set. The rest are declared explicitly from the Graph CSDL
+`$metadata` (the API's own schema, not documentation), for raw-passthrough labels with no
+bucket map to derive from — cross-checked against live values wherever the tenant carries
+them:
+
+- From the **v1.0** CSDL: `entra.risk`'s `riskLevel`/`riskState` and
+  `m365.sharepoint_settings`' `sharingCapability`/`sharingDomainRestrictionMode` (the
+  SharePoint set confirmed by cycling the live tenant setting through every member,
+  `live-measured 2026-07-25`), and `intune.mobile_apps`' `publishing_state`.
+- From the **beta** CSDL (`GET /beta/$metadata`, fetched 2026-07-25, poller read-only):
+  `entra.recommendations`' `status`/`priority`/`recommendationType`,
+  `intune.device_encryption`'s `encryption_state`/`encryption_readiness_state`/`device_type`
+  (the plural `deviceTypes` enum)/`encryption_policy_setting_state`,
+  `intune.remediation_run_states`' `detection_state`/`remediation_state`, and
+  `intune.hardware_inventory`'s two Device Guard states (`vbs_state`,
+  `credential_guard_state`).
+
+In every set `unknownFutureValue` is deliberately excluded, so Microsoft's evolvable-enum
+sentinel fires the watchdog rather than being silently accepted.
 
 `defender.quarantine` carries more single-measurement assumptions than most, because it
 shipped without ever observing a non-empty quarantine: the `quarantine_type` /
@@ -670,14 +683,20 @@ has stopped being queue depth.
 
 **Several collectors bucket unrecognized values to `"unknown"` and are still
 unwatched on purpose** — among them `intune.detected_apps`, `intune.connectors`,
-`intune.settings_catalog`, `entra.domains`, `entra.recommendations`,
-`intune.device_encryption`, `intune.mobile_apps` and `intune.remediation_run_states`.
-In each case the legitimate value set could only be taken from Microsoft's
-documentation, and **a watchdog that fires on correct data is worse than none**: it trains
-the reader to ignore the signal, which costs more than the gap it was meant to close. These
-are recorded evidence gaps, not oversights. `intune.devices`' `operating_system` is
-excluded on stronger grounds and should not be revisited — it is free text with no
-Graph-side enum, so no set exists to declare.
+`intune.settings_catalog` and `entra.domains`. In each case the legitimate value set could
+only be taken from Microsoft's documentation, and **a watchdog that fires on correct data
+is worse than none**: it trains the reader to ignore the signal, which costs more than the
+gap it was meant to close. These are recorded evidence gaps, not oversights.
+
+**Some fields on otherwise-watched collectors are left unwatched because they are free
+text, not an enum** — no CSDL set exists to declare, so a watchdog would fire on correct
+data. `intune.devices`' and `intune.hardware_inventory`'s `operating_system` (bucketed free
+text, no Graph-side enum), `intune.hardware_inventory`'s `manufacturer` (hardware vendor
+names) and `tpm_specification_version` (a comma-joined version triple), and
+`intune.mobile_apps`' `app_type` (the `@odata.type` derived-subtype hierarchy off
+`mobileApp` — a large catalog Microsoft extends whenever it ships a new app shape, so a
+watchdog would fire on legitimate new types; the central limiter (#235) bounds its series
+instead, same call as `intune.detected_apps`). None should be revisited.
 
 ### The rule for a new collector
 

@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 type fakeGraph struct {
@@ -371,6 +373,32 @@ func TestCollectSurfacesNon4xxError(t *testing.T) {
 	rec := telemetrytest.New()
 	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err == nil {
 		t.Error("a 500 should surface as a collector error, not be swallowed")
+	}
+}
+
+// TestCollectReportsUnmappedEnums proves #234: status, priority and
+// recommendationType are metric labels passed raw, so a value outside the
+// CSDL-declared set fires the graph2otel.api.unexpected watchdog without
+// dropping the record.
+func TestCollectReportsUnmappedEnums(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		listURL: `{"value":[{"status":"levitating","priority":"catastrophic","recommendationType":"summonKraken"}]}`,
+	}}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	fields := map[string]bool{}
+	for _, p := range rec.MetricPoints(wirecheck.MetricUnexpected) {
+		fields[p.Attrs[semconv.AttrField]] = true
+	}
+	for _, f := range []string{semconv.AttrStatus, semconv.AttrPriority, semconv.AttrRecommendation} {
+		if !fields[f] {
+			t.Errorf("expected %s to fire for field %q; got %v", wirecheck.MetricUnexpected, f, fields)
+		}
+	}
+	if len(rec.MetricPoints(totalMetric)) == 0 {
+		t.Error("the total gauge must still emit (report-only)")
 	}
 }
 

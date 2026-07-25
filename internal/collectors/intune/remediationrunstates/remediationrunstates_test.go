@@ -10,6 +10,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // fakeGraph maps request URLs to canned page bodies (or errors), satisfying
@@ -135,6 +136,33 @@ func TestCollectEmitsBoundedGaugeAndTwinPerRunState(t *testing.T) {
 	// Empty script-error fields must be omitted, never emitted as "".
 	if _, ok := fail.Attrs[semconv.AttrDetectionScriptError]; ok {
 		t.Errorf("detection_script_error present for an empty value")
+	}
+}
+
+// TestCollectReportsUnmappedStateEnums proves #234: detection_state and
+// remediation_state are metric labels passed raw, so a value outside the
+// CSDL-declared set fires the graph2otel.api.unexpected watchdog without
+// dropping the row.
+func TestCollectReportsUnmappedStateEnums(t *testing.T) {
+	const rem = "r1"
+	g := &fakeGraph{bodies: map[string]string{
+		listURL():   `{"value":[{"id":"` + rem + `","displayName":"R1","publisher":"rob"}]}`,
+		runURL(rem): `{"value":[{"id":"` + rem + `:dev1","detectionState":"teleported","remediationState":"summoned"}]}`,
+	}}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	fields := map[string]bool{}
+	for _, p := range rec.MetricPoints(wirecheck.MetricUnexpected) {
+		fields[p.Attrs[semconv.AttrField]] = true
+	}
+	if !fields[semconv.AttrDetectionState] || !fields[semconv.AttrRemediationState] {
+		t.Errorf("expected %s to fire for both %s and %s; got %v",
+			wirecheck.MetricUnexpected, semconv.AttrDetectionState, semconv.AttrRemediationState, fields)
+	}
+	if len(rec.MetricPoints(metricName)) == 0 {
+		t.Error("the gauge must still emit (report-only)")
 	}
 }
 

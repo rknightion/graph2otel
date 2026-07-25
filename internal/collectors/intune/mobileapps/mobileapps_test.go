@@ -7,7 +7,9 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // fakeGraph maps request URLs to canned bodies (or errors). Every fixture
@@ -451,6 +453,31 @@ func TestNoPerDeviceInstallStatusCalls(t *testing.T) {
 				t.Errorf("collector requested %q, which touches the deferred per-device install-status surface (%s)", url, f)
 			}
 		}
+	}
+}
+
+// TestCollectReportsUnmappedPublishingState proves #234: publishing_state is a
+// metric label passed raw, so a value outside the CSDL-declared set fires the
+// graph2otel.api.unexpected watchdog. app_type is deliberately unwatched (large
+// derived-subtype hierarchy) and must NOT fire.
+func TestCollectReportsUnmappedPublishingState(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		mobileAppsURL:    page(`{"@odata.type":"#microsoft.graph.someFutureLobApp","publishingState":"levitating"}`),
+		mobileConfigsURL: page(``),
+	}}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	fields := map[string]bool{}
+	for _, p := range rec.MetricPoints(wirecheck.MetricUnexpected) {
+		fields[p.Attrs[semconv.AttrField]] = true
+	}
+	if !fields[semconv.AttrPublishingState] {
+		t.Errorf("expected %s to fire for %s; got %v", wirecheck.MetricUnexpected, semconv.AttrPublishingState, fields)
+	}
+	if fields[semconv.AttrAppType] {
+		t.Errorf("app_type is deliberately unwatched but %s fired for it", wirecheck.MetricUnexpected)
 	}
 }
 

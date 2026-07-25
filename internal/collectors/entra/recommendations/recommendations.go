@@ -20,6 +20,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 const (
@@ -27,6 +28,31 @@ const (
 	totalMetric    = "entra.recommendations.total"
 	impactedMetric = "entra.recommendations.impacted_resources.total"
 	betaBaseURL    = "https://graph.microsoft.com/beta"
+)
+
+// status, priority and recommendationType are all METRIC LABELS passed RAW (the
+// first two on the total gauge, the type on the impacted gauge), so a value
+// Microsoft adds silently moves series membership with nothing saying why (#234).
+// There is no in-repo bucket map to derive these from, so they are declared
+// explicitly from the Graph BETA CSDL EnumType definitions
+// (`GET /beta/$metadata`, recommendationBase's status/priority/recommendationType
+// properties, fetched 2026-07-25). `unknownFutureValue` is EXCLUDED from every
+// set: it is Microsoft's evolvable-enum sentinel, so its appearance is exactly
+// the signal a new member exists and must fire the watchdog, not be accepted.
+var (
+	knownStatuses   = wirecheck.NewEnum("active", "completedBySystem", "completedByUser", "dismissed", "postponed", "riskAccepted", "thirdParty", "planned", "alternateMitigation")
+	knownPriorities = wirecheck.NewEnum("low", "medium", "high")
+	knownTypes      = wirecheck.NewEnum(
+		"adfsAppsMigration", "enableDesktopSSO", "enablePHS", "enableProvisioning", "switchFromPerUserMFA",
+		"tenantMFA", "thirdPartyApps", "turnOffPerUserMFA", "useAuthenticatorApp", "useMyApps", "staleApps",
+		"staleAppCreds", "applicationCredentialExpiry", "servicePrincipalKeyExpiry", "adminMFAV2",
+		"blockLegacyAuthentication", "integratedApps", "mfaRegistrationV2", "pwagePolicyNew", "passwordHashSync",
+		"oneAdmin", "roleOverlap", "selfServicePasswordReset", "signinRiskPolicy", "userRiskPolicy",
+		"verifyAppPublisher", "privateLinkForAAD", "appRoleAssignmentsGroups", "appRoleAssignmentsUsers",
+		"managedIdentity", "overprivilegedApps", "longLivedCredentials", "aadConnectDeprecated",
+		"adalToMsalMigration", "ownerlessApps", "inactiveGuests", "aadGraphDeprecationApplication",
+		"aadGraphDeprecationServicePrincipal", "mfaServerDeprecation",
+	)
 )
 
 // recommendation is the subset of the beta recommendation resource this
@@ -45,6 +71,7 @@ type Collector struct {
 	g       collectors.GraphClient
 	baseURL string
 	logger  *slog.Logger
+	watch   *wirecheck.Reporter
 }
 
 // New builds the recommendations collector. A nil logger falls back to the
@@ -53,7 +80,7 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Collector{g: g, baseURL: betaBaseURL, logger: logger}
+	return &Collector{g: g, baseURL: betaBaseURL, logger: logger, watch: wirecheck.New(collectorName, logger)}
 }
 
 // Name implements collector.Collector.
@@ -94,6 +121,11 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			c.logger.Warn("recommendations: skipping unparseable entry", "collector", collectorName, "error", err)
 			continue
 		}
+		// status/priority/recommendationType are metric labels passed raw — watch
+		// each against its CSDL set so a new Microsoft member surfaces (#234).
+		c.watch.Value(e, semconv.AttrStatus, rec.Status, knownStatuses)
+		c.watch.Value(e, semconv.AttrPriority, rec.Priority, knownPriorities)
+		c.watch.Value(e, semconv.AttrRecommendation, rec.RecommendationType, knownTypes)
 		status := orUnknown(rec.Status)
 		priority := orUnknown(rec.Priority)
 		byStatusPriority[[2]string{status, priority}]++

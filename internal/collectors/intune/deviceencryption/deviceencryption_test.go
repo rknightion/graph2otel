@@ -10,6 +10,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // fakeGraph maps request URLs to canned page bodies (or errors), satisfying
@@ -110,6 +111,30 @@ func TestCollectEmitsBoundedDeviceGauge(t *testing.T) {
 	}
 	if len(want) != 0 {
 		t.Errorf("missing series: %v", want)
+	}
+}
+
+// TestCollectReportsUnmappedStateEnums proves #234: the four State fields are
+// metric labels passed raw, so a value outside the CSDL-declared set fires the
+// graph2otel.api.unexpected watchdog without dropping the row.
+func TestCollectReportsUnmappedStateEnums(t *testing.T) {
+	body := `{"value":[{"id":"d1","encryptionState":"quantumEncrypted","encryptionReadinessState":"maybe","deviceType":"flyingToaster","encryptionPolicySettingState":"schrodinger"}]}`
+	g := &fakeGraph{bodies: map[string]string{listURL(): body}}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	fields := map[string]bool{}
+	for _, p := range rec.MetricPoints(wirecheck.MetricUnexpected) {
+		fields[p.Attrs[semconv.AttrField]] = true
+	}
+	for _, f := range []string{semconv.AttrEncryptionState, semconv.AttrEncryptionReadinessState, semconv.AttrDeviceType, semconv.AttrEncryptionPolicySettingState} {
+		if !fields[f] {
+			t.Errorf("expected %s to fire for field %q; got %v", wirecheck.MetricUnexpected, f, fields)
+		}
+	}
+	if len(rec.MetricPoints(devicesMetricName)) == 0 {
+		t.Error("the devices gauge must still emit (report-only)")
 	}
 }
 

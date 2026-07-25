@@ -26,11 +26,29 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // collectorName is the stable key used for config (enable/interval),
 // self-observability, and the admin status page.
 const collectorName = "intune.mobile_apps"
+
+// knownPublishingStates is the CSDL set for publishing_state, a METRIC LABEL
+// passed raw (publishingStateOf only guards the empty case), so a value
+// Microsoft adds silently moves series membership (#234). Declared from the
+// Graph v1.0 CSDL `mobileAppPublishingState` EnumType (fetched 2026-07-25); it
+// has no `unknownFutureValue` member, so the set is complete.
+//
+// app_type is DELIBERATELY UNWATCHED and must stay so. It is not a CSDL
+// EnumType — it is the concrete-subtype name off a mobileApp's @odata.type
+// (win32LobApp, iosStoreApp, webApp, officeSuiteApp, and the managed variants),
+// a large derived-type hierarchy Microsoft extends whenever it ships a new app
+// shape (macOS pkg/dmg apps, win32 catalog apps landed after the others). A
+// watchdog over it would fire on legitimate new app types — the "fires on
+// correct data is worse than none" case this issue's own rule bars — and the
+// central limiter (#235) already bounds its series. Same call as
+// intune.detected_apps.
+var knownPublishingStates = wirecheck.NewEnum("notPublished", "processing", "published")
 
 // Metric names this collector emits.
 const (
@@ -123,6 +141,7 @@ type Collector struct {
 	g       collectors.GraphClient
 	baseURL string
 	logger  *slog.Logger
+	watch   *wirecheck.Reporter
 }
 
 // New builds the mobile apps collector. A nil logger falls back to the slog
@@ -131,7 +150,7 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Collector{g: g, baseURL: defaultBaseURL, logger: logger}
+	return &Collector{g: g, baseURL: defaultBaseURL, logger: logger, watch: wirecheck.New(collectorName, logger)}
 }
 
 // Name implements collector.Collector.
@@ -160,7 +179,7 @@ func (c *Collector) RequiredPermissions() []string {
 func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 	var errs []error
 
-	appPoints, err := c.appsSnapshot(ctx)
+	appPoints, err := c.appsSnapshot(ctx, e)
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -182,7 +201,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 // into (app_type, publishing_state) counts. Deliberately does not
 // $expand=assignments on the list, which Microsoft's docs mark deprecated
 // for this collection.
-func (c *Collector) appsSnapshot(ctx context.Context) ([]telemetry.GaugePoint, error) {
+func (c *Collector) appsSnapshot(ctx context.Context, e telemetry.Emitter) ([]telemetry.GaugePoint, error) {
 	raw, err := collectors.GetAllValues(ctx, c.g, c.baseURL+"/deviceAppManagement/mobileApps", nil)
 	if err != nil {
 		if isForbidden(err) {
@@ -202,6 +221,9 @@ func (c *Collector) appsSnapshot(ctx context.Context) ([]telemetry.GaugePoint, e
 			c.logger.Warn("mobile apps: skipping unparseable app", "collector", collectorName, "error", err)
 			continue
 		}
+		// publishing_state is a metric label passed raw — watch it against its CSDL
+		// set (#234). app_type is deliberately unwatched (see knownPublishingStates).
+		c.watch.Value(e, semconv.AttrPublishingState, a.PublishingState, knownPublishingStates)
 		counts[bucket{appTypeOf(a.ODataType), publishingStateOf(a.PublishingState)}]++
 	}
 

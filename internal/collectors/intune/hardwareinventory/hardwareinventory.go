@@ -102,6 +102,30 @@ import (
 	"github.com/rknightion/graph2otel/internal/preflight"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
+)
+
+// The two Device Guard states are METRIC LABELS passed raw (orUnknown only
+// guards the empty case), so a value Microsoft adds silently moves series
+// membership (#234). No in-repo bucket map exists — the row carries the wire
+// value verbatim — so each is declared from the Graph BETA CSDL EnumType the
+// hardwareInformation property references (`GET /beta/$metadata`, fetched
+// 2026-07-25). Neither enum carries `unknownFutureValue`, so the sets are
+// complete (`other` on the VBS state IS a real member, not a sentinel).
+//
+// The other three gauge labels are DELIBERATELY UNWATCHED and must stay so:
+//   - operating_system is bucketed free text (osBucketFor, "other" fallback) —
+//     the Graph schema declares no enum for managedDevice.operatingSystem, so
+//     there is no set to declare.
+//   - manufacturer is Edm.String free text (hardware vendor names) — unbounded
+//     by nature, no enum to declare.
+//   - tpm_specification_version is Edm.String, a comma-joined version triple
+//     ("2.0, 0, 1.16") — free text, not an enum; bounded in practice by the TPM
+//     revisions a fleet runs, which is what makes it safe as a label but leaves
+//     nothing to declare a set from.
+var (
+	knownVBSStates            = wirecheck.NewEnum("running", "rebootRequired", "require64BitArchitecture", "notLicensed", "notConfigured", "doesNotMeetHardwareRequirements", "other")
+	knownCredentialGuardState = wirecheck.NewEnum("running", "rebootRequired", "notLicensed", "notConfigured", "virtualizationBasedSecurityNotRunning")
 )
 
 const (
@@ -192,6 +216,7 @@ type Collector struct {
 	poster  batchPoster
 	baseURL string
 	logger  *slog.Logger
+	watch   *wirecheck.Reporter
 }
 
 // New builds the collector. A nil logger falls back to slog.Default().
@@ -199,7 +224,7 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	c := &Collector{g: g, baseURL: defaultBaseURL, logger: logger}
+	c := &Collector{g: g, baseURL: defaultBaseURL, logger: logger, watch: wirecheck.New(collectorName, logger)}
 	if p, ok := g.(batchPoster); ok {
 		c.poster = p
 	}
@@ -425,6 +450,11 @@ func (c *Collector) emit(e telemetry.Emitter, rows []deviceRow) {
 	for _, row := range rows {
 		osBucket := osBucketFor(row.OperatingSystem)
 		hw := row.Hardware
+		// The two Device Guard states are metric labels passed raw — watch each
+		// against its CSDL set so a new Microsoft member surfaces (#234). The other
+		// three gauge labels are free text with no enum — see knownVBSStates.
+		c.watch.Value(e, semconv.AttrVbsState, hw.DeviceGuardVBSState, knownVBSStates)
+		c.watch.Value(e, semconv.AttrCredentialGuardState, hw.DeviceGuardCredentialGuardState, knownCredentialGuardState)
 		deviceCounts[[2]string{osBucket, orUnknown(hw.Manufacturer)}]++
 		tpmCounts[orUnknown(hw.TPMSpecificationVersion)]++
 		guardCounts[[2]string{
