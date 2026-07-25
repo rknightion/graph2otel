@@ -32,6 +32,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // collectorName is the stable key used for config (enable/interval),
@@ -109,12 +110,30 @@ func odataTypeBucketFor(raw string) string {
 	return "other"
 }
 
+// knownODataTypes is the wire assumption this collector watches at runtime
+// (#233/#234): odata_type is a METRIC LABEL, and an unrecognized subtype
+// already falls back to "other" rather than being dropped - so it never
+// shrinks a series, but it does silently reclassify a profile into "other"
+// with nothing else saying why. Derived from odataTypeBuckets itself, never
+// restated, so the watched set is by construction the set this collector
+// maps. windowsUpdateForBusinessConfiguration is deliberately excluded
+// before it ever reaches bucketing (see the package doc), so it is never
+// watched here either.
+var knownODataTypes = func() wirecheck.Enum {
+	keys := make([]string, 0, len(odataTypeBuckets))
+	for k := range odataTypeBuckets {
+		keys = append(keys, k)
+	}
+	return wirecheck.NewEnum(keys...)
+}()
+
 // Collector polls the Intune deviceConfigurations inventory and its
 // per-profile deviceStatusOverview singletons.
 type Collector struct {
 	g       collectors.GraphClient
 	baseURL string
 	logger  *slog.Logger
+	watch   *wirecheck.Reporter
 }
 
 // New builds the configuration-profiles collector. A nil logger falls back
@@ -123,7 +142,7 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Collector{g: g, baseURL: defaultBaseURL, logger: logger}
+	return &Collector{g: g, baseURL: defaultBaseURL, logger: logger, watch: wirecheck.New(collectorName, logger)}
 }
 
 // Name implements collector.Collector.
@@ -229,6 +248,7 @@ func (c *Collector) collectProfiles(ctx context.Context, e telemetry.Emitter) ([
 			continue
 		}
 		name := orUnknown(p.DisplayName)
+		c.watch.Value(e, semconv.AttrOdataType, p.ODataType, knownODataTypes)
 		bucket := odataTypeBucketFor(p.ODataType)
 		counts[bucket]++
 		refs = append(refs, profileRef{id: p.ID, name: name})

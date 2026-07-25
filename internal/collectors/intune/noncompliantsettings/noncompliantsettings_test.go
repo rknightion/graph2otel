@@ -10,6 +10,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // fakeRunner is a canned exportjob.Runner: it returns a fixed set of rows or a
@@ -308,6 +309,91 @@ func TestKnownStatusDecodes(t *testing.T) {
 	}
 	if got, known := decodeStatus(""); got != statusUnknown || known {
 		t.Errorf("decodeStatus(%q) = (%q, %v), want (unknown, false)", "", got, known)
+	}
+}
+
+// --- wire-assumption watchdog (#233/#234) --------------------------------
+//
+// statusNames feeds the os x setting_status METRIC LABEL and already buckets
+// anything unmapped to "unknown" rather than dropping it. A Microsoft
+// addition to the SettingStatus code set therefore does not shrink or grow a
+// series, it silently reclassifies rows into "unknown" with nothing saying
+// why beyond a Warn log.
+
+func findings(rec *telemetrytest.Recorder) map[string]float64 {
+	out := map[string]float64{}
+	for _, p := range rec.MetricPoints(wirecheck.MetricUnexpected) {
+		out[p.Attrs[semconv.AttrKind]+"/"+p.Attrs[semconv.AttrField]] += p.Value
+	}
+	return out
+}
+
+// The live rows (SettingStatus "4") are the steady state and must report
+// nothing.
+func TestLiveRowsReportNothingUnexpected(t *testing.T) {
+	c := New(&fakeRunner{rows: liveRows()}, nil)
+	rec := telemetrytest.New()
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect returned error: %v", err)
+	}
+	if got := findings(rec); len(got) != 0 {
+		t.Errorf("live rows produced findings %v, want none", got)
+	}
+}
+
+// TestUnknownStatusCodeIsReported pins that an unmapped, non-empty
+// SettingStatus code is announced to wirecheck, alongside the pre-existing
+// "unknown" bucket fallback and Warn log
+// (TestUnknownStatusBucketsKeepsRawCodeAndWarns) - report-only means
+// report-only.
+func TestUnknownStatusCodeIsReported(t *testing.T) {
+	c := New(&fakeRunner{rows: []exportjob.Row{unknownRow()}}, nil)
+	rec := telemetrytest.New()
+
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect returned error: %v", err)
+	}
+
+	got := findings(rec)
+	key := wirecheck.KindUnmappedValue + "/" + semconv.AttrSettingStatus
+	if got[key] != 1 {
+		t.Errorf("findings[%s] = %v, want 1; all=%v", key, got[key], got)
+	}
+
+	pts := rec.MetricPoints(countMetricName)
+	if len(pts) != 1 || pts[0].Attrs[semconv.AttrSettingStatus] != statusUnknown {
+		t.Errorf("reporting must not change the bucket, got %+v", pts)
+	}
+}
+
+// TestEmptyStatusCodeIsNeverReported pins that an empty SettingStatus code
+// does not trip the watchdog: an absent/empty field is the normal case, not a
+// surprise (matches the existing decodeStatus("") behavior).
+func TestEmptyStatusCodeIsNeverReported(t *testing.T) {
+	emptyRow := row("dev", "DEV", "user@m7kni.io", "Windows", "1.0",
+		"Setting", "SettingNm", "Setting", "Policy", "", "", "")
+	c := New(&fakeRunner{rows: []exportjob.Row{emptyRow}}, nil)
+	rec := telemetrytest.New()
+
+	if err := c.Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect returned error: %v", err)
+	}
+	if got := findings(rec); len(got) != 0 {
+		t.Errorf("empty SettingStatus produced findings %v, want none", got)
+	}
+}
+
+// TestWatchedStatusCodesAreDerivedFromTheMap is the anti-drift guard: the
+// Enum must be derived from statusNames itself, never a hand-restated list
+// that can fall out of step with it (#234).
+func TestWatchedStatusCodesAreDerivedFromTheMap(t *testing.T) {
+	if n := len(knownStatusCodes); n != len(statusNames) {
+		t.Errorf("knownStatusCodes has %d members, statusNames has %d - it must be derived, not restated", n, len(statusNames))
+	}
+	for k := range statusNames {
+		if !knownStatusCodes.Has(k) {
+			t.Errorf("knownStatusCodes is missing %q, a code this collector maps", k)
+		}
 	}
 }
 

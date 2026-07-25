@@ -30,6 +30,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // collectorName is the stable key used for config (enable/interval),
@@ -77,6 +78,25 @@ func configType(odataType string) string {
 	return "other"
 }
 
+// knownConfigTypes is the wire assumption this collector watches at runtime
+// (#233/#234): config_type is a METRIC LABEL, and an unrecognized subtype -
+// including the live-observed missing-@odata.type case - already falls back
+// to "other" rather than being dropped, so it never shrinks a series, but it
+// does silently reclassify a config into "other" with nothing else saying
+// why. Derived from configTypeBuckets itself, never restated, so the watched
+// set is by construction the set this collector maps. A MISSING @odata.type
+// is never reported here: wirecheck.Value treats an empty value as never a
+// finding, since an absent optional field is the normal case across every
+// Microsoft API this project touches (see the live WindowsRestore default
+// config, which has no @odata.type at all).
+var knownConfigTypes = func() wirecheck.Enum {
+	keys := make([]string, 0, len(configTypeBuckets))
+	for k := range configTypeBuckets {
+		keys = append(keys, k)
+	}
+	return wirecheck.NewEnum(keys...)
+}()
+
 // enrollmentConfiguration mirrors only the base deviceEnrollmentConfiguration
 // fields this collector reads (id, description, and per-subtype settings are
 // per-entity/config detail that belongs in the M5 logs pipeline or Graph
@@ -96,6 +116,7 @@ type Collector struct {
 	g       collectors.GraphClient
 	baseURL string
 	logger  *slog.Logger
+	watch   *wirecheck.Reporter
 }
 
 // New builds the enrollment configuration collector. A nil logger falls back
@@ -104,7 +125,7 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Collector{g: g, baseURL: defaultBaseURL, logger: logger}
+	return &Collector{g: g, baseURL: defaultBaseURL, logger: logger, watch: wirecheck.New(collectorName, logger)}
 }
 
 // Name implements collector.Collector.
@@ -152,6 +173,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 			continue
 		}
 
+		c.watch.Value(e, semconv.AttrConfigType, cfg.ODataType, knownConfigTypes)
 		typ := configType(cfg.ODataType)
 		name := orUnknown(cfg.DisplayName)
 		countByType[typ]++

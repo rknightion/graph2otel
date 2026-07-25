@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // fakeGraph maps request URLs to canned raw bodies (or errors), mirroring the
@@ -355,6 +357,90 @@ func TestNeverEmitsRawGPOContent(t *testing.T) {
 					t.Errorf("metric %s has forbidden attribute %q", metric, k)
 				}
 			}
+		}
+	}
+}
+
+// --- wire-assumption watchdog (#233/#234) --------------------------------
+//
+// Both readinessBuckets and ingestionTypeBuckets feed a metric label
+// (readiness / ingestion_type) and already bucket anything unmapped to
+// "other" rather than dropping it. A Microsoft addition to either beta enum
+// therefore does not shrink or grow a series count, it silently reclassifies
+// GPOs/configs into "other" with nothing saying why.
+
+func findings(rec *telemetrytest.Recorder) map[string]float64 {
+	out := map[string]float64{}
+	for _, p := range rec.MetricPoints(wirecheck.MetricUnexpected) {
+		out[p.Attrs[semconv.AttrKind]+"/"+p.Attrs[semconv.AttrField]] += p.Value
+	}
+	return out
+}
+
+// The live/synthetic fixture combination fullFixtureBodies uses is the steady
+// state: every readiness and ingestion type value on it is in the known set.
+// A watchdog that fires on it is worse than no watchdog at all.
+func TestLiveCaptureReportsNothingUnexpected(t *testing.T) {
+	g := &fakeGraph{bodies: fullFixtureBodies()}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if got := findings(rec); len(got) != 0 {
+		t.Errorf("fixture produced findings %v, want none", got)
+	}
+}
+
+// TestUnrecognizedReadinessAndIngestionTypeAreReported pins both halves at
+// once: an unmapped value is announced to wirecheck, and the pre-existing
+// "other" bucket fallback (TestCollectBucketsUnknownReadinessAndIngestionType)
+// is left untouched. Report-only means report-only.
+func TestUnrecognizedReadinessAndIngestionTypeAreReported(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		migrationReportsURL: `{"value":[{"displayName":"Weird GPO","migrationReadiness":"somethingNew","totalSettingsCount":4,"supportedSettingsCount":1}]}`,
+		configurationsURL:   `{"value":[{"displayName":"Weird Config","policyConfigurationIngestionType":"somethingElse"}]}`,
+	}}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	got := findings(rec)
+	for _, field := range []string{semconv.AttrReadiness, semconv.AttrIngestionType} {
+		key := wirecheck.KindUnmappedValue + "/" + field
+		if got[key] != 1 {
+			t.Errorf("findings[%s] = %v, want 1; all=%v", key, got[key], got)
+		}
+	}
+
+	readiness := rec.MetricPoints(migrationReadinessMetric)
+	if len(readiness) != 1 || readiness[0].Attrs["readiness"] != "other" {
+		t.Errorf("reporting must not change the bucket, got %+v", readiness)
+	}
+	ingestion := rec.MetricPoints(configCountMetric)
+	if len(ingestion) != 1 || ingestion[0].Attrs["ingestion_type"] != "other" {
+		t.Errorf("reporting must not change the bucket, got %+v", ingestion)
+	}
+}
+
+// TestWatchedSetsAreDerivedFromTheBucketMaps is the anti-drift guard: both
+// Enums must be derived from readinessBuckets/ingestionTypeBuckets themselves,
+// never a hand-restated list that can fall out of step with them (#234).
+func TestWatchedSetsAreDerivedFromTheBucketMaps(t *testing.T) {
+	if n := len(knownReadinessValues); n != len(readinessBuckets) {
+		t.Errorf("knownReadinessValues has %d members, readinessBuckets has %d - it must be derived, not restated", n, len(readinessBuckets))
+	}
+	for k := range readinessBuckets {
+		if !knownReadinessValues.Has(k) {
+			t.Errorf("knownReadinessValues is missing %q, a value this collector maps", k)
+		}
+	}
+	if n := len(knownIngestionTypes); n != len(ingestionTypeBuckets) {
+		t.Errorf("knownIngestionTypes has %d members, ingestionTypeBuckets has %d - it must be derived, not restated", n, len(ingestionTypeBuckets))
+	}
+	for k := range ingestionTypeBuckets {
+		if !knownIngestionTypes.Has(k) {
+			t.Errorf("knownIngestionTypes is missing %q, a value this collector maps", k)
 		}
 	}
 }

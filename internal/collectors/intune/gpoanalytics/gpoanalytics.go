@@ -31,6 +31,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // collectorName is the stable key used for config (enable/interval),
@@ -88,6 +89,33 @@ func ingestionTypeBucketFor(raw string) string {
 	return "other"
 }
 
+// The wire assumptions this collector watches at runtime (#233/#234). Both
+// readiness and ingestion type are METRIC LABELS, and both already fall back
+// to "other" for anything unmapped rather than being dropped - so an
+// unrecognized value never shrinks a series, but it does silently
+// reclassify a GPO/config into "other" with nothing else saying why.
+//
+// Each Enum is derived from the bucket map the collector actually keys on,
+// rather than restated from Microsoft's beta docs, so the watched set is by
+// construction the set this collector maps.
+var (
+	knownReadinessValues = func() wirecheck.Enum {
+		keys := make([]string, 0, len(readinessBuckets))
+		for k := range readinessBuckets {
+			keys = append(keys, k)
+		}
+		return wirecheck.NewEnum(keys...)
+	}()
+
+	knownIngestionTypes = func() wirecheck.Enum {
+		keys := make([]string, 0, len(ingestionTypeBuckets))
+		for k := range ingestionTypeBuckets {
+			keys = append(keys, k)
+		}
+		return wirecheck.NewEnum(keys...)
+	}()
+)
+
 // groupPolicyMigrationReport is the subset of the beta groupPolicyMigrationReport
 // resource this collector reads. displayName is the GPO's own name — bounded
 // by the number of imported GPOs (an admin-configured count, dozens to low
@@ -116,6 +144,7 @@ type Collector struct {
 	g       collectors.GraphClient
 	baseURL string
 	logger  *slog.Logger
+	watch   *wirecheck.Reporter
 }
 
 // New builds the gpoanalytics collector. A nil logger falls back to the slog
@@ -124,7 +153,7 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Collector{g: g, baseURL: betaBaseURL, logger: logger}
+	return &Collector{g: g, baseURL: betaBaseURL, logger: logger, watch: wirecheck.New(collectorName, logger)}
 }
 
 // Name implements collector.SnapshotCollector.
@@ -194,6 +223,7 @@ func (c *Collector) collectMigrationReports(ctx context.Context, e telemetry.Emi
 			continue
 		}
 		name := orUnknown(rep.DisplayName)
+		c.watch.Value(e, semconv.AttrReadiness, rep.MigrationReadiness, knownReadinessValues)
 		readiness = append(readiness, telemetry.GaugePoint{
 			Value: 1,
 			Attrs: telemetry.Attrs{semconv.AttrReportName: name, semconv.AttrReadiness: readinessBucketFor(rep.MigrationReadiness)},
@@ -225,6 +255,7 @@ func (c *Collector) collectConfigurations(ctx context.Context, e telemetry.Emitt
 			c.logger.Warn("gpoanalytics: skipping unparseable configuration", "collector", collectorName, "error", err)
 			continue
 		}
+		c.watch.Value(e, semconv.AttrIngestionType, cfg.PolicyConfigurationIngestionType, knownIngestionTypes)
 		counts[ingestionTypeBucketFor(cfg.PolicyConfigurationIngestionType)]++
 	}
 

@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // fakeGraph maps request URLs to canned page bodies (or errors). Every
@@ -332,6 +334,98 @@ func TestConfigTypeBucketsMissingAndUnknownToOther(t *testing.T) {
 // per-device or per-user identifier as an attribute — only the bounded
 // config_type/config_name dimensions (admin-configured object count, not
 // tenant device/user count).
+// --- wire-assumption watchdog (#233/#234) --------------------------------
+//
+// configTypeBuckets feeds a METRIC LABEL (config_type) and already buckets
+// anything unmapped - including a MISSING @odata.type - to "other" rather
+// than dropping it. A Microsoft addition to the enrollment-configuration
+// subtype set therefore does not shrink or grow a series, it silently
+// reclassifies a config into "other" with nothing saying why.
+
+func findings(rec *telemetrytest.Recorder) map[string]float64 {
+	out := map[string]float64{}
+	for _, p := range rec.MetricPoints(wirecheck.MetricUnexpected) {
+		out[p.Attrs[semconv.AttrKind]+"/"+p.Attrs[semconv.AttrField]] += p.Value
+	}
+	return out
+}
+
+// The live fixture (sampleConfigs) is the steady state: four known subtypes
+// plus one config with NO @odata.type at all. A missing value is never a
+// finding (an absent field is the normal case across this project's APIs),
+// so the live capture must report nothing.
+func TestLiveCaptureReportsNothingUnexpected(t *testing.T) {
+	g := &fakeGraph{bodies: fixture()}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if got := findings(rec); len(got) != 0 {
+		t.Errorf("live capture produced findings %v, want none", got)
+	}
+}
+
+// TestUnrecognizedConfigTypeIsReportedAndStillBucketed pins both halves at
+// once: a genuinely unrecognized (non-empty) @odata.type is announced to
+// wirecheck, and the pre-existing "other" bucket fallback
+// (TestConfigTypeBucketsMissingAndUnknownToOther) is left untouched.
+func TestUnrecognizedConfigTypeIsReportedAndStillBucketed(t *testing.T) {
+	bodies := map[string]string{
+		enrollmentsURL: page(`
+			{"@odata.type":"#microsoft.graph.someFutureConfigurationType","id":"e1","displayName":"Future","priority":0,"version":0}
+		`),
+	}
+	g := &fakeGraph{bodies: bodies}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	got := findings(rec)
+	key := wirecheck.KindUnmappedValue + "/" + semconv.AttrConfigType
+	if got[key] != 1 {
+		t.Errorf("findings[%s] = %v, want 1; all=%v", key, got[key], got)
+	}
+
+	pts := rec.MetricPoints(countMetricName)
+	if len(pts) != 1 || pts[0].Attrs["config_type"] != "other" {
+		t.Errorf("reporting must not change the bucket, got %+v", pts)
+	}
+}
+
+// TestMissingODataTypeIsNeverReported pins that a config with no @odata.type
+// at all (the live WindowsRestore case) does not trip the watchdog: absence
+// is the normal case, distinct from a genuinely unrecognized non-empty value.
+func TestMissingODataTypeIsNeverReported(t *testing.T) {
+	bodies := map[string]string{
+		enrollmentsURL: page(`{"id":"e1","displayName":"No Type","priority":0,"version":0}`),
+	}
+	g := &fakeGraph{bodies: bodies}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if got := findings(rec); len(got) != 0 {
+		t.Errorf("missing @odata.type produced findings %v, want none", got)
+	}
+}
+
+// TestWatchedConfigTypesAreDerivedFromTheBucketMap is the anti-drift guard:
+// the Enum must be derived from configTypeBuckets itself, never a
+// hand-restated list that can fall out of step with it (#234).
+func TestWatchedConfigTypesAreDerivedFromTheBucketMap(t *testing.T) {
+	if n := len(knownConfigTypes); n != len(configTypeBuckets) {
+		t.Errorf("knownConfigTypes has %d members, configTypeBuckets has %d - it must be derived, not restated", n, len(configTypeBuckets))
+	}
+	for k := range configTypeBuckets {
+		if !knownConfigTypes.Has(k) {
+			t.Errorf("knownConfigTypes is missing %q, a value this collector maps", k)
+		}
+	}
+}
+
 func TestNoPerEntitySeries(t *testing.T) {
 	g := &fakeGraph{bodies: fixture()}
 	rec := telemetrytest.New()

@@ -39,6 +39,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/preflight"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // collectorName is the stable key used for config (enable/interval),
@@ -90,6 +91,22 @@ func decodeStatus(raw string) (string, bool) {
 	return statusUnknown, false
 }
 
+// knownStatusCodes is the wire assumption this collector watches at runtime
+// (#233/#234): setting_status is a METRIC LABEL, and a code outside
+// statusNames already falls back to statusUnknown rather than being dropped,
+// so it never shrinks a series, but it does silently reclassify rows into
+// "unknown" with nothing else saying why beyond the Warn log below. Derived
+// from statusNames itself, never restated, so the watched set is by
+// construction the set this collector maps — the same map the package doc's
+// live-measured-evidence rule already governs.
+var knownStatusCodes = func() wirecheck.Enum {
+	keys := make([]string, 0, len(statusNames))
+	for k := range statusNames {
+		keys = append(keys, k)
+	}
+	return wirecheck.NewEnum(keys...)
+}()
+
 // The columns this collector consumes are DeviceId, DeviceName, UPN, OS,
 // OSVersion, SettingName, SettingNm, SettingNm_loc, PolicyName, SettingStatus,
 // SettingStatus_loc, ErrorCode. They are NOT pinned via an explicit `select`:
@@ -104,6 +121,7 @@ func decodeStatus(raw string) (string, bool) {
 type Collector struct {
 	export exportjob.Runner
 	logger *slog.Logger
+	watch  *wirecheck.Reporter
 }
 
 // New builds the noncompliant-settings collector. export is typically the
@@ -114,7 +132,7 @@ func New(export exportjob.Runner, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Collector{export: export, logger: logger}
+	return &Collector{export: export, logger: logger, watch: wirecheck.New(collectorName, logger)}
 }
 
 // Name implements collector.SnapshotCollector.
@@ -192,9 +210,13 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter) error {
 		status, known := decodeStatus(row["SettingStatus"])
 		// An unmapped, non-empty code is a Microsoft-side enum value this map
 		// has not learned yet; it is invisible on the metric (buckets to
-		// "unknown"). Log it once per row so a new status is discoverable
-		// without a live probe — the _loc sibling names it on the wire.
+		// "unknown"). Report it to wirecheck (#233/#234) so it shows up as a
+		// counted, alertable finding, and keep the local Warn for the
+		// per-row device/policy context wirecheck's own bounded log cannot
+		// carry — so a new status is discoverable without a live probe, the
+		// _loc sibling naming it on the wire.
 		if !known && row["SettingStatus"] != "" {
+			c.watch.Value(e, semconv.AttrSettingStatus, row["SettingStatus"], knownStatusCodes)
 			c.logger.Warn("noncompliantsettings: unmapped SettingStatus code; bucketing as unknown",
 				"collector", collectorName, "setting_status_code", row["SettingStatus"],
 				"setting_status_loc", row["SettingStatus_loc"], "device_name", row["DeviceName"])

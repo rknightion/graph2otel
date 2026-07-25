@@ -7,7 +7,9 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
 
 // fakeGraph maps request URLs to canned response bodies (or errors) and
@@ -439,6 +441,111 @@ func TestNoPerEntityAttribute(t *testing.T) {
 					t.Errorf("metric %s has a per-entity attribute %q - cardinality violation", metric, bad)
 				}
 			}
+		}
+	}
+}
+
+// --- wire-assumption watchdog (#233/#234) --------------------------------
+//
+// odataTypeBuckets feeds a METRIC LABEL (odata_type) and already buckets
+// anything unmapped to "other" rather than dropping it. A Microsoft addition
+// (or, as here, a real subtype this map simply doesn't enumerate yet)
+// therefore does not shrink or grow a series, it silently reclassifies a
+// profile into "other" with nothing saying why.
+
+func findings(rec *telemetrytest.Recorder) map[string]float64 {
+	out := map[string]float64{}
+	for _, p := range rec.MetricPoints(wirecheck.MetricUnexpected) {
+		out[p.Attrs[semconv.AttrKind]+"/"+p.Attrs[semconv.AttrField]] += p.Value
+	}
+	return out
+}
+
+// TestUnrecognizedODataTypeIsReported pins both halves at once: the surprise
+// is announced, and the pre-existing "other" fallback is untouched.
+// Report-only means report-only.
+func TestUnrecognizedODataTypeIsReported(t *testing.T) {
+	bodies := merge(emptyEndpoints(), map[string]string{
+		profilesURL: `{"value":[
+			{"id":"p1","displayName":"Something New","version":1,"@odata.type":"#microsoft.graph.someBrandNewConfigurationType"}
+		]}`,
+		statusOverviewURL("p1"): `{}`,
+	})
+	g := &fakeGraph{bodies: bodies}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	got := findings(rec)
+	key := wirecheck.KindUnmappedValue + "/" + semconv.AttrOdataType
+	if got[key] != 1 {
+		t.Errorf("findings[%s] = %v, want 1; all=%v", key, got[key], got)
+	}
+
+	pts := rec.MetricPoints(countMetricName)
+	if len(pts) != 1 || pts[0].Attrs["odata_type"] != "other" {
+		t.Errorf("reporting must not change the bucket, got %+v", pts)
+	}
+}
+
+// TestExcludedGroupBTypeNeverReportsAsUnexpected pins that the
+// windowsUpdateForBusinessConfiguration profile - deliberately skipped before
+// bucketing (owned by #59) - never trips the watchdog: its exclusion is a
+// design decision, not a wire surprise.
+func TestExcludedGroupBTypeNeverReportsAsUnexpected(t *testing.T) {
+	bodies := merge(emptyEndpoints(), map[string]string{
+		profilesURL: `{"value":[
+			{"id":"ring1","displayName":"Update Ring","version":1,"@odata.type":"#microsoft.graph.windowsUpdateForBusinessConfiguration"}
+		]}`,
+	})
+	g := &fakeGraph{bodies: bodies}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if got := findings(rec); len(got) != 0 {
+		t.Errorf("excluded Group-B type produced findings %v, want none", got)
+	}
+}
+
+// TestLiveCaptureReportsTheKnownODataTypeGap pins the live capture's actual
+// behavior: iosDeviceFeaturesConfiguration is a real Microsoft subtype absent
+// from odataTypeBuckets (buckets to "other" - see the fixture doc comment
+// above), so the watchdog correctly fires once for it. This is the honest
+// live state, not a synthetic surprise - a watchdog that stayed silent here
+// would be lying about a genuine, standing coverage gap in the map.
+func TestLiveCaptureReportsTheKnownODataTypeGap(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		profilesURL:                        liveDeviceConfigurations,
+		statusOverviewURL(firstProfileID):  liveDeviceStatusOverview,
+		statusOverviewURL(secondProfileID): `{}`,
+	}}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter()); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	got := findings(rec)
+	key := wirecheck.KindUnmappedValue + "/" + semconv.AttrOdataType
+	if got[key] != 1 {
+		t.Errorf("findings[%s] = %v, want 1 (iosDeviceFeaturesConfiguration); all=%v", key, got[key], got)
+	}
+}
+
+// TestWatchedODataTypesAreDerivedFromTheBucketMap is the anti-drift guard:
+// the Enum must be derived from odataTypeBuckets itself, never a
+// hand-restated list that can fall out of step with it (#234).
+func TestWatchedODataTypesAreDerivedFromTheBucketMap(t *testing.T) {
+	if n := len(knownODataTypes); n != len(odataTypeBuckets) {
+		t.Errorf("knownODataTypes has %d members, odataTypeBuckets has %d - it must be derived, not restated", n, len(odataTypeBuckets))
+	}
+	for k := range odataTypeBuckets {
+		if !knownODataTypes.Has(k) {
+			t.Errorf("knownODataTypes is missing %q, a value this collector maps", k)
 		}
 	}
 }
