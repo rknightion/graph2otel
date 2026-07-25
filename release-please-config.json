@@ -8,7 +8,8 @@
       "package-name": "graph2otel",
       "extra-files": [
         { "type": "yaml", "path": "charts/graph2otel/Chart.yaml", "jsonpath": "$.version" },
-        { "type": "yaml", "path": "charts/graph2otel/Chart.yaml", "jsonpath": "$.appVersion" }
+        { "type": "yaml", "path": "charts/graph2otel/Chart.yaml", "jsonpath": "$.appVersion" },
+        { "type": "generic", "path": "charts/graph2otel/README.md" }
       ]
     }
   },
