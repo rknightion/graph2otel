@@ -182,7 +182,13 @@ def _threshold_node(op: str, params: list) -> dict:
 
 def _alert(uid: str, title: str, expr: str, op: str, params: list, for_: str,
            labels: dict, summary: str, description: str, is_paused: bool,
-           no_data_state: str = "OK", exec_err_state: str = "OK") -> dict:
+           no_data_state: str = "OK", exec_err_state: str = "Error",
+           exec_err_waiver: str = "") -> dict:
+    if exec_err_state == "OK" and not exec_err_waiver.strip():
+        raise ValueError(f"{uid}: execErrState OK requires a documented waiver")
+    annotations = {"summary": summary, "description": description}
+    if exec_err_waiver:
+        annotations["exec_error_waiver"] = exec_err_waiver
     return {
         "uid": uid,
         "title": title,
@@ -192,7 +198,7 @@ def _alert(uid: str, title: str, expr: str, op: str, params: list, for_: str,
         "execErrState": exec_err_state,
         "for": for_,
         "labels": labels,
-        "annotations": {"summary": summary, "description": description},
+        "annotations": annotations,
         "isPaused": is_paused,
     }
 

@@ -68,6 +68,19 @@ Every Prometheus query uses the portable Grafana Cloud default,
 your actual Prometheus/Mimir datasource UID (`gcx datasources list`, or
 Connections → Data sources in the Grafana UI) before importing.
 
+## Evaluator errors and no data
+
+Every generated alert uses `execErrState: Error`. A datasource outage, invalid
+query, or evaluator failure is therefore visible as an evaluation error rather
+than a healthy rule. The generator rejects `execErrState: OK` unless that rule
+supplies an explicit `exec_error_waiver` annotation explaining why the
+silent-green behavior is intentional.
+
+`noDataState` is configured separately. Several collectors are legitimately
+healthy with no matching records, so absence remains `OK` for those rules.
+Collector staleness deliberately uses `noDataState: Alerting`; each rule's
+section below documents its own empty-state behavior.
+
 ## Doc block 1 — Credential & token expiry
 
 **Rules:** `g2o-entra-cred-expiry-critical` (primary), `g2o-entra-cred-expiry-warning`,

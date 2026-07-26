@@ -90,6 +90,53 @@ class TestPipelineShape(unittest.TestCase):
             self.assertEqual(r["data"][0]["model"]["datasource"]["type"], "loki", fname)
 
 
+class TestEvaluatorErrorState(unittest.TestCase):
+    def test_every_alert_treats_evaluator_errors_as_errors(self):
+        for rule in build_rules.RULES:
+            self.assertEqual(rule["execErrState"], "Error", rule["uid"])
+
+    def test_ok_evaluator_state_requires_a_documented_waiver(self):
+        args = (
+            "test-evaluator-waiver",
+            "Evaluator waiver",
+            "vector(1)",
+            "gt",
+            [0],
+            "0s",
+            {"severity": "warning"},
+            "summary",
+            "description",
+            True,
+        )
+        with self.assertRaisesRegex(ValueError, "waiver"):
+            build_rules._alert(*args, exec_err_state="OK")
+
+        waived = build_rules._alert(
+            *args,
+            exec_err_state="OK",
+            exec_err_waiver="The datasource is deliberately optional.",
+        )
+        self.assertEqual(waived["execErrState"], "OK")
+        self.assertEqual(
+            waived["annotations"]["exec_error_waiver"],
+            "The datasource is deliberately optional.",
+        )
+
+    def test_no_data_state_remains_independent(self):
+        staleness = next(
+            r for r in build_rules.RULES
+            if r["uid"] == "g2o-collector-staleness"
+        )
+        healthy_empty = next(
+            r for r in build_rules.RULES
+            if r["uid"] == "g2o-throttle-saturation"
+        )
+        self.assertEqual(staleness["noDataState"], "Alerting")
+        self.assertEqual(healthy_empty["noDataState"], "OK")
+        self.assertEqual(staleness["execErrState"], "Error")
+        self.assertEqual(healthy_empty["execErrState"], "Error")
+
+
 class TestReverseValidation(unittest.TestCase):
     def test_every_rule_metric_token_resolves(self):
         violations = build_rules.reverse_validate(CAT, build_rules.RULES)

@@ -82,7 +82,7 @@ groups:
                     params: []
               refId: "C"
         noDataState: "OK"
-        execErrState: "OK"
+        execErrState: "Error"
         for: "15m"
         labels:
           severity: "critical"
@@ -152,7 +152,7 @@ groups:
                     params: []
               refId: "C"
         noDataState: "OK"
-        execErrState: "OK"
+        execErrState: "Error"
         for: "15m"
         labels:
           severity: "warning"
@@ -222,7 +222,7 @@ groups:
                     params: []
               refId: "C"
         noDataState: "OK"
-        execErrState: "OK"
+        execErrState: "Error"
         for: "15m"
         labels:
           severity: "critical"
@@ -292,7 +292,7 @@ groups:
                     params: []
               refId: "C"
         noDataState: "OK"
-        execErrState: "OK"
+        execErrState: "Error"
         for: "15m"
         labels:
           severity: "critical"
@@ -362,7 +362,7 @@ groups:
                     params: []
               refId: "C"
         noDataState: "OK"
-        execErrState: "OK"
+        execErrState: "Error"
         for: "30m"
         labels:
           severity: "warning"
@@ -432,7 +432,7 @@ groups:
                     params: []
               refId: "C"
         noDataState: "OK"
-        execErrState: "OK"
+        execErrState: "Error"
         for: "15m"
         labels:
           severity: "warning"
@@ -502,7 +502,7 @@ groups:
                     params: []
               refId: "C"
         noDataState: "Alerting"
-        execErrState: "OK"
+        execErrState: "Error"
         for: "5m"
         labels:
           severity: "critical"
@@ -572,7 +572,7 @@ groups:
                     params: []
               refId: "C"
         noDataState: "OK"
-        execErrState: "OK"
+        execErrState: "Error"
         for: "0m"
         labels:
           severity: "warning"
@@ -642,7 +642,7 @@ groups:
                     params: []
               refId: "C"
         noDataState: "OK"
-        execErrState: "OK"
+        execErrState: "Error"
         for: "0m"
         labels:
           severity: "warning"
@@ -712,7 +712,7 @@ groups:
                     params: []
               refId: "C"
         noDataState: "OK"
-        execErrState: "OK"
+        execErrState: "Error"
         for: "0m"
         labels:
           severity: "warning"
@@ -782,7 +782,7 @@ groups:
                     params: []
               refId: "C"
         noDataState: "OK"
-        execErrState: "OK"
+        execErrState: "Error"
         for: "15m"
         labels:
           severity: "warning"
@@ -852,7 +852,7 @@ groups:
                     params: []
               refId: "C"
         noDataState: "OK"
-        execErrState: "OK"
+        execErrState: "Error"
         for: "15m"
         labels:
           severity: "warning"
@@ -922,7 +922,7 @@ groups:
                     params: []
               refId: "C"
         noDataState: "OK"
-        execErrState: "OK"
+        execErrState: "Error"
         for: "15m"
         labels:
           severity: "critical"
@@ -992,7 +992,7 @@ groups:
                     params: []
               refId: "C"
         noDataState: "OK"
-        execErrState: "OK"
+        execErrState: "Error"
         for: "5m"
         labels:
           severity: "warning"
