@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -129,6 +130,75 @@ func TestSPOwnershipCounts(t *testing.T) {
 	}
 	if got["false|Application"] != 2 || got["false|ManagedIdentity"] != 1 {
 		t.Errorf("SP ownership counts wrong: %v", got)
+	}
+}
+
+// TestServicePrincipalOwnershipTwin pins one state twin per source service
+// principal while keeping outcome accounting source-record based.
+func TestServicePrincipalOwnershipTwin(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{
+		v1 + spsOwnersPath: `{"value":[
+			{"id":"sp-object-ownerless","appId":"app-ownerless","displayName":"Ownerless SP","servicePrincipalType":"Application","owners":[]},
+			{"id":"sp-object-owned","appId":"app-owned","displayName":"Owned SP","servicePrincipalType":"ManagedIdentity","owners":[
+				{"userPrincipalName":"admin@m7kni.io","displayName":"Admin"},
+				{"userPrincipalName":"operator@m7kni.io","displayName":"Operator"}
+			]}
+		]}`,
+	}}
+	rec := telemetrytest.New()
+	outcomes := recordoutcome.NewRecorder()
+
+	if err := New(g, nil).collectSPOwnership(context.Background(), rec.Emitter(), outcomes); err != nil {
+		t.Fatalf("collectSPOwnership: %v", err)
+	}
+
+	logs := rec.LogRecords()
+	if len(logs) != 2 {
+		t.Fatalf("service-principal twins = %d, want 2", len(logs))
+	}
+	byID := make(map[string]telemetrytest.LogRecord, len(logs))
+	for _, log := range logs {
+		if log.EventName != "entra.service_principal" {
+			t.Errorf("event name = %q, want entra.service_principal", log.EventName)
+		}
+		byID[log.Attrs["service_principal_object_id"]] = log
+	}
+	ownerless := byID["sp-object-ownerless"]
+	if ownerless.SeverityText != "WARN" {
+		t.Errorf("ownerless severity = %q, want WARN", ownerless.SeverityText)
+	}
+	if ownerless.Attrs["app_id"] != "app-ownerless" ||
+		ownerless.Attrs["display_name"] != "Ownerless SP" ||
+		ownerless.Attrs["service_principal_type"] != "Application" ||
+		ownerless.Attrs["owner_count"] != "0" {
+		t.Errorf("ownerless attrs = %#v", ownerless.Attrs)
+	}
+	owned := byID["sp-object-owned"]
+	if owned.SeverityText != "INFO" {
+		t.Errorf("owned severity = %q, want INFO", owned.SeverityText)
+	}
+	if owned.Attrs["app_id"] != "app-owned" ||
+		owned.Attrs["display_name"] != "Owned SP" ||
+		owned.Attrs["service_principal_type"] != "ManagedIdentity" ||
+		owned.Attrs["owner_count"] != "2" ||
+		owned.Attrs["owner_principal_names"] != "admin@m7kni.io,operator@m7kni.io" {
+		t.Errorf("owned attrs = %#v", owned.Attrs)
+	}
+
+	wantCounts := recordoutcome.Counts{Fetched: 2, Mapped: 2, Emitted: 2}
+	if got := outcomes.Snapshot().Counts; got != wantCounts {
+		t.Errorf("outcome counts = %+v, want %+v", got, wantCounts)
+	}
+	for _, point := range rec.MetricPoints(metricSPOwnership) {
+		if len(point.Attrs) != 2 {
+			t.Errorf("metric attrs = %#v, want only has_owner and service_principal_type", point.Attrs)
+		}
+		if _, ok := point.Attrs["has_owner"]; !ok {
+			t.Errorf("metric attrs missing has_owner: %#v", point.Attrs)
+		}
+		if _, ok := point.Attrs["service_principal_type"]; !ok {
+			t.Errorf("metric attrs missing service_principal_type: %#v", point.Attrs)
+		}
 	}
 }
 

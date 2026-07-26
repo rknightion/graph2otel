@@ -6686,6 +6686,21 @@
       ]
     },
     {
+      "event_name": "entra.service_principal",
+      "domain": "entra",
+      "attr_keys": [
+        "app_id",
+        "display_name",
+        "owner_count",
+        "owner_principal_names",
+        "service_principal_object_id",
+        "service_principal_type"
+      ],
+      "packages": [
+        "internal/collectors/entra/appownership"
+      ]
+    },
+    {
       "event_name": "entra.service_principal_risk_detection",
       "domain": "entra",
       "attr_keys": [

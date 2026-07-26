@@ -54,6 +54,7 @@ const (
 
 const (
 	eventApplication = "entra.application"
+	eventSP          = "entra.service_principal"
 	eventFIC         = "entra.federated_identity_credential"
 )
 
@@ -202,7 +203,27 @@ func (c *Collector) collectSPOwnership(ctx context.Context, e telemetry.Emitter,
 			entraoutcome.Errored(outcomes, uint64(len(raws))-uint64(i), recordoutcome.CauseDecodeError)
 			return fmt.Errorf("decode service principal: %w", err)
 		}
-		counts[[2]string{boolStr(len(s.Owners) > 0), s.ServicePrincipalType}]++
+		hasOwner := len(s.Owners) > 0
+		counts[[2]string{boolStr(hasOwner), s.ServicePrincipalType}]++
+
+		attrs := telemetry.Attrs{}
+		telemetry.SetStr(attrs, semconv.AttrServicePrincipalObjectId, s.ID)
+		telemetry.SetStr(attrs, semconv.AttrAppId, s.AppID)
+		telemetry.SetStr(attrs, semconv.AttrDisplayName, s.DisplayName)
+		telemetry.SetStr(attrs, semconv.AttrServicePrincipalType, s.ServicePrincipalType)
+		attrs[semconv.AttrOwnerCount] = int64(len(s.Owners))
+		telemetry.SetStrs(attrs, semconv.AttrOwnerPrincipalNames, ownerUPNs(s.Owners))
+
+		sev := telemetry.SeverityInfo
+		if !hasOwner {
+			sev = telemetry.SeverityWarn
+		}
+		e.LogEvent(telemetry.Event{
+			Name:     eventSP,
+			Body:     fmt.Sprintf("service principal %s: owners=%d type=%s", displayOr(s.DisplayName, s.AppID), len(s.Owners), s.ServicePrincipalType),
+			Severity: sev,
+			Attrs:    attrs,
+		})
 		entraoutcome.Emitted(outcomes, 1)
 	}
 	e.GaugeSnapshot(metricSPOwnership, "{service_principal}", "Service principals by whether they have an owner and by type.", ownershipPoints(counts, semconv.AttrServicePrincipalType))
