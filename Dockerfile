@@ -5,6 +5,11 @@
 FROM golang:1.26.5-bookworm@sha256:1ecb7edf62a0408027bd5729dfd6b1b8766e578e8df93995b225dfd0944eb651 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
+# Root go.mod replaces both OTLP/HTTP exporters with narrow local forks. Copy
+# their manifests into the dependency-cache layer before Go resolves the
+# replacements; the full sources still arrive in the following COPY layer.
+COPY third_party/otlploghttp/go.mod third_party/otlploghttp/go.sum ./third_party/otlploghttp/
+COPY third_party/otlpmetrichttp/go.mod third_party/otlpmetrichttp/go.sum ./third_party/otlpmetrichttp/
 RUN go mod download
 COPY . .
 ARG VERSION=dev
