@@ -88,6 +88,7 @@ A list of Entra tenants to poll. At least one entry is required unless
 tenants:
   - tenant_id: "00000000-0000-0000-0000-000000000000" # hyphenated Entra directory GUID
     client_id: "" # optional expected app ID; an assertion, not credential selection
+    exclude_self: false
     collectors: # optional per-tenant overrides — see "Per-collector overrides" below
       "entra.signins.interactive":
         enabled: false
@@ -117,6 +118,60 @@ When `exclude_self: true`, graph2otel compares record `appId` only with the auth
 token's proved `appid`. If token acquisition or claim decoding cannot prove a non-empty
 ID, the filter fails open: graph2otel retains every record and emits one bounded startup
 warning for that tenant. A configured `client_id` alone is never proof.
+
+#### Per-tenant ingest and direct-API sources
+
+The shipped registry has 148 logical collectors across 7 registration paths. These
+tenant blocks enable or configure the non-default source paths; they are file-only because
+the environment layer does not bind into the `tenants[]` slice:
+
+```yaml
+tenants:
+  - tenant_id: "00000000-0000-0000-0000-000000000000"
+    blob_ingest:
+      account_url: "https://myaccount.blob.core.windows.net"
+      metric_recency_window: 20m
+    o365_activity:
+      content_types: ["Audit.Exchange", "Audit.SharePoint"]
+    mdca:
+      portal_url: "https://<tenant>.<region>.portal.cloudappsecurity.com"
+      token_file: "/run/secrets/mdca_token"
+    exchange_online:
+      enabled: true
+    hunting:
+      enabled: true
+```
+
+- `blob_ingest.account_url` is the opt-in for the read-only Azure Storage
+  byte-offset consumer. The ambient identity needs **Storage Blob Data Reader** on the
+  account; an Azure subscription Owner role does not grant blob-content reads.
+  `metric_recency_window` defaults to `20m` and must be at most `1h`; older blob events
+  still emit logs but not counters, so backfill is not credited to the current interval.
+  Azure diagnostic delivery is at-least-once, so blob log duplicates are preserved and
+  deduplicated downstream by record ID.
+- `o365_activity.content_types` configures the default-on, stable-v1.0
+  `m365.activity` collector. Empty means `Audit.Exchange` plus `Audit.SharePoint`.
+  `Audit.AzureActiveDirectory`, `Audit.General`, and `DLP.All` are supported explicit
+  additions; `DLP.All` requires `ActivityFeed.ReadDlp`. The API has no record-level
+  server filter, so every record in a selected type is fetched and shipped.
+  `Audit.General` is deliberately not a default: on the measured six-device tenant,
+  3,865 of 4,035 records over 23 hours were Endpoint DLP. The common audit mapper does
+  not emit `PolicyDetails`, `SensitiveInformation`, or `DetectedValues`; there is no
+  dedicated `DLP.All` classification mapper.
+- `mdca.portal_url` opts into Cloud Discovery parse health over the legacy MDCA portal
+  API. `token_file` is required and contains the static portal token; the secret itself
+  must not appear in YAML or an environment variable.
+- `exchange_online.enabled` opts into the Exchange Online admin collectors. It needs
+  both `Exchange.ManageAsApp` and an Entra directory role on the service principal
+  (Security Reader is the least-privileged verified role).
+- `hunting.enabled` opts into the Graph advanced-hunting query collectors. It needs
+  `ThreatHunting.Read.All` and consumes a per-tenant CPU budget shared with interactive
+  Defender portal queries.
+
+These blocks do not map one-to-one to ingest engines. The 4 ingest engine shapes are
+Graph window polling, async export jobs, Azure diagnostic blobs, and the O365 Management
+Activity subscription/content-blob flow. Snapshot, MDCA, Exchange Online, and Hunt
+collectors retain their direct API shapes.
 
 ### `otlp`
 
@@ -313,7 +368,7 @@ block-contention sampling that feed the corresponding Pyroscope profiles. Sampli
 is not free, so leave the defaults unless you are actively investigating contention.
 
 `basic_auth_password` is a secret — set it via `G2O_PROFILING__PYROSCOPE__BASIC_AUTH_PASSWORD`,
-never in committed YAML (see [Secrets](#secrets--what-never-belongs-in-this-file)). Every
+never in committed YAML (see [Secrets](#secrets-what-never-belongs-in-this-file)). Every
 scalar field here also has a `G2O_PROFILING__*` env var; `tags` is file-only. See
 [Environment variables](env-vars.md).
 
@@ -323,10 +378,15 @@ scalar field here also has a `G2O_PROFILING__*` env var; `tags` is file-only. Se
 checkpoint_dir: "./checkpoints"
 ```
 
-Root directory for the file-based checkpoint store. Every window (log-stream) collector
-persists its per-(tenant, endpoint) watermark under here, namespaced so a restart
-resumes from `watermark - overlap` rather than re-fetching or dropping data across
-out-of-order arrivals. See [Architecture](architecture.md#checkpointing).
+Root directory for the file-based checkpoint store. Window collectors persist their
+per-(tenant, endpoint) watermark and seen-ID overlap set; async jobs persist their job
+and record cursor state; O365 Management Activity persists its arrival watermark plus
+content- and record-ID sets; blob ingest persists exact byte offsets. A restart therefore
+resumes each source's own cursor contract instead of inventing one universal timestamp
+cursor. A correctly timestamped record with no ID still emits as undedupeable/degraded,
+while a record with no parseable event time is dropped and counted rather than stamped
+with arrival time. See [Architecture](architecture.md#checkpoints-and-delivery-semantics) and
+[Signals](signals.md#event-time-and-dedupe-are-transport-contracts).
 
 ### `backfill`
 

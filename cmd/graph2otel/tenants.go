@@ -748,7 +748,7 @@ func setupTenantWithGraphAndLicenseBuilders(
 	// WithTenant (#143) wraps outermost and is the mirror image: it stamps
 	// METRICS as well as logs, because without it two tenants' domain metrics are
 	// the same series rather than merely unsliceable. It is the same seam for the
-	// same reason — the Scheduler is the one place that reaches all 58 collectors
+	// same reason — the Scheduler is the one place that reaches every registered collector
 	// — and collector.WithTenant below already gave the Scheduler this tenant for
 	// self-obs labels and checkpoint namespacing. Self-obs metrics reach the
 	// decorator already stamped by selfObsAttrs with the identical value, and the

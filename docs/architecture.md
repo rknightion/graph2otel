@@ -1,156 +1,260 @@
 # Architecture
 
-`graph2otel`'s closest architectural analogs are `sf2loki`'s Source/Sink/CheckpointStore
-composition pattern (poll a tenant-scoped SaaS API, single global instance, avoid
-over-building HA prematurely) and `tailscale2otel`'s poll → `telemetry.Emitter` facade.
-This page walks the seams the composition root wires together.
+`graph2otel` is one multi-tenant process that polls several Microsoft control
+planes and pushes metrics and logs over OTLP. The composition root in
+`cmd/graph2otel` owns credentials, clients, collector construction, scheduling,
+and shutdown. Collectors depend on narrow interfaces and hand signals to
+`internal/telemetry`; they do not construct SDK providers or exporters.
 
-## The pieces
+## Data flow
 
 ```mermaid
-flowchart TB
-    cfg["internal/config<br/>tenants + collectors + otlp + admin"]
-    gc["internal/graphclient<br/>Kiota client + per-workload rate limiters"]
-    coll["internal/collector<br/>Registry + Scheduler"]
-    lp["internal/logpipeline<br/>watermark-poller engine"]
-    ej["internal/exportjob<br/>create/poll/download/parse"]
-    ck["internal/checkpoint<br/>file-based Store"]
-    tel["internal/telemetry<br/>Provider + Emitter"]
-    admin["internal/admin<br/>health/readiness/status endpoint"]
-    preflight["internal/preflight<br/>graph2otel check"]
+flowchart LR
+    cfg["internal/config<br/>YAML + G2O_*"]
+    root["cmd/graph2otel<br/>composition root"]
+    clients["source clients<br/>Graph, Storage, O365,<br/>MDCA, EXO, Hunt"]
+    factories["internal/collectors<br/>registration paths"]
+    engines["ingest engine packages<br/>log / job / blob / O365"]
+    scheduler["internal/collector<br/>Registry + Scheduler"]
+    emitter["internal/telemetry<br/>Emitter + limiter + capacity"]
+    otlp["OTLP<br/>metrics + logs"]
+    checkpoint["internal/checkpoint<br/>durable cursors"]
+    admin["internal/admin<br/>health + status + capacity"]
 
-    cfg --> coll
-    cfg --> gc
-    gc --> coll
-    coll --> lp
-    coll --> ej
-    lp --> ck
-    coll --> tel
-    coll --> admin
-    coll --> preflight
+    cfg --> root
+    root --> clients
+    root --> factories
+    clients --> factories
+    factories --> engines
+    factories --> scheduler
+    engines --> scheduler
+    engines <--> checkpoint
+    scheduler --> emitter
+    emitter --> otlp
+    scheduler --> admin
+    emitter --> admin
 ```
 
-### Multi-tenant config (`internal/config`)
+The diagram separates two concepts that are easy to conflate:
 
-A `Config` document with a `tenants` list (each entry a tenant ID + client ID + optional
-per-collector overrides), a global `collectors` map, `otlp`, `admin`, and
-`checkpoint_dir`. Layered load order: built-in defaults → optional YAML file →
-`G2O_*` environment variables (env always wins). Auth material never appears in this
-layer at all — it comes from environment variables consumed directly by
-`azidentity.DefaultAzureCredential`. See [Configuration](configuration.md) for the full
-key reference.
+- a **registration path** is how the composition root constructs a collector
+  with the dependencies for its source;
+- an **ingest engine** is shared cursor and delivery machinery for one transport
+  shape.
 
-### Graph client factory (`internal/graphclient`)
+Some registration paths return a collector that uses an ingest engine. Others
+return a direct snapshot or window collector over a source-specific client.
 
-Wraps `msgraph-sdk-go` v1.0, re-attaching Kiota's default middlewares (retry, redirect,
-compression, telemetry) explicitly under graph2otel's own OTEL-instrumented transport.
-Every outbound request is classified into a `Workload` — `reporting` (sign-in/audit/
-provisioning log endpoints, 5 req/10s per app per tenant), `identity-protection`
-(Identity Protection + Conditional Access, 1 req/s per tenant across all apps — the
-tightest ceiling Graph exposes), `directory` (plain directory-object reads, which do send
-`Retry-After` and so lean more on Kiota's built-in retry), Intune's general/elevated
-Devices tiers, and Intune's reports-export ceiling (48 req/min per app) — before a
-client-side rate limiter paces it. None of the reporting or Identity Protection
-workloads reliably send `Retry-After`, so this client-side pacing is the only thing
-keeping graph2otel inside Graph's throttle budget; Kiota's own retry logic is not enough
-on its own.
+## Configuration and composition
 
-### Collector framework (`internal/collector`)
+`internal/config` loads built-in defaults, optional YAML, then `G2O_*`
+environment overrides. The resulting config describes tenants, collector
+selection, checkpoint storage, OTLP, cardinality, capacity-cost metadata,
+profiling, and the admin server. Authentication material is not accepted in
+YAML: Azure credentials come from `azidentity.DefaultAzureCredential`, while
+source-specific secrets such as the MDCA token are read through their explicit
+secret-file settings.
 
-Ported from `tailscale2otel`. Two collector shapes:
+For each tenant, `cmd/graph2otel` builds the enabled source clients, walks every
+collector registration path, applies config/license/experimental/high-volume
+gates, registers the resulting collectors, and starts one tenant-scoped
+`internal/collector.Scheduler`. Source clients and rate limiters are shared
+within that tenant where their transport permits it.
 
-- **`SnapshotCollector`** — fetches current state each tick (directory objects, device
-  compliance, license SKUs, and other inventory-shaped data) and emits it as OTEL metric
-  gauges/counters.
-- **`WindowCollector`** — polls an event stream (sign-ins, directory audits, provisioning,
-  risk detections, Intune audit events) for a checkpointed time window and emits each
-  record as an OTEL log. Watermark, overlap window, and seen-ID dedupe all live in the
-  shared `internal/logpipeline` engine (below) — a real `WindowCollector` implementation
-  is a thin `EndpointConfig` plus a `Map` function, not a hand-rolled poller.
+## Graph transport
 
-A `Registry` holds every enabled collector; a goroutine-per-collector `Scheduler` drives
-each on its own ticker, staggered so a large collector set doesn't all fire in the same
-instant. Every collector run reports self-observability (`graph2otel.scrape.*`) through
-the same `telemetry.Emitter` collectors use for domain data. The Scheduler also supplies
-one concurrency-safe outcome recorder per run. Collectors reconcile source records as
-`fetched = mapped + filtered + dropped + errored` and
-`mapped = emitted + deduped`; the Scheduler turns the immutable summary into explicit
-empty/success/partial/failure status and bounded `graph2otel.record.outcomes` /
-`graph2otel.scrape.outcomes` metrics. A telemetry decorator measures event lag at the
-final log-emission boundary, after an engine has stamped the authoritative transport.
+Collectors use **Raw REST** through `internal/graphclient`. Its narrow
+`RawGet`/`RawGetWithHeaders` surface keeps wire decoding in each collector,
+while its OTEL-instrumented HTTP transport, workload classification,
+client-side rate limiting, retry, paging helpers, and beta opt-in are shared.
+This is deliberately not a typed-SDK collector architecture.
 
-### Log-stream engine (`internal/logpipeline`)
+There is exactly one `msgraph-sdk-go` call site:
+`internal/license/graphclient_adapter.go`, which adapts the SDK
+`subscribedSkus` request for license detection. It is an isolated compatibility
+adapter, not a collector transport. New collectors must use
+`internal/graphclient`.
 
-None of `signIns`, `directoryAudits`, `provisioning`, `riskDetections`, `riskyUsers`, or
-Intune `auditEvents` support a delta query or a reliable server-side cursor, so this
-package owns, once, the mechanics every one of those endpoints would otherwise hand-roll:
-build a time-window `$filter`, follow `@odata.nextLink` to exhaustion, dedupe by
-immutable ID against the checkpoint's overlap window, emit each record as an OTLP log,
-and advance the watermark. Streams that share a Graph path (the four sign-in event
-types all poll `/auditLogs/signIns`) get distinct `CheckpointKey`s so they don't collide
-on one checkpoint namespace and dedupe each other's events away.
+## Collector framework and census
 
-### Export-job subsystem (`internal/exportjob`)
+`internal/collector` defines the two scheduling contracts:
 
-Most fleet-wide Intune report data (app install status, feature-update device states,
-enrollment failures, certificate inventory, Defender agent health, …) is only available
-through the async **reports export API**, not a paged entity walk — per-device entity
-walks would blow the throttling budget on a large fleet. `exportjob` implements the
-generic create → poll → download → unzip → parse flow every export-based report
-collector builds on: `POST .../reports/exportJobs` to create a job, poll with exponential
-backoff to a terminal status, download the pre-signed SAS-url ZIP before it expires, and
-parse its single CSV/JSON entry into rows. The whole flow shares one 48-req/min-per-app
-rate budget — every poll counts against it, which is why backoff matters more here than
-on a typical paged endpoint.
+- `SnapshotCollector` answers "what is true now?" on each tick. It is used for
+  state-shaped gauges/log twins and also for source engines whose cursor is not
+  a time window, such as Azure Storage byte offsets.
+- `WindowCollector` consumes a bounded `[from, to]` interval. It is used for
+  event streams with a durable watermark and for source-specific streams that
+  can honor the same scheduling contract.
 
-### Telemetry emitter facade (`internal/telemetry`)
+Factories self-register under `internal/collectors`; the composition root
+constructs them once per eligible tenant. There are **7 registration paths**:
 
-The only package touching OTLP metrics + logs directly, so exporter details never leak
-into collectors. `Provider` builds the OTEL SDK metric/log pipelines for the configured
-protocol (`grpc` / `http` / `stdout`); `Emitter` is the narrow interface collectors call
-against (gauges, counters, histograms, log records). Grafana Cloud's auth header and the
-`/v1/metrics` vs `/v1/logs` URL-path distinction live here, once. A `CardinalityTracker`
-backs the `graph2otel.series.*` self-observability metrics.
+| path | registry seam | scheduled shape | source |
+| --- | --- | --- | --- |
+| Snapshot | `Deps` / `All` | `SnapshotCollector` | Graph Raw REST, plus the shared Intune report-export runner where required |
+| Window | `WindowDeps` / `WindowAll` | `WindowCollector` | Graph page polling, Graph async audit-query jobs, or an EXO window client |
+| Blob | `BlobDeps` / `RegisterBlob` | `SnapshotCollector` | Azure Storage diagnostic blobs |
+| O365 | `O365Deps` / `O365All` | `WindowCollector` | O365 Management Activity API |
+| MDCA | `MDCADeps` / `RegisterMDCA` | `WindowCollector` | Defender for Cloud Apps portal API |
+| EXO | `EXODeps` / `RegisterEXO` | `SnapshotCollector` | Exchange Online admin API |
+| Hunt | `HuntDeps` / `RegisterHunt` / `HuntAll` | `SnapshotCollector` | Microsoft Defender XDR advanced-hunting query API |
 
-### Checkpointing (`internal/checkpoint`) {#checkpointing}
+The current registry contains **151 registration-path candidates** representing
+**148 logical collectors**. The difference is intentional: a logical signal can
+have more than one mutually exclusive source candidate. `internal/collectordoc`
+walks every path and the generated collector reference is drift-gated. An
+eighth path is incomplete unless the census, `collectordoc.Rows` signature, and
+all generated gates are extended in the same change.
 
-A file-based `Store` rooted at `checkpoint_dir`, with one JSON file per
-`(tenant_id, endpoint)` pair, storing `{watermark, overlap_window, seen_ids}`. Safe for
-concurrent use by multiple `WindowCollector`s polling different endpoints on their own
-goroutines. On restart, a collector resumes from `watermark - overlap` rather than
-re-fetching everything or silently dropping events that arrived out of order.
+`Registry` holds the enabled instances. `Scheduler` gives each collector its own
+goroutine and interval, with a small startup stagger so a large tenant does not
+burst every source at once. A failed collector is isolated from its peers.
 
-### Operator surfaces
+## Ingest engine shapes
 
-- **`internal/admin`** — an optional (`admin.enabled`) HTTP server: unconditional
-  `/healthz` process liveness, latched `/readyz` workload readiness, and a
-  per-tenant, per-collector status page served as both HTML (`/`) and JSON
-  (`/api/status.json`) from one shared data model. Before the latch, configured
-  tenants with zero working collectors or no successful run return 503. The
-  first collector success latches readiness for the process lifetime: partial
-  tenant success is ready while failed tenants remain degraded, and later
-  failures do not flap it. A zero-tenant `stdout` run is ready immediately.
-  Failure to bind an enabled admin server is fatal. This is single-instance ops
-  visibility, not a control plane — no mutating endpoints, and every request
-  renders a fresh snapshot of the scheduler's own recorded state rather than
-  keeping a separate copy.
-- **`internal/preflight`** — backs the `graph2otel check` subcommand: validates, ahead of
-  time, that every enabled collector's declared Microsoft Graph application permissions
-  are both granted on the app registration and admin-consented, so a missing scope is
-  reported once up front instead of surfacing later as a runtime 403.
-- **`internal/profiling`** — optional Grafana Pyroscope continuous profiling (`profiling.
-  pyroscope.enabled`, off by default), wired at start-up in `cmd/graph2otel/main.go`. It is
-  **push-only** — profiles are shipped to Pyroscope; graph2otel exposes no HTTP `pprof`
-  endpoint of its own, so there is no debug surface to gate or secure. Start also applies
-  the runtime mutex/block sampling rates; a failure to reach Pyroscope is non-fatal.
+There are **4 ingest engine shapes**. They share scheduling and telemetry
+seams but retain transport-specific cursor rules:
 
-## Single-instance, no HA in v1
+### `internal/logpipeline`
 
-None of the Graph endpoints graph2otel polls support consumer-group or delta semantics
-that would make multi-replica coordination (leader election, work partitioning) pay for
-itself — every poller already has to re-derive its own watermark regardless of how many
-replicas exist, so adding replicas would mean either duplicate polling or a coordination
-layer with no endpoint feature to hang it off. graph2otel therefore runs as a single
-instance per configured tenant set; this is a deliberate v1 scope decision, revisited
-only if a real multi-replica requirement shows up (e.g. an operator needing to shard an
-extremely large tenant count across processes).
+This is the paged Graph event-log engine. It builds the time filter, follows
+`@odata.nextLink`, maps records, and maintains a watermark plus overlap and
+seen-ID dedupe. Graph exposes no delta cursor for these endpoints. Streams that
+share a path, including the four sign-in variants, therefore use distinct
+checkpoint keys.
+
+### `internal/jobpipeline`
+
+This is the asynchronous Graph audit-query engine. It submits a query, polls it
+to completion, pages results, maps and dedupes records, then advances the
+window. The in-flight query ID and its exact window are persisted so a restart
+adopts the same job instead of creating a duplicate or moving the watermark
+past an undrained range.
+
+`internal/exportjob` shares the create/poll/download/unzip/parse mechanics used
+by Intune reports-export snapshot collectors. It is part of the async-job
+transport family but is not a fifth scheduling engine: those collectors still
+enter through the Snapshot registration path and emit from the collector.
+
+### `internal/blobpipeline`
+
+This is the Azure Storage diagnostic-log engine. Its cursor is a byte offset per
+blob, not a time watermark. It lists blobs, resumes each object at its durable
+offset, decodes complete records, and saves progress without retaining blob
+contents in memory. Azure diagnostic delivery is itself at-least-once, so
+source duplicates are intentionally preserved; downstream dedupe uses the
+stable record identity documented in [Blob ingest](blob-ingest.md).
+
+### `internal/o365pipeline`
+
+This is the O365 Management Activity API engine. That API first lists content
+blobs, then downloads each blob to obtain records. The engine therefore tracks
+a content-created watermark and separate namespaces for seen content IDs and
+seen record IDs. It starts and maintains configured subscriptions through
+`internal/o365activityclient`, chunks the API's bounded time ranges, and will
+not advance past a content blob that failed to download.
+
+MDCA, Exchange Online, and advanced hunting retain their own clients because
+their authentication, request, and response shapes are not any of the four
+engines above. They still return the standard Snapshot or Window contract, so
+the scheduler and telemetry boundary remain shared.
+
+## Checkpoints and delivery semantics
+
+`internal/checkpoint.Store` is a file-backed, concurrent store with one
+atomically replaced JSON document per tenant and checkpoint namespace. Startup
+verifies that `checkpoint_dir` is writable; an unwritable store is fatal because
+silently restarting from the initial lookback would create an unbounded replay.
+A persistent volume is therefore part of the deployment contract.
+
+The engines encode different cursor state in that shared store:
+
+- log and job pipelines persist a watermark, overlap, and seen IDs;
+- job pipelines also persist an in-flight query and its original window;
+- blob pipelines persist byte offsets per blob;
+- O365 pipelines persist the content watermark plus content/record identities.
+
+Checkpoint state advances only through data the engine has consumed. A source
+or page failure leaves the undrained range replayable. The practical contract is
+at-least-once: a crash after a signal is accepted locally but before its
+checkpoint is durable can replay the signal. Overlap and seen-ID state suppress
+the common API-window replay for engines with stable IDs, while Azure's own
+duplicate blob records remain visible by design. Checkpoints prevent silent
+gaps; they are not a global exactly-once transaction with the OTLP backend.
+
+## Scheduler outcomes
+
+Every run receives a concurrency-safe `internal/recordoutcome.Recorder`.
+Collectors and engines account for source records as:
+
+```text
+fetched = mapped + filtered + dropped + errored
+mapped  = emitted + deduped
+```
+
+The scheduler snapshots that recorder once, derives `empty`, `success`,
+`partial`, or `failure`, and publishes bounded scrape/outcome telemetry and the
+admin status update from the same immutable summary. Mapping failures remain
+visible without hiding successfully emitted prefixes; shutdown cancellation is
+not misreported as a source failure.
+
+The same completed-run snapshot records exact logical source volume for
+capacity accounting. A persisted cold-start target keeps
+`cold_start_backfill` attribution active across multiple slices and restarts
+until the original backfill target is reached; normal recurring runs are
+`steady_state`.
+
+## Telemetry, cardinality, and capacity
+
+`internal/telemetry.Provider` is the only owner of the OpenTelemetry metric and
+log SDKs. It builds the configured HTTP, gRPC, or stdout exporters and exposes a
+narrow `Emitter` facade for gauges, counters, histograms, and log events.
+Tenant ID and ingest transport are stamped at this boundary rather than by
+collectors.
+
+Collector emitters are attributed by tenant, collector, transport, and traffic
+class. Their data passes through the central `Limiter` before the SDK:
+
+- per-metric and global series limits are enforced in one place;
+- significant additive tails fold into an explicit `other` bucket;
+- non-additive tails are dropped rather than fabricated;
+- limiter losses and active-series counts are self-observed.
+
+The limiter does not make entity-shaped metric labels acceptable. Metrics still
+carry bounded aggregates and logs carry per-entity detail.
+
+Capacity accounting sits beside the emission path rather than in a collector:
+
+- `VolumeTracker` counts exact source records and post-limiter emitted metric
+  and log points for each bounded attribution;
+- exporter observers count exact post-compression OTLP payload bytes and
+  internal retry attempts by signal;
+- optional cost projection allocates signal-specific payload bytes across
+  emitted points using operator-supplied rates and provenance.
+
+Cost is observational only. It does not feed the scheduler, source clients,
+limiter, exporter, or any enforcement path. The provider publishes bounded
+`graph2otel.ingest.*` and `graph2otel.otlp.*` self-observability; the admin
+surface reads the same cumulative in-process snapshots for rolling capacity
+views.
+
+## Operator surfaces
+
+- `internal/admin` serves process liveness, latched readiness, and
+  per-tenant/per-collector status as HTML and JSON. Its capacity view is derived
+  from scheduler/provider state, not a second accounting pipeline. It has no
+  mutating control endpoint.
+- `internal/preflight` backs `graph2otel check`, comparing enabled collectors'
+  declared Graph application permissions with the current app grants and admin
+  consent.
+- `internal/profiling` optionally pushes continuous profiles to Pyroscope. It
+  does not expose a local `pprof` endpoint.
+
+## Single instance
+
+graph2otel deliberately runs as a **single instance** for one configured tenant
+set. There is no leader election, consumer group, or shared transactional
+checkpoint protocol. Running replicas against the same sources would duplicate
+polling and race file-backed cursors. Scale a deployment by assigning disjoint
+tenant sets to separate processes; do not run active-active replicas over the
+same set.

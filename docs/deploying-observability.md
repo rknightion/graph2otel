@@ -1,13 +1,14 @@
 # Deploying the observability assets
 
 graph2otel ships three kinds of Grafana asset, each in its own top-level
-directory:
+directory. The generated inventory is drift-gated at
+**6 dashboards, 14 alert rules, and 2 recording rules**:
 
 | Directory | Assets | Format | Target Grafana Cloud folder |
 | --- | --- | --- | --- |
 | `dashboards/` | 6 dashboards (**generated**) | raw Grafana dashboard JSON (top-level `uid`) | folder of your choice |
-| `alerts/` | 10 alert rules + 1 contact-point/policy file | Grafana **file-provisioning** YAML (`apiVersion: 1` + `groups:`) | `graph2otel` |
-| `recording-rules/` | 2 recording rules | Grafana-managed rule objects (provisioning API JSON) | `graph2otel derived metrics` |
+| `alerts/` | 14 alert rules (**generated**) + 1 contact-point/policy file | Grafana **file-provisioning** YAML (`apiVersion: 1` + `groups:`) | `graph2otel` |
+| `recording-rules/` | 2 recording rules (**generated**) | Grafana-managed rule objects (provisioning API JSON) | `graph2otel derived metrics` |
 
 The `gcx` CLI is the reproducible deploy path documented here. There is **no
 GitSync flow in this repo today** — if one is later adopted, document its repo
@@ -19,7 +20,7 @@ and path in this file so a successor can reproduce the production deploy.
 
 ## Dashboards
 
-The six dashboards are plain Grafana dashboard JSON — each has a stable
+The dashboards are plain Grafana dashboard JSON — each has a stable
 top-level `uid` that is also its slug:
 
 | File | UID / slug | Title |
@@ -55,7 +56,7 @@ Import**, upload the JSON.
 `grafana/boards/*.py` and `spec/signal-catalog.json`, and `make grafana-check`
 (a required CI leg) fails on a hand-edited file. To change a panel, edit the
 board module and run `make dashboard`. See
-[`grafana/AUTHORING.md`](../grafana/AUTHORING.md).
+[`grafana/AUTHORING.md`](https://github.com/rknightion/graph2otel/blob/main/grafana/AUTHORING.md).
 
 The same gate fails when a metric graph2otel emits reaches no panel at all, so
 the dashboards cannot silently fall behind the collectors: `spec/signal-catalog.json`
@@ -71,7 +72,7 @@ rather than looking broken; the metric panels are unaffected.
 
 Log attributes are Loki **structured metadata**, not stream labels — only
 `service_name` is a stream label. `{event_name="entra.signin"}` matches zero rows
-silently. See [signals.md](signals.md#querying-the-logs-in-loki--attributes-are-structured-metadata-not-stream-labels).
+silently. See [signals.md](signals.md#querying-the-logs-in-loki-attributes-are-structured-metadata-not-stream-labels).
 
 ### Datasource UID — nothing to substitute
 
@@ -92,6 +93,11 @@ Terraform (`grafana_rule_group` / `grafana_contact_point` /
 `gcx resources push` target (that command consumes `rules.alerting.grafana.app`
 resource manifests, which these files are not).
 
+The alert-rule file is generated from the `RULES` list in
+`grafana/build_rules.py`; do not hand-edit it. Change the builder, run
+`make rules`, then run `make grafana-check`. The contact-point/policy file is
+hand-authored and remains the operator-owned deployment seam.
+
 The rules land in the Grafana Cloud folder **`graph2otel`**.
 
 ```bash
@@ -108,7 +114,7 @@ the portable default `datasourceUid: "grafanacloud-prom"`. Replace it with your
 actual Prometheus/Mimir datasource UID (`gcx datasources list`, or Connections
 → Data sources in the UI) before applying if yours differs.
 
-See [`alerts/README.md`](../alerts/README.md) for the per-rule rationale,
+See [`alerts/README.md`](https://github.com/rknightion/graph2otel/blob/main/alerts/README.md) for the per-rule rationale,
 thresholds, the OTLP→Prometheus metric-name normalization, and the
 multi-tenant grouping model. Replace the no-op contact point with a real
 receiver before relying on these to page anyone.
@@ -119,6 +125,10 @@ receiver before relying on these to page anyone.
 through the same provisioning API and landing in the folder
 **`graph2otel derived metrics`**, rule group `blob-derived` at a 1h evaluation
 interval:
+
+The two JSON files are generated from the `RECORDING` list in
+`grafana/build_rules.py`; do not hand-edit them. Change the builder, run
+`make rules`, then run `make grafana-check`.
 
 ```bash
 # 1. Create the folder once; put its uid into each rule's folderUID.
@@ -140,7 +150,7 @@ gcx api /api/v1/provisioning/folder/<folderUID>/rule-groups/blob-derived \
 All three are stack-specific — substitute your local Loki/Prometheus datasource
 UIDs and the folder UID from step 1.
 
-See [`recording-rules/README.md`](../recording-rules/README.md) for the metric
+See [`recording-rules/README.md`](https://github.com/rknightion/graph2otel/blob/main/recording-rules/README.md) for the metric
 ↔ log-twin mapping and verification queries.
 
 ## If GitSync is adopted later

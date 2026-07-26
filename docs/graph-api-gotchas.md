@@ -462,9 +462,11 @@ Re-probe it opportunistically if something else brings you back to this collecto
 > scope until a GSA tenant exists" — a GSA tenant now exists: `GET /beta/networkAccess/tenantStatus`
 > → `200 {"onboardingStatus":"onboarded"}`. GSA POSTURE (tenantStatus, forwardingProfiles,
 > filteringPolicies, the two settings objects) is readable on `Policy.Read.All` today, no grant.
-> GSA TRAFFIC LOGS (`/beta/networkAccess/logs/traffic`) still 403 — needs a `NetworkAccess.Read.All`
-> (or `NetworkAccess-Reports.Read.All`) grant; response shape unmeasured, mapper unwritten until the
-> grant lands. Both pieces tracked on #239.
+> GSA TRAFFIC LOGS (`/beta/networkAccess/logs/traffic`) are **data-blocked, not
+> scope-blocked**. `graph2otel-poller` already holds `NetworkAccess.Read.All`; the endpoint returns
+> 200 with an empty `value` while all three forwarding profiles are disabled. The mapper remains
+> unwritten until routed traffic produces a live row whose wire shape can be measured. Both pieces
+> are tracked on #239.
 
 The escape hatch for blob-only categories is diagnostic settings → Azure Storage →
 `internal/blobpipeline` — see [blob-ingest.md](blob-ingest.md).

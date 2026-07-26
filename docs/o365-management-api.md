@@ -5,8 +5,9 @@ The Office 365 Management Activity API (`manage.office.com`) feeds `m365.activit
 **stable v1.0** transport (2,000 req/min per tenant) with a subscription → content-blob
 model built for continuous ingest — chosen over the Graph audit query API, which is
 beta-only on this tenant and 429s on rapid job creation (#100, #109). App roles:
-`ActivityFeed.Read` + `ActivityFeed.ReadDlp` on the O365 Management APIs service
-principal (`c5393580-f805-4401-95e8-94b7a6ef2fc2`).
+`ActivityFeed.Read` on the O365 Management APIs service principal
+(`c5393580-f805-4401-95e8-94b7a6ef2fc2`); add `ActivityFeed.ReadDlp` only when the
+operator explicitly selects `DLP.All`.
 
 Everything below is live-measured (2026-07-16, #100) unless noted. The doc-vs-wire
 scorecard ran **6-0 against Microsoft's documentation** — treat the docs as hypotheses.
@@ -82,7 +83,12 @@ scorecard ran **6-0 against Microsoft's documentation** — treat the docs as hy
 - **`m365.unified_audit` must be disabled wherever `m365.activity` runs** — both emit
   `m365.audit` with the same ids; both on = every record twice.
 
-## Open items
+## Current completion state
 
-See #100's body for the current residual list (UPN convergence, `DLP.All` end-to-end
-verification, adapter move, SECURITY.md write-op note).
+All four #100 residuals are discharged. The classic schema emits its UPN-shaped identity as
+`user_id` rather than asserting that every value is a UPN; the `WindowCollector` adapter lives in
+`internal/o365pipeline`; `SECURITY.md` records the subscription-start write; and `DLP.All` was
+live-measured with three records. A dedicated `DLP.All` mapper is deliberately absent: those
+records are normally empty on m7kni and `DetectedValues` contains the matched secret in cleartext.
+Any future mapper must be built from a live sample, emit classification metadata only, and exclude
+`DetectedValues`.

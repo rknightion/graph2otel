@@ -215,12 +215,12 @@ func blobPrefix(tenantID string) string {
 //
 // The dedupe id mapSignIn returns is discarded, because blobpipeline tracks
 // progress by byte offset and has nowhere to put it. That is a known gap rather
-// than a tidy fact: Azure's diagnostic-settings delivery is AT-LEAST-ONCE (~2.3%
-// of records arrive twice, byte-identical payload, fresh envelope `time`), so
-// these collectors ship those duplicates through today — see #138, which is
-// where that id would be threaded if the engine grows a seen-id set. It is not a
-// cursor bug: both copies are real distinct bytes, and the engine was verified
-// to emit each record exactly as many times as Azure wrote it.
+// than a tidy fact: Azure's diagnostic-settings delivery is AT-LEAST-ONCE
+// (measured 2.7–4% re-delivery by signal family, with multiplicity up to four;
+// byte-identical payload, fresh envelope `time`), so these collectors ship those
+// duplicates through today. See #138. This is not a cursor bug: every copy is a
+// real distinct byte range, and the engine was verified to emit each record
+// exactly as many times as Azure wrote it.
 //
 // properties.id equals the polled signIn.id, so both the blob duplicates and any
 // polled/blob overlap are dedupe-able downstream on the `id` attribute today.

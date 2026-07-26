@@ -167,7 +167,7 @@ Its help text (`graph2otel check -h`) also prints the least-privilege notes from
 non-Graph transports. A `[MANUAL]` line means the collector is selected but a Graph application-token
 claim cannot prove the remaining prerequisite; it is not a successful validation of that prerequisite.
 
-The check builds its inventory from the same seven collector registration paths as runtime wiring and
+The check builds its inventory from the same collector registration paths as runtime wiring and
 honours disabled, source-selected, experimental, high-volume, and licence gates. To make the last
 one exact, it performs the same read-only `GET /subscribedSkus` capability lookup runtime performs;
 it never grants a role or changes the tenant. If that lookup fails, the command warns and uses the

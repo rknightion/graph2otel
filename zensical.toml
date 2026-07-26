@@ -1,6 +1,6 @@
 [project]
 site_name = "graph2otel"
-site_description = "Polls the Microsoft Graph API (Entra ID + Intune) and exports OpenTelemetry-native metrics + logs over OTLP, optimized for Grafana Cloud"
+site_description = "Exports Microsoft 365 security and operations data as OpenTelemetry-native metrics and logs over OTLP"
 site_url = "https://m7kni.io/graph2otel/"
 site_author = "Rob Knighton"
 repo_name = "rknightion/graph2otel"
@@ -11,10 +11,18 @@ nav = [
   { "Getting Started" = "getting-started.md" },
   { Configuration = "configuration.md" },
   { "How It Works" = [
-      { Architecture = "architecture.md" }
+      { Architecture = "architecture.md" },
+      { "Data-plane Registration" = "data-plane-registration.md" },
+      { "Blob Ingest" = "blob-ingest.md" },
+      { "O365 Management Activity API" = "o365-management-api.md" }
     ] },
   { Reference = [
-      { Signals = "signals.md" }
+      { Collectors = "collectors.md" },
+      { "Environment Variables" = "env-vars.md" },
+      { Permissions = "permissions.md" },
+      { Signals = "signals.md" },
+      { "Derived Metrics" = "derived-metrics.md" },
+      { "Graph API Gotchas" = "graph-api-gotchas.md" }
     ] },
   { Operations = [
       { Security = "security.md" },

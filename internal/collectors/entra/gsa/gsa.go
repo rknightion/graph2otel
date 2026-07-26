@@ -31,13 +31,15 @@
 //
 // # Scope and what is NOT built
 //
-// This is posture only. The GSA traffic-logs half of #239 is grant-blocked and
-// deliberately out of scope. The remote-networks endpoint returns an EMPTY
-// collection on m7kni (`live-measured 2026-07-23`), so this collector emits only
-// the remote-network COUNT gauge and does NOT twin individual remote networks —
-// there was no live remote-network row to map a per-network twin against
-// (#142/#165: never map a shape from docs alone). Everything else is mapped
-// against verbatim live samples captured as graph2otel-poller on 2026-07-23.
+// This is posture only. The GSA traffic-logs half of #239 is data-blocked:
+// graph2otel-poller already holds NetworkAccess.Read.All and the endpoint returns
+// 200 with an empty collection while all three forwarding profiles are disabled.
+// Its mapper remains unwritten until a live row establishes the wire shape. The
+// remote-networks endpoint is also empty on m7kni (`live-measured 2026-07-23`),
+// so this collector emits only the remote-network COUNT gauge and does NOT twin
+// individual remote networks — there was no live row to map a per-network twin
+// against (#142/#165: never map a shape from docs alone). Everything else is
+// mapped against verbatim live samples captured as graph2otel-poller that day.
 package gsa
 
 import (

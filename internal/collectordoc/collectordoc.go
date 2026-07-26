@@ -311,8 +311,9 @@ func CheckAnnotations(registered []string) error {
 // walk is invisible to the reference AND to all three drift gates — which then
 // pass because they are blind, not because they are satisfied. That is exactly
 // what happened when O365All() landed (#100) without being added here: the
-// annotation gate went green over a collector it could not see. If a fifth
-// construction path is ever added, this signature changes with it.
+// annotation gate went green over a collector it could not see. The current
+// signature names all seven construction paths; adding an eighth changes it in
+// the same commit.
 //
 // O365 collectors are KindWindow because that is what they are: they register
 // via RegisterWindow and their cursor is a time watermark. Their source being a

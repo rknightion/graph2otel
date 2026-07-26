@@ -64,7 +64,7 @@ for free — there is no volume or latency argument for a permanent counter here
 The log twin already carries everything the recording rule needs as structured metadata
 (`event_name`, `alert_type`, `operating_system`, `scenario_name` — see
 `docs/collectors.md` for the full `intune.compliance_alert` attribute set). Per
-[Signals](signals.md#querying-the-logs-in-loki--attributes-are-structured-metadata-not-stream-labels),
+[Signals](signals.md#querying-the-logs-in-loki-attributes-are-structured-metadata-not-stream-labels),
 attributes on a graph2otel log record are **Loki structured metadata, not stream
 labels** — only `service_name` is a stream label. So the query must select the stream
 first, then filter on the attribute with a `|` label-filter:
@@ -117,7 +117,7 @@ Key fields (see the JSON for the full shape):
   in Prometheus recording-rule convention (`<domain>_<name>_count`), **not** graph2otel's OTLP
   dot-notation, because the series never passes through graph2otel or OTLP — it is materialized
   entirely inside Grafana, so the OTLP→Prometheus normalization rules
-  ([Signals](signals.md#otlp--prometheus-name-normalization)) do not apply.
+  ([Signals](signals.md#otlp-prometheus-name-normalization)) do not apply.
 - `record.targetDatasourceUid` — the Prometheus datasource the result is written to
   (`grafanacloud-prom`); `data[0].datasourceUid` is the Loki datasource the LogQL runs against
   (`grafanacloud-logs`).
@@ -133,7 +133,7 @@ Once materialized the recorded series queries and dashboards exactly like a nati
 with none of the active-series cost graph2otel would have paid to emit it natively.
 
 Deduplication: the underlying log twin is at-least-once (~2.7-4% duplicate rate,
-[Signals](signals.md#deduplicating-blob-sourced-records--azure-delivers-at-least-once)).
+[Signals](signals.md#deduplicating-blob-sourced-records-azure-delivers-at-least-once)).
 A raw `count_over_time` over the stream inherits that over-count exactly as a manual
 LogQL count would. For a low-volume alerting signal this is immaterial (the same
 reasoning #128 applies to the native counters' at-least-once behavior); if a use case
@@ -172,9 +172,9 @@ Enrollment-failure-rate alerts read straight off the recorded series. The at-lea
 ## Shipped as manifests, generated (#219)
 
 Resolved: the recording-rule manifests are shipped in-repo as rules-as-code in
-[`recording-rules/`](../recording-rules/) (Grafana-managed provisioning payloads), alongside the
+[`recording-rules/`](https://github.com/rknightion/graph2otel/tree/main/recording-rules) (Grafana-managed provisioning payloads), alongside the
 [dashboards](https://github.com/rknightion/graph2otel/tree/main/dashboards), and applied with
-`gcx api`. See [`recording-rules/README.md`](../recording-rules/README.md) for the apply/verify
+`gcx api`. See [`recording-rules/README.md`](https://github.com/rknightion/graph2otel/blob/main/recording-rules/README.md) for the apply/verify
 commands.
 
 Both files are **generated** by `grafana/build_rules.py`'s `RECORDING` list — do not hand-edit the

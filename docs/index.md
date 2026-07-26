@@ -1,57 +1,100 @@
 # graph2otel
 
-`graph2otel` polls the **Microsoft Graph API** (Entra ID + Intune) and exports
-**OpenTelemetry-native metrics and logs** over OTLP, tuned for **Grafana Cloud** (or any
-OTLP-compatible backend). It ships as a single static Go binary and pushes telemetry —
-there is no Prometheus scrape endpoint to expose or firewall. It is multi-tenant from the
-start: one process can poll several Entra ID tenants concurrently.
+`graph2otel` turns Microsoft 365 security and operations data into
+**OpenTelemetry-native metrics and logs** and pushes it over OTLP to Grafana Cloud or
+any compatible backend. It covers Entra ID, Intune, Microsoft 365, Purview, Defender
+XDR, Defender for Cloud Apps, and Exchange Online. One static binary can poll multiple
+tenants; there is no Prometheus endpoint to expose or scrape.
 
-Two kinds of Graph data become telemetry:
+**v1.0.0 is released and production-tested.** The registry currently exposes **148 logical collectors**.
+[The generated collector reference](collectors.md) is the authoritative inventory: its
+contents and the collector census are checked against the same 7 registration paths
+used by the application.
 
-- **Snapshot data** — directory objects, license inventory, device compliance state,
-  Intune managed-device inventory, Conditional Access policy configuration, and similar
-  inventory — becomes **OTEL metrics**: bounded, tenant-shaped aggregates, never a
-  per-user or per-device label series.
-- **Event-stream data** — sign-ins, directory audits, provisioning events, risk
-  detections, Intune audit events, and similar activity — becomes **OTEL logs**,
-  checkpointed and deduped by ID, since none of these Graph endpoints support delta
-  queries or a reliable server-side cursor.
+## What it collects
 
-Both are pushed via **OTLP** (gRPC, HTTP, or `stdout` for local debugging) straight to
-your backend. For the identity/device audit core — Entra audit logs, all four sign-in
-event types, provisioning logs, risk detections, and Intune audit events — that means
-**no diagnostic settings, no Log Analytics workspace, and no Event Hub required**, and
-for Intune compliance state Graph is measurably fresher than the diagnostic-settings
-export path (minutes vs. a 24-48h export lag).
+The data plane has two deliberate output shapes:
 
-## What this does not replace
+- **Bounded, tenant-shaped aggregates become metrics.** Directory inventory, license
+  posture, device compliance, policy state, and similar snapshots are counted by bounded
+  dimensions. A user, device, or event identifier never becomes a metric label.
+- **Per-entity and event detail becomes logs.** Sign-ins, audits, risk detections,
+  managed-device records, policy details, and other individual records retain the fields
+  operators need to investigate them. Watermarked streams are checkpointed and deduped
+  where the source supplies an identifier.
 
-Polling Graph cannot see everything Azure Monitor diagnostic settings can. A small set of
-log categories are never materialized behind a queryable Graph endpoint, so diagnostic
-settings → Event Hub/Log Analytics remains the only way to get them:
+All signals carry `tenant_id`. Logs also carry `ingest_transport`, so a backend can
+distinguish Graph polling, Azure Storage, the O365 activity feed, audit queries, and
+report exports without changing the event contract.
 
-- **`MicrosoftGraphActivityLogs`** — the log of Graph API calls themselves; no query
-  endpoint exists at all.
-- **`EnrichedOffice365AuditLogs`** — the M365 Unified Audit Log, owned by Purview / the
-  Office 365 Management Activity API, not Graph.
-- **Most of Intune `OperationalLogs`** — only the enrollment-failure slice has a Graph
-  equivalent (`enrollmentTroubleshootingEvent`).
-- **`ADFSSignInLogs`** and **`NetworkAccessTrafficLogs`** — diagnostic-settings-only
-  (the Connect Health agent stream / Global Secure Access, respectively).
+## Ingest shapes
 
-If you need any of those, keep diagnostic settings wired up for that specific category.
-`graph2otel` is the no-infrastructure default for the rest of the identity/device audit
-surface, not a total replacement for Azure Monitor integration.
+Microsoft does not expose one consistent API, so graph2otel ships 4 ingest engine shapes
+behind the same collector and telemetry interfaces:
 
-## Where to go next
+1. **Graph REST polling** reads current-state snapshots and watermark-window log
+   endpoints. The window pollers use overlap plus seen-ID dedupe because those endpoints
+   have no delta cursor.
+2. **Asynchronous export jobs** create, poll, and download Microsoft 365 audit-query and
+   Intune report-export jobs.
+3. **Azure Storage blob ingest** consumes diagnostic-settings append blobs by byte
+   offset. It covers signals with no Graph endpoint and can replace selected Graph log
+   pollers with a more scalable transport. It is opt-in per tenant; see
+   [Blob ingest](blob-ingest.md).
+4. **The Office 365 Management Activity API** manages subscriptions, lists content
+   blobs, and downloads the unified audit records in them. This stable v1.0 source is
+   the default M365 audit transport; see
+   [O365 Management Activity API](o365-management-api.md).
 
-- [Getting Started](getting-started.md) — auth setup, minimal config, first run.
-- [Configuration](configuration.md) — the full `config.example.yaml` key reference.
-- [Architecture](architecture.md) — the composition-root and collector-framework shape.
-- [Signals](signals.md) — the `entra.*` / `intune.*` / `graph2otel.*` metric and log
-  namespaces.
-- [Security](security.md) — telemetry sensitivity, the cardinality boundary rule, and
-  secrets handling.
+The process can also call the domain-specific MDCA portal, Exchange Online admin, and
+Defender advanced-hunting surfaces through their collector registration paths. The
+[architecture reference](architecture.md) documents the composition seams; the
+[collector reference](collectors.md) names the exact source and permissions for every
+collector.
 
-Source, issues, and the release history live at
+## What it does not replace
+
+graph2otel removes the need for a Log Analytics workspace or Event Hub for the signals
+it supports, but some supported signals still originate in Azure Monitor diagnostic
+settings. For example, `MicrosoftGraphActivityLogs`, Graph notification activity, and
+Intune compliance fired events have no Graph read endpoint; configure diagnostic
+settings to Azure Storage and let graph2otel's blob engine consume them.
+
+The M365 unified audit stream is not a diagnostic-settings dependency:
+`m365.activity` reads it directly from the Office 365 Management Activity API. Entra
+Global Secure Access posture is also collected, while the separate GSA traffic-log
+endpoint remains unimplemented pending a live-verified response shape. ADFS sign-in
+logs and any other category absent from the generated collector reference still need
+their existing export path.
+
+Use the [collector reference](collectors.md), rather than a broad product-category
+claim, to decide whether a specific signal is covered.
+
+## Packaging
+
+Every tagged release publishes:
+
+- a signed multi-architecture container at
+  `ghcr.io/rknightion/graph2otel`;
+- Linux, macOS, and Windows binaries, checksums, per-archive SBOMs, a Sigstore bundle,
+  and build provenance on the
+  [GitHub release](https://github.com/rknightion/graph2otel/releases);
+- an OCI Helm chart at
+  `oci://ghcr.io/rknightion/charts/graph2otel`.
+
+Start with [Getting Started](getting-started.md) for container, Helm, and binary
+installation plus a local `stdout` smoke test.
+
+## References
+
+- [Configuration](configuration.md) and the generated
+  [environment-variable reference](env-vars.md)
+- [Permissions](permissions.md) and [data-plane registration](data-plane-registration.md)
+- [Signals](signals.md), including normalized metric names and LogQL examples
+- [Deploying observability](deploying-observability.md) for the shipped dashboards and
+  rules
+- [Security](security.md) for telemetry sensitivity, credential handling, and the
+  cardinality boundary
+
+Source, issues, and release history live at
 [github.com/rknightion/graph2otel](https://github.com/rknightion/graph2otel).

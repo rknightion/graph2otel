@@ -46,7 +46,7 @@ const (
 	// Two writers set it, deliberately:
 	//   - collector/selfobs.go stamps it on scrape.*/checkpoint.* via selfObsAttrs.
 	//   - telemetry.WithTenant stamps everything else at the emitter boundary,
-	//     which is the seam that reaches all 58 collectors. First stamp wins, so
+	//     which is the seam that reaches every registered collector. First stamp wins, so
 	//     the self-obs value above passes through untouched.
 	//
 	// Bounded cardinality: one value per operator-configured tenant. It grows with

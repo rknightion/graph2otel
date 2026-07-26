@@ -1,14 +1,18 @@
 # Signals
 
-graph2otel exports every domain signal under one of three OTLP dot-notation
-namespaces. A new collector emitting outside its domain's namespace is a bug, not a
+graph2otel exports every domain signal under a bounded OTLP dot-notation
+namespace. A new collector emitting outside its domain's namespace is a bug, not a
 style choice — see `CLAUDE.md`'s "Metric namespaces" section for the enforced
 convention.
 
 - **`entra.*`** — Entra ID directory, sign-in, and audit signals.
 - **`intune.*`** — Intune device management and compliance signals.
 - **`m365.*`** — Microsoft 365 service signals (unified audit, activity).
-- **`purview.*`** — Purview compliance signals (retention / sensitivity labels).
+- **`purview.*`** — Purview compliance signals (retention and sensitivity labels,
+  eDiscovery cases, and DLP policy posture). `purview.dlp_policies` reads the beta
+  `policyFiles` surface and emits policy **definitions**: enforcement modes,
+  workload/action bindings, and per-policy/per-rule log twins. It is Experimental
+  and opt-in. It never emits matched content or a rule condition's value text.
 - **`defender.*`** — Microsoft Defender signals, from two transports with two
   independent switches:
   - the **XDR advanced-hunting tables** (endpoint EDR, email/MDO, identity, alert
@@ -55,17 +59,45 @@ convention.
   unmapped/new Microsoft status. This table is the mapping — there is no companion
   metric. The per-profile and per-policy detail rides the `entra.gsa_forwarding_profile`
   and `entra.gsa_filtering_policy` log twins, never a metric label. `entra.gsa` is
-  Experimental (beta `networkAccess`, opt-in) and its traffic-log half is a separate
-  grant-blocked piece not shipped here.
+  Experimental (beta `networkAccess`, opt-in). The traffic endpoint is reachable
+  with the poller's existing `NetworkAccess.Read.All` grant and returns 200/empty on
+  m7kni because all forwarding profiles are disabled. Its wire record shape is
+  therefore still unmeasured, so no traffic mapper is shipped.
+- **`mdca.*`** — Microsoft Defender for Cloud Apps Cloud Discovery parse health over
+  the legacy MDCA portal API. This is neither Graph nor the Entra poller credential;
+  see [MDCA Cloud Discovery parse health](#mdca-cloud-discovery-parse-health-ingest_transportmdca).
 - **`graph2otel.*`** — self-observability: collector success/duration/staleness,
   export-job health, active series counts, build info, and
-  [`graph2otel.api.unexpected`](#graph2otelapiunexpected--when-microsoft-changes-something-under-us)
+  [`graph2otel.api.unexpected`](#graph2otelapiunexpected-when-microsoft-changes-something-under-us)
   (a Microsoft API response that no longer matches what a collector was built
   against). Not tenant domain data.
 
 For the exhaustive, per-collector metric/log/label reference (every gauge, counter, log
 attribute set, and the Graph API permission scope each collector needs), see
 [docs/collectors.md](collectors.md).
+
+## Shipped collector and ingest surface
+
+The generated registry currently exposes **148 logical collectors** through
+**7 registration paths**: Snapshot, Window, Blob, O365, MDCA, EXO, and Hunt. The generated
+[collector reference](collectors.md) is authoritative; the registration-path inventory
+contains 151 registration-path candidates because some logical collectors can register
+through more than one transport.
+
+Reusable ingest-engine shapes handle the event and export transports:
+
+- `internal/logpipeline` polls Graph log endpoints with a time watermark, overlap
+  window, pagination drain, and seen-ID dedupe.
+- `internal/jobpipeline` plus `internal/exportjob` run create → poll → download jobs
+  for the M365 audit-query and Intune report-export transports.
+- `internal/blobpipeline` consumes Azure Storage diagnostic blobs by byte offset.
+- `internal/o365pipeline` plus `internal/o365activityclient` manage the O365
+  Management Activity API's subscription → content-blob flow.
+
+Snapshot collectors and the MDCA, Exchange Online, and advanced-hunting registration
+paths use their direct API shapes around those engines. `ingest_transport` records which
+path produced each log: `graph`, `blob`, `o365_activity`, `audit_query`,
+`report_export`, `mdca`, or `exchange_online`.
 
 ## OTLP → Prometheus name normalization
 
@@ -172,13 +204,41 @@ A related query-side footgun that caused one of those wrong readings: `count_ove
 looks back only 24h, so records timestamped 2–3 days ago are excluded **by the query**, not
 missing from the store. Widen the range before drawing a conclusion.
 
+## Event time and dedupe are transport contracts
+
+An event record must carry a parseable source event time. The log, async-job, blob, and
+O365 engines drop and count a record when neither the wire field nor the mapper can
+establish that time. They never replace it with arrival time, a query-window boundary, or
+the time graph2otel happened to poll it; doing that would turn an unknown time into a
+confidently wrong one. The drop appears in
+`graph2otel.record.outcomes{outcome="dropped"}` with the bounded
+`missing_event_time` run cause (and the engine-specific watchdog where applicable).
+
+Identity is different. A correctly timestamped record with no stable ID is still useful,
+so it is emitted as **undedupeable/degraded** and the empty string is never inserted into
+a seen-ID set. This deliberately prefers possible overlap duplicates over guaranteed,
+silent data loss.
+
+The dedupe clock and identity depend on the source:
+
+- **Graph window polling** re-queries an overlap window and stores each non-empty record
+  ID with its event-time watermark. Seen IDs suppress the repeated overlap after a
+  checkpoint restore.
+- **Azure diagnostic blobs** have an exact byte-offset cursor, but Azure can append the
+  same logical event as new bytes. graph2otel preserves those at-least-once deliveries;
+  dedupe them downstream by the record identity described below.
+- **O365 Management Activity** dedupes both the content blob (`contentId`) and the audit
+  record (`Id`). Both seen sets evict on the blob's `contentCreated` **arrival clock**,
+  never the record's `CreationTime`: a newly-arrived blob can contain an older event, so
+  event-time eviction would re-emit records while their blobs remain listable.
+
 ## Deduplicating blob-sourced records — Azure delivers at-least-once
 
 Records ingested over the blob transport (`ingest_transport="blob"`) can arrive **more than
 once**: Azure Monitor's diagnostic-settings pipeline is at-least-once, so ~2.7% of
 `MicrosoftGraphActivityLogs` and ~4% of sign-in records are re-delivered, with a max
 multiplicity of **×4** (live-measured, steady-state — see
-[blob-ingest.md](blob-ingest.md#azure-delivers-at-least-once-27-mgal--4-sign-ins-of-records-arrive-more-than-once)).
+[blob-ingest.md](blob-ingest.md#azure-delivers-at-least-once-27-mgal-4-sign-ins-of-records-arrive-more-than-once)).
 graph2otel ships these through faithfully by design — the byte-offset cursor is provably
 exact, and deduping in the engine would need an unbounded, restart-persisted seen-id set to
 do correctly, so the decision (#138) is to **dedupe downstream**, where it costs nothing and
@@ -278,6 +338,21 @@ silently compares UserKeys against UserIds.
 literal `Not Available`, `ServicePrincipal_<guid>`, or a display name. Both transports emit
 it verbatim with no shape gate, so do not assume an email address. It was called
 `user_principal_name` until 2026-07-17; the name claimed a shape the value does not have.
+
+`m365.activity` is the default-on, stable-v1.0 transport. Its default subscriptions are
+`Audit.Exchange` and `Audit.SharePoint`; `Audit.General` and `DLP.All` are explicit
+operator choices because the API has no record-level server filter; selecting `DLP.All`
+also requires `ActivityFeed.ReadDlp`. `Audit.General` carried 3,865 Endpoint DLP records
+out of 4,035 records over 23 hours on the measured six-device tenant, so enabling it is
+a real SIEM feed and a real volume decision.
+
+This audit feed is separate from the shipped `purview.dlp_policies` posture collector.
+The common `m365.activity` mapper emits a strict audit-envelope allowlist and does not
+read `PolicyDetails`, `SensitiveInformation`, or `DetectedValues`. A dedicated
+`DLP.All` classification mapper is not shipped. Three live DLP.All records established
+the classification shape, but their raw `DetectedValues` included credit-card and message
+content in cleartext. Any future mapper may emit classification metadata, never those
+values; the current allowlist excludes both.
 
 ## Risk signals: the two transports are NOT interchangeable
 
@@ -415,7 +490,7 @@ detect a dead collector.
 ### Worked LogQL
 
 Remember attributes are structured metadata, not stream labels — always start from
-`{service_name="graph2otel"}` (see [above](#querying-the-logs-in-loki--attributes-are-structured-metadata-not-stream-labels)).
+`{service_name="graph2otel"}` (see [above](#querying-the-logs-in-loki-attributes-are-structured-metadata-not-stream-labels)).
 
 Everything currently held, most recent first:
 
@@ -517,8 +592,8 @@ Process-wide facts are the deliberate exception: build identity, cardinality pol
 OTLP delivery health describe one graph2otel process and carry no tenant selector.
 
 graph2otel runs one Scheduler per configured tenant, and `telemetry.WithTenant` stamps the
-tenant at the emitter boundary, so it reaches all 58 collectors without any of them knowing
-about it. Two exceptions worth knowing:
+tenant at the emitter boundary, so it reaches every logical collector across every
+registration path without any of them knowing about it. Two exceptions worth knowing:
 
 - **A single-tenant deploy that configures no tenant id stamps nothing.** Empty means "no
   tenant configured", so the attribute is simply absent rather than blank — series are
@@ -727,7 +802,7 @@ no failed tasks and this gauge keeps climbing), `mdca.discovery.parse.transactio
 `.cloud_services` (last successful parse's discovered counts), and the
 `mdca.discovery.parse.tasks` counter by outcome. Query the log as always with the
 `{service_name="graph2otel"} | event_name="mdca.discovery_parse"` form. See
-[alerts/README.md](../alerts/README.md) doc block 5 for the two rules.
+[alerts/README.md](https://github.com/rknightion/graph2otel/blob/main/alerts/README.md) doc block 5 for the two rules.
 
 ## `graph2otel.api.unexpected` — when Microsoft changes something under us
 
@@ -921,6 +996,6 @@ collectors depend on a Graph `beta` endpoint with no `v1.0` equivalent (several 
 signals — Settings Catalog, Autopilot profiles, Windows Update rings, certificates,
 scripts, GPO analytics, endpoint-analytics detail — plus the non-interactive/service
 principal/managed identity sign-in log filters). Beta collectors are opt-in, never
-default-on — see [Configuration](configuration.md#experimental--beta-collectors-are-opt-in-not-default-on).
+default-on — see [Configuration](configuration.md#experimental-beta-collectors-are-opt-in-not-default-on).
 A panel or alert reading empty on a lower license tier, or with a beta collector left
 disabled, is expected — not a broken signal.

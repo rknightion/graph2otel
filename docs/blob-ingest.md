@@ -346,7 +346,7 @@ for Graph activity), the duplicates are byte-identical, and the rate is steady-s
 downstream dedupe costs graph2otel nothing, cannot go stale, and has no memory-bound failure
 mode. The recipe (LogQL for counts, store-side `distinct` for raw export, with the ×4
 multiplicity caveat) is in
-[signals.md](signals.md#deduplicating-blob-sourced-records--azure-delivers-at-least-once).
+[signals.md](signals.md#deduplicating-blob-sourced-records-azure-delivers-at-least-once).
 
 ### Field types are inconsistent within a single record
 

@@ -110,7 +110,7 @@ The admin status JSON adds bounded `limitations` (the omitted sub-signals) and `
 | `entra.directory_counts` | Tenant-wide directory object counts by type | `graph` | `/{type}/$count` per object type | `Directory.Read.All` | — | 5m | `entra.directory.objects.total{type}` |
 | `entra.domains` | Domain verification/authentication posture | `graph` | `/domains` | `Domain.Read.All` | — | 15m | `entra.domains.federated.total`, `entra.domains.total{authentication_type,is_verified}`, plus a log twin per `entra.domain` |
 | `entra.groups` | Group population by type/membership/security/mail-enabled, role-assignable count | `graph` | `/groups/$count` (filtered) | `Group.Read.All` | — | 5m | `entra.groups.role_assignable.total`, `entra.groups.total{group_type,mail_enabled,membership_type,security_enabled}` |
-| `entra.gsa` | Global Secure Access posture (#239) — the #130 'until a GSA tenant exists' deferral fired; m7kni reports onboarded. Bounded gauges: entra.gsa.onboarding_status (numeric enum 0=onboarded/1=in-progress/2=error-or-offboarded/-1=unmapped, see docs/signals.md), entra.gsa.forwarding_profiles{traffic_forwarding_type, state}, entra.gsa.filtering_policies{action}, entra.gsa.remote_networks, and 0/1 flags entra.gsa.signaling_enabled + entra.gsa.packet_tagging_enabled. Log twins entra.gsa_forwarding_profile (priority, client-fallback, association count) and entra.gsa_filtering_policy. The per-remote-network twin is not emitted — m7kni has none, so there is no live shape to map (the traffic-logs half of #239 is a separate grant-blocked piece and is not built here) | `graph` | `/beta/networkAccess/tenantStatus`, `/beta/networkAccess/forwardingProfiles`, `/beta/networkAccess/filteringPolicies`, `/beta/networkAccess/settings/conditionalAccess`, `/beta/networkAccess/settings/crossTenantAccess`, `/beta/networkAccess/connectivity/remoteNetworks` | `Policy.Read.All` | `beta` (beta-only (networkAccess exists on no v1.0 surface), so marked Experimental — an operator opts in explicitly. Needs Policy.Read.All, already in the poller's token; each of the six fetches degrades to a non-fatal error independently) | 6h | `entra.gsa.filtering_policies{action}`, `entra.gsa.forwarding_profiles{state,traffic_forwarding_type}`, `entra.gsa.onboarding_status`, `entra.gsa.packet_tagging_enabled`, `entra.gsa.remote_networks`, `entra.gsa.signaling_enabled`, plus a log twin per `entra.gsa_filtering_policy`, `entra.gsa_forwarding_profile` |
+| `entra.gsa` | Global Secure Access posture (#239) — the #130 'until a GSA tenant exists' deferral fired; m7kni reports onboarded. Bounded gauges: entra.gsa.onboarding_status (numeric enum 0=onboarded/1=in-progress/2=error-or-offboarded/-1=unmapped, see docs/signals.md), entra.gsa.forwarding_profiles{traffic_forwarding_type, state}, entra.gsa.filtering_policies{action}, entra.gsa.remote_networks, and 0/1 flags entra.gsa.signaling_enabled + entra.gsa.packet_tagging_enabled. Log twins entra.gsa_forwarding_profile (priority, client-fallback, association count) and entra.gsa_filtering_policy. The per-remote-network twin is not emitted — m7kni has none, so there is no live shape to map. Traffic logs are a separate data-blocked piece: graph2otel-poller already holds NetworkAccess.Read.All and the endpoint returns 200/empty while every forwarding profile is disabled, so no mapper is written without a live row | `graph` | `/beta/networkAccess/tenantStatus`, `/beta/networkAccess/forwardingProfiles`, `/beta/networkAccess/filteringPolicies`, `/beta/networkAccess/settings/conditionalAccess`, `/beta/networkAccess/settings/crossTenantAccess`, `/beta/networkAccess/connectivity/remoteNetworks` | `Policy.Read.All` | `beta` (beta-only (networkAccess exists on no v1.0 surface), so marked Experimental — an operator opts in explicitly. Needs Policy.Read.All, already in the poller's token; each of the six fetches degrades to a non-fatal error independently) | 6h | `entra.gsa.filtering_policies{action}`, `entra.gsa.forwarding_profiles{state,traffic_forwarding_type}`, `entra.gsa.onboarding_status`, `entra.gsa.packet_tagging_enabled`, `entra.gsa.remote_networks`, `entra.gsa.signaling_enabled`, plus a log twin per `entra.gsa_filtering_policy`, `entra.gsa_forwarding_profile` |
 | `entra.licensing` | SKU consumption + prepaid/enabled units | `graph` | `/subscribedSkus` | `LicenseAssignment.Read.All`, `Group.Read.All` | — | 15m | `entra.license.capability_status{sku,status}`, `entra.license.consumed{sku}`, `entra.license.enabled{sku}`, `entra.license.groups_with_errors.total`, `entra.license.units{sku,state}`, plus a log twin per `entra.license_group_error` |
 | `entra.mfa_registration` | MFA/SSPR/passwordless registration + capability status, per-method counts, admin MFA-capable split | `graph` | `/reports/authenticationMethods/userRegistrationDetails` | `AuditLog.Read.All` | `needs-license/entra_p1` | 1h | `entra.mfa.registration.admin_mfa_capable.total{is_admin}`, `entra.mfa.registration.methods.total{method}`, `entra.mfa.registration.users.total{status,user_type}`, plus a log twin per `entra.user_registration` |
 | `entra.organization` | Tenant posture: on-prem sync state/age, tenant age, verified domain count, tenant type | `graph` | `/organization` | `Organization.Read.All` | — | 15m | `entra.directory.sync.last_sync_age_seconds`, `entra.organization.age_days`, `entra.organization.info{tenant_type}`, `entra.organization.on_premises_sync_enabled`, `entra.organization.verified_domains.total` |
@@ -325,22 +325,25 @@ default-on. See `CLAUDE.md` for the verified live behavior.
 
 ### Blob collectors read Azure Storage, not Graph
 
-The `entra.*` blob collectors exist for signals Graph has **no endpoint for at all** — permanently.
-They read Azure Monitor diagnostic-settings output from blob storage, so they poll no Graph endpoint
-and declare no Graph scope: they need the **`Storage Blob Data Reader`** data-plane role instead.
-`Owner` is not enough — it grants container list/create but not blob *content* reads, and the
-failure is silent, indistinguishable from "no data yet".
+Blob collectors read Azure Monitor diagnostic-settings output from Azure Storage. Some expose
+categories for which Graph has **no endpoint at all**; others are scalable or fallback sources for
+signals also available over Graph, including sign-ins, directory audits, provisioning, and risk
+detections. The Graph/blob alternatives are mutually exclusive per logical collector through the
+`source` configuration — they are not a dual-ship mode.
+
+The blob path declares no Graph scope. It needs the **`Storage Blob Data Reader`** data-plane role;
+`Owner` is not enough because it grants container administration but not blob-content reads.
 
 They **only register when `blob_ingest.account_url` is set** for the tenant. That one key is the
 opt-in for the whole lane; a deployment that has not provisioned a storage account registers none of
 them and is entirely untouched by this path.
 
-They emit **no metrics** — only logs. Their cursor is a byte offset per blob rather than a
-watermark, because Azure backfills records into already-closed hour buckets, which is also why they
-are `SnapshotCollector`s despite emitting logs: the interface split is about the **cursor**, not the
-signal shape. Azure's delivery is at-least-once (~2.3% of records arrive more than once), and the
-blob engine does not dedupe today, so those duplicates ship — dedupe downstream on the `id`
-attribute. For why this path exists and how to provision it, see
+Blob collectors emit per-record logs; collectors with a measured aggregation contract can also
+derive bounded metrics from the same records. Their cursor is a byte offset per blob rather than a
+watermark because Azure backfills records into already-closed hour buckets. Azure delivery is
+at-least-once: measured duplicate rates are 2.7–4% by signal family and multiplicity reaches ×4.
+The byte-offset consumer intentionally emits every stored copy, so counts and SIEM storage must
+dedupe downstream on `id` or `request_id`. For why this path exists and how to provision it, see
 [`blob-ingest.md`](./blob-ingest.md).
 
 ### The export-report collectors need one write-level scope

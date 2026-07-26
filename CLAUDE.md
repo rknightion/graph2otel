@@ -11,8 +11,9 @@ for the user-facing pitch.
 > `docs/collectors.md` is generated from the registry and drift-gated (the authoritative
 > collector count). Releases are release-please driven; the launch tracker (#79) and the
 > release checklist (#35) are both **closed** — read them for history, not current state.
-> The only open issue is #78 (Renovate's dependency dashboard, permanently open). Keep
-> this file to *current truth*; correction history lives on the issues.
+> The post-launch integrity audit is tracked by #374; its body, comments, and child
+> issues record the evidence and follow-up decisions. Keep this file to *current truth*;
+> correction history and any current worklist live on the issues.
 
 ## Commands
 
@@ -22,11 +23,15 @@ go test -race ./...         # unit + integration tests (race detector on)
 go vet ./...
 golangci-lint run           # lint (v2 config, .golangci.yml)
 golangci-lint fmt           # apply gofmt + goimports
-make tidy                   # go mod tidy across BOTH modules (root + tools/graphdrift)
-make check                  # vet + test + lint + govulncheck + tidy + build — the green bar
+make tidy                   # tidy root, tools/graphdrift, and both OTLP/HTTP fork modules
+make forks-check            # vet/test/tidy + provenance gate for both third_party forks
+make tools-check            # vet + test the separate tools/graphdrift module
+make check                  # root + tools + forks + lint/vuln/tidy/build — the green bar
 ```
 
-`make check` is the full gate; run it before every commit. CI runs the same steps.
+`make check` is the full gate; it covers the root module, `tools/graphdrift`, and
+the two modules under `third_party/`. Run it before every commit. CI runs the same
+steps.
 
 ## Development methodology
 
@@ -75,7 +80,7 @@ Closest analogs: `sf2loki`'s composition-root pattern, `tailscale2otel`'s poll �
   site (`internal/license/graphclient_adapter.go`, subscribedSkus); do not add typed-SDK
   usage and do not "clean up" that one. Beta endpoints via `BaseURLOverride` +
   `Experimental()` opt-in (default off).
-- **Four ingest engines**, one per transport shape:
+- **4 ingest engine shapes**, one per transport shape:
   - `internal/logpipeline` — watermark window polling for Graph log endpoints (no delta
     query exists on any of them; watermark + overlap + seen-id dedupe).
   - `internal/jobpipeline` + `internal/exportjob` — async create→poll→download jobs
@@ -86,7 +91,7 @@ Closest analogs: `sf2loki`'s composition-root pattern, `tailscale2otel`'s poll �
     API subscription/content-blob model (see `docs/o365-management-api.md`).
 - **Collector framework** (`internal/collector`, `internal/collectors`) — typed
   `SnapshotCollector` (bounded gauges + log twins) and `WindowCollector` (event streams →
-  logs). Seven registration paths: `Deps`/`All`, `WindowDeps`/`WindowAll`,
+  logs). 7 registration paths: `Deps`/`All`, `WindowDeps`/`WindowAll`,
   `BlobDeps`/`RegisterBlob`, `O365Deps`/`O365All`, `MDCADeps`/`RegisterMDCA`,
   `EXODeps`/`RegisterEXO`, `HuntDeps`/`RegisterHunt`/`HuntAll` (#249, the
   advanced-hunting query API). **`internal/collectordoc` must walk every registration
@@ -101,7 +106,9 @@ Closest analogs: `sf2loki`'s composition-root pattern, `tailscale2otel`'s poll �
   **dropped**, never stamped on arrival (it would silently claim to have happened now).
   **Undedupeable is degraded; misdated is wrong — only wrong justifies a drop.**
 - **CheckpointStore** — file-based, namespaced per tenant + endpoint. Needs a persistent
-  volume (Helm defaults and the compose reference mount one; fail-fast if unwritable).
+  volume in production (the compose reference mounts one; the Helm chart defaults to an
+  `emptyDir`, so production installs must set `persistence.enabled=true`). Fail fast if
+  the configured checkpoint path is unwritable.
 - **Transport is exclusive per collector**: `source: graph` XOR `blob`, enforced by
   config `ConflictsWith` (#144). There is no dual mode (#131 closed rejecting it — the
   log-shaped collectors emit zero metrics, so dual ≡ blob). The one genuinely

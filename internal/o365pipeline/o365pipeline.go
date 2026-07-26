@@ -34,8 +34,8 @@
 //     contentId dedupe skips it without spending a fetch.
 //   - The same RECORD can appear in two DIFFERENT blobs, which contentId dedupe
 //     cannot catch because the ids differ. Record-Id dedupe catches it. Azure's
-//     at-least-once delivery (#138, measured ~2.3% re-delivery on the blob path)
-//     is the same hazard class.
+//     at-least-once delivery (#138, measured 2.7–4% re-delivery by signal family,
+//     with multiplicity up to four on the blob path) is the same hazard class.
 //
 // # Both id sets are evicted on the BLOB's contentCreated, never on event time
 //

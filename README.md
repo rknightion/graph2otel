@@ -1,324 +1,306 @@
 # graph2otel
 
-Polls the **Microsoft Graph API** (Entra ID + Intune) and exports **OpenTelemetry-native
-metrics and logs** over OTLP, tuned for **Grafana Cloud** (or any OTLP-compatible
-backend). A single static Go binary, push-only — there is no Prometheus scrape endpoint.
-Multi-tenant from the start: one process can poll several Entra ID tenants concurrently.
+Polls Microsoft Graph, Azure Storage diagnostic logs, the Office 365 Management
+Activity API, and specialist Microsoft security surfaces, then exports
+**OpenTelemetry-native metrics and logs** over OTLP. It is tuned for Grafana Cloud
+but works with any OTLP-compatible backend. The exporter is a single static Go
+binary, push-only, and multi-tenant from the start.
 
-> **Status:** pre-1.0 (`v0.1.0`), feature-complete for the v1.0 launch — the collector
-> framework, all Entra ID and Intune collectors, checkpointing, and the permission
-> preflight are built and shipped. What's left before the `v1.0.0` tag is ops/launch
-> polish (dashboards, alerts, Helm chart, this docs pass). Track progress on the
-> [issue tracker](https://github.com/rknightion/graph2otel/issues) and its milestones.
+> **Status:** v1.0.0 shipped on 2026-07-25 and is live in production. The generated
+> registry currently contains **148 logical collectors** across Entra ID, Intune,
+> Microsoft 365, Purview, Defender XDR, and Defender for Cloud Apps.
+
+Release packaging is complete: multi-arch container images, platform binaries,
+checksums, per-binary and container SBOMs, Sigstore signatures, SLSA provenance,
+and an OCI Helm chart are published with each release. See the
+[v1.0.0 release](https://github.com/rknightion/graph2otel/releases/tag/v1.0.0),
+the [operator documentation](https://m7kni.io/graph2otel/), and the generated
+[collector reference](docs/collectors.md).
 
 ## What it does
 
-`graph2otel` authenticates against one or more Microsoft Entra ID tenants (app-only,
-client-credentials auth — no signed-in user) and turns two categories of Graph API data
-into telemetry:
+`graph2otel` turns two data shapes into telemetry:
 
-- **Snapshot data** (directory objects, license inventory, device compliance state,
-  Intune managed-device inventory, Conditional Access policy config, …) → **OTEL
-  metrics** — bounded, tenant-shaped aggregates, never per-user/per-device label series.
-- **Event-stream data** (sign-ins, directory audits, provisioning events, risk
-  detections, Intune audit events, …) → **OTEL logs** — checkpointed, incremental,
-  deduped by ID, since none of these Graph endpoints support delta queries.
+- **Snapshot and report data** becomes bounded, tenant-shaped OTEL metrics, with
+  log twins for per-entity detail. User, device, policy, and other tenant-sized
+  identifiers never become metric labels.
+- **Event streams** become OTEL logs with source timestamps, durable checkpoints,
+  overlap windows, and transport-appropriate deduplication.
 
-Both are pushed via **OTLP** (gRPC, HTTP, or `stdout` for local debugging) directly to
-your backend. No Log Analytics workspace, no diagnostic settings, no Event Hub required
-for the core identity/device audit signals — see [What this cannot replace](#what-this-cannot-replace)
-for where that claim stops holding.
+The exporter uses the source that fits each Microsoft workload:
+
+- raw Microsoft Graph REST for directory, device, security, governance, and
+  reporting APIs;
+- Azure Storage byte-offset ingest for diagnostic and advanced-hunting logs that
+  Graph cannot provide, or that scale better out of band;
+- the stable Office 365 Management Activity API for subscription/content-blob
+  audit ingest;
+- async Graph audit queries and Intune report-export jobs where the service only
+  exposes a create/poll/download flow;
+- the Defender for Cloud Apps governance API, Exchange Online message trace, and
+  Defender XDR advanced-hunting APIs for their specialist data.
+
+Metrics and logs are pushed directly over OTLP using gRPC or HTTP. `stdout` is
+available for local inspection. There is no Prometheus scrape endpoint and the
+core Graph collectors need no Log Analytics workspace or Event Hub.
+
+The repository also ships 6 dashboards, 14 alert rules, and 2 recording rules,
+all generated. See
+[Deploying observability](docs/deploying-observability.md).
 
 ## Quickstart
 
-1. **Register an Entra ID app** and grant it read-only Graph API application
-   permissions, per collector, plus admin consent. See
-   [`docs/permissions.md`](docs/permissions.md) for the full walkthrough and its three
-   first-run gotchas (admin consent, directory-role gating, the Intune export-job
-   `ReadWrite` caveat).
-2. **Set auth via environment variables** — never in config:
+### 1. Register the application
 
-   ```sh
-   export AZURE_TENANT_ID="11111111-1111-1111-1111-111111111111"
-   export AZURE_CLIENT_ID="22222222-2222-2222-2222-222222222222"
-   export AZURE_CLIENT_SECRET="..."          # or AZURE_CLIENT_CERTIFICATE_PATH
-   export G2O_OTLP__GRAFANA_CLOUD__TOKEN="..."
-   ```
+Create an Entra ID app registration, grant the application permissions required
+by the collectors you enable, and apply admin consent. The defaults are
+read-oriented, with two documented operation-level exceptions: Intune report
+export creation and starting an O365 Management Activity subscription.
 
-3. **Write a minimal config** (`config.yaml`) naming the tenant and your OTLP backend:
+Use [the permission guide](docs/permissions.md) for the complete setup and
+[the collector reference](docs/collectors.md) for per-collector scopes, license
+requirements, beta status, interval, source, and output.
 
-   ```yaml
-   tenants:
-     - tenant_id: "11111111-1111-1111-1111-111111111111"
-       client_id: "22222222-2222-2222-2222-222222222222" # optional identity assertion
+### 2. Set credentials
 
-   otlp:
-     protocol: http
-     endpoint: "https://otlp-gateway-prod-us-central-0.grafana.net/otlp"
-     grafana_cloud:
-       instance_id: "123456"
-
-   checkpoint_dir: "/var/lib/graph2otel"
-   ```
-
-4. **Run it** — as a container:
-
-   ```sh
-   docker volume create graph2otel-checkpoints
-
-   docker run --rm \
-     --read-only \
-     --tmpfs /tmp:uid=65532,gid=65532,mode=1777 \
-     -e AZURE_TENANT_ID -e AZURE_CLIENT_ID -e AZURE_CLIENT_SECRET \
-     -e G2O_OTLP__GRAFANA_CLOUD__TOKEN \
-     --mount type=volume,src=graph2otel-checkpoints,dst=/var/lib/graph2otel \
-     --mount type=bind,src="$(pwd)/config.yaml",dst=/etc/graph2otel/config.yaml,readonly \
-     ghcr.io/rknightion/graph2otel:latest \
-     --config /etc/graph2otel/config.yaml
-   ```
-
-   The absolute `checkpoint_dir` and named volume are not
-   optional: it preserves window-collector watermarks across container restarts.
-   The image runs as UID/GID `65532`; for a host bind mount instead, prepare it
-   before starting the container:
-
-   ```sh
-   mkdir -p ./checkpoints
-   sudo chown 65532:65532 ./checkpoints
-   ```
-
-   Then replace the volume `--mount` above with:
-
-   ```sh
-   --mount type=bind,src="$(pwd)/checkpoints",dst=/var/lib/graph2otel
-   ```
-
-   or as a local binary: `go build ./cmd/graph2otel && ./graph2otel --config config.yaml`.
-
-5. **Verify permissions before trusting the data** — run the built-in preflight check,
-   which reports missing Graph API permissions per tenant instead of a runtime 403:
-
-   ```sh
-   graph2otel check --config config.yaml
-   ```
-
-See [`docs/collectors.md`](docs/collectors.md) for what each collector needs and emits,
-and [`docs/permissions.md`](docs/permissions.md) for the full setup path. A published
-docs site (zensical, `#31`) collects all of this in one place once it lands.
-
-## Coverage
-
-### Entra ID
-
-| Category | Examples |
-| --- | --- |
-| Metrics (snapshot) | directory object counts, users/groups/devices aggregates, licensing (SKU consumption + assignment), domains, org/directory-sync freshness, app + service principal credential expiry, Conditional Access policy + named location counts, directory roles + PIM standing/eligible assignments, secure score + control profiles, MFA/auth-methods registration summaries, consent surface (OAuth2 grants, app-role assignments), risky users/service principals (current state), authentication methods policy config, terms-of-use agreements, Entra recommendations *(beta)* |
-| Logs (event stream) | interactive sign-ins, non-interactive sign-ins *(beta filter)*, service principal sign-ins *(beta filter)*, managed identity sign-ins *(beta filter)*, directory audit logs, provisioning logs, risk detections, security alerts (`alerts_v2`) |
-
-### Intune
-
-| Category | Examples |
-| --- | --- |
-| Metrics (snapshot) | managed device inventory + compliance/encryption/sync-recency aggregates, compliance policy rollups (tenant + per-policy), configuration profile status overviews, Settings Catalog inventory *(beta)*, mobile app catalog, app protection (MAM) policy inventory, Autopilot device + deployment profile state *(beta)*, Windows Update rings + feature/quality/driver profiles *(beta)*, endpoint analytics scores, Defender/malware tenant overview, Apple token (APNS/VPP/DEP) expiry, connector health (Exchange/MTD/NDES), certificate state *(beta)*, detected-apps software inventory, enrollment configs |
-| Logs (event stream) | Intune audit events, enrollment troubleshooting events, Autopilot events *(beta)*, plus export-job-based reports (app install status, certificate inventory, Defender agent health) via the Reports Export API |
-
-Items marked *(beta)* rely on a Microsoft Graph `beta` endpoint with no v1.0 equivalent —
-they ship behind a feature flag (`collectors.Experimental`, opt-in, off by default) and
-are called out as a stability risk, not a promise. Full per-collector detail — Graph
-endpoint, required scope, license/beta gating, poll interval, metric namespace — is in
-[`docs/collectors.md`](docs/collectors.md).
-
-## What this cannot replace
-
-Polling Microsoft Graph fully covers the identity/device audit core most people actually
-want — Entra audit logs, sign-ins (all four event types), provisioning logs, risk
-detections, and Intune audit events — with **no diagnostic settings and no Log Analytics
-workspace required**, and for Intune compliance state, Graph is measurably fresher than
-the diagnostic-settings export (minutes vs. a 24-48h export lag).
-
-It is **not** a full replacement for Azure Monitor diagnostic settings. Some signals are
-never materialized behind a queryable Graph endpoint. These are **confirmed-permanent**
-gaps, not "not built yet" — but they are not a dead end: the diagnostic-settings pipeline
-already emits most of them, and `graph2otel` **optionally reads that data straight out of
-an Azure Storage account**, so you still do not need an Azure Function or a Log Analytics
-workspace in the middle. It is opt-in (one config key), read-only, and measured at **~£0.85
-a month** on a small tenant with no standing charge — against £1.54 for Log Analytics and
-£8.34 standing for Event Hub. See [`docs/blob-ingest.md`](docs/blob-ingest.md).
-
-**Served this way today:** `MicrosoftGraphActivityLogs` (`entra.graph_activity`) and three
-sign-in categories — `MicrosoftServicePrincipalSignInLogs`
-(`entra.signins.microsoft_service_principal`, which has no Graph route at all),
-`ServicePrincipalSignInLogs` and `NonInteractiveUserSignInLogs` (the `.blob` collectors,
-which reach those streams on a v1.0-stable source instead of the `/beta`-only
-`signInEventTypes` filter the polled versions need). The remaining categories below are the
-roadmap for the same path.
-
-One honest caveat: Azure's diagnostic-settings pipeline is **at-least-once**, so roughly
-2.3% of blob-sourced records arrive twice and graph2otel currently passes those duplicates
-through (the polled path dedupes; see [#138](https://github.com/rknightion/graph2otel/issues/138)).
-Every record carries its identifying attribute, so a backend-side dedupe works today.
-
-**Log categories with no Graph endpoint (confirmed permanent):**
-
-- **`MicrosoftGraphActivityLogs`** ✅ **served via blob ingest** — ironically, the log of
-  Graph API calls themselves. No query endpoint exists at all, so `entra.graph_activity`
-  reads it from blob storage instead: one log record per Graph call against your tenant,
-  answering which app or user called which endpoint, with which permissions, from where,
-  and what came back. Without it, the `graph2otel.graphclient.http_4xx` /
-  `graph2otel.graphclient.http_5xx` self-observability counters cover only **graph2otel's
-  own** outbound Graph responses — a narrow substitute for "is our poller hitting Graph
-  friction," never the tenant-wide 403-burst signal across every app.
-- **`MicrosoftServicePrincipalSignInLogs`** ✅ **served via blob ingest** — Microsoft's own
-  first-party service-to-service auth against your tenant. Offered "as an opt-in through
-  diagnostic settings only"; there is no API. Live-verified a genuinely different dataset
-  from the polled `entra.signins.service_principal`, which only ever returns *your own*
-  service principals: every sampled record here was owned by Microsoft's tenant, every
-  record there by the local tenant, and **zero** sign-in ids overlapped.
-- **`EnrichedOffice365AuditLogs`** — a Sentinel / Log-Analytics-side ML **enrichment**
-  table (fields layered onto raw M365 activity by Sentinel itself). It has no source API
-  in Graph *or* the O365 Management Activity API — it is synthesized downstream and does
-  not exist as a retrievable source anywhere upstream.
-- **Most of Intune `OperationalLogs`** — the compliance-notification / SLA-alert
-  fired-event stream (e.g. `AlertType: "Managed Device Not Compliant"`) has no Graph read
-  resource; Graph exposes only the notification *templates*
-  (`deviceManagement/notificationMessageTemplates`, config only). Only the
-  enrollment-failure slice has a Graph event equivalent (`enrollmentTroubleshootingEvent`).
-  Distinct from compliance *state*, which `graph2otel` does poll.
-- **`ADFSSignInLogs`** and **`NetworkAccessTrafficLogs`** — diagnostic-settings-only
-  (Connect Health agent stream / Global Secure Access, respectively).
-
-For any of these, the fallback path above (Event Hub near-real-time, Log Analytics query
-as a narrow at-rest fallback) is the answer — you still need diagnostic settings feeding
-that pipeline, but `graph2otel` can consume it directly rather than a bespoke Function.
-
-**Purview / M365 configuration state with no Graph endpoint (confirmed permanent):**
-
-These are policy/config surfaces exposed only through Security & Compliance PowerShell (or
-a portal), with no Graph list/count equivalent — so there is no "count of policies in each
-mode" metric to build:
-
-- **DLP policy authoring / simulation state** (Block vs TestWithNotifications mode, which
-  locations a policy covers) — S&C PowerShell only (`Get/Set-DlpCompliancePolicy`,
-  `Get/Set-DlpComplianceRule`). Graph's only DLP-adjacent surface,
-  `protectionScopes/compute`, evaluates what *would* apply to synthetic input; it is not
-  an enumerable policy list.
-- **Retention *policy* location bindings** — S&C PowerShell only
-  (`Get/Set-RetentionCompliancePolicy`). Note retention *label* **definitions** *are*
-  Graph-exposed (`security/labels/retentionLabels`); it is the policy-to-location binding
-  that has no Graph surface.
-- **Label encryption activation** (Azure RMS) — portal-only toggle, no PowerShell/API path.
-
-**Open, pending live-verify (not a settled gap):**
-
-- **`DLP.All` sensitive-data content** — not yet confirmed whether
-  `/security/auditLog/queries` fully mirrors what the O365 Management Activity API's
-  `ActivityFeed.ReadDlp` scope carries. Flagged as an open question, not assumed solved
-  or assumed impossible.
-
-**Deployment prerequisite (not a `graph2otel` limitation):**
-
-- **Turning on the unified audit log** — `Set-AdminAuditLogConfig`, an Exchange Online
-  cmdlet (not Graph, not even S&C PowerShell). A fresh tenant may have it off, which is a
-  hard prerequisite for any unified-audit-event collector. It is **already on** for the
-  m7kni reference tenant, so it is not a current blocker there — but a new deployment must
-  check it. `graph2otel` cannot remediate this itself.
-
-## Auth setup
-
-`graph2otel` uses `azidentity.DefaultAzureCredential` for app-only authentication — no
-signed-in user and no interactive login. The ambient credential chain selects one
-application identity for the process. Each `tenants[].tenant_id` must be the hyphenated
-Entra directory GUID; verified domains and arbitrary names are rejected. graph2otel sets
-that GUID on every token request, permits the credential to target only that directory,
-and verifies the returned token's `tid` before any collector or tenant-labelled signal
-starts. One multi-tenant app registration can therefore be reused across every listed
-directory after its service principal has the required permissions and admin consent in
-each one.
-
-For client-secret or certificate authentication, configure the process environment:
+Authentication uses `azidentity.DefaultAzureCredential`; secrets never belong in
+YAML:
 
 ```sh
 export AZURE_TENANT_ID="11111111-1111-1111-1111-111111111111"
 export AZURE_CLIENT_ID="22222222-2222-2222-2222-222222222222"
-export AZURE_CLIENT_SECRET="..."          # or, for certificate auth:
-# export AZURE_CLIENT_CERTIFICATE_PATH="/path/to/cert.pem"
+export AZURE_CLIENT_SECRET="..."          # or AZURE_CLIENT_CERTIFICATE_PATH
+export G2O_OTLP__GRAFANA_CLOUD__TOKEN="..."
 ```
 
-Workload identity uses the platform-injected federated-token environment, including its
-single ambient `AZURE_CLIENT_ID`. Managed identity uses the identity assigned to the
-Azure host; set `AZURE_CLIENT_ID` to select a user-assigned identity, or leave it unset
-for the system-assigned identity. Managed identity remains bound to its home tenant and
-ignores cross-tenant targeting; if its returned token `tid` differs from the configured
-directory GUID, graph2otel fails that tenant closed before it emits data. These
-mechanisms still select one application identity for the process.
+### 3. Write a minimal config
 
-For multiple tenants, list every directory GUID in `config.yaml`; do not repeat
-credential environment variables per tenant. `tenant_id` binds and verifies the
-directory, not the application identity. An optional YAML `client_id` is a non-secret
-consistency assertion only: it cannot select or override `DefaultAzureCredential`. If it
-disagrees with the `appid` proved from the actual Graph access token, startup warns once
-and the authenticated ID wins. Auth material is always ambient and never written into
-YAML. See
-[`docs/permissions.md`](docs/permissions.md) for the full app registration + scope +
-admin-consent walkthrough.
-
-## Configuration
+Create `config.yaml`:
 
 ```yaml
-log_level: info # debug | info | warn | error
-
 tenants:
-  - tenant_id: "11111111-1111-1111-1111-111111111111" # hyphenated Entra directory GUID
-    client_id: "22222222-2222-2222-2222-222222222222" # optional expected app ID
-    # collectors:               # optional per-tenant overrides, layered on the global block
-    #   "entra.signins.interactive":
-    #     enabled: false
+  - tenant_id: "11111111-1111-1111-1111-111111111111"
+    client_id: "22222222-2222-2222-2222-222222222222" # optional identity assertion
 
 otlp:
-  protocol: http # grpc | http | stdout
+  protocol: http
   endpoint: "https://otlp-gateway-prod-us-central-0.grafana.net/otlp"
   grafana_cloud:
     instance_id: "123456"
-    token: "" # DO NOT set here — use G2O_OTLP__GRAFANA_CLOUD__TOKEN instead
 
-collectors: {}    # per-collector enable/disable + interval overrides; omitted = enabled at its default
+checkpoint_dir: "/var/lib/graph2otel"
+
+collectors: {}
 #   "entra.signins.interactive":
 #     enabled: true
 #     interval: "5m"
-
-admin:
-  enabled: false  # /healthz liveness, /readyz readiness, and per-collector status
-  addr: ":9090"
-
-checkpoint_dir: "/var/lib/graph2otel"  # persistent, writable container checkpoint volume
 ```
 
-Config is layered: built-in defaults < `config.yaml` (`--config` flag) < `G2O_*`
-environment variables (double underscore for nesting, e.g. `G2O_OTLP__ENDPOINT`; a
-collector name is uppercased and otherwise preserved, e.g.
-`G2O_COLLECTORS__ENTRA.SIGNINS.INTERACTIVE__ENABLED=false`). See `config.example.yaml` for the
-authoritative, fully-commented schema, and [`docs/collectors.md`](docs/collectors.md) for
-what each `collectors:` key gates.
+For a first local inspection, set `otlp.protocol: stdout` and omit the endpoint
+and Grafana Cloud block.
 
-When the admin server is enabled, `/healthz` is process liveness and is
-independent of collector outcomes. `/readyz` returns 503 until the first
-successful collector run, then stays ready for the process lifetime. Partial
-tenant success is ready while failures remain visible as degraded status.
-Before the latch, zero working collectors remains unready; later transient
-failures do not flap readiness. A zero-tenant `stdout` diagnostic run is ready
-immediately. Failure to bind the configured admin address is fatal.
+Every scalar also has a `G2O_` environment override. For example:
+
+```sh
+G2O_COLLECTORS__ENTRA.SIGNINS.INTERACTIVE__ENABLED=false
+```
+
+### 4. Check permissions
+
+Run the built-in preflight before trusting the output:
+
+```sh
+graph2otel check --config config.yaml
+```
+
+It reports missing application permissions per tenant and collector before a
+poll turns the same problem into runtime 403s. For a container-only install, run
+the same command from the release image:
+
+```sh
+docker run --rm \
+  -e AZURE_TENANT_ID -e AZURE_CLIENT_ID -e AZURE_CLIENT_SECRET \
+  -e G2O_OTLP__GRAFANA_CLOUD__TOKEN \
+  --mount type=bind,src="$(pwd)/config.yaml",dst=/etc/graph2otel/config.yaml,readonly \
+  ghcr.io/rknightion/graph2otel:1.0.0 \
+  check --config /etc/graph2otel/config.yaml
+```
+
+### 5. Run the container
+
+```sh
+docker volume create graph2otel-checkpoints
+
+docker run --rm \
+  --read-only \
+  --tmpfs /tmp:uid=65532,gid=65532,mode=1777 \
+  -e AZURE_TENANT_ID -e AZURE_CLIENT_ID -e AZURE_CLIENT_SECRET \
+  -e G2O_OTLP__GRAFANA_CLOUD__TOKEN \
+  --mount type=volume,src=graph2otel-checkpoints,dst=/var/lib/graph2otel \
+  --mount type=bind,src="$(pwd)/config.yaml",dst=/etc/graph2otel/config.yaml,readonly \
+  ghcr.io/rknightion/graph2otel:1.0.0 \
+  --config /etc/graph2otel/config.yaml
+```
+
+The checkpoint volume is required for a real deployment. It preserves window
+watermarks and dedupe state across restarts. The image runs as UID/GID `65532`;
+if a host bind mount is required, create it and set that ownership before
+starting the container.
+
+## Other installation paths
+
+### Helm
+
+The chart is published as an OCI artifact:
+
+```sh
+kubectl create secret generic graph2otel-credentials \
+  --from-literal=AZURE_TENANT_ID="<your-tenant-guid>" \
+  --from-literal=AZURE_CLIENT_ID="<app-registration-client-id>" \
+  --from-literal=AZURE_CLIENT_SECRET="<client-secret>" \
+  --from-literal=G2O_OTLP__GRAFANA_CLOUD__TOKEN="<your-otlp-token>"
+
+helm install g2o oci://ghcr.io/rknightion/charts/graph2otel \
+  --version 1.0.0 \
+  --set "config.tenants[0].tenant_id=<your-tenant-guid>" \
+  --set "config.otlp.grafana_cloud.instance_id=<your-instance-id>" \
+  --set existingSecret=graph2otel-credentials \
+  --set persistence.enabled=true
+```
+
+Production installs should keep `persistence.enabled=true`; an ephemeral
+checkpoint loses watermarks on pod replacement. The full values reference is in
+[the chart README](charts/graph2otel/README.md).
+
+### Binary
+
+Release archives for macOS, Linux, and Windows, their checksums and SBOMs, and
+the signature/provenance bundles are attached to each
+[GitHub release](https://github.com/rknightion/graph2otel/releases). To build from
+source instead:
+
+```sh
+go install github.com/rknightion/graph2otel/cmd/graph2otel@v1.0.0
+```
+
+## Coverage
+
+The generated [collector reference](docs/collectors.md) is authoritative; CI
+regenerates it from every registration path and fails on drift.
+
+| Domain | Shipped coverage includes |
+| --- | --- |
+| Entra ID | directory inventory, applications and credentials, Conditional Access, authentication methods, licensing, PIM and access reviews, secure score, all four sign-in families, audit/provisioning/risk streams, security alerts/incidents, and Global Secure Access posture |
+| Intune | managed devices, compliance and configuration, endpoint analytics, apps and MAM, Autopilot, enrollment, certificates and Cloud PKI, Windows update surfaces, Apple tokens/connectors, report-export inventories, audit events, and compliance/enrollment log streams |
+| Microsoft 365 | teams/groups, service health, unified audit over either async query or the O365 Management Activity API, Exchange Online message trace, and Defender-derived email/security activity |
+| Purview | sensitivity and retention labels, DLP policy inventory, eDiscovery cases, and audit activity |
+| Defender XDR | advanced-hunting tables for alerts, evidence, devices, identities, email, URLs, vulnerabilities, recommendations, exposure, and related security events |
+| Defender for Cloud Apps | Cloud Discovery governance/parse health over the MDCA portal API |
+
+Beta Graph collectors implement `Experimental` and are off unless explicitly
+enabled. High-traffic collectors implement a separate `HighVolume` opt-in; a GA
+firehose is not mislabeled as beta.
+
+## Source boundaries and correctness contracts
+
+### Global Secure Access
+
+The `entra.gsa` Experimental snapshot collector is shipped. It reports onboarding,
+forwarding-profile, filtering-policy, remote-network, signaling, and packet-tagging
+posture from the Graph beta surface.
+
+`NetworkAccessTrafficLogs` is not permission-blocked on the reference tenant:
+`graph2otel-poller` holds `NetworkAccess.Read.All`, and
+`GET /beta/networkAccess/logs/traffic` returns 200 with an empty `value`. It is
+currently **data-blocked** because all three forwarding profiles are disabled and
+no traffic is routed through GSA. No traffic mapper is written from documentation
+alone; it remains unwritten until a real record can be captured.
+
+### Purview DLP
+
+`purview.dlp_policies` is shipped as an Experimental snapshot collector over
+`/beta/security/dataSecurityAndGovernance/policyFiles`. It inventories policy
+definitions, enforcement modes, rules, actions, workload bindings, and change age.
+
+This is separate from `DLP.All` activity. A live DLP match proved that
+`DetectedValues[].Name` and `DetectedValues[].Value` can contain the actual matched
+secret and surrounding message text. graph2otel has no dedicated `DLP.All` mapper
+and deliberately does not emit those raw values. The existing M365 activity mapper
+is allowlisted and ignores that nested payload.
+
+### Azure Storage duplicates
+
+Azure Monitor diagnostic delivery is at-least-once. Steady-state measurement found
+about **2.7%** duplicate `MicrosoftGraphActivityLogs` records and about **4%**
+duplicate sign-in records, with a maximum observed multiplicity of **four**.
+`blobpipeline` consumes every byte exactly once; the repeated logical records are
+distinct bytes written by Azure.
+
+The binding decision is downstream deduplication on each event's structured-metadata
+identity (`request_id` for Graph activity and `id` for sign-ins). Do not count raw
+blob lines or assume at most two copies. See
+[Deduplicating blob-sourced records](docs/signals.md#deduplicating-blob-sourced-records-azure-delivers-at-least-once).
+
+### Timestamps and dedupe IDs
+
+An event without a parseable source timestamp is dropped and reported as
+`missing_event_time`; stamping it with arrival time would silently claim that an
+old event happened now. A correctly timed record without a dedupe ID still emits
+and is reported as degraded. Undedupeable is recoverable; misdated is wrong.
+
+## Auth setup
+
+`DefaultAzureCredential` selects one ambient application identity for the process.
+Each `tenants[].tenant_id` must be the hyphenated Entra directory GUID.
+graph2otel sets that tenant on each token request, permits the credential to target
+only that directory, and verifies the returned token's `tid` before collection or
+tenant-labelled telemetry starts.
+
+One multi-tenant app registration can serve every configured directory after its
+service principal has the required permissions and admin consent in each tenant.
+An optional YAML `client_id` is a non-secret consistency assertion only; it cannot
+select or override the ambient credential.
+
+Workload identity uses the platform-provided federated token. Managed identity uses
+the Azure host identity and remains bound to its home tenant. Certificate and client
+secret credentials use the normal `AZURE_*` environment variables. See
+[Permissions and app registration](docs/permissions.md).
+
+## Configuration
+
+Configuration is layered:
+
+```text
+built-in defaults < config.yaml < G2O_* environment variables
+```
+
+Environment nesting uses a double underscore:
+`otlp.endpoint` becomes `G2O_OTLP__ENDPOINT`. Collector names are preserved,
+for example
+`G2O_COLLECTORS__ENTRA.SIGNINS.INTERACTIVE__ENABLED=false`.
+
+[`config.example.yaml`](config.example.yaml) is the fully commented source
+configuration, and the generated [environment variable reference](docs/env-vars.md)
+is drift-gated in CI.
+
+When enabled, the admin server exposes `/healthz`, `/readyz`, collector status,
+checkpoint state, and capacity/cost observations. Liveness is independent of
+collector outcomes. Readiness returns 503 until the first successful collection,
+then stays ready while partial failures remain visible as degraded status. Failure
+to bind the configured admin address is fatal.
 
 ## Operating notes
 
-**Expect a brief flat-line after a restart, not a gap.** `graph2otel` is OTLP push-only.
-When the process stops, its push simply stops — unlike a Prometheus scrape target going
-down, a stopped push carries **no staleness marker**, so the last-pushed value lingers in
-the backend for the query lookback window (~5 min in Grafana Cloud / Mimir) before it ages
-out. On a restart, panels therefore show a short **flat-line** across the gap, not a break
-in the series. This is expected OTLP-push behaviour, not a stuck collector — the new
-process picks the series back up on its first push.
+`graph2otel` is OTLP push-only. When it stops, no Prometheus staleness marker is
+written, so the last sample can appear flat until the backend query lookback ages
+it out. A short flat line after restart is expected; the new process resumes each
+series on its first export.
+
+Persistent checkpoints are mandatory for window, job, blob, and O365 activity
+collectors. Losing them causes cold-start replays and can create duplicates; an
+outage longer than the initial lookback can also create an unrecoverable gap.
 
 ## License
 
 `graph2otel` is licensed under the GNU Affero General Public License v3.0 only
-(`AGPL-3.0-only`) — see [`LICENSE`](./LICENSE).
+(`AGPL-3.0-only`) — see [`LICENSE`](LICENSE).

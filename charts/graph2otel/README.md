@@ -17,7 +17,7 @@
 <!-- x-release-please-end -->
 ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square)
 
-Poll the Microsoft Graph API (Entra ID + Intune) and export OpenTelemetry-native metrics + logs (OTLP). Optimized for Grafana Cloud.
+Export Entra ID, Intune, Defender, M365, and Purview telemetry from Microsoft Graph, Azure Storage blobs, and the O365 Management Activity API as OpenTelemetry-native metrics and logs over OTLP.
 
 **Homepage:** <https://github.com/rknightion/graph2otel>
 
@@ -33,18 +33,26 @@ Poll the Microsoft Graph API (Entra ID + Intune) and export OpenTelemetry-native
 
 ## Install
 
+Stable releases publish this chart to GHCR alongside the matching graph2otel
+container, binaries, SBOMs, and signatures. Set `<version>` to a released
+graph2otel version without the leading `v`:
+
 ```sh
-helm install g2o oci://ghcr.io/rknightion/charts/graph2otel --version <chart-version> \
+kubectl create secret generic graph2otel-credentials \
+  --from-literal=AZURE_TENANT_ID="<your-tenant-guid>" \
+  --from-literal=AZURE_CLIENT_ID="<app-registration-client-id>" \
+  --from-literal=AZURE_CLIENT_SECRET="<client-secret>" \
+  --from-literal=G2O_OTLP__GRAFANA_CLOUD__TOKEN="<your-otlp-token>"
+
+helm install g2o oci://ghcr.io/rknightion/charts/graph2otel --version <version> \
   --set "config.tenants[0].tenant_id=<your-tenant-guid>" \
   --set "config.otlp.grafana_cloud.instance_id=<your-instance-id>" \
-  --set "secret.AZURE_TENANT_ID=<your-tenant-guid>" \
-  --set "secret.AZURE_CLIENT_ID=<app-registration-client-id>" \
-  --set "secret.AZURE_CLIENT_SECRET=<client-secret>" \
-  --set "extraEnv[0].name=G2O_OTLP__GRAFANA_CLOUD__TOKEN" \
-  --set "extraEnv[0].value=<your-otlp-token>"
+  --set existingSecret=graph2otel-credentials \
+  --set persistence.enabled=true
 ```
 
-Or from a checked-out repo copy: `helm install g2o charts/graph2otel -f my-values.yaml`.
+To test unreleased chart changes from a checked-out repo:
+`helm install g2o charts/graph2otel -f my-values.yaml`.
 
 ## Configuration
 

@@ -1,8 +1,9 @@
 apiVersion: v2
 name: graph2otel
 description: >-
-  Poll the Microsoft Graph API (Entra ID + Intune) and export
-  OpenTelemetry-native metrics + logs (OTLP). Optimized for Grafana Cloud.
+  Export Entra ID, Intune, Defender, M365, and Purview telemetry from Microsoft
+  Graph, Azure Storage blobs, and the O365 Management Activity API as
+  OpenTelemetry-native metrics and logs over OTLP.
 type: application
 version: 1.0.0
 appVersion: 1.0.0
@@ -13,6 +14,10 @@ keywords:
   - microsoft-graph
   - entra-id
   - intune
+  - defender
+  - microsoft-365
+  - purview
+  - azure-storage
   - opentelemetry
   - otlp
   - observability
