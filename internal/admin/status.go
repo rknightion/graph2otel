@@ -109,6 +109,137 @@ func deliverySignalStatusFrom(signal telemetry.DeliverySignal) DeliverySignalSta
 	}
 }
 
+// CapacitySource reports cumulative logical-volume attribution and process OTLP
+// transport totals. *telemetry.Provider satisfies it alongside
+// ThroughputSource. Both snapshots are passive and immutable.
+type CapacitySource interface {
+	Volume() []telemetry.VolumeRow
+	Transport() telemetry.OTLPTransportSnapshot
+}
+
+// CapacityStatus separates exact cumulative counters from an optional cost
+// estimate. Cost is absent unless the operator explicitly enables pricing.
+type CapacityStatus struct {
+	Volume    []CapacityVolumeRow     `json:"volume"`
+	Transport CapacityTransportStatus `json:"transport"`
+	Cost      *CostStatus             `json:"cost,omitempty"`
+}
+
+// CapacityVolumeRow is one exact cumulative attribution row.
+type CapacityVolumeRow struct {
+	TenantID        string                 `json:"tenant_id"`
+	Collector       string                 `json:"collector"`
+	IngestTransport telemetry.Transport    `json:"ingest_transport"`
+	TrafficClass    telemetry.TrafficClass `json:"traffic_class"`
+	SourceRecords   uint64                 `json:"source_records"`
+	MetricPoints    uint64                 `json:"metric_points"`
+	LogPoints       uint64                 `json:"log_points"`
+}
+
+// CapacityTransportStatus is exact cumulative process transport activity. It
+// deliberately has no tenant or collector attribution.
+type CapacityTransportStatus struct {
+	Metrics CapacityTransportSignalStatus `json:"metrics"`
+	Logs    CapacityTransportSignalStatus `json:"logs"`
+}
+
+type CapacityTransportSignalStatus struct {
+	TransmittedPayloadBytes uint64 `json:"transmitted_payload_bytes"`
+	RetryAttempts           uint64 `json:"retry_attempts"`
+}
+
+const (
+	costIntervalScope   = "all_observed_traffic"
+	costProjectionScope = "recurring_steady_state_only"
+)
+
+// CostStatus is an observational estimate from operator-supplied rates. The
+// interval includes every observed traffic class; the recurring projection and
+// budget ratio include steady-state traffic only. It is display-only and has
+// no scheduler, limiter, or exporter callback.
+type CostStatus struct {
+	Currency        string `json:"currency"`
+	Version         string `json:"version"`
+	Source          string `json:"source"`
+	EffectiveAt     string `json:"effective_at"`
+	Period          string `json:"period"`
+	IntervalScope   string `json:"interval_scope"`
+	ProjectionScope string `json:"projection_scope"`
+
+	Rates CostRatesStatus `json:"rates"`
+
+	ObservedIntervalSeconds   float64         `json:"observed_interval_seconds"`
+	IntervalMicrounits        uint64          `json:"interval_microunits"`
+	ProjectedPeriodMicrounits uint64          `json:"projected_period_microunits"`
+	BudgetMicrounits          uint64          `json:"budget_microunits"`
+	BudgetRatio               *float64        `json:"budget_ratio,omitempty"`
+	BudgetPercent             float64         `json:"-"`
+	Rows                      []CostRowStatus `json:"rows"`
+}
+
+type CostRatesStatus struct {
+	SourceRecordMicrounits           uint64 `json:"source_record_microunits"`
+	MetricPointMicrounits            uint64 `json:"metric_point_microunits"`
+	LogRecordMicrounits              uint64 `json:"log_record_microunits"`
+	TransmittedPayloadByteMicrounits uint64 `json:"transmitted_payload_byte_microunits"`
+}
+
+// CostRowStatus keeps exact logical cost components separate from the
+// estimated payload-byte allocation. Attribution is always "estimated".
+type CostRowStatus struct {
+	TenantID        string `json:"tenant_id"`
+	Collector       string `json:"collector"`
+	IngestTransport string `json:"ingest_transport"`
+	TrafficClass    string `json:"traffic_class"`
+	Attribution     string `json:"attribution"`
+
+	SourceRecordCostMicrounits  uint64 `json:"source_record_cost_microunits"`
+	MetricPointCostMicrounits   uint64 `json:"metric_point_cost_microunits"`
+	LogRecordCostMicrounits     uint64 `json:"log_record_cost_microunits"`
+	AllocatedMetricPayloadBytes uint64 `json:"allocated_metric_payload_bytes"`
+	AllocatedLogPayloadBytes    uint64 `json:"allocated_log_payload_bytes"`
+	AllocatedPayloadBytes       uint64 `json:"allocated_payload_bytes"`
+	PayloadCostMicrounits       uint64 `json:"payload_cost_microunits"`
+	IntervalMicrounits          uint64 `json:"interval_microunits"`
+	ProjectedPeriodMicrounits   uint64 `json:"projected_period_microunits"`
+}
+
+func capacityStatusFrom(
+	rows []telemetry.VolumeRow,
+	transport telemetry.OTLPTransportSnapshot,
+	cost *CostStatus,
+) *CapacityStatus {
+	volume := make([]CapacityVolumeRow, 0, len(rows))
+	for _, row := range rows {
+		volume = append(volume, CapacityVolumeRow{
+			TenantID:        row.TenantID,
+			Collector:       row.Collector,
+			IngestTransport: row.Transport,
+			TrafficClass:    row.TrafficClass,
+			SourceRecords:   row.SourceRecords,
+			MetricPoints:    row.MetricPoints,
+			LogPoints:       row.LogPoints,
+		})
+	}
+	return &CapacityStatus{
+		Volume: volume,
+		Transport: CapacityTransportStatus{
+			Metrics: capacityTransportSignalStatusFrom(transport.Metrics),
+			Logs:    capacityTransportSignalStatusFrom(transport.Logs),
+		},
+		Cost: cost,
+	}
+}
+
+func capacityTransportSignalStatusFrom(
+	signal telemetry.OTLPTransportSignal,
+) CapacityTransportSignalStatus {
+	return CapacityTransportSignalStatus{
+		TransmittedPayloadBytes: signal.PayloadBytes,
+		RetryAttempts:           signal.RetryAttempts,
+	}
+}
+
 // consecutiveFailureThreshold is the number of back-to-back failures at which
 // a collector drags overall health to "degraded".
 const consecutiveFailureThreshold = 3
@@ -191,6 +322,9 @@ type Status struct {
 	// omitted when the existing throughput-provider argument does not also
 	// implement DeliverySource.
 	Delivery *DeliveryStatus `json:"delivery,omitempty"`
+	// Capacity is a fresh exact cumulative volume/transport snapshot plus the
+	// sampler's latest optional, explicitly estimated cost projection.
+	Capacity *CapacityStatus `json:"capacity,omitempty"`
 	// SeriesTrend is deliberately NOT named Cardinality: pageModel already has a
 	// Cardinality field (the tab view), and an embedded Status field of the same
 	// name would be silently shadowed in every template expression.

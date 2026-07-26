@@ -260,6 +260,25 @@ cardinality:
   per_metric_limit: 5000 # per-metric active-series cap; beyond it the top series by value are kept and the tail folds into `other` (0 = unlimited)
   global_limit: 100000 # total active-series cap across every metric; overage is absorbed by the worst offenders via max-min fairness (0 = unlimited)
 
+# cost enables observational cost projections from operator-supplied integer
+# microunit rates. graph2otel ships NO vendor prices: currency, schedule
+# identity/provenance, effective time, and all four rates are required when
+# enabled. An explicit zero rate is valid and differs from an omitted rate.
+# Budget 0 disables the comparison; it never drops or suppresses telemetry.
+cost:
+  enabled: false # opt in to cost accounting; default off
+  currency: "" # uppercase 3-letter currency code, required when enabled
+  version: "" # nonblank operator rate-schedule version, required when enabled
+  source: "" # nonblank operator rate source/provenance, required when enabled
+  effective_at: "" # RFC3339 rate-schedule effective timestamp, required when enabled
+  period: 720h # positive projection period; 720h = 30 days
+  rates:
+    source_record_microunits: null # microunits per logical source record; explicit nonnegative integer required when enabled
+    metric_point_microunits: null # microunits per emitted metric point; explicit nonnegative integer required when enabled
+    log_record_microunits: null # microunits per emitted log record; explicit nonnegative integer required when enabled
+    transmitted_payload_byte_microunits: null # microunits per post-compression OTLP payload byte; explicit nonnegative integer required when enabled
+  budget_microunits: 0 # nonnegative projection-period budget; 0 disables comparison
+
 # backfill tunes how much history a window (log) collector recovers on a COLD
 # START — no checkpoint yet: a new tenant, a wiped volume, a first deploy. It does
 # NOT affect the steady state: once a checkpoint exists, polling resumes from the

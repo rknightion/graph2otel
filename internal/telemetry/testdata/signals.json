@@ -12,6 +12,33 @@
       ]
     },
     {
+      "Name": "graph2otel.ingest.cost.projected",
+      "Unit": "{microunit}",
+      "Kind": "gauge",
+      "Description": "Estimated recurring steady-state ingest cost projected from cumulative process-lifetime observations; payload-byte attribution is estimated, not an invoice.",
+      "AttrKeys": [
+        "attribution",
+        "collector",
+        "currency",
+        "ingest_transport",
+        "price_version",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.ingest.emitted_points",
+      "Unit": "{point}",
+      "Kind": "sum",
+      "Description": "Exact metric and log points emitted after cardinality limiting and handed to the OpenTelemetry SDK.",
+      "AttrKeys": [
+        "collector",
+        "ingest_transport",
+        "signal",
+        "tenant_id",
+        "traffic_class"
+      ]
+    },
+    {
       "Name": "graph2otel.otlp.delivery.degraded",
       "Unit": "1",
       "Kind": "gauge",
@@ -61,6 +88,24 @@
       "Unit": "{operation}",
       "Kind": "sum",
       "Description": "Exporter shutdown callbacks that returned an error since process start.",
+      "AttrKeys": [
+        "signal"
+      ]
+    },
+    {
+      "Name": "graph2otel.otlp.retry_attempts",
+      "Unit": "{retry}",
+      "Kind": "sum",
+      "Description": "Exact second-and-later exporter retry-loop attempts; excludes redirects and transparent connection retries.",
+      "AttrKeys": [
+        "signal"
+      ]
+    },
+    {
+      "Name": "graph2otel.otlp.transmitted_payload.bytes",
+      "Unit": "By",
+      "Kind": "sum",
+      "Description": "Exact post-compression OTLP payload bytes accepted by the client transport; excludes protocol and network framing.",
       "AttrKeys": [
         "signal"
       ]

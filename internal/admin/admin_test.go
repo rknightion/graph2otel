@@ -41,6 +41,23 @@ func (f fakeTelemetryStatus) Delivery() telemetry.DeliverySnapshot {
 	return f.delivery
 }
 
+type fakeCapacityTelemetryStatus struct {
+	fakeTelemetryStatus
+	volume     []telemetry.VolumeRow
+	transport  telemetry.OTLPTransportSnapshot
+	rawPayload string
+	endpoint   string
+	enforced   int
+}
+
+func (f fakeCapacityTelemetryStatus) Volume() []telemetry.VolumeRow {
+	return f.volume
+}
+func (f fakeCapacityTelemetryStatus) Transport() telemetry.OTLPTransportSnapshot {
+	return f.transport
+}
+func (f *fakeCapacityTelemetryStatus) EnforceBudget() { f.enforced++ }
+
 func TestSnapshot_RateLimitsLandOnRightTenant(t *testing.T) {
 	tr, reg := runOnceAndTrack(t, "devices", nil)
 	lim := fakeLimiter{headroom: []graphclient.WorkloadHeadroom{
@@ -305,6 +322,201 @@ func TestHandleStatusJSON_DeliveryProjectsIndependentBoundedSignals(t *testing.T
 		l.LastSuccessAt != "2026-07-26T10:02:00.123456789Z" ||
 		l.LastFailureAt != "" || l.LastFailureCode != "" {
 		t.Errorf("log delivery = %+v, want independent healthy snapshot", l)
+	}
+}
+
+func TestHandleStatusJSON_CapacityProjectsOnlyExactBoundedCounters(t *testing.T) {
+	const (
+		secret      = "Authorization: Bearer capacity-secret"
+		rawPayload  = `{"userPrincipalName":"secret@example.test"}`
+		endpointURL = "https://otlp.example.test/private-path"
+	)
+	provider := &fakeCapacityTelemetryStatus{
+		fakeTelemetryStatus: fakeTelemetryStatus{rawError: secret},
+		rawPayload:          rawPayload,
+		endpoint:            endpointURL,
+		volume: []telemetry.VolumeRow{
+			{
+				Attribution: telemetry.Attribution{
+					TenantID:     "tenant-a",
+					Collector:    "entra.signins",
+					Transport:    telemetry.TransportGraph,
+					TrafficClass: telemetry.TrafficClassSteadyState,
+				},
+				SourceRecords: 11,
+				MetricPoints:  3,
+				LogPoints:     7,
+			},
+			{
+				Attribution: telemetry.Attribution{
+					TenantID:     "tenant-b",
+					Collector:    "intune.devices",
+					Transport:    telemetry.TransportBlob,
+					TrafficClass: telemetry.TrafficClassColdStartBackfill,
+				},
+				SourceRecords: 5,
+				MetricPoints:  2,
+				LogPoints:     1,
+			},
+		},
+		transport: telemetry.OTLPTransportSnapshot{
+			Metrics: telemetry.OTLPTransportSignal{PayloadBytes: 1234, RetryAttempts: 2},
+			Logs:    telemetry.OTLPTransportSignal{PayloadBytes: 5678, RetryAttempts: 3},
+		},
+	}
+	cfg := &config.Config{}
+	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, nil, nil, nil, cfg, nil, provider)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/status.json", nil)
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /api/status.json status = %d, want %d", w.Code, http.StatusOK)
+	}
+	for _, forbidden := range []string{secret, rawPayload, endpointURL} {
+		if strings.Contains(w.Body.String(), forbidden) {
+			t.Errorf("capacity JSON retained forbidden provider data %q", forbidden)
+		}
+	}
+
+	var got struct {
+		Capacity *struct {
+			Volume []struct {
+				TenantID        string                 `json:"tenant_id"`
+				Collector       string                 `json:"collector"`
+				IngestTransport telemetry.Transport    `json:"ingest_transport"`
+				TrafficClass    telemetry.TrafficClass `json:"traffic_class"`
+				SourceRecords   uint64                 `json:"source_records"`
+				MetricPoints    uint64                 `json:"metric_points"`
+				LogPoints       uint64                 `json:"log_points"`
+			} `json:"volume"`
+			Transport struct {
+				Metrics struct {
+					TransmittedPayloadBytes uint64 `json:"transmitted_payload_bytes"`
+					RetryAttempts           uint64 `json:"retry_attempts"`
+				} `json:"metrics"`
+				Logs struct {
+					TransmittedPayloadBytes uint64 `json:"transmitted_payload_bytes"`
+					RetryAttempts           uint64 `json:"retry_attempts"`
+				} `json:"logs"`
+			} `json:"transport"`
+			Cost json.RawMessage `json:"cost"`
+		} `json:"capacity"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal capacity response: %v", err)
+	}
+	if got.Capacity == nil {
+		t.Fatal("capacity JSON is absent with a CapacitySource")
+	}
+	if len(got.Capacity.Volume) != 2 {
+		t.Fatalf("capacity volume rows = %+v, want two exact rows", got.Capacity.Volume)
+	}
+	first := got.Capacity.Volume[0]
+	if first.TenantID != "tenant-a" || first.Collector != "entra.signins" ||
+		first.IngestTransport != telemetry.TransportGraph ||
+		first.TrafficClass != telemetry.TrafficClassSteadyState ||
+		first.SourceRecords != 11 || first.MetricPoints != 3 || first.LogPoints != 7 {
+		t.Errorf("first capacity row = %+v, want exact cumulative counters", first)
+	}
+	if got.Capacity.Transport.Metrics.TransmittedPayloadBytes != 1234 ||
+		got.Capacity.Transport.Metrics.RetryAttempts != 2 ||
+		got.Capacity.Transport.Logs.TransmittedPayloadBytes != 5678 ||
+		got.Capacity.Transport.Logs.RetryAttempts != 3 {
+		t.Errorf("process transport = %+v, want exact cumulative totals", got.Capacity.Transport)
+	}
+	if len(got.Capacity.Cost) != 0 && string(got.Capacity.Cost) != "null" {
+		t.Errorf("cost JSON = %s, want absent/null while disabled", got.Capacity.Cost)
+	}
+	if provider.enforced != 0 {
+		t.Errorf("budget enforcement calls = %d, want 0", provider.enforced)
+	}
+}
+
+func TestHandleStatusJSON_CostPreservesSignalAllocationAndRecurringScopes(t *testing.T) {
+	sourceRate, metricRate, logRate, payloadRate := int64(1), int64(1), int64(1), int64(1)
+	provider := &fakeCapacityTelemetryStatus{
+		volume: []telemetry.VolumeRow{{
+			Attribution: telemetry.Attribution{
+				TenantID:     "tenant-a",
+				Collector:    "collector-a",
+				Transport:    telemetry.TransportGraph,
+				TrafficClass: telemetry.TrafficClassSteadyState,
+			},
+			SourceRecords: 10,
+			MetricPoints:  10,
+			LogPoints:     10,
+		}},
+		transport: telemetry.OTLPTransportSnapshot{
+			Metrics: telemetry.OTLPTransportSignal{PayloadBytes: 100},
+			Logs:    telemetry.OTLPTransportSignal{PayloadBytes: 200},
+		},
+	}
+	cfg := &config.Config{Cost: *testCostConfig(
+		2*time.Minute,
+		1000,
+		&sourceRate,
+		&metricRate,
+		&logRate,
+		&payloadRate,
+	)}
+	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, nil, nil, nil, cfg, nil, provider)
+	clk := newStepClock()
+	s.trend.now = clk.now
+	s.trend.sample()
+
+	provider.volume[0].SourceRecords = 11
+	provider.volume[0].MetricPoints = 13
+	provider.volume[0].LogPoints = 12
+	provider.transport.Metrics.PayloadBytes = 106
+	provider.transport.Logs.PayloadBytes = 204
+	clk.advance(2 * time.Minute)
+	s.trend.sample()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/status.json", nil)
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /api/status.json status = %d, want %d", w.Code, http.StatusOK)
+	}
+	var got struct {
+		Capacity struct {
+			Cost struct {
+				IntervalScope   string `json:"interval_scope"`
+				ProjectionScope string `json:"projection_scope"`
+				Rows            []struct {
+					Attribution                 string `json:"attribution"`
+					AllocatedMetricPayloadBytes uint64 `json:"allocated_metric_payload_bytes"`
+					AllocatedLogPayloadBytes    uint64 `json:"allocated_log_payload_bytes"`
+					AllocatedPayloadBytes       uint64 `json:"allocated_payload_bytes"`
+					IntervalMicrounits          uint64 `json:"interval_microunits"`
+					ProjectedPeriodMicrounits   uint64 `json:"projected_period_microunits"`
+				} `json:"rows"`
+			} `json:"cost"`
+		} `json:"capacity"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal capacity cost JSON: %v", err)
+	}
+	if got.Capacity.Cost.IntervalScope != "all_observed_traffic" ||
+		got.Capacity.Cost.ProjectionScope != "recurring_steady_state_only" {
+		t.Errorf("cost JSON scopes = %q/%q, want all-observed/recurring-steady",
+			got.Capacity.Cost.IntervalScope, got.Capacity.Cost.ProjectionScope)
+	}
+	if len(got.Capacity.Cost.Rows) != 1 {
+		t.Fatalf("cost JSON rows = %+v, want one", got.Capacity.Cost.Rows)
+	}
+	row := got.Capacity.Cost.Rows[0]
+	if row.Attribution != "estimated" ||
+		row.AllocatedMetricPayloadBytes != 6 ||
+		row.AllocatedLogPayloadBytes != 4 ||
+		row.AllocatedPayloadBytes != 10 ||
+		row.IntervalMicrounits == 0 ||
+		row.ProjectedPeriodMicrounits == 0 {
+		t.Errorf("cost JSON row = %+v, want auditable signal allocation and both costs", row)
+	}
+	if provider.enforced != 0 {
+		t.Errorf("budget enforcement calls = %d, want 0", provider.enforced)
 	}
 }
 

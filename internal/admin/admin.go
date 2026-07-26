@@ -47,6 +47,7 @@ type Server struct {
 	skipReasons map[SkipKey]string
 	limiter     RateLimiter
 	delivery    DeliverySource
+	capacity    CapacitySource
 	startedAt   time.Time
 	now         func() time.Time
 	refreshMs   int
@@ -97,14 +98,15 @@ type Server struct {
 //
 // tp is the emit-side throughput source for the Overview tab's throughput
 // trend (#227) — *telemetry.Provider satisfies it. When the same value also
-// implements DeliverySource, the status JSON and page expose the independent
-// exporter-callback snapshot. Nil leaves both surfaces empty and changes
-// nothing else.
+// implements DeliverySource and/or CapacitySource, the status JSON and page
+// expose those independent passive snapshots. Nil leaves those surfaces empty
+// and changes nothing else.
 func New(cfg config.AdminConfig, sources []CollectorSource, skipReasons map[SkipKey]string, limiter RateLimiter, fullCfg *config.Config, card *telemetry.CardinalityTracker, tp ThroughputSource) *Server {
 	if !cfg.Enabled {
 		return nil
 	}
 	delivery, _ := tp.(DeliverySource)
+	capacity, _ := tp.(CapacitySource)
 	refreshMs := int(cfg.RefreshInterval / time.Millisecond)
 	if refreshMs <= 0 {
 		refreshMs = 5000
@@ -114,6 +116,7 @@ func New(cfg config.AdminConfig, sources []CollectorSource, skipReasons map[Skip
 		skipReasons: skipReasons,
 		limiter:     limiter,
 		delivery:    delivery,
+		capacity:    capacity,
 		startedAt:   time.Now(),
 		now:         time.Now,
 		refreshMs:   refreshMs,
@@ -121,6 +124,10 @@ func New(cfg config.AdminConfig, sources []CollectorSource, skipReasons map[Skip
 		card:        card,
 	}
 	s.trend = newSampler(samplerHistoryLen, card, tp, sources, limiter, s.now)
+	s.trend.capacitySource = capacity
+	if fullCfg != nil {
+		s.trend.cost = &fullCfg.Cost
+	}
 	s.runSampler = s.trend.run
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealthz)
@@ -200,6 +207,14 @@ func (s *Server) snapshot() Status {
 	if s.delivery != nil {
 		delivery = deliveryStatusFrom(s.delivery.Delivery())
 	}
+	var capacity *CapacityStatus
+	if s.capacity != nil {
+		capacity = capacityStatusFrom(
+			s.capacity.Volume(),
+			s.capacity.Transport(),
+			s.trend.costInfo(),
+		)
+	}
 	return Status{
 		Service: ServiceInfo{
 			Version:   version.String(),
@@ -218,6 +233,7 @@ func (s *Server) snapshot() Status {
 		Throughput:    s.trend.throughputInfo(),
 		Fleet:         s.trend.fleetInfo(),
 		Delivery:      delivery,
+		Capacity:      capacity,
 		SeriesTrend:   s.trend.cardinalityTrend(),
 	}
 }

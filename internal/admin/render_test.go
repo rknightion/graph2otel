@@ -542,6 +542,115 @@ func TestRender_DeliveryBlockIsAbsentWithoutSource(t *testing.T) {
 	}
 }
 
+func TestRender_CapacityDistinguishesExactCountersFromEstimatedCost(t *testing.T) {
+	ratio := 0.5
+	body := renderString(t, Status{
+		Service: ServiceInfo{Version: "0.1.0"},
+		Health:  healthHealthy,
+		Capacity: &CapacityStatus{
+			Volume: []CapacityVolumeRow{{
+				TenantID:        "tenant-a",
+				Collector:       "entra.signins",
+				IngestTransport: telemetry.TransportGraph,
+				TrafficClass:    telemetry.TrafficClassSteadyState,
+				SourceRecords:   11,
+				MetricPoints:    3,
+				LogPoints:       7,
+			}},
+			Transport: CapacityTransportStatus{
+				Metrics: CapacityTransportSignalStatus{
+					TransmittedPayloadBytes: 1234,
+					RetryAttempts:           2,
+				},
+				Logs: CapacityTransportSignalStatus{
+					TransmittedPayloadBytes: 5678,
+					RetryAttempts:           3,
+				},
+			},
+			Cost: &CostStatus{
+				Currency:                  "GBP",
+				Version:                   "ops-2026-07",
+				Source:                    "internal-finops",
+				EffectiveAt:               "2026-07-26T00:00:00Z",
+				Period:                    "168h0m0s",
+				ObservedIntervalSeconds:   10,
+				ProjectedPeriodMicrounits: 500000,
+				BudgetMicrounits:          1000000,
+				BudgetRatio:               &ratio,
+				BudgetPercent:             50,
+				IntervalScope:             "all_observed_traffic",
+				ProjectionScope:           "recurring_steady_state_only",
+				Rows: []CostRowStatus{{
+					TenantID:                  "tenant-a",
+					Collector:                 "entra.signins",
+					IngestTransport:           "graph",
+					TrafficClass:              "steady_state",
+					Attribution:               "estimated",
+					AllocatedPayloadBytes:     6812,
+					IntervalMicrounits:        900000,
+					ProjectedPeriodMicrounits: 500000,
+				}, {
+					TenantID:                  "tenant-a",
+					Collector:                 "cold-backfill",
+					IngestTransport:           "blob",
+					TrafficClass:              "cold_start_backfill",
+					Attribution:               "estimated",
+					AllocatedPayloadBytes:     100,
+					IntervalMicrounits:        100000,
+					ProjectedPeriodMicrounits: 0,
+				}},
+			},
+		},
+	})
+
+	for _, want := range []string{
+		"Capacity",
+		"Exact cumulative counters",
+		"entra.signins",
+		"1234",
+		"5678",
+		"Estimate, not invoice",
+		"all observed traffic",
+		"recurring steady_state only",
+		"Observed interval cost",
+		"Recurring projected",
+		"estimated",
+		"cold-backfill",
+		"900000",
+		"100000",
+		"ops-2026-07",
+		"internal-finops",
+		"50%",
+		`id="costBudgetDetail"`,
+		"setText('costBudgetDetail'",
+		"d.capacity",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("capacity status page missing %q", want)
+		}
+	}
+}
+
+func TestRender_CostBlockIsAbsentWhenPricingDisabled(t *testing.T) {
+	body := renderString(t, Status{
+		Service: ServiceInfo{Version: "0.1.0"},
+		Health:  healthHealthy,
+		Capacity: &CapacityStatus{
+			Volume: []CapacityVolumeRow{{
+				TenantID:      "tenant-a",
+				Collector:     "entra.signins",
+				SourceRecords: 11,
+			}},
+		},
+	})
+	if !strings.Contains(body, "Exact cumulative counters") {
+		t.Errorf("exact capacity counters are absent when pricing is disabled")
+	}
+	if strings.Contains(body, "Estimate, not invoice") {
+		t.Errorf("pricing block rendered while cost is disabled")
+	}
+}
+
 // TestRender_ThrottleHeadroomSparkline asserts each throttle row carries its
 // headroom trend, so a bucket that is draining is visible as a slope and not
 // only as a single instantaneous percentage.

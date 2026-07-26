@@ -117,12 +117,43 @@ func newTelemetryProvider(ctx context.Context, cfg *config.Config, stdout io.Wri
 		InstanceID:     cfg.OTLP.GrafanaCloud.InstanceID,
 		Token:          cfg.OTLP.GrafanaCloud.Token.Reveal(),
 		SelfObsEnabled: true,
+		Cost:           costOptionsFromConfig(cfg.Cost),
 		Limits: telemetry.Limits{
 			PerMetric: cfg.Cardinality.PerMetricLimit,
 			Global:    cfg.Cardinality.GlobalLimit,
 		},
 		StdoutWriter: stdout,
 	})
+}
+
+func costOptionsFromConfig(cost config.CostConfig) telemetry.CostOptions {
+	return telemetry.CostOptions{
+		Enabled:      cost.Enabled,
+		Currency:     cost.Currency,
+		PriceVersion: cost.Version,
+		Period:       cost.Period,
+		Rates: telemetry.CostRates{
+			SourceRecordMicrounits: nonNegativeMicrounits(
+				cost.Rates.SourceRecord,
+			),
+			MetricPointMicrounits: nonNegativeMicrounits(
+				cost.Rates.MetricPoint,
+			),
+			LogRecordMicrounits: nonNegativeMicrounits(
+				cost.Rates.LogRecord,
+			),
+			TransmittedPayloadByteMicrounits: nonNegativeMicrounits(
+				cost.Rates.TransmittedPayloadByte,
+			),
+		},
+	}
+}
+
+func nonNegativeMicrounits(rate *int64) uint64 {
+	if rate == nil || *rate < 0 {
+		return 0
+	}
+	return uint64(*rate)
 }
 
 var buildTelemetryProvider = newTelemetryProvider

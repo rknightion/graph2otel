@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collector"
+	"github.com/rknightion/graph2otel/internal/config"
 	"github.com/rknightion/graph2otel/internal/graphclient"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
@@ -16,6 +17,22 @@ import (
 type fakeThroughput struct{ tp telemetry.Throughput }
 
 func (f *fakeThroughput) Throughput() telemetry.Throughput { return f.tp }
+
+type fakeCapacity struct {
+	volume    []telemetry.VolumeRow
+	transport telemetry.OTLPTransportSnapshot
+	enforced  int
+}
+
+func (f *fakeCapacity) Volume() []telemetry.VolumeRow {
+	return f.volume
+}
+
+func (f *fakeCapacity) Transport() telemetry.OTLPTransportSnapshot {
+	return f.transport
+}
+
+func (f *fakeCapacity) EnforceBudget() { f.enforced++ }
 
 // stepClock is a manually advanced clock so rate differencing is exact rather
 // than dependent on how long the test took to run.
@@ -91,6 +108,278 @@ func TestSamplerThroughputRates(t *testing.T) {
 	}
 	if tp.MetricPointsTotal != 1 || tp.LogRecordsTotal != 0 {
 		t.Errorf("totals = %d/%d, want 1/0", tp.MetricPointsTotal, tp.LogRecordsTotal)
+	}
+}
+
+func TestSamplerCostRetainsBaselineUntilTwoCompleteMetricIntervals(t *testing.T) {
+	sourceRate := int64(1)
+	cfg := testCostConfig(2*time.Minute, 0, &sourceRate, nil, nil, nil)
+	clk := newStepClock()
+	src := &fakeCapacity{
+		volume: []telemetry.VolumeRow{{
+			Attribution: telemetry.Attribution{
+				TenantID:     "tenant-a",
+				Collector:    "collector-a",
+				Transport:    telemetry.TransportGraph,
+				TrafficClass: telemetry.TrafficClassSteadyState,
+			},
+			SourceRecords: 100,
+		}},
+	}
+	s := newSampler(samplerHistoryLen, nil, nil, nil, nil, clk.now)
+	s.capacitySource = src
+	s.cost = cfg
+
+	s.sample()
+
+	src.volume[0].SourceRecords = 102
+	clk.advance(10 * time.Second)
+	s.sample()
+	if got := s.costInfo(); got == nil ||
+		got.ObservedIntervalSeconds != 0 ||
+		got.ProjectedPeriodMicrounits != 0 ||
+		len(got.Rows) != 0 {
+		t.Fatalf("10s cost projection = %+v, want metadata only before 120s", got)
+	}
+
+	src.volume[0].SourceRecords = 105
+	clk.advance(109 * time.Second)
+	s.sample()
+	if got := s.costInfo(); got == nil ||
+		got.ObservedIntervalSeconds != 0 ||
+		got.ProjectedPeriodMicrounits != 0 ||
+		len(got.Rows) != 0 {
+		t.Fatalf("119s cost projection = %+v, want metadata only before 120s", got)
+	}
+
+	src.volume[0].SourceRecords = 106
+	clk.advance(time.Second)
+	s.sample()
+	got := s.costInfo()
+	if got == nil {
+		t.Fatal("cost projection is nil after a complete 120s observation")
+	}
+	if got.ObservedIntervalSeconds != 120 ||
+		got.IntervalMicrounits != 6 ||
+		got.ProjectedPeriodMicrounits != 6 {
+		t.Errorf("mature cost totals = %+v, want retained-baseline 120s / 6 / 6", got)
+	}
+	if len(got.Rows) != 1 || got.Rows[0].IntervalMicrounits != 6 {
+		t.Errorf("mature cost rows = %+v, want all six records since baseline", got.Rows)
+	}
+	if src.enforced != 0 {
+		t.Errorf("budget enforcement calls = %d, want 0", src.enforced)
+	}
+}
+
+func TestSamplerCostProjectsRecurringSteadyStateButRetainsExceptionalIntervalCost(t *testing.T) {
+	sourceRate := int64(10)
+	cfg := testCostConfig(4*time.Minute, 80, &sourceRate, nil, nil, nil)
+	clk := newStepClock()
+	src := &fakeCapacity{volume: []telemetry.VolumeRow{
+		{
+			Attribution: telemetry.Attribution{
+				TenantID:     "tenant-a",
+				Collector:    "steady",
+				Transport:    telemetry.TransportGraph,
+				TrafficClass: telemetry.TrafficClassSteadyState,
+			},
+			SourceRecords: 10,
+		},
+		{
+			Attribution: telemetry.Attribution{
+				TenantID:     "tenant-a",
+				Collector:    "cold",
+				Transport:    telemetry.TransportBlob,
+				TrafficClass: telemetry.TrafficClassColdStartBackfill,
+			},
+			SourceRecords: 20,
+		},
+	}}
+	s := newSampler(samplerHistoryLen, nil, nil, nil, nil, clk.now)
+	s.capacitySource = src
+	s.cost = cfg
+	s.sample()
+
+	src.volume[0].SourceRecords = 11
+	src.volume[1].SourceRecords = 21
+	clk.advance(time.Minute)
+	s.sample()
+	if got := s.costInfo(); got == nil || got.ObservedIntervalSeconds != 0 {
+		t.Fatalf("60s cost projection = %+v, want no projection before 120s", got)
+	}
+
+	src.volume[0].SourceRecords = 12
+	src.volume[1].SourceRecords = 23
+	clk.advance(time.Minute)
+	s.sample()
+
+	got := s.costInfo()
+	if got == nil {
+		t.Fatal("cost projection is nil after a mature mixed interval")
+	}
+	if got.ObservedIntervalSeconds != 120 ||
+		got.IntervalMicrounits != 50 ||
+		got.ProjectedPeriodMicrounits != 40 {
+		t.Errorf("mixed cost totals = %+v, want all-traffic interval 50 / recurring steady projection 40", got)
+	}
+	if got.ProjectionScope != "recurring_steady_state_only" ||
+		got.IntervalScope != "all_observed_traffic" {
+		t.Errorf("cost scopes = %q/%q, want explicit recurring/all-observed semantics",
+			got.ProjectionScope, got.IntervalScope)
+	}
+	if got.BudgetMicrounits != 80 || got.BudgetRatio == nil || *got.BudgetRatio != 0.5 {
+		t.Errorf("budget projection = budget %d ratio %v, want 80 / 0.5",
+			got.BudgetMicrounits, got.BudgetRatio)
+	}
+	if len(got.Rows) != 2 {
+		t.Fatalf("mixed cost rows = %+v, want steady and cold rows", got.Rows)
+	}
+	byCollector := map[string]CostRowStatus{}
+	for _, row := range got.Rows {
+		byCollector[row.Collector] = row
+	}
+	if row := byCollector["steady"]; row.IntervalMicrounits != 20 ||
+		row.ProjectedPeriodMicrounits != 40 {
+		t.Errorf("steady row = %+v, want interval 20 / recurring projected 40", row)
+	}
+	if row := byCollector["cold"]; row.IntervalMicrounits != 30 ||
+		row.ProjectedPeriodMicrounits != 0 {
+		t.Errorf("cold row = %+v, want interval 30 / recurring projected 0", row)
+	}
+	if src.enforced != 0 {
+		t.Errorf("budget enforcement calls = %d, want 0", src.enforced)
+	}
+}
+
+func TestSamplerCostUsesRollingActualElapsedHistoryAndRetainsMatureProjection(t *testing.T) {
+	sourceRate := int64(1)
+	cfg := testCostConfig(10*time.Minute, 0, &sourceRate, nil, nil, nil)
+	clk := newStepClock()
+	src := &fakeCapacity{volume: []telemetry.VolumeRow{{
+		Attribution: telemetry.Attribution{
+			TenantID:     "tenant-a",
+			Collector:    "steady",
+			Transport:    telemetry.TransportGraph,
+			TrafficClass: telemetry.TrafficClassSteadyState,
+		},
+	}}}
+	s := newSampler(samplerHistoryLen, nil, nil, nil, nil, clk.now)
+	s.capacitySource = src
+	s.cost = cfg
+	s.sample()
+
+	src.volume[0].SourceRecords = 2
+	clk.advance(2 * time.Minute)
+	s.sample()
+	if got := s.costInfo(); got == nil ||
+		got.ObservedIntervalSeconds != 120 ||
+		got.IntervalMicrounits != 2 ||
+		got.ProjectedPeriodMicrounits != 10 {
+		t.Fatalf("120s projection = %+v, want 2 records projected to 10", got)
+	}
+
+	src.volume[0].SourceRecords = 3
+	clk.advance(30 * time.Second)
+	s.sample()
+	if got := s.costInfo(); got == nil ||
+		got.ObservedIntervalSeconds != 120 ||
+		got.IntervalMicrounits != 2 {
+		t.Fatalf("sub-minute refresh = %+v, want last mature projection retained", got)
+	}
+
+	clk.advance(30 * time.Second)
+	s.sample()
+	if got := s.costInfo(); got == nil ||
+		got.ObservedIntervalSeconds != 180 ||
+		got.IntervalMicrounits != 3 ||
+		got.ProjectedPeriodMicrounits != 10 {
+		t.Fatalf("180s rolling projection = %+v, want original baseline and actual elapsed history", got)
+	}
+
+	// A non-forward sample is invalid. It must retain the last mature
+	// projection rather than clearing operator visibility.
+	src.volume[0].SourceRecords = 100
+	s.sample()
+	if got := s.costInfo(); got == nil ||
+		got.ObservedIntervalSeconds != 180 ||
+		got.IntervalMicrounits != 3 {
+		t.Fatalf("invalid-sample projection = %+v, want last mature projection retained", got)
+	}
+
+	src.volume[0].SourceRecords = 12
+	clk.advance(9 * time.Minute)
+	s.sample()
+	if got := s.costInfo(); got == nil ||
+		got.ObservedIntervalSeconds != 600 ||
+		got.IntervalMicrounits != 10 ||
+		got.ProjectedPeriodMicrounits != 10 {
+		t.Fatalf("10m rolling projection = %+v, want history capped at baseline t=120s", got)
+	}
+
+	// A gap beyond the rolling horizon leaves only a new baseline. Keep the
+	// last mature projection visible until that baseline has aged 120 seconds.
+	src.volume[0].SourceRecords = 13
+	clk.advance(20 * time.Minute)
+	s.sample()
+	if got := s.costInfo(); got == nil ||
+		got.ObservedIntervalSeconds != 600 ||
+		got.IntervalMicrounits != 10 ||
+		got.ProjectedPeriodMicrounits != 10 {
+		t.Fatalf("post-gap projection = %+v, want last mature projection retained", got)
+	}
+	if src.enforced != 0 {
+		t.Errorf("budget enforcement calls = %d, want 0", src.enforced)
+	}
+}
+
+func TestSamplerCostDisabledProducesNoPricingProjection(t *testing.T) {
+	clk := newStepClock()
+	src := &fakeCapacity{
+		volume: []telemetry.VolumeRow{{
+			Attribution: telemetry.Attribution{
+				TenantID:     "tenant-a",
+				Collector:    "collector-a",
+				Transport:    telemetry.TransportGraph,
+				TrafficClass: telemetry.TrafficClassSteadyState,
+			},
+			SourceRecords: 10,
+		}},
+	}
+	s := newSampler(samplerHistoryLen, nil, nil, nil, nil, clk.now)
+	s.capacitySource = src
+	s.cost = &config.CostConfig{Enabled: false}
+	s.sample()
+	clk.advance(10 * time.Second)
+	s.sample()
+
+	if got := s.costInfo(); got != nil {
+		t.Errorf("cost projection = %+v, want nil while cost is disabled", got)
+	}
+	if src.enforced != 0 {
+		t.Errorf("budget enforcement calls = %d, want 0", src.enforced)
+	}
+}
+
+func testCostConfig(
+	period time.Duration,
+	budget int64,
+	sourceRecord, metricPoint, logRecord, payloadByte *int64,
+) *config.CostConfig {
+	return &config.CostConfig{
+		Enabled:     true,
+		Currency:    "GBP",
+		Version:     "ops-2026-07",
+		Source:      "internal-finops",
+		EffectiveAt: "2026-07-26T00:00:00Z",
+		Period:      period,
+		Rates: config.CostRatesConfig{
+			SourceRecord:           sourceRecord,
+			MetricPoint:            metricPoint,
+			LogRecord:              logRecord,
+			TransmittedPayloadByte: payloadByte,
+		},
+		BudgetMicrounits: budget,
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rknightion/graph2otel/internal/config"
 	"github.com/rknightion/graph2otel/internal/ringbuf"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -17,8 +18,11 @@ import (
 // sibling exporters (opnsense-exporter, tailscale2otel) so a operator reading
 // two of these pages side by side is reading the same window.
 const (
-	samplerInterval   = 10 * time.Second
-	samplerHistoryLen = 60
+	samplerInterval        = 10 * time.Second
+	samplerHistoryLen      = 60
+	costMinimumObservation = 2 * time.Minute
+	costHistoryWindow      = samplerInterval * samplerHistoryLen
+	costProjectionRefresh  = time.Minute
 )
 
 // ThroughputSource reports cumulative emitted-record totals for the throughput
@@ -52,6 +56,12 @@ type latest struct {
 	meanDurMs   float64
 }
 
+type costObservation struct {
+	at        time.Time
+	volume    []telemetry.VolumeRow
+	transport telemetry.OTLPTransportSnapshot
+}
+
 // sampler holds the admin page's short-term in-memory trends: the Go runtime,
 // emitted throughput, active series, collector fleet health, and per-workload
 // throttle headroom. It is introspection only — nothing here is ever emitted
@@ -66,6 +76,9 @@ type sampler struct {
 	sources  []CollectorSource
 	limiter  RateLimiter
 	capacity int
+
+	capacitySource CapacitySource
+	cost           *config.CostConfig
 
 	goroutines  *ringbuf.Ring[int]
 	heapAlloc   *ringbuf.Ring[uint64]
@@ -92,6 +105,11 @@ type sampler struct {
 	prevNumGC   uint32
 	prevMetrics uint64
 	prevLogs    uint64
+
+	costObservations     []costObservation
+	costProjection       telemetry.CostProjection
+	hasCostProjection    bool
+	lastCostProjectionAt time.Time
 }
 
 // newSampler builds a sampler retaining capacity observations per series. Every
@@ -186,6 +204,7 @@ func (s *sampler) sample() {
 	s.meanDurMs.Add(meanDurMs)
 
 	s.sampleHeadroom(at)
+	s.sampleCost(at)
 
 	s.mu.Lock()
 	s.last = latest{
@@ -210,6 +229,119 @@ func (s *sampler) sample() {
 	s.prevNumGC = ms.NumGC
 	s.prevMetrics = tp.MetricPoints
 	s.prevLogs = tp.LogRecords
+}
+
+func (s *sampler) sampleCost(at time.Time) {
+	if s == nil || s.capacitySource == nil || s.cost == nil || !s.cost.Enabled {
+		return
+	}
+	if len(s.costObservations) > 0 &&
+		!at.After(s.costObservations[len(s.costObservations)-1].at) {
+		return
+	}
+
+	current := costObservation{
+		at:        at,
+		volume:    append([]telemetry.VolumeRow(nil), s.capacitySource.Volume()...),
+		transport: s.capacitySource.Transport(),
+	}
+	s.costObservations = append(s.costObservations, current)
+
+	cutoff := at.Add(-costHistoryWindow)
+	for len(s.costObservations) > 1 && s.costObservations[0].at.Before(cutoff) {
+		s.costObservations = s.costObservations[1:]
+	}
+
+	if len(s.costObservations) < 2 {
+		return
+	}
+	baseline := s.costObservations[0]
+	elapsed := at.Sub(baseline.at)
+	if elapsed < costMinimumObservation {
+		return
+	}
+	// Capacity snapshots still join the 10-second history so the rolling
+	// baseline stays close to ten minutes, but a cost estimate changes no more
+	// often than the 60-second metric export cadence it is modeling.
+	if s.hasCostProjection && at.Sub(s.lastCostProjectionAt) < costProjectionRefresh {
+		return
+	}
+
+	projection, err := telemetry.ProjectCosts(
+		deltaVolumeRows(current.volume, volumeRowsByAttribution(baseline.volume)),
+		deltaTransportSnapshot(current.transport, baseline.transport),
+		costRatesFromConfig(s.cost.Rates),
+		elapsed,
+		s.cost.Period,
+	)
+	if err != nil {
+		return
+	}
+
+	s.mu.Lock()
+	s.costProjection = projection
+	s.hasCostProjection = true
+	s.lastCostProjectionAt = at
+	s.mu.Unlock()
+}
+
+func volumeRowsByAttribution(rows []telemetry.VolumeRow) map[telemetry.Attribution]telemetry.VolumeRow {
+	byAttribution := make(map[telemetry.Attribution]telemetry.VolumeRow, len(rows))
+	for _, row := range rows {
+		byAttribution[row.Attribution] = row
+	}
+	return byAttribution
+}
+
+func deltaVolumeRows(
+	current []telemetry.VolumeRow,
+	previous map[telemetry.Attribution]telemetry.VolumeRow,
+) []telemetry.VolumeRow {
+	rows := make([]telemetry.VolumeRow, 0, len(current))
+	for _, row := range current {
+		prev := previous[row.Attribution]
+		delta := telemetry.VolumeRow{
+			Attribution:   row.Attribution,
+			SourceRecords: deltaU64(row.SourceRecords, prev.SourceRecords),
+			MetricPoints:  deltaU64(row.MetricPoints, prev.MetricPoints),
+			LogPoints:     deltaU64(row.LogPoints, prev.LogPoints),
+		}
+		if delta.SourceRecords != 0 || delta.MetricPoints != 0 || delta.LogPoints != 0 {
+			rows = append(rows, delta)
+		}
+	}
+	return rows
+}
+
+func deltaTransportSnapshot(
+	current, previous telemetry.OTLPTransportSnapshot,
+) telemetry.OTLPTransportSnapshot {
+	return telemetry.OTLPTransportSnapshot{
+		Metrics: telemetry.OTLPTransportSignal{
+			PayloadBytes:  deltaU64(current.Metrics.PayloadBytes, previous.Metrics.PayloadBytes),
+			RetryAttempts: deltaU64(current.Metrics.RetryAttempts, previous.Metrics.RetryAttempts),
+		},
+		Logs: telemetry.OTLPTransportSignal{
+			PayloadBytes:  deltaU64(current.Logs.PayloadBytes, previous.Logs.PayloadBytes),
+			RetryAttempts: deltaU64(current.Logs.RetryAttempts, previous.Logs.RetryAttempts),
+		},
+	}
+}
+
+func costRatesFromConfig(rates config.CostRatesConfig) telemetry.CostRates {
+	return telemetry.CostRates{
+		SourceRecordMicrounits:           nonNegativeCostRate(rates.SourceRecord),
+		MetricPointMicrounits:            nonNegativeCostRate(rates.MetricPoint),
+		LogRecordMicrounits:              nonNegativeCostRate(rates.LogRecord),
+		TransmittedPayloadByteMicrounits: nonNegativeCostRate(rates.TransmittedPayloadByte),
+	}
+}
+
+func nonNegativeCostRate(rate *int64) uint64 {
+	if rate == nil || *rate < 0 {
+		return 0
+	}
+	return uint64(*rate)
 }
 
 // aggregateFleet rolls every tenant's collectors into fleet-wide counts: how
@@ -305,6 +437,72 @@ func (s *sampler) throughputInfo() ThroughputInfo {
 		MetricPointsSeries: s.metricRate.Values(),
 		LogRecordsSeries:   s.logRate.Values(),
 	}
+}
+
+// costInfo returns operator-supplied metadata and the latest interval
+// projection. It is nil while pricing is disabled. A configured budget is
+// compared for display only; this method has no control-plane dependency.
+func (s *sampler) costInfo() *CostStatus {
+	if s == nil || s.cost == nil || !s.cost.Enabled {
+		return nil
+	}
+	s.mu.Lock()
+	projection := s.costProjection
+	hasProjection := s.hasCostProjection
+	s.mu.Unlock()
+
+	rates := costRatesFromConfig(s.cost.Rates)
+	status := &CostStatus{
+		Currency:        s.cost.Currency,
+		Version:         s.cost.Version,
+		Source:          s.cost.Source,
+		EffectiveAt:     s.cost.EffectiveAt,
+		Period:          s.cost.Period.String(),
+		IntervalScope:   costIntervalScope,
+		ProjectionScope: costProjectionScope,
+		Rates: CostRatesStatus{
+			SourceRecordMicrounits:           rates.SourceRecordMicrounits,
+			MetricPointMicrounits:            rates.MetricPointMicrounits,
+			LogRecordMicrounits:              rates.LogRecordMicrounits,
+			TransmittedPayloadByteMicrounits: rates.TransmittedPayloadByteMicrounits,
+		},
+	}
+	if s.cost.BudgetMicrounits > 0 {
+		status.BudgetMicrounits = uint64(s.cost.BudgetMicrounits)
+	}
+	if !hasProjection {
+		return status
+	}
+
+	status.ObservedIntervalSeconds = projection.ObservedInterval.Seconds()
+	status.IntervalMicrounits = projection.IntervalMicrounits
+	status.ProjectedPeriodMicrounits = projection.ProjectedMicrounits
+	status.Rows = make([]CostRowStatus, 0, len(projection.Rows))
+	for _, row := range projection.Rows {
+		status.Rows = append(status.Rows, CostRowStatus{
+			TenantID:                    row.TenantID,
+			Collector:                   row.Collector,
+			IngestTransport:             row.IngestTransport,
+			TrafficClass:                row.TrafficClass,
+			Attribution:                 row.Attribution,
+			SourceRecordCostMicrounits:  row.SourceRecordCostMicrounits,
+			MetricPointCostMicrounits:   row.MetricPointCostMicrounits,
+			LogRecordCostMicrounits:     row.LogRecordCostMicrounits,
+			AllocatedMetricPayloadBytes: row.AllocatedMetricPayloadBytes,
+			AllocatedLogPayloadBytes:    row.AllocatedLogPayloadBytes,
+			AllocatedPayloadBytes:       row.AllocatedPayloadBytes,
+			PayloadCostMicrounits:       row.PayloadCostMicrounits,
+			IntervalMicrounits:          row.IntervalMicrounits,
+			ProjectedPeriodMicrounits:   row.ProjectedMicrounits,
+		})
+	}
+	if status.BudgetMicrounits > 0 {
+		ratio := float64(status.ProjectedPeriodMicrounits) /
+			float64(status.BudgetMicrounits)
+		status.BudgetRatio = &ratio
+		status.BudgetPercent = ratio * 100
+	}
+	return status
 }
 
 // fleetInfo returns the fleet-wide collector roll-up plus its trends.

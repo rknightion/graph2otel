@@ -290,6 +290,103 @@ class TestOTLPDeliveryPanels(unittest.TestCase):
                 self.assertIn(phrase, docs)
 
 
+class TestCapacityAndCostPanels(unittest.TestCase):
+    def setUp(self):
+        self.board = next(b for name, b in BUILT
+                          if name == "graph2otel-self-observability.json")
+        self.panels = {
+            item["spec"]["title"]: item["spec"]
+            for item in self.board._panels
+            if item.get("spec")
+        }
+
+    def test_exact_collector_volume_preserves_bounded_attribution(self):
+        source = self.panels[
+            "Exact source-record rate by collector and traffic class"
+        ]
+        self.assertIn(
+            "sum by (tenant_id, collector, ingest_transport, traffic_class)",
+            source["targets"][0]["expr"],
+        )
+        self.assertIn(
+            "graph2otel_ingest_source_records_total",
+            source["targets"][0]["expr"],
+        )
+        self.assertIn("exact", source["description"].lower())
+
+        points = self.panels[
+            "Exact emitted-point rate by collector, signal and traffic class"
+        ]
+        self.assertIn(
+            "sum by (tenant_id, collector, ingest_transport, signal, traffic_class)",
+            points["targets"][0]["expr"],
+        )
+        self.assertIn(
+            "graph2otel_ingest_emitted_points_total",
+            points["targets"][0]["expr"],
+        )
+        self.assertIn("after the central limiter", points["description"].lower())
+
+    def test_exact_transport_panels_are_process_wide_and_preserve_signal(self):
+        expected = {
+            "Exact transmitted OTLP payload rate by signal":
+                "graph2otel_otlp_transmitted_payload_bytes_total",
+            "Exact exporter retry rate by signal":
+                "graph2otel_otlp_retry_attempts_total",
+        }
+        for title, metric in expected.items():
+            with self.subTest(panel=title):
+                panel = self.panels[title]
+                expr = panel["targets"][0]["expr"]
+                self.assertIn(metric, expr)
+                self.assertIn("sum by (signal) (rate(", expr)
+                self.assertNotIn(TENANT_SEL, expr)
+                self.assertNotIn("$tenant", expr)
+                self.assertNotIn("tenant_id", expr)
+                self.assertNotIn("$collector", expr)
+                self.assertNotIn("collector", expr)
+
+    def test_transport_byte_panel_states_the_exact_boundary(self):
+        desc = self.panels[
+            "Exact transmitted OTLP payload rate by signal"
+        ]["description"].lower()
+        self.assertIn("post-compression", desc)
+        self.assertIn("excludes", desc)
+        self.assertIn("framing", desc)
+
+    def test_cost_panel_is_explicitly_estimated_and_optional(self):
+        title = "Estimated projected collector cost (configured period)"
+        panel = self.panels[title]
+        self.assertIn("estimated", title.lower())
+        self.assertIn("estimate, not invoice", panel["description"].lower())
+        self.assertIn(
+            "max by (tenant_id, collector, ingest_transport, currency, "
+            "price_version, attribution)",
+            panel["targets"][0]["expr"],
+        )
+        self.assertIn(
+            "graph2otel_ingest_cost_projected",
+            panel["targets"][0]["expr"],
+        )
+        self.assertIn('attribution="estimated"', panel["targets"][0]["expr"])
+        self.assertNotIn("budget", panel["targets"][0]["expr"].lower())
+
+    def test_capacity_and_cost_add_no_alert_or_recording_rule(self):
+        rendered = json.dumps({
+            "alerts": build_rules.RULES,
+            "recording": build_rules.RECORDING,
+        })
+        for metric in [
+            "graph2otel_ingest_source_records",
+            "graph2otel_ingest_emitted_points",
+            "graph2otel_otlp_transmitted_payload",
+            "graph2otel_otlp_retry_attempts",
+            "graph2otel_ingest_cost_projected",
+        ]:
+            with self.subTest(metric=metric):
+                self.assertNotIn(metric, rendered)
+
+
 class TestCollectorAvailabilityPanels(unittest.TestCase):
     def setUp(self):
         board = next(b for name, b in BUILT

@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -235,6 +236,44 @@ func TestCanonicalBuildVersionReachesProviderResourceAndAdmin(t *testing.T) {
 	}
 	if got := status.Service.Version; got != wantVersion {
 		t.Errorf("admin version = %q, want canonical version %q", got, wantVersion)
+	}
+}
+
+func TestCostOptionsFromConfigPreservesValidatedExplicitRates(t *testing.T) {
+	source := int64(0)
+	metric := int64(2)
+	logRecord := int64(3)
+	payload := int64(4)
+	got := costOptionsFromConfig(config.CostConfig{
+		Enabled:  true,
+		Currency: "GBP",
+		Version:  "ops-2026-07",
+		Period:   30 * 24 * time.Hour,
+		Rates: config.CostRatesConfig{
+			SourceRecord:           &source,
+			MetricPoint:            &metric,
+			LogRecord:              &logRecord,
+			TransmittedPayloadByte: &payload,
+		},
+	})
+	want := telemetry.CostOptions{
+		Enabled:      true,
+		Currency:     "GBP",
+		PriceVersion: "ops-2026-07",
+		Period:       30 * 24 * time.Hour,
+		Rates: telemetry.CostRates{
+			SourceRecordMicrounits:           0,
+			MetricPointMicrounits:            2,
+			LogRecordMicrounits:              3,
+			TransmittedPayloadByteMicrounits: 4,
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("cost options = %+v, want %+v", got, want)
+	}
+
+	if disabled := costOptionsFromConfig(config.CostConfig{}); disabled.Enabled {
+		t.Fatalf("disabled cost options = %+v, want disabled", disabled)
 	}
 }
 

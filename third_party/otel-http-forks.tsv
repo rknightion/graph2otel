@@ -1,0 +1,3 @@
+# module	version	license	source	local_dir	modified_files
+go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp	v1.44.0	Apache-2.0	https://github.com/open-telemetry/opentelemetry-go/tree/b62d92831b2dd142f5a0cc89c828270274196877/exporters/otlp/otlpmetric/otlpmetrichttp	third_party/otlpmetrichttp	client.go,config.go,go.mod,go.sum,internal/oconf/options.go,request_observer_test.go
+go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp	v0.20.0	Apache-2.0	https://github.com/open-telemetry/opentelemetry-go/tree/b62d92831b2dd142f5a0cc89c828270274196877/exporters/otlp/otlplog/otlploghttp	third_party/otlploghttp	client.go,config.go,go.mod,go.sum,request_observer_test.go

@@ -194,6 +194,44 @@
       </div>
     </div>
     {{end}}
+
+    {{with .Capacity}}
+    <div class="sub-h">Capacity <span class="tsum">Exact cumulative counters</span></div>
+    <div class="cards" id="capacityStatus">
+      <div class="card"><div class="k">Metrics transmitted payload</div><div class="v" id="capacityMetricBytes">{{.Transport.Metrics.TransmittedPayloadBytes}}</div><div class="sub">post-compression bytes &middot; <span id="capacityMetricRetries">{{.Transport.Metrics.RetryAttempts}}</span> exporter retries</div></div>
+      <div class="card"><div class="k">Logs transmitted payload</div><div class="v" id="capacityLogBytes">{{.Transport.Logs.TransmittedPayloadBytes}}</div><div class="sub">post-compression bytes &middot; <span id="capacityLogRetries">{{.Transport.Logs.RetryAttempts}}</span> exporter retries</div></div>
+    </div>
+    <table id="capacityVolume">
+      <thead><tr><th>Tenant</th><th>Collector</th><th>Transport</th><th>Traffic class</th><th class="num">Source records</th><th class="num">Metric points</th><th class="num">Log points</th></tr></thead>
+      <tbody id="capacityVolumeBody">
+      {{range .Volume}}
+        <tr><td><code>{{.TenantID}}</code></td><td><code>{{.Collector}}</code></td><td>{{.IngestTransport}}</td><td>{{.TrafficClass}}</td><td class="num">{{.SourceRecords}}</td><td class="num">{{.MetricPoints}}</td><td class="num">{{.LogPoints}}</td></tr>
+      {{else}}
+        <tr><td colspan="7" class="muted">No attributed volume recorded yet.</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+
+    {{with .Cost}}
+    <div class="sub-h">Estimate, not invoice <span class="tsum">operator-supplied pricing; observational only</span></div>
+    <p class="muted">Observed interval cost includes all observed traffic. Period projection and budget ratio include recurring steady_state only.</p>
+    <div class="cards" id="costStatus">
+      <div class="card"><div class="k">Recurring projected {{.Period}}</div><div class="v" id="costProjected">{{.ProjectedPeriodMicrounits}}</div><div class="sub">{{.Currency}} microunits &middot; <span id="costInterval">{{.IntervalMicrounits}}</span> observed interval cost across all traffic</div></div>
+      <div class="card"><div class="k">Budget ratio</div><div class="v" id="costBudget">{{if .BudgetRatio}}{{printf "%.0f" .BudgetPercent}}%{{else}}&mdash;{{end}}</div><div class="sub" id="costBudgetDetail">recurring steady_state only &middot; {{if .BudgetRatio}}{{.ProjectedPeriodMicrounits}} / {{.BudgetMicrounits}} microunits{{else if .BudgetMicrounits}}collecting the first estimate{{else}}no budget comparison configured{{end}}</div></div>
+      <div class="card"><div class="k">Price metadata</div><div class="v mono" style="font-size:14px">{{.Version}}</div><div class="sub">{{.Source}} &middot; effective {{.EffectiveAt}}</div></div>
+    </div>
+    <table id="capacityCost">
+      <thead><tr><th>Tenant</th><th>Collector</th><th>Transport</th><th>Traffic class</th><th>Attribution</th><th class="num">Allocated payload bytes</th><th class="num">Observed interval cost</th><th class="num">Recurring projected {{.Period}}</th></tr></thead>
+      <tbody id="capacityCostBody">
+      {{range .Rows}}
+        <tr><td><code>{{.TenantID}}</code></td><td><code>{{.Collector}}</code></td><td>{{.IngestTransport}}</td><td>{{.TrafficClass}}</td><td><span class="badge warn">{{.Attribution}}</span></td><td class="num">{{.AllocatedPayloadBytes}}</td><td class="num">{{.IntervalMicrounits}}</td><td class="num">{{.ProjectedPeriodMicrounits}}</td></tr>
+      {{else}}
+        <tr><td colspan="8" class="muted">Collecting two complete metric intervals for the first estimate.</td></tr>
+      {{end}}
+      </tbody>
+    </table>
+    {{end}}
+    {{end}}
   </section>
 
   <!-- ═══ COLLECTORS ═══ -->
@@ -585,6 +623,54 @@ function updateDelivery(d){
     if(failure) failure.textContent='last failure '+(signal.last_failure_at||'—')+(signal.last_failure_code?' · '+signal.last_failure_code:'');
   });
 }
+function rebuildCapacity(c){
+  if(!c || !document.getElementById('capacityStatus')) return;
+  setText('capacityMetricBytes',c.transport.metrics.transmitted_payload_bytes);
+  setText('capacityMetricRetries',c.transport.metrics.retry_attempts);
+  setText('capacityLogBytes',c.transport.logs.transmitted_payload_bytes);
+  setText('capacityLogRetries',c.transport.logs.retry_attempts);
+  var volume=document.getElementById('capacityVolumeBody');
+  if(volume){
+    volume.textContent='';
+    (c.volume||[]).forEach(function(r){
+      var tr=el('tr');
+      [r.tenant_id,r.collector,r.ingest_transport,r.traffic_class,r.source_records,r.metric_points,r.log_points].forEach(function(v,i){
+        var td=el('td',i>=4?{'class':'num'}:null);
+        if(i<2) td.appendChild(el('code',null,String(v))); else td.textContent=String(v);
+        tr.appendChild(td);
+      });
+      volume.appendChild(tr);
+    });
+    if(!c.volume || !c.volume.length){ var empty=el('tr'); empty.appendChild(el('td',{'colspan':'7','class':'muted'},'No attributed volume recorded yet.')); volume.appendChild(empty); }
+  }
+  if(!c.cost || !document.getElementById('costStatus')) return;
+  setText('costProjected',c.cost.projected_period_microunits);
+  setText('costInterval',c.cost.interval_microunits);
+  setText('costBudget',c.cost.budget_ratio==null?'—':Math.round(c.cost.budget_ratio*100)+'%');
+  setText('costBudgetDetail','recurring steady_state only · '+(
+    c.cost.budget_ratio!=null
+      ? c.cost.projected_period_microunits+' / '+c.cost.budget_microunits+' microunits'
+      : c.cost.budget_microunits
+        ? 'collecting the first estimate'
+        : 'no budget comparison configured'
+  ));
+  var costs=document.getElementById('capacityCostBody');
+  if(costs){
+    costs.textContent='';
+    (c.cost.rows||[]).forEach(function(r){
+      var tr=el('tr');
+      [r.tenant_id,r.collector,r.ingest_transport,r.traffic_class,r.attribution,r.allocated_payload_bytes,r.interval_microunits,r.projected_period_microunits].forEach(function(v,i){
+        var td=el('td',i>=5?{'class':'num'}:null);
+        if(i<2) td.appendChild(el('code',null,String(v)));
+        else if(i===4) td.appendChild(el('span',{'class':'badge warn'},String(v)));
+        else td.textContent=String(v);
+        tr.appendChild(td);
+      });
+      costs.appendChild(tr);
+    });
+    if(!c.cost.rows || !c.cost.rows.length){ var empty=el('tr'); empty.appendChild(el('td',{'colspan':'8','class':'muted'},'Collecting two complete metric intervals for the first estimate.')); costs.appendChild(empty); }
+  }
+}
 function setHealth(d){
   var b=document.getElementById('healthBadge'); if(b){ b.textContent=d.health; b.className='badge '+(d.health==='healthy'?'ok':d.health==='degraded'?'err':'pending'); b.title=(d.health_reasons||[]).join('\n'); }
   var rb=document.getElementById('healthReasons'); if(rb){ if(d.health_reasons && d.health_reasons.length){ rb.textContent=d.health_reasons.join(' · '); rb.style.display=''; } else { rb.style.display='none'; } }
@@ -599,7 +685,7 @@ function refresh(){
   fetch('/api/status.json',{cache:'no-store'}).then(function(r){ if(!r.ok) throw new Error('status '+r.status); return r.json(); }).then(function(d){
     lastOkMs=Date.now(); setStale(false);
     lastData=d;
-    setHealth(d); setReadiness(d); updateRollup(d); updateTrends(d); updateDelivery(d); redrawCharts();
+    setHealth(d); setReadiness(d); updateRollup(d); updateTrends(d); updateDelivery(d); rebuildCapacity(d.capacity); redrawCharts();
     if(d.service) setText('uptime', d.service.uptime);
     setText('generatedAt', d.generated_at);
     rebuildThrottle(d.tenants); rebuildTenants(d.tenants);

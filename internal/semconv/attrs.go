@@ -30,6 +30,10 @@ const (
 	AttrCollectorTransport = "collector.transport"
 	// AttrReason names the bounded explanation for AttrState.
 	AttrReason = "reason"
+	// AttrTrafficClass distinguishes ordinary scheduled collection from bounded
+	// cold-start backfill and the replay receipt reserved by #382. Values come
+	// from telemetry.TrafficClass; collectors never supply arbitrary strings.
+	AttrTrafficClass = "traffic_class"
 	// AttrField names the wire field a graph2otel.api.unexpected point describes.
 	// Bounded: the value is a field name from graph2otel's own source, never data.
 	AttrField = "field"

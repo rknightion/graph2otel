@@ -36,6 +36,9 @@ func TestCollectorConstants(t *testing.T) {
 	if AttrTenantID != "tenant_id" {
 		t.Errorf("AttrTenantID = %q, want %q", AttrTenantID, "tenant_id")
 	}
+	if AttrTrafficClass != "traffic_class" {
+		t.Errorf("AttrTrafficClass = %q, want %q", AttrTrafficClass, "traffic_class")
+	}
 	if UnitSeconds != "s" {
 		t.Errorf("UnitSeconds = %q, want %q", UnitSeconds, "s")
 	}

@@ -50,8 +50,9 @@ Or from a checked-out repo copy: `helm install g2o charts/graph2otel -f my-value
 
 The entire application config lives under a single top-level `config:` key in
 `values.yaml`, mirroring `config.example.yaml`'s top-level keys 1:1 (`tenants`,
-`otlp`, `collectors`, `log_level`, `admin`, `checkpoint_dir`) — not a parallel
-schema. It is rendered verbatim into a ConfigMap as `config.yaml`. Helm
+`otlp`, `collectors`, `log_level`, `admin`, `profiling`, `cardinality`, `cost`,
+`backfill`, `checkpoint_dir`) — not a parallel schema. It is rendered verbatim
+into a ConfigMap as `config.yaml`. Helm
 deep-merges maps, so single-key overrides work without restating the rest,
 e.g. `--set config.log_level=debug`.
 
@@ -118,6 +119,20 @@ The same `extraEnv` mechanism sources `G2O_OTLP__GRAFANA_CLOUD__TOKEN` (or any
 other `G2O_*` env override) from a Secret via `valueFrom.secretKeyRef`,
 without ever landing the token in the ConfigMap.
 
+### Cost projections
+
+`config.cost` is disabled by default and contains no vendor prices. Enabling it
+requires an operator-supplied uppercase three-letter currency, rate schedule
+version and source, RFC3339 effective timestamp, positive projection period,
+and four nonnegative integer microunit rates. Every rate must be present;
+explicit zero is valid and differs from an omitted rate. The four rates cover a
+logical source record, emitted metric point, emitted log record, and
+post-compression transmitted OTLP payload byte.
+
+`config.cost.budget_microunits` is also operator-supplied. Zero disables budget
+comparison. Cost accounting is observational: neither a rate nor a budget can
+drop or suppress telemetry.
+
 ### Checkpoint persistence
 
 `config.checkpoint_dir` (default `/var/lib/graph2otel/checkpoints`) is where
@@ -167,6 +182,18 @@ running two.
 | config.cardinality | object | `{"global_limit":100000,"per_metric_limit":5000}` | Output-side active-series governance (Grafana Cloud bills on active series). Enforced by graph2otel's own limiter, which keeps the most significant series and folds the rest into a named `other` bucket; the OTEL SDK's arrival-ordered cap is disabled in favor of it. graph2otel's metrics are bounded aggregates (largest measured: 175 series), so these are blast-radius guards, not normal constraints. Set 0 for unlimited. |
 | config.checkpoint_dir | string | `"/var/lib/graph2otel/checkpoints"` | Where window-log collectors persist their per-(tenant, endpoint) watermarks, so a restart resumes rather than re-fetching or dropping data. Matches the checkpoint volume's mountPath below, so overriding this also moves where the volume is mounted — keep it an absolute path. |
 | config.collectors | object | `{}` | Per-collector overrides, applied globally across all tenants, keyed by collector name. A collector omitted here runs enabled at its built-in default interval. Experimental/beta collectors need explicit enabling — see docs/collectors.md. Example: collectors:   "entra.signins.interactive":     enabled: true     interval: "5m" |
+| config.cost | object | `{"budget_microunits":0,"currency":"","effective_at":"","enabled":false,"period":"720h","rates":{"log_record_microunits":null,"metric_point_microunits":null,"source_record_microunits":null,"transmitted_payload_byte_microunits":null},"source":"","version":""}` | Optional observational cost projections from operator-supplied integer microunit rates. graph2otel ships no vendor prices and never enforces this budget by dropping or suppressing telemetry. All metadata and all four rates are required when enabled; an explicit zero rate is valid. |
+| config.cost.budget_microunits | int | `0` | Nonnegative projection-period budget in microunits; 0 disables comparison. |
+| config.cost.currency | string | `""` | Uppercase three-letter currency code; required when enabled. |
+| config.cost.effective_at | string | `""` | RFC3339 rate-schedule effective timestamp; required when enabled. |
+| config.cost.enabled | bool | `false` | Enable observational cost accounting. |
+| config.cost.period | string | `"720h"` | Positive projection period. 720h is 30 days. |
+| config.cost.rates.log_record_microunits | integer\|null | `nil` | Microunits per emitted log record; explicit nonnegative integer required when enabled. |
+| config.cost.rates.metric_point_microunits | integer\|null | `nil` | Microunits per emitted metric point; explicit nonnegative integer required when enabled. |
+| config.cost.rates.source_record_microunits | integer\|null | `nil` | Microunits per logical source record; explicit nonnegative integer required when enabled. |
+| config.cost.rates.transmitted_payload_byte_microunits | integer\|null | `nil` | Microunits per post-compression transmitted OTLP payload byte; explicit nonnegative integer required when enabled. |
+| config.cost.source | string | `""` | Operator rate source/provenance; required and nonblank when enabled. |
+| config.cost.version | string | `""` | Operator rate-schedule version; required and nonblank when enabled. |
 | config.log_level | string | `"info"` | Log verbosity: debug | info | warn | error. |
 | config.otlp.endpoint | string | `"https://otlp-gateway-prod-us-central-0.grafana.net/otlp"` | OTLP endpoint base URL. For Grafana Cloud use the otlp-gateway URL for YOUR region. |
 | config.otlp.grafana_cloud.instance_id | string | `""` | Grafana Cloud OTLP instance ID. NOT a secret by itself, but set alongside the token below; kept out of values.yaml defaults on purpose so an empty chart install doesn't silently point at nothing. |

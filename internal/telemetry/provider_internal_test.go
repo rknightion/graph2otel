@@ -26,12 +26,14 @@ func NewSelfObsProviderForTest(
 	deliveryTracker := newDeliveryTracker()
 	deliveryTracker.metrics = delivery.Metrics
 	deliveryTracker.logs = delivery.Logs
-	return &Provider{
+	provider := &Provider{
 		selfObsEmitter: e,
 		card:           card,
 		limiter:        limiter,
 		delivery:       deliveryTracker,
 	}
+	seedCapacityReportForTest(provider)
+	return provider
 }
 
 // TestOTLPHTTPURL pins the OTLP/HTTP per-signal URL construction. The OTEL Go

@@ -46,8 +46,9 @@ Or from a checked-out repo copy: `helm install g2o charts/graph2otel -f my-value
 
 The entire application config lives under a single top-level `config:` key in
 `values.yaml`, mirroring `config.example.yaml`'s top-level keys 1:1 (`tenants`,
-`otlp`, `collectors`, `log_level`, `admin`, `checkpoint_dir`) — not a parallel
-schema. It is rendered verbatim into a ConfigMap as `config.yaml`. Helm
+`otlp`, `collectors`, `log_level`, `admin`, `profiling`, `cardinality`, `cost`,
+`backfill`, `checkpoint_dir`) — not a parallel schema. It is rendered verbatim
+into a ConfigMap as `config.yaml`. Helm
 deep-merges maps, so single-key overrides work without restating the rest,
 e.g. `--set config.log_level=debug`.
 
@@ -113,6 +114,20 @@ extraVolumeMounts:
 The same `extraEnv` mechanism sources `G2O_OTLP__GRAFANA_CLOUD__TOKEN` (or any
 other `G2O_*` env override) from a Secret via `valueFrom.secretKeyRef`,
 without ever landing the token in the ConfigMap.
+
+### Cost projections
+
+`config.cost` is disabled by default and contains no vendor prices. Enabling it
+requires an operator-supplied uppercase three-letter currency, rate schedule
+version and source, RFC3339 effective timestamp, positive projection period,
+and four nonnegative integer microunit rates. Every rate must be present;
+explicit zero is valid and differs from an omitted rate. The four rates cover a
+logical source record, emitted metric point, emitted log record, and
+post-compression transmitted OTLP payload byte.
+
+`config.cost.budget_microunits` is also operator-supplied. Zero disables budget
+comparison. Cost accounting is observational: neither a rate nor a budget can
+drop or suppress telemetry.
 
 ### Checkpoint persistence
 

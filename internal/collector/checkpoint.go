@@ -74,7 +74,9 @@ type fileStore struct {
 }
 
 // NewFileStore returns a file-backed checkpoint store, loading any existing
-// checkpoints from path. A missing file is not an error (starts empty).
+// checkpoints from path. A missing file is not an error (starts empty). When
+// the file is corrupt, the returned store is still usable and starts empty;
+// err wraps ErrCorruptCheckpoint so the caller can report the degraded restart.
 func NewFileStore(path string) (CheckpointStore, error) {
 	fs := &fileStore{path: path, m: map[string]time.Time{}}
 	data, err := os.ReadFile(path)
@@ -88,7 +90,7 @@ func NewFileStore(path string) (CheckpointStore, error) {
 		if err := json.Unmarshal(data, &fs.m); err != nil {
 			// Corrupt/incompatible content: wrap so the caller can degrade to an
 			// empty checkpoint instead of crash-looping startup (#69).
-			return nil, fmt.Errorf("%w: %w", ErrCorruptCheckpoint, err)
+			return fs, fmt.Errorf("%w: %w", ErrCorruptCheckpoint, err)
 		}
 	}
 	return fs, nil

@@ -22,7 +22,9 @@ GO_LICENSES="${GO_LICENSES:-go-licenses}"
 TARGET="${TARGET:-./cmd/graph2otel}"
 OUT="${OUT:-THIRD_PARTY_NOTICES.md}"
 SELF="github.com/rknightion/graph2otel"
-TMPL="$(cd "$(dirname "$0")" && pwd)/notices.tsv.tmpl"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+TMPL="$ROOT/scripts/notices.tsv.tmpl"
+FORKS="$ROOT/third_party/otel-http-forks.tsv"
 
 # go-licenses resolves license files from the module cache, so force module mode
 # (this repo builds -mod=readonly by default; go-licenses needs the cache paths).
@@ -39,10 +41,34 @@ go mod download
 # One go-licenses pass -> TSV (name<TAB>version<TAB>license<TAB>url<TAB>licensePath), sorted
 # byte-stably by module name. stderr carries only benign "non-Go code"/"empty version" warnings;
 # a hard failure still propagates via pipefail (the exit code survives 2>/dev/null).
+raw="$(mktemp)"
 tsv="$(mktemp)"
-trap 'rm -f "$tsv"' EXIT
+trap 'rm -f "$raw" "$tsv"' EXIT
 "$GO_LICENSES" report "$TARGET" --template "$TMPL" --ignore "$SELF" 2>/dev/null \
-  | LC_ALL=C sort -t "$(printf '\t')" -k1,1 > "$tsv"
+  > "$raw"
+
+# Local replacements have no semantic version or upstream URL in Go's module
+# metadata, so go-licenses reports an empty version and UNKNOWN source. Remap
+# only the two declared forks from the same drift-gated provenance manifest
+# used by make check. The detected local Apache license text remains verbatim.
+while IFS="$(printf '\t')" read -r module version license source local_dir _; do
+  case "$module" in
+    ""|\#*) continue ;;
+  esac
+  if ! awk -F "$(printf '\t')" -v module="$module" '$1 == module { found=1 } END { exit !found }' "$raw"; then
+    echo "notices: fork $module is absent from the shipped import graph" >&2
+    exit 1
+  fi
+  patched="$(mktemp)"
+  awk -F "$(printf '\t')" -v OFS="$(printf '\t')" \
+    -v module="$module" -v version="$version" -v license="$license" \
+    -v source="$source" -v path="$ROOT/$local_dir/LICENSE" \
+    '$1 == module { $2=version; $3=license; $4=source; $5=path } { print }' \
+    "$raw" > "$patched"
+  mv -f "$patched" "$raw"
+done < "$FORKS"
+
+LC_ALL=C sort -t "$(printf '\t')" -k1,1 "$raw" > "$tsv"
 
 [ -s "$tsv" ] || { echo "notices: go-licenses produced no modules — aborting" >&2; exit 1; }
 

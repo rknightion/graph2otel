@@ -105,6 +105,10 @@ type Options struct {
 	// (nil Cardinality() otherwise).
 	SelfObsEnabled bool
 
+	// Cost configures optional operator-priced, observational cost projection.
+	// It never feeds the scheduler, limiter, client, or exporter control paths.
+	Cost CostOptions
+
 	// StdoutWriter overrides the destination in "stdout" protocol (default os.Stdout).
 	StdoutWriter io.Writer
 }
@@ -114,6 +118,10 @@ type Options struct {
 type Provider struct {
 	mp *sdkmetric.MeterProvider
 	lp *sdklog.LoggerProvider
+	// transport is the process-wide post-compression payload/retry tracker.
+	// It is separate from delivery: delivery observes one SDK exporter callback
+	// after all internal retries, while transport observes the attempts within it.
+	transport *otlpTransportTracker
 	// delivery is the one process-wide tracker shared by both exporter wrappers.
 	// Its fixed metrics/logs fields keep the two delivery paths independent.
 	delivery *deliveryTracker
@@ -123,10 +131,18 @@ type Provider struct {
 	// limited is emitter wrapped by the cardinality limiter; it is what
 	// Emitter() hands out, so nothing can reach the SDK unbounded.
 	limited Emitter
-	// selfObsEmitter is the deliberately process-scoped path used only by
-	// ReportSelfObs. Kept as an interface so the provider-level scope/drift
-	// gate can exercise the exact orchestration against an in-memory emitter.
+	// selfObsEmitter is the un-limited path used only by ReportSelfObs. Each
+	// metric emitted there is explicitly classified as process-scoped or
+	// tenant-attributed by the provider scope drift gate.
 	selfObsEmitter Emitter
+	// volume accumulates exact bounded source and post-limiter emitted-point
+	// totals for passive admin introspection and the self-observation report.
+	volume *VolumeTracker
+	// capacityReport owns cumulative snapshot differencing. capacityNow is an
+	// injected clock used only by focused package tests.
+	capacityReport capacityReportState
+	capacityNow    func() time.Time
+	cost           CostOptions
 	limiter        *Limiter
 	card           *CardinalityTracker // nil unless self-observability is enabled
 }
@@ -193,15 +209,16 @@ func NewProvider(ctx context.Context, opts Options) (*Provider, error) {
 	if err != nil {
 		return nil, fmt.Errorf("build logs resource: %w", err)
 	}
-	metricExp, err := newMetricExporter(ctx, opts)
+	transport := newOTLPTransportTracker()
+	metricExp, err := newMetricExporterWithTransport(ctx, opts, transport)
 	if err != nil {
 		return nil, fmt.Errorf("metric exporter: %w", err)
 	}
-	logExp, err := newLogExporter(ctx, opts)
+	logExp, err := newLogExporterWithTransport(ctx, opts, transport)
 	if err != nil {
 		return nil, fmt.Errorf("log exporter: %w", err)
 	}
-	return newProvider(opts, metricRes, logRes, metricExp, logExp), nil
+	return newProvider(opts, metricRes, logRes, metricExp, logExp, transport), nil
 }
 
 // newProviderWithExporters is the narrow injected construction seam used by
@@ -221,7 +238,14 @@ func newProviderWithExporters(
 	if err != nil {
 		return nil, fmt.Errorf("build logs resource: %w", err)
 	}
-	return newProvider(opts, metricRes, logRes, metricExp, logExp), nil
+	return newProvider(
+		opts,
+		metricRes,
+		logRes,
+		metricExp,
+		logExp,
+		newOTLPTransportTracker(),
+	), nil
 }
 
 func newProvider(
@@ -230,7 +254,10 @@ func newProvider(
 	logRes *resource.Resource,
 	metricExp sdkmetric.Exporter,
 	logExp sdklog.Exporter,
+	transport *otlpTransportTracker,
 ) *Provider {
+	metricExp = wrapOTLPMetricTransportExporter(metricExp, transport)
+	logExp = wrapOTLPLogTransportExporter(logExp, transport)
 	delivery := newDeliveryTracker()
 	metricExp = wrapMetricExporter(metricExp, delivery)
 	logExp = wrapLogExporter(logExp, delivery)
@@ -255,13 +282,20 @@ func newProvider(
 
 	emitter := newOtelEmitter(mp.Meter(scopeName), lp.Logger(scopeName), card)
 	limiter := NewLimiter(opts.Limits)
+	volume := &VolumeTracker{}
+	now := time.Now()
 
 	return &Provider{
 		mp:             mp,
 		lp:             lp,
+		transport:      transport,
 		delivery:       delivery,
 		emitter:        emitter,
 		selfObsEmitter: emitter,
+		volume:         volume,
+		capacityReport: capacityReportState{startedAt: now},
+		capacityNow:    time.Now,
+		cost:           opts.Cost,
 		card:           card,
 		limiter:        limiter,
 		// The limiter wraps the base emitter INNERMOST, so WithTenant (#143) and
@@ -276,6 +310,43 @@ func newProvider(
 // Emitter returns the Emitter collectors should use.
 func (p *Provider) Emitter() Emitter { return p.limited }
 
+// CollectorEmitter returns a per-run emitter whose bounded attribution counts
+// only points which survive the central limiter. Tenant and transport stamps
+// sit outside the limiter so they participate in series identity before
+// ranking, while the volume counter sits inside it and sees only forwarded
+// points.
+func (p *Provider) CollectorEmitter(attribution Attribution) Emitter {
+	if p == nil {
+		return nil
+	}
+	base := p.selfObsEmitter
+	if base == nil || p.limiter == nil || p.volume == nil {
+		return p.limited
+	}
+	counted := newVolumeEmitter(base, p.volume, attribution)
+	return WithTenant(
+		WithTransport(p.limiter.Wrap(counted), attribution.Transport),
+		attribution.TenantID,
+	)
+}
+
+// RecordSourceRecords adds one completed collector run's exact fetched count
+// to the passive cumulative volume snapshot.
+func (p *Provider) RecordSourceRecords(attribution Attribution, count uint64) {
+	if p == nil || p.volume == nil {
+		return
+	}
+	p.volume.RecordSourceRecords(attribution, count)
+}
+
+// Volume returns a deterministic immutable cumulative attribution snapshot.
+func (p *Provider) Volume() []VolumeRow {
+	if p == nil || p.volume == nil {
+		return nil
+	}
+	return p.volume.Snapshot()
+}
+
 // Limiter returns the cardinality limiter this provider's Emitter enforces.
 func (p *Provider) Limiter() *Limiter { return p.limiter }
 
@@ -289,6 +360,15 @@ func (p *Provider) Delivery() DeliverySnapshot {
 		}
 	}
 	return p.delivery.snapshot()
+}
+
+// Transport returns an immutable cumulative snapshot of the process-wide OTLP
+// payload bytes and exporter retry attempts observed since startup.
+func (p *Provider) Transport() OTLPTransportSnapshot {
+	if p.transport == nil {
+		return OTLPTransportSnapshot{}
+	}
+	return p.transport.snapshot()
 }
 
 // ReportSelfObs emits one export interval's cardinality self-observability: the
@@ -310,6 +390,7 @@ func (p *Provider) ReportSelfObs() {
 	if p.delivery != nil {
 		p.delivery.report(p.selfObsEmitter)
 	}
+	p.reportCapacity()
 }
 
 // Throughput returns the cumulative count of metric data points and log
@@ -418,6 +499,14 @@ func cumulativeTemporalitySelector(sdkmetric.InstrumentKind) metricdata.Temporal
 }
 
 func newMetricExporter(ctx context.Context, opts Options) (sdkmetric.Exporter, error) {
+	return newMetricExporterWithTransport(ctx, opts, nil)
+}
+
+func newMetricExporterWithTransport(
+	ctx context.Context,
+	opts Options,
+	transport *otlpTransportTracker,
+) (sdkmetric.Exporter, error) {
 	switch opts.Protocol {
 	case "stdout":
 		w := opts.StdoutWriter
@@ -427,6 +516,9 @@ func newMetricExporter(ctx context.Context, opts Options) (sdkmetric.Exporter, e
 		return stdoutmetric.New(stdoutmetric.WithWriter(w))
 	case "", "http":
 		o := []otlpmetrichttp.Option{otlpmetrichttp.WithTemporalitySelector(cumulativeTemporalitySelector)}
+		if transport != nil {
+			o = append(o, otlpmetrichttp.WithRequestObserver(otlpHTTPRequestObserver{}))
+		}
 		if opts.Endpoint != "" {
 			o = append(o, otlpmetrichttp.WithEndpointURL(otlpHTTPURL(opts.Endpoint, "metrics")))
 		}
@@ -436,6 +528,9 @@ func newMetricExporter(ctx context.Context, opts Options) (sdkmetric.Exporter, e
 		return otlpmetrichttp.New(ctx, o...)
 	case "grpc":
 		o := []otlpmetricgrpc.Option{otlpmetricgrpc.WithTemporalitySelector(cumulativeTemporalitySelector)}
+		if transport != nil {
+			o = append(o, otlpmetricgrpc.WithDialOption(otlpGRPCDialOptions(otlpSignalMetrics)...))
+		}
 		if opts.Endpoint != "" {
 			o = append(o, otlpmetricgrpc.WithEndpoint(opts.Endpoint))
 		}
@@ -449,6 +544,14 @@ func newMetricExporter(ctx context.Context, opts Options) (sdkmetric.Exporter, e
 }
 
 func newLogExporter(ctx context.Context, opts Options) (sdklog.Exporter, error) {
+	return newLogExporterWithTransport(ctx, opts, nil)
+}
+
+func newLogExporterWithTransport(
+	ctx context.Context,
+	opts Options,
+	transport *otlpTransportTracker,
+) (sdklog.Exporter, error) {
 	switch opts.Protocol {
 	case "stdout":
 		w := opts.StdoutWriter
@@ -458,6 +561,9 @@ func newLogExporter(ctx context.Context, opts Options) (sdklog.Exporter, error) 
 		return stdoutlog.New(stdoutlog.WithWriter(w))
 	case "", "http":
 		o := []otlploghttp.Option{}
+		if transport != nil {
+			o = append(o, otlploghttp.WithRequestObserver(otlpHTTPRequestObserver{}))
+		}
 		if opts.Endpoint != "" {
 			o = append(o, otlploghttp.WithEndpointURL(otlpHTTPURL(opts.Endpoint, "logs")))
 		}
@@ -467,6 +573,9 @@ func newLogExporter(ctx context.Context, opts Options) (sdklog.Exporter, error) 
 		return otlploghttp.New(ctx, o...)
 	case "grpc":
 		o := []otlploggrpc.Option{}
+		if transport != nil {
+			o = append(o, otlploggrpc.WithDialOption(otlpGRPCDialOptions(otlpSignalLogs)...))
+		}
 		if opts.Endpoint != "" {
 			o = append(o, otlploggrpc.WithEndpoint(opts.Endpoint))
 		}

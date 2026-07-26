@@ -40,6 +40,127 @@ var _ collectors.Experimental = gateTestCollector{}
 var _ collectors.HighVolume = gateTestCollector{}
 var _ license.CapabilityRequirer = premiumGateTestCollector{}
 
+type capacityWiringCollector struct {
+	done chan struct{}
+}
+
+func TestTenantSchedulerStorePersistsAcrossProcessRestart(t *testing.T) {
+	cfg := &config.Config{CheckpointDir: t.TempDir()}
+	const tenantID = "11111111-1111-1111-1111-111111111111"
+	want := time.Unix(1_700_000_123, 0).UTC()
+
+	first, err := newTenantSchedulerStore(cfg, tenantID)
+	if err != nil {
+		t.Fatalf("newTenantSchedulerStore first process: %v", err)
+	}
+	if err := first.Set(tenantID+"/entra.signins", want); err != nil {
+		t.Fatalf("persist scheduler checkpoint: %v", err)
+	}
+
+	second, err := newTenantSchedulerStore(cfg, tenantID)
+	if err != nil {
+		t.Fatalf("newTenantSchedulerStore restarted process: %v", err)
+	}
+	got, ok := second.Get(tenantID + "/entra.signins")
+	if !ok {
+		t.Fatal("restarted scheduler store lost persisted checkpoint")
+	}
+	if !got.Equal(want) {
+		t.Fatalf("restarted scheduler checkpoint = %v, want %v", got, want)
+	}
+}
+
+func (capacityWiringCollector) Name() string                   { return "capacity.wiring" }
+func (capacityWiringCollector) DefaultInterval() time.Duration { return time.Hour }
+func (c capacityWiringCollector) Collect(
+	_ context.Context,
+	e telemetry.Emitter,
+	outcomes *recordoutcome.Recorder,
+) error {
+	e.Gauge("entra.capacity.wiring", "{record}", "", 1, nil)
+	e.LogEvent(telemetry.Event{
+		Name:      "entra.capacity.wiring",
+		Timestamp: time.Unix(1_700_000_000, 0),
+	})
+	outcomes.Add(recordoutcome.OutcomeFetched, 2)
+	outcomes.Add(recordoutcome.OutcomeMapped, 2)
+	outcomes.Add(recordoutcome.OutcomeEmitted, 2)
+	close(c.done)
+	return nil
+}
+
+func TestTenantSchedulerOptionsWireProviderCapacityAccounting(t *testing.T) {
+	provider, err := telemetry.NewProvider(context.Background(), telemetry.Options{
+		ServiceName:    "capacity-wiring-test",
+		Protocol:       "stdout",
+		StdoutWriter:   io.Discard,
+		SelfObsEnabled: true,
+		Limits:         telemetry.Limits{PerMetric: 100, Global: 1000},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := provider.Shutdown(context.Background()); err != nil {
+			t.Errorf("shutdown provider: %v", err)
+		}
+	})
+
+	done := make(chan struct{})
+	registry := collector.NewRegistry()
+	registry.Register(capacityWiringCollector{done: done}, time.Hour)
+	status := collector.NewStatusTracker()
+	availabilityTracker := availability.NewTracker("tenant-a", []availability.Static{{
+		Collector: "capacity.wiring",
+		Transport: telemetry.TransportGraph,
+		State:     availability.StateStarting,
+		Reason:    availability.ReasonNoCompletedRun,
+	}})
+	base := telemetry.WithTenant(
+		telemetry.WithTransport(provider.Emitter(), telemetry.TransportGraph),
+		"tenant-a",
+	)
+	opts := tenantSchedulerOptions(
+		provider,
+		"tenant-a",
+		status,
+		availabilityTracker,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
+	opts = append(opts, collector.WithStaggerWindow(0))
+	scheduler := collector.NewScheduler(
+		base,
+		collector.NewMemoryStore(),
+		opts...,
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	runDone := make(chan error, 1)
+	go func() { runDone <- scheduler.Run(ctx, registry) }()
+	select {
+	case <-done:
+		cancel()
+	case <-time.After(5 * time.Second):
+		cancel()
+		t.Fatal("collector did not run")
+	}
+	<-runDone
+
+	rows := provider.Volume()
+	if len(rows) != 1 {
+		t.Fatalf("capacity rows = %+v, want one", rows)
+	}
+	row := rows[0]
+	// The log handoff produces its collector-bound event-lag histogram as well
+	// as the domain gauge, so both billable SDK metric points are attributable.
+	if row.TenantID != "tenant-a" || row.Collector != "capacity.wiring" ||
+		row.Transport != telemetry.TransportGraph ||
+		row.TrafficClass != telemetry.TrafficClassSteadyState ||
+		row.SourceRecords != 2 || row.MetricPoints != 2 || row.LogPoints != 1 {
+		t.Fatalf("capacity row = %+v, want fully attributed exact counts", row)
+	}
+}
+
 func TestCollectorGate(t *testing.T) {
 	trueValue := true
 	tests := []struct {

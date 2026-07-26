@@ -1,22 +1,19 @@
 package telemetry
 
 // selfObsScope is the identity contract for a metric emitted directly by the
-// process-level Provider rather than through a tenant-decorated collector
-// emitter.
+// Provider rather than through a tenant-decorated collector emitter.
 type selfObsScope uint8
 
 const selfObsScopeProcess selfObsScope = iota + 1
+const selfObsScopeTenantAttribution selfObsScope = selfObsScopeProcess + 1
 
 // providerSelfObsScopes is intentionally explicit. Provider.ReportSelfObs
-// bypasses WithTenant because these cardinality values describe the single
-// shared process: the configured limit, global total, and aggregate clipping
-// across every tenant. Duplicating them once per tenant would create several
-// identical-looking series that invite summing a process value N times.
+// emits through an undecorated path: genuinely process-wide values must omit
+// tenant_id, while bounded capacity rows must carry their explicit tenant_id.
 //
 // TestProviderProcessSelfObsScopeRegistryCoversEveryReportMetric is the drift
-// gate: a new provider-level self-observability metric fails until its
-// process-global semantics are recorded here. A tenant-specific metric must
-// instead move behind a tenant-decorated emitter.
+// gate: a new provider-level self-observability metric fails until its scope
+// semantics are recorded here.
 var providerSelfObsScopes = map[string]selfObsScope{
 	seriesActiveMetric:  selfObsScopeProcess,
 	seriesLimitMetric:   selfObsScopeProcess,
@@ -29,4 +26,10 @@ var providerSelfObsScopes = map[string]selfObsScope{
 	deliveryForceFlushFailuresMetric: selfObsScopeProcess,
 	deliveryShutdownFailuresMetric:   selfObsScopeProcess,
 	deliveryDegradedMetric:           selfObsScopeProcess,
+
+	MetricOTLPTransmittedPayloadBytes: selfObsScopeProcess,
+	MetricOTLPRetryAttempts:           selfObsScopeProcess,
+
+	MetricIngestEmittedPoints: selfObsScopeTenantAttribution,
+	MetricIngestCostProjected: selfObsScopeTenantAttribution,
 }

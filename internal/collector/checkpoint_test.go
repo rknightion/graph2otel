@@ -18,9 +18,23 @@ func TestFileStore_CorruptFileReportsSentinel(t *testing.T) {
 	if err := os.WriteFile(path, []byte("{ this is not valid json"), 0o600); err != nil {
 		t.Fatalf("write corrupt file: %v", err)
 	}
-	_, err := collector.NewFileStore(path)
+	store, err := collector.NewFileStore(path)
 	if !errors.Is(err, collector.ErrCorruptCheckpoint) {
 		t.Fatalf("NewFileStore on corrupt file err = %v, want ErrCorruptCheckpoint", err)
+	}
+	if store == nil {
+		t.Fatal("NewFileStore on corrupt file returned nil recovery store")
+	}
+	want := time.Unix(1_717_000_123, 0).UTC()
+	if err := store.Set("recovered", want); err != nil {
+		t.Fatalf("recovery store Set: %v", err)
+	}
+	reopened, err := collector.NewFileStore(path)
+	if err != nil {
+		t.Fatalf("reopen recovered store: %v", err)
+	}
+	if got, ok := reopened.Get("recovered"); !ok || !got.Equal(want) {
+		t.Fatalf("reopened recovered checkpoint = %v, %v; want %v, true", got, ok, want)
 	}
 }
 

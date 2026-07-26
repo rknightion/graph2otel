@@ -69,6 +69,8 @@ type Config struct {
 	Profiling ProfilingConfig `yaml:"profiling"`
 	// Cardinality governs output-side active-series limits (#105).
 	Cardinality CardinalityConfig `yaml:"cardinality"`
+	// Cost configures opt-in, observational cost accounting (#289).
+	Cost CostConfig `yaml:"cost"`
 	// Backfill tunes how much history a cold-started window collector recovers
 	// (#118).
 	Backfill BackfillConfig `yaml:"backfill"`
@@ -145,6 +147,28 @@ type CardinalityConfig struct {
 	// pay for another metric's overage. 0 means unlimited.
 	// Env: G2O_CARDINALITY__GLOBAL_LIMIT.
 	GlobalLimit int `yaml:"global_limit"`
+}
+
+// CostConfig configures opt-in, observational cost accounting. Pricing is
+// supplied by the operator; graph2otel does not embed vendor rates.
+type CostConfig struct {
+	Enabled          bool            `yaml:"enabled"`
+	Currency         string          `yaml:"currency"`
+	Version          string          `yaml:"version"`
+	Source           string          `yaml:"source"`
+	EffectiveAt      string          `yaml:"effective_at"`
+	Period           time.Duration   `yaml:"period"`
+	Rates            CostRatesConfig `yaml:"rates"`
+	BudgetMicrounits int64           `yaml:"budget_microunits"`
+}
+
+// CostRatesConfig holds integer microunit rates. Pointers preserve the
+// distinction between an omitted rate and an explicitly supplied zero rate.
+type CostRatesConfig struct {
+	SourceRecord           *int64 `yaml:"source_record_microunits"`
+	MetricPoint            *int64 `yaml:"metric_point_microunits"`
+	LogRecord              *int64 `yaml:"log_record_microunits"`
+	TransmittedPayloadByte *int64 `yaml:"transmitted_payload_byte_microunits"`
 }
 
 // BackfillConfig tunes the cold-start backfill window shared by every window
@@ -567,6 +591,9 @@ func Default() *Config {
 			PerMetricLimit: 5000,
 			GlobalLimit:    100_000,
 		},
+		Cost: CostConfig{
+			Period: 30 * 24 * time.Hour,
+		},
 		CheckpointDir: "./checkpoints",
 	}
 }
@@ -736,6 +763,56 @@ func (c *Config) Validate() error {
 			c.Cardinality.GlobalLimit)
 	}
 
+	if c.Cost.Enabled {
+		if !isUpperCurrencyCode(c.Cost.Currency) {
+			return fmt.Errorf(
+				"cost.currency %q invalid: must be an uppercase 3-letter currency code",
+				c.Cost.Currency,
+			)
+		}
+		if strings.TrimSpace(c.Cost.Version) == "" {
+			return fmt.Errorf("cost.version: required when cost.enabled is true")
+		}
+		if strings.TrimSpace(c.Cost.Source) == "" {
+			return fmt.Errorf("cost.source: required when cost.enabled is true")
+		}
+		if _, err := time.Parse(time.RFC3339, c.Cost.EffectiveAt); err != nil {
+			return fmt.Errorf("cost.effective_at %q invalid: must be RFC3339", c.Cost.EffectiveAt)
+		}
+		if c.Cost.Period <= 0 {
+			return fmt.Errorf("cost.period %v invalid: must be > 0", c.Cost.Period)
+		}
+		for _, rate := range []struct {
+			name  string
+			value *int64
+		}{
+			{"source_record_microunits", c.Cost.Rates.SourceRecord},
+			{"metric_point_microunits", c.Cost.Rates.MetricPoint},
+			{"log_record_microunits", c.Cost.Rates.LogRecord},
+			{"transmitted_payload_byte_microunits", c.Cost.Rates.TransmittedPayloadByte},
+		} {
+			if rate.value == nil {
+				return fmt.Errorf(
+					"cost.rates.%s: required when cost.enabled is true",
+					rate.name,
+				)
+			}
+			if *rate.value < 0 {
+				return fmt.Errorf(
+					"cost.rates.%s %d invalid: must be >= 0",
+					rate.name,
+					*rate.value,
+				)
+			}
+		}
+		if c.Cost.BudgetMicrounits < 0 {
+			return fmt.Errorf(
+				"cost.budget_microunits %d invalid: must be >= 0 (0 = no comparison)",
+				c.Cost.BudgetMicrounits,
+			)
+		}
+	}
+
 	if c.Profiling.Pyroscope.Enabled && c.Profiling.Pyroscope.ServerAddress == "" {
 		return fmt.Errorf("profiling.pyroscope.server_address is required when profiling.pyroscope.enabled is true")
 	}
@@ -746,6 +823,18 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+func isUpperCurrencyCode(value string) bool {
+	if len(value) != 3 {
+		return false
+	}
+	for i := range value {
+		if value[i] < 'A' || value[i] > 'Z' {
+			return false
+		}
+	}
+	return true
 }
 
 // backendAcceptWindow is how far back the OTLP backend accepts log samples.

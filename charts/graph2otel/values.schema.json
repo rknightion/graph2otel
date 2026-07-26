@@ -559,6 +559,140 @@
                         }
                     }
                 },
+                "cost": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "currency": {
+                            "type": "string"
+                        },
+                        "version": {
+                            "type": "string"
+                        },
+                        "source": {
+                            "type": "string"
+                        },
+                        "effective_at": {
+                            "type": "string"
+                        },
+                        "period": {
+                            "type": "string"
+                        },
+                        "rates": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                                "source_record_microunits": {
+                                    "type": [
+                                        "integer",
+                                        "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                },
+                                "metric_point_microunits": {
+                                    "type": [
+                                        "integer",
+                                        "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                },
+                                "log_record_microunits": {
+                                    "type": [
+                                        "integer",
+                                        "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                },
+                                "transmitted_payload_byte_microunits": {
+                                    "type": [
+                                        "integer",
+                                        "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                }
+                            }
+                        },
+                        "budget_microunits": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                        }
+                    },
+                    "allOf": [
+                        {
+                            "if": {
+                                "properties": {
+                                    "enabled": {
+                                        "const": true
+                                    }
+                                },
+                                "required": [
+                                    "enabled"
+                                ]
+                            },
+                            "then": {
+                                "required": [
+                                    "currency",
+                                    "version",
+                                    "source",
+                                    "effective_at",
+                                    "period",
+                                    "rates"
+                                ],
+                                "properties": {
+                                    "currency": {
+                                        "pattern": "^[A-Z]{3}$"
+                                    },
+                                    "version": {
+                                        "pattern": ".*\\S.*"
+                                    },
+                                    "source": {
+                                        "pattern": ".*\\S.*"
+                                    },
+                                    "effective_at": {
+                                        "format": "date-time"
+                                    },
+                                    "period": {
+                                        "minLength": 1,
+                                        "pattern": "^(((0|[1-9][0-9]*)(\\.[0-9]*)?|\\.[0-9]+)(ns|us|µs|ms|s|m|h))+$",
+                                        "not": {
+                                            "pattern": "^((0+(\\.0*)?|\\.0+)(ns|us|µs|ms|s|m|h))+$"
+                                        }
+                                    },
+                                    "rates": {
+                                        "required": [
+                                            "source_record_microunits",
+                                            "metric_point_microunits",
+                                            "log_record_microunits",
+                                            "transmitted_payload_byte_microunits"
+                                        ],
+                                        "properties": {
+                                            "source_record_microunits": {
+                                                "type": "integer"
+                                            },
+                                            "metric_point_microunits": {
+                                                "type": "integer"
+                                            },
+                                            "log_record_microunits": {
+                                                "type": "integer"
+                                            },
+                                            "transmitted_payload_byte_microunits": {
+                                                "type": "integer"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
                 "backfill": {
                     "type": "object",
                     "additionalProperties": false,

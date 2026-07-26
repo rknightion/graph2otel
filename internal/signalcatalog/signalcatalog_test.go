@@ -145,6 +145,8 @@ func TestSelfObservabilityScopeIsGeneratedAndProcessSetIsExact(t *testing.T) {
 		"graph2otel.otlp.delivery.export_successes":     true,
 		"graph2otel.otlp.delivery.force_flush_failures": true,
 		"graph2otel.otlp.delivery.shutdown_failures":    true,
+		"graph2otel.otlp.retry_attempts":                true,
+		"graph2otel.otlp.transmitted_payload.bytes":     true,
 		"graph2otel.series.active":                      true,
 		"graph2otel.series.clipped":                     true,
 		"graph2otel.series.limit":                       true,

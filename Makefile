@@ -30,7 +30,7 @@ export PATH := $(TOOLS_DIR):$(PATH)
 .PHONY: build test lint fmt vet govulncheck docker check regen tools \
         coverage notices sbom tools-licensing tools-sbom install-hooks \
         helm-docs tools-helm-docs tools-check tools-graphdrift \
-        graphdrift graphdrift-update tidy tidy-check dashboard grafana-check rules \
+        graphdrift graphdrift-update tidy tidy-check forks-check dashboard grafana-check rules \
         container-smoke
 
 build:
@@ -65,7 +65,7 @@ container-smoke:
 # generated-doc drift gate (docs/env-vars.md vs config.example.yaml) rides the
 # `test` target as an ordinary `go test` (TestEnvReferenceDocInSync), so a stale
 # doc fails `check` with no extra step.
-check: vet test lint govulncheck tidy-check tools-check
+check: vet test lint govulncheck tidy-check tools-check forks-check
 	$(GO) build ./...
 
 # Both modules must be tidy. `-mod=readonly` above only catches a go.mod that is
@@ -79,11 +79,21 @@ check: vet test lint govulncheck tidy-check tools-check
 tidy-check:
 	$(GO) mod tidy -diff
 	$(GO) -C tools/graphdrift mod tidy -diff
+	$(GO) -C third_party/otlpmetrichttp mod tidy -diff
+	$(GO) -C third_party/otlploghttp mod tidy -diff
 
 # Fix what tidy-check reports, across every module.
 tidy:
 	$(GO) mod tidy
 	$(GO) -C tools/graphdrift mod tidy
+	bash third_party/check-otel-http-forks.sh tidy
+
+# The OTLP/HTTP observer needs a narrow patch in two separately versioned
+# upstream exporter modules. Root ./... patterns do not cross module
+# boundaries, so their full vet/test suites and upstream-provenance drift gate
+# are explicit parts of the green bar.
+forks-check:
+	bash third_party/check-otel-http-forks.sh check
 
 # tools/ holds separate CI-only modules, so `./...` from the repo root does not
 # see them — vet and test them explicitly or they rot uncaught. graphdrift is

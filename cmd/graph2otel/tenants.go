@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -466,6 +467,22 @@ func setupTenantWithGraphAndLicenseBuilders(
 	// a restart: window collectors' watermarks (logpipeline + jobpipeline) and both
 	// async engines' in-flight job ids (#118).
 	store := checkpoint.NewStore(cfg.CheckpointDir)
+	schedulerStore, schedulerStoreErr := newTenantSchedulerStore(cfg, ta.TenantID)
+	if schedulerStoreErr != nil {
+		if errors.Is(schedulerStoreErr, collector.ErrCorruptCheckpoint) {
+			tlog.Warn(
+				"scheduler checkpoint file is corrupt; starting its window cursors cold",
+				"error",
+				schedulerStoreErr,
+			)
+		} else {
+			return admin.CollectorSource{}, fmt.Errorf(
+				"tenant %s: open scheduler checkpoint store: %w",
+				ta.TenantID,
+				schedulerStoreErr,
+			)
+		}
+	}
 
 	// Snapshot collectors (metric-shaped inventory polls). exporter runs the
 	// Intune reports export-job pipeline (POST → poll → download → parse) for the
@@ -739,11 +756,14 @@ func setupTenantWithGraphAndLicenseBuilders(
 	sched := collector.NewScheduler(
 		telemetry.WithTenant(
 			telemetry.WithTransport(emitter, telemetry.TransportGraph), ta.TenantID),
-		collector.NewMemoryStore(),
-		collector.WithTenant(ta.TenantID),
-		collector.WithStatusTracker(status),
-		collector.WithAvailabilityTracker(availabilityTracker),
-		collector.WithLogger(tlog),
+		schedulerStore,
+		tenantSchedulerOptions(
+			provider,
+			ta.TenantID,
+			status,
+			availabilityTracker,
+			tlog,
+		)...,
 	)
 	startTenantWorkers(
 		ctx,
@@ -761,6 +781,33 @@ func setupTenantWithGraphAndLicenseBuilders(
 		Status:       status,
 		Availability: availabilityTracker,
 	}, nil
+}
+
+func newTenantSchedulerStore(
+	cfg *config.Config,
+	tenantID string,
+) (collector.CheckpointStore, error) {
+	return collector.NewFileStore(filepath.Join(
+		cfg.CheckpointDir,
+		"scheduler-"+tenantID+".json",
+	))
+}
+
+func tenantSchedulerOptions(
+	provider *telemetry.Provider,
+	tenantID string,
+	status *collector.StatusTracker,
+	availabilityTracker *availability.Tracker,
+	logger *slog.Logger,
+) []collector.SchedulerOption {
+	return []collector.SchedulerOption{
+		collector.WithEmitterFactory(provider.CollectorEmitter),
+		collector.WithSourceRecordRecorder(provider.RecordSourceRecords),
+		collector.WithTenant(tenantID),
+		collector.WithStatusTracker(status),
+		collector.WithAvailabilityTracker(availabilityTracker),
+		collector.WithLogger(logger),
+	}
 }
 
 // checkRegistryConflicts refuses a tenant whose enabled collector set contains

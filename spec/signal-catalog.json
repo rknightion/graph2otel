@@ -1981,6 +1981,63 @@
       ]
     },
     {
+      "name": "graph2otel.ingest.cost.projected",
+      "prometheus_name": "graph2otel_ingest_cost_projected",
+      "unit": "{microunit}",
+      "kind": "gauge",
+      "description": "Estimated recurring steady-state ingest cost projected from cumulative process-lifetime observations; payload-byte attribution is estimated, not an invoice.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "attribution",
+        "collector",
+        "currency",
+        "ingest_transport",
+        "price_version",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/telemetry"
+      ]
+    },
+    {
+      "name": "graph2otel.ingest.emitted_points",
+      "prometheus_name": "graph2otel_ingest_emitted_points_total",
+      "unit": "{point}",
+      "kind": "sum",
+      "description": "Exact metric and log points emitted after cardinality limiting and handed to the OpenTelemetry SDK.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector",
+        "ingest_transport",
+        "signal",
+        "tenant_id",
+        "traffic_class"
+      ],
+      "packages": [
+        "internal/telemetry"
+      ]
+    },
+    {
+      "name": "graph2otel.ingest.source_records",
+      "prometheus_name": "graph2otel_ingest_source_records_total",
+      "unit": "{record}",
+      "kind": "sum",
+      "description": "Count of logical source records fetched by completed collector runs, classified by traffic phase.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector",
+        "ingest_transport",
+        "tenant_id",
+        "traffic_class"
+      ],
+      "packages": [
+        "internal/collector"
+      ]
+    },
+    {
       "name": "graph2otel.logpipeline.self_excluded",
       "prometheus_name": "graph2otel_logpipeline_self_excluded_total",
       "unit": "{record}",
@@ -2216,6 +2273,36 @@
       "unit": "{operation}",
       "kind": "sum",
       "description": "Exporter shutdown callbacks that returned an error since process start.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "signal"
+      ],
+      "packages": [
+        "internal/telemetry"
+      ]
+    },
+    {
+      "name": "graph2otel.otlp.retry_attempts",
+      "prometheus_name": "graph2otel_otlp_retry_attempts_total",
+      "unit": "{retry}",
+      "kind": "sum",
+      "description": "Exact second-and-later exporter retry-loop attempts; excludes redirects and transparent connection retries.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "signal"
+      ],
+      "packages": [
+        "internal/telemetry"
+      ]
+    },
+    {
+      "name": "graph2otel.otlp.transmitted_payload.bytes",
+      "prometheus_name": "graph2otel_otlp_transmitted_payload_bytes_total",
+      "unit": "By",
+      "kind": "sum",
+      "description": "Exact post-compression OTLP payload bytes accepted by the client transport; excludes protocol and network framing.",
       "additive": true,
       "domain": "graph2otel",
       "attr_keys": [

@@ -97,6 +97,13 @@ DELIVERY_FLUSH_FAILURES = SELF_OBS[
 DELIVERY_SHUTDOWN_FAILURES = SELF_OBS[
     "graph2otel.otlp.delivery.shutdown_failures"
 ].prom
+INGEST_SOURCE_RECORDS = SELF_OBS["graph2otel.ingest.source_records"].prom
+INGEST_EMITTED_POINTS = SELF_OBS["graph2otel.ingest.emitted_points"].prom
+OTLP_TRANSMITTED_PAYLOAD_BYTES = SELF_OBS[
+    "graph2otel.otlp.transmitted_payload.bytes"
+].prom
+OTLP_RETRY_ATTEMPTS = SELF_OBS["graph2otel.otlp.retry_attempts"].prom
+INGEST_COST_PROJECTED = SELF_OBS["graph2otel.ingest.cost.projected"].prom
 
 _SEL = "{" + TENANT_SEL + ', collector=~"$collector"}'
 _AVAIL_SEL = '{tenant_id=~"$tenant",collector=~"$collector"}'
@@ -155,6 +162,23 @@ def extra(b):
         w=12, h=6,
         desc="Process-lifetime failed shutdown callbacks by signal. Shutdown failure "
              "does not alter dependency-free liveness or readiness semantics.",
+    )
+    b.raw(
+        "Exact transmitted OTLP payload rate by signal",
+        [f"sum by (signal) (rate({OTLP_TRANSMITTED_PAYLOAD_BYTES}[{RATE}]))"],
+        legends=["{{signal}}"],
+        unit="Bps", w=12, h=6,
+        desc="Exact post-compression OTLP payload bytes accepted by the client "
+             "transport on each send. This process-wide measurement excludes HTTP/gRPC "
+             "framing, TLS, TCP/IP and kernel retransmission.",
+    )
+    b.raw(
+        "Exact exporter retry rate by signal",
+        [f"sum by (signal) (rate({OTLP_RETRY_ATTEMPTS}[{RATE}]))"],
+        legends=["{{signal}}"],
+        w=12, h=6,
+        desc="Exact second-and-later exporter retry-loop attempts for metrics and logs. "
+             "Redirects and transparent connection retries are excluded.",
     )
     b.row("Collector availability")
     availability = f"{COLLECTOR_AVAILABILITY}{_AVAIL_SEL}"
@@ -281,6 +305,51 @@ def extra(b):
         viz="table",
         desc="Report-only payload drift. Labels contain only source-controlled field "
              "names and closed JSON types, never field values.",
+    )
+
+    b.row("Ingest volume and estimated cost")
+    b.raw(
+        "Exact source-record rate by collector and traffic class",
+        [f"sum by (tenant_id, collector, ingest_transport, traffic_class) "
+         f"(rate({INGEST_SOURCE_RECORDS}{_SEL}[{RATE}]))"],
+        legends=[
+            "{{tenant_id}} {{collector}} {{ingest_transport}} {{traffic_class}}"
+        ],
+        w=12, h=7,
+        desc="Exact logical source records fetched by completed collector runs. This "
+             "traffic-class view comes from the same immutable snapshot as "
+             "record.outcomes{outcome=\"fetched\"}. Normal runtime emits steady_state "
+             "and cold_start_backfill; manual_replay is reserved and not emitted here.",
+    )
+    b.raw(
+        "Exact emitted-point rate by collector, signal and traffic class",
+        [f"sum by (tenant_id, collector, ingest_transport, signal, traffic_class) "
+         f"(rate({INGEST_EMITTED_POINTS}{_SEL}[{RATE}]))"],
+        legends=[
+            "{{tenant_id}} {{collector}} {{ingest_transport}} {{signal}} "
+            "{{traffic_class}}"
+        ],
+        w=12, h=7,
+        desc="Exact metric and log points after the central limiter and handed to the "
+             "OpenTelemetry SDK. This is not backend acceptance or retention.",
+    )
+    b.raw(
+        "Estimated projected collector cost (configured period)",
+        [f"max by (tenant_id, collector, ingest_transport, currency, price_version, "
+         f"attribution) ({INGEST_COST_PROJECTED}"
+         f'{{{TENANT_SEL}, collector=~"$collector", attribution="estimated"}})'],
+        legends=[
+            "{{tenant_id}} {{collector}} {{ingest_transport}} {{currency}} "
+            "{{price_version}} {{attribution}}"
+        ],
+        viz="table", w=24, h=8,
+        desc="Estimate, not invoice. Present only when cost.enabled is true, using the "
+             "operator-supplied rates and configured projection period. This projects "
+             "recurring steady_state rows from cumulative process-lifetime observations; "
+             "exceptional interval cost remains in the admin view. Logical record and "
+             "point components are exact; the collector payload-byte allocation is "
+             "estimated. A configured budget is display-only and never changes "
+             "collector behavior.",
     )
 
     b.row("Build and licensing")

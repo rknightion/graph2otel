@@ -21,6 +21,18 @@
       ]
     },
     {
+      "Name": "graph2otel.ingest.source_records",
+      "Unit": "{record}",
+      "Kind": "sum",
+      "Description": "Count of logical source records fetched by completed collector runs, classified by traffic phase.",
+      "AttrKeys": [
+        "collector",
+        "ingest_transport",
+        "tenant_id",
+        "traffic_class"
+      ]
+    },
+    {
       "Name": "graph2otel.payload.type_mismatches",
       "Unit": "{record}",
       "Kind": "sum",

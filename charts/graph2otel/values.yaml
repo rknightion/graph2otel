@@ -263,6 +263,35 @@ config:
     per_metric_limit: 5000
     global_limit: 100000
 
+  # -- Optional observational cost projections from operator-supplied integer
+  # microunit rates. graph2otel ships no vendor prices and never enforces this
+  # budget by dropping or suppressing telemetry. All metadata and all four
+  # rates are required when enabled; an explicit zero rate is valid.
+  cost:
+    # -- Enable observational cost accounting.
+    enabled: false
+    # -- Uppercase three-letter currency code; required when enabled.
+    currency: ""
+    # -- Operator rate-schedule version; required and nonblank when enabled.
+    version: ""
+    # -- Operator rate source/provenance; required and nonblank when enabled.
+    source: ""
+    # -- RFC3339 rate-schedule effective timestamp; required when enabled.
+    effective_at: ""
+    # -- Positive projection period. 720h is 30 days.
+    period: 720h
+    rates:
+      # -- (integer\|null) Microunits per logical source record; explicit nonnegative integer required when enabled.
+      source_record_microunits: null
+      # -- (integer\|null) Microunits per emitted metric point; explicit nonnegative integer required when enabled.
+      metric_point_microunits: null
+      # -- (integer\|null) Microunits per emitted log record; explicit nonnegative integer required when enabled.
+      log_record_microunits: null
+      # -- (integer\|null) Microunits per post-compression transmitted OTLP payload byte; explicit nonnegative integer required when enabled.
+      transmitted_payload_byte_microunits: null
+    # -- Nonnegative projection-period budget in microunits; 0 disables comparison.
+    budget_microunits: 0
+
   backfill:
     # -- Cold-start backfill window for window (log) collectors — no checkpoint
     # yet: a new tenant, a wiped volume, a first deploy. 0 means "use each

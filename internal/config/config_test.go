@@ -132,6 +132,245 @@ func TestLoadEnvNestedDoubleUnderscore(t *testing.T) {
 	}
 }
 
+func TestCostDefaultsDisabledWithoutVendorRates(t *testing.T) {
+	cfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if cfg.Cost.Enabled {
+		t.Error("cost accounting is enabled by default")
+	}
+	if cfg.Cost.Period != 30*24*time.Hour {
+		t.Errorf("cost period = %v, want 30 days", cfg.Cost.Period)
+	}
+	if cfg.Cost.Currency != "" || cfg.Cost.Version != "" ||
+		cfg.Cost.Source != "" || cfg.Cost.EffectiveAt != "" {
+		t.Errorf("cost metadata = %+v, want empty operator-supplied values", cfg.Cost)
+	}
+	if cfg.Cost.Rates.SourceRecord != nil ||
+		cfg.Cost.Rates.MetricPoint != nil ||
+		cfg.Cost.Rates.LogRecord != nil ||
+		cfg.Cost.Rates.TransmittedPayloadByte != nil {
+		t.Errorf("cost rates = %+v, want all rates omitted by default", cfg.Cost.Rates)
+	}
+	if cfg.Cost.BudgetMicrounits != 0 {
+		t.Errorf("cost budget = %d, want 0 (no comparison)", cfg.Cost.BudgetMicrounits)
+	}
+}
+
+func TestLoadCostEnvironmentOverridesAndPreservesExplicitZeroRate(t *testing.T) {
+	t.Setenv("G2O_COST__ENABLED", "true")
+	t.Setenv("G2O_COST__CURRENCY", "GBP")
+	t.Setenv("G2O_COST__VERSION", "ops-2026-07")
+	t.Setenv("G2O_COST__SOURCE", "internal-finops")
+	t.Setenv("G2O_COST__EFFECTIVE_AT", "2026-07-26T00:00:00Z")
+	t.Setenv("G2O_COST__PERIOD", "168h")
+	t.Setenv("G2O_COST__RATES__SOURCE_RECORD_MICROUNITS", "0")
+	t.Setenv("G2O_COST__RATES__METRIC_POINT_MICROUNITS", "2")
+	t.Setenv("G2O_COST__RATES__LOG_RECORD_MICROUNITS", "3")
+	t.Setenv("G2O_COST__RATES__TRANSMITTED_PAYLOAD_BYTE_MICROUNITS", "4")
+	t.Setenv("G2O_COST__BUDGET_MICROUNITS", "500000")
+
+	cfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.Cost.Enabled {
+		t.Error("cost enabled = false, want true")
+	}
+	if cfg.Cost.Currency != "GBP" ||
+		cfg.Cost.Version != "ops-2026-07" ||
+		cfg.Cost.Source != "internal-finops" ||
+		cfg.Cost.EffectiveAt != "2026-07-26T00:00:00Z" {
+		t.Errorf("cost metadata = %+v, want environment values", cfg.Cost)
+	}
+	if cfg.Cost.Period != 7*24*time.Hour {
+		t.Errorf("cost period = %v, want 168h", cfg.Cost.Period)
+	}
+
+	assertInt64Pointer := func(name string, got *int64, want int64) {
+		t.Helper()
+		if got == nil {
+			t.Errorf("%s = nil, want explicit %d", name, want)
+			return
+		}
+		if *got != want {
+			t.Errorf("%s = %d, want %d", name, *got, want)
+		}
+	}
+	assertInt64Pointer("source record rate", cfg.Cost.Rates.SourceRecord, 0)
+	assertInt64Pointer("metric point rate", cfg.Cost.Rates.MetricPoint, 2)
+	assertInt64Pointer("log record rate", cfg.Cost.Rates.LogRecord, 3)
+	assertInt64Pointer(
+		"transmitted payload byte rate",
+		cfg.Cost.Rates.TransmittedPayloadByte,
+		4,
+	)
+	if cfg.Cost.BudgetMicrounits != 500000 {
+		t.Errorf("cost budget = %d, want 500000", cfg.Cost.BudgetMicrounits)
+	}
+	cfg.OTLP.Protocol = "stdout"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate rejected environment-loaded cost config: %v", err)
+	}
+}
+
+func TestValidateCostContract(t *testing.T) {
+	int64Pointer := func(value int64) *int64 { return &value }
+	validCost := func() config.CostConfig {
+		return config.CostConfig{
+			Enabled:     true,
+			Currency:    "GBP",
+			Version:     "ops-2026-07",
+			Source:      "internal-finops",
+			EffectiveAt: "2026-07-26T00:00:00Z",
+			Period:      30 * 24 * time.Hour,
+			Rates: config.CostRatesConfig{
+				SourceRecord:           int64Pointer(0),
+				MetricPoint:            int64Pointer(0),
+				LogRecord:              int64Pointer(0),
+				TransmittedPayloadByte: int64Pointer(0),
+			},
+			BudgetMicrounits: 0,
+		}
+	}
+
+	tests := []struct {
+		name    string
+		mutate  func(*config.CostConfig)
+		wantErr string
+	}{
+		{
+			name:    "currency required",
+			mutate:  func(c *config.CostConfig) { c.Currency = "" },
+			wantErr: "cost.currency",
+		},
+		{
+			name:    "currency uppercase three letters",
+			mutate:  func(c *config.CostConfig) { c.Currency = "gbp" },
+			wantErr: "cost.currency",
+		},
+		{
+			name:    "currency rejects non-ASCII letters",
+			mutate:  func(c *config.CostConfig) { c.Currency = "G£P" },
+			wantErr: "cost.currency",
+		},
+		{
+			name:    "version nonblank",
+			mutate:  func(c *config.CostConfig) { c.Version = " \t" },
+			wantErr: "cost.version",
+		},
+		{
+			name:    "source nonblank",
+			mutate:  func(c *config.CostConfig) { c.Source = "\n" },
+			wantErr: "cost.source",
+		},
+		{
+			name:    "effective at required",
+			mutate:  func(c *config.CostConfig) { c.EffectiveAt = "" },
+			wantErr: "cost.effective_at",
+		},
+		{
+			name:    "effective at RFC3339",
+			mutate:  func(c *config.CostConfig) { c.EffectiveAt = "2026-07-26" },
+			wantErr: "cost.effective_at",
+		},
+		{
+			name:    "period positive",
+			mutate:  func(c *config.CostConfig) { c.Period = 0 },
+			wantErr: "cost.period",
+		},
+		{
+			name: "source record rate required",
+			mutate: func(c *config.CostConfig) {
+				c.Rates.SourceRecord = nil
+			},
+			wantErr: "cost.rates.source_record_microunits",
+		},
+		{
+			name: "metric point rate required",
+			mutate: func(c *config.CostConfig) {
+				c.Rates.MetricPoint = nil
+			},
+			wantErr: "cost.rates.metric_point_microunits",
+		},
+		{
+			name: "log record rate required",
+			mutate: func(c *config.CostConfig) {
+				c.Rates.LogRecord = nil
+			},
+			wantErr: "cost.rates.log_record_microunits",
+		},
+		{
+			name: "transmitted payload byte rate required",
+			mutate: func(c *config.CostConfig) {
+				c.Rates.TransmittedPayloadByte = nil
+			},
+			wantErr: "cost.rates.transmitted_payload_byte_microunits",
+		},
+		{
+			name: "source record rate nonnegative",
+			mutate: func(c *config.CostConfig) {
+				c.Rates.SourceRecord = int64Pointer(-1)
+			},
+			wantErr: "cost.rates.source_record_microunits",
+		},
+		{
+			name: "metric point rate nonnegative",
+			mutate: func(c *config.CostConfig) {
+				c.Rates.MetricPoint = int64Pointer(-1)
+			},
+			wantErr: "cost.rates.metric_point_microunits",
+		},
+		{
+			name: "log record rate nonnegative",
+			mutate: func(c *config.CostConfig) {
+				c.Rates.LogRecord = int64Pointer(-1)
+			},
+			wantErr: "cost.rates.log_record_microunits",
+		},
+		{
+			name: "transmitted payload byte rate nonnegative",
+			mutate: func(c *config.CostConfig) {
+				c.Rates.TransmittedPayloadByte = int64Pointer(-1)
+			},
+			wantErr: "cost.rates.transmitted_payload_byte_microunits",
+		},
+		{
+			name: "budget nonnegative",
+			mutate: func(c *config.CostConfig) {
+				c.BudgetMicrounits = -1
+			},
+			wantErr: "cost.budget_microunits",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := config.Default()
+			cfg.OTLP.Protocol = "stdout"
+			cfg.Cost = validCost()
+			test.mutate(&cfg.Cost)
+
+			err := cfg.Validate()
+			if err == nil {
+				t.Fatalf("Validate accepted invalid cost config: %+v", cfg.Cost)
+			}
+			if !strings.Contains(err.Error(), test.wantErr) {
+				t.Errorf("error %q does not identify %q", err, test.wantErr)
+			}
+		})
+	}
+
+	cfg := config.Default()
+	cfg.OTLP.Protocol = "stdout"
+	cfg.Cost = validCost()
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate rejected valid cost config with explicit zero rates: %v", err)
+	}
+}
+
 // TestCardinalityDefaultsAndEnvOverride verifies both limits' defaults and that
 // their G2O_* overrides land (#235).
 func TestCardinalityDefaultsAndEnvOverride(t *testing.T) {

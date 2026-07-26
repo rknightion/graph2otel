@@ -55,6 +55,12 @@ const (
 	// MetricRecordOutcomes counts source records by their bounded processing
 	// outcome for each collector run.
 	MetricRecordOutcomes = "graph2otel.record.outcomes"
+	// MetricSourceRecords counts exact logical source records fetched by
+	// completed scheduler runs, classified by bounded traffic phase. It is
+	// emitted from the same immutable #269 snapshot as MetricRecordOutcomes, so
+	// its value reconciles exactly with outcome=fetched without changing #269's
+	// frozen labels.
+	MetricSourceRecords = "graph2otel.ingest.source_records"
 	// MetricScrapeOutcomes counts collector runs by their reconciled result.
 	MetricScrapeOutcomes = "graph2otel.scrape.outcomes"
 	// MetricPayloadTypeMismatches counts otherwise-usable records whose optional
@@ -183,6 +189,23 @@ func emitOutcomeMetrics(
 			"Count of payload fields whose JSON type differed from the expected type.",
 			float64(mismatch.Count), attrs)
 	}
+}
+
+func emitSourceRecordMetric(
+	e telemetry.Emitter,
+	attribution telemetry.Attribution,
+	fetched uint64,
+) {
+	attrs := selfObsAttrs(attribution.Collector, attribution.TenantID)
+	attrs[semconv.AttrIngestTransport] = string(attribution.Transport)
+	attrs[semconv.AttrTrafficClass] = string(attribution.TrafficClass)
+	e.Counter(
+		MetricSourceRecords,
+		semconv.UnitRecords,
+		"Count of logical source records fetched by completed collector runs, classified by traffic phase.",
+		float64(fetched),
+		attrs,
+	)
 }
 
 func cloneAttrs(src telemetry.Attrs) telemetry.Attrs {

@@ -28,6 +28,19 @@ type int32Counter struct{ v atomic.Int32 }
 func (c *int32Counter) inc()       { c.v.Add(1) }
 func (c *int32Counter) get() int32 { return c.v.Load() }
 
+type countingCheckpointStore struct {
+	collector.CheckpointStore
+	gets map[string]int
+}
+
+func (s *countingCheckpointStore) Get(name string) (time.Time, bool) {
+	if s.gets == nil {
+		s.gets = make(map[string]int)
+	}
+	s.gets[name]++
+	return s.CheckpointStore.Get(name)
+}
+
 type snapFunc struct {
 	name string
 	def  time.Duration
@@ -885,6 +898,308 @@ func TestSchedulerAvailabilitySkipsShutdownCancellation(t *testing.T) {
 		t.Fatalf("shutdown cancellation changed status accounting: %v", got)
 	}
 }
+
+func TestScheduler_SnapshotBindsSteadyStateEmitterAndReconcilesSourceRecords(t *testing.T) {
+	selfObs := telemetrytest.New()
+	data := telemetrytest.New()
+	var got telemetry.Attribution
+	var recorded telemetry.Attribution
+	var recordedFetched uint64
+	s := collector.NewScheduler(
+		selfObs.Emitter(),
+		collector.NewMemoryStore(),
+		collector.WithTenant("acme"),
+		collector.WithEmitterFactory(func(a telemetry.Attribution) telemetry.Emitter {
+			got = a
+			return data.Emitter()
+		}),
+		collector.WithSourceRecordRecorder(func(a telemetry.Attribution, fetched uint64) {
+			recorded = a
+			recordedFetched = fetched
+		}),
+	)
+	entry := collector.Entry{
+		Collector: transportedSnap{
+			snapFunc: snapFunc{
+				name: "devices",
+				def:  time.Minute,
+				fn: func(_ context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+					e.Gauge("intune.devices.count", "{device}", "devices", 2, nil)
+					outcomes.Add(recordoutcome.OutcomeFetched, 2)
+					outcomes.Add(recordoutcome.OutcomeMapped, 2)
+					outcomes.Add(recordoutcome.OutcomeEmitted, 2)
+					return nil
+				},
+			},
+			transport: telemetry.TransportReportExport,
+		},
+		Interval: time.Minute,
+	}
+	var lastSuccess time.Time
+
+	s.RunTick(context.Background(), entry, &lastSuccess)
+
+	want := telemetry.Attribution{
+		TenantID:     "acme",
+		Collector:    "devices",
+		Transport:    telemetry.TransportReportExport,
+		TrafficClass: telemetry.TrafficClassSteadyState,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("factory attribution = %+v, want %+v", got, want)
+	}
+	if !reflect.DeepEqual(recorded, want) || recordedFetched != 2 {
+		t.Fatalf("source-record callback = (%+v, %d), want (%+v, 2)", recorded, recordedFetched, want)
+	}
+	assertMetricSeries(t, data, "intune.devices.count", 2, nil)
+	if got := selfObs.MetricPoints("intune.devices.count"); len(got) != 0 {
+		t.Fatalf("domain metric used scheduler self-observation emitter: %v", got)
+	}
+	assertMetricSeries(t, selfObs, collector.MetricSourceRecords, 2, map[string]string{
+		semconv.AttrTenantID:        "acme",
+		semconv.AttrCollector:       "devices",
+		semconv.AttrIngestTransport: "report_export",
+		semconv.AttrTrafficClass:    "steady_state",
+	})
+	assertMetricSeries(t, selfObs, collector.MetricRecordOutcomes, 2, map[string]string{
+		semconv.AttrTenantID:        "acme",
+		semconv.AttrCollector:       "devices",
+		semconv.AttrIngestTransport: "report_export",
+		"outcome":                   "fetched",
+	})
+	for _, point := range selfObs.MetricPoints(collector.MetricRecordOutcomes) {
+		if _, ok := point.Attrs[semconv.AttrTrafficClass]; ok {
+			t.Fatalf("%s changed frozen #269 labels: %v", collector.MetricRecordOutcomes, point.Attrs)
+		}
+	}
+}
+
+func TestScheduler_WindowTrafficClassComesFromTheSameCheckpointRead(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0).UTC()
+	tests := []struct {
+		name       string
+		checkpoint *time.Time
+		want       telemetry.TrafficClass
+	}{
+		{name: "no checkpoint is cold-start backfill", want: telemetry.TrafficClassColdStartBackfill},
+		{name: "checkpointed is steady state", checkpoint: ptrTime(now.Add(-time.Hour)), want: telemetry.TrafficClassSteadyState},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			selfObs := telemetrytest.New()
+			store := &countingCheckpointStore{CheckpointStore: collector.NewMemoryStore()}
+			if tc.checkpoint != nil {
+				if err := store.Set("auditlogs", *tc.checkpoint); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var got telemetry.Attribution
+			s := collector.NewScheduler(
+				selfObs.Emitter(),
+				store,
+				collector.WithClock(func() time.Time { return now }),
+				collector.WithEmitterFactory(func(a telemetry.Attribution) telemetry.Emitter {
+					got = a
+					return telemetrytest.New().Emitter()
+				}),
+			)
+			entry := collector.Entry{
+				Collector: winFunc{
+					name: "auditlogs",
+					def:  time.Minute,
+					fn: func(_ context.Context, _, to time.Time, _ telemetry.Emitter, outcomes *recordoutcome.Recorder) (time.Time, error) {
+						outcomes.Add(recordoutcome.OutcomeFetched, 1)
+						outcomes.Add(recordoutcome.OutcomeMapped, 1)
+						outcomes.Add(recordoutcome.OutcomeEmitted, 1)
+						return to, nil
+					},
+				},
+				Interval:        time.Minute,
+				InitialLookback: time.Hour,
+				MaxWindow:       24 * time.Hour,
+			}
+			var lastSuccess time.Time
+
+			s.RunTick(context.Background(), entry, &lastSuccess)
+
+			if got.TrafficClass != tc.want {
+				t.Fatalf("traffic class = %q, want %q", got.TrafficClass, tc.want)
+			}
+			if store.gets["auditlogs"] != 1 {
+				t.Fatalf("main checkpoint reads = %d, want exactly 1 for class and window", store.gets["auditlogs"])
+			}
+			assertMetricSeries(t, selfObs, collector.MetricSourceRecords, 1, map[string]string{
+				semconv.AttrCollector:    "auditlogs",
+				semconv.AttrTrafficClass: string(tc.want),
+			})
+		})
+	}
+}
+
+func TestScheduler_ZeroRowRunEmitsClassifiedSourceRecordPoint(t *testing.T) {
+	rec := telemetrytest.New()
+	var callbackCalls int
+	var callbackFetched uint64
+	s := collector.NewScheduler(
+		rec.Emitter(),
+		collector.NewMemoryStore(),
+		collector.WithEmitterFactory(func(telemetry.Attribution) telemetry.Emitter {
+			return telemetrytest.New().Emitter()
+		}),
+		collector.WithSourceRecordRecorder(func(_ telemetry.Attribution, fetched uint64) {
+			callbackCalls++
+			callbackFetched = fetched
+		}),
+	)
+	entry := collector.Entry{
+		Collector: snapFunc{
+			name: "empty",
+			def:  time.Minute,
+			fn: func(context.Context, telemetry.Emitter, *recordoutcome.Recorder) error {
+				return nil
+			},
+		},
+		Interval: time.Minute,
+	}
+	var lastSuccess time.Time
+
+	s.RunTick(context.Background(), entry, &lastSuccess)
+
+	assertMetricSeries(t, rec, collector.MetricSourceRecords, 0, map[string]string{
+		semconv.AttrCollector:    "empty",
+		semconv.AttrTrafficClass: "steady_state",
+	})
+	if callbackCalls != 1 || callbackFetched != 0 {
+		t.Fatalf("zero-row callback = (%d calls, %d fetched), want (1, 0)", callbackCalls, callbackFetched)
+	}
+}
+
+func TestScheduler_SourceRecordRecorderIsIndependentOfOTLPSelfObs(t *testing.T) {
+	rec := telemetrytest.New()
+	var got uint64
+	s := collector.NewScheduler(
+		rec.Emitter(),
+		collector.NewMemoryStore(),
+		collector.WithSelfObs(false),
+		collector.WithSourceRecordRecorder(func(_ telemetry.Attribution, fetched uint64) {
+			got = fetched
+		}),
+	)
+	entry := collector.Entry{
+		Collector: snapFunc{
+			name: "quiet",
+			def:  time.Minute,
+			fn: func(_ context.Context, _ telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+				outcomes.Add(recordoutcome.OutcomeFetched, 3)
+				outcomes.Add(recordoutcome.OutcomeFiltered, 3)
+				return nil
+			},
+		},
+		Interval: time.Minute,
+	}
+	var lastSuccess time.Time
+
+	s.RunTick(context.Background(), entry, &lastSuccess)
+
+	if got != 3 {
+		t.Fatalf("source-record callback fetched = %d, want 3 with selfobs disabled", got)
+	}
+	if points := rec.MetricPoints(collector.MetricSourceRecords); len(points) != 0 {
+		t.Fatalf("source-record OTLP points = %v, want none with selfobs disabled", points)
+	}
+}
+
+func TestScheduler_PartialRunRetainsBoundEmitterHandoffAndSourceRecords(t *testing.T) {
+	selfObs := telemetrytest.New()
+	data := telemetrytest.New()
+	var sourceRecordCalls int
+	s := collector.NewScheduler(
+		selfObs.Emitter(),
+		collector.NewMemoryStore(),
+		collector.WithEmitterFactory(func(telemetry.Attribution) telemetry.Emitter {
+			return data.Emitter()
+		}),
+		collector.WithSourceRecordRecorder(func(telemetry.Attribution, uint64) {
+			sourceRecordCalls++
+		}),
+	)
+	entry := collector.Entry{
+		Collector: snapFunc{
+			name: "partial",
+			def:  time.Minute,
+			fn: func(_ context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+				e.Counter("entra.partial.records", "{record}", "", 1, nil)
+				outcomes.Add(recordoutcome.OutcomeFetched, 2)
+				outcomes.Add(recordoutcome.OutcomeMapped, 1)
+				outcomes.Add(recordoutcome.OutcomeEmitted, 1)
+				outcomes.Add(recordoutcome.OutcomeErrored, 1)
+				outcomes.Cause(recordoutcome.CauseSourceError)
+				return errors.New("page failed")
+			},
+		},
+		Interval: time.Minute,
+	}
+	var lastSuccess time.Time
+
+	s.RunTick(context.Background(), entry, &lastSuccess)
+
+	assertMetricSeries(t, data, "entra.partial.records", 1, nil)
+	assertMetricSeries(t, selfObs, collector.MetricSourceRecords, 2, map[string]string{
+		semconv.AttrCollector:    "partial",
+		semconv.AttrTrafficClass: "steady_state",
+	})
+	if sourceRecordCalls != 1 {
+		t.Fatalf("partial run source-record callback calls = %d, want 1", sourceRecordCalls)
+	}
+}
+
+func TestScheduler_ShutdownKeepsBoundEmitterHandoffButSuppressesSourceRecords(t *testing.T) {
+	selfObs := telemetrytest.New()
+	data := telemetrytest.New()
+	var sourceRecordCalls int
+	s := collector.NewScheduler(
+		selfObs.Emitter(),
+		collector.NewMemoryStore(),
+		collector.WithEmitterFactory(func(telemetry.Attribution) telemetry.Emitter {
+			return data.Emitter()
+		}),
+		collector.WithSourceRecordRecorder(func(telemetry.Attribution, uint64) {
+			sourceRecordCalls++
+		}),
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	entry := collector.Entry{
+		Collector: snapFunc{
+			name: "shutdown",
+			def:  time.Minute,
+			fn: func(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+				e.Counter("entra.shutdown.handoff", "{record}", "", 1, nil)
+				outcomes.Add(recordoutcome.OutcomeFetched, 1)
+				outcomes.Add(recordoutcome.OutcomeMapped, 1)
+				outcomes.Add(recordoutcome.OutcomeEmitted, 1)
+				return ctx.Err()
+			},
+		},
+		Interval: time.Minute,
+	}
+	var lastSuccess time.Time
+
+	s.RunTick(ctx, entry, &lastSuccess)
+
+	assertMetricSeries(t, data, "entra.shutdown.handoff", 1, nil)
+	if got := selfObs.MetricPoints(collector.MetricSourceRecords); len(got) != 0 {
+		t.Fatalf("shutdown emitted source-record accounting: %v", got)
+	}
+	if got := selfObs.MetricPoints(collector.MetricRecordOutcomes); len(got) != 0 {
+		t.Fatalf("shutdown changed frozen #269 accounting: %v", got)
+	}
+	if sourceRecordCalls != 0 {
+		t.Fatalf("shutdown called source-record recorder %d times, want 0", sourceRecordCalls)
+	}
+}
+
+func ptrTime(t time.Time) *time.Time { return &t }
 
 // TestEmitBuildInfo pins that graph2otel.build_info is emitted once with
 // value 1 and a "version" attribute.

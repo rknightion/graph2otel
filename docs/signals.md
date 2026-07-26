@@ -599,6 +599,109 @@ did not become useful telemetry and is default-alerted. A type mismatch keeps th
 record, emits the mismatch counter, and marks the run partial so drift cannot look fully
 healthy.
 
+## Volume, transport, and estimated cost
+
+graph2otel exposes two different measurement boundaries for capacity planning. Logical
+volume is exact per tenant, collector, ingest transport, and traffic class. OTLP
+transmitted payload and retry volume is exact only for the process and signal. A
+collector-level payload allocation is therefore an estimate, never a wire measurement.
+
+> **Evidence class:** `source-derived 2026-07-26, #289`. These boundaries are enforced
+> by the runtime accounting seams and tests. They are not a live backend bill or a
+> measured vendor pricing schedule.
+
+### Exact logical volume
+
+| Metric | Attributes | Meaning |
+| --- | --- | --- |
+| `graph2otel.ingest.source_records` (`{record}` counter) | `tenant_id`, `collector`, `ingest_transport`, `traffic_class` | Logical rows fetched by completed scheduler runs. It comes from the same immutable accounting snapshot as `graph2otel.record.outcomes{outcome="fetched"}`, so the two views reconcile without changing #269's frozen labels. |
+| `graph2otel.ingest.emitted_points` (`{point}` counter) | `tenant_id`, `collector`, `ingest_transport`, `signal`, `traffic_class` | Points which survived the central cardinality limiter and reached the OTel SDK. `signal` is `metric` or `log`: each synchronous metric emission counts once, each retained gauge-snapshot point counts once, and each log event counts once. |
+
+A source record and an emitted point are deliberately different units. One fetched row
+may produce several metric points and a log twin; it still increments
+`source_records` once. Conversely, filtering or deduplication can make a fetched row
+produce no emitted point. Use the record-outcome equations above to explain that
+difference rather than treating it as loss.
+
+`traffic_class` has a closed boundary:
+
+- `steady_state` — every snapshot collector run and ordinary window collection outside
+  an initial backfill.
+- `cold_start_backfill` — every slice of the initial no-checkpoint window, including a
+  new tenant, first deploy, or wiped checkpoint. The scheduler persists the original
+  catch-up target, so a backfill larger than one maximum window remains cold across
+  later ticks and process restarts until that target is reached.
+- `manual_replay` — reserved for the isolated replay workflow. The normal scheduler
+  does not emit it, and #289 does not turn replay into ordinary runtime metrics.
+
+A shutdown-cancelled run emits neither source-record accounting view. Point accounting
+is cumulative from emissions which already happened, so a partial run retains its
+successfully emitted points. No record ID, entity field, request URL, error text, or
+collector-provided free text becomes an attribution label.
+
+### Exact process transport
+
+| Metric | Attributes | Meaning |
+| --- | --- | --- |
+| `graph2otel.otlp.transmitted_payload.bytes` (`By` counter) | `signal="metrics"|"logs"` | Post-compression OTLP payload bytes accepted by the client transport on every actual send, including sends performed by exporter retry loops. |
+| `graph2otel.otlp.retry_attempts` (`{retry}` counter) | `signal="metrics"|"logs"` | Second-and-later attempts made by the exporter retry loop for an SDK export callback. |
+
+These are exact for the graph2otel process, not for a collector. Payload bytes exclude
+HTTP/gRPC framing, TLS, TCP/IP, kernel retransmission, and backend-side processing. Retry
+attempts exclude redirects and transparent connection retries. Neither metric proves
+backend acceptance or retention; use the exporter callback health above for that separate
+boundary.
+
+### Estimated cost, never enforcement
+
+Cost projection is off unless the operator enables `cost` and supplies the complete,
+versioned rate schedule described in [Configuration](configuration.md#cost). graph2otel
+embeds no vendor prices. One microunit is \(10^{-6}\) of the configured currency unit.
+
+For an observed interval, the source-record, metric-point, and log-record components use
+the exact logical deltas above. Metric payload bytes are allocated over metric points and
+log payload bytes over log points independently, using deterministic largest-remainder
+allocation for each signal. A signal's bytes can therefore never move to a collector
+which emitted points only for the other signal. Bytes which have no same-signal
+collector point share remain visible as
+`collector="_unattributed", ingest_transport="process"`. Every row carries
+`attribution="estimated"`, and the rows reconcile to the process interval estimate.
+
+The interval estimate retains `steady_state`, `cold_start_backfill`, and the reserved
+`manual_replay` class. Only `steady_state` contributes to the recurring period
+projection and budget ratio. Exceptional rows remain visible with a zero recurring
+projection; that means “finite observed cost, not annualised,” not “free.” The admin
+forms this estimate from a mature rolling window spanning at least two 60-second metric
+export intervals and up to about ten minutes, refreshes it no more than once per minute,
+and exposes the actual observed duration.
+This reduces the mismatch between collector handoffs, periodic metric export, and the
+separate log batch schedule; the collector byte allocation remains estimated.
+
+When enabled, `graph2otel.ingest.cost.projected` is an estimated `{microunit}` gauge
+labelled by `tenant_id`, `collector`, `ingest_transport`, configured `currency`,
+configured `price_version`, and `attribution="estimated"`. It is a running projection
+from cumulative process-lifetime observations rather than a single export interval, so
+collector schedules longer than 60 seconds are not annualised from one active minute
+and then reported as zero in every idle minute. The projected metric contains recurring
+steady-state collector rows only.
+
+The admin status exposes the same exact cumulative volume and process-transport totals,
+plus the supplied pricing metadata, mature rolling interval estimate, period projection,
+optional budget ratio, and estimated rows. The page labels the result **estimate, not
+invoice**; while pricing is disabled, the cost object/card is absent. Exceptional
+interval cost remains on the admin surface where its traffic class is explicit.
+
+A budget is display-only. There is no scheduler, limiter, Graph-client, or exporter
+control path from these values, so crossing it cannot sample, throttle, delay, disable,
+or drop telemetry. Export retries are shown as exact transport activity but have no
+invented price component.
+
+For a collector marked `high-volume opt-in`, use the generated collector reference's
+measured volume as the pre-enable planning baseline. Once it is running, use
+`source_records` and `emitted_points` split by `traffic_class` to replace that baseline
+with this deployment's observed volume. Do not project a cold-start backfill as steady
+state, and do not infer per-collector wire bytes from the process counters.
+
 ## MDCA Cloud Discovery parse health: `ingest_transport="mdca"`
 
 `mdca.discovery_parse` (#145) is the one signal reached over neither Graph, Azure Storage,

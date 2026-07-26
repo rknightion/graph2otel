@@ -28,8 +28,14 @@ var noopSchedulerTracer = tracenoop.NewTracerProvider().Tracer("")
 // isolating failures so one collector cannot stop the others.
 type Scheduler struct {
 	emitter telemetry.Emitter
-	store   CheckpointStore
-	now     func() time.Time
+	// emitterFactory binds collector data handoffs to their bounded attribution.
+	// Scheduler self-observability deliberately continues through emitter.
+	emitterFactory func(telemetry.Attribution) telemetry.Emitter
+	// sourceRecordRecorder feeds the in-process volume/cost snapshot from the
+	// same immutable #269 snapshot used by source-record self-observability.
+	sourceRecordRecorder func(telemetry.Attribution, uint64)
+	store                CheckpointStore
+	now                  func() time.Time
 	// staggerWindow bounds the random startup delay applied to each collector's
 	// first tick, to de-synchronize polls (see WithStaggerWindow). Zero disables it.
 	staggerWindow time.Duration
@@ -71,6 +77,22 @@ func WithLogger(l *slog.Logger) SchedulerOption { return func(s *Scheduler) { s.
 // (graph2otel.scrape.*). It defaults to enabled; passing false suppresses
 // all scrape metric emission, leaving behavior identical to having no self-obs.
 func WithSelfObs(enabled bool) SchedulerOption { return func(s *Scheduler) { s.selfObs = enabled } }
+
+// WithEmitterFactory binds each collector run to an emitter carrying its
+// tenant, collector, transport, and traffic class. It applies only to collector
+// data handoffs; scrape/outcome/source-record self-observability stays on the
+// Scheduler's un-attributed emitter.
+func WithEmitterFactory(factory func(telemetry.Attribution) telemetry.Emitter) SchedulerOption {
+	return func(s *Scheduler) { s.emitterFactory = factory }
+}
+
+// WithSourceRecordRecorder records the exact fetched-row count from each
+// completed non-shutdown run into an in-process consumer such as #289's volume
+// tracker. It is independent of WithSelfObs so disabling OTLP self-observation
+// does not disable admin/cost accounting.
+func WithSourceRecordRecorder(record func(telemetry.Attribution, uint64)) SchedulerOption {
+	return func(s *Scheduler) { s.sourceRecordRecorder = record }
+}
 
 // WithStatusTracker records each collector's latest run outcome into t for
 // in-process introspection (e.g. the admin status page). Recording happens on
@@ -146,6 +168,16 @@ func (s *Scheduler) Run(ctx context.Context, r *Registry) error {
 // potentially long interval: a 600s collector still produces data within seconds
 // of startup, not 10 minutes later.
 const defaultStaggerWindow = 3 * time.Second
+
+// coldStartTargetKeyPrefix reserves an internal checkpoint namespace which
+// cannot collide with the ordinary tenant/collector keys. The leading NUL is
+// outside the stable collector-name/config alphabet; appending checkpointKey is
+// injective and retains tenant isolation.
+const coldStartTargetKeyPrefix = "\x00graph2otel/cold-start-target/"
+
+func (s *Scheduler) coldStartTargetKey(name string) string {
+	return coldStartTargetKeyPrefix + s.checkpointKey(name)
+}
 
 func (s *Scheduler) runLoop(ctx context.Context, e Entry) {
 	// Baseline for scrape.staleness: until the first successful run, staleness
@@ -227,13 +259,12 @@ func (s *Scheduler) runTick(ctx context.Context, e Entry, lastSuccess *time.Time
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(attribute.String(semconv.AttrCollector, e.Collector.Name())))
 	outcomes := recordoutcome.NewRecorder()
-	runEmitter := telemetry.WithEventLag(
-		s.emitter,
-		e.Collector.Name(),
-		s.tenant,
-		TransportOf(e.Collector),
-		s.now,
-	)
+	attribution := telemetry.Attribution{
+		TenantID:     s.tenant,
+		Collector:    e.Collector.Name(),
+		Transport:    TransportOf(e.Collector),
+		TrafficClass: telemetry.TrafficClassSteadyState,
+	}
 
 	var runErr error
 	panicked := false
@@ -269,6 +300,10 @@ func (s *Scheduler) runTick(ctx context.Context, e Entry, lastSuccess *time.Time
 			return
 		}
 
+		if s.sourceRecordRecorder != nil {
+			s.sourceRecordRecorder(attribution, outcomeSnapshot.Counts.Fetched)
+		}
+
 		if s.availability != nil {
 			s.availability.Record(e.Collector.Name(), outcome)
 		}
@@ -283,6 +318,7 @@ func (s *Scheduler) runTick(ctx context.Context, e Entry, lastSuccess *time.Time
 			staleness = 0
 		}
 		if s.selfObs {
+			emitSourceRecordMetric(s.emitter, attribution, outcomeSnapshot.Counts.Fetched)
 			emitScrapeMetrics(s.emitter, scrapeResult{
 				collector:  e.Collector.Name(),
 				tenant:     s.tenant,
@@ -325,8 +361,75 @@ func (s *Scheduler) runTick(ctx context.Context, e Entry, lastSuccess *time.Time
 	}()
 	switch c := e.Collector.(type) {
 	case WindowCollector:
-		runErr = s.runWindow(ctx, c, e, runEmitter, outcomes)
+		last, hasLast := s.store.Get(s.checkpointKey(c.Name()))
+		targetKey := s.coldStartTargetKey(c.Name())
+		coldTarget, hasColdTarget := s.store.Get(targetKey)
+		if hasColdTarget && coldTarget.IsZero() {
+			hasColdTarget = false
+		}
+		windowNow := s.now()
+		switch {
+		case !hasLast:
+			attribution.TrafficClass = telemetry.TrafficClassColdStartBackfill
+			if !hasColdTarget {
+				// Freeze the original uncapped now-lag target BEFORE collection.
+				// Retries and later MaxWindow slices remain anchored to it rather
+				// than chasing a moving wall clock and silently becoming steady.
+				coldTarget = windowNow.Add(-c.Lag())
+				if err := s.store.Set(targetKey, coldTarget); err != nil {
+					s.reportCheckpointPersistError(
+						c.Name(),
+						"cold-start target persist failed",
+						err,
+					)
+					runErr = fmt.Errorf("persist cold-start target: %w", err)
+					break
+				}
+				hasColdTarget = true
+			}
+		case hasColdTarget:
+			attribution.TrafficClass = telemetry.TrafficClassColdStartBackfill
+			if !last.Before(coldTarget) {
+				// A prior final-slice clear failed. Retry it before scheduling
+				// steady traffic; until zero is persisted, remain conservatively
+				// cold even though the main HWM reached its target.
+				if err := s.clearColdStartTarget(targetKey, coldTarget); err != nil {
+					s.reportCheckpointPersistError(
+						c.Name(),
+						"cold-start target clear failed",
+						err,
+					)
+					runErr = fmt.Errorf("clear cold-start target: %w", err)
+				} else {
+					hasColdTarget = false
+					attribution.TrafficClass = telemetry.TrafficClassSteadyState
+				}
+			}
+		}
+		if runErr != nil {
+			break
+		}
+		if hasColdTarget {
+			// nextWindow subtracts Lag from now. Supplying target+Lag fixes its
+			// uncapped upper bound at the original cold-start target.
+			windowNow = coldTarget.Add(c.Lag())
+		}
+		runEmitter := s.runEmitter(attribution)
+		runErr = s.runWindow(
+			ctx,
+			c,
+			e,
+			runEmitter,
+			outcomes,
+			last,
+			hasLast,
+			windowNow,
+			targetKey,
+			coldTarget,
+			hasColdTarget,
+		)
 	case SnapshotCollector:
+		runEmitter := s.runEmitter(attribution)
 		runErr = c.Collect(ctx, runEmitter, outcomes)
 		if runErr != nil && !isShutdownCancellation(ctx, runErr) {
 			s.logger.Warn("collector failed", "collector", c.Name(), "error", runErr)
@@ -341,6 +444,42 @@ func (s *Scheduler) runTick(ctx context.Context, e Entry, lastSuccess *time.Time
 	}
 }
 
+// runEmitter returns the collector-bound data emitter for one run and adds
+// event-lag observation outside it. The factory is optional for backwards
+// compatibility with package users and unit tests.
+func (s *Scheduler) runEmitter(attribution telemetry.Attribution) telemetry.Emitter {
+	e := s.emitter
+	if s.emitterFactory != nil {
+		e = s.emitterFactory(attribution)
+	}
+	return telemetry.WithEventLag(
+		e,
+		attribution.Collector,
+		attribution.TenantID,
+		attribution.Transport,
+		s.now,
+	)
+}
+
+func (s *Scheduler) clearColdStartTarget(key string, target time.Time) error {
+	if err := s.store.Set(key, time.Time{}); err != nil {
+		// File-backed Set updates its in-memory map before persistence. Restore the
+		// nonzero target even when the failed zero-write mutated memory, so the
+		// running process cannot silently switch to steady. On disk, the failed
+		// clear leaves the prior nonzero target intact across restart.
+		restoreErr := s.store.Set(key, target)
+		return errors.Join(err, restoreErr)
+	}
+	return nil
+}
+
+func (s *Scheduler) reportCheckpointPersistError(collectorName, message string, err error) {
+	s.logger.Warn(message, "collector", collectorName, "error", err)
+	if s.selfObs {
+		emitCheckpointPersistError(s.emitter, collectorName, s.tenant)
+	}
+}
+
 // runWindow polls a window collector's next [from, to] range and advances the
 // checkpoint on success. It returns the collector's error (nil on success or
 // when there is no new window to poll) so the caller can record scrape metrics.
@@ -350,9 +489,14 @@ func (s *Scheduler) runWindow(
 	e Entry,
 	emitter telemetry.Emitter,
 	outcomes *recordoutcome.Recorder,
+	last time.Time,
+	hasLast bool,
+	windowNow time.Time,
+	coldTargetKey string,
+	coldTarget time.Time,
+	hasColdTarget bool,
 ) error {
-	last, hasLast := s.store.Get(s.checkpointKey(c.Name()))
-	from, to, ok := nextWindow(last, hasLast, s.now(), c.Lag(), e.InitialLookback, e.MaxWindow)
+	from, to, ok := nextWindow(last, hasLast, windowNow, c.Lag(), e.InitialLookback, e.MaxWindow)
 	if !ok {
 		return nil
 	}
@@ -369,9 +513,13 @@ func (s *Scheduler) runWindow(
 		hwm = to
 	}
 	if err := s.store.Set(s.checkpointKey(c.Name()), hwm); err != nil {
-		s.logger.Warn("checkpoint persist failed", "collector", c.Name(), "error", err)
-		if s.selfObs {
-			emitCheckpointPersistError(s.emitter, c.Name(), s.tenant)
+		s.reportCheckpointPersistError(c.Name(), "checkpoint persist failed", err)
+		return nil
+	}
+	if hasColdTarget && !hwm.Before(coldTarget) {
+		if err := s.clearColdStartTarget(coldTargetKey, coldTarget); err != nil {
+			s.reportCheckpointPersistError(c.Name(), "cold-start target clear failed", err)
+			return fmt.Errorf("clear cold-start target: %w", err)
 		}
 	}
 	return nil

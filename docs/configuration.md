@@ -54,6 +54,10 @@ field name (e.g. `log_level`) is preserved as-is — only level boundaries use `
 | `admin.enabled` | `G2O_ADMIN__ENABLED` |
 | `admin.addr` | `G2O_ADMIN__ADDR` |
 | `admin.refresh_interval` | `G2O_ADMIN__REFRESH_INTERVAL` |
+| `cost.enabled` | `G2O_COST__ENABLED` |
+| `cost.period` | `G2O_COST__PERIOD` |
+| `cost.rates.log_record_microunits` | `G2O_COST__RATES__LOG_RECORD_MICROUNITS` |
+| `cost.budget_microunits` | `G2O_COST__BUDGET_MICROUNITS` |
 | `checkpoint_dir` | `G2O_CHECKPOINT_DIR` |
 | `backfill.initial_lookback` | `G2O_BACKFILL__INITIAL_LOOKBACK` |
 | `collectors["entra.signins.interactive"].enabled` | `G2O_COLLECTORS__ENTRA.SIGNINS.INTERACTIVE__ENABLED` |
@@ -208,6 +212,75 @@ The status page also renders a per-tenant **throttle-headroom** panel — the
 live client-side rate-limiter state (limit/s, burst, tokens available,
 headroom %) for each Graph workload the tenant has actually hit since start-up
 — so you can see how close a tenant is running to Graph's throttling ceilings.
+
+It also exposes exact cumulative collector volume and process-level OTLP
+transport totals. The optional cost view described below appears only when
+`cost.enabled` is true. It is labelled **estimate, not invoice**.
+
+### `cost`
+
+```yaml
+cost:
+  enabled: false
+  currency: ""
+  version: ""
+  source: ""
+  effective_at: ""
+  period: 720h
+  rates:
+    source_record_microunits: null
+    metric_point_microunits: null
+    log_record_microunits: null
+    transmitted_payload_byte_microunits: null
+  budget_microunits: 0
+```
+
+Cost projection is observational and disabled by default. graph2otel does not
+ship a vendor price table or try to discover one. When enabled, the operator
+must provide the currency and the identity, provenance, effective timestamp,
+and rates for the schedule being modelled:
+
+- `currency` — an upper-case three-letter ASCII currency code.
+- `version` — a nonblank identifier for the supplied rate schedule.
+- `source` — a nonblank description or reference identifying where the rates
+  came from.
+- `effective_at` — the schedule's RFC3339 effective timestamp.
+- `period` — a positive duration used to project an observed interval. The
+  default is `720h` (30 days).
+- `rates.*` — four explicit, nonnegative integer rates: per logical source
+  record, per emitted metric point, per emitted log record, and per
+  post-compression OTLP payload byte. An explicit `0` is valid; an omitted rate
+  is not valid while cost projection is enabled. Helm values are capped at
+  `9007199254740991` so its YAML/JSON rendering path preserves each integer
+  exactly.
+- `budget_microunits` — a nonnegative comparison value for the projection
+  period. `0` disables the comparison. The same Helm exact-integer cap applies.
+
+A microunit is \(10^{-6}\) of the configured currency unit. Integer rates and
+integer arithmetic keep the result exact at that scale without presenting
+floating-point rounding as a billing fact.
+
+The logical source-record, metric-point, and log-record components are exact
+runtime counts. OTLP payload bytes are exact only for the process as a whole.
+graph2otel allocates metric payload bytes over metric points and log payload
+bytes over log points independently; one signal can never be charged to a
+collector which emitted only the other. That allocation is always labelled
+`estimated`. Signal bytes with no same-signal collector point share remain in
+an explicit `_unattributed` / `process` row rather than disappearing. The
+collector rows plus that row reconcile to the process interval estimate.
+
+The interval estimate retains every traffic class. The configured-period
+projection and budget ratio include `steady_state` only: a finite cold-start
+backfill or replay is shown as interval cost but is never annualised as
+recurring traffic. The admin waits for at least two complete metric-export
+intervals and uses up to about ten minutes of observations to reduce exporter
+cadence mismatch, refreshes the projection no more than once per minute, and
+exposes the actual observed duration. A budget produces
+only a ratio in the admin status and UI. Neither pricing nor a crossed budget
+can sample, throttle, delay, disable, or drop a collector, and it cannot change
+the cardinality limiter or exporter. See
+[Volume, transport, and estimated cost](signals.md#volume-transport-and-estimated-cost)
+for the exact measurement boundaries.
 
 ### `profiling`
 

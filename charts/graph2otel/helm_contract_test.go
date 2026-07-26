@@ -186,6 +186,226 @@ func TestConfigSchemaMatchesApplicationConfigAndClosesFixedObjects(t *testing.T)
 	assertConfigSchema(t, configSchema, reflect.TypeOf(config.Config{}), "config")
 }
 
+func TestHelmCostConfigRequiresCompleteOperatorSuppliedRates(t *testing.T) {
+	valid := writeValues(t, `config:
+  cost:
+    enabled: true
+    currency: GBP
+    version: ops-2026-07
+    source: internal-finops
+    effective_at: "2026-07-26T00:00:00Z"
+    period: 720h
+    rates:
+      source_record_microunits: 0
+      metric_point_microunits: 0
+      log_record_microunits: 0
+      transmitted_payload_byte_microunits: 0
+    budget_microunits: 0
+`)
+	if output, err := runHelm(t, "template", "test", ".", "-f", valid); err != nil {
+		t.Fatalf("helm template rejected complete cost config with explicit zero rates: %v\n%s",
+			err, output)
+	}
+
+	tests := []struct {
+		name       string
+		values     string
+		diagnostic string
+	}{
+		{
+			name: "lowercase currency",
+			values: `config:
+  cost:
+    enabled: true
+    currency: gbp
+`,
+			diagnostic: "currency",
+		},
+		{
+			name: "omitted source record rate",
+			values: `config:
+  cost:
+    enabled: true
+    currency: GBP
+    version: ops-2026-07
+    source: internal-finops
+    effective_at: "2026-07-26T00:00:00Z"
+`,
+			diagnostic: "source_record_microunits",
+		},
+		{
+			name: "blank version",
+			values: `config:
+  cost:
+    enabled: true
+    currency: GBP
+    version: " "
+    source: internal-finops
+    effective_at: "2026-07-26T00:00:00Z"
+    rates:
+      source_record_microunits: 0
+      metric_point_microunits: 0
+      log_record_microunits: 0
+      transmitted_payload_byte_microunits: 0
+`,
+			diagnostic: "version",
+		},
+		{
+			name: "blank source",
+			values: `config:
+  cost:
+    enabled: true
+    currency: GBP
+    version: ops-2026-07
+    source: " "
+    effective_at: "2026-07-26T00:00:00Z"
+    rates:
+      source_record_microunits: 0
+      metric_point_microunits: 0
+      log_record_microunits: 0
+      transmitted_payload_byte_microunits: 0
+`,
+			diagnostic: "source",
+		},
+		{
+			name: "invalid effective timestamp",
+			values: `config:
+  cost:
+    enabled: true
+    currency: GBP
+    version: ops-2026-07
+    source: internal-finops
+    effective_at: "2026-07-26"
+    rates:
+      source_record_microunits: 0
+      metric_point_microunits: 0
+      log_record_microunits: 0
+      transmitted_payload_byte_microunits: 0
+`,
+			diagnostic: "effective_at",
+		},
+		{
+			name: "zero period",
+			values: `config:
+  cost:
+    enabled: true
+    currency: GBP
+    version: ops-2026-07
+    source: internal-finops
+    effective_at: "2026-07-26T00:00:00Z"
+    period: 0s
+    rates:
+      source_record_microunits: 0
+      metric_point_microunits: 0
+      log_record_microunits: 0
+      transmitted_payload_byte_microunits: 0
+`,
+			diagnostic: "period",
+		},
+		{
+			name: "malformed period",
+			values: `config:
+  cost:
+    enabled: true
+    currency: GBP
+    version: ops-2026-07
+    source: internal-finops
+    effective_at: "2026-07-26T00:00:00Z"
+    period: bogus
+    rates:
+      source_record_microunits: 0
+      metric_point_microunits: 0
+      log_record_microunits: 0
+      transmitted_payload_byte_microunits: 0
+`,
+			diagnostic: "period",
+		},
+		{
+			name: "negative metric point rate",
+			values: `config:
+  cost:
+    rates:
+      metric_point_microunits: -1
+`,
+			diagnostic: "metric_point_microunits",
+		},
+		{
+			name: "negative budget",
+			values: `config:
+  cost:
+    budget_microunits: -1
+`,
+			diagnostic: "budget_microunits",
+		},
+		{
+			name: "rate beyond exact Helm integer range",
+			values: `config:
+  cost:
+    rates:
+      source_record_microunits: 9007199254740992
+`,
+			diagnostic: "source_record_microunits",
+		},
+		{
+			name: "budget beyond exact Helm integer range",
+			values: `config:
+  cost:
+    budget_microunits: 9007199254740992
+`,
+			diagnostic: "budget_microunits",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			values := writeValues(t, test.values)
+			output, err := runHelm(t, "template", "test", ".", "-f", values)
+			if err == nil {
+				t.Fatalf("helm template accepted invalid cost config:\n%s", output)
+			}
+			if !strings.Contains(string(output), test.diagnostic) {
+				t.Errorf("helm diagnostic does not identify %q:\n%s", test.diagnostic, output)
+			}
+		})
+	}
+}
+
+func TestHelmPreservesMaximumExactCostInteger(t *testing.T) {
+	values := writeValues(t, `config:
+  cost:
+    rates:
+      source_record_microunits: 9007199254740991
+    budget_microunits: 9007199254740991
+`)
+	rendered, err := runHelm(t, "template", "test", ".", "-f", values)
+	if err != nil {
+		t.Fatalf("helm template exact maximum cost integer: %v\n%s", err, rendered)
+	}
+	if got := strings.Count(string(rendered), "9007199254740991"); got != 2 {
+		t.Fatalf("rendered exact maximum cost integer %d times, want 2:\n%s", got, rendered)
+	}
+}
+
+func TestGeneratedReadmeDocumentsNullableCostRatesAsIntegers(t *testing.T) {
+	readme, err := os.ReadFile("README.md")
+	if err != nil {
+		t.Fatalf("read generated chart README: %v", err)
+	}
+
+	for _, rate := range []string{
+		"source_record_microunits",
+		"metric_point_microunits",
+		"log_record_microunits",
+		"transmitted_payload_byte_microunits",
+	} {
+		want := "| config.cost.rates." + rate + " | integer\\|null | `nil` |"
+		if !strings.Contains(string(readme), want) {
+			t.Errorf("generated README does not document %s as integer|null with a null default",
+				rate)
+		}
+	}
+}
+
 func TestCollectorOverrideSchemaHasBoundedNamesAndSourceEnum(t *testing.T) {
 	schema := loadValuesSchema(t)
 	definitions := schemaObject(t, schema, "definitions")

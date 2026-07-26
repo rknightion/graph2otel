@@ -57,6 +57,17 @@ never in committed YAML.
 | `G2O_PROFILING__BLOCK_PROFILE_RATE` | `100000` | runtime.SetBlockProfileRate (ns, 100µs); 0 = disabled |
 | `G2O_CARDINALITY__PER_METRIC_LIMIT` | `5000` | per-metric active-series cap; beyond it the top series by value are kept and the tail folds into `other` (0 = unlimited) |
 | `G2O_CARDINALITY__GLOBAL_LIMIT` | `100000` | total active-series cap across every metric; overage is absorbed by the worst offenders via max-min fairness (0 = unlimited) |
+| `G2O_COST__ENABLED` | `false` | opt in to cost accounting; default off |
+| `G2O_COST__CURRENCY` | `""` | uppercase 3-letter currency code, required when enabled |
+| `G2O_COST__VERSION` | `""` | nonblank operator rate-schedule version, required when enabled |
+| `G2O_COST__SOURCE` | `""` | nonblank operator rate source/provenance, required when enabled |
+| `G2O_COST__EFFECTIVE_AT` | `""` | RFC3339 rate-schedule effective timestamp, required when enabled |
+| `G2O_COST__PERIOD` | `720h` | positive projection period; 720h = 30 days |
+| `G2O_COST__RATES__SOURCE_RECORD_MICROUNITS` | `null` | microunits per logical source record; explicit nonnegative integer required when enabled |
+| `G2O_COST__RATES__METRIC_POINT_MICROUNITS` | `null` | microunits per emitted metric point; explicit nonnegative integer required when enabled |
+| `G2O_COST__RATES__LOG_RECORD_MICROUNITS` | `null` | microunits per emitted log record; explicit nonnegative integer required when enabled |
+| `G2O_COST__RATES__TRANSMITTED_PAYLOAD_BYTE_MICROUNITS` | `null` | microunits per post-compression OTLP payload byte; explicit nonnegative integer required when enabled |
+| `G2O_COST__BUDGET_MICROUNITS` | `0` | nonnegative projection-period budget; 0 disables comparison |
 | `G2O_BACKFILL__INITIAL_LOOKBACK` | `0s` | cold-start backfill window; 0 = each collector's own built-in lookback |
 | `G2O_CHECKPOINT_DIR` | `./checkpoints` | root dir for the file-based CheckpointStore |
 
