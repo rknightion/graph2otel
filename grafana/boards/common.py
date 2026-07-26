@@ -76,14 +76,17 @@ def build(mod, cat) -> Builder:
     if availability_pattern:
         b.row("Collector availability")
         b.availability(availability_pattern)
+    # Boards may add hand-authored presentation for cataloged signals that need
+    # richer PromQL than the standard section renderer can express.
+    extra = getattr(mod, "extra", None)
+    extra_first = bool(getattr(mod, "EXTRA_FIRST", False))
+    if extra is not None and extra_first:
+        extra(b)
     for section_title, items in mod.SECTIONS:
         b.row(section_title)
         for item in items:
             _entry(b, item)
-    # Boards may add hand-authored presentation for cataloged signals that need
-    # richer PromQL than the standard section renderer can express.
-    extra = getattr(mod, "extra", None)
-    if extra is not None:
+    if extra is not None and not extra_first:
         extra(b)
     logs = getattr(mod, "LOGS", ())
     if logs:

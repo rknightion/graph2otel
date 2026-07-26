@@ -108,7 +108,7 @@
     {
       "id": 2,
       "type": "row",
-      "title": "Blob ingest health and API drift",
+      "title": "Executive health and data-loss summary",
       "collapsed": false,
       "panels": [],
       "gridPos": {
@@ -120,72 +120,29 @@
     },
     {
       "id": 3,
-      "type": "timeseries",
-      "title": "Microsoft API drift \u2014 a response no longer matches what a collector expects",
-      "description": "",
+      "type": "text",
+      "title": "What this summary cannot prove",
       "gridPos": {
-        "h": 8,
+        "h": 5,
         "w": 24,
         "x": 0,
         "y": 13
       },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 10,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
-        },
-        "overrides": []
-      },
       "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true,
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (collector, field, kind, tenant_id) (rate(graph2otel_api_unexpected_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "range": true,
-          "instant": false
-        }
-      ]
+        "mode": "markdown",
+        "content": "This matrix deliberately keeps source collection, source-to-emitter loss, exporter callback delivery, checkpoint persistence, source-event emission lag, cardinality clipping, API drift and throttling separate. It cannot reproduce dependency-free liveness or latched readiness from a missing metrics path. If the metrics path is unavailable, use `/readyz` and the admin status as the authoritative fallback. Empty summary panels are unknown, not healthy."
+      }
     },
     {
       "id": 4,
-      "type": "timeseries",
-      "title": "Blob categories",
-      "description": "",
+      "type": "table",
+      "title": "Current source collection failures",
+      "description": "Current runtime, startup and permission failures only. Healthy-empty, configured absence, alternative coverage and subscription limitations are intentionally not failures.",
       "gridPos": {
-        "h": 8,
-        "w": 12,
+        "h": 6,
+        "w": 6,
         "x": 0,
-        "y": 21
+        "y": 18
       },
       "datasource": {
         "type": "prometheus",
@@ -194,56 +151,53 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 10,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
+          "custom": {},
+          "noValue": "Unknown: no matching series. This is not a green verdict; open the drilldown.",
+          "links": [
+            {
+              "title": "Open Collector availability failures",
+              "url": "/d/graph2otel-self-obs?viewPanel=23&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ]
         },
         "overrides": []
       },
       "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true,
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
         }
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (state, tenant_id) (graph2otel_blob_categories{tenant_id=~\"$tenant\"})",
+          "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~\"$collector\",state=~\"degraded|failed|startup_failed\"} or graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~\"$collector\",state=\"blocked\",reason=\"permission_denied\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "range": true,
-          "instant": false
+          "range": false,
+          "instant": true
         }
       ]
     },
     {
       "id": 5,
-      "type": "timeseries",
-      "title": "Blob endpoint paths",
-      "description": "",
+      "type": "table",
+      "title": "Known source-to-emitter record loss",
+      "description": "Source rows deliberately dropped or lost to decode/processing errors during the selected range. This stops at the emitter boundary.",
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 21
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 18
       },
       "datasource": {
         "type": "prometheus",
@@ -252,56 +206,163 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 10,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
+          "custom": {},
+          "noValue": "Unknown: no matching series. This is not a green verdict; open the drilldown.",
+          "links": [
+            {
+              "title": "Open Dropped / errored source records",
+              "url": "/d/graph2otel-self-obs?viewPanel=36&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ]
         },
         "overrides": []
       },
       "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true,
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
         }
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (collector, tenant_id) (graph2otel_blob_endpoint_paths{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (increase(graph2otel_record_outcomes_total{tenant_id=~\"$tenant\",collector=~\"$collector\",outcome=~\"dropped|errored\"}[$__range]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "range": true,
-          "instant": false
+          "range": false,
+          "instant": true
         }
       ]
     },
     {
       "id": 6,
-      "type": "timeseries",
-      "title": "Blob event age",
-      "description": "",
+      "type": "table",
+      "title": "Current exporter callback degradation",
+      "description": "Latest process-local callback state by signal. Success means the exporter accepted the callback; it is not backend retention and not exactly-once delivery evidence.",
       "gridPos": {
-        "h": 8,
-        "w": 12,
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 18
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {},
+          "noValue": "Unknown: no matching series. This is not a green verdict; open the drilldown.",
+          "links": [
+            {
+              "title": "Open Current exporter degradation by signal",
+              "url": "/d/graph2otel-self-obs?viewPanel=13&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (signal) (graph2otel_otlp_delivery_degraded_ratio)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": false,
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Checkpoint persistence failures",
+      "description": "Checkpoint writes that failed during the selected range. A nonzero value means restart replay risk even when the collection itself succeeded.",
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 18
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {},
+          "noValue": "Unknown: no matching series. This is not a green verdict; open the drilldown.",
+          "links": [
+            {
+              "title": "Open Checkpoint persist error rate",
+              "url": "/d/graph2otel-self-obs?viewPanel=32&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (tenant_id) (increase(graph2otel_checkpoint_persist_errors_total{tenant_id=~\"$tenant\",collector=~\"$collector\"}[$__range]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": false,
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Source-event emission lag",
+      "description": "P95 source timestamp to graph2otel emission lag by collector and transport. This does not measure backend acceptance or OTLP delivery latency.",
+      "gridPos": {
+        "h": 6,
+        "w": 6,
         "x": 0,
-        "y": 29
+        "y": 24
       },
       "datasource": {
         "type": "prometheus",
@@ -310,172 +371,53 @@
       "fieldConfig": {
         "defaults": {
           "unit": "s",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 10,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
+          "custom": {},
+          "noValue": "Unknown: no matching series. This is not a green verdict; open the drilldown.",
+          "links": [
+            {
+              "title": "Open Source-event lag at emission",
+              "url": "/d/graph2otel-self-obs?viewPanel=37&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ]
         },
         "overrides": []
       },
       "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true,
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
         }
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (collector, tenant_id) (graph2otel_blob_event_age_seconds{tenant_id=~\"$tenant\"})",
+          "expr": "histogram_quantile(0.95, sum by (le, tenant_id, collector, ingest_transport) (rate(graph2otel_event_lag_seconds_bucket{tenant_id=~\"$tenant\", collector=~\"$collector\"}[$__rate_interval])))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "range": true,
-          "instant": false
-        }
-      ]
-    },
-    {
-      "id": 7,
-      "type": "timeseries",
-      "title": "Blob records dropped",
-      "description": "",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 29
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 10,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true,
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (collector, tenant_id) (rate(graph2otel_blob_records_dropped_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "range": true,
-          "instant": false
-        }
-      ]
-    },
-    {
-      "id": 8,
-      "type": "timeseries",
-      "title": "Blob self excluded",
-      "description": "",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 37
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 10,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true,
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum by (collector, tenant_id) (rate(graph2otel_blob_self_excluded_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "range": true,
-          "instant": false
+          "range": false,
+          "instant": true
         }
       ]
     },
     {
       "id": 9,
-      "type": "timeseries",
-      "title": "Blob records: emitted as metrics vs gated",
-      "description": "",
+      "type": "table",
+      "title": "Series clipped last interval",
+      "description": "Process-wide metric series folded or dropped by the central cardinality limiter during the latest export interval.",
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 37
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 24
       },
       "datasource": {
         "type": "prometheus",
@@ -484,67 +426,53 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 10,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
+          "custom": {},
+          "noValue": "Unknown: no matching series. This is not a green verdict; open the drilldown.",
+          "links": [
+            {
+              "title": "Open Series clipped, by mode (process-wide)",
+              "url": "/d/graph2otel-self-obs?viewPanel=53&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ]
         },
         "overrides": []
       },
       "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true,
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
         }
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (collector, tenant_id) (rate(graph2otel_blob_metric_emitted_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (mode) (graph2otel_series_clipped)",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "range": true,
-          "instant": false
-        },
-        {
-          "refId": "B",
-          "expr": "sum by (collector, tenant_id) (rate(graph2otel_blob_metric_gated_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "range": true,
-          "instant": false
+          "range": false,
+          "instant": true
         }
       ]
     },
     {
       "id": 10,
-      "type": "timeseries",
-      "title": "Logpipeline self excluded",
-      "description": "",
+      "type": "table",
+      "title": "Microsoft API assumption violations",
+      "description": "Report-only wire values that violated a collector's validated API assumptions during the selected range. Records are not dropped.",
       "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 45
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 24
       },
       "datasource": {
         "type": "prometheus",
@@ -553,48 +481,100 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 1,
-            "fillOpacity": 10,
-            "showPoints": "never",
-            "spanNulls": true
-          },
-          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
+          "custom": {},
+          "noValue": "Unknown: no matching series. This is not a green verdict; open the drilldown.",
+          "links": [
+            {
+              "title": "Open Microsoft API drift \u2014 a response no longer matches what a collector expects",
+              "url": "/d/graph2otel-self-obs?viewPanel=71&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ]
         },
         "overrides": []
       },
       "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true,
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
         }
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (collector, tenant_id) (rate(graph2otel_logpipeline_self_excluded_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id) (increase(graph2otel_api_unexpected_total{tenant_id=~\"$tenant\",collector=~\"$collector\"}[$__range]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "range": true,
-          "instant": false
+          "range": false,
+          "instant": true
         }
       ]
     },
     {
       "id": 11,
+      "type": "table",
+      "title": "Maximum reported throttle consumption",
+      "description": "Maximum currently reported Microsoft Graph throttle-budget consumption. The header is not present on every response, so absence is unknown.",
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 24
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {},
+          "noValue": "Unknown: no matching series. This is not a green verdict; open the drilldown.",
+          "links": [
+            {
+              "title": "Open Graph-reported throttle budget consumed",
+              "url": "/d/graph2otel-self-obs?viewPanel=58&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (tenant_id, workload) (graph2otel_throttle_limit_percentage_percent{tenant_id=~\"$tenant\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": false,
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 12,
       "type": "row",
       "title": "OTLP delivery (process-wide)",
       "collapsed": false,
@@ -603,11 +583,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 53
+        "y": 30
       }
     },
     {
-      "id": 12,
+      "id": 13,
       "type": "table",
       "title": "Current exporter degradation by signal",
       "description": "Current process-local exporter callback state for metrics and logs. 1 means the latest failure has not been cleared by a later successful export; 0 means it has. This does not change liveness or readiness.",
@@ -615,7 +595,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 54
+        "y": 31
       },
       "datasource": {
         "type": "prometheus",
@@ -655,7 +635,7 @@
       ]
     },
     {
-      "id": 13,
+      "id": 14,
       "type": "timeseries",
       "title": "Exporter callback rates by signal",
       "description": "Exporter callback attempts, accepted callbacks, and failures for the metrics and logs pipelines independently. These overlapping rates are deliberately unstacked; attempts equal successes plus failures.",
@@ -663,7 +643,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 60
+        "y": 37
       },
       "datasource": {
         "type": "prometheus",
@@ -738,7 +718,7 @@
       ]
     },
     {
-      "id": 14,
+      "id": 15,
       "type": "timeseries",
       "title": "Force-flush failure rate by signal",
       "description": "Failed force-flush callbacks by signal. A later successful export clears degradation; an empty successful flush does not claim payload acceptance.",
@@ -746,7 +726,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 68
+        "y": 45
       },
       "datasource": {
         "type": "prometheus",
@@ -797,7 +777,7 @@
       ]
     },
     {
-      "id": 15,
+      "id": 16,
       "type": "timeseries",
       "title": "Shutdown failure total by signal",
       "description": "Process-lifetime failed shutdown callbacks by signal. Shutdown failure does not alter dependency-free liveness or readiness semantics.",
@@ -805,7 +785,7 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 68
+        "y": 45
       },
       "datasource": {
         "type": "prometheus",
@@ -856,7 +836,7 @@
       ]
     },
     {
-      "id": 16,
+      "id": 17,
       "type": "timeseries",
       "title": "Exact transmitted OTLP payload rate by signal",
       "description": "Exact post-compression OTLP payload bytes accepted by the client transport on each send. This process-wide measurement excludes HTTP/gRPC framing, TLS, TCP/IP and kernel retransmission.",
@@ -864,7 +844,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 74
+        "y": 51
       },
       "datasource": {
         "type": "prometheus",
@@ -915,7 +895,7 @@
       ]
     },
     {
-      "id": 17,
+      "id": 18,
       "type": "timeseries",
       "title": "Exact exporter retry rate by signal",
       "description": "Exact second-and-later exporter retry-loop attempts for metrics and logs. Redirects and transparent connection retries are excluded.",
@@ -923,7 +903,7 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 74
+        "y": 51
       },
       "datasource": {
         "type": "prometheus",
@@ -974,7 +954,7 @@
       ]
     },
     {
-      "id": 18,
+      "id": 19,
       "type": "row",
       "title": "Collector availability",
       "collapsed": false,
@@ -983,11 +963,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 80
+        "y": 57
       }
     },
     {
-      "id": 19,
+      "id": 20,
       "type": "table",
       "title": "Current collector availability",
       "description": "One current value-1 row per tenant and logical collector. collector_transport is the resolved collector transport, not the log-record ingest_transport.",
@@ -995,7 +975,7 @@
         "h": 12,
         "w": 24,
         "x": 0,
-        "y": 81
+        "y": 58
       },
       "datasource": {
         "type": "prometheus",
@@ -1035,7 +1015,7 @@
       ]
     },
     {
-      "id": 20,
+      "id": 21,
       "type": "bargauge",
       "title": "Collector availability by state",
       "description": "Current logical-collector counts by bounded availability state. This is a snapshot, not a scrape-success or record-throughput count.",
@@ -1043,7 +1023,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 93
+        "y": 70
       },
       "datasource": {
         "type": "prometheus",
@@ -1084,7 +1064,7 @@
       ]
     },
     {
-      "id": 21,
+      "id": 22,
       "type": "table",
       "title": "Intentional collector absence",
       "description": "Disabled and covered collectors are intentional absence, shown separately from runtime or startup failures.",
@@ -1092,7 +1072,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 93
+        "y": 70
       },
       "datasource": {
         "type": "prometheus",
@@ -1132,7 +1112,7 @@
       ]
     },
     {
-      "id": 22,
+      "id": 23,
       "type": "table",
       "title": "Collector availability failures",
       "description": "Current permission-denied blocks, degraded runs, failed runs, and startup failures. This is deliberately separate from configured absence and subscription limitations.",
@@ -1140,7 +1120,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 100
+        "y": 77
       },
       "datasource": {
         "type": "prometheus",
@@ -1191,7 +1171,7 @@
       ]
     },
     {
-      "id": 23,
+      "id": 24,
       "type": "table",
       "title": "Subscription and capability limitations",
       "description": "This non-failure view shows subscription and capability limitations: a partial license can keep a collector running with a reduced capability set, while an unavailable license blocks it. Exact omitted capabilities are available from the admin status, not labels.",
@@ -1199,7 +1179,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 100
+        "y": 77
       },
       "datasource": {
         "type": "prometheus",
@@ -1250,7 +1230,7 @@
       ]
     },
     {
-      "id": 24,
+      "id": 25,
       "type": "row",
       "title": "Collector health (generated signal catalog)",
       "collapsed": false,
@@ -1259,11 +1239,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 107
+        "y": 84
       }
     },
     {
-      "id": 25,
+      "id": 26,
       "type": "timeseries",
       "title": "Scrape success by collector",
       "description": "1 when the last reconciled run was empty or successful; 0 when it was partial or failed (including a recovered panic). A green tick is not evidence of data: several collectors succeed on an empty collection by design.",
@@ -1271,7 +1251,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 108
+        "y": 85
       },
       "datasource": {
         "type": "prometheus",
@@ -1321,7 +1301,7 @@
       ]
     },
     {
-      "id": 26,
+      "id": 27,
       "type": "timeseries",
       "title": "Scrape duration by collector",
       "description": "",
@@ -1329,7 +1309,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 108
+        "y": 85
       },
       "datasource": {
         "type": "prometheus",
@@ -1379,7 +1359,7 @@
       ]
     },
     {
-      "id": 27,
+      "id": 28,
       "type": "table",
       "title": "Scrape staleness (seconds since last healthy result)",
       "description": "Counts up from process start until the first empty or successful result, so a collector that has never been healthy shows a growing value rather than no series.",
@@ -1387,7 +1367,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 116
+        "y": 93
       },
       "datasource": {
         "type": "prometheus",
@@ -1427,7 +1407,7 @@
       ]
     },
     {
-      "id": 28,
+      "id": 29,
       "type": "timeseries",
       "title": "Age of the latest completed scrape",
       "description": "Wall-clock age of the latest completed run, whether it succeeded or failed.",
@@ -1435,7 +1415,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 116
+        "y": 93
       },
       "datasource": {
         "type": "prometheus",
@@ -1485,7 +1465,7 @@
       ]
     },
     {
-      "id": 29,
+      "id": 30,
       "type": "timeseries",
       "title": "Scrape budget (duration / interval)",
       "description": "At or above 1 a scrape takes as long as its own poll interval \u2014 no headroom, risk of overrun.",
@@ -1493,7 +1473,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 124
+        "y": 101
       },
       "datasource": {
         "type": "prometheus",
@@ -1543,7 +1523,7 @@
       ]
     },
     {
-      "id": 30,
+      "id": 31,
       "type": "timeseries",
       "title": "Scrape error rate by error type",
       "description": "",
@@ -1551,7 +1531,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 124
+        "y": 101
       },
       "datasource": {
         "type": "prometheus",
@@ -1601,7 +1581,7 @@
       ]
     },
     {
-      "id": 31,
+      "id": 32,
       "type": "timeseries",
       "title": "Checkpoint persist error rate",
       "description": "The window succeeded but its high-water mark did not reach disk. The next tick still advances; the window is only re-polled after a restart.",
@@ -1609,7 +1589,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 132
+        "y": 109
       },
       "datasource": {
         "type": "prometheus",
@@ -1659,7 +1639,7 @@
       ]
     },
     {
-      "id": 32,
+      "id": 33,
       "type": "row",
       "title": "Record outcome accounting",
       "collapsed": false,
@@ -1668,11 +1648,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 140
+        "y": 117
       }
     },
     {
-      "id": 33,
+      "id": 34,
       "type": "timeseries",
       "title": "Collector runs by reconciled result",
       "description": "Separates healthy-empty polls from successful data-bearing polls and from partial or failed runs.",
@@ -1680,7 +1660,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 141
+        "y": 118
       },
       "datasource": {
         "type": "prometheus",
@@ -1731,7 +1711,7 @@
       ]
     },
     {
-      "id": 34,
+      "id": 35,
       "type": "timeseries",
       "title": "Source-record rate by outcome",
       "description": "One source row counts once at each lifecycle boundary; fetched, mapped, and terminal outcomes overlap and are deliberately unstacked. This is not the number of OTEL metric points or log records.",
@@ -1739,7 +1719,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 141
+        "y": 118
       },
       "datasource": {
         "type": "prometheus",
@@ -1790,7 +1770,7 @@
       ]
     },
     {
-      "id": 35,
+      "id": 36,
       "type": "timeseries",
       "title": "Dropped / errored source records",
       "description": "Any nonzero value is record loss. `dropped` is a deliberate rejection such as a missing event timestamp; `errored` is decode or processing failure.",
@@ -1798,7 +1778,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 149
+        "y": 126
       },
       "datasource": {
         "type": "prometheus",
@@ -1849,7 +1829,7 @@
       ]
     },
     {
-      "id": 36,
+      "id": 37,
       "type": "timeseries",
       "title": "Source-event lag at emission",
       "description": "Source timestamp to graph2otel emission. It does not measure backend acceptance or OTLP delivery latency.",
@@ -1857,7 +1837,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 149
+        "y": 126
       },
       "datasource": {
         "type": "prometheus",
@@ -1920,7 +1900,7 @@
       ]
     },
     {
-      "id": 37,
+      "id": 38,
       "type": "table",
       "title": "Payload type mismatches",
       "description": "Report-only payload drift. Labels contain only source-controlled field names and closed JSON types, never field values.",
@@ -1928,7 +1908,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 157
+        "y": 134
       },
       "datasource": {
         "type": "prometheus",
@@ -1968,7 +1948,7 @@
       ]
     },
     {
-      "id": 38,
+      "id": 39,
       "type": "row",
       "title": "Ingest volume and estimated cost",
       "collapsed": false,
@@ -1977,11 +1957,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 165
+        "y": 142
       }
     },
     {
-      "id": 39,
+      "id": 40,
       "type": "timeseries",
       "title": "Exact source-record rate by collector and traffic class",
       "description": "Exact logical source records fetched by completed collector runs. This traffic-class view comes from the same immutable snapshot as record.outcomes{outcome=\"fetched\"}. Normal runtime emits steady_state and cold_start_backfill; manual_replay is reserved and not emitted here.",
@@ -1989,7 +1969,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 166
+        "y": 143
       },
       "datasource": {
         "type": "prometheus",
@@ -2040,7 +2020,7 @@
       ]
     },
     {
-      "id": 40,
+      "id": 41,
       "type": "timeseries",
       "title": "Exact emitted-point rate by collector, signal and traffic class",
       "description": "Exact metric and log points after the central limiter and handed to the OpenTelemetry SDK. This is not backend acceptance or retention.",
@@ -2048,7 +2028,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 166
+        "y": 143
       },
       "datasource": {
         "type": "prometheus",
@@ -2099,7 +2079,7 @@
       ]
     },
     {
-      "id": 41,
+      "id": 42,
       "type": "table",
       "title": "Estimated projected collector cost (configured period)",
       "description": "Estimate, not invoice. Present only when cost.enabled is true, using the operator-supplied rates and configured projection period. This projects recurring steady_state rows from cumulative process-lifetime observations; exceptional interval cost remains in the admin view. Logical record and point components are exact; the collector payload-byte allocation is estimated. A configured budget is display-only and never changes collector behavior.",
@@ -2107,7 +2087,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 173
+        "y": 150
       },
       "datasource": {
         "type": "prometheus",
@@ -2148,7 +2128,7 @@
       ]
     },
     {
-      "id": 42,
+      "id": 43,
       "type": "row",
       "title": "Build and licensing",
       "collapsed": false,
@@ -2157,11 +2137,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 181
+        "y": 158
       }
     },
     {
-      "id": 43,
+      "id": 44,
       "type": "table",
       "title": "Build info (process-wide)",
       "description": "One series for the graph2otel process. Tenant selection does not apply: duplicating build identity per tenant would create misleading copies of the same process fact.",
@@ -2169,7 +2149,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 182
+        "y": 159
       },
       "datasource": {
         "type": "prometheus",
@@ -2209,7 +2189,7 @@
       ]
     },
     {
-      "id": 44,
+      "id": 45,
       "type": "table",
       "title": "Detected license tier by tenant",
       "description": "",
@@ -2217,7 +2197,7 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 182
+        "y": 159
       },
       "datasource": {
         "type": "prometheus",
@@ -2257,7 +2237,7 @@
       ]
     },
     {
-      "id": 45,
+      "id": 46,
       "type": "row",
       "title": "Export jobs (Intune report exports, M365 audit query)",
       "collapsed": false,
@@ -2266,11 +2246,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 188
+        "y": 165
       }
     },
     {
-      "id": 46,
+      "id": 47,
       "type": "timeseries",
       "title": "Export jobs by result",
       "description": "",
@@ -2278,7 +2258,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 189
+        "y": 166
       },
       "datasource": {
         "type": "prometheus",
@@ -2328,7 +2308,7 @@
       ]
     },
     {
-      "id": 47,
+      "id": 48,
       "type": "timeseries",
       "title": "Export job duration",
       "description": "",
@@ -2336,7 +2316,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 189
+        "y": 166
       },
       "datasource": {
         "type": "prometheus",
@@ -2386,7 +2366,7 @@
       ]
     },
     {
-      "id": 48,
+      "id": 49,
       "type": "timeseries",
       "title": "Export polls to terminal state",
       "description": "",
@@ -2394,7 +2374,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 189
+        "y": 166
       },
       "datasource": {
         "type": "prometheus",
@@ -2444,7 +2424,7 @@
       ]
     },
     {
-      "id": 49,
+      "id": 50,
       "type": "timeseries",
       "title": "Downloaded export size",
       "description": "",
@@ -2452,7 +2432,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 197
+        "y": 174
       },
       "datasource": {
         "type": "prometheus",
@@ -2502,7 +2482,7 @@
       ]
     },
     {
-      "id": 50,
+      "id": 51,
       "type": "row",
       "title": "Cardinality limiter (#235)",
       "collapsed": false,
@@ -2511,11 +2491,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 203
+        "y": 180
       }
     },
     {
-      "id": 51,
+      "id": 52,
       "type": "table",
       "title": "Active series by source metric (process-wide)",
       "description": "Distinct series emitted per source metric across the shared process AFTER limiting \u2014 the series actually billed. Tenant selection does not apply.",
@@ -2523,7 +2503,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 204
+        "y": 181
       },
       "datasource": {
         "type": "prometheus",
@@ -2563,7 +2543,7 @@
       ]
     },
     {
-      "id": 52,
+      "id": 53,
       "type": "timeseries",
       "title": "Series clipped, by mode (process-wide)",
       "description": "mode=folded were summed into the `other` bucket; mode=dropped were discarded because the metric is not additive and a synthetic aggregate would be worse than the loss. Counts cover the shared process; tenant selection does not apply.",
@@ -2571,7 +2551,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 204
+        "y": 181
       },
       "datasource": {
         "type": "prometheus",
@@ -2621,7 +2601,7 @@
       ]
     },
     {
-      "id": 53,
+      "id": 54,
       "type": "stat",
       "title": "Total active series (process-wide)",
       "description": "Total distinct active series across the shared process during the last export interval. Tenant selection does not apply.",
@@ -2629,7 +2609,7 @@
         "h": 4,
         "w": 12,
         "x": 0,
-        "y": 212
+        "y": 189
       },
       "datasource": {
         "type": "prometheus",
@@ -2672,7 +2652,7 @@
       ]
     },
     {
-      "id": 54,
+      "id": 55,
       "type": "stat",
       "title": "Configured per-metric series limit (process-wide)",
       "description": "One process-wide cardinality policy. Tenant selection does not apply.",
@@ -2680,7 +2660,7 @@
         "h": 4,
         "w": 12,
         "x": 12,
-        "y": 212
+        "y": 189
       },
       "datasource": {
         "type": "prometheus",
@@ -2723,7 +2703,7 @@
       ]
     },
     {
-      "id": 55,
+      "id": 56,
       "type": "row",
       "title": "Graph throttling and outbound HTTP",
       "collapsed": false,
@@ -2732,11 +2712,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 216
+        "y": 193
       }
     },
     {
-      "id": 56,
+      "id": 57,
       "type": "timeseries",
       "title": "Throttle (429) rate by workload",
       "description": "",
@@ -2744,7 +2724,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 217
+        "y": 194
       },
       "datasource": {
         "type": "prometheus",
@@ -2794,7 +2774,7 @@
       ]
     },
     {
-      "id": 57,
+      "id": 58,
       "type": "timeseries",
       "title": "Graph-reported throttle budget consumed",
       "description": "From the x-ms-throttle-limit-percentage response header, which is not sent on every 429 or every workload \u2014 an absent series does NOT mean the budget is healthy.",
@@ -2802,7 +2782,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 217
+        "y": 194
       },
       "datasource": {
         "type": "prometheus",
@@ -2852,7 +2832,7 @@
       ]
     },
     {
-      "id": 58,
+      "id": 59,
       "type": "timeseries",
       "title": "Outbound Graph request latency (p95)",
       "description": "",
@@ -2860,7 +2840,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 217
+        "y": 194
       },
       "datasource": {
         "type": "prometheus",
@@ -2910,7 +2890,7 @@
       ]
     },
     {
-      "id": 59,
+      "id": 60,
       "type": "timeseries",
       "title": "Outbound Graph 4xx / 5xx rate by workload",
       "description": "",
@@ -2918,7 +2898,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 225
+        "y": 202
       },
       "datasource": {
         "type": "prometheus",
@@ -2981,7 +2961,7 @@
       ]
     },
     {
-      "id": 60,
+      "id": 61,
       "type": "row",
       "title": "Non-Graph transport HTTP",
       "collapsed": false,
@@ -2990,11 +2970,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 233
+        "y": 210
       }
     },
     {
-      "id": 61,
+      "id": 62,
       "type": "timeseries",
       "title": "Exchange Online request latency (p95)",
       "description": "",
@@ -3002,7 +2982,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 234
+        "y": 211
       },
       "datasource": {
         "type": "prometheus",
@@ -3052,7 +3032,7 @@
       ]
     },
     {
-      "id": 62,
+      "id": 63,
       "type": "timeseries",
       "title": "Exchange Online errors and throttling",
       "description": "",
@@ -3060,7 +3040,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 234
+        "y": 211
       },
       "datasource": {
         "type": "prometheus",
@@ -3135,7 +3115,7 @@
       ]
     },
     {
-      "id": 63,
+      "id": 64,
       "type": "timeseries",
       "title": "Advanced hunting request latency (p95)",
       "description": "",
@@ -3143,7 +3123,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 241
+        "y": 218
       },
       "datasource": {
         "type": "prometheus",
@@ -3193,7 +3173,7 @@
       ]
     },
     {
-      "id": 64,
+      "id": 65,
       "type": "timeseries",
       "title": "Advanced hunting errors and throttling",
       "description": "",
@@ -3201,7 +3181,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 241
+        "y": 218
       },
       "datasource": {
         "type": "prometheus",
@@ -3276,7 +3256,7 @@
       ]
     },
     {
-      "id": 65,
+      "id": 66,
       "type": "timeseries",
       "title": "MDCA request latency (p95)",
       "description": "",
@@ -3284,7 +3264,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 248
+        "y": 225
       },
       "datasource": {
         "type": "prometheus",
@@ -3334,7 +3314,7 @@
       ]
     },
     {
-      "id": 66,
+      "id": 67,
       "type": "timeseries",
       "title": "MDCA errors and throttling",
       "description": "",
@@ -3342,7 +3322,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 248
+        "y": 225
       },
       "datasource": {
         "type": "prometheus",
@@ -3417,7 +3397,7 @@
       ]
     },
     {
-      "id": 67,
+      "id": 68,
       "type": "timeseries",
       "title": "O365 Activity request latency (p95)",
       "description": "",
@@ -3425,7 +3405,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 255
+        "y": 232
       },
       "datasource": {
         "type": "prometheus",
@@ -3475,7 +3455,7 @@
       ]
     },
     {
-      "id": 68,
+      "id": 69,
       "type": "timeseries",
       "title": "O365 Activity errors and throttling",
       "description": "",
@@ -3483,7 +3463,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 255
+        "y": 232
       },
       "datasource": {
         "type": "prometheus",
@@ -3558,7 +3538,508 @@
       ]
     },
     {
-      "id": 69,
+      "id": 70,
+      "type": "row",
+      "title": "Microsoft API drift",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 239
+      }
+    },
+    {
+      "id": 71,
+      "type": "timeseries",
+      "title": "Microsoft API drift \u2014 a response no longer matches what a collector expects",
+      "description": "Report-only wire values outside a collector's mapped assumptions. Unexpected values do not drop records.",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 240
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (collector, field, kind, tenant_id) (rate(graph2otel_api_unexpected_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ]
+    },
+    {
+      "id": 72,
+      "type": "row",
+      "title": "Blob ingest health",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 248
+      }
+    },
+    {
+      "id": 73,
+      "type": "timeseries",
+      "title": "Blob categories",
+      "description": "",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 249
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (state, tenant_id) (graph2otel_blob_categories{tenant_id=~\"$tenant\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ]
+    },
+    {
+      "id": 74,
+      "type": "timeseries",
+      "title": "Blob endpoint paths",
+      "description": "",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 249
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (collector, tenant_id) (graph2otel_blob_endpoint_paths{tenant_id=~\"$tenant\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ]
+    },
+    {
+      "id": 75,
+      "type": "timeseries",
+      "title": "Blob event age",
+      "description": "",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 257
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "avg by (collector, tenant_id) (graph2otel_blob_event_age_seconds{tenant_id=~\"$tenant\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ]
+    },
+    {
+      "id": 76,
+      "type": "timeseries",
+      "title": "Blob records dropped",
+      "description": "",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 257
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (collector, tenant_id) (rate(graph2otel_blob_records_dropped_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ]
+    },
+    {
+      "id": 77,
+      "type": "timeseries",
+      "title": "Blob self excluded",
+      "description": "",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 265
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (collector, tenant_id) (rate(graph2otel_blob_self_excluded_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ]
+    },
+    {
+      "id": 78,
+      "type": "timeseries",
+      "title": "Blob records: emitted as metrics vs gated",
+      "description": "",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 265
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (collector, tenant_id) (rate(graph2otel_blob_metric_emitted_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (collector, tenant_id) (rate(graph2otel_blob_metric_gated_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ]
+    },
+    {
+      "id": 79,
+      "type": "timeseries",
+      "title": "Logpipeline self excluded",
+      "description": "",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 273
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (collector, tenant_id) (rate(graph2otel_logpipeline_self_excluded_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": true,
+          "instant": false
+        }
+      ]
+    },
+    {
+      "id": 80,
       "type": "row",
       "title": "Logs \u2014 which one, not how many (#162)",
       "collapsed": false,
@@ -3567,11 +4048,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 262
+        "y": 281
       }
     },
     {
-      "id": 70,
+      "id": 81,
       "type": "logs",
       "title": "Blob diagnostic categories \u2014 which container, mapped or not",
       "description": "One record per diagnostic category found in the storage account, saying whether graph2otel has a mapper for it. An unmapped category is data arriving that nothing reads.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
@@ -3579,7 +4060,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 263
+        "y": 282
       },
       "datasource": {
         "type": "loki",

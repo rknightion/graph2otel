@@ -28,11 +28,12 @@ TAGS = ["graph2otel", "self-observability", "generated"]
 TENANT_METRIC = SELF_OBS["graph2otel.collector.availability"].prom
 # This board owns the complete cross-domain availability presentation below.
 AVAILABILITY_PATTERN = None
+# The executive/data-loss summary and its detailed drilldowns are the board's
+# operational entry point. Put them before the catalog-rendered blob section.
+EXTRA_FIRST = True
 
 SECTIONS = [
-    ("Blob ingest health and API drift", [
-        ("Microsoft API drift — a response no longer matches what a collector expects",
-         ["graph2otel.api.unexpected"], {"w": 24, "h": 8}),
+    ("Blob ingest health", [
         "graph2otel.blob.categories",
         "graph2otel.blob.endpoint_paths",
         "graph2otel.blob.event_age",
@@ -106,10 +107,29 @@ OTLP_TRANSMITTED_PAYLOAD_BYTES = SELF_OBS[
 ].prom
 OTLP_RETRY_ATTEMPTS = SELF_OBS["graph2otel.otlp.retry_attempts"].prom
 INGEST_COST_PROJECTED = SELF_OBS["graph2otel.ingest.cost.projected"].prom
+API_UNEXPECTED = SELF_OBS["graph2otel.api.unexpected"].prom
 
 _SEL = "{" + TENANT_SEL + ', collector=~"$collector"}'
 _AVAIL_SEL = '{tenant_id=~"$tenant",collector=~"$collector"}'
 _T = "{" + TENANT_SEL + "}"
+
+
+def _summary_panel(panel):
+    panel["fieldConfig"]["defaults"]["noValue"] = (
+        "Unknown: no matching series. This is not a green verdict; open the drilldown."
+    )
+    return panel
+
+
+def _drilldown(summary, target):
+    summary["fieldConfig"]["defaults"]["links"] = [{
+        "title": f"Open {target['title']}",
+        "url": (
+            f"/d/{UID}?viewPanel={target['id']}"
+            f"&from=${{__from}}&to=${{__to}}&${{__all_variables}}"
+        ),
+        "targetBlank": False,
+    }]
 
 
 def extra(b):
@@ -123,8 +143,102 @@ def extra(b):
                   "refId": "collector"},
         "definition": f'label_values({COLLECTOR_AVAILABILITY}{{tenant_id=~"$tenant"}}, collector)',
     })
+
+    b.row("Executive health and data-loss summary")
+    b.text(
+        "This matrix deliberately keeps source collection, source-to-emitter loss, "
+        "exporter callback delivery, checkpoint persistence, source-event emission lag, "
+        "cardinality clipping, API drift and throttling separate. It cannot reproduce "
+        "dependency-free liveness or latched readiness from a missing metrics path. If "
+        "the metrics path is unavailable, use `/readyz` and the admin status as the "
+        "authoritative fallback. Empty summary panels are unknown, not healthy.",
+        title="What this summary cannot prove",
+        h=5,
+        w=24,
+    )
+    source_failures = _summary_panel(b.raw(
+        "Current source collection failures",
+        [
+            "max by (tenant_id, collector, collector_transport, state, reason) ("
+            f'{COLLECTOR_AVAILABILITY}{{{TENANT_SEL},collector=~"$collector",'
+            'state=~"degraded|failed|startup_failed"}'
+            " or "
+            f'{COLLECTOR_AVAILABILITY}{{{TENANT_SEL},collector=~"$collector",'
+            'state="blocked",reason="permission_denied"}'
+            ")"
+        ],
+        viz="table", w=6, h=6,
+        desc="Current runtime, startup and permission failures only. Healthy-empty, "
+             "configured absence, alternative coverage and subscription limitations "
+             "are intentionally not failures.",
+    ))
+    record_loss = _summary_panel(b.raw(
+        "Known source-to-emitter record loss",
+        [
+            "sum by (tenant_id) (increase("
+            f'{RECORD_OUTCOMES}{{{TENANT_SEL},collector=~"$collector",'
+            'outcome=~"dropped|errored"}[$__range]))'
+        ],
+        viz="table", w=6, h=6,
+        desc="Source rows deliberately dropped or lost to decode/processing errors "
+             "during the selected range. This stops at the emitter boundary.",
+    ))
+    delivery_degradation = _summary_panel(b.raw(
+        "Current exporter callback degradation",
+        [f"max by (signal) ({DELIVERY_DEGRADED})"],
+        viz="table", w=6, h=6,
+        desc="Latest process-local callback state by signal. Success means the exporter "
+             "accepted the callback; it is not backend retention and not exactly-once "
+             "delivery evidence.",
+    ))
+    checkpoint_failures = _summary_panel(b.raw(
+        "Checkpoint persistence failures",
+        [
+            "sum by (tenant_id) (increase("
+            f'{CHECKPOINT_ERRORS}{{{TENANT_SEL},collector=~"$collector"}}[$__range]))'
+        ],
+        viz="table", w=6, h=6,
+        desc="Checkpoint writes that failed during the selected range. A nonzero value "
+             "means restart replay risk even when the collection itself succeeded.",
+    ))
+    event_lag = _summary_panel(b.raw(
+        "Source-event emission lag",
+        [
+            "histogram_quantile(0.95, sum by "
+            "(le, tenant_id, collector, ingest_transport) "
+            f"(rate({EVENT_LAG}_bucket{_SEL}[{RATE}])))"
+        ],
+        viz="table", unit="s", w=6, h=6,
+        desc="P95 source timestamp to graph2otel emission lag by collector and transport. "
+             "This does not measure backend acceptance or OTLP delivery latency.",
+    ))
+    clipped_series = _summary_panel(b.raw(
+        "Series clipped last interval",
+        [f"sum by (mode) ({SERIES_CLIPPED})"],
+        viz="table", w=6, h=6,
+        desc="Process-wide metric series folded or dropped by the central cardinality "
+             "limiter during the latest export interval.",
+    ))
+    api_violations = _summary_panel(b.raw(
+        "Microsoft API assumption violations",
+        [
+            "sum by (tenant_id) (increase("
+            f'{API_UNEXPECTED}{{{TENANT_SEL},collector=~"$collector"}}[$__range]))'
+        ],
+        viz="table", w=6, h=6,
+        desc="Report-only wire values that violated a collector's validated API "
+             "assumptions during the selected range. Records are not dropped.",
+    ))
+    throttle_consumption = _summary_panel(b.raw(
+        "Maximum reported throttle consumption",
+        [f"max by (tenant_id, workload) ({THROTTLE_PCT}{_T})"],
+        viz="table", unit="percent", w=6, h=6,
+        desc="Maximum currently reported Microsoft Graph throttle-budget consumption. "
+             "The header is not present on every response, so absence is unknown.",
+    ))
+
     b.row("OTLP delivery (process-wide)")
-    b.raw(
+    delivery_detail = b.raw(
         "Current exporter degradation by signal",
         [f"max by (signal) ({DELIVERY_DEGRADED})"],
         viz="table", w=24, h=6,
@@ -206,7 +320,7 @@ def extra(b):
         desc="Disabled and covered collectors are intentional absence, shown separately "
              "from runtime or startup failures.",
     )
-    b.raw(
+    availability_failure_detail = b.raw(
         "Collector availability failures",
         [f'max by (tenant_id, collector, collector_transport, state, reason) '
          f'({COLLECTOR_AVAILABILITY}{{{TENANT_SEL}, collector=~"$collector", '
@@ -252,7 +366,7 @@ def extra(b):
                "headroom, risk of overrun.")
     b.raw("Scrape error rate by error type",
           [f"sum by (collector, error_type) (rate({SCRAPE_ERRORS}{_SEL}[{RATE}]))"])
-    b.raw("Checkpoint persist error rate",
+    checkpoint_detail = b.raw("Checkpoint persist error rate",
           [f"sum by (collector) (rate({CHECKPOINT_ERRORS}{_SEL}[{RATE}]))"],
           desc="The window succeeded but its high-water mark did not reach disk. The "
                "next tick still advances; the window is only re-polled after a restart.")
@@ -273,7 +387,7 @@ def extra(b):
              "and terminal outcomes overlap and are deliberately unstacked. This is "
              "not the number of OTEL metric points or log records.",
     )
-    b.raw(
+    record_loss_detail = b.raw(
         "Dropped / errored source records",
         [f"sum by (tenant_id, collector, ingest_transport, outcome) "
          f"(rate({RECORD_OUTCOMES}"
@@ -283,7 +397,7 @@ def extra(b):
         desc="Any nonzero value is record loss. `dropped` is a deliberate rejection "
              "such as a missing event timestamp; `errored` is decode or processing failure.",
     )
-    b.raw(
+    event_lag_detail = b.raw(
         "Source-event lag at emission",
         [
             f"histogram_quantile(0.50, sum by "
@@ -373,7 +487,7 @@ def extra(b):
           [f"topk(25, {SERIES_ACTIVE})"], viz="table", w=12, h=8,
           desc="Distinct series emitted per source metric across the shared process AFTER "
                "limiting — the series actually billed. Tenant selection does not apply.")
-    b.raw("Series clipped, by mode (process-wide)",
+    clipped_series_detail = b.raw("Series clipped, by mode (process-wide)",
           [f"sum by (metric_name, mode) ({SERIES_CLIPPED})"], w=12, h=8,
           desc="mode=folded were summed into the `other` bucket; mode=dropped were "
                "discarded because the metric is not additive and a synthetic aggregate "
@@ -390,7 +504,8 @@ def extra(b):
     b.row("Graph throttling and outbound HTTP")
     b.raw("Throttle (429) rate by workload",
           [f"sum by (workload) (rate({THROTTLE_COUNT}{_T}[{RATE}]))"], w=8)
-    b.raw("Graph-reported throttle budget consumed", [f"{THROTTLE_PCT}{_T}"],
+    throttle_detail = b.raw(
+        "Graph-reported throttle budget consumed", [f"{THROTTLE_PCT}{_T}"],
           unit="percent", w=8,
           desc="From the x-ms-throttle-limit-percentage response header, which is not "
                "sent on every 429 or every workload — an absent series does NOT mean "
@@ -419,6 +534,28 @@ def extra(b):
                f"sum(rate({errors5}{_T}[{RATE}]))",
                f"sum(rate({throttle}{_T}[{RATE}]))"],
               legends=["4xx", "5xx", "429 throttle"], w=12, h=7)
+
+    b.row("Microsoft API drift")
+    api_detail = b.metric(
+        "graph2otel.api.unexpected",
+        title="Microsoft API drift — a response no longer matches what a collector expects",
+        w=24,
+        h=8,
+        desc="Report-only wire values outside a collector's mapped assumptions. "
+             "Unexpected values do not drop records.",
+    )
+
+    for summary, target in [
+        (source_failures, availability_failure_detail),
+        (record_loss, record_loss_detail),
+        (delivery_degradation, delivery_detail),
+        (checkpoint_failures, checkpoint_detail),
+        (event_lag, event_lag_detail),
+        (clipped_series, clipped_series_detail),
+        (api_violations, api_detail),
+        (throttle_consumption, throttle_detail),
+    ]:
+        _drilldown(summary, target)
 
 
 LOGS = [

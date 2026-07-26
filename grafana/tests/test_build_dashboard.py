@@ -457,6 +457,155 @@ class TestCollectorAvailabilityPanels(unittest.TestCase):
             self.assertNotIn("alert", panel)
 
 
+class TestExecutiveHealthSummary(unittest.TestCase):
+    EXPECTED_DRILLDOWNS = {
+        "Current source collection failures": "Collector availability failures",
+        "Known source-to-emitter record loss": "Dropped / errored source records",
+        "Current exporter callback degradation":
+            "Current exporter degradation by signal",
+        "Checkpoint persistence failures": "Checkpoint persist error rate",
+        "Source-event emission lag": "Source-event lag at emission",
+        "Series clipped last interval": "Series clipped, by mode (process-wide)",
+        "Microsoft API assumption violations":
+            "Microsoft API drift — a response no longer matches what a collector expects",
+        "Maximum reported throttle consumption":
+            "Graph-reported throttle budget consumed",
+    }
+
+    def setUp(self):
+        self.board = next(
+            board for filename, board in BUILT
+            if filename == "graph2otel-self-observability.json"
+        )
+        self.rendered = self.board.render()
+        self.panels = {
+            panel["title"]: panel
+            for panel in self.rendered["panels"]
+            if panel["type"] != "row"
+        }
+
+    def test_summary_is_the_first_query_row(self):
+        panels = self.rendered["panels"]
+        first_row = next(panel for panel in panels if panel["type"] == "row")
+        self.assertEqual(first_row["title"], "Executive health and data-loss summary")
+        self.assertLess(
+            next(i for i, panel in enumerate(panels)
+                 if panel.get("title") == "Current source collection failures"),
+            next(i for i, panel in enumerate(panels)
+                 if panel.get("title") == "Current exporter degradation by signal"),
+        )
+
+    def test_summary_keeps_failure_dimensions_separate(self):
+        self.assertEqual(
+            set(self.EXPECTED_DRILLDOWNS),
+            set(self.panels) & set(self.EXPECTED_DRILLDOWNS),
+        )
+        queries = {
+            title: self.panels[title]["targets"][0]["expr"]
+            for title in self.EXPECTED_DRILLDOWNS
+        }
+        self.assertIn(
+            'state=~"degraded|failed|startup_failed"',
+            queries["Current source collection failures"],
+        )
+        self.assertIn(
+            'state="blocked",reason="permission_denied"',
+            queries["Current source collection failures"].replace(" ", ""),
+        )
+        self.assertIn(
+            'outcome=~"dropped|errored"',
+            queries["Known source-to-emitter record loss"],
+        )
+        self.assertIn("$__range", queries["Known source-to-emitter record loss"])
+        self.assertIn(
+            "graph2otel_otlp_delivery_degraded_ratio",
+            queries["Current exporter callback degradation"],
+        )
+        self.assertIn(
+            "graph2otel_checkpoint_persist_errors_total",
+            queries["Checkpoint persistence failures"],
+        )
+        self.assertIn(
+            "graph2otel_event_lag_seconds_bucket",
+            queries["Source-event emission lag"],
+        )
+        self.assertIn(
+            "histogram_quantile(0.95",
+            queries["Source-event emission lag"],
+        )
+        self.assertIn(
+            "graph2otel_series_clipped",
+            queries["Series clipped last interval"],
+        )
+        self.assertIn(
+            "graph2otel_api_unexpected_total",
+            queries["Microsoft API assumption violations"],
+        )
+        self.assertIn(
+            "graph2otel_throttle_limit_percentage_percent",
+            queries["Maximum reported throttle consumption"],
+        )
+
+    def test_healthy_empty_and_intentional_absence_are_not_source_failures(self):
+        expr = self.panels[
+            "Current source collection failures"
+        ]["targets"][0]["expr"]
+        for value in [
+            "healthy_empty",
+            "disabled",
+            "covered",
+            "limited",
+            "partial_license",
+            "license_unavailable",
+        ]:
+            with self.subTest(value=value):
+                self.assertNotIn(value, expr)
+
+    def test_delivery_and_readiness_boundaries_are_explicit(self):
+        delivery = self.panels[
+            "Current exporter callback degradation"
+        ]["description"].lower()
+        self.assertIn("exporter accepted", delivery)
+        self.assertIn("not backend retention", delivery)
+        self.assertIn("not exactly-once", delivery)
+
+        boundary = self.panels["What this summary cannot prove"]["options"][
+            "content"
+        ].lower()
+        for phrase in [
+            "/readyz",
+            "admin status",
+            "dependency-free liveness",
+            "latched readiness",
+            "metrics path",
+        ]:
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, boundary)
+
+    def test_every_verdict_has_a_resolving_same_dashboard_drilldown(self):
+        by_id = {panel["id"]: panel for panel in self.rendered["panels"]}
+        for title, expected_target in self.EXPECTED_DRILLDOWNS.items():
+            with self.subTest(panel=title):
+                links = self.panels[title]["fieldConfig"]["defaults"]["links"]
+                self.assertEqual(len(links), 1)
+                url = links[0]["url"]
+                self.assertTrue(url.startswith(f"/d/{self.board.uid}?viewPanel="))
+                self.assertIn("from=${__from}", url)
+                self.assertIn("to=${__to}", url)
+                self.assertIn("${__all_variables}", url)
+                target_id = int(re.search(r"viewPanel=(\d+)", url).group(1))
+                self.assertIn(target_id, by_id)
+                self.assertEqual(by_id[target_id]["title"], expected_target)
+
+    def test_summary_no_data_is_neutral_not_green(self):
+        for title in self.EXPECTED_DRILLDOWNS:
+            panel = self.panels[title]
+            self.assertEqual(panel["type"], "table", title)
+            no_value = panel["fieldConfig"]["defaults"]["noValue"].lower()
+            self.assertIn("unknown", no_value)
+            self.assertIn("not a green verdict", no_value)
+
+
 class TestDomainAvailabilityPresentation(unittest.TestCase):
     DOMAIN_PATTERNS = {
         "intune-fleet-overview.json": r"intune\..+",
