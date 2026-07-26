@@ -351,14 +351,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (audit_enabled, forwarding_configured, recipient_type_details) (m365_exchange_mailboxes{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, audit_enabled, forwarding_configured, recipient_type_details) (m365_exchange_mailboxes{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{audit_enabled}} {{forwarding_configured}} {{recipient_type_details}}"
         }
       ]
     },
@@ -409,14 +410,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (setting) (m365_exchange_mailboxes_setting_enabled{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, setting) (m365_exchange_mailboxes_setting_enabled{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{setting}}"
         }
       ]
     },
@@ -457,14 +459,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (setting) (m365_exchange_audit_config_enabled{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, setting) (m365_exchange_audit_config_enabled{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": false,
-          "instant": true
+          "instant": true,
+          "legendFormat": "{{tenant_id}} {{setting}}"
         }
       ]
     },
@@ -505,14 +508,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (setting) (m365_exchange_org_config_setting_enabled{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, setting) (m365_exchange_org_config_setting_enabled{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": false,
-          "instant": true
+          "instant": true,
+          "legendFormat": "{{tenant_id}} {{setting}}"
         }
       ]
     },
@@ -563,25 +567,27 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (direction, enabled) (m365_exchange_connectors{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, direction, enabled) (m365_exchange_connectors{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "Exchange connectors {{tenant_id}} {{direction}} {{enabled}}"
         },
         {
           "refId": "B",
-          "expr": "sum by (direction) (m365_exchange_connectors_without_tls{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, direction) (m365_exchange_connectors_without_tls{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "Exchange connectors without TLS {{tenant_id}} {{direction}}"
         }
       ]
     },
@@ -632,25 +638,27 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (rule_mode, state) (m365_exchange_transport_rules{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, rule_mode, state) (m365_exchange_transport_rules{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "Exchange transport rules {{tenant_id}} {{rule_mode}} {{state}}"
         },
         {
           "refId": "B",
-          "expr": "sum by (state) (m365_exchange_transport_rules_redirecting{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, state) (m365_exchange_transport_rules_redirecting{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "Exchange transport rules redirecting {{tenant_id}} {{state}}"
         }
       ]
     },
@@ -701,14 +709,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (auto_forward_enabled) (m365_exchange_remote_domains{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, auto_forward_enabled) (m365_exchange_remote_domains{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{auto_forward_enabled}}"
         }
       ]
     },
@@ -759,14 +768,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (enabled, status) (m365_exchange_dkim_signing{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, enabled, status) (m365_exchange_dkim_signing{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{enabled}} {{status}}"
         }
       ]
     },
@@ -820,14 +830,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (sharing_capability, sharing_domain_restriction_mode) (m365_sharepoint_sharing_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, sharing_capability, sharing_domain_restriction_mode) (m365_sharepoint_sharing_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": false,
-          "instant": true
+          "instant": true,
+          "legendFormat": "{{tenant_id}} {{sharing_capability}} {{sharing_domain_restriction_mode}}"
         }
       ]
     },
@@ -878,7 +889,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(m365_sharepoint_sharing_allowed_domains{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (m365_sharepoint_sharing_allowed_domains{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -886,11 +897,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Sharepoint sharing allowed domains"
+          "legendFormat": "Sharepoint sharing allowed domains {{tenant_id}}"
         },
         {
           "refId": "B",
-          "expr": "sum(m365_sharepoint_sharing_blocked_domains{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (m365_sharepoint_sharing_blocked_domains{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -898,7 +909,7 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Sharepoint sharing blocked domains"
+          "legendFormat": "Sharepoint sharing blocked domains {{tenant_id}}"
         }
       ]
     },
@@ -949,7 +960,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg(m365_sharepoint_external_resharing_enabled_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id) (m365_sharepoint_external_resharing_enabled_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -957,11 +968,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Sharepoint external resharing enabled"
+          "legendFormat": "Sharepoint external resharing enabled {{tenant_id}}"
         },
         {
           "refId": "B",
-          "expr": "avg(m365_sharepoint_legacy_auth_enabled_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id) (m365_sharepoint_legacy_auth_enabled_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -969,11 +980,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Sharepoint legacy auth enabled"
+          "legendFormat": "Sharepoint legacy auth enabled {{tenant_id}}"
         },
         {
           "refId": "C",
-          "expr": "avg(m365_sharepoint_idle_session_signout_enabled_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id) (m365_sharepoint_idle_session_signout_enabled_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -981,11 +992,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Sharepoint idle session signout enabled"
+          "legendFormat": "Sharepoint idle session signout enabled {{tenant_id}}"
         },
         {
           "refId": "D",
-          "expr": "avg(m365_sharepoint_unmanaged_sync_restricted_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id) (m365_sharepoint_unmanaged_sync_restricted_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -993,7 +1004,7 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Sharepoint unmanaged sync restricted"
+          "legendFormat": "Sharepoint unmanaged sync restricted {{tenant_id}}"
         }
       ]
     },
@@ -1044,7 +1055,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(m365_sharepoint_site_storage_limit_mb{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (m365_sharepoint_site_storage_limit_mb{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -1052,11 +1063,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Sharepoint site storage limit mb"
+          "legendFormat": "Sharepoint site storage limit mb {{tenant_id}}"
         },
         {
           "refId": "B",
-          "expr": "sum(m365_sharepoint_personal_site_storage_limit_mb{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (m365_sharepoint_personal_site_storage_limit_mb{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -1064,7 +1075,7 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Sharepoint personal site storage limit mb"
+          "legendFormat": "Sharepoint personal site storage limit mb {{tenant_id}}"
         }
       ]
     },
@@ -1108,14 +1119,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg(m365_sharepoint_deleted_user_retention_days{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id) (m365_sharepoint_deleted_user_retention_days{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}}"
         }
       ]
     },
@@ -1166,14 +1178,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (drive_type, quota_state) (m365_storage_drives_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, drive_type, quota_state) (m365_storage_drives_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{drive_type}} {{quota_state}}"
         }
       ]
     },
@@ -1224,25 +1237,27 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (drive_type) (m365_storage_used_bytes{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, drive_type) (m365_storage_used_bytes{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "Storage used bytes {{tenant_id}} {{drive_type}}"
         },
         {
           "refId": "B",
-          "expr": "sum by (drive_type) (m365_storage_total_bytes{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, drive_type) (m365_storage_total_bytes{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "Storage total bytes {{tenant_id}} {{drive_type}}"
         }
       ]
     },
@@ -1306,14 +1321,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (visibility) (m365_teams_total_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, visibility) (m365_teams_total_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{visibility}}"
         }
       ]
     },
@@ -1364,14 +1380,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (is_archived, membership_type) (m365_teams_channels_total_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, is_archived, membership_type) (m365_teams_channels_total_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{is_archived}} {{membership_type}}"
         }
       ]
     },
@@ -1422,14 +1439,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (role) (m365_teams_membership_total_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, role) (m365_teams_membership_total_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{role}}"
         }
       ]
     },
@@ -1480,14 +1498,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (distribution_method, has_rsc_permissions) (m365_teams_installed_apps_total_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, distribution_method, has_rsc_permissions) (m365_teams_installed_apps_total_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{distribution_method}} {{has_rsc_permissions}}"
         }
       ]
     },
@@ -1538,7 +1557,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg(m365_teams_ownerless_total_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id) (m365_teams_ownerless_total_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -1546,11 +1565,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Teams ownerless total"
+          "legendFormat": "Teams ownerless total {{tenant_id}}"
         },
         {
           "refId": "B",
-          "expr": "avg(m365_teams_with_guests_total_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id) (m365_teams_with_guests_total_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -1558,7 +1577,7 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Teams with guests total"
+          "legendFormat": "Teams with guests total {{tenant_id}}"
         }
       ]
     },
@@ -1622,14 +1641,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (classification, status) (m365_service_health_issues_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, classification, status) (m365_service_health_issues_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{classification}} {{status}}"
         }
       ]
     },
@@ -1680,14 +1700,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (status) (m365_service_health_services_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, status) (m365_service_health_services_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{status}}"
         }
       ]
     },
@@ -1728,14 +1749,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (service) (m365_service_health_status_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, service) (m365_service_health_status_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": false,
-          "instant": true
+          "instant": true,
+          "legendFormat": "{{tenant_id}} {{service}}"
         }
       ]
     },
@@ -1786,14 +1808,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (category, severity) (m365_service_messages_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, category, severity) (m365_service_messages_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{category}} {{severity}}"
         }
       ]
     },
@@ -1857,14 +1880,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (status) (rate(m365_message_trace_messages_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id, status) (rate(m365_message_trace_messages_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{status}}"
         }
       ]
     },
@@ -1915,14 +1939,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (status) (rate(m365_message_trace_bytes_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id, status) (rate(m365_message_trace_bytes_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{status}}"
         }
       ]
     },
@@ -2018,13 +2043,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "topk(20, sum by (workload, operation) (count_over_time({service_name=\"graph2otel\"} | event_name=`m365.audit` | tenant_id=~\"$tenant\" [$__auto])))",
+          "expr": "topk(20, sum by (tenant_id, workload, operation) (count_over_time({service_name=\"graph2otel\"} | event_name=`m365.audit` | tenant_id=~\"$tenant\" [$__auto])))",
           "datasource": {
             "type": "loki",
             "uid": "${loki_datasource}"
           },
           "editorMode": "code",
-          "queryType": "range"
+          "queryType": "range",
+          "legendFormat": "{{tenant_id}} {{workload}} {{operation}}"
         }
       ],
       "transformations": [
@@ -2086,13 +2112,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (result_status) (count_over_time({service_name=\"graph2otel\"} | event_name=`m365.audit` | tenant_id=~\"$tenant\" [$__auto]))",
+          "expr": "sum by (tenant_id, result_status) (count_over_time({service_name=\"graph2otel\"} | event_name=`m365.audit` | tenant_id=~\"$tenant\" [$__auto]))",
           "datasource": {
             "type": "loki",
             "uid": "${loki_datasource}"
           },
           "editorMode": "code",
-          "queryType": "range"
+          "queryType": "range",
+          "legendFormat": "{{tenant_id}} {{result_status}}"
         }
       ]
     },
@@ -2133,13 +2160,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "topk(20, sum by (sender_address, status) (count_over_time({service_name=\"graph2otel\"} | event_name=`m365.message_trace` | tenant_id=~\"$tenant\" [$__auto])))",
+          "expr": "topk(20, sum by (tenant_id, sender_address, status) (count_over_time({service_name=\"graph2otel\"} | event_name=`m365.message_trace` | tenant_id=~\"$tenant\" [$__auto])))",
           "datasource": {
             "type": "loki",
             "uid": "${loki_datasource}"
           },
           "editorMode": "code",
-          "queryType": "range"
+          "queryType": "range",
+          "legendFormat": "{{tenant_id}} {{sender_address}} {{status}}"
         }
       ],
       "transformations": [

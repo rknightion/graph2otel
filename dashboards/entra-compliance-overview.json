@@ -352,14 +352,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (type) (entra_directory_objects_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, type) (entra_directory_objects_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{type}}"
         }
       ]
     },
@@ -410,14 +411,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (account_enabled, on_premises_sync_enabled, user_type) (entra_users_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, account_enabled, on_premises_sync_enabled, user_type) (entra_users_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{account_enabled}} {{on_premises_sync_enabled}} {{user_type}}"
         }
       ]
     },
@@ -468,14 +470,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (account_enabled, user_type) (entra_users_population{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, account_enabled, user_type) (entra_users_population{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{account_enabled}} {{user_type}}"
         }
       ]
     },
@@ -526,14 +529,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (threshold_days) (entra_users_stale_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, threshold_days) (entra_users_stale_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{threshold_days}}"
         }
       ]
     },
@@ -584,14 +588,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (trust_type) (entra_devices_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, trust_type) (entra_devices_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{trust_type}}"
         }
       ]
     },
@@ -642,14 +647,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (threshold_days) (entra_devices_stale_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, threshold_days) (entra_devices_stale_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{threshold_days}}"
         }
       ]
     },
@@ -700,14 +706,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (is_compliant) (entra_devices_compliance_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, is_compliant) (entra_devices_compliance_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{is_compliant}}"
         }
       ]
     },
@@ -758,14 +765,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (is_managed) (entra_devices_managed_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, is_managed) (entra_devices_managed_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{is_managed}}"
         }
       ]
     },
@@ -816,14 +824,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (operating_system) (entra_devices_os_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, operating_system) (entra_devices_os_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{operating_system}}"
         }
       ]
     },
@@ -874,14 +883,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (group_type, mail_enabled, membership_type, security_enabled) (entra_groups_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, group_type, mail_enabled, membership_type, security_enabled) (entra_groups_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{group_type}} {{mail_enabled}} {{membership_type}} {{security_enabled}}"
         }
       ]
     },
@@ -925,14 +935,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(entra_groups_role_assignable_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (entra_groups_role_assignable_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}}"
         }
       ]
     },
@@ -983,14 +994,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (authentication_type, is_verified) (entra_domains_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, authentication_type, is_verified) (entra_domains_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{authentication_type}} {{is_verified}}"
         }
       ]
     },
@@ -1034,7 +1046,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(entra_domains_federated_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (entra_domains_federated_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -1042,11 +1054,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Domains federated total"
+          "legendFormat": "Domains federated total {{tenant_id}}"
         },
         {
           "refId": "B",
-          "expr": "sum(entra_organization_verified_domains_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (entra_organization_verified_domains_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -1054,7 +1066,7 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Organization verified domains total"
+          "legendFormat": "Organization verified domains total {{tenant_id}}"
         }
       ]
     },
@@ -1105,14 +1117,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (near_purge, object_type) (entra_deleted_items_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, near_purge, object_type) (entra_deleted_items_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{near_purge}} {{object_type}}"
         }
       ]
     },
@@ -1163,14 +1176,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (category, object_type, property_causing_error) (entra_directory_sync_errors_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, category, object_type, property_causing_error) (entra_directory_sync_errors_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{category}} {{object_type}} {{property_causing_error}}"
         }
       ]
     },
@@ -1214,7 +1228,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg(entra_directory_sync_last_sync_age_seconds{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id) (entra_directory_sync_last_sync_age_seconds{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -1222,11 +1236,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Directory sync last sync age seconds"
+          "legendFormat": "Directory sync last sync age seconds {{tenant_id}}"
         },
         {
           "refId": "B",
-          "expr": "avg(entra_organization_on_premises_sync_enabled_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id) (entra_organization_on_premises_sync_enabled_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -1234,7 +1248,7 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Organization on premises sync enabled"
+          "legendFormat": "Organization on premises sync enabled {{tenant_id}}"
         }
       ]
     },
@@ -1275,18 +1289,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (tenant_type) (entra_organization_info_ratio{tenant_id=~\"$tenant\"})",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "range": false,
-          "instant": true
-        },
-        {
-          "refId": "B",
-          "expr": "avg(entra_organization_age_days{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, tenant_type) (entra_organization_info_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -1294,7 +1297,19 @@
           "editorMode": "code",
           "range": false,
           "instant": true,
-          "legendFormat": "Organization age days"
+          "legendFormat": "Organization info {{tenant_id}} {{tenant_type}}"
+        },
+        {
+          "refId": "B",
+          "expr": "avg by (tenant_id) (entra_organization_age_days{tenant_id=~\"$tenant\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": false,
+          "instant": true,
+          "legendFormat": "Organization age days {{tenant_id}}"
         }
       ]
     },
@@ -1358,14 +1373,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (sku) (entra_license_consumed{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, sku) (entra_license_consumed{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{sku}}"
         }
       ]
     },
@@ -1416,14 +1432,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (sku) (entra_license_enabled{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, sku) (entra_license_enabled{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{sku}}"
         }
       ]
     },
@@ -1474,14 +1491,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (sku, state) (entra_license_units{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, sku, state) (entra_license_units{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{sku}} {{state}}"
         }
       ]
     },
@@ -1532,14 +1550,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (sku, status) (entra_license_capability_status{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, sku, status) (entra_license_capability_status{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{sku}} {{status}}"
         }
       ]
     },
@@ -1583,14 +1602,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(entra_license_groups_with_errors_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (entra_license_groups_with_errors_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}}"
         }
       ]
     },
@@ -1654,14 +1674,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (credential_type, expiry_bucket, owner_type) (entra_credentials_expiring_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, credential_type, expiry_bucket, owner_type) (entra_credentials_expiring_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{credential_type}} {{expiry_bucket}} {{owner_type}}"
         }
       ]
     },
@@ -1712,14 +1733,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (issuer_host) (entra_application_federated_credentials{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, issuer_host) (entra_application_federated_credentials{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{issuer_host}}"
         }
       ]
     },
@@ -1770,14 +1792,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (has_owner, sign_in_audience) (entra_application_ownership{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, has_owner, sign_in_audience) (entra_application_ownership{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{has_owner}} {{sign_in_audience}}"
         }
       ]
     },
@@ -1828,14 +1851,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (has_owner, service_principal_type) (entra_service_principal_ownership{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, has_owner, service_principal_type) (entra_service_principal_ownership{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{has_owner}} {{service_principal_type}}"
         }
       ]
     },
@@ -1886,14 +1910,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (consent_type, privilege) (entra_consent_grants_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, consent_type, privilege) (entra_consent_grants_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{consent_type}} {{privilege}}"
         }
       ]
     },
@@ -1944,14 +1969,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (result) (entra_app_signin_summary_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, result) (entra_app_signin_summary_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{result}}"
         }
       ]
     },
@@ -2002,25 +2028,27 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (threshold_days) (entra_app_credential_signin_stale_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, threshold_days) (entra_app_credential_signin_stale_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "App credential signin stale total {{tenant_id}} {{threshold_days}}"
         },
         {
           "refId": "B",
-          "expr": "sum by (threshold_days) (entra_serviceprincipal_signin_stale_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, threshold_days) (entra_serviceprincipal_signin_stale_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "Serviceprincipal signin stale total {{tenant_id}} {{threshold_days}}"
         }
       ]
     },
@@ -2084,14 +2112,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (state) (entra_ca_policies_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, state) (entra_ca_policies_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{state}}"
         }
       ]
     },
@@ -2142,14 +2171,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (is_trusted, type) (entra_named_locations_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, is_trusted, type) (entra_named_locations_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{is_trusted}} {{type}}"
         }
       ]
     },
@@ -2193,14 +2223,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(entra_auth_methods_policy_legacy_enabled_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (entra_auth_methods_policy_legacy_enabled_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}}"
         }
       ]
     },
@@ -2241,14 +2272,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (method) (entra_auth_methods_policy_method_enabled_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, method) (entra_auth_methods_policy_method_enabled_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": false,
-          "instant": true
+          "instant": true,
+          "legendFormat": "{{tenant_id}} {{method}}"
         }
       ]
     },
@@ -2299,14 +2331,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (kind) (entra_tenant_policy_scoped_policies{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, kind) (entra_tenant_policy_scoped_policies{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{kind}}"
         }
       ]
     },
@@ -2347,14 +2380,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (setting) (entra_tenant_policy_setting{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, setting) (entra_tenant_policy_setting{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": false,
-          "instant": true
+          "instant": true,
+          "legendFormat": "{{tenant_id}} {{setting}}"
         }
       ]
     },
@@ -2398,14 +2432,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(entra_agreements_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (entra_agreements_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}}"
         }
       ]
     },
@@ -2456,14 +2491,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (agreement, state) (entra_agreements_acceptances_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, agreement, state) (entra_agreements_acceptances_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{agreement}} {{state}}"
         }
       ]
     },
@@ -2527,14 +2563,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (role_name) (entra_roles_members_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, role_name) (entra_roles_members_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{role_name}}"
         }
       ]
     },
@@ -2585,14 +2622,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (assignment_type, role_name) (entra_pim_assignments_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, assignment_type, role_name) (entra_pim_assignments_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{assignment_type}} {{role_name}}"
         }
       ]
     },
@@ -2643,14 +2681,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (role_name) (entra_pim_permanent_assignments_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, role_name) (entra_pim_permanent_assignments_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{role_name}}"
         }
       ]
     },
@@ -2701,14 +2740,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (alert_type, is_active, severity) (entra_pim_alert_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, alert_type, is_active, severity) (entra_pim_alert_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{alert_type}} {{is_active}} {{severity}}"
         }
       ]
     },
@@ -2759,14 +2799,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (alert_type, severity) (entra_pim_alert_incidents{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, alert_type, severity) (entra_pim_alert_incidents{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{alert_type}} {{severity}}"
         }
       ]
     },
@@ -2817,14 +2858,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (alert_type, is_enabled) (entra_pim_alert_configurations{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, alert_type, is_enabled) (entra_pim_alert_configurations{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{alert_type}} {{is_enabled}}"
         }
       ]
     },
@@ -2865,14 +2907,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (caller, enabled, requirement) (entra_pim_role_policy_requirement{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, caller, enabled, requirement) (entra_pim_role_policy_requirement{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": false,
-          "instant": true
+          "instant": true,
+          "legendFormat": "{{tenant_id}} {{caller}} {{enabled}} {{requirement}}"
         }
       ]
     },
@@ -2923,14 +2966,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (status) (entra_access_reviews_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, status) (entra_access_reviews_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{status}}"
         }
       ]
     },
@@ -2994,7 +3038,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg(entra_secure_score_current{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id) (entra_secure_score_current{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -3002,11 +3046,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Secure score current"
+          "legendFormat": "Secure score current {{tenant_id}}"
         },
         {
           "refId": "B",
-          "expr": "avg(entra_secure_score_max{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id) (entra_secure_score_max{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -3014,7 +3058,7 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Secure score max"
+          "legendFormat": "Secure score max {{tenant_id}}"
         }
       ]
     },
@@ -3058,14 +3102,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg(entra_secure_score_percentage_percent{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id) (entra_secure_score_percentage_percent{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}}"
         }
       ]
     },
@@ -3116,14 +3161,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (category) (entra_secure_score_by_category{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, category) (entra_secure_score_by_category{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{category}}"
         }
       ]
     },
@@ -3174,14 +3220,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (category) (entra_secure_score_max_by_category{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, category) (entra_secure_score_max_by_category{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{category}}"
         }
       ]
     },
@@ -3232,14 +3279,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (basis) (entra_secure_score_peer_average{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, basis) (entra_secure_score_peer_average{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{basis}}"
         }
       ]
     },
@@ -3290,14 +3338,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (category) (entra_secure_score_control_profiles_by_category{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, category) (entra_secure_score_control_profiles_by_category{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{category}}"
         }
       ]
     },
@@ -3348,14 +3397,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (status) (entra_secure_score_control_profiles_by_status{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, status) (entra_secure_score_control_profiles_by_status{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{status}}"
         }
       ]
     },
@@ -3406,14 +3456,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (priority, status) (entra_recommendations_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, priority, status) (entra_recommendations_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{priority}} {{status}}"
         }
       ]
     },
@@ -3464,14 +3515,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (recommendation) (entra_recommendations_impacted_resources_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, recommendation) (entra_recommendations_impacted_resources_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{recommendation}}"
         }
       ]
     },
@@ -3535,14 +3587,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (status, user_type) (entra_mfa_registration_users_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, status, user_type) (entra_mfa_registration_users_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{status}} {{user_type}}"
         }
       ]
     },
@@ -3593,14 +3646,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (method) (entra_mfa_registration_methods_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, method) (entra_mfa_registration_methods_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{method}}"
         }
       ]
     },
@@ -3651,14 +3705,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (is_admin) (entra_mfa_registration_admin_mfa_capable_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, is_admin) (entra_mfa_registration_admin_mfa_capable_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{is_admin}}"
         }
       ]
     },
@@ -3722,14 +3777,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (risk_level, risk_state) (entra_risky_users_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, risk_level, risk_state) (entra_risky_users_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{risk_level}} {{risk_state}}"
         }
       ]
     },
@@ -3780,14 +3836,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (risk_level, risk_state) (entra_risky_service_principals_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, risk_level, risk_state) (entra_risky_service_principals_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{risk_level}} {{risk_state}}"
         }
       ]
     },
@@ -3838,14 +3895,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (risk_level, risk_state) (entra_risky_agents_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, risk_level, risk_state) (entra_risky_agents_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{risk_level}} {{risk_state}}"
         }
       ]
     },
@@ -3896,14 +3954,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (client_app_used, conditional_access_status, result, risk_level_during_sign_in) (rate(entra_signin_count_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id, client_app_used, conditional_access_status, result, risk_level_during_sign_in) (rate(entra_signin_count_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{client_app_used}} {{conditional_access_status}} {{result}} {{risk_level_during_sign_in}}"
         }
       ]
     },
@@ -3960,14 +4019,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg(entra_gsa_onboarding_status_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id) (entra_gsa_onboarding_status_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}}"
         }
       ]
     },
@@ -4018,14 +4078,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (state, traffic_forwarding_type) (entra_gsa_forwarding_profiles{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, state, traffic_forwarding_type) (entra_gsa_forwarding_profiles{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{state}} {{traffic_forwarding_type}}"
         }
       ]
     },
@@ -4076,14 +4137,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (action) (entra_gsa_filtering_policies{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, action) (entra_gsa_filtering_policies{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{action}}"
         }
       ]
     },
@@ -4127,14 +4189,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(entra_gsa_remote_networks{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (entra_gsa_remote_networks{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}}"
         }
       ]
     },
@@ -4178,7 +4241,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(entra_gsa_packet_tagging_enabled{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (entra_gsa_packet_tagging_enabled{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -4186,11 +4249,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "GSA packet tagging enabled"
+          "legendFormat": "GSA packet tagging enabled {{tenant_id}}"
         },
         {
           "refId": "B",
-          "expr": "sum(entra_gsa_signaling_enabled{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (entra_gsa_signaling_enabled{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -4198,7 +4261,7 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "GSA signaling enabled"
+          "legendFormat": "GSA signaling enabled {{tenant_id}}"
         }
       ]
     },
@@ -4269,7 +4332,8 @@
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{identity_type}} {{is_replay}} {{request_method}} {{response_status_code}} {{tenant_id}}"
         }
       ]
     },
@@ -4327,7 +4391,8 @@
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{normalized_path}} {{request_method}} {{response_status_class}} {{tenant_id}}"
         }
       ]
     },
@@ -4385,7 +4450,8 @@
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{request_method}} {{tenant_id}}"
         }
       ]
     },
@@ -4443,7 +4509,8 @@
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{request_method}} {{tenant_id}}"
         }
       ]
     },
@@ -4549,13 +4616,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (status_error_code) (count_over_time({service_name=\"graph2otel\"} | event_name=`entra.signin` | tenant_id=~\"$tenant\" | status_error_code!=`0` [$__auto]))",
+          "expr": "sum by (tenant_id, status_error_code) (count_over_time({service_name=\"graph2otel\"} | event_name=`entra.signin` | tenant_id=~\"$tenant\" | status_error_code!=`0` [$__auto]))",
           "datasource": {
             "type": "loki",
             "uid": "${loki_datasource}"
           },
           "editorMode": "code",
-          "queryType": "range"
+          "queryType": "range",
+          "legendFormat": "{{tenant_id}} {{status_error_code}}"
         }
       ]
     },
@@ -4596,13 +4664,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "topk(20, sum by (location_country_or_region, client_app_used) (count_over_time({service_name=\"graph2otel\"} | event_name=`entra.signin` | tenant_id=~\"$tenant\" | status_error_code!=`0` [$__auto])))",
+          "expr": "topk(20, sum by (tenant_id, location_country_or_region, client_app_used) (count_over_time({service_name=\"graph2otel\"} | event_name=`entra.signin` | tenant_id=~\"$tenant\" | status_error_code!=`0` [$__auto])))",
           "datasource": {
             "type": "loki",
             "uid": "${loki_datasource}"
           },
           "editorMode": "code",
-          "queryType": "range"
+          "queryType": "range",
+          "legendFormat": "{{tenant_id}} {{location_country_or_region}} {{client_app_used}}"
         }
       ],
       "transformations": [
@@ -4696,13 +4765,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "topk(20, sum by (risk_event_type, risk_level) (count_over_time({service_name=\"graph2otel\"} | event_name=`entra.risk_detection` | tenant_id=~\"$tenant\" [$__auto])))",
+          "expr": "topk(20, sum by (tenant_id, risk_event_type, risk_level) (count_over_time({service_name=\"graph2otel\"} | event_name=`entra.risk_detection` | tenant_id=~\"$tenant\" [$__auto])))",
           "datasource": {
             "type": "loki",
             "uid": "${loki_datasource}"
           },
           "editorMode": "code",
-          "queryType": "range"
+          "queryType": "range",
+          "legendFormat": "{{tenant_id}} {{risk_event_type}} {{risk_level}}"
         }
       ],
       "transformations": [
@@ -4754,13 +4824,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "topk(20, sum by (activity_display_name, result) (count_over_time({service_name=\"graph2otel\"} | event_name=`entra.directory_audit` | tenant_id=~\"$tenant\" [$__auto])))",
+          "expr": "topk(20, sum by (tenant_id, activity_display_name, result) (count_over_time({service_name=\"graph2otel\"} | event_name=`entra.directory_audit` | tenant_id=~\"$tenant\" [$__auto])))",
           "datasource": {
             "type": "loki",
             "uid": "${loki_datasource}"
           },
           "editorMode": "code",
-          "queryType": "range"
+          "queryType": "range",
+          "legendFormat": "{{tenant_id}} {{activity_display_name}} {{result}}"
         }
       ],
       "transformations": [

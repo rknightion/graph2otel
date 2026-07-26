@@ -308,6 +308,7 @@ def extra(b):
     b.raw(
         "Collector availability by state",
         [f"count by (tenant_id, state) ({availability})"],
+        legends=["{{tenant_id}} {{state}}"],
         viz="bargauge", w=12, h=7,
         desc="Current logical-collector counts by bounded availability state. This is a "
              "snapshot, not a scrape-success or record-throughput count.",
@@ -347,11 +348,13 @@ def extra(b):
     )
     b.row("Collector health (generated signal catalog)")
     b.raw("Scrape success by collector", [f"{SCRAPE_SUCCESS}{_SEL}"],
+          legends=["{{tenant_id}} {{collector}}"],
           desc="1 when the last reconciled run was empty or successful; 0 when it was "
                "partial or failed (including a recovered panic). A green tick is not "
                "evidence of data: several collectors succeed on an empty collection "
                "by design.")
-    b.raw("Scrape duration by collector", [f"{SCRAPE_DURATION}{_SEL}"], unit="s")
+    b.raw("Scrape duration by collector", [f"{SCRAPE_DURATION}{_SEL}"],
+          legends=["{{tenant_id}} {{collector}}"], unit="s")
     b.raw("Scrape staleness (seconds since last healthy result)",
           [f"{SCRAPE_STALENESS}{_SEL}"],
           viz="table", unit="s",
@@ -359,15 +362,21 @@ def extra(b):
                "so a collector that has never been healthy shows a growing value rather "
                "than no series.")
     b.raw("Age of the latest completed scrape",
-          [f"time() - {SCRAPE_LAST}{_SEL}"], unit="s",
+          [f"time() - {SCRAPE_LAST}{_SEL}"],
+          legends=["{{tenant_id}} {{collector}}"], unit="s",
           desc="Wall-clock age of the latest completed run, whether it succeeded or failed.")
     b.raw("Scrape budget (duration / interval)", [f"{SCRAPE_BUDGET}{_SEL}"],
+          legends=["{{tenant_id}} {{collector}}"],
           desc="At or above 1 a scrape takes as long as its own poll interval — no "
                "headroom, risk of overrun.")
     b.raw("Scrape error rate by error type",
-          [f"sum by (collector, error_type) (rate({SCRAPE_ERRORS}{_SEL}[{RATE}]))"])
+          [f"sum by (tenant_id, collector, error_type) "
+           f"(rate({SCRAPE_ERRORS}{_SEL}[{RATE}]))"],
+          legends=["{{tenant_id}} {{collector}} {{error_type}}"])
     checkpoint_detail = b.raw("Checkpoint persist error rate",
-          [f"sum by (collector) (rate({CHECKPOINT_ERRORS}{_SEL}[{RATE}]))"],
+          [f"sum by (tenant_id, collector) "
+           f"(rate({CHECKPOINT_ERRORS}{_SEL}[{RATE}]))"],
+          legends=["{{tenant_id}} {{collector}}"],
           desc="The window succeeded but its high-water mark did not reach disk. The "
                "next tick still advances; the window is only re-polled after a restart.")
 
@@ -477,10 +486,15 @@ def extra(b):
 
     b.row("Export jobs (Intune report exports, M365 audit query)")
     b.raw("Export jobs by result",
-          [f"sum by (report_name, result) (rate({EXPORT_JOBS}{_T}[{RATE}]))"], w=8)
-    b.raw("Export job duration", [f"{EXPORT_DURATION}{_T}"], unit="s", w=8)
-    b.raw("Export polls to terminal state", [f"{EXPORT_POLLS}{_T}"], w=8)
-    b.raw("Downloaded export size", [f"{EXPORT_BYTES}{_T}"], unit="bytes", w=24, h=6)
+          [f"sum by (tenant_id, report_name, result) "
+           f"(rate({EXPORT_JOBS}{_T}[{RATE}]))"],
+          legends=["{{tenant_id}} {{report_name}} {{result}}"], w=8)
+    b.raw("Export job duration", [f"{EXPORT_DURATION}{_T}"],
+          legends=["{{tenant_id}} {{report_name}}"], unit="s", w=8)
+    b.raw("Export polls to terminal state", [f"{EXPORT_POLLS}{_T}"],
+          legends=["{{tenant_id}} {{report_name}}"], w=8)
+    b.raw("Downloaded export size", [f"{EXPORT_BYTES}{_T}"],
+          legends=["{{tenant_id}} {{report_name}}"], unit="bytes", w=24, h=6)
 
     b.row("Cardinality limiter (#235)")
     b.raw("Active series by source metric (process-wide)",
@@ -503,20 +517,26 @@ def extra(b):
 
     b.row("Graph throttling and outbound HTTP")
     b.raw("Throttle (429) rate by workload",
-          [f"sum by (workload) (rate({THROTTLE_COUNT}{_T}[{RATE}]))"], w=8)
+          [f"sum by (tenant_id, workload) "
+           f"(rate({THROTTLE_COUNT}{_T}[{RATE}]))"],
+          legends=["{{tenant_id}} {{workload}}"], w=8)
     throttle_detail = b.raw(
         "Graph-reported throttle budget consumed", [f"{THROTTLE_PCT}{_T}"],
-          unit="percent", w=8,
+          legends=["{{tenant_id}} {{workload}}"], unit="percent", w=8,
           desc="From the x-ms-throttle-limit-percentage response header, which is not "
                "sent on every 429 or every workload — an absent series does NOT mean "
                "the budget is healthy.")
     b.raw("Outbound Graph request latency (p95)",
-          [f"histogram_quantile(0.95, sum by (le) (rate({HTTP_DURATION}_bucket{_T}[{RATE}])))"],
-          unit="s", w=8)
+          [f"histogram_quantile(0.95, sum by (le, tenant_id) "
+           f"(rate({HTTP_DURATION}_bucket{_T}[{RATE}])))"],
+          legends=["{{tenant_id}}"], unit="s", w=8)
     b.raw("Outbound Graph 4xx / 5xx rate by workload",
-          [f"sum by (workload) (rate({HTTP_4XX}{_T}[{RATE}]))",
-           f"sum by (workload) (rate({HTTP_5XX}{_T}[{RATE}]))"],
-          legends=["4xx {{workload}}", "5xx {{workload}}"], w=24, h=8)
+          [f"sum by (tenant_id, workload) (rate({HTTP_4XX}{_T}[{RATE}]))",
+           f"sum by (tenant_id, workload) (rate({HTTP_5XX}{_T}[{RATE}]))"],
+          legends=[
+              "4xx {{tenant_id}} {{workload}}",
+              "5xx {{tenant_id}} {{workload}}",
+          ], w=24, h=8)
 
     b.row("Non-Graph transport HTTP")
     for title, duration, errors4, errors5, throttle in [
@@ -526,14 +546,18 @@ def extra(b):
         ("O365 Activity", O365_DURATION, O365_4XX, O365_5XX, O365_THROTTLE),
     ]:
         b.raw(f"{title} request latency (p95)",
-              [f"histogram_quantile(0.95, sum by (le) "
+              [f"histogram_quantile(0.95, sum by (le, tenant_id) "
                f"(rate({duration}_bucket{_T}[{RATE}])))"],
-              unit="s", w=12, h=7)
+              legends=["{{tenant_id}}"], unit="s", w=12, h=7)
         b.raw(f"{title} errors and throttling",
-              [f"sum(rate({errors4}{_T}[{RATE}]))",
-               f"sum(rate({errors5}{_T}[{RATE}]))",
-               f"sum(rate({throttle}{_T}[{RATE}]))"],
-              legends=["4xx", "5xx", "429 throttle"], w=12, h=7)
+              [f"sum by (tenant_id) (rate({errors4}{_T}[{RATE}]))",
+               f"sum by (tenant_id) (rate({errors5}{_T}[{RATE}]))",
+               f"sum by (tenant_id) (rate({throttle}{_T}[{RATE}]))"],
+              legends=[
+                  "4xx {{tenant_id}}",
+                  "5xx {{tenant_id}}",
+                  "429 throttle {{tenant_id}}",
+              ], w=12, h=7)
 
     b.row("Microsoft API drift")
     api_detail = b.metric(

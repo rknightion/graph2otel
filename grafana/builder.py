@@ -32,6 +32,8 @@ from __future__ import annotations
 
 import json
 
+from catalog import TENANT_SCOPE
+
 SCHEMA_VERSION = 39
 
 # Every panel query filters on the tenant template variable. tenant_id is on
@@ -163,6 +165,28 @@ def group_keys(keys: list) -> list:
     return [k for k in keys if not (k.endswith("_id") and k[: -len("_id")] in names)]
 
 
+def _metric_group_keys(metric, by: list | None) -> list:
+    """Return aggregation keys without discarding emitter-boundary tenant identity."""
+    keys = list(by) if by is not None else group_keys(metric.keys)
+    keys = [
+        key for key in keys
+        if key in metric.keys or (
+            key == "tenant_id" and metric.scope == TENANT_SCOPE
+        )
+    ]
+    if metric.scope == TENANT_SCOPE and "tenant_id" not in keys:
+        keys.insert(0, "tenant_id")
+    return keys
+
+
+def _label_legend(keys: list) -> str:
+    return " ".join(f"{{{{{key}}}}}" for key in keys)
+
+
+def _tenant_group_keys(keys: list | None) -> list:
+    return ["tenant_id", *(key for key in (keys or []) if key != "tenant_id")]
+
+
 class Builder:
     """Accumulates panels for one dashboard and renders the Grafana JSON.
 
@@ -273,12 +297,15 @@ class Builder:
         any_hist = False
         for i, name in enumerate(names):
             m = self.cat.metric(name)
-            keys = by if by is not None else group_keys(m.keys)
-            keys = [k for k in keys if k in m.keys]
+            keys = _metric_group_keys(m, by)
             expr = self._expr(m, keys, quantile)
             legend = None
             if legends is not None and i < len(legends):
                 legend = legends[i]
+            elif m.scope == TENANT_SCOPE:
+                legend = _label_legend(keys)
+                if len(names) > 1:
+                    legend = f"{titleize(name)} {legend}"
             elif len(names) > 1 and not keys:
                 legend = titleize(name)
             queries.append(self._prom_query(expr, ref=chr(65 + i), legend=legend))
@@ -446,11 +473,9 @@ class Builder:
                  desc: str = "", w: int = 12, h: int = 8):
         """count_over_time for one event, optionally split by structured metadata."""
         sel = self._selector(event, filters)
-        if by:
-            expr = f"sum by ({', '.join(by)}) (count_over_time({sel} [$__auto]))"
-        else:
-            expr = f"sum(count_over_time({sel} [$__auto]))"
-        q = self._loki_query(expr)
+        keys = _tenant_group_keys(by)
+        expr = f"sum by ({', '.join(keys)}) (count_over_time({sel} [$__auto]))"
+        q = self._loki_query(expr, legend=_label_legend(keys))
         panel = self._viz_panel("timeseries", title, [], "short", desc + _loki_note(), w, h)
         panel["datasource"] = LOKI_DS
         panel["targets"] = [q]
@@ -466,8 +491,12 @@ class Builder:
         straight into Loki's series cap on any wide time range.
         """
         sel = self._selector(event, filters)
-        expr = f"topk({topk}, sum by ({', '.join(by)}) (count_over_time({sel} [$__auto])))"
-        q = self._loki_query(expr)
+        keys = _tenant_group_keys(by)
+        expr = (
+            f"topk({topk}, sum by ({', '.join(keys)}) "
+            f"(count_over_time({sel} [$__auto])))"
+        )
+        q = self._loki_query(expr, legend=_label_legend(keys))
         panel = self._viz_panel("table", title, [], "short", desc + _loki_note(), w, h)
         panel["datasource"] = LOKI_DS
         panel["targets"] = [q]

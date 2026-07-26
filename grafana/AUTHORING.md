@@ -61,7 +61,9 @@ else comes from the catalog:
   a ratio, a percentage or a duration must never be summed: the sum of four thousand
   health scores is a number nobody measured (#235);
 - **the grouping** — the metric's real attribute keys, minus an `x_id` that has an
-  `x_name` twin;
+  `x_name` twin. Tenant-scoped metrics always retain `tenant_id`, including when a
+  panel supplies an explicit `by` override, so selecting several tenants cannot blend
+  them into one series;
 - **counters** get `rate(...[$__rate_interval])`, **histograms** get
   `histogram_quantile(0.95, sum by (le, …) (rate(…_bucket[…])))`;
 - **the title** — derived from the metric name unless you pass one.
@@ -109,6 +111,9 @@ rules and 74 dashboard queries were both built on a false belief about these lab
 Event names are validated against the catalog, and `kind: "table"` uses range + reduce
 rather than an instant `topk` — an instant query materializes one series per distinct
 value before `topk` runs, which walks into Loki's series cap on any wide range.
+Rate and table aggregations always group by `tenant_id`, and their legends name the
+tenant. Do not remove that grouping to produce a global rollup; add a separately titled
+panel whose global scope is explicit instead.
 
 Log panels declare the Loki datasource variable, say in their description that they need
 it, and carry a `noValue` message so an operator with no Loki sees an explanation rather

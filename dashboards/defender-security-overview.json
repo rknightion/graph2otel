@@ -353,14 +353,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (exploit_available, severity) (defender_vulnerability_cves{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, exploit_available, severity) (defender_vulnerability_cves{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{exploit_available}} {{severity}}"
         }
       ]
     },
@@ -411,14 +412,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (exploit_available, severity) (defender_vulnerability_instances{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, exploit_available, severity) (defender_vulnerability_instances{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{exploit_available}} {{severity}}"
         }
       ]
     },
@@ -469,14 +471,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (exploit_available, severity) (defender_vulnerability_affected_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, exploit_available, severity) (defender_vulnerability_affected_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{exploit_available}} {{severity}}"
         }
       ]
     },
@@ -527,14 +530,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (exploit_available, severity) (defender_vulnerability_max_cvss{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, exploit_available, severity) (defender_vulnerability_max_cvss{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{exploit_available}} {{severity}}"
         }
       ]
     },
@@ -585,14 +589,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (exploit_available, severity) (defender_vulnerability_max_epss_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, exploit_available, severity) (defender_vulnerability_max_epss_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{exploit_available}} {{severity}}"
         }
       ]
     },
@@ -643,14 +648,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (end_of_support_status) (defender_software_products{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, end_of_support_status) (defender_software_products{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{end_of_support_status}}"
         }
       ]
     },
@@ -701,14 +707,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (end_of_support_status) (defender_software_installs{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, end_of_support_status) (defender_software_installs{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{end_of_support_status}}"
         }
       ]
     },
@@ -759,14 +766,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (end_of_support_status) (defender_software_eos_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, end_of_support_status) (defender_software_eos_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{end_of_support_status}}"
         }
       ]
     },
@@ -830,14 +838,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (configuration_category, is_compliant) (defender_secure_config_assessments{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, configuration_category, is_compliant) (defender_secure_config_assessments{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{configuration_category}} {{is_compliant}}"
         }
       ]
     },
@@ -888,14 +897,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (configuration_category) (defender_secure_config_noncompliant_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, configuration_category) (defender_secure_config_noncompliant_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{configuration_category}}"
         }
       ]
     },
@@ -946,14 +956,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (configuration_category) (defender_secure_config_impact_at_risk{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, configuration_category) (defender_secure_config_impact_at_risk{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{configuration_category}}"
         }
       ]
     },
@@ -1017,14 +1028,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (action, list_subtype, list_type) (defender_allow_block_list_entries{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, action, list_subtype, list_type) (defender_allow_block_list_entries{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{action}} {{list_subtype}} {{list_type}}"
         }
       ]
     },
@@ -1075,14 +1087,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (action, list_type) (defender_allow_block_list_expiring_soon{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, action, list_type) (defender_allow_block_list_expiring_soon{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{action}} {{list_type}}"
         }
       ]
     },
@@ -1133,14 +1146,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (list_type) (defender_allow_block_list_non_expiring_allow{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, list_type) (defender_allow_block_list_non_expiring_allow{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{list_type}}"
         }
       ]
     },
@@ -1191,14 +1205,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (action, spoof_type) (defender_allow_block_list_spoof_entries{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, action, spoof_type) (defender_allow_block_list_spoof_entries{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{action}} {{spoof_type}}"
         }
       ]
     },
@@ -1262,14 +1277,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (policy_type) (defender_mdo_policies{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, policy_type) (defender_mdo_policies{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{policy_type}}"
         }
       ]
     },
@@ -1320,14 +1336,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (policy_type, protection) (defender_mdo_protection_enabled{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, policy_type, protection) (defender_mdo_protection_enabled{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{policy_type}} {{protection}}"
         }
       ]
     },
@@ -1378,14 +1395,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (direction, entity_type, quarantine_type) (defender_quarantine_held_messages_total_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, direction, entity_type, quarantine_type) (defender_quarantine_held_messages_total_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{direction}} {{entity_type}} {{quarantine_type}}"
         }
       ]
     },
@@ -1449,14 +1467,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (admin_consented, app_origin, app_status, privilege_level) (defender_oauth_app_apps{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, admin_consented, app_origin, app_status, privilege_level) (defender_oauth_app_apps{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{admin_consented}} {{app_origin}} {{app_status}} {{privilege_level}}"
         }
       ]
     },
@@ -1507,14 +1526,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (privilege_level) (defender_oauth_app_consented_users{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, privilege_level) (defender_oauth_app_consented_users{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{privilege_level}}"
         }
       ]
     },
@@ -1565,14 +1585,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (privilege_level) (defender_oauth_app_max_risk_score{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, privilege_level) (defender_oauth_app_max_risk_score{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{privilege_level}}"
         }
       ]
     },
@@ -1636,14 +1657,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (input_stream_id, is_success, template) (rate(mdca_discovery_parse_tasks_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id, input_stream_id, is_success, template) (rate(mdca_discovery_parse_tasks_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{input_stream_id}} {{is_success}} {{template}}"
         }
       ]
     },
@@ -1694,14 +1716,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (input_stream_id) (mdca_discovery_parse_last_success_age_seconds{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, input_stream_id) (mdca_discovery_parse_last_success_age_seconds{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{input_stream_id}}"
         }
       ]
     },
@@ -1752,14 +1775,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (input_stream_id) (mdca_discovery_parse_transactions_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, input_stream_id) (mdca_discovery_parse_transactions_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{input_stream_id}}"
         }
       ]
     },
@@ -1810,14 +1834,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (input_stream_id) (mdca_discovery_parse_cloud_services_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, input_stream_id) (mdca_discovery_parse_cloud_services_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{input_stream_id}}"
         }
       ]
     },
@@ -1913,13 +1938,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "topk(20, sum by (severity, detection_source) (count_over_time({service_name=\"graph2otel\"} | event_name=`defender.alert_info` | tenant_id=~\"$tenant\" [$__auto])))",
+          "expr": "topk(20, sum by (tenant_id, severity, detection_source) (count_over_time({service_name=\"graph2otel\"} | event_name=`defender.alert_info` | tenant_id=~\"$tenant\" [$__auto])))",
           "datasource": {
             "type": "loki",
             "uid": "${loki_datasource}"
           },
           "editorMode": "code",
-          "queryType": "range"
+          "queryType": "range",
+          "legendFormat": "{{tenant_id}} {{severity}} {{detection_source}}"
         }
       ],
       "transformations": [
@@ -1971,13 +1997,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "topk(20, sum by (software_name, severity) (count_over_time({service_name=\"graph2otel\"} | event_name=`defender.vulnerability` | tenant_id=~\"$tenant\" [$__auto])))",
+          "expr": "topk(20, sum by (tenant_id, software_name, severity) (count_over_time({service_name=\"graph2otel\"} | event_name=`defender.vulnerability` | tenant_id=~\"$tenant\" [$__auto])))",
           "datasource": {
             "type": "loki",
             "uid": "${loki_datasource}"
           },
           "editorMode": "code",
-          "queryType": "range"
+          "queryType": "range",
+          "legendFormat": "{{tenant_id}} {{software_name}} {{severity}}"
         }
       ],
       "transformations": [
@@ -2039,13 +2066,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (logon_type, action_type) (count_over_time({service_name=\"graph2otel\"} | event_name=`defender.device_logon` | tenant_id=~\"$tenant\" [$__auto]))",
+          "expr": "sum by (tenant_id, logon_type, action_type) (count_over_time({service_name=\"graph2otel\"} | event_name=`defender.device_logon` | tenant_id=~\"$tenant\" [$__auto]))",
           "datasource": {
             "type": "loki",
             "uid": "${loki_datasource}"
           },
           "editorMode": "code",
-          "queryType": "range"
+          "queryType": "range",
+          "legendFormat": "{{tenant_id}} {{logon_type}} {{action_type}}"
         }
       ]
     },

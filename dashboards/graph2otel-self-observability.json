@@ -1059,7 +1059,8 @@
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{state}}"
         }
       ]
     },
@@ -1296,7 +1297,8 @@
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{collector}}"
         }
       ]
     },
@@ -1354,7 +1356,8 @@
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{collector}}"
         }
       ]
     },
@@ -1460,7 +1463,8 @@
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{collector}}"
         }
       ]
     },
@@ -1518,7 +1522,8 @@
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{collector}}"
         }
       ]
     },
@@ -1569,14 +1574,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (collector, error_type) (rate(graph2otel_scrape_errors_total{tenant_id=~\"$tenant\", collector=~\"$collector\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id, collector, error_type) (rate(graph2otel_scrape_errors_total{tenant_id=~\"$tenant\", collector=~\"$collector\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{collector}} {{error_type}}"
         }
       ]
     },
@@ -1627,14 +1633,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (collector) (rate(graph2otel_checkpoint_persist_errors_total{tenant_id=~\"$tenant\", collector=~\"$collector\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id, collector) (rate(graph2otel_checkpoint_persist_errors_total{tenant_id=~\"$tenant\", collector=~\"$collector\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{collector}}"
         }
       ]
     },
@@ -2296,14 +2303,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (report_name, result) (rate(graph2otel_export_jobs_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id, report_name, result) (rate(graph2otel_export_jobs_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{report_name}} {{result}}"
         }
       ]
     },
@@ -2361,7 +2369,8 @@
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{report_name}}"
         }
       ]
     },
@@ -2419,7 +2428,8 @@
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{report_name}}"
         }
       ]
     },
@@ -2477,7 +2487,8 @@
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{report_name}}"
         }
       ]
     },
@@ -2762,14 +2773,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (workload) (rate(graph2otel_throttle_count_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id, workload) (rate(graph2otel_throttle_count_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{workload}}"
         }
       ]
     },
@@ -2827,7 +2839,8 @@
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{workload}}"
         }
       ]
     },
@@ -2878,14 +2891,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(graph2otel_http_client_request_duration_seconds_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, tenant_id) (rate(graph2otel_http_client_request_duration_seconds_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}}"
         }
       ]
     },
@@ -2936,7 +2950,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (workload) (rate(graph2otel_graphclient_http_4xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id, workload) (rate(graph2otel_graphclient_http_4xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -2944,11 +2958,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "4xx {{workload}}"
+          "legendFormat": "4xx {{tenant_id}} {{workload}}"
         },
         {
           "refId": "B",
-          "expr": "sum by (workload) (rate(graph2otel_graphclient_http_5xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id, workload) (rate(graph2otel_graphclient_http_5xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -2956,7 +2970,7 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "5xx {{workload}}"
+          "legendFormat": "5xx {{tenant_id}} {{workload}}"
         }
       ]
     },
@@ -3020,14 +3034,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(graph2otel_exo_http_client_request_duration_seconds_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, tenant_id) (rate(graph2otel_exo_http_client_request_duration_seconds_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}}"
         }
       ]
     },
@@ -3078,7 +3093,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate(graph2otel_exo_http_4xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id) (rate(graph2otel_exo_http_4xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -3086,11 +3101,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "4xx"
+          "legendFormat": "4xx {{tenant_id}}"
         },
         {
           "refId": "B",
-          "expr": "sum(rate(graph2otel_exo_http_5xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id) (rate(graph2otel_exo_http_5xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -3098,11 +3113,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "5xx"
+          "legendFormat": "5xx {{tenant_id}}"
         },
         {
           "refId": "C",
-          "expr": "sum(rate(graph2otel_exo_throttle_count_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id) (rate(graph2otel_exo_throttle_count_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -3110,7 +3125,7 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "429 throttle"
+          "legendFormat": "429 throttle {{tenant_id}}"
         }
       ]
     },
@@ -3161,14 +3176,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(graph2otel_hunt_http_client_request_duration_seconds_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, tenant_id) (rate(graph2otel_hunt_http_client_request_duration_seconds_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}}"
         }
       ]
     },
@@ -3219,7 +3235,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate(graph2otel_hunt_http_4xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id) (rate(graph2otel_hunt_http_4xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -3227,11 +3243,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "4xx"
+          "legendFormat": "4xx {{tenant_id}}"
         },
         {
           "refId": "B",
-          "expr": "sum(rate(graph2otel_hunt_http_5xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id) (rate(graph2otel_hunt_http_5xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -3239,11 +3255,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "5xx"
+          "legendFormat": "5xx {{tenant_id}}"
         },
         {
           "refId": "C",
-          "expr": "sum(rate(graph2otel_hunt_throttle_count_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id) (rate(graph2otel_hunt_throttle_count_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -3251,7 +3267,7 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "429 throttle"
+          "legendFormat": "429 throttle {{tenant_id}}"
         }
       ]
     },
@@ -3302,14 +3318,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(graph2otel_mdca_http_client_request_duration_seconds_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, tenant_id) (rate(graph2otel_mdca_http_client_request_duration_seconds_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}}"
         }
       ]
     },
@@ -3360,7 +3377,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate(graph2otel_mdca_http_4xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id) (rate(graph2otel_mdca_http_4xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -3368,11 +3385,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "4xx"
+          "legendFormat": "4xx {{tenant_id}}"
         },
         {
           "refId": "B",
-          "expr": "sum(rate(graph2otel_mdca_http_5xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id) (rate(graph2otel_mdca_http_5xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -3380,11 +3397,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "5xx"
+          "legendFormat": "5xx {{tenant_id}}"
         },
         {
           "refId": "C",
-          "expr": "sum(rate(graph2otel_mdca_throttle_count_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id) (rate(graph2otel_mdca_throttle_count_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -3392,7 +3409,7 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "429 throttle"
+          "legendFormat": "429 throttle {{tenant_id}}"
         }
       ]
     },
@@ -3443,14 +3460,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(graph2otel_o365activity_http_client_request_duration_seconds_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, tenant_id) (rate(graph2otel_o365activity_http_client_request_duration_seconds_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}}"
         }
       ]
     },
@@ -3501,7 +3519,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate(graph2otel_o365activity_http_4xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id) (rate(graph2otel_o365activity_http_4xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -3509,11 +3527,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "4xx"
+          "legendFormat": "4xx {{tenant_id}}"
         },
         {
           "refId": "B",
-          "expr": "sum(rate(graph2otel_o365activity_http_5xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id) (rate(graph2otel_o365activity_http_5xx_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -3521,11 +3539,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "5xx"
+          "legendFormat": "5xx {{tenant_id}}"
         },
         {
           "refId": "C",
-          "expr": "sum(rate(graph2otel_o365activity_throttle_count_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id) (rate(graph2otel_o365activity_throttle_count_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -3533,7 +3551,7 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "429 throttle"
+          "legendFormat": "429 throttle {{tenant_id}}"
         }
       ]
     },
@@ -3604,7 +3622,8 @@
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{collector}} {{field}} {{kind}} {{tenant_id}}"
         }
       ]
     },
@@ -3675,7 +3694,8 @@
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{state}} {{tenant_id}}"
         }
       ]
     },
@@ -3733,7 +3753,8 @@
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{collector}} {{tenant_id}}"
         }
       ]
     },
@@ -3791,7 +3812,8 @@
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{collector}} {{tenant_id}}"
         }
       ]
     },
@@ -3849,7 +3871,8 @@
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{collector}} {{tenant_id}}"
         }
       ]
     },
@@ -3907,7 +3930,8 @@
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{collector}} {{tenant_id}}"
         }
       ]
     },
@@ -3965,7 +3989,8 @@
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "Blob metric emitted {{collector}} {{tenant_id}}"
         },
         {
           "refId": "B",
@@ -3976,7 +4001,8 @@
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "Blob metric gated {{collector}} {{tenant_id}}"
         }
       ]
     },
@@ -4034,7 +4060,8 @@
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{collector}} {{tenant_id}}"
         }
       ]
     },

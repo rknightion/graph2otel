@@ -147,6 +147,224 @@ class TestSelfObservabilityScopeGate(unittest.TestCase):
         self.assertNotIn(TENANT_SEL, exprs[0])
 
 
+class TestTenantPreservingQueries(unittest.TestCase):
+    AGGREGATION = re.compile(
+        r"\b(?:sum|avg|max|min|count)\s*"
+        r"(?:by\s*\((?P<group>[^)]*)\))?\s*\("
+    )
+
+    def _builder(self):
+        return Builder(
+            uid="tenant-test",
+            title="tenant test",
+            description="",
+            tags=[],
+            tenant_metric=CAT.metric("intune.devices.count").prom,
+            catalog=CAT,
+        )
+
+    def _groups(self, expr):
+        return [
+            [] if match.group("group") is None else [
+                key.strip() for key in match.group("group").split(",")
+            ]
+            for match in self.AGGREGATION.finditer(expr)
+        ]
+
+    def test_standard_metric_and_non_additive_queries_preserve_tenant(self):
+        builder = self._builder()
+        additive = builder.metric("intune.devices.count")
+        non_additive = builder.metric("intune.compliance.policy.version")
+
+        self.assertIn(
+            "sum by (tenant_id, compliance_state, operating_system)",
+            additive["targets"][0]["expr"],
+        )
+        self.assertEqual(
+            additive["targets"][0]["legendFormat"],
+            "{{tenant_id}} {{compliance_state}} {{operating_system}}",
+        )
+        self.assertIn(
+            "avg by (tenant_id, policy_name)",
+            non_additive["targets"][0]["expr"],
+        )
+        self.assertEqual(
+            non_additive["targets"][0]["legendFormat"],
+            "{{tenant_id}} {{policy_name}}",
+        )
+
+    def test_histogram_preserves_tenant_before_quantile(self):
+        panel = self._builder().metric("intune.uxa.boot_time_ms")
+        target = panel["targets"][0]
+        self.assertIn(
+            "sum by (le, tenant_id, restart_category)",
+            target["expr"],
+        )
+        self.assertEqual(
+            target["legendFormat"],
+            "{{tenant_id}} {{restart_category}}",
+        )
+
+    def test_log_rate_and_topk_table_preserve_tenant(self):
+        builder = self._builder()
+        rate = builder.log_rate(
+            "entra.signin",
+            "Sign-ins",
+            by=["status_error_code"],
+        )
+        table = builder.log_table(
+            "intune.compliance_alert",
+            "Compliance alerts",
+            by=["alert_type"],
+        )
+
+        self.assertIn(
+            "sum by (tenant_id, status_error_code)",
+            rate["targets"][0]["expr"],
+        )
+        self.assertEqual(
+            rate["targets"][0]["legendFormat"],
+            "{{tenant_id}} {{status_error_code}}",
+        )
+        self.assertIn(
+            "topk(20, sum by (tenant_id, alert_type)",
+            table["targets"][0]["expr"],
+        )
+        self.assertEqual(
+            table["targets"][0]["legendFormat"],
+            "{{tenant_id}} {{alert_type}}",
+        )
+
+    def test_explicit_tenant_group_is_not_duplicated(self):
+        builder = self._builder()
+        rate = builder.log_rate(
+            "entra.signin",
+            "Sign-ins",
+            by=["tenant_id", "status_error_code"],
+        )
+        table = builder.log_table(
+            "intune.compliance_alert",
+            "Compliance alerts",
+            by=["tenant_id", "alert_type"],
+        )
+
+        self.assertIn(
+            "sum by (tenant_id, status_error_code)",
+            rate["targets"][0]["expr"],
+        )
+        self.assertNotIn(
+            "tenant_id, tenant_id",
+            rate["targets"][0]["expr"],
+        )
+        self.assertIn(
+            "sum by (tenant_id, alert_type)",
+            table["targets"][0]["expr"],
+        )
+        self.assertNotIn(
+            "tenant_id, tenant_id",
+            table["targets"][0]["expr"],
+        )
+
+    def test_two_tenant_fixture_keeps_every_query_shape_separable(self):
+        builder = self._builder()
+        panels = [
+            builder.metric("intune.devices.count"),
+            builder.metric("intune.uxa.boot_time_ms"),
+            builder.log_rate(
+                "entra.signin",
+                "Sign-ins",
+                by=["status_error_code"],
+            ),
+            builder.log_table(
+                "intune.compliance_alert",
+                "Compliance alerts",
+                by=["alert_type"],
+            ),
+        ]
+        selfobs = next(board for name, board in BUILT if name == "graph2otel-self-observability.json")
+        raw_panel = next(
+            item["spec"]
+            for item in selfobs._panels
+            if item.get("spec", {}).get("title") == "Scrape error rate by error type"
+        )
+        panels.append(raw_panel)
+
+        fixtures = [
+            {
+                "tenant_id": "tenant-a",
+                "compliance_state": "compliant",
+                "operating_system": "Windows",
+            },
+            {
+                "tenant_id": "tenant-b",
+                "compliance_state": "compliant",
+                "operating_system": "Windows",
+            },
+        ]
+        for panel in panels:
+            with self.subTest(panel=panel["title"]):
+                group = self._groups(panel["targets"][0]["expr"])[0]
+                keys = {
+                    tuple(record.get(label, "") for label in group)
+                    for record in fixtures
+                }
+                self.assertEqual(len(keys), 2)
+
+    def test_every_generated_tenant_aggregation_keeps_tenant_id(self):
+        violations = []
+        for filename, board in BUILT:
+            for item in board._panels:
+                panel = item.get("spec")
+                if panel is None:
+                    continue
+                for target in panel.get("targets", []):
+                    expr = target.get("expr", "")
+                    names = CAT.metrics_referenced_by(expr)
+                    scopes = {CAT.metric(name).scope for name in names}
+                    if catalog_mod.TENANT_SCOPE not in scopes:
+                        continue
+                    if catalog_mod.PROCESS_SCOPE in scopes:
+                        violations.append(
+                            f"{filename}/{panel['title']}: mixes process and tenant metrics"
+                        )
+                        continue
+                    for group in self._groups(expr):
+                        if "tenant_id" not in group:
+                            violations.append(
+                                f"{filename}/{panel['title']}: {expr}"
+                            )
+        self.assertEqual(violations, [], "\n".join(violations[:20]))
+
+    def test_every_generated_tenant_series_has_an_explicit_tenant_legend(self):
+        violations = []
+        for filename, board in BUILT:
+            for item in board._panels:
+                panel = item.get("spec")
+                if panel is None or panel["type"] not in {
+                    "timeseries", "stat", "bargauge"
+                }:
+                    continue
+                for target in panel.get("targets", []):
+                    names = CAT.metrics_referenced_by(target.get("expr", ""))
+                    if not any(
+                        CAT.metric(name).scope == catalog_mod.TENANT_SCOPE
+                        for name in names
+                    ):
+                        continue
+                    if "{{tenant_id}}" not in target.get("legendFormat", ""):
+                        violations.append(
+                            f"{filename}/{panel['title']}: "
+                            f"{target.get('expr', '')}"
+                        )
+        self.assertEqual(violations, [], "\n".join(violations[:20]))
+
+    def test_process_scoped_query_does_not_gain_tenant_identity(self):
+        panel = self._builder().metric("graph2otel.series.total")
+        target = panel["targets"][0]
+        self.assertNotIn("tenant_id", target["expr"])
+        self.assertNotIn("legendFormat", target)
+
+
 class TestOutcomeAccountingPanels(unittest.TestCase):
     def setUp(self):
         board = next(b for name, b in BUILT

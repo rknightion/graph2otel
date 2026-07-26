@@ -352,14 +352,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (enforcement_mode) (purview_dlp_policies{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, enforcement_mode) (purview_dlp_policies{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{enforcement_mode}}"
         }
       ]
     },
@@ -410,14 +411,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (action, workload) (purview_dlp_rules{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, action, workload) (purview_dlp_rules{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{action}} {{workload}}"
         }
       ]
     },
@@ -468,14 +470,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (binding_type, workload) (purview_dlp_policy_bindings{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, binding_type, workload) (purview_dlp_policy_bindings{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{binding_type}} {{workload}}"
         }
       ]
     },
@@ -519,14 +522,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg(purview_dlp_policy_last_changed_age_seconds{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id) (purview_dlp_policy_last_changed_age_seconds{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}}"
         }
       ]
     },
@@ -590,14 +594,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (applicable_to) (purview_labels_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, applicable_to) (purview_labels_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{applicable_to}}"
         }
       ]
     },
@@ -648,14 +653,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (action_after_retention, behavior_during_retention, retention_trigger) (purview_retention_labels_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, action_after_retention, behavior_during_retention, retention_trigger) (purview_retention_labels_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{action_after_retention}} {{behavior_during_retention}} {{retention_trigger}}"
         }
       ]
     },
@@ -699,14 +705,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(purview_retention_event_types_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (purview_retention_event_types_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}}"
         }
       ]
     },
@@ -770,14 +777,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (status) (purview_ediscovery_cases{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, status) (purview_ediscovery_cases{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{status}}"
         }
       ]
     },
@@ -873,13 +881,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "topk(20, sum by (policy_name, enforcement_mode) (count_over_time({service_name=\"graph2otel\"} | event_name=`purview.dlp_policy` | tenant_id=~\"$tenant\" [$__auto])))",
+          "expr": "topk(20, sum by (tenant_id, policy_name, enforcement_mode) (count_over_time({service_name=\"graph2otel\"} | event_name=`purview.dlp_policy` | tenant_id=~\"$tenant\" [$__auto])))",
           "datasource": {
             "type": "loki",
             "uid": "${loki_datasource}"
           },
           "editorMode": "code",
-          "queryType": "range"
+          "queryType": "range",
+          "legendFormat": "{{tenant_id}} {{policy_name}} {{enforcement_mode}}"
         }
       ],
       "transformations": [
@@ -931,13 +940,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "topk(20, sum by (behavior_during_retention, action_after_retention) (count_over_time({service_name=\"graph2otel\"} | event_name=`purview.retention_label` | tenant_id=~\"$tenant\" [$__auto])))",
+          "expr": "topk(20, sum by (tenant_id, behavior_during_retention, action_after_retention) (count_over_time({service_name=\"graph2otel\"} | event_name=`purview.retention_label` | tenant_id=~\"$tenant\" [$__auto])))",
           "datasource": {
             "type": "loki",
             "uid": "${loki_datasource}"
           },
           "editorMode": "code",
-          "queryType": "range"
+          "queryType": "range",
+          "legendFormat": "{{tenant_id}} {{behavior_during_retention}} {{action_after_retention}}"
         }
       ],
       "transformations": [

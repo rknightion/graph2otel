@@ -352,14 +352,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (compliance_state, operating_system) (intune_devices_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, compliance_state, operating_system) (intune_devices_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{compliance_state}} {{operating_system}}"
         }
       ]
     },
@@ -410,14 +411,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (os) (intune_devices_overview_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, os) (intune_devices_overview_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{os}}"
         }
       ]
     },
@@ -468,7 +470,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(intune_devices_overview_enrolled_device_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (intune_devices_overview_enrolled_device_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -476,11 +478,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Devices overview enrolled device count"
+          "legendFormat": "Devices overview enrolled device count {{tenant_id}}"
         },
         {
           "refId": "B",
-          "expr": "sum(intune_devices_overview_mdm_enrolled_device_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (intune_devices_overview_mdm_enrolled_device_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -488,11 +490,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Devices overview MDM enrolled device count"
+          "legendFormat": "Devices overview MDM enrolled device count {{tenant_id}}"
         },
         {
           "refId": "C",
-          "expr": "sum(intune_devices_overview_dual_enrolled_device_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (intune_devices_overview_dual_enrolled_device_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -500,7 +502,7 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Devices overview dual enrolled device count"
+          "legendFormat": "Devices overview dual enrolled device count {{tenant_id}}"
         }
       ]
     },
@@ -551,14 +553,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (staleness_bucket) (intune_devices_sync_staleness_seconds{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, staleness_bucket) (intune_devices_sync_staleness_seconds{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{staleness_bucket}}"
         }
       ]
     },
@@ -609,14 +612,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (operating_system, os_version) (intune_devices_os_version_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, operating_system, os_version) (intune_devices_os_version_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{operating_system}} {{os_version}}"
         }
       ]
     },
@@ -667,14 +671,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (operating_system) (intune_devices_encrypted_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, operating_system) (intune_devices_encrypted_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{operating_system}}"
         }
       ]
     },
@@ -725,14 +730,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (device_type, encryption_readiness_state, encryption_state) (intune_device_encryption_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, device_type, encryption_readiness_state, encryption_state) (intune_device_encryption_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{device_type}} {{encryption_readiness_state}} {{encryption_state}}"
         }
       ]
     },
@@ -783,14 +789,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (encryption_policy_setting_state) (intune_device_encryption_policy_state{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, encryption_policy_setting_state) (intune_device_encryption_policy_state{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{encryption_policy_setting_state}}"
         }
       ]
     },
@@ -841,14 +848,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (attestation_status, os) (intune_device_attestation_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, attestation_status, os) (intune_device_attestation_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{attestation_status}} {{os}}"
         }
       ]
     },
@@ -899,14 +907,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (os, posture, status) (intune_device_boot_security_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, os, posture, status) (intune_device_boot_security_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{os}} {{posture}} {{status}}"
         }
       ]
     },
@@ -957,14 +966,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (os) (intune_devices_without_compliance_policy_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, os) (intune_devices_without_compliance_policy_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{os}}"
         }
       ]
     },
@@ -1015,14 +1025,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (manufacturer, operating_system) (intune_hardware_inventory_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, manufacturer, operating_system) (intune_hardware_inventory_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{manufacturer}} {{operating_system}}"
         }
       ]
     },
@@ -1073,14 +1084,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (tpm_specification_version) (intune_hardware_inventory_tpm_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, tpm_specification_version) (intune_hardware_inventory_tpm_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{tpm_specification_version}}"
         }
       ]
     },
@@ -1131,14 +1143,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (credential_guard_state, vbs_state) (intune_hardware_inventory_device_guard_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, credential_guard_state, vbs_state) (intune_hardware_inventory_device_guard_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{credential_guard_state}} {{vbs_state}}"
         }
       ]
     },
@@ -1189,14 +1202,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (operating_system, storage_state) (intune_hardware_inventory_storage_bytes{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, operating_system, storage_state) (intune_hardware_inventory_storage_bytes{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{operating_system}} {{storage_state}}"
         }
       ]
     },
@@ -1240,14 +1254,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(intune_detected_apps_catalog_size{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (intune_detected_apps_catalog_size{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}}"
         }
       ]
     },
@@ -1298,14 +1313,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (app_name, platform) (intune_detected_apps_device_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, app_name, platform) (intune_detected_apps_device_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{app_name}} {{platform}}"
         }
       ]
     },
@@ -1369,14 +1385,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (state) (intune_compliance_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, state) (intune_compliance_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{state}}"
         }
       ]
     },
@@ -1427,14 +1444,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (policy_name, state) (intune_compliance_policy_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, policy_name, state) (intune_compliance_policy_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{policy_name}} {{state}}"
         }
       ]
     },
@@ -1485,14 +1503,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (policy_name, state) (intune_compliance_policy_users{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, policy_name, state) (intune_compliance_policy_users{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{policy_name}} {{state}}"
         }
       ]
     },
@@ -1533,14 +1552,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (policy_name) (intune_compliance_policy_version_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, policy_name) (intune_compliance_policy_version_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": false,
-          "instant": true
+          "instant": true,
+          "legendFormat": "{{tenant_id}} {{policy_name}}"
         }
       ]
     },
@@ -1591,14 +1611,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (platform, setting_name, state) (intune_compliance_setting_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, platform, setting_name, state) (intune_compliance_setting_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{platform}} {{setting_name}} {{state}}"
         }
       ]
     },
@@ -1649,14 +1670,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (os, setting_status) (intune_noncompliant_settings_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, os, setting_status) (intune_noncompliant_settings_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{os}} {{setting_status}}"
         }
       ]
     },
@@ -1707,14 +1729,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (baseline_name, state) (intune_security_baseline_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, baseline_name, state) (intune_security_baseline_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{baseline_name}} {{state}}"
         }
       ]
     },
@@ -1765,14 +1788,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (firewall_status) (intune_firewall_status_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, firewall_status) (intune_firewall_status_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{firewall_status}}"
         }
       ]
     },
@@ -1823,14 +1847,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (migrating) (intune_intent_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, migrating) (intune_intent_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{migrating}}"
         }
       ]
     },
@@ -1881,14 +1906,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (compliance_status, intent_name) (intune_intent_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, compliance_status, intent_name) (intune_intent_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{compliance_status}} {{intent_name}}"
         }
       ]
     },
@@ -1952,14 +1978,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (odata_type) (intune_config_profile_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, odata_type) (intune_config_profile_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{odata_type}}"
         }
       ]
     },
@@ -2010,14 +2037,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (profile_name, state) (intune_config_profile_status{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, profile_name, state) (intune_config_profile_status{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{profile_name}} {{state}}"
         }
       ]
     },
@@ -2058,14 +2086,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (profile_name) (intune_config_profile_version_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, profile_name) (intune_config_profile_version_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": false,
-          "instant": true
+          "instant": true,
+          "legendFormat": "{{tenant_id}} {{profile_name}}"
         }
       ]
     },
@@ -2116,14 +2145,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (report_status) (intune_config_profile_device_status_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, report_status) (intune_config_profile_device_status_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{report_status}}"
         }
       ]
     },
@@ -2174,14 +2204,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (setting_device_status) (intune_config_setting_status_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, setting_device_status) (intune_config_setting_status_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{setting_device_status}}"
         }
       ]
     },
@@ -2232,14 +2263,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (policy_platform, report_status) (intune_config_assignment_status_assignments{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, policy_platform, report_status) (intune_config_assignment_status_assignments{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{policy_platform}} {{report_status}}"
         }
       ]
     },
@@ -2290,14 +2322,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (platform, technology, template_family) (intune_settings_catalog_policy_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, platform, technology, template_family) (intune_settings_catalog_policy_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{platform}} {{technology}} {{template_family}}"
         }
       ]
     },
@@ -2348,14 +2381,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (config_type) (intune_enrollment_config_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, config_type) (intune_enrollment_config_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{config_type}}"
         }
       ]
     },
@@ -2396,14 +2430,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (config_name, config_type) (intune_enrollment_config_priority_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, config_name, config_type) (intune_enrollment_config_priority_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": false,
-          "instant": true
+          "instant": true,
+          "legendFormat": "{{tenant_id}} {{config_name}} {{config_type}}"
         }
       ]
     },
@@ -2444,14 +2479,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (config_name) (intune_enrollment_config_version_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, config_name) (intune_enrollment_config_version_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": false,
-          "instant": true
+          "instant": true,
+          "legendFormat": "{{tenant_id}} {{config_name}}"
         }
       ]
     },
@@ -2502,14 +2538,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (ingestion_type) (intune_gpo_config_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, ingestion_type) (intune_gpo_config_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{ingestion_type}}"
         }
       ]
     },
@@ -2560,14 +2597,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (readiness, report_name) (intune_gpo_migration_readiness{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, readiness, report_name) (intune_gpo_migration_readiness{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{readiness}} {{report_name}}"
         }
       ]
     },
@@ -2618,14 +2656,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (report_name) (intune_gpo_supported_settings_percent{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, report_name) (intune_gpo_supported_settings_percent{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{report_name}}"
         }
       ]
     },
@@ -2689,14 +2728,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (app_type, publishing_state) (intune_mobile_apps_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, app_type, publishing_state) (intune_mobile_apps_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{app_type}} {{publishing_state}}"
         }
       ]
     },
@@ -2747,14 +2787,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (policy_name, status) (intune_mobile_app_config_status{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, policy_name, status) (intune_mobile_app_config_status{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{policy_name}} {{status}}"
         }
       ]
     },
@@ -2805,14 +2846,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (install_state, platform) (intune_app_install_status_installations{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, install_state, platform) (intune_app_install_status_installations{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{install_state}} {{platform}}"
         }
       ]
     },
@@ -2863,14 +2905,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (assigned, platform) (intune_app_protection_policy_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, assigned, platform) (intune_app_protection_policy_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{assigned}} {{platform}}"
         }
       ]
     },
@@ -2921,14 +2964,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (flagged_reason, platform) (intune_app_protection_flagged_registrations{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, flagged_reason, platform) (intune_app_protection_flagged_registrations{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{flagged_reason}} {{platform}}"
         }
       ]
     },
@@ -2979,14 +3023,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (assigned) (intune_wip_policy_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, assigned) (intune_wip_policy_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{assigned}}"
         }
       ]
     },
@@ -3050,14 +3095,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (enrollment_state, group_tag) (intune_autopilot_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, enrollment_state, group_tag) (intune_autopilot_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{enrollment_state}} {{group_tag}}"
         }
       ]
     },
@@ -3108,14 +3154,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (group_tag) (intune_autopilot_stale_contact_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, group_tag) (intune_autopilot_stale_contact_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{group_tag}}"
         }
       ]
     },
@@ -3166,14 +3213,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (device_type, preprovisioning_allowed) (intune_autopilot_profile_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, device_type, preprovisioning_allowed) (intune_autopilot_profile_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{device_type}} {{preprovisioning_allowed}}"
         }
       ]
     },
@@ -3224,14 +3272,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (profile_name) (intune_autopilot_profile_assignments{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, profile_name) (intune_autopilot_profile_assignments{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{profile_name}}"
         }
       ]
     },
@@ -3282,14 +3331,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (profile_name) (intune_autopilot_profile_esp_timeout_minutes{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, profile_name) (intune_autopilot_profile_esp_timeout_minutes{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{profile_name}}"
         }
       ]
     },
@@ -3330,14 +3380,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (profile_name, setting) (intune_autopilot_profile_setting_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, profile_name, setting) (intune_autopilot_profile_setting_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": false,
-          "instant": true
+          "instant": true,
+          "legendFormat": "{{tenant_id}} {{profile_name}} {{setting}}"
         }
       ]
     },
@@ -3381,7 +3432,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg(intune_autopilot_sync_age_seconds{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id) (intune_autopilot_sync_age_seconds{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -3389,18 +3440,19 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Autopilot sync age seconds"
+          "legendFormat": "Autopilot sync age seconds {{tenant_id}}"
         },
         {
           "refId": "B",
-          "expr": "avg by (sync_status) (intune_autopilot_sync_status_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, sync_status) (intune_autopilot_sync_status_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "Autopilot sync status {{tenant_id}} {{sync_status}}"
         }
       ]
     },
@@ -3451,14 +3503,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (deployment_status) (intune_autopilot_deployment_deployments{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, deployment_status) (intune_autopilot_deployment_deployments{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{deployment_status}}"
         }
       ]
     },
@@ -3509,14 +3562,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (policy_install_status) (intune_autopilot_deployment_apps_installs{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, policy_install_status) (intune_autopilot_deployment_apps_installs{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{policy_install_status}}"
         }
       ]
     },
@@ -3567,14 +3621,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (policy_install_status) (intune_autopilot_deployment_scripts_executions{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, policy_install_status) (intune_autopilot_deployment_scripts_executions{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{policy_install_status}}"
         }
       ]
     },
@@ -3638,14 +3693,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (ring_name, state) (intune_update_ring_status{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, ring_name, state) (intune_update_ring_status{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{ring_name}} {{state}}"
         }
       ]
     },
@@ -3696,14 +3752,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (ring_name, update_type) (intune_update_ring_pause_state_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, ring_name, update_type) (intune_update_ring_pause_state_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{ring_name}} {{update_type}}"
         }
       ]
     },
@@ -3754,14 +3811,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (ring_name, update_type) (intune_update_ring_pause_expiry_seconds{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, ring_name, update_type) (intune_update_ring_pause_expiry_seconds{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{ring_name}} {{update_type}}"
         }
       ]
     },
@@ -3812,14 +3870,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (ring_name, update_type) (intune_update_ring_rollback_active_ratio{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, ring_name, update_type) (intune_update_ring_rollback_active_ratio{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{ring_name}} {{update_type}}"
         }
       ]
     },
@@ -3870,14 +3929,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (profile_name) (intune_driver_update_pending_approval{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, profile_name) (intune_driver_update_pending_approval{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{profile_name}}"
         }
       ]
     },
@@ -3928,14 +3988,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (profile_name) (intune_driver_update_sync_staleness_seconds{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, profile_name) (intune_driver_update_sync_staleness_seconds{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{profile_name}}"
         }
       ]
     },
@@ -3986,14 +4047,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (policy_name, update_deployment_state) (intune_driver_update_summary_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, policy_name, update_deployment_state) (intune_driver_update_summary_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{policy_name}} {{update_deployment_state}}"
         }
       ]
     },
@@ -4044,14 +4106,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (feature_update_version, policy_name, update_deployment_state) (intune_feature_update_summary_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, feature_update_version, policy_name, update_deployment_state) (intune_feature_update_summary_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{feature_update_version}} {{policy_name}} {{update_deployment_state}}"
         }
       ]
     },
@@ -4102,14 +4165,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (feature_update_version, profile_name) (intune_feature_update_profile_eol_target_seconds{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, feature_update_version, profile_name) (intune_feature_update_profile_eol_target_seconds{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{feature_update_version}} {{profile_name}}"
         }
       ]
     },
@@ -4160,14 +4224,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (expedite_release_date, policy_name, update_deployment_state) (intune_quality_update_summary_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, expedite_release_date, policy_name, update_deployment_state) (intune_quality_update_summary_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{expedite_release_date}} {{policy_name}} {{update_deployment_state}}"
         }
       ]
     },
@@ -4218,14 +4283,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (resource_type) (intune_quality_update_config_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, resource_type) (intune_quality_update_config_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{resource_type}}"
         }
       ]
     },
@@ -4276,14 +4342,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (catalog_entry_type, deployment_effective_state, deployment_requested_state) (intune_windows_updates_deployments{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, catalog_entry_type, deployment_effective_state, deployment_requested_state) (intune_windows_updates_deployments{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{catalog_entry_type}} {{deployment_effective_state}} {{deployment_requested_state}}"
         }
       ]
     },
@@ -4334,14 +4401,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (update_category) (intune_windows_updates_update_policies{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, update_category) (intune_windows_updates_update_policies{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{update_category}}"
         }
       ]
     },
@@ -4405,14 +4473,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (health_state) (intune_uxa_device_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, health_state) (intune_uxa_device_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{health_state}}"
         }
       ]
     },
@@ -4463,14 +4532,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, category) (rate(intune_uxa_device_score_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, tenant_id, category) (rate(intune_uxa_device_score_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{category}}"
         }
       ]
     },
@@ -4521,14 +4591,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (baseline_name, is_built_in) (intune_uxa_baseline_score{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, baseline_name, is_built_in) (intune_uxa_baseline_score{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{baseline_name}} {{is_built_in}}"
         }
       ]
     },
@@ -4579,14 +4650,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (anomaly_severity) (intune_uxa_anomaly_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, anomaly_severity) (intune_uxa_anomaly_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{anomaly_severity}}"
         }
       ]
     },
@@ -4637,14 +4709,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, restart_category) (rate(intune_uxa_boot_time_ms_milliseconds_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, tenant_id, restart_category) (rate(intune_uxa_boot_time_ms_milliseconds_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{restart_category}}"
         }
       ]
     },
@@ -4695,14 +4768,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, restart_category) (rate(intune_uxa_login_time_ms_milliseconds_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, tenant_id, restart_category) (rate(intune_uxa_login_time_ms_milliseconds_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{restart_category}}"
         }
       ]
     },
@@ -4753,14 +4827,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (app_name) (intune_uxa_app_crash_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, app_name) (intune_uxa_app_crash_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{app_name}}"
         }
       ]
     },
@@ -4811,14 +4886,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (health_state) (intune_uxa_app_health_device_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, health_state) (intune_uxa_app_health_device_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{health_state}}"
         }
       ]
     },
@@ -4869,14 +4945,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (os_version) (intune_uxa_app_health_active_device_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, os_version) (intune_uxa_app_health_active_device_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{os_version}}"
         }
       ]
     },
@@ -4927,14 +5004,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (health_state, os_version) (intune_uxa_app_health_os_version_score{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, health_state, os_version) (intune_uxa_app_health_os_version_score{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{health_state}} {{os_version}}"
         }
       ]
     },
@@ -4985,14 +5063,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (os_version) (intune_uxa_app_health_mean_time_to_failure_minutes{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, os_version) (intune_uxa_app_health_mean_time_to_failure_minutes{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{os_version}}"
         }
       ]
     },
@@ -5043,14 +5122,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (health_state) (intune_uxa_battery_health_device_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, health_state) (intune_uxa_battery_health_device_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{health_state}}"
         }
       ]
     },
@@ -5101,14 +5181,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, health_state) (rate(intune_uxa_battery_health_score_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, tenant_id, health_state) (rate(intune_uxa_battery_health_score_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{health_state}}"
         }
       ]
     },
@@ -5159,14 +5240,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (health_state) (intune_uxa_resource_performance_device_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, health_state) (intune_uxa_resource_performance_device_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{health_state}}"
         }
       ]
     },
@@ -5217,14 +5299,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, health_state) (rate(intune_uxa_resource_performance_score_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, tenant_id, health_state) (rate(intune_uxa_resource_performance_score_bucket{tenant_id=~\"$tenant\"}[$__rate_interval])))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{health_state}}"
         }
       ]
     },
@@ -5275,14 +5358,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (health_state, upgrade_eligibility) (intune_uxa_work_from_anywhere_device_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, health_state, upgrade_eligibility) (intune_uxa_work_from_anywhere_device_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{health_state}} {{upgrade_eligibility}}"
         }
       ]
     },
@@ -5323,14 +5407,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (category, health_state, manufacturer, model) (intune_uxa_model_score{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, category, health_state, manufacturer, model) (intune_uxa_model_score{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": false,
-          "instant": true
+          "instant": true,
+          "legendFormat": "{{tenant_id}} {{category}} {{health_state}} {{manufacturer}} {{model}}"
         }
       ]
     },
@@ -5371,14 +5456,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (health_state, manufacturer, model) (intune_uxa_model_device_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, health_state, manufacturer, model) (intune_uxa_model_device_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": false,
-          "instant": true
+          "instant": true,
+          "legendFormat": "{{tenant_id}} {{health_state}} {{manufacturer}} {{model}}"
         }
       ]
     },
@@ -5442,7 +5528,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(intune_malware_overview_detected_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (intune_malware_overview_detected_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -5450,11 +5536,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Malware overview detected devices"
+          "legendFormat": "Malware overview detected devices {{tenant_id}}"
         },
         {
           "refId": "B",
-          "expr": "sum(intune_malware_overview_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (intune_malware_overview_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -5462,7 +5548,7 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Malware overview total"
+          "legendFormat": "Malware overview total {{tenant_id}}"
         }
       ]
     },
@@ -5513,25 +5599,27 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (severity) (intune_malware_overview_by_severity{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, severity) (intune_malware_overview_by_severity{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "Malware overview by severity {{tenant_id}} {{severity}}"
         },
         {
           "refId": "B",
-          "expr": "sum by (category) (intune_malware_overview_by_category{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, category) (intune_malware_overview_by_category{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "Malware overview by category {{tenant_id}} {{category}}"
         }
       ]
     },
@@ -5582,14 +5670,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (signal) (intune_defender_protection_state{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, signal) (intune_defender_protection_state{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{signal}}"
         }
       ]
     },
@@ -5640,14 +5729,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (status) (intune_defender_product_status{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, status) (intune_defender_product_status{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{status}}"
         }
       ]
     },
@@ -5698,14 +5788,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (signal) (intune_defender_agents_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, signal) (intune_defender_agents_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{signal}}"
         }
       ]
     },
@@ -5756,14 +5847,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (status) (intune_defender_agents_product_status{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, status) (intune_defender_agents_product_status{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{status}}"
         }
       ]
     },
@@ -5827,14 +5919,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (state, token_name, type) (intune_apple_token_days_until_expiry{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, state, token_name, type) (intune_apple_token_days_until_expiry{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{state}} {{token_name}} {{type}}"
         }
       ]
     },
@@ -5885,14 +5978,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (token_name) (intune_apple_token_synced_device_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, token_name) (intune_apple_token_synced_device_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{token_name}}"
         }
       ]
     },
@@ -5943,14 +6037,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (cert_profile_name, expiry_bucket, state) (intune_certificate_days_until_expiry{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, cert_profile_name, expiry_bucket, state) (intune_certificate_days_until_expiry{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{cert_profile_name}} {{expiry_bucket}} {{state}}"
         }
       ]
     },
@@ -6001,14 +6096,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (state) (intune_certificate_state_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, state) (intune_certificate_state_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{state}}"
         }
       ]
     },
@@ -6059,14 +6155,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (bucket, issuer) (intune_cert_inventory_days_until_expiry{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, bucket, issuer) (intune_cert_inventory_days_until_expiry{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{bucket}} {{issuer}}"
         }
       ]
     },
@@ -6117,14 +6214,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (state) (intune_cert_inventory_state{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, state) (intune_cert_inventory_state{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{state}}"
         }
       ]
     },
@@ -6175,14 +6273,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (certification_authority_status, certification_authority_type) (intune_cloud_pki_authorities{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, certification_authority_status, certification_authority_type) (intune_cloud_pki_authorities{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{certification_authority_status}} {{certification_authority_type}}"
         }
       ]
     },
@@ -6233,14 +6332,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (certificate_status, display_name) (intune_cloud_pki_leaf_certificates{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, certificate_status, display_name) (intune_cloud_pki_leaf_certificates{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{certificate_status}} {{display_name}}"
         }
       ]
     },
@@ -6291,14 +6391,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (certification_authority_type, display_name) (intune_cloud_pki_days_until_expiry{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, certification_authority_type, display_name) (intune_cloud_pki_days_until_expiry{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{certification_authority_type}} {{display_name}}"
         }
       ]
     },
@@ -6349,14 +6450,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (connector_type, state) (intune_connector_state{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, connector_type, state) (intune_connector_state{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{connector_type}} {{state}}"
         }
       ]
     },
@@ -6407,14 +6509,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "avg by (connector_type) (intune_connector_heartbeat_age_seconds{tenant_id=~\"$tenant\"})",
+          "expr": "avg by (tenant_id, connector_type) (intune_connector_heartbeat_age_seconds{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{connector_type}}"
         }
       ]
     },
@@ -6465,14 +6568,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (enabled, platform) (intune_connector_mtd_platform_total{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, enabled, platform) (intune_connector_mtd_platform_total{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{enabled}} {{platform}}"
         }
       ]
     },
@@ -6536,14 +6640,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (elevation_type) (intune_epm_elevations_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, elevation_type) (intune_epm_elevations_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{elevation_type}}"
         }
       ]
     },
@@ -6594,14 +6699,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (elevation_type, result) (rate(intune_epm_elevation_events_count_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+          "expr": "sum by (tenant_id, elevation_type, result) (rate(intune_epm_elevation_events_count_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{elevation_type}} {{result}}"
         }
       ]
     },
@@ -6652,14 +6758,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (elevation_type) (intune_epm_denied_denials{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, elevation_type) (intune_epm_denied_denials{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{elevation_type}}"
         }
       ]
     },
@@ -6710,14 +6817,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (elevation_type) (intune_epm_elevations_by_publisher_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, elevation_type) (intune_epm_elevations_by_publisher_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{elevation_type}}"
         }
       ]
     },
@@ -6768,14 +6876,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (elevation_governance) (intune_epm_elevations_by_user_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, elevation_governance) (intune_epm_elevations_by_user_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{elevation_governance}}"
         }
       ]
     },
@@ -6826,14 +6935,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (is_built_in, scope_type) (intune_rbac_role_assignments{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, is_built_in, scope_type) (intune_rbac_role_assignments{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{is_built_in}} {{scope_type}}"
         }
       ]
     },
@@ -6884,14 +6994,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (is_built_in, is_built_in_role_definition, role_definition_type) (intune_rbac_role_definitions{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, is_built_in, is_built_in_role_definition, role_definition_type) (intune_rbac_role_definitions{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{is_built_in}} {{is_built_in_role_definition}} {{role_definition_type}}"
         }
       ]
     },
@@ -6955,7 +7066,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(intune_remediation_overview_script_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (intune_remediation_overview_script_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -6963,11 +7074,11 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Remediation overview script count"
+          "legendFormat": "Remediation overview script count {{tenant_id}}"
         },
         {
           "refId": "B",
-          "expr": "sum(intune_remediation_overview_remediated_device_count{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id) (intune_remediation_overview_remediated_device_count{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
@@ -6975,7 +7086,7 @@
           "editorMode": "code",
           "range": true,
           "instant": false,
-          "legendFormat": "Remediation overview remediated device count"
+          "legendFormat": "Remediation overview remediated device count {{tenant_id}}"
         }
       ]
     },
@@ -7026,14 +7137,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (phase, script_name, state) (intune_remediation_summary{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, phase, script_name, state) (intune_remediation_summary{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{phase}} {{script_name}} {{state}}"
         }
       ]
     },
@@ -7084,14 +7196,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (script_name) (intune_remediation_remediated_cumulative_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, script_name) (intune_remediation_remediated_cumulative_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{script_name}}"
         }
       ]
     },
@@ -7142,14 +7255,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (detection_state, remediation_name, remediation_state) (intune_remediation_run_states_devices{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, detection_state, remediation_name, remediation_state) (intune_remediation_run_states_devices{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{detection_state}} {{remediation_name}} {{remediation_state}}"
         }
       ]
     },
@@ -7200,14 +7314,15 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (os, run_state, script_name, target) (intune_script_run_summary{tenant_id=~\"$tenant\"})",
+          "expr": "sum by (tenant_id, os, run_state, script_name, target) (intune_script_run_summary{tenant_id=~\"$tenant\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
           "editorMode": "code",
           "range": true,
-          "instant": false
+          "instant": false,
+          "legendFormat": "{{tenant_id}} {{os}} {{run_state}} {{script_name}} {{target}}"
         }
       ]
     },
@@ -7303,13 +7418,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "topk(20, sum by (actor_user_principal_name, activity_operation_type) (count_over_time({service_name=\"graph2otel\"} | event_name=`intune.audit_event` | tenant_id=~\"$tenant\" [$__auto])))",
+          "expr": "topk(20, sum by (tenant_id, actor_user_principal_name, activity_operation_type) (count_over_time({service_name=\"graph2otel\"} | event_name=`intune.audit_event` | tenant_id=~\"$tenant\" [$__auto])))",
           "datasource": {
             "type": "loki",
             "uid": "${loki_datasource}"
           },
           "editorMode": "code",
-          "queryType": "range"
+          "queryType": "range",
+          "legendFormat": "{{tenant_id}} {{actor_user_principal_name}} {{activity_operation_type}}"
         }
       ],
       "transformations": [
@@ -7371,13 +7487,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (category, activity_result) (count_over_time({service_name=\"graph2otel\"} | event_name=`intune.audit_event` | tenant_id=~\"$tenant\" [$__auto]))",
+          "expr": "sum by (tenant_id, category, activity_result) (count_over_time({service_name=\"graph2otel\"} | event_name=`intune.audit_event` | tenant_id=~\"$tenant\" [$__auto]))",
           "datasource": {
             "type": "loki",
             "uid": "${loki_datasource}"
           },
           "editorMode": "code",
-          "queryType": "range"
+          "queryType": "range",
+          "legendFormat": "{{tenant_id}} {{category}} {{activity_result}}"
         }
       ]
     },
