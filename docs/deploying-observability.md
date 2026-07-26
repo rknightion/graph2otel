@@ -196,6 +196,45 @@ choosing receipt retention, and owning failure routing are deployment decisions.
 Offline manifest/runner tests are already part of `make grafana-check`; run the
 narrow lane with `make grafana-canary-check`.
 
+## Dashboard performance baseline
+
+The policy-free #309 baseline records the generated estate's current shape:
+panel and row counts, expanded/collapsed rows, query panels and targets,
+instant/range modes, expression bytes, and repeated expressions.
+
+```bash
+make grafana-performance-baseline > baseline.json
+```
+
+An optional live lane renders each stable dashboard UID serially through the
+configured `gcx` context:
+
+```bash
+python3 grafana/performance_baseline.py \
+  --live-context <gcx-context> \
+  --since 6h \
+  --width 1920 \
+  --height 1080 \
+  --repeat 1 \
+  --var datasource=<prometheus-uid> \
+  --var loki_datasource=<loki-uid> \
+  --var tenant=<tenant-selection> \
+  > baseline.json
+```
+
+Live snapshots use concurrency 1 and a temporary directory that is removed
+after measurement. The receipt records runtime variable **names**, never their
+values. Each elapsed value is end-to-end Grafana Image Renderer time: renderer
+startup, datasource work, dashboard execution, image construction, and transfer
+are all included. It is not a backend-query-latency measurement, and repeat 1
+is not labelled cold or warm.
+
+This tool records evidence; it does not choose a performance policy. Numeric
+overview/explorer budgets, allowed variance, waiver review, CI/deployment
+credentials, and failure routing remain #309 decisions after #302 freezes the
+dashboard topology. Offline tests run under `make grafana-check`; the narrow
+lane is `make grafana-performance-check`.
+
 ## If GitSync is adopted later
 
 This repo has no GitSync (git-to-Grafana) flow today; the `gcx` commands above

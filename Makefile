@@ -31,7 +31,8 @@ export PATH := $(TOOLS_DIR):$(PATH)
         coverage notices sbom tools-licensing tools-sbom install-hooks \
         helm-docs tools-helm-docs tools-check tools-graphdrift \
         graphdrift graphdrift-update tidy tidy-check forks-check dashboard grafana-check rules \
-        grafana-canary-check grafana-canary container-smoke
+        grafana-canary-check grafana-canary grafana-performance-check \
+        grafana-performance-baseline container-smoke
 
 build:
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/$(BINARY)
@@ -195,6 +196,15 @@ grafana-canary:
 		--context "$(GRAFANA_CONTEXT)" \
 		--prometheus-datasource "$(GRAFANA_PROMETHEUS_DATASOURCE)" \
 		--loki-datasource "$(GRAFANA_LOKI_DATASOURCE)"
+
+grafana-performance-check:
+	cd grafana && python3 -m unittest tests.test_performance_baseline -q
+
+# Policy-free static source baseline. Use the documented script flags for the
+# optional read-only live snapshot lane; numeric budgets remain #309 work.
+grafana-performance-baseline:
+	@python3 grafana/performance_baseline.py
+
 # Idempotent tool install into .tools/ (gitignored). Re-installs if the cached
 # binary is missing or doesn't execute on this arch (e.g. a wrong-arch CI cache).
 tools:
