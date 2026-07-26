@@ -31,7 +31,7 @@ export PATH := $(TOOLS_DIR):$(PATH)
         coverage notices sbom tools-licensing tools-sbom install-hooks \
         helm-docs tools-helm-docs tools-check tools-graphdrift \
         graphdrift graphdrift-update tidy tidy-check forks-check dashboard grafana-check rules \
-        container-smoke
+        grafana-canary-check grafana-canary container-smoke
 
 build:
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/$(BINARY)
@@ -176,6 +176,25 @@ grafana-check:
 	cd grafana && python3 build_rules.py --check
 	cd grafana && python3 -m unittest discover -s tests -t . -q
 
+# Offline contract tests for #308's read-only semantic canary. These also run
+# through grafana-check's discovery command above; the narrow target is useful
+# while editing the manifest or runner.
+grafana-canary-check:
+	cd grafana && python3 -m unittest tests.test_semantic_canary -q
+
+# Credentialed, read-only execution is opt-in. gcx owns authentication and the
+# context; this target accepts only public role-to-UID selection.
+GRAFANA_CONTEXT ?=
+GRAFANA_PROMETHEUS_DATASOURCE ?=
+GRAFANA_LOKI_DATASOURCE ?=
+grafana-canary:
+	@test -n "$(GRAFANA_CONTEXT)" || { echo "GRAFANA_CONTEXT is required" >&2; exit 2; }
+	@test -n "$(GRAFANA_PROMETHEUS_DATASOURCE)" || { echo "GRAFANA_PROMETHEUS_DATASOURCE is required" >&2; exit 2; }
+	@test -n "$(GRAFANA_LOKI_DATASOURCE)" || { echo "GRAFANA_LOKI_DATASOURCE is required" >&2; exit 2; }
+	@python3 grafana/semantic_canary.py \
+		--context "$(GRAFANA_CONTEXT)" \
+		--prometheus-datasource "$(GRAFANA_PROMETHEUS_DATASOURCE)" \
+		--loki-datasource "$(GRAFANA_LOKI_DATASOURCE)"
 # Idempotent tool install into .tools/ (gitignored). Re-installs if the cached
 # binary is missing or doesn't execute on this arch (e.g. a wrong-arch CI cache).
 tools:

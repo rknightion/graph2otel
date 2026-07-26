@@ -153,6 +153,49 @@ UIDs and the folder UID from step 1.
 See [`recording-rules/README.md`](https://github.com/rknightion/graph2otel/blob/main/recording-rules/README.md) for the metric
 ↔ log-twin mapping and verification queries.
 
+## Read-only semantic canary
+
+`make grafana-check` proves that generated Grafana assets and their query
+vocabulary agree with the repository. It does not prove that a selected live
+datasource accepts those queries or returns the required labels. The opt-in
+semantic canary covers that live boundary without changing Grafana:
+
+```bash
+make grafana-canary \
+  GRAFANA_CONTEXT=<gcx-context> \
+  GRAFANA_PROMETHEUS_DATASOURCE=<prometheus-uid> \
+  GRAFANA_LOKI_DATASOURCE=<loki-uid>
+```
+
+The versioned probe set is
+[`spec/grafana-semantic-canary.json`](../spec/grafana-semantic-canary.json).
+The runner first verifies each datasource's type, then executes representative
+PromQL and structured-metadata LogQL queries and reads back one stable alert
+rule's evaluator health. It makes no create, update, or delete request.
+
+The JSON receipt distinguishes:
+
+- `nonempty` from an explicitly permitted `healthy_empty`;
+- `unexpected_empty` from a backend query error;
+- missing required labels from valid empty results;
+- wrong datasource selection from invalid query syntax;
+- evaluator errors and never-evaluated rules from healthy rule read-back.
+
+Exit `0` means every semantic probe passed, exit `1` means the backend answered
+but a semantic assertion failed, and exit `2` means the manifest, `gcx`,
+authentication, transport, or response shape failed operationally.
+
+Only collector availability is required to return data. Optional log,
+histogram, and recording signals may be healthy-empty. In particular, the
+recording probe does not claim completeness for late-queryable records; see
+[#297](https://github.com/rknightion/graph2otel/issues/297).
+
+The repository does not schedule this command or carry a live credential.
+Selecting a target, provisioning a least-privilege read-only credential,
+choosing receipt retention, and owning failure routing are deployment decisions.
+Offline manifest/runner tests are already part of `make grafana-check`; run the
+narrow lane with `make grafana-canary-check`.
+
 ## If GitSync is adopted later
 
 This repo has no GitSync (git-to-Grafana) flow today; the `gcx` commands above

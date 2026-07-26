@@ -1,0 +1,71 @@
+{
+  "schema": 1,
+  "probes": [
+    {
+      "id": "collector-availability",
+      "kind": "promql",
+      "datasource": "prometheus",
+      "query": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability)",
+      "empty": "required_nonempty",
+      "required_labels": [
+        "tenant_id",
+        "collector",
+        "collector_transport",
+        "state",
+        "reason"
+      ]
+    },
+    {
+      "id": "event-lag-histogram",
+      "kind": "promql",
+      "datasource": "prometheus",
+      "query": "histogram_quantile(0.95, sum by (le, tenant_id, collector, ingest_transport) (rate(graph2otel_event_lag_seconds_bucket[5m])))",
+      "empty": "empty_allowed",
+      "required_labels": [
+        "tenant_id",
+        "collector",
+        "ingest_transport"
+      ]
+    },
+    {
+      "id": "compliance-alert-log",
+      "kind": "logql",
+      "datasource": "loki",
+      "query": "sum by (tenant_id, alert_type, operating_system, scenario_name) (count_over_time({service_name=\"graph2otel\"} | event_name=`intune.compliance_alert` [1h]))",
+      "empty": "empty_allowed",
+      "required_labels": [
+        "tenant_id"
+      ],
+      "since": "1h",
+      "step": "5m"
+    },
+    {
+      "id": "compliance-alert-recording",
+      "kind": "promql",
+      "datasource": "prometheus",
+      "query": "intune_compliance_alert_count",
+      "empty": "empty_allowed",
+      "required_labels": [
+        "tenant_id"
+      ]
+    },
+    {
+      "id": "collector-staleness-query",
+      "kind": "promql",
+      "datasource": "prometheus",
+      "query": "max by (tenant_id, collector) (graph2otel_scrape_staleness_seconds)",
+      "empty": "empty_allowed",
+      "required_labels": [
+        "tenant_id",
+        "collector"
+      ]
+    },
+    {
+      "id": "collector-staleness-rule-health",
+      "kind": "rule_health",
+      "datasource": "prometheus",
+      "folder_uid": "graph2otel",
+      "uid": "g2o-collector-staleness"
+    }
+  ]
+}
