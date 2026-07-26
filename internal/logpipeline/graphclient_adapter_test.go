@@ -88,11 +88,14 @@ func TestGraphPageFetcherDecodesValueAndNextLink(t *testing.T) {
 	}
 }
 
-// TestPollRejectsForeignNextLinkWithoutSideEffects exercises the complete
-// Poll -> graphPageFetcher -> graphclient.RawGet boundary. If raw host
-// validation is weakened, the routing transport below delivers the foreign
-// next-link request to foreignSrv and this test observes the leak.
-func TestPollRejectsForeignNextLinkWithoutSideEffects(t *testing.T) {
+// TestPollRejectsForeignNextLinkAfterReliablePrefix preserves the adapter's
+// SSRF boundary across the complete Poll -> graphPageFetcher ->
+// graphclient.RawGet path under ordered streaming. If raw host validation is
+// weakened, the routing transport below delivers the foreign next-link request
+// to foreignSrv and this test observes the leak. The successful first page is
+// visible, while the rejected foreign suffix cannot be fetched and the caller
+// checkpoint remains unchanged so retry replays that prefix.
+func TestPollRejectsForeignNextLinkAfterReliablePrefix(t *testing.T) {
 	var foreignRequests atomic.Int32
 	foreignSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		foreignRequests.Add(1)
@@ -178,8 +181,8 @@ func TestPollRejectsForeignNextLinkWithoutSideEffects(t *testing.T) {
 	if got := foreignRequests.Load(); got != 0 {
 		t.Errorf("foreign server requests = %d, want 0", got)
 	}
-	if logs := recorder.LogRecords(); len(logs) != 0 {
-		t.Errorf("emitted logs = %d, want 0", len(logs))
+	if got := emittedIDSet(recorder); len(got) != 1 || got[0] != "first-page-record" {
+		t.Errorf("emitted ids = %v, want reliable first-page prefix [first-page-record]", got)
 	}
 	if !highWater.Equal(wantCheckpoint.Watermark) {
 		t.Errorf("returned high water = %s, want unchanged %s", highWater, wantCheckpoint.Watermark)

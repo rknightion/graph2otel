@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"sort"
 	"strconv"
@@ -47,8 +48,9 @@ const (
 	// DefaultPageSize is the $top page size requested per Graph page.
 	DefaultPageSize = 1000
 	// maxPages bounds an opaque next-link walk. Reaching it means the window
-	// was not fully drained, so Poll fails without emitting or advancing its
-	// checkpoint rather than treating a partial read as success.
+	// was not fully drained, so Poll fails without advancing its checkpoint.
+	// Reliable ordered pages already emitted remain visible and retryable;
+	// client-sorted endpoints retain their zero-partial-emission boundary.
 	maxPages = 1000
 )
 
@@ -205,13 +207,21 @@ type PageFetcher interface {
 	FetchPage(ctx context.Context, pageURL string) (records []map[string]any, nextLink string, err error)
 }
 
+func cloneCheckpoint(cp *checkpoint.Checkpoint) checkpoint.Checkpoint {
+	next := *cp
+	next.SeenIDs = maps.Clone(cp.SeenIDs)
+	return next
+}
+
 // Poll drains every record in [from, to] for cfg from fetcher, deduping
 // against cp.SeenIDs, emitting each newly-seen record as an OTLP log through
-// e, and returning the new high-water mark. It mutates cp in place
-// (Watermark, OverlapWindow, SeenIDs via EvictStale) but does NOT persist
-// it — the caller owns persistence (checkpoint.Store.Save), so Poll stays
-// testable without a filesystem. LogCollector.CollectWindow (collector.go)
-// is the convenience that Loads, Polls, and Saves for a WindowCollector.
+// e, and returning the new high-water mark. It commits Watermark,
+// OverlapWindow, and SeenIDs to cp only after the terminal page succeeds, and
+// does NOT persist them — the caller owns persistence (checkpoint.Store.Save),
+// so Poll stays testable without a filesystem. Reliable ordered pages stream
+// before that commit and may therefore replay after a later-page failure.
+// LogCollector.CollectWindow (collector.go) is the convenience that Loads,
+// Polls, and Saves for a WindowCollector.
 func Poll(
 	ctx context.Context,
 	cfg EndpointConfig,
@@ -222,6 +232,7 @@ func Poll(
 	outcomes *recordoutcome.Recorder,
 ) (highWater time.Time, err error) {
 	cfg = cfg.withDefaults()
+	working := cloneCheckpoint(cp)
 
 	// Name the transport once per cycle rather than per record: every record
 	// drained below is a direct Graph poll by construction (#141).
@@ -237,49 +248,51 @@ func Poll(
 	var all []drainedRecord
 	selfExcluded := 0
 	undated := 0
+	newest := working.Watermark
+	sawAny := false
 	var fetched uint64
-	pageURL := buildFirstURL(cfg, from, to)
-	seenURLs := make(map[string]struct{})
-	pages := 0
-	for pageURL != "" {
-		if _, seen := seenURLs[pageURL]; seen {
-			failFetchedRecords(outcomes, fetched, recordoutcome.CauseSourceError)
-			return cp.Watermark, fmt.Errorf("logpipeline: %s: repeated pagination URL %q", cfg.Path, pageURL)
-		}
-		seenURLs[pageURL] = struct{}{}
-		if pages >= maxPages {
-			failFetchedRecords(outcomes, fetched, recordoutcome.CauseSourceError)
-			return cp.Watermark, fmt.Errorf("logpipeline: %s: pagination exceeded %d pages at %q", cfg.Path, maxPages, pageURL)
-		}
-		pages++
 
-		records, next, ferr := fetcher.FetchPage(ctx, pageURL)
-		n := uint64(len(records))
-		fetched += n
-		outcomes.Add(recordoutcome.OutcomeFetched, n)
-		if ferr != nil {
-			failFetchedRecords(outcomes, fetched, fetchFailureCause(ferr))
-			return cp.Watermark, fmt.Errorf("logpipeline: %s: fetch page: %w", cfg.Path, ferr)
+	emitDrained := func(d drainedRecord) {
+		if d.id == "" {
+			// A record with no dedupe id cannot be deduplicated (#262). Emit it —
+			// undedupeable is degraded, but dropping a log record is worse — and
+			// never store "" in SeenIDs, which would silently dedupe away every
+			// later empty-id record in this window. Surface the condition on the
+			// watchdog rather than recover from it silently. It still counts as a
+			// seen record for watermark advancement.
+			wirecheck.Shared(cfg.CollectorName).MissingField(e, semconv.AttrId)
+			e.LogEvent(d.ev)
+			outcomes.Add(recordoutcome.OutcomeEmitted, 1)
+			if !sawAny || d.t.After(newest) {
+				newest = d.t
+			}
+			sawAny = true
+			return
 		}
-		rawRecords = append(rawRecords, records...)
-		pageURL = next
+		if working.SeenIDs.Has(d.id) {
+			outcomes.Add(recordoutcome.OutcomeDeduped, 1)
+			return
+		}
+		e.LogEvent(d.ev)
+		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
+		working.SeenIDs.Add(d.id, d.t)
+		if !sawAny || d.t.After(newest) {
+			newest = d.t
+		}
+		sawAny = true
 	}
 
-	// Map only after the complete page walk succeeds. The engine deliberately
-	// buffers before emission/checkpoint mutation; deferring mapping to the same
-	// commit point means a later-page failure classifies every fetched row as
-	// errored instead of claiming mapped work that is intentionally retried.
-	for _, rec := range rawRecords {
+	processRecord := func(rec map[string]any, stream bool) {
 		if cfg.ExcludeSelf && cfg.SelfAppID != nil && cfg.SelfClientID != "" && cfg.SelfAppID(rec) == cfg.SelfClientID {
 			selfExcluded++
 			outcomes.Add(recordoutcome.OutcomeFiltered, 1)
-			continue
+			return
 		}
 		id, ev, mapped := mapRecord(cfg.Map, rec)
 		if !mapped {
 			outcomes.Add(recordoutcome.OutcomeErrored, 1)
 			outcomes.Cause(recordoutcome.CauseMappingError)
-			continue
+			return
 		}
 		t, ok := recordTime(rec, cfg.TimeField)
 		if !ok {
@@ -296,7 +309,7 @@ func Poll(
 			undated++
 			outcomes.Add(recordoutcome.OutcomeDropped, 1)
 			outcomes.Cause(recordoutcome.CauseMissingEventTime)
-			continue
+			return
 		}
 		// With no server-side $filter, the endpoint returns its whole
 		// collection, so bound the window client-side: drop records outside
@@ -304,17 +317,81 @@ func Poll(
 		// stops events inside the SafetyLag tail from emitting early.
 		if cfg.NoServerFilter && (t.Before(from) || t.After(to)) {
 			outcomes.Add(recordoutcome.OutcomeFiltered, 1)
-			continue
+			return
 		}
 		outcomes.Add(recordoutcome.OutcomeMapped, 1)
-		all = append(all, drainedRecord{id: id, ev: ev, t: t})
+		d := drainedRecord{id: id, ev: ev, t: t}
+		if stream {
+			emitDrained(d)
+			return
+		}
+		all = append(all, d)
 	}
 
-	// $orderby is not honored (or not trusted) server-side for this
-	// endpoint: sort the fully-drained window client-side before emitting,
-	// so "newest" below reflects real event time, not arrival order.
+	pageURL := buildFirstURL(cfg, from, to)
+	seenURLs := make(map[string]struct{})
+	pages := 0
+	for pageURL != "" {
+		if _, seen := seenURLs[pageURL]; seen {
+			if cfg.OrderByReliable {
+				outcomes.Cause(recordoutcome.CauseSourceError)
+			} else {
+				failFetchedRecords(outcomes, fetched, recordoutcome.CauseSourceError)
+			}
+			return cp.Watermark, fmt.Errorf("logpipeline: %s: repeated pagination URL %q", cfg.Path, pageURL)
+		}
+		seenURLs[pageURL] = struct{}{}
+		if pages >= maxPages {
+			if cfg.OrderByReliable {
+				outcomes.Cause(recordoutcome.CauseSourceError)
+			} else {
+				failFetchedRecords(outcomes, fetched, recordoutcome.CauseSourceError)
+			}
+			return cp.Watermark, fmt.Errorf("logpipeline: %s: pagination exceeded %d pages at %q", cfg.Path, maxPages, pageURL)
+		}
+		pages++
+
+		records, next, ferr := fetcher.FetchPage(ctx, pageURL)
+		n := uint64(len(records))
+		fetched += n
+		outcomes.Add(recordoutcome.OutcomeFetched, n)
+		if ferr != nil {
+			cause := fetchFailureCause(ferr)
+			if cfg.OrderByReliable {
+				outcomes.Add(recordoutcome.OutcomeErrored, n)
+				outcomes.Cause(cause)
+			} else {
+				failFetchedRecords(outcomes, fetched, cause)
+			}
+			return cp.Watermark, fmt.Errorf("logpipeline: %s: fetch page: %w", cfg.Path, ferr)
+		}
+		if cfg.OrderByReliable {
+			for _, rec := range records {
+				processRecord(rec, true)
+			}
+		} else {
+			rawRecords = append(rawRecords, records...)
+		}
+		pageURL = next
+	}
+
 	if !cfg.OrderByReliable {
+		// Map only after the complete page walk succeeds. Client-sorted
+		// endpoints deliberately buffer before emission/checkpoint mutation;
+		// deferring mapping to the same commit point means a later-page failure
+		// classifies every fetched row as errored instead of claiming mapped
+		// work that is intentionally retried.
+		for _, rec := range rawRecords {
+			processRecord(rec, false)
+		}
+
+		// $orderby is not honored (or not trusted) server-side for this
+		// endpoint: sort the fully-drained window client-side before emitting,
+		// so "newest" below reflects real event time, not arrival order.
 		sort.Slice(all, func(i, j int) bool { return all[i].t.Before(all[j].t) })
+		for _, d := range all {
+			emitDrained(d)
+		}
 	}
 	if selfExcluded > 0 {
 		e.Counter(metricSelfExcluded, "{record}",
@@ -323,38 +400,6 @@ func Poll(
 	}
 	for range undated {
 		wirecheck.Shared(cfg.CollectorName).MissingField(e, "event_time")
-	}
-
-	newest := cp.Watermark
-	sawAny := false
-	for _, d := range all {
-		if d.id == "" {
-			// A record with no dedupe id cannot be deduplicated (#262). Emit it —
-			// undedupeable is degraded, but dropping a log record is worse — and
-			// never store "" in SeenIDs, which would silently dedupe away every
-			// later empty-id record in this window. Surface the condition on the
-			// watchdog rather than recover from it silently. It still counts as a
-			// seen record for watermark advancement.
-			wirecheck.Shared(cfg.CollectorName).MissingField(e, semconv.AttrId)
-			e.LogEvent(d.ev)
-			outcomes.Add(recordoutcome.OutcomeEmitted, 1)
-			if !sawAny || d.t.After(newest) {
-				newest = d.t
-			}
-			sawAny = true
-			continue
-		}
-		if cp.SeenIDs.Has(d.id) {
-			outcomes.Add(recordoutcome.OutcomeDeduped, 1)
-			continue
-		}
-		e.LogEvent(d.ev)
-		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
-		cp.SeenIDs.Add(d.id, d.t)
-		if !sawAny || d.t.After(newest) {
-			newest = d.t
-		}
-		sawAny = true
 	}
 
 	// The watermark always advances at least to `to - SafetyLag` once this
@@ -370,14 +415,15 @@ func Poll(
 		candidate = newest
 	}
 	hw := candidate.Add(-cfg.SafetyLag)
-	highWater = cp.Watermark
+	highWater = working.Watermark
 	if hw.After(highWater) {
 		highWater = hw
 	}
 
-	cp.Watermark = highWater
-	cp.OverlapWindow = cfg.Overlap
-	cp.EvictStale()
+	working.Watermark = highWater
+	working.OverlapWindow = cfg.Overlap
+	working.EvictStale()
+	*cp = working
 
 	return highWater, nil
 }
@@ -398,9 +444,10 @@ func mapRecord(mapper func(map[string]any) (string, telemetry.Event), record map
 	return id, ev, true
 }
 
-// failFetchedRecords closes the reconciliation equation when a page walk
-// aborts before its buffered records can be committed. Every row returned in
-// this attempt remains retryable and is therefore errored, never mapped.
+// failFetchedRecords closes the reconciliation equation when a client-sorted
+// page walk aborts before its buffered records can be committed. Every row
+// returned in this attempt remains retryable and is therefore errored, never
+// mapped.
 func failFetchedRecords(outcomes *recordoutcome.Recorder, fetched uint64, cause recordoutcome.Cause) {
 	outcomes.Add(recordoutcome.OutcomeErrored, fetched)
 	outcomes.Cause(cause)

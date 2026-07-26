@@ -3,13 +3,16 @@ package logpipeline
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/graphclient"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
@@ -37,6 +40,56 @@ func mapByID(record map[string]any) (string, telemetry.Event) {
 
 func newCheckpoint(tenantID, endpoint string) *checkpoint.Checkpoint {
 	return &checkpoint.Checkpoint{TenantID: tenantID, Endpoint: endpoint, SeenIDs: checkpoint.NewSeenIDs()}
+}
+
+// TestPollStreamsReliablePageBeforeFetchingNext catches a reliable ordered
+// walk regressing to whole-window buffering. Once page one succeeds, its
+// record must reach the emitter before Poll asks the source for page two.
+func TestPollStreamsReliablePageBeforeFetchingNext(t *testing.T) {
+	rec := telemetrytest.New()
+	from := time.Date(2026, 7, 26, 10, 0, 0, 0, time.UTC)
+	cfg := EndpointConfig{
+		Path:            "/auditLogs/signIns",
+		CollectorName:   "entra.test.streaming",
+		TimeField:       "createdDateTime",
+		Flavor:          FlavorGeLe,
+		OrderByReliable: true,
+		Map:             mapByID,
+	}
+
+	calls := 0
+	fetcher := pageFetcherFunc(func(_ context.Context, _ string) ([]map[string]any, string, error) {
+		calls++
+		if calls == 1 {
+			return []map[string]any{{
+				"id":              "a",
+				"createdDateTime": from.Add(time.Minute).Format(time.RFC3339),
+			}}, "page-2", nil
+		}
+		if got := emittedIDSet(rec); !sameSet(got, []string{"a"}) {
+			t.Fatalf("before second fetch emitted = %v, want [a]", got)
+		}
+		return []map[string]any{{
+			"id":              "b",
+			"createdDateTime": from.Add(2 * time.Minute).Format(time.RFC3339),
+		}}, "", nil
+	})
+
+	if _, err := Poll(
+		context.Background(),
+		cfg,
+		newCheckpoint("t1", cfg.Path),
+		from,
+		from.Add(time.Hour),
+		fetcher,
+		rec.Emitter(),
+		nil,
+	); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	if got := emittedIDSet(rec); !sameSet(got, []string{"a", "b"}) {
+		t.Fatalf("emitted = %v, want [a b]", got)
+	}
 }
 
 // TestPollDropsUndatedRecords keeps #275's boundary at the ingest engine: an
@@ -193,16 +246,16 @@ func TestPollDrainsAllPagesViaNextLink(t *testing.T) {
 }
 
 // TestPollRejectsRepeatedNextLinkBeforeEmission makes a self-referential
-// nextLink fail when Poll observes the initial URL for a second time. The
-// first page must remain uncommitted: no log event may be emitted and the
-// checkpoint must be left exactly as it was for the retry.
+// nextLink fail when a client-sorted Poll observes the initial URL for a second
+// time. The first page must remain uncommitted: no log event may be emitted and
+// the checkpoint must be left exactly as it was for the retry.
 func TestPollRejectsRepeatedNextLinkBeforeEmission(t *testing.T) {
 	rec := telemetrytest.New()
 	cfg := EndpointConfig{
 		Path:            "/auditLogs/signIns",
 		TimeField:       "createdDateTime",
 		Flavor:          FlavorGeLe,
-		OrderByReliable: true,
+		OrderByReliable: false,
 		ExcludeSelf:     true,
 		SelfClientID:    "graph2otel-poller",
 		SelfAppID: func(record map[string]any) string {
@@ -252,17 +305,92 @@ func TestPollRejectsRepeatedNextLinkBeforeEmission(t *testing.T) {
 	}
 }
 
-// TestPollRejectsPaginationPastOneThousandPagesBeforeEmission makes the
-// 1001st distinct page URL fail before FetchPage. A cap is a failed drain, not
-// a partial success: buffered records must not emit and the checkpoint must
-// remain retryable.
+// TestPollReliableRepeatedNextLinkKeepsPrefixRetryable catches the reliable
+// repeat guard reclassifying an already-emitted prefix as errored or committing
+// its staged SeenIDs. The source must not be called for the repeated URL, and
+// the unchanged caller checkpoint must allow the prefix to replay on retry.
+func TestPollReliableRepeatedNextLinkKeepsPrefixRetryable(t *testing.T) {
+	rec := telemetrytest.New()
+	outcomes := recordoutcome.NewRecorder()
+	cfg := EndpointConfig{
+		Path:            "/auditLogs/signIns",
+		TimeField:       "createdDateTime",
+		Flavor:          FlavorGeLe,
+		OrderByReliable: true,
+		Map:             mapByID,
+	}
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+	cp := newCheckpoint("t1", cfg.Path)
+	cp.Watermark = from.Add(-time.Hour)
+	cp.OverlapWindow = 90 * time.Minute
+	cp.SeenIDs.Add("already-seen", from.Add(-30*time.Minute))
+	wantCheckpoint := *cp
+	wantCheckpoint.SeenIDs = maps.Clone(cp.SeenIDs)
+
+	calls := 0
+	fetcher := pageFetcherFunc(func(_ context.Context, pageURL string) ([]map[string]any, string, error) {
+		calls++
+		if calls > 1 {
+			t.Fatalf("FetchPage called for repeated URL %q", pageURL)
+		}
+		return []map[string]any{{
+			"id":              "prefix",
+			"createdDateTime": from.Add(10 * time.Minute).Format(time.RFC3339),
+		}}, pageURL, nil
+	})
+
+	_, pollErr := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter(), outcomes)
+	if pollErr == nil || !strings.Contains(pollErr.Error(), "repeated pagination URL") {
+		t.Fatalf("Poll error = %v, want repeated pagination URL error", pollErr)
+	}
+	if calls != 1 {
+		t.Fatalf("FetchPage calls = %d, want 1", calls)
+	}
+	if got := emittedIDSet(rec); !sameSet(got, []string{"prefix"}) {
+		t.Fatalf("emitted prefix = %v, want [prefix]", got)
+	}
+	assertOutcomeCounts(t, outcomes, outcomeCounts{fetched: 1, mapped: 1, emitted: 1})
+	assertOutcomeCauses(t, outcomes, recordoutcome.CauseSourceError)
+	if err := outcomes.Snapshot().Validate(); err != nil {
+		t.Fatalf("outcome snapshot validation: %v", err)
+	}
+	if !reflect.DeepEqual(*cp, wantCheckpoint) {
+		t.Fatalf("caller checkpoint changed on repeated URL:\n got: %+v\nwant: %+v", *cp, wantCheckpoint)
+	}
+
+	retryRecorder := telemetrytest.New()
+	if _, err := Poll(
+		context.Background(),
+		cfg,
+		cp,
+		from,
+		to,
+		onePageFetcher([]map[string]any{{
+			"id":              "prefix",
+			"createdDateTime": from.Add(10 * time.Minute).Format(time.RFC3339),
+		}}),
+		retryRecorder.Emitter(),
+		nil,
+	); err != nil {
+		t.Fatalf("retry Poll: %v", err)
+	}
+	if got := emittedIDSet(retryRecorder); !sameSet(got, []string{"prefix"}) {
+		t.Fatalf("retry emitted = %v, want replayed [prefix]", got)
+	}
+}
+
+// TestPollRejectsPaginationPastOneThousandPagesBeforeEmission makes the 1001st
+// distinct page URL fail before FetchPage. For a client-sorted endpoint a cap
+// is a failed drain, not a partial success: buffered records must not emit and
+// the checkpoint must remain retryable.
 func TestPollRejectsPaginationPastOneThousandPagesBeforeEmission(t *testing.T) {
 	rec := telemetrytest.New()
 	cfg := EndpointConfig{
 		Path:            "/auditLogs/signIns",
 		TimeField:       "createdDateTime",
 		Flavor:          FlavorGeLe,
-		OrderByReliable: true,
+		OrderByReliable: false,
 		ExcludeSelf:     true,
 		SelfClientID:    "graph2otel-poller",
 		SelfAppID: func(record map[string]any) string {
@@ -309,6 +437,87 @@ func TestPollRejectsPaginationPastOneThousandPagesBeforeEmission(t *testing.T) {
 	}
 	if len(cp.SeenIDs) != 1 || !cp.SeenIDs.Has("already-seen") {
 		t.Errorf("checkpoint SeenIDs = %v, want unchanged existing id only", cp.SeenIDs)
+	}
+}
+
+// TestPollReliablePageCapKeepsPrefixRetryable catches the reliable maxPages
+// guard fabricating errored rows or committing staged SeenIDs. All successful
+// pages may emit, the capped page must not be fetched, and the unchanged caller
+// checkpoint must allow the complete prefix to replay on retry.
+func TestPollReliablePageCapKeepsPrefixRetryable(t *testing.T) {
+	rec := telemetrytest.New()
+	outcomes := recordoutcome.NewRecorder()
+	cfg := EndpointConfig{
+		Path:            "/auditLogs/signIns",
+		TimeField:       "createdDateTime",
+		Flavor:          FlavorGeLe,
+		OrderByReliable: true,
+		Map:             mapByID,
+	}
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+	cp := newCheckpoint("t1", cfg.Path)
+	cp.Watermark = from.Add(-time.Hour)
+	cp.OverlapWindow = 90 * time.Minute
+	cp.SeenIDs.Add("already-seen", from.Add(-30*time.Minute))
+	wantCheckpoint := *cp
+	wantCheckpoint.SeenIDs = maps.Clone(cp.SeenIDs)
+
+	prefix := make([]map[string]any, maxPages)
+	for i := range prefix {
+		prefix[i] = map[string]any{
+			"id":              fmt.Sprintf("prefix-%d", i),
+			"createdDateTime": from.Add(time.Duration(i) * time.Second).Format(time.RFC3339),
+		}
+	}
+	calls := 0
+	fetcher := pageFetcherFunc(func(_ context.Context, _ string) ([]map[string]any, string, error) {
+		if calls >= maxPages {
+			t.Fatalf("FetchPage called past %d-page cap", maxPages)
+		}
+		record := prefix[calls]
+		calls++
+		return []map[string]any{record}, fmt.Sprintf("page-%d", calls+1), nil
+	})
+
+	_, pollErr := Poll(context.Background(), cfg, cp, from, to, fetcher, rec.Emitter(), outcomes)
+	if pollErr == nil || !strings.Contains(pollErr.Error(), "pagination exceeded 1000 pages") {
+		t.Fatalf("Poll error = %v, want pagination cap error", pollErr)
+	}
+	if calls != maxPages {
+		t.Fatalf("FetchPage calls = %d, want %d", calls, maxPages)
+	}
+	if got := emittedIDSet(rec); len(got) != maxPages {
+		t.Fatalf("emitted prefix records = %d, want %d", len(got), maxPages)
+	}
+	assertOutcomeCounts(t, outcomes, outcomeCounts{
+		fetched: maxPages,
+		mapped:  maxPages,
+		emitted: maxPages,
+	})
+	assertOutcomeCauses(t, outcomes, recordoutcome.CauseSourceError)
+	if err := outcomes.Snapshot().Validate(); err != nil {
+		t.Fatalf("outcome snapshot validation: %v", err)
+	}
+	if !reflect.DeepEqual(*cp, wantCheckpoint) {
+		t.Fatalf("caller checkpoint changed at page cap:\n got: %+v\nwant: %+v", *cp, wantCheckpoint)
+	}
+
+	retryRecorder := telemetrytest.New()
+	if _, err := Poll(
+		context.Background(),
+		cfg,
+		cp,
+		from,
+		to,
+		onePageFetcher(prefix),
+		retryRecorder.Emitter(),
+		nil,
+	); err != nil {
+		t.Fatalf("retry Poll: %v", err)
+	}
+	if got := emittedIDSet(retryRecorder); len(got) != maxPages {
+		t.Fatalf("retry emitted records = %d, want replayed %d-record prefix", len(got), maxPages)
 	}
 }
 

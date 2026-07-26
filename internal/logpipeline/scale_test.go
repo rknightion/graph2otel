@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -92,6 +93,99 @@ func TestScaleWatermarkDurableAcrossRestart(t *testing.T) {
 		t.Errorf("new event f not emitted; poll 2 emitted %v", got2)
 	}
 	_ = hw1
+}
+
+// TestScaleOrderedPollDoesNotRetainPriorPagePayloads catches reliable ordered
+// polling regressing to whole-window raw-record retention. It compares live
+// heap after 4 and 64 unique 1 MiB pages: a sixteenfold page-count increase may
+// not materially increase retained heap, and either sample must stay within a
+// deliberately loose eight-page allowance for runtime/GC headroom.
+func TestScaleOrderedPollDoesNotRetainPriorPagePayloads(t *testing.T) {
+	base := time.Date(2026, 7, 26, 10, 0, 0, 0, time.UTC)
+	cfg := EndpointConfig{
+		Path:            "/auditLogs/signIns",
+		TimeField:       "createdDateTime",
+		Flavor:          FlavorGeLe,
+		OrderByReliable: true,
+		Map:             mapByID,
+	}
+
+	const (
+		smallPages  = 4
+		largePages  = 64
+		payloadSize = 1 << 20
+		maxRetained = 8 * payloadSize
+		maxGrowth   = 4 * payloadSize
+	)
+	smallRetained := measureOrderedRetainedHeap(t, cfg, base, smallPages, payloadSize)
+	largeRetained := measureOrderedRetainedHeap(t, cfg, base, largePages, payloadSize)
+	growth := largeRetained - smallRetained
+	t.Logf(
+		"retained heap: %d pages=%d B, %d pages=%d B, growth=%d B",
+		smallPages,
+		smallRetained,
+		largePages,
+		largeRetained,
+		growth,
+	)
+
+	if smallRetained >= maxRetained || largeRetained >= maxRetained {
+		t.Fatalf(
+			"retained heap = {%d pages:%d B, %d pages:%d B}, want each less than %d B (eight-page GC allowance)",
+			smallPages,
+			smallRetained,
+			largePages,
+			largeRetained,
+			maxRetained,
+		)
+	}
+	if growth >= maxGrowth {
+		t.Fatalf(
+			"retained heap growth from %d to %d pages = %d B, want less than %d B (four-page GC allowance)",
+			smallPages,
+			largePages,
+			growth,
+			maxGrowth,
+		)
+	}
+}
+
+// BenchmarkPollOrderedPageMemory characterizes the reliable ordered path:
+// allocations still scale with bytes decoded, but live raw-record retention is
+// page-bounded because each page is processed before the next fetch.
+func BenchmarkPollOrderedPageMemory(b *testing.B) {
+	base := time.Date(2026, 7, 26, 10, 0, 0, 0, time.UTC)
+	cfg := EndpointConfig{
+		Path:            "/auditLogs/signIns",
+		TimeField:       "createdDateTime",
+		Flavor:          FlavorGeLe,
+		OrderByReliable: true,
+		Map:             mapByID,
+	}
+	const (
+		pageCount   = 64
+		payloadSize = 1 << 20
+	)
+
+	b.ReportAllocs()
+	b.SetBytes(pageCount * payloadSize)
+	b.ResetTimer()
+	for range b.N {
+		cp := newCheckpoint("t1", cfg.Path)
+		fetcher := orderedPayloadPageFetcher(base, pageCount, payloadSize, nil)
+		if _, err := Poll(
+			context.Background(),
+			cfg,
+			cp,
+			base,
+			base.Add(time.Hour),
+			fetcher,
+			discardEmitter{},
+			nil,
+		); err != nil {
+			b.Fatal(err)
+		}
+	}
 }
 
 // BenchmarkPollWindowMemory characterizes the #32 memory finding: Poll drains the
@@ -214,4 +308,76 @@ func contains(s []string, v string) bool {
 	return false
 }
 
-var _ = telemetry.Event{}
+func orderedPayloadPageFetcher(base time.Time, pageCount, payloadSize int, sentinel func()) PageFetcher {
+	page := 0
+	return pageFetcherFunc(func(_ context.Context, _ string) ([]map[string]any, string, error) {
+		page++
+		if page > pageCount {
+			if sentinel != nil {
+				sentinel()
+			}
+			return nil, "", nil
+		}
+		payload := fmt.Sprintf("%06d%s", page, strings.Repeat("x", payloadSize-6))
+		return []map[string]any{{
+			"id":              fmt.Sprintf("evt-%d", page),
+			"createdDateTime": base.Add(time.Duration(page) * time.Second).Format(time.RFC3339),
+			"unused_payload":  payload,
+		}}, fmt.Sprintf("page-%d", page+1), nil
+	})
+}
+
+func measureOrderedRetainedHeap(
+	t *testing.T,
+	cfg EndpointConfig,
+	base time.Time,
+	pageCount,
+	payloadSize int,
+) int64 {
+	t.Helper()
+	runtime.GC()
+	var before runtime.MemStats
+	runtime.ReadMemStats(&before)
+
+	sentinelRan := false
+	var retained int64
+	fetcher := orderedPayloadPageFetcher(base, pageCount, payloadSize, func() {
+		sentinelRan = true
+		runtime.GC()
+		var atSentinel runtime.MemStats
+		runtime.ReadMemStats(&atSentinel)
+		retained = int64(atSentinel.HeapAlloc) - int64(before.HeapAlloc)
+	})
+	if _, err := Poll(
+		context.Background(),
+		cfg,
+		newCheckpoint("t1", cfg.Path),
+		base,
+		base.Add(time.Hour),
+		fetcher,
+		discardEmitter{},
+		nil,
+	); err != nil {
+		t.Fatalf("Poll(%d pages): %v", pageCount, err)
+	}
+	if !sentinelRan {
+		t.Fatalf("sentinel fetch did not run after %d pages", pageCount)
+	}
+	if retained < 0 {
+		return 0
+	}
+	return retained
+}
+
+type discardEmitter struct{}
+
+func (discardEmitter) Counter(string, string, string, float64, telemetry.Attrs) {}
+func (discardEmitter) Gauge(string, string, string, float64, telemetry.Attrs)   {}
+func (discardEmitter) GaugeSnapshot(string, string, string, []telemetry.GaugePoint) {
+}
+func (discardEmitter) UpDownCounter(string, string, string, float64, telemetry.Attrs) {}
+func (discardEmitter) Histogram(string, string, string, float64, []float64, telemetry.Attrs) {
+}
+func (discardEmitter) HistogramCtx(context.Context, string, string, string, float64, []float64, telemetry.Attrs) {
+}
+func (discardEmitter) LogEvent(telemetry.Event) {}

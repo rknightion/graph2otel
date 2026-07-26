@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"testing"
 	"time"
 
@@ -135,15 +136,17 @@ func TestPollRecordOutcomesMappingPanicIsPartialSuccess(t *testing.T) {
 	}
 }
 
-// TestPollRecordOutcomesPartialPageFailureAccountsBufferedRows verifies that a
-// page walk which fails after returning data remains retry-safe. No buffered
-// record is emitted or checkpointed; every fetched record is classified as
-// errored so reconciliation remains exact rather than claiming mapped work.
-func TestPollRecordOutcomesPartialPageFailureAccountsBufferedRows(t *testing.T) {
+// TestPollRecordOutcomesReliablePartialPageFailureKeepsEmittedPrefix catches
+// an ordered walk retroactively reclassifying already-emitted prefix records
+// as errored. Only rows returned with the failed page remain unprocessed.
+func TestPollRecordOutcomesReliablePartialPageFailureKeepsEmittedPrefix(t *testing.T) {
 	outcomes := recordoutcome.NewRecorder()
 	recorder := telemetrytest.New()
 	cfg, cp, from, to := outcomeTestSetup()
 	cp.Watermark = from.Add(-time.Hour)
+	cp.OverlapWindow = 45 * time.Minute
+	cp.SeenIDs.Add("durable-before", from.Add(-30*time.Minute))
+	wantSeen := maps.Clone(cp.SeenIDs)
 
 	calls := 0
 	fetcher := pageFetcherFunc(func(_ context.Context, _ string) ([]map[string]any, string, error) {
@@ -154,7 +157,10 @@ func TestPollRecordOutcomesPartialPageFailureAccountsBufferedRows(t *testing.T) 
 				{"id": "b", "createdDateTime": from.Add(10 * time.Minute).Format(time.RFC3339)},
 			}, "https://graph.microsoft.com/v1.0/auditLogs/signIns?$skiptoken=2", nil
 		}
-		return nil, "", errors.New("upstream page failed")
+		return []map[string]any{{
+			"id":              "c",
+			"createdDateTime": from.Add(15 * time.Minute).Format(time.RFC3339),
+		}}, "", errors.New("upstream page failed")
 	})
 
 	_, pollErr := Poll(
@@ -172,26 +178,111 @@ func TestPollRecordOutcomesPartialPageFailureAccountsBufferedRows(t *testing.T) 
 	}
 
 	assertOutcomeCounts(t, outcomes, outcomeCounts{
-		fetched: 2,
-		errored: 2,
+		fetched: 3,
+		mapped:  2,
+		emitted: 2,
+		errored: 1,
 	})
 	assertOutcomeCauses(t, outcomes, recordoutcome.CauseSourceError)
-	assertOutcomeSummary(t, outcomes, pollErr, recordoutcome.ResultFailure, recordoutcome.CauseSourceError)
-	if got := len(recorder.LogRecords()); got != 0 {
-		t.Fatalf("emitted logs = %d, want 0 from an incomplete buffered walk", got)
+	if err := outcomes.Snapshot().Validate(); err != nil {
+		t.Fatalf("outcome snapshot validation: %v", err)
 	}
-	if !cp.Watermark.Equal(from.Add(-time.Hour)) {
-		t.Fatalf("checkpoint watermark = %v, want unchanged %v", cp.Watermark, from.Add(-time.Hour))
+	assertOutcomeSummary(t, outcomes, pollErr, recordoutcome.ResultPartial, recordoutcome.CauseSourceError)
+	if got := emittedIDSet(recorder); !sameSet(got, []string{"a", "b"}) {
+		t.Fatalf("emitted logs = %v, want successful prefix [a b]", got)
+	}
+	if !cp.Watermark.Equal(from.Add(-time.Hour)) ||
+		cp.OverlapWindow != 45*time.Minute ||
+		!maps.Equal(cp.SeenIDs, wantSeen) {
+		t.Fatalf(
+			"caller checkpoint = {watermark:%v overlap:%v seen:%v}, want unchanged {%v %v %v}",
+			cp.Watermark,
+			cp.OverlapWindow,
+			cp.SeenIDs,
+			from.Add(-time.Hour),
+			45*time.Minute,
+			wantSeen,
+		)
+	}
+}
+
+// TestPollRecordOutcomesUnreliablePartialPageFailureEmitsNothing preserves the
+// all-or-nothing boundary for client-sorted endpoints. Every fetched record is
+// errored because no row can be mapped or emitted before the full walk drains.
+func TestPollRecordOutcomesUnreliablePartialPageFailureEmitsNothing(t *testing.T) {
+	outcomes := recordoutcome.NewRecorder()
+	recorder := telemetrytest.New()
+	cfg, cp, from, to := outcomeTestSetup()
+	cfg.OrderByReliable = false
+	cp.Watermark = from.Add(-time.Hour)
+	cp.OverlapWindow = 45 * time.Minute
+	cp.SeenIDs.Add("durable-before", from.Add(-30*time.Minute))
+	wantSeen := maps.Clone(cp.SeenIDs)
+
+	calls := 0
+	fetcher := pageFetcherFunc(func(_ context.Context, _ string) ([]map[string]any, string, error) {
+		calls++
+		if calls == 1 {
+			return []map[string]any{
+				{"id": "a", "createdDateTime": from.Add(5 * time.Minute).Format(time.RFC3339)},
+				{"id": "b", "createdDateTime": from.Add(10 * time.Minute).Format(time.RFC3339)},
+			}, "https://graph.microsoft.com/v1.0/auditLogs/signIns?$skiptoken=2", nil
+		}
+		return []map[string]any{{
+			"id":              "c",
+			"createdDateTime": from.Add(15 * time.Minute).Format(time.RFC3339),
+		}}, "", errors.New("upstream page failed")
+	})
+
+	_, pollErr := Poll(
+		context.Background(),
+		cfg,
+		cp,
+		from,
+		to,
+		fetcher,
+		recorder.Emitter(),
+		outcomes,
+	)
+	if pollErr == nil {
+		t.Fatal("Poll error = nil, want second-page failure")
+	}
+
+	assertOutcomeCounts(t, outcomes, outcomeCounts{
+		fetched: 3,
+		errored: 3,
+	})
+	assertOutcomeCauses(t, outcomes, recordoutcome.CauseSourceError)
+	if err := outcomes.Snapshot().Validate(); err != nil {
+		t.Fatalf("outcome snapshot validation: %v", err)
+	}
+	assertOutcomeSummary(t, outcomes, pollErr, recordoutcome.ResultFailure, recordoutcome.CauseSourceError)
+	if got := emittedIDSet(recorder); len(got) != 0 {
+		t.Fatalf("emitted logs = %v, want none from incomplete client-sorted walk", got)
+	}
+	if !cp.Watermark.Equal(from.Add(-time.Hour)) ||
+		cp.OverlapWindow != 45*time.Minute ||
+		!maps.Equal(cp.SeenIDs, wantSeen) {
+		t.Fatalf(
+			"caller checkpoint = {watermark:%v overlap:%v seen:%v}, want unchanged {%v %v %v}",
+			cp.Watermark,
+			cp.OverlapWindow,
+			cp.SeenIDs,
+			from.Add(-time.Hour),
+			45*time.Minute,
+			wantSeen,
+		)
 	}
 }
 
 // TestPollRecordOutcomesDecodeFailureUsesBoundedCause verifies decoder details
 // stay out of metric labels while the bounded decode_error cause remains
-// observable. Rows fetched before the malformed page are retryable, not
-// incorrectly reported as mapped.
+// observable. On a client-sorted walk, rows fetched before the malformed page
+// are retryable, not incorrectly reported as mapped.
 func TestPollRecordOutcomesDecodeFailureUsesBoundedCause(t *testing.T) {
 	outcomes := recordoutcome.NewRecorder()
 	cfg, cp, from, to := outcomeTestSetup()
+	cfg.OrderByReliable = false
 
 	calls := 0
 	fetcher := pageFetcherFunc(func(_ context.Context, _ string) ([]map[string]any, string, error) {

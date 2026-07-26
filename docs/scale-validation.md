@@ -61,11 +61,13 @@ it, and this test is its regression guard.
 
 ## Memory behavior on large paginated walks
 
-`internal/logpipeline/scale_test.go` — `BenchmarkPollWindowMemory` and
+`internal/logpipeline/scale_test.go` —
+`TestScaleOrderedPollDoesNotRetainPriorPagePayloads`,
+`BenchmarkPollOrderedPageMemory`, `BenchmarkPollWindowMemory`, and
 `TestScalePollMemoryBoundedByWindowNotBacklog`:
 
-`Poll` drains the whole window into an in-memory slice before emitting, because
-client-side ordering (`OrderByReliable=false`) can't sort a stream. Consequences:
+Client-side ordering (`OrderByReliable=false`) requires `Poll` to drain the
+whole window into an in-memory slice before sorting and emitting. Consequences:
 
 - **Per-poll memory scales with the window's record count, not the total
   backlog.** Each collector caps a single poll at its `MaxWindow` (e.g. 24h), so a
@@ -79,14 +81,20 @@ client-side ordering (`OrderByReliable=false`) can't sort a stream. Consequences
   set a smaller window (e.g. 1–4h) so each poll drains a proportionally smaller
   slice.
 
-### Known limitation / post-v1 follow-up
+### Ordered vs client-sorted delivery contract
 
-For endpoints where server order **is** reliable (`OrderByReliable=true`), `Poll`
-could stream-emit page-by-page instead of buffering the whole window, removing the
-`MaxWindow × event-rate` memory bound entirely. It doesn't today — buffering is
-unconditional. This is a documented enhancement, not a correctness bug (the bound
-is real and tunable via `MaxWindow`); it belongs against the logpipeline engine
-(#13) as a post-v1 optimization.
+`OrderByReliable=true` streams successful pages immediately. Decoded raw-record
+memory is bounded by a page, while durable overlap `SeenIDs` remains bounded by
+the overlap window. The checkpoint commits only after the terminal page, so a
+later fetch failure replays the already-emitted prefix on retry (bounded
+at-least-once) and never skips the un-emitted suffix. The ordered scale test
+guards page-bounded retention; the collector restart test guards prefix replay
+and terminal checkpoint persistence.
+
+`OrderByReliable=false` still buffers and client-sorts a complete window. It
+emits nothing and advances no checkpoint when pagination fails. The repeated
+next-link, page-cap, and unreliable partial-page outcome tests guard this
+all-or-nothing boundary.
 
 ## Practically-confirmed envelope
 
@@ -95,7 +103,7 @@ is real and tunable via `MaxWindow`); it belongs against the logpipeline engine
 | Reporting throttle (5/10s, no Retry-After) | fits at 50k users | limiter enforces the ceiling under burst + isolates per tenant |
 | Identity Protection (1/s) | fits | budget pinned + enforced |
 | Watermark under out-of-order arrival + restart | flagged as the real risk | no data loss / bounded dupes across an induced mid-cycle restart |
-| Memory on backfill | not analyzed | flat across a backfill; per-poll bound is `MaxWindow × event-rate`, tunable |
+| Memory on backfill | not analyzed | ordered raw records are page-bounded; client-sorted polls remain `MaxWindow × event-rate`; both stay flat across a backfill |
 
 Not tested: a live run against a real ~50k-user / ~10M-events-day tenant (not
 available/authorized). The component-level guarantees above are what such a run
