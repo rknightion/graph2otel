@@ -4,19 +4,172 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/rknightion/graph2otel/internal/admin"
 	"github.com/rknightion/graph2otel/internal/auth"
+	"github.com/rknightion/graph2otel/internal/availability"
+	"github.com/rknightion/graph2otel/internal/blobpipeline"
+	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collector"
+	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/config"
 	"github.com/rknightion/graph2otel/internal/graphclient"
+	"github.com/rknightion/graph2otel/internal/huntclient"
+	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/mdcaclient"
+	"github.com/rknightion/graph2otel/internal/o365activityclient"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
+
+func TestStartTenantsCredentialFailureRetainsCompleteBoundedAvailability(t *testing.T) {
+	const sentinel = "credential super-secret"
+	disabled := false
+	cfg := &config.Config{
+		Tenants: []config.TenantConfig{{TenantID: "tenant-a"}},
+		Collectors: map[string]config.CollectorConfig{
+			"entra.domains": {Enabled: &disabled},
+		},
+	}
+	assertTenantWideFailureCoveragePrecondition(
+		t, cfg, availability.ReasonExperimentalNotEnabled,
+	)
+	var logOutput bytes.Buffer
+	sources, _, _, wait, err := startTenantsWithBuilders(
+		context.Background(),
+		cfg,
+		nil,
+		slog.New(slog.NewTextHandler(&logOutput, nil)),
+		func(config.TenantConfig) (*auth.TenantAuth, error) {
+			return nil, errors.New(sentinel)
+		},
+		func(
+			context.Context,
+			*auth.TenantAuth,
+			*config.Config,
+			*telemetry.Provider,
+			*slog.Logger,
+			*graphclient.WorkloadLimiter,
+			map[admin.SkipKey]string,
+			*sync.WaitGroup,
+		) (admin.CollectorSource, error) {
+			t.Fatal("setup called after credential construction failed")
+			return admin.CollectorSource{}, nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("startTenantsWithBuilders() error = %v", err)
+	}
+	wait()
+	if len(sources) != 1 || sources[0].Availability == nil {
+		t.Fatalf("sources = %+v, want one source with a non-nil availability tracker", sources)
+	}
+
+	points := sources[0].Availability.Snapshot()
+	if got, want := len(points), 148; got != want {
+		t.Fatalf("availability point count = %d, want %d", got, want)
+	}
+	for _, point := range points {
+		switch point.Collector {
+		case "entra.domains":
+			if point.State != availability.StateDisabled ||
+				point.Reason != availability.ReasonDisabledByConfig {
+				t.Fatalf("%s = %+v, want intentional config-disabled state preserved", point.Collector, point)
+			}
+			continue
+		case "m365.unified_audit":
+			if point.State != availability.StateDisabled ||
+				point.Reason != availability.ReasonExperimentalNotEnabled {
+				t.Fatalf("%s = %+v, want experimental-disabled state preserved", point.Collector, point)
+			}
+			continue
+		}
+		if point.State == availability.StateDisabled {
+			continue
+		}
+		if point.State != availability.StateStartupFailed ||
+			point.Reason != availability.ReasonCredentialInitializationFailed {
+			t.Fatalf("%s = %+v, want bounded credential startup failure", point.Collector, point)
+		}
+		if strings.Contains(
+			string(point.State)+" "+string(point.Reason)+" "+
+				string(point.Transport)+" "+fmt.Sprint(point.Limitations),
+			sentinel,
+		) {
+			t.Fatalf("%s availability exposed raw sentinel: %+v", point.Collector, point)
+		}
+	}
+	if !strings.Contains(logOutput.String(), sentinel) {
+		t.Fatalf("startup log = %q, want raw sentinel for operator diagnosis", logOutput.String())
+	}
+}
+
+func TestStartTenantsCredentialFailureEmitsInitialAvailabilityWhenProviderExists(t *testing.T) {
+	var metrics bytes.Buffer
+	provider, err := telemetry.NewProvider(context.Background(), telemetry.Options{
+		ServiceName:    "graph2otel",
+		Protocol:       "stdout",
+		StdoutWriter:   &metrics,
+		MetricInterval: time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	cfg := &config.Config{Tenants: []config.TenantConfig{{TenantID: "tenant-a"}}}
+	sources, _, _, wait, err := startTenantsWithBuilders(
+		context.Background(),
+		cfg,
+		provider,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		func(config.TenantConfig) (*auth.TenantAuth, error) {
+			return nil, errors.New("credential unavailable")
+		},
+		func(
+			context.Context,
+			*auth.TenantAuth,
+			*config.Config,
+			*telemetry.Provider,
+			*slog.Logger,
+			*graphclient.WorkloadLimiter,
+			map[admin.SkipKey]string,
+			*sync.WaitGroup,
+		) (admin.CollectorSource, error) {
+			t.Fatal("setup called after credential construction failed")
+			return admin.CollectorSource{}, nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("startTenantsWithBuilders() error = %v", err)
+	}
+	wait()
+	if len(sources) != 1 || sources[0].Availability == nil {
+		t.Fatalf("sources = %+v, want retained availability source", sources)
+	}
+	if err := provider.Shutdown(context.Background()); err != nil {
+		t.Fatalf("provider shutdown: %v", err)
+	}
+
+	output := metrics.String()
+	for _, want := range []string{
+		availability.MetricCollectorAvailability,
+		"tenant-a",
+		string(availability.ReasonCredentialInitializationFailed),
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("initial metric export missing %q; got:\n%s", want, output)
+		}
+	}
+}
 
 func TestStartTenantsWithBuildersRetainsEveryConfiguredTenantInOrder(t *testing.T) {
 	cfg := &config.Config{Tenants: []config.TenantConfig{
@@ -107,11 +260,22 @@ func TestSetupTenantWithGraphClientBuilderSanitizesConstructionFailure(t *testin
 
 	var logOutput bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logOutput, nil))
+	disabled := false
+	cfg := &config.Config{
+		CheckpointDir: t.TempDir(),
+		Tenants:       []config.TenantConfig{{TenantID: "tenant-a"}},
+		Collectors: map[string]config.CollectorConfig{
+			"m365.unified_audit": {Enabled: &disabled},
+		},
+	}
+	assertTenantWideFailureCoveragePrecondition(
+		t, cfg, availability.ReasonDisabledByConfig,
+	)
 	var wg sync.WaitGroup
 	source, err := setupTenantWithGraphClientBuilder(
 		context.Background(),
 		&auth.TenantAuth{TenantID: "tenant-a"},
-		&config.Config{CheckpointDir: t.TempDir()},
+		cfg,
 		provider,
 		logger,
 		graphclient.NewWorkloadLimiter(),
@@ -135,10 +299,727 @@ func TestSetupTenantWithGraphClientBuilderSanitizesConstructionFailure(t *testin
 	if source.Registry != nil || source.Status != nil {
 		t.Error("failed tenant retained live registry/status")
 	}
+	if source.Availability == nil {
+		t.Fatal("failed tenant has nil availability tracker")
+	}
+	points := source.Availability.Snapshot()
+	if got, want := len(points), 148; got != want {
+		t.Fatalf("availability point count = %d, want %d", got, want)
+	}
+	for _, point := range points {
+		switch point.Collector {
+		case "m365.unified_audit":
+			if point.State != availability.StateDisabled ||
+				point.Reason != availability.ReasonDisabledByConfig {
+				t.Fatalf("%s = %+v, want config-disabled state preserved", point.Collector, point)
+			}
+			continue
+		}
+		if point.State == availability.StateDisabled {
+			continue
+		}
+		if point.State != availability.StateStartupFailed ||
+			point.Reason != availability.ReasonGraphClientInitializationFailed {
+			t.Fatalf("%s = %+v, want bounded Graph-client startup failure", point.Collector, point)
+		}
+	}
 	if strings.Contains(string(source.StartupFailure), "super-secret") {
 		t.Fatal("retained Graph-client startup state contains raw error")
 	}
 	if !strings.Contains(logOutput.String(), "client super-secret") {
 		t.Errorf("startup log = %q, want raw Graph-client error for operator diagnosis", logOutput.String())
+	}
+}
+
+func TestSetupTenantLicenseProbeFailureOnlyFailsCapabilityDependentAvailability(t *testing.T) {
+	provider, err := telemetry.NewProvider(context.Background(), telemetry.Options{
+		Protocol:     "stdout",
+		StdoutWriter: io.Discard,
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := provider.Shutdown(context.Background()); err != nil {
+			t.Errorf("provider shutdown: %v", err)
+		}
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var wg sync.WaitGroup
+	source, err := setupTenantWithGraphAndLicenseBuilders(
+		ctx,
+		&auth.TenantAuth{TenantID: "tenant-a"},
+		&config.Config{CheckpointDir: t.TempDir()},
+		provider,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		graphclient.NewWorkloadLimiter(),
+		map[admin.SkipKey]string{},
+		&wg,
+		func(context.Context, *auth.TenantAuth, graphclient.Options) (*graphclient.Client, error) {
+			return &graphclient.Client{TenantID: "tenant-a"}, nil
+		},
+		func(context.Context, *graphclient.Client) (license.Capabilities, error) {
+			return nil, errors.New("license super-secret")
+		},
+	)
+	if err != nil {
+		t.Fatalf("setupTenantWithGraphAndLicenseBuilders() error = %v", err)
+	}
+	wg.Wait()
+	if source.Availability == nil {
+		t.Fatal("source has nil availability tracker")
+	}
+
+	byName := map[string]availability.Point{}
+	for _, point := range source.Availability.Snapshot() {
+		byName[point.Collector] = point
+	}
+	for _, name := range []string{"entra.signins.interactive", "entra.risk", "entra.users"} {
+		point := byName[name]
+		if point.State != availability.StateStartupFailed ||
+			point.Reason != availability.ReasonLicenseDetectionFailed {
+			t.Errorf("%s = %+v, want license-detection startup failure", name, point)
+		}
+	}
+	if point := byName["entra.domains"]; point.State != availability.StateStarting ||
+		point.Reason != availability.ReasonNoCompletedRun {
+		t.Errorf("entra.domains = %+v, want capability-independent collector to keep starting", point)
+	}
+	if source.Registry == nil {
+		t.Fatal("capability-independent collectors were not registered")
+	}
+	registered := map[string]bool{}
+	for _, entry := range source.Registry.Entries() {
+		registered[entry.Collector.Name()] = true
+	}
+	for _, name := range []string{"entra.signins.interactive", "entra.risk", "entra.users"} {
+		if registered[name] {
+			t.Errorf("license-dependent startup-failed collector %q was registered", name)
+		}
+	}
+	if !registered["entra.domains"] {
+		t.Error("capability-independent collector entra.domains was not registered")
+	}
+}
+
+func TestSetupTenantInvalidO365ConfigurationRecomputesCoverage(t *testing.T) {
+	provider, err := telemetry.NewProvider(context.Background(), telemetry.Options{
+		Protocol:     "stdout",
+		StdoutWriter: io.Discard,
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := provider.Shutdown(context.Background()); err != nil {
+			t.Errorf("provider shutdown: %v", err)
+		}
+	})
+
+	const sentinel = "Not.A.Real.ContentType"
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	cfg := &config.Config{
+		CheckpointDir: t.TempDir(),
+		Tenants: []config.TenantConfig{{
+			TenantID: "tenant-a",
+			O365Activity: config.O365ActivityConfig{
+				ContentTypes: []string{sentinel},
+			},
+		}},
+	}
+	var wg sync.WaitGroup
+	skips := map[admin.SkipKey]string{}
+	source, err := setupTenantWithGraphAndLicenseBuilders(
+		ctx,
+		&auth.TenantAuth{TenantID: "tenant-a"},
+		cfg,
+		provider,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		graphclient.NewWorkloadLimiter(),
+		skips,
+		&wg,
+		func(context.Context, *auth.TenantAuth, graphclient.Options) (*graphclient.Client, error) {
+			return &graphclient.Client{TenantID: "tenant-a"}, nil
+		},
+		func(context.Context, *graphclient.Client) (license.Capabilities, error) {
+			return allAvailabilityTestCapabilities(), nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("setupTenantWithGraphAndLicenseBuilders() error = %v", err)
+	}
+	wg.Wait()
+
+	byName := map[string]availability.Point{}
+	for _, point := range source.Availability.Snapshot() {
+		byName[point.Collector] = point
+	}
+	activity := byName["m365.activity"]
+	if activity.State != availability.StateStartupFailed ||
+		activity.Reason != availability.ReasonInvalidTransportConfiguration {
+		t.Fatalf("m365.activity = %+v, want bounded invalid transport configuration", activity)
+	}
+	unifiedAudit := byName["m365.unified_audit"]
+	if unifiedAudit.State != availability.StateDisabled ||
+		unifiedAudit.Reason != availability.ReasonExperimentalNotEnabled {
+		t.Fatalf("m365.unified_audit = %+v, want its own experimental opt-out after declarer failure", unifiedAudit)
+	}
+	for _, point := range source.Availability.Snapshot() {
+		if strings.Contains(
+			string(point.State)+" "+string(point.Reason)+" "+
+				string(point.Transport)+" "+fmt.Sprint(point.Limitations),
+			sentinel,
+		) {
+			t.Fatalf("%s availability exposed raw sentinel: %+v", point.Collector, point)
+		}
+	}
+	for key, reason := range skips {
+		if strings.Contains(reason, sentinel) {
+			t.Fatalf("legacy skip %v exposed raw sentinel: %q", key, reason)
+		}
+	}
+}
+
+func TestSetupTenantWithoutBlobConfigurationDoesNotRegisterBlobCategories(t *testing.T) {
+	provider, err := telemetry.NewProvider(context.Background(), telemetry.Options{
+		Protocol:     "stdout",
+		StdoutWriter: io.Discard,
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := provider.Shutdown(context.Background()); err != nil {
+			t.Errorf("provider shutdown: %v", err)
+		}
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var wg sync.WaitGroup
+	source, err := setupTenantWithGraphAndLicenseBuilders(
+		ctx,
+		&auth.TenantAuth{TenantID: "tenant-a"},
+		&config.Config{CheckpointDir: t.TempDir()},
+		provider,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		graphclient.NewWorkloadLimiter(),
+		map[admin.SkipKey]string{},
+		&wg,
+		func(context.Context, *auth.TenantAuth, graphclient.Options) (*graphclient.Client, error) {
+			return &graphclient.Client{TenantID: "tenant-a"}, nil
+		},
+		func(context.Context, *graphclient.Client) (license.Capabilities, error) {
+			return allAvailabilityTestCapabilities(), nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("setupTenantWithGraphAndLicenseBuilders() error = %v", err)
+	}
+	wg.Wait()
+
+	for _, entry := range source.Registry.Entries() {
+		if entry.Collector.Name() == "graph2otel.blob_categories" {
+			t.Fatal("blob-category no-op collector registered without blob configuration")
+		}
+	}
+	for _, point := range source.Availability.Snapshot() {
+		if point.Collector != "graph2otel.blob_categories" {
+			continue
+		}
+		if point.State != availability.StateDisabled ||
+			point.Reason != availability.ReasonTransportNotConfigured {
+			t.Fatalf("blob-category availability = %+v, want transport-not-configured", point)
+		}
+		return
+	}
+	t.Fatal("blob-category logical point disappeared from availability census")
+}
+
+func TestSetupTenantBlobInitializationFailureRecomputesCoverage(t *testing.T) {
+	provider, err := telemetry.NewProvider(context.Background(), telemetry.Options{
+		Protocol:     "stdout",
+		StdoutWriter: io.Discard,
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := provider.Shutdown(context.Background()); err != nil {
+			t.Errorf("provider shutdown: %v", err)
+		}
+	})
+
+	disabled := false
+	const sentinel = "not-an-https-account-url"
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	cfg := &config.Config{
+		CheckpointDir: t.TempDir(),
+		Tenants: []config.TenantConfig{{
+			TenantID:   "tenant-a",
+			BlobIngest: config.BlobIngestConfig{AccountURL: sentinel},
+			Collectors: map[string]config.CollectorConfig{
+				"entra.signins.managed_identity": {Enabled: &disabled},
+			},
+		}},
+	}
+	var wg sync.WaitGroup
+	skips := map[admin.SkipKey]string{}
+	source, err := setupTenantWithGraphAndLicenseBuilders(
+		ctx,
+		&auth.TenantAuth{TenantID: "tenant-a"},
+		cfg,
+		provider,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		graphclient.NewWorkloadLimiter(),
+		skips,
+		&wg,
+		func(context.Context, *auth.TenantAuth, graphclient.Options) (*graphclient.Client, error) {
+			return &graphclient.Client{TenantID: "tenant-a"}, nil
+		},
+		func(context.Context, *graphclient.Client) (license.Capabilities, error) {
+			return allAvailabilityTestCapabilities(), nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("setupTenantWithGraphAndLicenseBuilders() error = %v", err)
+	}
+	wg.Wait()
+
+	byName := map[string]availability.Point{}
+	for _, point := range source.Availability.Snapshot() {
+		byName[point.Collector] = point
+	}
+	blob := byName["entra.signins.managed_identity.blob"]
+	if blob.State != availability.StateStartupFailed ||
+		blob.Reason != availability.ReasonTransportInitializationFailed {
+		t.Fatalf("blob declarer = %+v, want bounded transport initialization failure", blob)
+	}
+	graph := byName["entra.signins.managed_identity"]
+	if graph.State != availability.StateDisabled ||
+		graph.Reason != availability.ReasonDisabledByConfig {
+		t.Fatalf("Graph peer = %+v, want own disabled state after declarer failure", graph)
+	}
+	for _, point := range source.Availability.Snapshot() {
+		if strings.Contains(
+			string(point.State)+" "+string(point.Reason)+" "+
+				string(point.Transport)+" "+fmt.Sprint(point.Limitations),
+			sentinel,
+		) {
+			t.Fatalf("%s availability exposed raw sentinel: %+v", point.Collector, point)
+		}
+	}
+	for key, reason := range skips {
+		if strings.Contains(reason, sentinel) {
+			t.Fatalf("legacy skip %v exposed raw sentinel: %q", key, reason)
+		}
+	}
+}
+
+func TestConfiguredOptionalLaneConstructionFailuresAreBoundedAndSanitized(t *testing.T) {
+	const sentinel = "transport super-secret"
+	tokenFile := t.TempDir() + "/mdca-token"
+	if err := os.WriteFile(tokenFile, []byte("token"), 0o600); err != nil {
+		t.Fatalf("write MDCA token: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		run  func(*slog.Logger, map[admin.SkipKey]string, *collector.Registry) availability.Reason
+	}{
+		{
+			name: "mdca",
+			run: func(
+				logger *slog.Logger,
+				skips map[admin.SkipKey]string,
+				registry *collector.Registry,
+			) availability.Reason {
+				cfg := &config.Config{Tenants: []config.TenantConfig{{
+					TenantID: "tenant-a",
+					MDCA: config.MDCAConfig{
+						PortalURL: "https://example.portal.cloudappsecurity.com",
+						TokenFile: tokenFile,
+					},
+				}}}
+				return registerMDCACollectors(
+					cfg,
+					&auth.TenantAuth{TenantID: "tenant-a"},
+					allAvailabilityTestCapabilities(),
+					checkpoint.NewStore(t.TempDir()),
+					logger,
+					telemetrytest.New().Emitter(),
+					registry,
+					skips,
+					collectors.MDCAAll(),
+					func(string, mdcaclient.Options) (*mdcaclient.Client, error) {
+						return nil, errors.New(sentinel)
+					},
+					nil,
+					nil,
+				)
+			},
+		},
+		{
+			name: "exchange_online",
+			run: func(
+				logger *slog.Logger,
+				skips map[admin.SkipKey]string,
+				registry *collector.Registry,
+			) availability.Reason {
+				cfg := &config.Config{Tenants: []config.TenantConfig{{
+					TenantID:       "tenant-a",
+					ExchangeOnline: config.ExchangeOnlineConfig{Enabled: true},
+				}}}
+				return registerEXOCollectors(
+					cfg,
+					&auth.TenantAuth{TenantID: "tenant-a"},
+					allAvailabilityTestCapabilities(),
+					logger,
+					nil,
+					errors.New(sentinel),
+					registry,
+					skips,
+					collectors.EXOAll(),
+					nil,
+					nil,
+				)
+			},
+		},
+		{
+			name: "hunt",
+			run: func(
+				logger *slog.Logger,
+				skips map[admin.SkipKey]string,
+				registry *collector.Registry,
+			) availability.Reason {
+				cfg := &config.Config{Tenants: []config.TenantConfig{{
+					TenantID: "tenant-a",
+					Hunting:  config.HuntingConfig{Enabled: true},
+				}}}
+				return registerHuntCollectors(
+					cfg,
+					&auth.TenantAuth{TenantID: "tenant-a"},
+					allAvailabilityTestCapabilities(),
+					logger,
+					telemetrytest.New().Emitter(),
+					registry,
+					skips,
+					collectors.HuntAll(),
+					func(*auth.TenantAuth, huntclient.Options) (*huntclient.Client, error) {
+						return nil, errors.New(sentinel)
+					},
+					nil,
+					nil,
+				)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var logOutput bytes.Buffer
+			logger := slog.New(slog.NewTextHandler(&logOutput, nil))
+			skips := map[admin.SkipKey]string{}
+			registry := collector.NewRegistry()
+
+			if got := tt.run(logger, skips, registry); got != availability.ReasonTransportInitializationFailed {
+				t.Fatalf("startup reason = %q, want %q", got, availability.ReasonTransportInitializationFailed)
+			}
+			if len(registry.Entries()) != 0 {
+				t.Fatalf("registered %d collectors after client construction failed", len(registry.Entries()))
+			}
+			if !strings.Contains(logOutput.String(), sentinel) {
+				t.Fatalf("operator log = %q, want raw construction error", logOutput.String())
+			}
+			for key, reason := range skips {
+				if strings.Contains(reason, sentinel) {
+					t.Fatalf("legacy skip %v exposed raw sentinel: %q", key, reason)
+				}
+			}
+		})
+	}
+}
+
+type conditionalRuntimeSnapshotCollector struct {
+	name      string
+	transport telemetry.Transport
+}
+
+func (c conditionalRuntimeSnapshotCollector) Name() string { return c.name }
+func (conditionalRuntimeSnapshotCollector) DefaultInterval() time.Duration {
+	return time.Minute
+}
+func (c conditionalRuntimeSnapshotCollector) IngestTransport() telemetry.Transport {
+	return c.transport
+}
+func (conditionalRuntimeSnapshotCollector) Collect(
+	context.Context,
+	telemetry.Emitter,
+	*recordoutcome.Recorder,
+) error {
+	return nil
+}
+
+type conditionalRuntimeWindowCollector struct {
+	name      string
+	transport telemetry.Transport
+}
+
+func (c conditionalRuntimeWindowCollector) Name() string { return c.name }
+func (conditionalRuntimeWindowCollector) DefaultInterval() time.Duration {
+	return time.Minute
+}
+func (c conditionalRuntimeWindowCollector) IngestTransport() telemetry.Transport {
+	return c.transport
+}
+func (conditionalRuntimeWindowCollector) CollectWindow(
+	_ context.Context,
+	_, to time.Time,
+	_ telemetry.Emitter,
+	_ *recordoutcome.Recorder,
+) (time.Time, error) {
+	return to, nil
+}
+func (conditionalRuntimeWindowCollector) Lag() time.Duration { return 0 }
+
+type runtimeFactoryTestBlobSource struct{}
+
+func (runtimeFactoryTestBlobSource) List(context.Context, string, string) ([]blobpipeline.BlobInfo, error) {
+	return nil, nil
+}
+func (runtimeFactoryTestBlobSource) ReadRange(
+	context.Context,
+	string,
+	string,
+	int64,
+	int64,
+) ([]byte, error) {
+	return nil, nil
+}
+
+func TestOptionalRuntimeFactoriesCannotSilentlyReturnNilWhenActive(t *testing.T) {
+	const tenantID = "tenant-a"
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ta := &auth.TenantAuth{TenantID: tenantID}
+	emitter := telemetrytest.New().Emitter()
+	store := checkpoint.NewStore(t.TempDir())
+
+	tests := []struct {
+		name      string
+		family    availabilityFamily
+		transport telemetry.Transport
+		run       func(
+			[]availability.Static,
+			*[]availabilityStartupFailure,
+			*collector.Registry,
+		)
+	}{
+		{
+			name:      "blob",
+			family:    availabilityFamilyBlob,
+			transport: telemetry.TransportBlob,
+			run: func(
+				inventory []availability.Static,
+				failures *[]availabilityStartupFailure,
+				registry *collector.Registry,
+			) {
+				cfg := &config.Config{Tenants: []config.TenantConfig{{
+					TenantID:   tenantID,
+					BlobIngest: config.BlobIngestConfig{AccountURL: "https://example.blob.core.windows.net"},
+				}}}
+				_ = registerBlobCollectors(
+					cfg, ta, nil, store, logger, registry, map[admin.SkipKey]string{}, nil,
+					[]collectors.BlobFactory{func(d collectors.BlobDeps) collector.SnapshotCollector {
+						if d.Source != nil {
+							return nil
+						}
+						return conditionalRuntimeSnapshotCollector{
+							name: "test.blob", transport: telemetry.TransportBlob,
+						}
+					}},
+					func(string, *auth.TenantAuth) (blobpipeline.Source, error) {
+						return runtimeFactoryTestBlobSource{}, nil
+					},
+					inventory, failures,
+				)
+			},
+		},
+		{
+			name:      "o365",
+			family:    availabilityFamilyO365,
+			transport: telemetry.TransportO365Activity,
+			run: func(
+				inventory []availability.Static,
+				failures *[]availabilityStartupFailure,
+				registry *collector.Registry,
+			) {
+				_ = registerO365Collectors(
+					&config.Config{}, ta, nil, store, logger, emitter, registry,
+					map[admin.SkipKey]string{},
+					[]collectors.O365Factory{func(d collectors.O365Deps) collectors.RegisteredWindow {
+						if d.Client != nil {
+							return collectors.RegisteredWindow{}
+						}
+						return collectors.RegisteredWindow{Collector: conditionalRuntimeWindowCollector{
+							name: "test.o365", transport: telemetry.TransportO365Activity,
+						}}
+					}},
+					func(*auth.TenantAuth, o365activityclient.Options) (*o365activityclient.Client, error) {
+						return &o365activityclient.Client{}, nil
+					},
+					inventory, failures,
+				)
+			},
+		},
+		{
+			name:      "mdca",
+			family:    availabilityFamilyMDCA,
+			transport: telemetry.TransportMDCA,
+			run: func(
+				inventory []availability.Static,
+				failures *[]availabilityStartupFailure,
+				registry *collector.Registry,
+			) {
+				tokenFile := t.TempDir() + "/token"
+				if err := os.WriteFile(tokenFile, []byte("token"), 0o600); err != nil {
+					t.Fatalf("write MDCA token: %v", err)
+				}
+				cfg := &config.Config{Tenants: []config.TenantConfig{{
+					TenantID: tenantID,
+					MDCA: config.MDCAConfig{
+						PortalURL: "https://example.portal.cloudappsecurity.com",
+						TokenFile: tokenFile,
+					},
+				}}}
+				_ = registerMDCACollectors(
+					cfg, ta, nil, store, logger, emitter, registry, map[admin.SkipKey]string{},
+					[]collectors.MDCAFactory{func(d collectors.MDCADeps) collectors.RegisteredWindow {
+						if d.Client != nil {
+							return collectors.RegisteredWindow{}
+						}
+						return collectors.RegisteredWindow{Collector: conditionalRuntimeWindowCollector{
+							name: "test.mdca", transport: telemetry.TransportMDCA,
+						}}
+					}},
+					func(string, mdcaclient.Options) (*mdcaclient.Client, error) {
+						return &mdcaclient.Client{}, nil
+					},
+					inventory, failures,
+				)
+			},
+		},
+		{
+			name:      "exchange_online",
+			family:    availabilityFamilyEXO,
+			transport: telemetry.TransportExchangeOnline,
+			run: func(
+				inventory []availability.Static,
+				failures *[]availabilityStartupFailure,
+				registry *collector.Registry,
+			) {
+				cfg := &config.Config{Tenants: []config.TenantConfig{{
+					TenantID:       tenantID,
+					ExchangeOnline: config.ExchangeOnlineConfig{Enabled: true},
+				}}}
+				_ = registerEXOCollectors(
+					cfg, ta, nil, logger, inertEXO{}, nil, registry, map[admin.SkipKey]string{},
+					[]collectors.EXOFactory{func(d collectors.EXODeps) collector.SnapshotCollector {
+						if d.Client != nil {
+							return nil
+						}
+						return conditionalRuntimeSnapshotCollector{
+							name: "test.exo", transport: telemetry.TransportExchangeOnline,
+						}
+					}},
+					inventory, failures,
+				)
+			},
+		},
+		{
+			name:      "hunt",
+			family:    availabilityFamilyHunt,
+			transport: telemetry.TransportGraph,
+			run: func(
+				inventory []availability.Static,
+				failures *[]availabilityStartupFailure,
+				registry *collector.Registry,
+			) {
+				cfg := &config.Config{Tenants: []config.TenantConfig{{
+					TenantID: tenantID,
+					Hunting:  config.HuntingConfig{Enabled: true},
+				}}}
+				_ = registerHuntCollectors(
+					cfg, ta, nil, logger, emitter, registry, map[admin.SkipKey]string{},
+					[]collectors.HuntFactory{func(d collectors.HuntDeps) collector.SnapshotCollector {
+						if d.Client != nil {
+							return nil
+						}
+						return conditionalRuntimeSnapshotCollector{
+							name: "test.hunt", transport: telemetry.TransportGraph,
+						}
+					}},
+					func(*auth.TenantAuth, huntclient.Options) (*huntclient.Client, error) {
+						return &huntclient.Client{}, nil
+					},
+					inventory, failures,
+				)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inventory := []availability.Static{{
+				Collector: "test." + tt.name,
+				Transport: tt.transport,
+				State:     availability.StateStarting,
+				Reason:    availability.ReasonNoCompletedRun,
+			}}
+			if tt.name == "exchange_online" {
+				inventory[0].Collector = "test.exo"
+			}
+			var failures []availabilityStartupFailure
+			registry := collector.NewRegistry()
+
+			tt.run(inventory, &failures, registry)
+
+			if len(registry.Entries()) != 0 {
+				t.Fatalf("nil runtime factory registered %d collectors", len(registry.Entries()))
+			}
+			if len(failures) != 1 {
+				t.Fatalf("startup failures = %+v, want one", failures)
+			}
+			if got := failures[0]; got.collector != inventory[0].Collector ||
+				got.family != tt.family ||
+				got.transport != tt.transport ||
+				got.reason != availability.ReasonTransportInitializationFailed {
+				t.Fatalf("startup failure = %+v, want bounded %s transport initialization failure", got, tt.family)
+			}
+		})
+	}
+}
+
+func assertTenantWideFailureCoveragePrecondition(
+	t *testing.T,
+	cfg *config.Config,
+	wantUnderlyingReason availability.Reason,
+) {
+	t.Helper()
+	baseline := availabilityStaticsByName(
+		t,
+		resolveAvailabilityInventory(cfg, "tenant-a", nil, false),
+	)
+	point := baseline["m365.unified_audit"]
+	if point.State != availability.StateCovered ||
+		point.Reason != availability.ReasonCoveredByAlternative {
+		t.Fatalf(
+			"test precondition m365.unified_audit = %+v, want covered/covered_by_alternative before tenant-wide failure from underlying %s",
+			point,
+			wantUnderlyingReason,
+		)
 	}
 }

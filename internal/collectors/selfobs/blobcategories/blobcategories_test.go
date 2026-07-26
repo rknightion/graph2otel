@@ -172,14 +172,15 @@ func TestCategoryTwin_Severity(t *testing.T) {
 	}
 }
 
-func TestCollect_NilARM_NoOp(t *testing.T) {
-	rec := telemetrytest.New()
+func TestCollect_NilARMFailsInsteadOfReportingHealthyNoOp(t *testing.T) {
+	outcomes := recordoutcome.NewRecorder()
 	c := New(nil, []string{"insights-logs-signinlogs"}, nil)
-	if err := c.Collect(context.Background(), rec.Emitter(), recordoutcome.NewRecorder()); err != nil {
-		t.Fatalf("Collect: %v", err)
+	err := c.Collect(context.Background(), telemetrytest.New().Emitter(), outcomes)
+	if err == nil {
+		t.Fatal("Collect() error = nil, want missing ARM dependency to fail loudly")
 	}
-	if pts := rec.MetricPoints(metricCategories); len(pts) != 0 {
-		t.Errorf("nil ARM should emit nothing, got %d points", len(pts))
+	if got := outcomes.Snapshot().Summarize(err, false).Cause; got != recordoutcome.CauseSourceError {
+		t.Fatalf("outcome cause = %q, want source_error", got)
 	}
 }
 

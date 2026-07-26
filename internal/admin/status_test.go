@@ -3,11 +3,14 @@ package admin
 import (
 	"context"
 	"errors"
+	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/rknightion/graph2otel/internal/availability"
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetry"
@@ -166,6 +169,185 @@ func (f *fakeTwin) Collect(
 }
 func (f *fakeTwin) IngestTransport() telemetry.Transport { return f.transport }
 func (f *fakeTwin) ConflictsWith() []string              { return f.conflicts }
+
+func TestBuildTenantStatuses_AvailabilitySnapshotDrivesCompleteStartupFailedCensus(t *testing.T) {
+	const collectorCount = 148
+	initial := make([]availability.Static, 0, collectorCount)
+	for i := range collectorCount {
+		initial = append(initial, availability.Static{
+			Collector: fmt.Sprintf("collector.%03d", i),
+			Transport: telemetry.TransportGraph,
+			State:     availability.StateStartupFailed,
+			Reason:    availability.ReasonCredentialInitializationFailed,
+		})
+	}
+
+	tenants := buildTenantStatuses([]CollectorSource{{
+		TenantID:       "tenant-startup-failed",
+		StartupFailure: StartupFailureCredentialInitialization,
+		Availability:   availability.NewTracker("tenant-startup-failed", initial),
+	}}, map[SkipKey]string{
+		{TenantID: "tenant-startup-failed", Collector: "raw-free-form-row"}: "secret raw startup error",
+	}, time.Now())
+
+	if got := len(tenants[0].Collectors); got != collectorCount {
+		t.Fatalf("collector rows = %d, want canonical %d-row census", got, collectorCount)
+	}
+	if got := tenants[0].FailingCount; got != collectorCount {
+		t.Errorf("FailingCount = %d, want %d canonical startup failures", got, collectorCount)
+	}
+	if got := tenants[0].SkippedCount; got != 0 {
+		t.Errorf("SkippedCount = %d, want 0 (startup failures are failures, not skips)", got)
+	}
+	if got := tenants[0].EnabledCount; got != 0 {
+		t.Errorf("EnabledCount = %d, want 0 while startup-failed compatibility rows remain disabled", got)
+	}
+	for i, row := range tenants[0].Collectors {
+		wantName := fmt.Sprintf("collector.%03d", i)
+		if row.Name != wantName {
+			t.Fatalf("row[%d].Name = %q, want %q", i, row.Name, wantName)
+		}
+		if row.Availability == nil ||
+			row.Availability.State != availability.StateStartupFailed ||
+			row.Availability.Reason != availability.ReasonCredentialInitializationFailed ||
+			row.Availability.Transport != telemetry.TransportGraph {
+			t.Fatalf("row[%d].Availability = %+v, want bounded startup failure", i, row.Availability)
+		}
+	}
+}
+
+func TestBuildTenantStatuses_AvailabilityProjectsCompatibilityAndPreservesCheckpoint(t *testing.T) {
+	now := time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC)
+	reg := collector.NewRegistry()
+	reg.Register(&fakeStateful{name: "active", state: &collector.CheckpointState{
+		Kind: collector.CheckpointKindWindow, Watermark: now.Add(-time.Minute),
+	}}, time.Hour)
+	reg.Register(&fakeTwin{
+		name:      "blob-twin",
+		transport: telemetry.TransportBlob,
+		conflicts: []string{"covered-peer"},
+	}, time.Hour)
+
+	tracker := availability.NewTracker("tenant-a", []availability.Static{
+		{Collector: "active", Transport: telemetry.TransportGraph, State: availability.StateStarting, Reason: availability.ReasonNoCompletedRun},
+		{Collector: "blob-twin", Transport: telemetry.TransportBlob, State: availability.StateStarting, Reason: availability.ReasonNoCompletedRun},
+		{Collector: "covered-peer", Transport: telemetry.TransportGraph, State: availability.StateCovered, Reason: availability.ReasonCoveredByAlternative},
+		{Collector: "disabled", Transport: telemetry.TransportGraph, State: availability.StateDisabled, Reason: availability.ReasonExperimentalNotEnabled},
+		{
+			Collector: "limited", Transport: telemetry.TransportGraph,
+			State: availability.StateLimited, Reason: availability.ReasonPartialLicense,
+			Limitations: []availability.Limitation{"premium_signal"},
+		},
+	})
+	tracker.Record("limited", recordoutcome.Summary{
+		Result: recordoutcome.ResultSuccess,
+		Counts: recordoutcome.Counts{Fetched: 2, Mapped: 2, Emitted: 2},
+	})
+
+	tenants := buildTenantStatuses([]CollectorSource{{
+		TenantID:     "tenant-a",
+		Registry:     reg,
+		Status:       collector.NewStatusTracker(),
+		Availability: tracker,
+	}}, map[SkipKey]string{
+		{TenantID: "tenant-a", Collector: "disabled"}: "raw free-form skip must not win",
+	}, now)
+
+	byName := map[string]CollectorStatus{}
+	for _, row := range tenants[0].Collectors {
+		byName[row.Name] = row
+	}
+
+	if got := byName["active"].State; got == nil || got.Kind != collector.CheckpointKindWindow {
+		t.Fatalf("active durable checkpoint state = %+v, want preserved window state", got)
+	}
+	if got := byName["active"].Availability; got == nil ||
+		got.State != availability.StateStarting ||
+		got.Transport != telemetry.TransportGraph {
+		t.Fatalf("active availability = %+v, want canonical starting/graph", got)
+	}
+	if got := byName["disabled"]; got.Enabled ||
+		got.SkipReason != string(availability.ReasonExperimentalNotEnabled) ||
+		got.SkipCategory != skipCatExperimental ||
+		got.Transport != string(telemetry.TransportGraph) {
+		t.Errorf("disabled compatibility = %+v, want typed disabled projection", got)
+	}
+	covered := byName["covered-peer"]
+	if covered.Enabled || covered.CoveredBy == nil ||
+		covered.CoveredBy.Collector != "blob-twin" ||
+		covered.CoveredBy.Transport != string(telemetry.TransportBlob) {
+		t.Errorf("covered compatibility = %+v, want current ConflictsWith twin identity", covered)
+	}
+	limited := byName["limited"]
+	if !limited.Enabled || limited.SkipReason != "" ||
+		limited.Availability == nil ||
+		len(limited.Availability.Limitations) != 1 ||
+		limited.LastOutcome == nil ||
+		limited.LastOutcome.Result != recordoutcome.ResultSuccess ||
+		limited.LastOutcome.Counts.Fetched != 2 {
+		t.Errorf("limited row = %+v, want enabled typed limitation and last outcome", limited)
+	}
+}
+
+func TestCollectorAvailabilityFromCopiesBoundedDetails(t *testing.T) {
+	point := availability.Point{
+		State:               availability.StateLimited,
+		Reason:              availability.ReasonPartialLicense,
+		Transport:           telemetry.TransportGraph,
+		Limitations:         []availability.Limitation{availability.LimitationRiskyUsers},
+		MissingCapabilities: []availability.MissingCapability{availability.MissingCapabilityEntraP2},
+	}
+	got := collectorAvailabilityFrom(point)
+	point.Limitations[0] = "mutated"
+	point.MissingCapabilities[0] = "mutated"
+	if !reflect.DeepEqual(got.Limitations, []availability.Limitation{availability.LimitationRiskyUsers}) {
+		t.Fatalf("Limitations = %v, want independent copy", got.Limitations)
+	}
+	if !reflect.DeepEqual(got.MissingCapabilities, []availability.MissingCapability{availability.MissingCapabilityEntraP2}) {
+		t.Fatalf("MissingCapabilities = %v, want independent copy", got.MissingCapabilities)
+	}
+}
+
+func TestBuildTenantStatuses_RawErrorsCannotChangeBoundedAvailability(t *testing.T) {
+	const rawSecret = "https://graph.example/token?client_secret=hunter2"
+	status, reg := runOnceAndTrack(t, "collector", errors.New(rawSecret))
+	tracker := availability.NewTracker("tenant-a", []availability.Static{{
+		Collector: "collector",
+		Transport: telemetry.TransportGraph,
+		State:     availability.StateStarting,
+		Reason:    availability.ReasonNoCompletedRun,
+	}})
+	tracker.Record("collector", recordoutcome.Summary{
+		Result: recordoutcome.ResultFailure,
+		Cause:  recordoutcome.CauseSourceError,
+	})
+
+	row := buildTenantStatuses([]CollectorSource{{
+		TenantID:     "tenant-a",
+		Registry:     reg,
+		Status:       status,
+		Availability: tracker,
+	}}, map[SkipKey]string{
+		{TenantID: "tenant-a", Collector: "collector"}: rawSecret,
+	}, time.Now())[0].Collectors[0]
+
+	if row.LastError != rawSecret {
+		t.Fatalf("LastError = %q, want compatibility diagnostic preserved", row.LastError)
+	}
+	bounded := fmt.Sprintf("%s %s %s %v",
+		row.Availability.State,
+		row.Availability.Reason,
+		row.Availability.Transport,
+		row.Availability.Limitations,
+	)
+	if strings.Contains(bounded, rawSecret) {
+		t.Fatalf("bounded availability exposes raw LastError: %q", bounded)
+	}
+	if row.Availability.State != availability.StateFailed ||
+		row.Availability.Reason != availability.ReasonSourceError {
+		t.Fatalf("availability = %+v, want tracker-derived failed/source_error", row.Availability)
+	}
+}
 
 func TestBuildTenantStatuses_TransportReflectsEngine(t *testing.T) {
 	// A plain fakeCollector polls Graph inline (no engine) -> graph.
@@ -602,6 +784,74 @@ func TestDeriveHealth_SkippedCollectorNeverDegradesHealth(t *testing.T) {
 	}
 }
 
+func TestDeriveHealth_IntentionalAvailabilityStatesDoNotDegradeOrHoldStarting(t *testing.T) {
+	tenants := []TenantStatus{{Collectors: []CollectorStatus{
+		{
+			Name: "disabled",
+			Availability: &CollectorAvailability{
+				State: availability.StateDisabled, Reason: availability.ReasonDisabledByConfig,
+			},
+		},
+		{
+			Name: "covered",
+			Availability: &CollectorAvailability{
+				State: availability.StateCovered, Reason: availability.ReasonCoveredByAlternative,
+			},
+		},
+		{
+			Name:    "limited",
+			Enabled: true,
+			Availability: &CollectorAvailability{
+				State: availability.StateLimited, Reason: availability.ReasonPartialLicense,
+			},
+		},
+	}}}
+
+	health, reasons := deriveHealth(tenants)
+	if health != healthHealthy || len(reasons) != 0 {
+		t.Fatalf("deriveHealth(intentional states) = %q, %v; want healthy with no reasons", health, reasons)
+	}
+}
+
+func TestDeriveHealth_UsesCanonicalBlockedStateWithoutRawRunError(t *testing.T) {
+	const rawSecret = "raw API failure with secret"
+	tenants := []TenantStatus{{TenantID: "tenant-a", Collectors: []CollectorStatus{{
+		Name:      "blocked",
+		Enabled:   true,
+		LastError: rawSecret,
+		Availability: &CollectorAvailability{
+			State: availability.StateBlocked, Reason: availability.ReasonPermissionDenied,
+		},
+	}}}}
+
+	health, reasons := deriveHealth(tenants)
+	if health != healthDegraded {
+		t.Fatalf("health = %q, want degraded for blocked availability", health)
+	}
+	joined := strings.Join(reasons, " ")
+	if !strings.Contains(joined, string(availability.ReasonPermissionDenied)) {
+		t.Errorf("health reasons = %q, want bounded permission_denied reason", joined)
+	}
+	if strings.Contains(joined, rawSecret) {
+		t.Fatalf("health reasons expose raw LastError: %q", joined)
+	}
+}
+
+func TestDeriveHealth_StaticLicenseBlockDoesNotDegrade(t *testing.T) {
+	tenants := []TenantStatus{{TenantID: "tenant-a", Collectors: []CollectorStatus{{
+		Name:    "license-blocked",
+		Enabled: false,
+		Availability: &CollectorAvailability{
+			State: availability.StateBlocked, Reason: availability.ReasonLicenseUnavailable,
+		},
+	}}}}
+
+	health, reasons := deriveHealth(tenants)
+	if health != healthHealthy || len(reasons) != 0 {
+		t.Fatalf("deriveHealth(license block) = %q, %v; want healthy with no reasons", health, reasons)
+	}
+}
+
 func TestBuildTenantStatuses_StartupFailureIsSanitized(t *testing.T) {
 	reg := collector.NewRegistry()
 	reg.Register(&fakeCollector{name: "must-not-count-as-working"}, time.Hour)
@@ -691,6 +941,45 @@ func TestDeriveReadiness_WorkingCollectorWaitsForFirstSuccess(t *testing.T) {
 	}
 }
 
+func TestDeriveReadiness_NonEnabledCanonicalRowsCannotLatchHistoricalSuccess(t *testing.T) {
+	tenants := []TenantStatus{{
+		TenantID: "tenant-a",
+		Working:  true,
+		Collectors: []CollectorStatus{
+			{
+				Name:    "disabled",
+				Enabled: false,
+				Runs:    1,
+				Availability: &CollectorAvailability{
+					State: availability.StateDisabled, Reason: availability.ReasonDisabledByConfig,
+				},
+			},
+			{
+				Name:    "covered",
+				Enabled: false,
+				Runs:    1,
+				Availability: &CollectorAvailability{
+					State: availability.StateCovered, Reason: availability.ReasonCoveredByAlternative,
+				},
+			},
+			{
+				Name:    "startup-failed",
+				Enabled: false,
+				Runs:    1,
+				Availability: &CollectorAvailability{
+					State:  availability.StateStartupFailed,
+					Reason: availability.ReasonCredentialInitializationFailed,
+				},
+			},
+		},
+	}}
+
+	got := deriveReadiness(tenants)
+	if got.Ready || got.State != readinessWaitingForFirstSuccess || got.SuccessfulTenants != 0 {
+		t.Fatalf("readiness = %+v, want waiting with no successful tenant from disabled historical rows", got)
+	}
+}
+
 func TestDeriveReadiness_HealthyEmptyCollectionCountsAsSuccess(t *testing.T) {
 	tr, reg := runOnceAndTrack(t, "healthy-empty", nil)
 	tenants := buildTenantStatuses([]CollectorSource{{
@@ -731,14 +1020,24 @@ func TestDeriveReadiness_PartialTenantSuccessIsReady(t *testing.T) {
 
 func TestDeriveReadiness_LifetimeSuccessSurvivesLaterFailure(t *testing.T) {
 	tr, reg := runSequenceAndTrack(t, "devices", nil, errBoom)
+	availabilityTracker := availability.NewTracker("tenant-a", []availability.Static{{
+		Collector: "devices",
+		Transport: telemetry.TransportGraph,
+		State:     availability.StateStarting,
+		Reason:    availability.ReasonNoCompletedRun,
+	}})
+	availabilityTracker.Record("devices", tr.Snapshot()["devices"].LastOutcome)
 	tenants := buildTenantStatuses([]CollectorSource{{
-		TenantID: "tenant-a",
-		Registry: reg,
-		Status:   tr,
+		TenantID:     "tenant-a",
+		Registry:     reg,
+		Status:       tr,
+		Availability: availabilityTracker,
 	}}, nil, time.Now())
 
 	row := tenants[0].Collectors[0]
-	if row.LastSuccess || row.Runs <= row.Failures {
+	if row.LastSuccess || row.Runs <= row.Failures ||
+		row.Availability == nil ||
+		row.Availability.State != availability.StateFailed {
 		t.Fatalf("collector run = %+v, want last failure after a lifetime success", row)
 	}
 	got := deriveReadiness(tenants)

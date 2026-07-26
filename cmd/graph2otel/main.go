@@ -11,12 +11,14 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"go.opentelemetry.io/otel"
 
 	"github.com/rknightion/graph2otel/internal/admin"
+	"github.com/rknightion/graph2otel/internal/availability"
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/config"
@@ -38,6 +40,53 @@ func otelErrorHandler(logger *slog.Logger) otel.ErrorHandler {
 // PeriodicReader's default export interval (60s) so each report covers exactly
 // one export window's distinct series.
 const selfObsReportInterval = 60 * time.Second
+
+func reportAvailability(
+	ctx context.Context,
+	tracker *availability.Tracker,
+	emitter telemetry.Emitter,
+	ticks <-chan time.Time,
+) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticks:
+			tracker.Emit(emitter)
+		}
+	}
+}
+
+type periodicAvailabilityReporter func(
+	context.Context,
+	*availability.Tracker,
+	telemetry.Emitter,
+)
+
+func runPeriodicAvailability(
+	ctx context.Context,
+	tracker *availability.Tracker,
+	emitter telemetry.Emitter,
+) {
+	ticker := time.NewTicker(selfObsReportInterval)
+	defer ticker.Stop()
+	reportAvailability(ctx, tracker, emitter, ticker.C)
+}
+
+func startTenantWorkers(
+	ctx context.Context,
+	tracker *availability.Tracker,
+	emitter telemetry.Emitter,
+	wg *sync.WaitGroup,
+	reportPeriodic periodicAvailabilityReporter,
+	runScheduler func(),
+) {
+	tracker.Emit(emitter)
+	wg.Go(func() {
+		reportPeriodic(ctx, tracker, emitter)
+	})
+	wg.Go(runScheduler)
+}
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

@@ -10,9 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rknightion/graph2otel/internal/availability"
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/config"
 	"github.com/rknightion/graph2otel/internal/graphclient"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
+	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
 // fakeLimiter is a stand-in RateLimiter returning a fixed headroom snapshot, so
@@ -205,6 +208,89 @@ func TestHandleStatusJSON_ReflectsCollectorState(t *testing.T) {
 	}
 	if got.Service.Version == "" {
 		t.Errorf("Service.Version is empty")
+	}
+}
+
+func TestHandleStatusJSON_ExposesNestedCanonicalAvailabilityAndLastOutcome(t *testing.T) {
+	tracker := availability.NewTracker("tenant-a", []availability.Static{{
+		Collector:           "entra.risk",
+		Transport:           telemetry.TransportGraph,
+		State:               availability.StateLimited,
+		Reason:              availability.ReasonPartialLicense,
+		Limitations:         []availability.Limitation{availability.LimitationRiskyUsers},
+		MissingCapabilities: []availability.MissingCapability{availability.MissingCapabilityEntraP2},
+	}})
+	tracker.Record("entra.risk", recordoutcome.Summary{
+		Result: recordoutcome.ResultSuccess,
+		Counts: recordoutcome.Counts{
+			Fetched: 4,
+			Mapped:  3,
+			Emitted: 2,
+			Deduped: 1,
+		},
+	})
+	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, []CollectorSource{{
+		TenantID:     "tenant-a",
+		Availability: tracker,
+	}}, nil, nil, nil, nil, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/status.json", nil)
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /api/status.json status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var payload struct {
+		Tenants []struct {
+			Collectors []json.RawMessage `json:"collectors"`
+		} `json:"tenants"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal status response: %v", err)
+	}
+	if len(payload.Tenants) != 1 || len(payload.Tenants[0].Collectors) != 1 {
+		t.Fatalf("tenant collector payload = %+v, want one canonical row", payload.Tenants)
+	}
+
+	var row struct {
+		Availability struct {
+			State               string   `json:"state"`
+			Reason              string   `json:"reason"`
+			Transport           string   `json:"transport"`
+			Limitations         []string `json:"limitations"`
+			MissingCapabilities []string `json:"missing_capabilities"`
+		} `json:"availability"`
+		LastOutcome struct {
+			Result string `json:"result"`
+			Cause  string `json:"cause"`
+			Counts struct {
+				Fetched uint64 `json:"fetched"`
+				Mapped  uint64 `json:"mapped"`
+				Emitted uint64 `json:"emitted"`
+				Deduped uint64 `json:"deduped"`
+			} `json:"counts"`
+		} `json:"last_outcome"`
+	}
+	if err := json.Unmarshal(payload.Tenants[0].Collectors[0], &row); err != nil {
+		t.Fatalf("unmarshal collector row: %v", err)
+	}
+	if row.Availability.State != string(availability.StateLimited) ||
+		row.Availability.Reason != string(availability.ReasonPartialLicense) ||
+		row.Availability.Transport != string(telemetry.TransportGraph) ||
+		len(row.Availability.Limitations) != 1 ||
+		row.Availability.Limitations[0] != string(availability.LimitationRiskyUsers) ||
+		len(row.Availability.MissingCapabilities) != 1 ||
+		row.Availability.MissingCapabilities[0] != string(availability.MissingCapabilityEntraP2) {
+		t.Errorf("availability JSON = %+v, want canonical limited point", row.Availability)
+	}
+	if row.LastOutcome.Result != string(recordoutcome.ResultSuccess) ||
+		row.LastOutcome.Cause != "" ||
+		row.LastOutcome.Counts.Fetched != 4 ||
+		row.LastOutcome.Counts.Mapped != 3 ||
+		row.LastOutcome.Counts.Emitted != 2 ||
+		row.LastOutcome.Counts.Deduped != 1 {
+		t.Errorf("last_outcome JSON = %+v, want typed result/cause/counts", row.LastOutcome)
 	}
 }
 

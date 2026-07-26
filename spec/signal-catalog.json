@@ -1,5 +1,5 @@
 {
-  "package_count": 151,
+  "package_count": 152,
   "domains": [
     "defender",
     "entra",
@@ -1687,6 +1687,25 @@
       ],
       "packages": [
         "internal/collector"
+      ]
+    },
+    {
+      "name": "graph2otel.collector.availability",
+      "prometheus_name": "graph2otel_collector_availability",
+      "unit": "{collector}",
+      "kind": "gauge",
+      "description": "Current bounded availability state for each logical collector.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector",
+        "collector.transport",
+        "reason",
+        "state",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/availability"
       ]
     },
     {

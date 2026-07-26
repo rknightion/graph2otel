@@ -24,6 +24,15 @@ func TestCollectorConstants(t *testing.T) {
 	if AttrCollector != "collector" {
 		t.Errorf("AttrCollector = %q, want %q", AttrCollector, "collector")
 	}
+	if AttrCollectorTransport != "collector.transport" {
+		t.Errorf("AttrCollectorTransport = %q, want %q", AttrCollectorTransport, "collector.transport")
+	}
+	if AttrState != "state" {
+		t.Errorf("AttrState = %q, want %q", AttrState, "state")
+	}
+	if AttrReason != "reason" {
+		t.Errorf("AttrReason = %q, want %q", AttrReason, "reason")
+	}
 	if AttrTenantID != "tenant_id" {
 		t.Errorf("AttrTenantID = %q, want %q", AttrTenantID, "tenant_id")
 	}

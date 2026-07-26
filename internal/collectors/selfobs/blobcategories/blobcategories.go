@@ -37,6 +37,7 @@ package blobcategories
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -87,8 +88,8 @@ type Collector struct {
 
 // New builds the census. containerNames is the set of Azure Storage container
 // names every registered blob collector reads (collectors.BlobContainers).
-// A nil arm — the tenant has no blob ingest configured — turns Collect into a
-// no-op, since there is nothing to census.
+// The composition root registers this collector only when blob ingest is
+// configured, so a nil ARM reader is a wiring fault and Collect fails loudly.
 func New(arm collectors.ARMReader, containerNames []string, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
@@ -131,14 +132,15 @@ type logCategory struct {
 }
 
 // Collect reads the aadiam diagnostic settings and emits the census gauge plus
-// one twin per category. A nil ARM reader (no blob ingest) is a no-op.
+// one twin per category.
 func (c *Collector) Collect(
 	ctx context.Context,
 	e telemetry.Emitter,
 	outcomes *recordoutcome.Recorder,
 ) error {
 	if c.arm == nil {
-		return nil
+		outcomes.Cause(recordoutcome.CauseSourceError)
+		return errors.New("blob category census: nil ARM reader")
 	}
 	body, err := c.arm.RawGet(ctx, aadiamURL)
 	if err != nil {

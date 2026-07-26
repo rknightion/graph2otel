@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 
+	"github.com/rknightion/graph2otel/internal/availability"
 	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
@@ -35,7 +36,8 @@ type Scheduler struct {
 	logger        *slog.Logger
 	selfObs       bool
 	status        *StatusTracker // optional; records per-collector run outcomes for the status page
-	tracer        trace.Tracer   // optional; emits one root span per scrape cycle
+	availability  *availability.Tracker
+	tracer        trace.Tracer // optional; emits one root span per scrape cycle
 	// tenant, when non-empty, is the tenant ID this Scheduler instance polls.
 	// graph2otel runs one Scheduler per configured tenant, so this both (a)
 	// labels every self-obs metric with semconv.AttrTenantID alongside
@@ -75,6 +77,13 @@ func WithSelfObs(enabled bool) SchedulerOption { return func(s *Scheduler) { s.s
 // every tick regardless of WithSelfObs, so the status page works even when
 // scrape metrics are suppressed.
 func WithStatusTracker(t *StatusTracker) SchedulerOption { return func(s *Scheduler) { s.status = t } }
+
+// WithAvailabilityTracker records every completed non-shutdown collector run
+// into t. Snapshot emission is owned by the tenant lifecycle rather than the
+// scheduler tick, so a run update does not publish an incomplete tenant set.
+func WithAvailabilityTracker(t *availability.Tracker) SchedulerOption {
+	return func(s *Scheduler) { s.availability = t }
+}
 
 // WithTracer sets the tracer used to emit one root span per scrape cycle. A nil
 // tracer (the default) disables span emission via a package-level no-op tracer,
@@ -258,6 +267,10 @@ func (s *Scheduler) runTick(ctx context.Context, e Entry, lastSuccess *time.Time
 			// still recorded, since that's a per-run trace rather than a
 			// persisted last-sample metric).
 			return
+		}
+
+		if s.availability != nil {
+			s.availability.Record(e.Collector.Name(), outcome)
 		}
 
 		duration := time.Since(started)

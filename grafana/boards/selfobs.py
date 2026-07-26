@@ -25,7 +25,7 @@ DESCRIPTION = (
     "edit grafana/boards/selfobs.py, not this JSON."
 )
 TAGS = ["graph2otel", "self-observability", "generated"]
-TENANT_METRIC = SELF_OBS["graph2otel.scrape.success"].prom
+TENANT_METRIC = SELF_OBS["graph2otel.collector.availability"].prom
 
 SECTIONS = [
     ("Blob ingest health and API drift", [
@@ -45,6 +45,7 @@ SECTIONS = [
 
 # Prometheus names are read from the generated catalog rather than typed here.
 SCRAPE_SUCCESS = SELF_OBS["graph2otel.scrape.success"].prom
+COLLECTOR_AVAILABILITY = SELF_OBS["graph2otel.collector.availability"].prom
 SCRAPE_DURATION = SELF_OBS["graph2otel.scrape.duration"].prom
 SCRAPE_STALENESS = SELF_OBS["graph2otel.scrape.staleness"].prom
 SCRAPE_LAST = SELF_OBS["graph2otel.scrape.last_timestamp"].prom
@@ -88,6 +89,7 @@ O365_5XX = SELF_OBS["graph2otel.o365activity.http_5xx"].prom
 O365_THROTTLE = SELF_OBS["graph2otel.o365activity.throttle.count"].prom
 
 _SEL = "{" + TENANT_SEL + ', collector=~"$collector"}'
+_AVAIL_SEL = '{tenant_id=~"$tenant",collector=~"$collector"}'
 _T = "{" + TENANT_SEL + "}"
 
 
@@ -98,10 +100,59 @@ def extra(b):
         "refresh": 2, "includeAll": True, "multi": True, "sort": 1,
         "current": {}, "options": [], "hide": 0,
         "query": {"qryType": 1,
-                  "query": f'label_values({SCRAPE_SUCCESS}{{tenant_id=~"$tenant"}}, collector)',
+                  "query": f'label_values({COLLECTOR_AVAILABILITY}{{tenant_id=~"$tenant"}}, collector)',
                   "refId": "collector"},
-        "definition": f'label_values({SCRAPE_SUCCESS}{{tenant_id=~"$tenant"}}, collector)',
+        "definition": f'label_values({COLLECTOR_AVAILABILITY}{{tenant_id=~"$tenant"}}, collector)',
     })
+    b.row("Collector availability")
+    availability = f"{COLLECTOR_AVAILABILITY}{_AVAIL_SEL}"
+    b.raw(
+        "Current collector availability",
+        [f"max by (tenant_id, collector, collector_transport, state, reason) ({availability})"],
+        viz="table", w=24, h=12,
+        desc="One current value-1 row per tenant and logical collector. collector_transport is "
+             "the resolved collector transport, not the log-record ingest_transport.",
+    )
+    b.raw(
+        "Collector availability by state",
+        [f"count by (tenant_id, state) ({availability})"],
+        viz="bargauge", w=12, h=7,
+        desc="Current logical-collector counts by bounded availability state. This is a "
+             "snapshot, not a scrape-success or record-throughput count.",
+    )
+    b.raw(
+        "Intentional collector absence",
+        [f'max by (tenant_id, collector, collector_transport, state, reason) '
+         f'({COLLECTOR_AVAILABILITY}{{{TENANT_SEL}, collector=~"$collector", state=~"disabled|covered"}})'],
+        viz="table", w=12, h=7,
+        desc="Disabled and covered collectors are intentional absence, shown separately "
+             "from runtime or startup failures.",
+    )
+    b.raw(
+        "Collector availability failures",
+        [f'max by (tenant_id, collector, collector_transport, state, reason) '
+         f'({COLLECTOR_AVAILABILITY}{{{TENANT_SEL}, collector=~"$collector", '
+         f'state=~"degraded|failed|startup_failed"}})',
+         f'max by (tenant_id, collector, collector_transport, state, reason) '
+         f'({COLLECTOR_AVAILABILITY}{{{TENANT_SEL}, collector=~"$collector", '
+         f'state="blocked", reason="permission_denied"}})'],
+        viz="table", w=12, h=7,
+        desc="Current permission-denied blocks, degraded runs, failed runs, and startup failures. "
+             "This is deliberately separate from configured absence and subscription limitations.",
+    )
+    b.raw(
+        "Subscription and capability limitations",
+        [f'max by (tenant_id, collector, collector_transport, state, reason) '
+         f'({COLLECTOR_AVAILABILITY}{{{TENANT_SEL}, collector=~"$collector", '
+         f'state="limited", reason="partial_license"}})',
+         f'max by (tenant_id, collector, collector_transport, state, reason) '
+         f'({COLLECTOR_AVAILABILITY}{{{TENANT_SEL}, collector=~"$collector", '
+         f'state="blocked", reason="license_unavailable"}})'],
+        viz="table", w=12, h=7,
+        desc="This non-failure view shows subscription and capability limitations: a partial license can "
+             "keep a collector running with a reduced capability set, while an unavailable license blocks it. "
+             "Exact omitted capabilities are available from the admin status, not labels.",
+    )
     b.row("Collector health (generated signal catalog)")
     b.raw("Scrape success by collector", [f"{SCRAPE_SUCCESS}{_SEL}"],
           desc="1 when the last reconciled run was empty or successful; 0 when it was "

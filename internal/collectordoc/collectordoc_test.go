@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rknightion/graph2otel/internal/availability"
 	"github.com/rknightion/graph2otel/internal/blobpipeline"
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/telemetry"
@@ -28,6 +29,14 @@ type fakeFull struct{ fakeSnapshot }
 func (fakeFull) Experimental() bool                     { return true }
 func (fakeFull) RequiredCapability() license.Capability { return license.CapEntraP2 }
 func (fakeFull) RequiredPermissions() []string          { return []string{"B.Read.All", "A.Read.All"} }
+
+type fakeHighVolume struct{ fakeSnapshot }
+
+func (fakeHighVolume) HighVolume() bool { return true }
+
+type fakeTransported struct{ fakeSnapshot }
+
+func (fakeTransported) IngestTransport() telemetry.Transport { return telemetry.TransportBlob }
 
 // fakeWindow adds Lag, which is what makes RowFor classify the window columns.
 type fakeWindow struct {
@@ -93,6 +102,63 @@ func TestRowForAbsentOptionalInterfaces(t *testing.T) {
 	}
 	if row.Domain != "Intune" {
 		t.Errorf("Domain = %q", row.Domain)
+	}
+}
+
+func TestRowForReadsIntrinsicTransportAndHighVolumeGate(t *testing.T) {
+	row, err := RowFor(fakeHighVolume{fakeSnapshot{name: "m365.firehose", iv: time.Hour}}, KindWindow, Annotation{})
+	if err != nil {
+		t.Fatalf("RowFor: %v", err)
+	}
+	if row.Transport != telemetry.TransportGraph {
+		t.Errorf("Transport = %q, want %q", row.Transport, telemetry.TransportGraph)
+	}
+	if !row.HighVolume {
+		t.Error("HighVolume not read from the collector")
+	}
+	if got := gatingCell(row); !strings.Contains(got, "high-volume opt-in") {
+		t.Errorf("gatingCell = %q, want generated high-volume opt-in fact", got)
+	}
+}
+
+func TestRowForReadsCanonicalSpecializedTransport(t *testing.T) {
+	row, err := RowFor(fakeTransported{fakeSnapshot{name: "entra.transport", iv: time.Hour}}, KindWindow, Annotation{})
+	if err != nil {
+		t.Fatalf("RowFor: %v", err)
+	}
+	if row.Transport != telemetry.TransportBlob {
+		t.Errorf("Transport = %q, want %q", row.Transport, telemetry.TransportBlob)
+	}
+}
+
+func TestAvailabilityContractIsGeneratedFromCanonicalEnums(t *testing.T) {
+	out := AvailabilityContract()
+	for _, state := range availability.States() {
+		if !strings.Contains(out, "`"+string(state)+"`") {
+			t.Errorf("contract missing state %q:\n%s", state, out)
+		}
+	}
+	for _, reason := range availability.Reasons() {
+		if !strings.Contains(out, "`"+string(reason)+"`") {
+			t.Errorf("contract missing reason %q:\n%s", reason, out)
+		}
+	}
+	for _, state := range availability.States() {
+		for _, reason := range availability.Reasons() {
+			if availability.ValidPair(state, reason) && !strings.Contains(out, "`"+string(state)+"` | `"+string(reason)+"`") {
+				t.Errorf("contract missing allowed pair %q/%q:\n%s", state, reason, out)
+			}
+		}
+	}
+	for _, want := range []string{
+		"`graph2otel.collector.availability`", "`graph2otel_collector_availability`",
+		"`healthy_empty`", "successful zero-row source response", "non-alerting",
+		"`collector.transport`", "`ingest_transport`",
+		"`limitations`", "`missing_capabilities`",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("contract missing %q:\n%s", want, out)
+		}
 	}
 }
 
@@ -163,11 +229,28 @@ func TestGatingCellRendersRegistryFactsAndHandNote(t *testing.T) {
 		{"note only", Row{Ann: Annotation{Gating: "half of it needs P2"}}, "half of it needs P2"},
 		{"fact plus note", Row{Capability: license.CapEntraP1, Ann: Annotation{Gating: "staleness slice only"}},
 			"`needs-license/entra_p1` (staleness slice only)"},
+		{"canonical partial requirements", Row{Name: "entra.risk"},
+			"`partial-license/risky_users:entra_p2`"},
 	}
 	for _, tc := range cases {
 		if got := gatingCell(tc.row); got != tc.want {
 			t.Errorf("%s: gatingCell = %q, want %q", tc.name, got, tc.want)
 		}
+	}
+}
+
+func TestGatingCellRiskDoesNotClaimWorkloadIdentityCapabilityGate(t *testing.T) {
+	got := gatingCell(Row{
+		Name: "entra.risk",
+		Ann: Annotation{
+			Gating: "risky service principals are attempted unconditionally; endpoint 403 sets runtime permission state",
+		},
+	})
+	if !strings.Contains(got, "`partial-license/risky_users:entra_p2`") {
+		t.Fatalf("gatingCell(entra.risk) = %q, want generated risky-users requirement", got)
+	}
+	if strings.Contains(got, "workload_identities_premium") {
+		t.Fatalf("gatingCell(entra.risk) = %q, must not claim workload identity capability gating", got)
 	}
 }
 

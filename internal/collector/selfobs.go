@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/rknightion/graph2otel/internal/availability"
 	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
@@ -15,6 +16,9 @@ import (
 // plus semconv.AttrTenantID when the owning Scheduler was configured with
 // WithTenant, letting operators see scrape health per data source per tenant.
 const (
+	// MetricCollectorAvailability is the complete tenant-scoped snapshot of
+	// bounded current state for every configured logical collector.
+	MetricCollectorAvailability = availability.MetricCollectorAvailability
 	// MetricScrapeDuration is a gauge of the wall-clock seconds a collector run
 	// took (the snapshot Collect or window CollectWindow call).
 	MetricScrapeDuration = "graph2otel.scrape.duration"

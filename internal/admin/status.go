@@ -6,8 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rknightion/graph2otel/internal/availability"
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/graphclient"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
+	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
 // Health states surfaced on the admin status page.
@@ -98,6 +101,7 @@ type CollectorSource struct {
 	TenantID       string
 	Registry       *collector.Registry
 	Status         *collector.StatusTracker
+	Availability   *availability.Tracker
 	StartupFailure StartupFailureCode
 }
 
@@ -234,6 +238,14 @@ type RateLimitStatus struct {
 // registered collector's latest run state, or a skipped collector's reason.
 type CollectorStatus struct {
 	Name string `json:"name"`
+	// Availability is the canonical bounded current state shared with OTLP.
+	// It is present whenever the composition root supplies an availability
+	// tracker. The legacy compatibility fields below are projected from this
+	// typed value rather than from free-form errors or skip prose.
+	Availability *CollectorAvailability `json:"availability,omitempty"`
+	// LastOutcome is the immutable bounded record accounting summary for the
+	// latest completed run. It is absent until a run exists.
+	LastOutcome *CollectorLastOutcome `json:"last_outcome,omitempty"`
 	// Enabled is false for a collector the composition root chose not to
 	// register at all; SkipReason then explains why (e.g. "requires P2").
 	Enabled bool `json:"enabled"`
@@ -295,6 +307,37 @@ type CollectorStatus struct {
 	// first, aligned), feeding a duration sparkline and outcome strip.
 	DurationMsSeries []int64 `json:"duration_ms_series,omitempty"`
 	OutcomeSeries    []bool  `json:"outcome_series,omitempty"`
+}
+
+// CollectorAvailability is the admin JSON projection of availability.Point.
+// Bounded detail slices are always present in JSON (empty arrays when none
+// apply).
+type CollectorAvailability struct {
+	State               availability.State               `json:"state"`
+	Reason              availability.Reason              `json:"reason"`
+	Transport           telemetry.Transport              `json:"transport"`
+	Limitations         []availability.Limitation        `json:"limitations"`
+	MissingCapabilities []availability.MissingCapability `json:"missing_capabilities"`
+}
+
+// CollectorLastOutcome is the bounded latest-run payload exposed by admin.
+type CollectorLastOutcome struct {
+	Result recordoutcome.Result `json:"result"`
+	Cause  recordoutcome.Cause  `json:"cause"`
+	Counts OutcomeCounts        `json:"counts"`
+}
+
+// OutcomeCounts mirrors recordoutcome.Counts with an explicit stable JSON
+// contract. recordoutcome is an internal Go value and intentionally has no
+// transport tags of its own.
+type OutcomeCounts struct {
+	Fetched  uint64 `json:"fetched"`
+	Mapped   uint64 `json:"mapped"`
+	Emitted  uint64 `json:"emitted"`
+	Deduped  uint64 `json:"deduped"`
+	Filtered uint64 `json:"filtered"`
+	Dropped  uint64 `json:"dropped"`
+	Errored  uint64 `json:"errored"`
 }
 
 // Coverage names the registered twin that ships an off collector's records, and
@@ -387,6 +430,11 @@ func startupFailure(code StartupFailureCode) *TenantStartupFailure {
 func buildTenantStatuses(sources []CollectorSource, skipReasons map[SkipKey]string, now time.Time) []TenantStatus {
 	tenants := make([]TenantStatus, 0, len(sources))
 	for _, src := range sources {
+		if src.Availability != nil {
+			tenants = append(tenants, buildAvailabilityTenantStatus(src, now))
+			continue
+		}
+
 		runs := src.Status.Snapshot()
 		hist := src.Status.HistorySnapshot()
 
@@ -473,6 +521,179 @@ func buildTenantStatuses(sources []CollectorSource, skipReasons map[SkipKey]stri
 		tenants = append(tenants, ten)
 	}
 	return tenants
+}
+
+// buildAvailabilityTenantStatus joins the canonical availability census with
+// registry, durable-checkpoint, and run-history details. The tracker decides
+// which rows exist and their bounded current meaning; registry ConflictsWith
+// contributes only the legacy covered_by identity.
+func buildAvailabilityTenantStatus(src CollectorSource, now time.Time) TenantStatus {
+	runs := src.Status.Snapshot()
+	hist := src.Status.HistorySnapshot()
+
+	var entries []collector.Entry
+	if src.Registry != nil {
+		entries = src.Registry.Entries()
+	}
+	entryByName := make(map[string]collector.Entry, len(entries))
+	coveredBy := make(map[string]Coverage)
+	for _, entry := range entries {
+		name := entry.Collector.Name()
+		entryByName[name] = entry
+		if cw, ok := entry.Collector.(conflicter); ok {
+			for _, peer := range cw.ConflictsWith() {
+				coveredBy[peer] = Coverage{
+					Collector: name,
+					Transport: string(collector.TransportOf(entry.Collector)),
+				}
+			}
+		}
+	}
+
+	points := src.Availability.Snapshot()
+	rows := make([]CollectorStatus, 0, len(points))
+	for _, point := range points {
+		var interval time.Duration
+		entry, registered := entryByName[point.Collector]
+		if registered {
+			interval = entry.Interval
+		}
+		row := collectorStatusFor(point.Collector, interval, runs, hist, now)
+		row.Availability = collectorAvailabilityFrom(point)
+		row.LastOutcome = collectorLastOutcomeFrom(point.LastOutcome)
+		row.Enabled = availabilityEnabled(point)
+		row.Transport = string(point.Transport)
+		if !row.Enabled {
+			row.SkipReason = string(point.Reason)
+			row.SkipCategory = availabilitySkipCategory(point)
+		}
+		if registered {
+			row.State = collectorStateFrom(collector.CheckpointStateOf(entry.Collector), now)
+		}
+		if point.State == availability.StateCovered {
+			if coverage, ok := coveredBy[point.Collector]; ok {
+				c := coverage
+				row.CoveredBy = &c
+			}
+		}
+		rows = append(rows, row)
+	}
+
+	failure := startupFailure(src.StartupFailure)
+	tenant := TenantStatus{
+		TenantID:       src.TenantID,
+		Working:        failure == nil && src.Registry != nil && src.Status != nil && len(entries) > 0,
+		StartupFailure: failure,
+		Collectors:     rows,
+	}
+	countTenantRows(&tenant)
+	return tenant
+}
+
+func collectorAvailabilityFrom(point availability.Point) *CollectorAvailability {
+	limitations := make([]availability.Limitation, len(point.Limitations))
+	copy(limitations, point.Limitations)
+	missingCapabilities := make([]availability.MissingCapability, len(point.MissingCapabilities))
+	copy(missingCapabilities, point.MissingCapabilities)
+	return &CollectorAvailability{
+		State:               point.State,
+		Reason:              point.Reason,
+		Transport:           point.Transport,
+		Limitations:         limitations,
+		MissingCapabilities: missingCapabilities,
+	}
+}
+
+func collectorLastOutcomeFrom(summary *recordoutcome.Summary) *CollectorLastOutcome {
+	if summary == nil {
+		return nil
+	}
+	return &CollectorLastOutcome{
+		Result: summary.Result,
+		Cause:  summary.Cause,
+		Counts: OutcomeCounts{
+			Fetched:  summary.Counts.Fetched,
+			Mapped:   summary.Counts.Mapped,
+			Emitted:  summary.Counts.Emitted,
+			Deduped:  summary.Counts.Deduped,
+			Filtered: summary.Counts.Filtered,
+			Dropped:  summary.Counts.Dropped,
+			Errored:  summary.Counts.Errored,
+		},
+	}
+}
+
+// availabilityEnabled projects the legacy enabled field from the typed point.
+// A runtime permission block has a completed run and remains configured to
+// retry; a static license block has no run and remains off.
+func availabilityEnabled(point availability.Point) bool {
+	switch point.State {
+	case availability.StateDisabled, availability.StateCovered, availability.StateStartupFailed:
+		return false
+	case availability.StateBlocked:
+		return point.LastOutcome != nil
+	default:
+		return true
+	}
+}
+
+func availabilitySkipCategory(point availability.Point) string {
+	switch point.Reason {
+	case availability.ReasonLicenseUnavailable, availability.ReasonPermissionDenied:
+		return skipCatLicense
+	case availability.ReasonExperimentalNotEnabled:
+		return skipCatExperimental
+	case availability.ReasonTransportNotConfigured,
+		availability.ReasonHighVolumeNotEnabled,
+		availability.ReasonDisabledByConfig:
+		return skipCatDisabled
+	default:
+		return ""
+	}
+}
+
+func countTenantRows(tenant *TenantStatus) {
+	for _, row := range tenant.Collectors {
+		if row.Availability != nil {
+			switch {
+			case row.Availability.State == availability.StateCovered:
+				tenant.CoveredCount++
+			case row.Availability.State == availability.StateStartupFailed:
+				tenant.FailingCount++
+			case !row.Enabled:
+				tenant.SkippedCount++
+			default:
+				tenant.EnabledCount++
+				switch row.Availability.State {
+				case availability.StateStarting:
+					tenant.PendingCount++
+				case availability.StateBlocked,
+					availability.StateDegraded,
+					availability.StateFailed,
+					availability.StateStartupFailed:
+					tenant.FailingCount++
+				}
+			}
+			continue
+		}
+
+		switch {
+		case !row.Enabled:
+			if row.CoveredBy != nil {
+				tenant.CoveredCount++
+			} else {
+				tenant.SkippedCount++
+			}
+		default:
+			tenant.EnabledCount++
+			switch {
+			case !row.HasRun:
+				tenant.PendingCount++
+			case !row.LastSuccess:
+				tenant.FailingCount++
+			}
+		}
+	}
 }
 
 // attachHeadroomTrends fills each rendered throttle row's HeadroomSeries from
@@ -589,6 +810,44 @@ func deriveHealth(tenants []TenantStatus) (string, []string) {
 	for _, tenant := range tenants {
 		reasons = append(reasons, deriveTenantHealthReasons(tenant)...)
 		for _, c := range tenant.Collectors {
+			if c.Availability != nil {
+				switch c.Availability.State {
+				case availability.StateBlocked:
+					if c.Availability.Reason == availability.ReasonPermissionDenied {
+						reasons = append(reasons, fmt.Sprintf(
+							"tenant %q collector %q: %s/%s",
+							tenant.TenantID,
+							c.Name,
+							c.Availability.State,
+							c.Availability.Reason,
+						))
+					}
+				case availability.StateDegraded,
+					availability.StateFailed:
+					reasons = append(reasons, fmt.Sprintf(
+						"tenant %q collector %q: %s/%s",
+						tenant.TenantID,
+						c.Name,
+						c.Availability.State,
+						c.Availability.Reason,
+					))
+				case availability.StateStartupFailed:
+					// A tenant-level startup failure already supplies one bounded
+					// reason. Do not repeat it once per census row.
+					if tenant.StartupFailure == nil {
+						reasons = append(reasons, fmt.Sprintf(
+							"tenant %q collector %q: %s/%s",
+							tenant.TenantID,
+							c.Name,
+							c.Availability.State,
+							c.Availability.Reason,
+						))
+					}
+				case availability.StateStarting:
+					pending = append(pending, tenant.TenantID+"/"+c.Name)
+				}
+				continue
+			}
 			if !c.Enabled {
 				continue
 			}

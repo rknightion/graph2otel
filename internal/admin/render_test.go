@@ -1,8 +1,12 @@
 package admin
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/rknightion/graph2otel/internal/availability"
+	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
 // renderString renders s to HTML and fails the test on any template error.
@@ -205,6 +209,108 @@ func TestRender_TransportAndCoverage(t *testing.T) {
 	// The covered collector must NOT be dressed as a plain skip.
 	if strings.Contains(body, "skipped &mdash; beta; enable explicitly to opt in") {
 		t.Errorf("covered collector rendered as a bare skip; should read 'collected via'")
+	}
+}
+
+func TestRender_AvailabilityBadgesCoverEveryBoundedStateAndGenericReason(t *testing.T) {
+	cases := []struct {
+		state availability.State
+		class string
+	}{
+		{availability.StateDisabled, "muted"},
+		{availability.StateBlocked, "err"},
+		{availability.StateCovered, "info"},
+		{availability.StateStarting, "pending"},
+		{availability.StateHealthyEmpty, "ok"},
+		{availability.StateHealthy, "ok"},
+		{availability.StateLimited, "warn"},
+		{availability.StateDegraded, "warn"},
+		{availability.StateFailed, "err"},
+		{availability.StateStartupFailed, "err"},
+	}
+	rows := make([]CollectorStatus, 0, len(cases))
+	for _, tc := range cases {
+		rows = append(rows, CollectorStatus{
+			Name:      "collector." + string(tc.state),
+			Enabled:   tc.state != availability.StateDisabled && tc.state != availability.StateCovered,
+			Transport: string(telemetry.TransportGraph),
+			Availability: &CollectorAvailability{
+				State:       tc.state,
+				Reason:      availability.Reason("future_bounded_reason"),
+				Transport:   telemetry.TransportGraph,
+				Limitations: []availability.Limitation{"bounded_capability"},
+			},
+		})
+	}
+	body := renderString(t, Status{
+		Service: ServiceInfo{Version: "0.1.0"},
+		Health:  healthHealthy,
+		Tenants: []TenantStatus{{
+			TenantID:   "tenant-a",
+			Collectors: rows,
+		}},
+	})
+
+	for _, tc := range cases {
+		want := fmt.Sprintf(`class="badge %s">%s</span>`, tc.class, tc.state)
+		if !strings.Contains(body, want) {
+			t.Errorf("page missing bounded %q state badge %q", tc.state, want)
+		}
+	}
+	if got := strings.Count(body, "future_bounded_reason"); got < len(cases) {
+		t.Errorf("generic bounded reason rendered %d times, want at least %d", got, len(cases))
+	}
+	if !strings.Contains(body, "bounded_capability") {
+		t.Errorf("page missing typed availability limitation")
+	}
+	if !strings.Contains(body, `title="resolved collector transport"`) {
+		t.Errorf("page missing resolved collector transport title")
+	}
+	if strings.Contains(body, `title="ingest transport"`) {
+		t.Errorf("canonical availability page labels collector transport as ingest transport")
+	}
+}
+
+func TestRender_CanonicalCoveredShowsResolvedAndCoveringTransports(t *testing.T) {
+	body := renderString(t, Status{
+		Service: ServiceInfo{Version: "0.1.0"},
+		Health:  healthHealthy,
+		Tenants: []TenantStatus{{
+			TenantID: "tenant-a",
+			Collectors: []CollectorStatus{{
+				Name:      "covered-peer",
+				Enabled:   false,
+				Transport: string(telemetry.TransportGraph),
+				Availability: &CollectorAvailability{
+					State:     availability.StateCovered,
+					Reason:    availability.ReasonCoveredByAlternative,
+					Transport: telemetry.TransportGraph,
+				},
+				CoveredBy: &Coverage{
+					Collector: "blob-twin",
+					Transport: string(telemetry.TransportBlob),
+				},
+			}},
+		}},
+	})
+
+	for _, want := range []string{
+		`title="resolved collector transport">via graph</span>`,
+		`collected via <code>blob-twin</code>`,
+		`title="covering collector transport">(blob)</span>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("server-rendered covered row missing %q", want)
+		}
+	}
+	// The template also carries the refresh renderer. One occurrence belongs
+	// to the server row and one to collectorRow's covered branch; the existing
+	// active and skipped refresh branches contribute the other two.
+	if got := strings.Count(body, "resolved collector transport"); got < 4 {
+		t.Errorf("resolved collector transport markers = %d, want server and all refresh branches", got)
+	}
+	if !strings.Contains(body, "'covering collector transport'") {
+		t.Errorf("refresh-rendered covered row lacks a distinct covering collector transport label")
 	}
 }
 

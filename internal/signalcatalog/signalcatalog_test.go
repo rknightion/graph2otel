@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -167,6 +168,33 @@ func TestSelfObservabilityScopeIsGeneratedAndProcessSetIsExact(t *testing.T) {
 			t.Errorf("process-scoped self-observability metrics missing %q: got %v", name, gotProcess)
 		}
 	}
+}
+
+func TestCollectorAvailabilityCatalogContract(t *testing.T) {
+	cat, err := Load(repoRoot)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	for _, metric := range cat.Metrics {
+		if metric.Name != "graph2otel.collector.availability" {
+			continue
+		}
+		if metric.PrometheusName != "graph2otel_collector_availability" ||
+			metric.Unit != "{collector}" ||
+			metric.Kind != "gauge" ||
+			!metric.Additive {
+			t.Errorf("availability metric contract = %+v", metric)
+		}
+		wantAttrs := []string{"collector", "collector.transport", "reason", "state", "tenant_id"}
+		if !slices.Equal(metric.AttrKeys, wantAttrs) {
+			t.Errorf("availability attr keys = %v, want %v", metric.AttrKeys, wantAttrs)
+		}
+		if !slices.Equal(metric.Packages, []string{"internal/availability"}) {
+			t.Errorf("availability packages = %v, want [internal/availability]", metric.Packages)
+		}
+		return
+	}
+	t.Fatal("catalog is missing graph2otel.collector.availability")
 }
 
 // TestSignalCatalogInSync is the staleness gate: spec/signal-catalog.json is

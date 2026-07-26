@@ -1,16 +1,13 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collectordoc"
 	"github.com/rknightion/graph2otel/internal/collectors"
-	"github.com/rknightion/graph2otel/internal/exoclient"
 )
 
 // updateCollectorDoc regenerates the committed docs/collectors.md golden file
@@ -42,30 +39,6 @@ var updateCollectorDoc = flag.Bool("update", false, "rewrite generated golden fi
 // stubs for the seams a factory may condition on, and
 // TestEveryWindowFactoryIsVisibleToTheGate asserts that none of them declines
 // under them. The stubs are never called — nothing here polls anything.
-
-// inertEXO satisfies both collectors.EXOClient and the InvokeFull seam an
-// EXO-transport window collector narrows to, so a factory conditioning on either
-// constructs instead of declining. It is never invoked: the gates below only
-// read a collector's identity and declared signals.
-type inertEXO struct{}
-
-func (inertEXO) Invoke(context.Context, string, map[string]any) ([]map[string]any, error) {
-	return nil, nil
-}
-
-func (inertEXO) InvokeFull(context.Context, string, map[string]any) (exoclient.InvokeResult, error) {
-	return exoclient.InvokeResult{}, nil
-}
-
-// snapshotWindowDeps is WindowDeps with inert non-nil values for the seams a
-// window factory may decline on. Everything else stays zero — the point of the
-// snapshot is still that no collector needs a tenant to be documented.
-func snapshotWindowDeps() collectors.WindowDeps {
-	return collectors.WindowDeps{
-		EXO:   inertEXO{},
-		Store: checkpoint.NewStore(""),
-	}
-}
 
 // collectorDocFactoryVisitor is deliberately separate from runtime and
 // preflight. Extending the registration visitor with a new family therefore

@@ -12,12 +12,17 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/admin"
+	"github.com/rknightion/graph2otel/internal/availability"
 	"github.com/rknightion/graph2otel/internal/config"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/telemetrytest"
 	buildversion "github.com/rknightion/graph2otel/internal/version"
 )
 
@@ -30,6 +35,133 @@ const invalidYAML = `
 otlp:
   protocol: not-a-real-protocol
 `
+
+func TestReportAvailabilityEmitsPeriodicAndStopsWithTenantContext(t *testing.T) {
+	rec := telemetrytest.New()
+	emitter := &availabilityCountingEmitter{
+		Emitter: rec.Emitter(),
+		calls:   make(chan struct{}, 2),
+	}
+	tracker := availability.NewTracker("tenant-a", []availability.Static{{
+		Collector: "entra.domains",
+		Transport: telemetry.TransportGraph,
+		State:     availability.StateStarting,
+		Reason:    availability.ReasonNoCompletedRun,
+	}})
+	ctx, cancel := context.WithCancel(context.Background())
+	ticks := make(chan time.Time)
+	done := make(chan struct{})
+	go func() {
+		reportAvailability(ctx, tracker, emitter, ticks)
+		close(done)
+	}()
+
+	ticks <- time.Now()
+	<-emitter.calls
+	assertAvailabilityMetricReason(t, rec, availability.ReasonNoCompletedRun)
+	tracker.Record("entra.domains", recordoutcome.Summary{
+		Result: recordoutcome.ResultSuccess,
+	})
+	ticks <- time.Now()
+	<-emitter.calls
+	assertAvailabilityMetricReason(t, rec, availability.ReasonSuccess)
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("availability reporter did not stop with tenant context")
+	}
+}
+
+func TestReportAvailabilityCanceledBeforeFirstTickEmitsNothing(t *testing.T) {
+	rec := telemetrytest.New()
+	tracker := availability.NewTracker("tenant-a", []availability.Static{{
+		Collector: "entra.domains",
+		Transport: telemetry.TransportGraph,
+		State:     availability.StateStarting,
+		Reason:    availability.ReasonNoCompletedRun,
+	}})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	reportAvailability(ctx, tracker, rec.Emitter(), nil)
+
+	if got := rec.MetricPoints(availability.MetricCollectorAvailability); len(got) != 0 {
+		t.Fatalf("periodic reporter emitted %d points before its first tick, want zero", len(got))
+	}
+}
+
+func TestStartTenantWorkersEmitsInitialAvailabilityExactlyOnceBeforeScheduler(t *testing.T) {
+	rec := telemetrytest.New()
+	emitter := &availabilityCountingEmitter{
+		Emitter: rec.Emitter(),
+		calls:   make(chan struct{}, 2),
+	}
+	tracker := availability.NewTracker("tenant-a", []availability.Static{{
+		Collector: "entra.domains",
+		Transport: telemetry.TransportGraph,
+		State:     availability.StateStarting,
+		Reason:    availability.ReasonNoCompletedRun,
+	}})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var wg sync.WaitGroup
+	schedulerRan := false
+
+	startTenantWorkers(
+		ctx,
+		tracker,
+		emitter,
+		&wg,
+		func(context.Context, *availability.Tracker, telemetry.Emitter) {},
+		func() {
+			schedulerRan = true
+			if got := len(emitter.calls); got != 1 {
+				t.Errorf("initial availability emissions before scheduler = %d, want exactly 1", got)
+			}
+		},
+	)
+	wg.Wait()
+
+	if !schedulerRan {
+		t.Fatal("scheduler did not run")
+	}
+	if got := len(emitter.calls); got != 1 {
+		t.Fatalf("total initial availability emissions = %d, want exactly 1", got)
+	}
+}
+
+type availabilityCountingEmitter struct {
+	telemetry.Emitter
+	calls chan struct{}
+}
+
+func (e *availabilityCountingEmitter) GaugeSnapshot(
+	name, unit, desc string,
+	points []telemetry.GaugePoint,
+) {
+	e.Emitter.GaugeSnapshot(name, unit, desc, points)
+	e.calls <- struct{}{}
+}
+
+func assertAvailabilityMetricReason(
+	t *testing.T,
+	rec *telemetrytest.Recorder,
+	want availability.Reason,
+) {
+	t.Helper()
+	points := rec.MetricPoints(availability.MetricCollectorAvailability)
+	if got, wantCount := len(points), 1; got != wantCount {
+		t.Fatalf("availability metric points = %d, want %d", got, wantCount)
+	}
+	if got := points[0].Attrs[semconv.AttrReason]; got != string(want) {
+		t.Fatalf("availability reason = %q, want %q", got, want)
+	}
+	if got := points[0].Attrs[semconv.AttrTenantID]; got != "tenant-a" {
+		t.Fatalf("availability tenant_id = %q, want tenant-a", got)
+	}
+}
 
 // adminEnabledStdoutYAML boots the telemetry provider (stdout) and the admin
 // server on an ephemeral port, exercising the M1 composition-root wiring.

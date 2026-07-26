@@ -25,10 +25,12 @@
 // shared per-tenant limiter — this collector wires no limiter itself and polls
 // slowly.
 //
-// It is deliberately NOT gated on CapWorkloadIdentitiesPremium, unlike entra.risk's
-// riskyServicePrincipals half. That was the first design and it was WRONG:
-// live-verified 2026-07-19, m7kni's license detection reports NO Workload
-// Identities Premium (entra.risk internally skips its SP half there), yet
+// Like entra.risk's riskyServicePrincipals half, it is deliberately NOT gated
+// on CapWorkloadIdentitiesPremium. A capability gate was the first design and it
+// was WRONG: live-verified 2026-07-19, m7kni's license detection reports NO
+// Workload Identities Premium, yet both risky-service-principal endpoints return
+// usable data. Both collectors therefore attempt their endpoints unconditionally;
+// endpoint reachability is authoritative. In particular,
 // GET /identityProtection/servicePrincipalRiskDetections returns 200 with real
 // detections. A capability gate would permanently hide this collector on the exact
 // tenant where it works and has data. So it polls unconditionally and degrades

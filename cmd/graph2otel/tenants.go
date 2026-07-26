@@ -13,6 +13,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/admin"
 	"github.com/rknightion/graph2otel/internal/armclient"
 	"github.com/rknightion/graph2otel/internal/auth"
+	"github.com/rknightion/graph2otel/internal/availability"
 	"github.com/rknightion/graph2otel/internal/blobpipeline"
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collector"
@@ -91,6 +92,18 @@ type tenantGraphClientBuilder func(
 	graphclient.Options,
 ) (*graphclient.Client, error)
 
+type tenantLicenseDetector func(
+	context.Context,
+	*graphclient.Client,
+) (license.Capabilities, error)
+
+type availabilityStartupFailure struct {
+	family    availabilityFamily
+	transport telemetry.Transport
+	collector string
+	reason    availability.Reason
+}
+
 func startTenants(
 	ctx context.Context,
 	cfg *config.Config,
@@ -122,14 +135,30 @@ func startTenantsWithBuilders(
 	limiter = graphclient.NewWorkloadLimiter()
 
 	for _, tenantCfg := range cfg.Tenants {
+		inventory := resolveAvailabilityInventory(cfg, tenantCfg.TenantID, nil, false)
 		ta, buildErr := buildAuth(tenantCfg)
 		if buildErr != nil || ta == nil {
 			if buildErr == nil {
 				buildErr = errors.New("credential builder returned nil TenantAuth")
 			}
 			logger.Error("building tenant credential", "tenant", tenantCfg.TenantID, "error", buildErr)
+			tracker := availability.NewTracker(
+				tenantCfg.TenantID,
+				startupFailedInventory(
+					inventory,
+					cfg,
+					tenantCfg.TenantID,
+					nil,
+					false,
+					availability.ReasonCredentialInitializationFailed,
+				),
+			)
+			if provider != nil {
+				tracker.Emit(provider.Emitter())
+			}
 			sources = append(sources, admin.CollectorSource{
 				TenantID:       tenantCfg.TenantID,
+				Availability:   tracker,
 				StartupFailure: admin.StartupFailureCredentialInitialization,
 			})
 			continue
@@ -146,6 +175,163 @@ func startTenantsWithBuilders(
 		sources = append(sources, src)
 	}
 	return sources, skips, limiter, wg.Wait, nil
+}
+
+func startupFailedInventory(
+	inventory []availability.Static,
+	cfg *config.Config,
+	tenantID string,
+	caps license.Capabilities,
+	licenseKnown bool,
+	reason availability.Reason,
+) []availability.Static {
+	candidates := availabilityCandidates()
+	selected := make([]availabilityCandidate, 0, 148)
+	statics := make([]availability.Static, 0, 148)
+	blobConfigured := tenantBlobAccountURL(cfg, tenantID) != ""
+	for start := 0; start < len(candidates); {
+		end := start + 1
+		for end < len(candidates) && candidates[end].Name == candidates[start].Name {
+			end++
+		}
+		candidate, fallback := selectAvailabilityCandidate(
+			cfg, tenantID, candidates[start:end], blobConfigured,
+		)
+		static := resolveAvailabilityStatic(
+			cfg, tenantID, candidate, caps, licenseKnown, blobConfigured, fallback,
+		)
+		if static.State != availability.StateDisabled {
+			static.State = availability.StateStartupFailed
+			static.Reason = reason
+			static.Limitations = nil
+		}
+		selected = append(selected, candidate)
+		statics = append(statics, static)
+		start = end
+	}
+	applyAvailabilityCoverage(statics, selected)
+	if len(statics) != len(inventory) {
+		panic("availability inventory: tenant-wide startup failure changed census size")
+	}
+	return statics
+}
+
+func applyAvailabilityStartupFailures(
+	inventory []availability.Static,
+	cfg *config.Config,
+	tenantID string,
+	caps license.Capabilities,
+	licenseKnown bool,
+	failures []availabilityStartupFailure,
+) {
+	if len(failures) == 0 {
+		return
+	}
+	candidates := availabilityCandidates()
+	selected := make([]availabilityCandidate, 0, len(inventory))
+	statics := make([]availability.Static, 0, len(inventory))
+	blobConfigured := tenantBlobAccountURL(cfg, tenantID) != ""
+	for start := 0; start < len(candidates); {
+		end := start + 1
+		for end < len(candidates) && candidates[end].Name == candidates[start].Name {
+			end++
+		}
+		candidate, fallback := selectAvailabilityCandidate(
+			cfg, tenantID, candidates[start:end], blobConfigured,
+		)
+		static := resolveAvailabilityStatic(
+			cfg, tenantID, candidate, caps, licenseKnown, blobConfigured, fallback,
+		)
+		for _, failure := range failures {
+			if !availabilityFailureMatches(failure, candidate) ||
+				!availabilityStaticActive(static) {
+				continue
+			}
+			static.State = availability.StateStartupFailed
+			static.Reason = failure.reason
+			static.Limitations = nil
+			break
+		}
+		selected = append(selected, candidate)
+		statics = append(statics, static)
+		start = end
+	}
+	applyAvailabilityCoverage(statics, selected)
+	if len(inventory) != len(statics) {
+		panic("availability inventory: startup override changed census size")
+	}
+	copy(inventory, statics)
+}
+
+func availabilityFailureMatches(
+	failure availabilityStartupFailure,
+	candidate availabilityCandidate,
+) bool {
+	if failure.collector != "" && failure.collector != candidate.Name {
+		return false
+	}
+	if failure.family != "" && failure.family != candidate.Family {
+		return false
+	}
+	return failure.transport == "" || failure.transport == candidate.Transport
+}
+
+// runtimeCollectorReady prevents a configured factory from silently declining
+// after its canonical census row was resolved active. Optional factories may
+// still return nil when their transport is intentionally disabled; that absence
+// is already represented by the census and needs no startup failure.
+func runtimeCollectorReady(
+	c collector.Collector,
+	expected availabilityCandidate,
+	inventory []availability.Static,
+	failures *[]availabilityStartupFailure,
+	logger *slog.Logger,
+) bool {
+	active := false
+	for _, static := range inventory {
+		if static.Collector != expected.Name || static.Transport != expected.Transport {
+			continue
+		}
+		active = availabilityStaticActive(static)
+		break
+	}
+	if !active {
+		return false
+	}
+	if c != nil && c.Name() == expected.Name {
+		return true
+	}
+	if c == nil || c.Name() != expected.Name {
+		logger.Error(
+			"configured collector factory did not construct its canonical runtime collector",
+			"collector", expected.Name,
+			"family", expected.Family,
+		)
+		*failures = append(*failures, availabilityStartupFailure{
+			family:    expected.Family,
+			transport: expected.Transport,
+			collector: expected.Name,
+			reason:    availability.ReasonTransportInitializationFailed,
+		})
+	}
+	return false
+}
+
+func validateRuntimeRegistryCensus(
+	registry *collector.Registry,
+	inventory []availability.Static,
+) error {
+	canonical := make(map[string]struct{}, len(inventory))
+	for _, static := range inventory {
+		canonical[static.Collector] = struct{}{}
+	}
+	for _, entry := range registry.Entries() {
+		name := entry.Collector.Name()
+		if _, ok := canonical[name]; !ok {
+			return fmt.Errorf("runtime collector %q is absent from the canonical availability census", name)
+		}
+	}
+	return nil
 }
 
 // setupTenant wires one tenant end to end.
@@ -165,8 +351,12 @@ func setupTenant(
 	skips map[admin.SkipKey]string,
 	wg *sync.WaitGroup,
 ) (admin.CollectorSource, error) {
-	return setupTenantWithGraphClientBuilder(
-		ctx, ta, cfg, provider, logger, limiter, skips, wg, graphclient.NewClient,
+	return setupTenantWithGraphAndLicenseBuilders(
+		ctx, ta, cfg, provider, logger, limiter, skips, wg,
+		graphclient.NewClient,
+		func(ctx context.Context, client *graphclient.Client) (license.Capabilities, error) {
+			return license.Detect(ctx, license.NewGraphSkuLister(client))
+		},
 	)
 }
 
@@ -181,8 +371,31 @@ func setupTenantWithGraphClientBuilder(
 	wg *sync.WaitGroup,
 	buildGraphClient tenantGraphClientBuilder,
 ) (admin.CollectorSource, error) {
+	return setupTenantWithGraphAndLicenseBuilders(
+		ctx, ta, cfg, provider, logger, limiter, skips, wg,
+		buildGraphClient,
+		func(ctx context.Context, client *graphclient.Client) (license.Capabilities, error) {
+			return license.Detect(ctx, license.NewGraphSkuLister(client))
+		},
+	)
+}
+
+func setupTenantWithGraphAndLicenseBuilders(
+	ctx context.Context,
+	ta *auth.TenantAuth,
+	cfg *config.Config,
+	provider *telemetry.Provider,
+	logger *slog.Logger,
+	limiter *graphclient.WorkloadLimiter,
+	skips map[admin.SkipKey]string,
+	wg *sync.WaitGroup,
+	buildGraphClient tenantGraphClientBuilder,
+	detectLicense tenantLicenseDetector,
+) (admin.CollectorSource, error) {
 	tlog := logger.With("tenant", ta.TenantID)
 	emitter := provider.Emitter()
+	inventory := resolveAvailabilityInventory(cfg, ta.TenantID, nil, false)
+	var availabilityFailures []availabilityStartupFailure
 
 	gc, err := buildGraphClient(ctx, ta, graphclient.Options{
 		Emitter:  emitter,
@@ -191,8 +404,21 @@ func setupTenantWithGraphClientBuilder(
 	})
 	if err != nil {
 		tlog.Error("building Graph client", "error", err)
+		tracker := availability.NewTracker(
+			ta.TenantID,
+			startupFailedInventory(
+				inventory,
+				cfg,
+				ta.TenantID,
+				nil,
+				false,
+				availability.ReasonGraphClientInitializationFailed,
+			),
+		)
+		tracker.Emit(emitter)
 		return admin.CollectorSource{
 			TenantID:       ta.TenantID,
+			Availability:   tracker,
 			StartupFailure: admin.StartupFailureGraphClientInitialization,
 		}, nil
 	}
@@ -200,10 +426,12 @@ func setupTenantWithGraphClientBuilder(
 	// License detection is best-effort: on failure, proceed with no premium
 	// capabilities (gated collectors skip, ungated collectors still run) rather
 	// than taking the tenant down.
-	caps, err := license.Detect(ctx, license.NewGraphSkuLister(gc))
+	caps, err := detectLicense(ctx, gc)
+	licenseKnown := err == nil
 	if err != nil {
 		tlog.Warn("license detection failed; proceeding with base tier", "error", err)
 	}
+	inventory = resolveAvailabilityInventory(cfg, ta.TenantID, caps, licenseKnown)
 	license.EmitLicenseTier(emitter, ta.TenantID, caps)
 
 	registry := collector.NewRegistry()
@@ -257,7 +485,8 @@ func setupTenantWithGraphClientBuilder(
 	// on the ARM control plane (authorized by the poller's Entra roles, not Azure
 	// RBAC) and diffs it against the containers graph2otel's blob collectors read.
 	// Only wired when blob ingest is configured — there is nothing to census
-	// otherwise, and a nil ARM turns the census into a no-op. The container set is
+	// otherwise, and a nil ARM is treated as a composition-root wiring failure.
+	// The container set is
 	// the same one every blob collector declares (BlobContainers introspects the
 	// registry), so a new blob collector is counted the moment it is registered.
 	if blobConfigured {
@@ -265,7 +494,17 @@ func setupTenantWithGraphClientBuilder(
 		deps.BlobContainerNames = collectors.BlobContainers(ta.TenantID, tlog)
 	}
 	for _, factory := range paths.snapshot {
+		expected := newAvailabilityCandidate(
+			factory(collectors.Deps{}),
+			availabilityFamilySnapshot,
+		)
 		c := factory(deps)
+		if !runtimeCollectorReady(c, expected, inventory, &availabilityFailures, tlog) {
+			continue
+		}
+		if c.Name() == "graph2otel.blob_categories" && !blobConfigured {
+			continue
+		}
 		polledNames[c.Name()] = true
 		if interval, ok := gateCollector(c, ta, cfg, caps, tlog, skips); ok {
 			registry.Register(c, interval)
@@ -305,8 +544,14 @@ func setupTenantWithGraphClientBuilder(
 		SelfClientID: wClientID,
 	}
 	for _, wf := range paths.window {
+		expected := newAvailabilityCandidate(
+			wf(snapshotWindowDeps()).Collector,
+			availabilityFamilyWindow,
+		)
 		rw := wf(wdeps)
-		if rw.Collector == nil {
+		if !runtimeCollectorReady(
+			rw.Collector, expected, inventory, &availabilityFailures, tlog,
+		) {
 			continue
 		}
 		wname := rw.Collector.Name()
@@ -333,19 +578,52 @@ func setupTenantWithGraphClientBuilder(
 	// for at all. Configuring blob_ingest.account_url IS the opt-in: a tenant
 	// that has provisioned no storage account registers none of these, so a
 	// default deployment is untouched.
-	registerBlobCollectors(cfg, ta, caps, store, tlog, registry, skips, polledNames, paths.blob)
+	if reason := registerBlobCollectors(
+		cfg, ta, caps, store, tlog, registry, skips, polledNames, paths.blob,
+		func(accountURL string, ta *auth.TenantAuth) (blobpipeline.Source, error) {
+			return blobpipeline.NewAzureSource(accountURL, ta.Cred)
+		},
+		inventory,
+		&availabilityFailures,
+	); reason != "" {
+		clear(deps.SuppressedTwins)
+		availabilityFailures = append(availabilityFailures, availabilityStartupFailure{
+			family: availabilityFamilyBlob,
+			reason: reason,
+		})
+	}
 
 	// O365 Management Activity API collectors (#100) — the second non-Graph
 	// first-party API. Unlike blob ingest this needs no infrastructure opt-in:
 	// the tenant's existing credential just requests a different audience, so
 	// these are default-on.
-	registerO365Collectors(cfg, ta, caps, store, tlog, emitter, registry, skips, paths.o365)
+	if reason := registerO365Collectors(
+		cfg, ta, caps, store, tlog, emitter, registry, skips, paths.o365,
+		o365activityclient.NewClient,
+		inventory,
+		&availabilityFailures,
+	); reason != "" {
+		availabilityFailures = append(availabilityFailures, availabilityStartupFailure{
+			family: availabilityFamilyO365,
+			reason: reason,
+		})
+	}
 
 	// MDCA Cloud Discovery collectors (#145) — the FIFTH registration path and
 	// the one non-Graph, non-poller signal. Opt-in like blob ingest: setting the
 	// tenant's mdca.portal_url is the switch, so a tenant with no mdca block
 	// registers none of these.
-	registerMDCACollectors(cfg, ta, caps, store, tlog, emitter, registry, skips, paths.mdca)
+	if reason := registerMDCACollectors(
+		cfg, ta, caps, store, tlog, emitter, registry, skips, paths.mdca,
+		mdcaclient.NewClient,
+		inventory,
+		&availabilityFailures,
+	); reason != "" {
+		availabilityFailures = append(availabilityFailures, availabilityStartupFailure{
+			family: availabilityFamilyMDCA,
+			reason: reason,
+		})
+	}
 
 	// Exchange Online admin API collectors (#233) — the SIXTH registration path
 	// and the fourth first-party API. Opt-in like blob ingest and MDCA, but for
@@ -353,7 +631,16 @@ func setupTenantWithGraphClientBuilder(
 	// (an app role AND an Entra directory role) that graph2otel cannot detect in
 	// advance and that most tenants will not have, so the switch is
 	// exchange_online.enabled rather than the presence of a URL or token.
-	registerEXOCollectors(cfg, ta, caps, tlog, exoClient, exoBuildErr, registry, skips, paths.exo)
+	if reason := registerEXOCollectors(
+		cfg, ta, caps, tlog, exoClient, exoBuildErr, registry, skips, paths.exo,
+		inventory,
+		&availabilityFailures,
+	); reason != "" {
+		availabilityFailures = append(availabilityFailures, availabilityStartupFailure{
+			family: availabilityFamilyEXO,
+			reason: reason,
+		})
+	}
 
 	// Advanced-hunting collectors (#249) — the SEVENTH registration path. The
 	// DeviceTvm* threat-and-vulnerability-management posture, reached over the
@@ -363,7 +650,17 @@ func setupTenantWithGraphClientBuilder(
 	// every query draws on a per-tenant advanced-hunting CPU budget shared with
 	// humans in the Defender portal (#106), so an operator turns it on
 	// deliberately.
-	registerHuntCollectors(cfg, ta, caps, tlog, emitter, registry, skips, paths.hunt)
+	if reason := registerHuntCollectors(
+		cfg, ta, caps, tlog, emitter, registry, skips, paths.hunt,
+		huntclient.NewClient,
+		inventory,
+		&availabilityFailures,
+	); reason != "" {
+		availabilityFailures = append(availabilityFailures, availabilityStartupFailure{
+			family: availabilityFamilyHunt,
+			reason: reason,
+		})
+	}
 
 	// Transport mutual-exclusion, checked AFTER every registration path above
 	// and before anything is scheduled (#144). Position is load-bearing: run
@@ -382,7 +679,14 @@ func setupTenantWithGraphClientBuilder(
 		return admin.CollectorSource{}, fmt.Errorf("tenant %s: %w", ta.TenantID, err)
 	}
 
+	applyAvailabilityStartupFailures(
+		inventory, cfg, ta.TenantID, caps, licenseKnown, availabilityFailures,
+	)
+	if err := validateRuntimeRegistryCensus(registry, inventory); err != nil {
+		return admin.CollectorSource{}, fmt.Errorf("tenant %s: %w", ta.TenantID, err)
+	}
 	status := collector.NewStatusTracker()
+	availabilityTracker := availability.NewTracker(ta.TenantID, inventory)
 	// The transport baseline (#141). Every collector receives its emitter from
 	// the Scheduler, so this is the one seam that reaches all of them — including
 	// the SnapshotCollector log twins (entra/risk being the reference shape) that
@@ -413,14 +717,25 @@ func setupTenantWithGraphClientBuilder(
 		collector.NewMemoryStore(),
 		collector.WithTenant(ta.TenantID),
 		collector.WithStatusTracker(status),
+		collector.WithAvailabilityTracker(availabilityTracker),
 		collector.WithLogger(tlog),
 	)
-	wg.Go(func() {
-		_ = sched.Run(ctx, registry)
-	})
+	startTenantWorkers(
+		ctx,
+		availabilityTracker,
+		emitter,
+		wg,
+		runPeriodicAvailability,
+		func() { _ = sched.Run(ctx, registry) },
+	)
 
 	tlog.Info("tenant started", "collectors", len(registry.Entries()))
-	return admin.CollectorSource{TenantID: ta.TenantID, Registry: registry, Status: status}, nil
+	return admin.CollectorSource{
+		TenantID:     ta.TenantID,
+		Registry:     registry,
+		Status:       status,
+		Availability: availabilityTracker,
+	}, nil
 }
 
 // checkRegistryConflicts refuses a tenant whose enabled collector set contains
@@ -506,21 +821,25 @@ func registerBlobCollectors(
 	skips map[admin.SkipKey]string,
 	polledNames map[string]bool,
 	blobFactories []collectors.BlobFactory,
-) {
+	buildSource func(string, *auth.TenantAuth) (blobpipeline.Source, error),
+	inventory []availability.Static,
+	failures *[]availabilityStartupFailure,
+) availability.Reason {
 	accountURL := tenantBlobAccountURL(cfg, ta.TenantID)
 	if accountURL == "" {
-		return
+		return ""
 	}
 
-	src, err := blobpipeline.NewAzureSource(accountURL, ta.Cred)
+	src, err := buildSource(accountURL, ta)
 	if err != nil {
 		tlog.Error("blob ingest disabled: building the storage source failed",
 			"account_url", accountURL, "error", err)
 		for _, bf := range blobFactories {
 			c := bf(collectors.BlobDeps{TenantID: ta.TenantID, Logger: tlog, Store: store})
-			skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] = "blob ingest unavailable: " + err.Error()
+			skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] =
+				"blob transport initialization failed"
 		}
-		return
+		return availability.ReasonTransportInitializationFailed
 	}
 
 	excludeSelf, clientID := tenantExcludeSelf(cfg, ta.TenantID)
@@ -542,7 +861,14 @@ func registerBlobCollectors(
 		MetricRecencyWindow: cfg.BlobMetricRecencyWindow(ta.TenantID),
 	}
 	for _, bf := range blobFactories {
+		expected := newAvailabilityCandidate(
+			bf(collectors.BlobDeps{}),
+			availabilityFamilyBlob,
+		)
 		c := bf(bdeps)
+		if !runtimeCollectorReady(c, expected, inventory, failures, tlog) {
+			continue
+		}
 		// A blob collector whose name matches a polled collector is that
 		// collector's second TRANSPORT (#135 group D): register it only when
 		// source=blob, so it and the polled twin are never both active. A
@@ -555,6 +881,7 @@ func registerBlobCollectors(
 			registry.Register(c, interval)
 		}
 	}
+	return ""
 }
 
 // registerO365Collectors wires the tenant's Office 365 Management Activity API
@@ -582,15 +909,22 @@ func registerO365Collectors(
 	registry *collector.Registry,
 	skips map[admin.SkipKey]string,
 	o365Factories []collectors.O365Factory,
-) {
+	buildClient func(*auth.TenantAuth, o365activityclient.Options) (*o365activityclient.Client, error),
+	inventory []availability.Static,
+	failures *[]availabilityStartupFailure,
+) availability.Reason {
 	types, err := tenantO365ContentTypes(cfg, ta.TenantID)
 	if err != nil {
 		tlog.Error("o365 activity disabled: invalid content_types", "error", err)
-		recordO365Skips(store, ta, tlog, skips, "o365 activity unavailable: "+err.Error(), o365Factories)
-		return
+		recordO365Skips(
+			store, ta, tlog, skips,
+			"o365 activity transport configuration is invalid",
+			o365Factories,
+		)
+		return availability.ReasonInvalidTransportConfiguration
 	}
 
-	client, err := o365activityclient.NewClient(ta, o365activityclient.Options{
+	client, err := buildClient(ta, o365activityclient.Options{
 		Emitter: emitter,
 		// PublisherIdentifier is the tenant's OWN GUID, deliberately. Microsoft's
 		// reference calls it "the tenant GUID of the vendor coding against the
@@ -608,8 +942,12 @@ func registerO365Collectors(
 	})
 	if err != nil {
 		tlog.Error("o365 activity disabled: building the client failed", "error", err)
-		recordO365Skips(store, ta, tlog, skips, "o365 activity unavailable: "+err.Error(), o365Factories)
-		return
+		recordO365Skips(
+			store, ta, tlog, skips,
+			"o365 activity transport initialization failed",
+			o365Factories,
+		)
+		return availability.ReasonTransportInitializationFailed
 	}
 
 	odeps := collectors.O365Deps{
@@ -620,14 +958,21 @@ func registerO365Collectors(
 		Store:        store,
 	}
 	for _, of := range o365Factories {
+		expected := newAvailabilityCandidate(
+			of(collectors.O365Deps{}).Collector,
+			availabilityFamilyO365,
+		)
 		rw := of(odeps)
-		if rw.Collector == nil {
+		if !runtimeCollectorReady(
+			rw.Collector, expected, inventory, failures, tlog,
+		) {
 			continue
 		}
 		if interval, ok := gateCollector(rw.Collector, ta, cfg, caps, tlog, skips); ok {
 			registry.RegisterWindow(rw.Collector, interval, initialLookback(cfg, rw), rw.MaxWindow)
 		}
 	}
+	return ""
 }
 
 // registerMDCACollectors wires the tenant's MDCA Cloud Discovery collectors
@@ -651,19 +996,22 @@ func registerMDCACollectors(
 	registry *collector.Registry,
 	skips map[admin.SkipKey]string,
 	mdcaFactories []collectors.MDCAFactory,
-) {
+	buildClient func(string, mdcaclient.Options) (*mdcaclient.Client, error),
+	inventory []availability.Static,
+	failures *[]availabilityStartupFailure,
+) availability.Reason {
 	mc := tenantMDCAConfig(cfg, ta.TenantID)
 	if !mc.Configured() {
-		return // opt-out: no mdca block, nothing to register or skip.
+		return "" // opt-out: no mdca block, nothing to register or skip.
 	}
 
 	token, err := os.ReadFile(mc.TokenFile)
 	if err != nil {
 		tlog.Error("mdca disabled: reading token_file failed", "path", mc.TokenFile, "error", err)
-		recordMDCASkips(store, ta, tlog, skips, "mdca unavailable: reading token_file failed: "+err.Error(), mdcaFactories)
-		return
+		recordMDCASkips(store, ta, tlog, skips, "mdca transport initialization failed", mdcaFactories)
+		return availability.ReasonTransportInitializationFailed
 	}
-	client, err := mdcaclient.NewClient(ta.TenantID, mdcaclient.Options{
+	client, err := buildClient(ta.TenantID, mdcaclient.Options{
 		Emitter: emitter,
 		BaseURL: mc.PortalURL,
 		Token:   strings.TrimSpace(string(token)),
@@ -671,8 +1019,8 @@ func registerMDCACollectors(
 	})
 	if err != nil {
 		tlog.Error("mdca disabled: building the client failed", "error", err)
-		recordMDCASkips(store, ta, tlog, skips, "mdca unavailable: "+err.Error(), mdcaFactories)
-		return
+		recordMDCASkips(store, ta, tlog, skips, "mdca transport initialization failed", mdcaFactories)
+		return availability.ReasonTransportInitializationFailed
 	}
 
 	mdeps := collectors.MDCADeps{
@@ -682,14 +1030,21 @@ func registerMDCACollectors(
 		Store:    store,
 	}
 	for _, mf := range mdcaFactories {
+		expected := newAvailabilityCandidate(
+			mf(collectors.MDCADeps{}).Collector,
+			availabilityFamilyMDCA,
+		)
 		rw := mf(mdeps)
-		if rw.Collector == nil {
+		if !runtimeCollectorReady(
+			rw.Collector, expected, inventory, failures, tlog,
+		) {
 			continue
 		}
 		if interval, ok := gateCollector(rw.Collector, ta, cfg, caps, tlog, skips); ok {
 			registry.RegisterWindow(rw.Collector, interval, initialLookback(cfg, rw), rw.MaxWindow)
 		}
 	}
+	return ""
 }
 
 // tenantEXOClient builds the tenant's single Exchange Online admin API client,
@@ -744,28 +1099,38 @@ func registerEXOCollectors(
 	registry *collector.Registry,
 	skips map[admin.SkipKey]string,
 	exoFactories []collectors.EXOFactory,
-) {
+	inventory []availability.Static,
+	failures *[]availabilityStartupFailure,
+) availability.Reason {
 	if !tenantEXOConfig(cfg, ta.TenantID).Enabled {
-		return // opt-out: no exchange_online block, nothing to register or skip.
+		return "" // opt-out: no exchange_online block, nothing to register or skip.
 	}
 
 	if buildErr != nil {
 		tlog.Error("exchange online disabled: building the client failed", "error", buildErr)
-		reason := "exchange online unavailable: " + buildErr.Error()
+		reason := "exchange online transport initialization failed"
 		for _, ef := range exoFactories {
 			c := ef(collectors.EXODeps{TenantID: ta.TenantID, Logger: tlog})
 			skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] = reason
 		}
-		return
+		return availability.ReasonTransportInitializationFailed
 	}
 
 	edeps := collectors.EXODeps{Client: client, TenantID: ta.TenantID, Logger: tlog}
 	for _, ef := range exoFactories {
+		expected := newAvailabilityCandidate(
+			ef(collectors.EXODeps{}),
+			availabilityFamilyEXO,
+		)
 		c := ef(edeps)
+		if !runtimeCollectorReady(c, expected, inventory, failures, tlog) {
+			continue
+		}
 		if interval, ok := gateCollector(c, ta, cfg, caps, tlog, skips); ok {
 			registry.Register(c, interval)
 		}
 	}
+	return ""
 }
 
 // tenantEXOConfig returns the tenant's Exchange Online block, or a zero
@@ -801,29 +1166,40 @@ func registerHuntCollectors(
 	registry *collector.Registry,
 	skips map[admin.SkipKey]string,
 	huntFactories []collectors.HuntFactory,
-) {
+	buildClient func(*auth.TenantAuth, huntclient.Options) (*huntclient.Client, error),
+	inventory []availability.Static,
+	failures *[]availabilityStartupFailure,
+) availability.Reason {
 	if !tenantHuntingConfig(cfg, ta.TenantID).Enabled {
-		return // opt-out: no hunting block, nothing to register or skip.
+		return "" // opt-out: no hunting block, nothing to register or skip.
 	}
 
-	client, err := huntclient.NewClient(ta, huntclient.Options{Emitter: emitter})
+	client, err := buildClient(ta, huntclient.Options{Emitter: emitter})
 	if err != nil {
 		tlog.Error("advanced hunting disabled: building the client failed", "error", err)
-		reason := "advanced hunting unavailable: " + err.Error()
+		reason := "advanced hunting transport initialization failed"
 		for _, hf := range huntFactories {
 			c := hf(collectors.HuntDeps{TenantID: ta.TenantID, Logger: tlog})
 			skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] = reason
 		}
-		return
+		return availability.ReasonTransportInitializationFailed
 	}
 
 	hdeps := collectors.HuntDeps{Client: client, TenantID: ta.TenantID, Logger: tlog}
 	for _, hf := range huntFactories {
+		expected := newAvailabilityCandidate(
+			hf(collectors.HuntDeps{}),
+			availabilityFamilyHunt,
+		)
 		c := hf(hdeps)
+		if !runtimeCollectorReady(c, expected, inventory, failures, tlog) {
+			continue
+		}
 		if interval, ok := gateCollector(c, ta, cfg, caps, tlog, skips); ok {
 			registry.Register(c, interval)
 		}
 	}
+	return ""
 }
 
 // tenantHuntingConfig returns the tenant's advanced-hunting block, or a zero

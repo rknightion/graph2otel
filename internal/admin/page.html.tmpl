@@ -194,7 +194,7 @@
           {{if .Enabled}}
           <tr{{if and .HasRun (not .LastSuccess)}} class="bad"{{end}}>
             <td><code>{{.Name}}</code>{{with .State}}<span class="cursor mono" title="durable checkpoint cursor">{{if eq .Kind "blob"}}cursor {{.ByteOffset}}B &middot; {{.BlobsTracked}} blobs{{if .NewestBlob}} &middot; newest <code>{{.NewestBlob}}</code>{{end}}{{else}}{{if .Watermark}}watermark {{.Watermark}} &middot; {{.Staleness}} behind{{else}}cold start{{end}}{{if .SeenIDs}} &middot; {{.SeenIDs}} seen{{end}}{{if .InFlightJob}} &middot; job <code>{{.InFlightJob}}</code>{{end}}{{end}}</span>{{end}}</td>
-            <td>{{if not .HasRun}}<span class="badge pending">starting</span>{{else if .LastSuccess}}<span class="badge ok">ok</span>{{else}}<span class="badge err">failing</span>{{end}}{{if .Transport}} <span class="muted mono" title="ingest transport">via {{.Transport}}</span>{{end}}</td>
+            <td>{{if .Availability}}<span class="badge {{.Availability.BadgeClass}}">{{.Availability.State}}</span> <span class="muted mono">{{.Availability.Reason}}{{range .Availability.Limitations}} &middot; {{.}}{{end}}</span>{{else}}{{if not .HasRun}}<span class="badge pending">starting</span>{{else if .LastSuccess}}<span class="badge ok">ok</span>{{else}}<span class="badge err">failing</span>{{end}}{{end}}{{if .Transport}} <span class="muted mono" title="{{if .Availability}}resolved collector transport{{else}}ingest transport{{end}}">via {{.Transport}}</span>{{end}}</td>
             <td class="num">{{.IntervalSec}}s</td>
             <td class="num">{{if .HasRun}}{{printf "%.0f" .SuccessRatePct}}%{{else}}<span class="muted">&mdash;</span>{{end}}</td>
             <td class="num">{{.Runs}}</td>
@@ -206,9 +206,9 @@
             <td class="mono">{{if .LastError}}{{.LastError}}{{else}}<span class="muted">&mdash;</span>{{end}}</td>
           </tr>
           {{else if .CoveredBy}}
-          <tr><td><code>{{.Name}}</code></td><td><span class="badge info">covered</span></td><td class="mono muted" colspan="9">collected via <code>{{.CoveredBy.Collector}}</code> ({{.CoveredBy.Transport}}) &middot; polled form off by design</td></tr>
+          <tr><td><code>{{.Name}}</code></td><td>{{if .Availability}}<span class="badge {{.Availability.BadgeClass}}">{{.Availability.State}}</span>{{if .Transport}} <span class="muted mono" title="resolved collector transport">via {{.Transport}}</span>{{end}}{{else}}<span class="badge info">covered</span>{{end}}</td><td class="mono muted" colspan="9">collected via <code>{{.CoveredBy.Collector}}</code> <span title="covering collector transport">({{.CoveredBy.Transport}})</span>{{if .Availability}} &middot; {{.Availability.Reason}}{{range .Availability.Limitations}} &middot; {{.}}{{end}}{{else}} &middot; polled form off by design{{end}}</td></tr>
           {{else}}
-          <tr class="skip"><td><code>{{.Name}}</code></td><td><span class="badge {{skipBadgeClass .SkipCategory}}">{{if .SkipCategory}}{{.SkipCategory}}{{else}}skipped{{end}}</span></td><td class="mono muted" colspan="9">skipped &mdash; {{.SkipReason}}</td></tr>
+          <tr class="skip"><td><code>{{.Name}}</code></td><td>{{if .Availability}}<span class="badge {{.Availability.BadgeClass}}">{{.Availability.State}}</span>{{else}}<span class="badge {{skipBadgeClass .SkipCategory}}">{{if .SkipCategory}}{{.SkipCategory}}{{else}}skipped{{end}}</span>{{end}}</td><td class="mono muted" colspan="9">{{if .Availability}}{{.Availability.Reason}}{{range .Availability.Limitations}} &middot; {{.}}{{end}}{{else}}skipped &mdash; {{.SkipReason}}{{end}}{{if .Transport}} &middot; <span title="{{if .Availability}}resolved collector transport{{else}}ingest transport{{end}}">via {{.Transport}}</span>{{end}}</td></tr>
           {{end}}
         {{else}}
           <tr><td colspan="11" class="muted">No collectors registered or skipped for this tenant.</td></tr>
@@ -449,6 +449,21 @@ function outcomeStripEl(arr){
   for(var i=start;i<arr.length;i++){ var d=el('i'); if(!arr[i]) d.className='f'; span.appendChild(d); }
   return span;
 }
+function availabilityClass(state){
+  if(state==='healthy'||state==='healthy_empty')return 'ok';
+  if(state==='limited'||state==='degraded')return 'warn';
+  if(state==='blocked'||state==='failed'||state==='startup_failed')return 'err';
+  if(state==='covered')return 'info';
+  if(state==='disabled')return 'muted';
+  return 'pending';
+}
+function appendAvailability(td,c){
+  var a=c.availability; if(!a)return false;
+  td.appendChild(el('span',{'class':'badge '+availabilityClass(a.state)},a.state||'unknown'));
+  var detail=a.reason||''; if(a.limitations&&a.limitations.length)detail+=(detail?' · ':'')+a.limitations.join(' · ');
+  if(detail){td.appendChild(document.createTextNode(' '));td.appendChild(el('span',{'class':'muted mono'},detail));}
+  return true;
+}
 
 function collectorRow(c){
   if(c.enabled){
@@ -456,7 +471,7 @@ function collectorRow(c){
     var nameTd=el('td'); nameTd.appendChild(el('code',null,c.name));
     if(c.state){ var cur=el('span',{'class':'cursor mono'}); if(c.state.kind==='blob'){ cur.textContent='cursor '+(c.state.byte_offset||0)+'B · '+(c.state.blobs_tracked||0)+' blobs'+(c.state.newest_blob?' · newest '+c.state.newest_blob:''); } else { cur.textContent=c.state.watermark?('watermark '+c.state.watermark+' · '+(c.state.staleness||'')+' behind'):'cold start'; } nameTd.appendChild(cur); }
     tr.appendChild(nameTd);
-    var stTd=el('td'); if(!c.has_run) stTd.appendChild(el('span',{'class':'badge pending'},'starting')); else if(c.last_success) stTd.appendChild(el('span',{'class':'badge ok'},'ok')); else stTd.appendChild(el('span',{'class':'badge err'},'failing')); if(c.transport){ stTd.appendChild(document.createTextNode(' ')); stTd.appendChild(el('span',{'class':'muted mono'},'via '+c.transport)); } tr.appendChild(stTd);
+    var stTd=el('td'); if(!appendAvailability(stTd,c)){ if(!c.has_run) stTd.appendChild(el('span',{'class':'badge pending'},'starting')); else if(c.last_success) stTd.appendChild(el('span',{'class':'badge ok'},'ok')); else stTd.appendChild(el('span',{'class':'badge err'},'failing')); } if(c.transport){ stTd.appendChild(document.createTextNode(' ')); stTd.appendChild(el('span',{'class':'muted mono','title':c.availability?'resolved collector transport':'ingest transport'},'via '+c.transport)); } tr.appendChild(stTd);
     tr.appendChild(el('td',{'class':'num'}, (c.interval_seconds||0)+'s'));
     tr.appendChild(el('td',{'class':'num'}, c.has_run?Math.round(c.success_rate_pct)+'%':'—'));
     tr.appendChild(el('td',{'class':'num'}, String(c.runs||0)));
@@ -469,9 +484,9 @@ function collectorRow(c){
     return tr;
   }
   if(c.covered_by){
-    var tr2=el('tr'); tr2.appendChild(el('td')).appendChild(el('code',null,c.name)); var cTd=el('td'); cTd.appendChild(el('span',{'class':'badge info'},'covered')); tr2.appendChild(cTd); tr2.appendChild(el('td',{'class':'mono muted','colspan':'9'},'collected via '+c.covered_by.collector+' ('+c.covered_by.transport+') · polled form off by design')); return tr2;
+    var tr2=el('tr'); tr2.appendChild(el('td')).appendChild(el('code',null,c.name)); var cTd=el('td'); if(!appendAvailability(cTd,c))cTd.appendChild(el('span',{'class':'badge info'},'covered')); if(c.availability&&c.transport){cTd.appendChild(document.createTextNode(' '));cTd.appendChild(el('span',{'class':'muted mono','title':'resolved collector transport'},'via '+c.transport));} tr2.appendChild(cTd); var coveredTd=el('td',{'class':'mono muted','colspan':'9'}); coveredTd.appendChild(document.createTextNode('collected via ')); coveredTd.appendChild(el('code',null,c.covered_by.collector)); coveredTd.appendChild(document.createTextNode(' ')); coveredTd.appendChild(el('span',{'title':'covering collector transport'},'('+c.covered_by.transport+')')); if(!c.availability)coveredTd.appendChild(document.createTextNode(' · polled form off by design')); tr2.appendChild(coveredTd); return tr2;
   }
-  var tr3=el('tr',{'class':'skip'}); tr3.appendChild(el('td')).appendChild(el('code',null,c.name)); var sTd=el('td'); sTd.appendChild(el('span',{'class':'badge '+skipClass(c.skip_category)}, c.skip_category||'skipped')); tr3.appendChild(sTd); tr3.appendChild(el('td',{'class':'mono muted','colspan':'9'},'skipped — '+(c.skip_reason||''))); return tr3;
+  var tr3=el('tr',{'class':'skip'}); tr3.appendChild(el('td')).appendChild(el('code',null,c.name)); var sTd=el('td'); if(!appendAvailability(sTd,c))sTd.appendChild(el('span',{'class':'badge '+skipClass(c.skip_category)}, c.skip_category||'skipped')); tr3.appendChild(sTd); var skipTd=el('td',{'class':'mono muted','colspan':'9'},c.availability?'':('skipped — '+(c.skip_reason||''))); if(c.transport){ if(skipTd.textContent)skipTd.appendChild(document.createTextNode(' · ')); skipTd.appendChild(el('span',{'title':c.availability?'resolved collector transport':'ingest transport'},'via '+c.transport)); } tr3.appendChild(skipTd); return tr3;
 }
 function skipClass(cat){ if(cat==='license')return 'warn'; if(cat==='experimental')return 'info'; return 'muted'; }
 

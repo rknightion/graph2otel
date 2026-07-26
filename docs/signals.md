@@ -83,6 +83,26 @@ adjust a query one clause if your pipeline normalizes differently. This is exact
 convention the shipped [dashboards](https://github.com/rknightion/graph2otel/tree/main/dashboards)
 are built against.
 
+## Collector availability
+
+`graph2otel.collector.availability` is a value-1 current-state gauge, normalized in the
+shipped PromQL dashboards as `graph2otel_collector_availability`. It has exactly one row
+per configured `tenant_id` and logical `collector`, with bounded `collector.transport`,
+`state`, and `reason` labels. The complete generated state/reason contract and every
+allowed pair are in [the collector reference](collectors.md#collector-availability).
+
+`collector.transport` is the transport resolved for that logical collector in this tenant
+after configuration, source selection, and capability checks. It is not
+`ingest_transport`: that log-only field identifies the transport that produced an
+individual record and is appropriate for record outcomes and event lag, not availability.
+
+`healthy_empty` means a successful source response containing zero rows. It proves that
+the collector's source answered, not that data was observed. `limited` with
+`reason="partial_license"` means an otherwise running collector has a documented reduced
+capability subset; it is non-alerting. `disabled` and `covered` are intentional absence;
+`degraded`, `failed`, and `startup_failed` are the failure-oriented states. This snapshot
+does not replace scrape freshness, lifetime readiness, or backend-delivery acceptance.
+
 ## Querying the logs in Loki — attributes are structured metadata, not stream labels
 
 Every attribute graph2otel puts on a log record (`event_name`, `app_id`,

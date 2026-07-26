@@ -1,8 +1,10 @@
-// Package risk is the Entra Identity Protection current-risk collector: two
-// independently license-gated halves — risky users (Entra ID P2) and risky
-// service principals (Workload Identities Premium). This is the discrete "how
-// much risk is live right now" state snapshot; the risk-detection *events*
-// stream is a separate log-pipeline collector (M3), not this one.
+// Package risk is the Entra Identity Protection current-risk collector. Risky
+// users are gated on Entra ID P2. Risky service principals are attempted
+// unconditionally because Workload Identities Premium detection is a
+// live-measured false negative; endpoint reachability is authoritative. This is
+// the discrete "how much risk is live right now" state snapshot; the
+// risk-detection *events* stream is a separate log-pipeline collector (M3), not
+// this one.
 //
 // # Both sides of the cardinality boundary, from one fetch
 //
@@ -27,11 +29,10 @@
 // 14:00" answerable. Volume therefore scales with the risky population (small
 // on a healthy tenant) x the poll interval, not with tenant size.
 //
-// The two halves are gated by two DIFFERENT capabilities and degrade fully
-// independently: a tenant may hold Entra ID P2 without Workload Identities
-// Premium, the reverse, both, or neither. Collect emits whichever half(s) the
-// tenant's detected capabilities unlock and skips-and-logs the rest, without
-// treating a missing capability as an error.
+// The two halves degrade independently. Collect omits risky users when Entra ID
+// P2 is absent, but always attempts risky service principals: a tenant may have
+// usable endpoint access even when subscribed-SKU detection says otherwise. A
+// 403 on that endpoint is handled as the runtime permission state.
 package risk
 
 import (
@@ -127,12 +128,10 @@ func (c *Collector) Name() string { return collectorName }
 // a negligible share of that shared budget.
 func (c *Collector) DefaultInterval() time.Duration { return 15 * time.Minute }
 
-// RequiredPermissions declares the least-privilege Graph application scope
-// for each half. A tenant holding only one of the two license capabilities
-// only ever needs the matching scope in practice (the other half's requests
-// are simply never made — see Collect), but both are declared up front so
-// the full permission requirement is visible regardless of which capability
-// is eventually granted.
+// RequiredPermissions declares the least-privilege Graph application scope for
+// each half. The risky-service-principal half is attempted on every tenant
+// because endpoint reachability is more reliable than capability detection;
+// both scopes are therefore declared up front.
 func (c *Collector) RequiredPermissions() []string {
 	// User.Read.All backs the deleted-user reconciliation: the risky-users gauge
 	// is corrected against /directory/deletedItems/microsoft.graph.user, because
@@ -220,12 +219,9 @@ var (
 	}
 )
 
-// Collect fetches whichever half(s) the tenant's detected capabilities
-// unlock. Risky users requires license.CapEntraP2; risky service principals
-// requires license.CapWorkloadIdentitiesPremium. These are two INDEPENDENT
-// gates: each half is checked and skipped-and-logged on its own, and a
-// failure fetching one half does not prevent the other from being collected
-// and emitted.
+// Collect fetches risky users when the tenant holds license.CapEntraP2 and
+// attempts risky service principals unconditionally. A failure fetching one
+// half does not prevent the other from being collected and emitted.
 func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	var errs []error
 

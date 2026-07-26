@@ -21,9 +21,9 @@
 //     key — are read off the CONSTRUCTED collector here. They are never written
 //     by hand, so they cannot be wrong.
 //   - Facts the registry does not know — what the collector is FOR, which Graph
-//     endpoints it polls, and any partial license gating that lives inside
-//     Collect() rather than in a declared interface — are hand-written prose in
-//     annotations.go, keyed by collector name.
+//     endpoints it polls, and nuance around partial license behavior — are
+//     hand-written prose in annotations.go, keyed by collector name. The bounded
+//     partial requirement itself comes from availability.PartialRequirements.
 //   - The metric and log-event names a collector emits are GENERATED from its
 //     package's testdata/signals.json golden (#140, internal/signalcapture) —
 //     see signals.go. They used to be hand-written prose here, and that prose
@@ -48,10 +48,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rknightion/graph2otel/internal/availability"
 	"github.com/rknightion/graph2otel/internal/blobpipeline"
+	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/preflight"
 	"github.com/rknightion/graph2otel/internal/signalcapture"
+	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
 // Markers delimit the generated block inside docs/collectors.md. Splice
@@ -92,10 +95,9 @@ type Annotation struct {
 	// collector's container (e.g. "MicrosoftGraphActivityLogs"). Its casing is
 	// not recoverable from the container name, which is lowercased. Blob only.
 	Category string
-	// Gating carries license/beta nuance the registry cannot express: a
-	// collector that PARTIALLY degrades gates inside Collect() on Deps.Caps
-	// rather than declaring license.CapabilityRequirer, so no interface reports
-	// it. Rendered alongside the generated gating facts, never instead of them.
+	// Gating carries license/beta nuance the bounded registry and availability
+	// metadata cannot express. Rendered alongside generated gating facts, never
+	// instead of them.
 	Gating string
 }
 
@@ -108,11 +110,18 @@ type Row struct {
 	Interval     time.Duration
 	Lag          time.Duration // window collectors only
 	Experimental bool
-	Capability   license.Capability
-	Permissions  []string
-	Container    string // blob only
-	CursorKey    string // blob only; the EFFECTIVE key, with the container default resolved
-	Ann          Annotation
+	// HighVolume is the registry-declared firehose opt-in. Like Experimental it
+	// is generated from the constructed collector, never a list of names in docs.
+	HighVolume bool
+	// Transport is this registration candidate's intrinsic source transport. The
+	// current resolved transport is emitted by the availability snapshot after
+	// per-tenant source and capability selection.
+	Transport   telemetry.Transport
+	Capability  license.Capability
+	Permissions []string
+	Container   string // blob only
+	CursorKey   string // blob only; the EFFECTIVE key, with the container default resolved
+	Ann         Annotation
 	// Signals is what the collector's package actually emits, per its
 	// testdata/signals.json golden (#140). Populated by Rows, never by RowFor:
 	// RowFor is tested with bare Row{} literals that carry no golden on disk,
@@ -165,17 +174,21 @@ func RowFor(c any, kind Kind, ann Annotation) (Row, error) {
 	}
 
 	row := Row{
-		Name:     name,
-		Domain:   domain,
-		Kind:     kind,
-		Interval: facts.DefaultInterval(),
-		Ann:      ann,
+		Name:      name,
+		Domain:    domain,
+		Kind:      kind,
+		Interval:  facts.DefaultInterval(),
+		Transport: collector.TransportOf(facts),
+		Ann:       ann,
 	}
 
 	// Optional interfaces, asserted exactly as the composition root asserts
 	// them, so the doc reports the gating the tenant loop will actually apply.
 	if e, ok := c.(interface{ Experimental() bool }); ok {
 		row.Experimental = e.Experimental()
+	}
+	if h, ok := c.(interface{ HighVolume() bool }); ok {
+		row.HighVolume = h.HighVolume()
 	}
 	if r, ok := c.(license.CapabilityRequirer); ok {
 		row.Capability = r.RequiredCapability()
@@ -380,9 +393,9 @@ var sections = []section{
 // no Graph endpoint, declare no Graph scope, and emit no metrics (#128), so
 // Graph-shaped columns would be three blanks and a lie.
 var headers = map[Kind][]string{
-	KindSnapshot: {"Collector", "Collects", "Graph endpoint(s)", "Required scope(s)", "License / beta", "Interval", "Metric namespace"},
-	KindWindow:   {"Collector", "Collects", "Graph endpoint(s)", "Required scope(s)", "License / beta", "Interval", "Lag", "Log event"},
-	KindBlob:     {"Collector", "Collects", "Container (diagnostic category)", "Cursor key", "Required role", "License / beta", "Interval", "Log event"},
+	KindSnapshot: {"Collector", "Collects", "Intrinsic transport", "Graph endpoint(s)", "Required scope(s)", "License / beta / volume", "Interval", "Metric namespace"},
+	KindWindow:   {"Collector", "Collects", "Intrinsic transport", "Graph endpoint(s)", "Required scope(s)", "License / beta / volume", "Interval", "Lag", "Log event"},
+	KindBlob:     {"Collector", "Collects", "Intrinsic transport", "Container (diagnostic category)", "Cursor key", "Required role", "License / beta / volume", "Interval", "Log event"},
 }
 
 // Render turns rows into the generated block: one markdown table per non-empty
@@ -395,6 +408,8 @@ func Render(rows []Row) (string, error) {
 	}
 
 	var b strings.Builder
+	b.WriteString(AvailabilityContract())
+	b.WriteString("\n\n")
 	placed := 0
 	for _, s := range sections {
 		got := byKey[sectionKey(s.domain, s.kind)]
@@ -428,17 +443,17 @@ func cellsFor(r Row) ([]string, error) {
 	switch r.Kind {
 	case KindSnapshot:
 		return []string{
-			code(r.Name), esc(r.Ann.Collects), esc(or(r.Ann.Source, "—")),
+			code(r.Name), esc(r.Ann.Collects), code(string(r.Transport)), esc(or(r.Ann.Source, "—")),
 			scopes(r.Permissions), gatingCell(r), dur(r.Interval), esc(or(signalCell(r), "—")),
 		}, nil
 	case KindWindow:
 		return []string{
-			code(r.Name), esc(r.Ann.Collects), esc(or(r.Ann.Source, "—")),
+			code(r.Name), esc(r.Ann.Collects), code(string(r.Transport)), esc(or(r.Ann.Source, "—")),
 			scopes(r.Permissions), gatingCell(r), dur(r.Interval), dur(r.Lag), esc(or(signalCell(r), "—")),
 		}, nil
 	case KindBlob:
 		return []string{
-			code(r.Name), esc(r.Ann.Collects), containerCell(r), code(r.CursorKey),
+			code(r.Name), esc(r.Ann.Collects), code(string(r.Transport)), containerCell(r), code(r.CursorKey),
 			"`Storage Blob Data Reader`", gatingCell(r), dur(r.Interval), esc(or(signalCell(r), "—")),
 		}, nil
 	}
@@ -458,17 +473,24 @@ func containerCell(r Row) string {
 // gatingCell renders the License / beta column: the registry's declared facts
 // first, then any hand-written nuance in parentheses.
 //
-// A collector with NO declared capability may still be gated — the ones that
-// partially degrade check Deps.Caps inside Collect() instead of declaring
-// license.CapabilityRequirer, and no interface reports that. Those carry the
-// whole story in Annotation.Gating, which is why a note alone is a valid cell.
+// A collector with NO declared whole-collector capability may still omit a
+// sub-signal. Those partial requirements come from the canonical availability
+// metadata, while Annotation.Gating carries the operational nuance.
 func gatingCell(r Row) string {
 	var facts []string
 	if r.Capability != "" {
 		facts = append(facts, code("needs-license/"+string(r.Capability)))
 	}
+	for _, requirement := range availability.PartialRequirements(r.Name) {
+		facts = append(facts, code(
+			"partial-license/"+string(requirement.Limitation)+":"+string(requirement.MissingCapability),
+		))
+	}
 	if r.Experimental {
 		facts = append(facts, "`beta`")
+	}
+	if r.HighVolume {
+		facts = append(facts, "`high-volume opt-in`")
 	}
 	note := esc(r.Ann.Gating)
 	switch {
@@ -481,6 +503,26 @@ func gatingCell(r Row) string {
 	default:
 		return strings.Join(facts, ", ") + " (" + note + ")"
 	}
+}
+
+// AvailabilityContract renders the closed availability vocabulary directly from
+// the Go contract. Adding a state, reason, or allowed pair there therefore
+// changes the generated reference and its golden gate in the same change.
+func AvailabilityContract() string {
+	var b strings.Builder
+	b.WriteString("## Collector availability\n\n")
+	b.WriteString("Every configured tenant has one current availability point for each logical collector: `graph2otel.collector.availability` (Prometheus-normalized `graph2otel_collector_availability`), a value-1 gauge with `tenant_id`, `collector`, `collector.transport`, `state`, and `reason`. `collector.transport` is the resolved transport selected for that tenant; the reference tables below show each registration candidate's intrinsic transport. This is deliberately distinct from log-only `ingest_transport`, which describes the transport that produced an individual record and is never used for availability.\n\n")
+	b.WriteString("The admin status JSON adds bounded `limitations` (the omitted sub-signals) and `missing_capabilities` (the exact entitlements that would restore them or a whole blocked collector). These details stay out of metric labels.\n\n")
+	b.WriteString("`healthy_empty` means the source answered successfully with zero rows; it proves a successful zero-row source response, not that graph2otel observed data. `limited` / `partial_license` means the configured collector is running with a documented capability subset and is non-alerting. `disabled` and `covered` are intentional absence; `degraded`, `failed`, and `startup_failed` are failure states.\n\n")
+	b.WriteString("| State | Reason |\n| --- | --- |\n")
+	for _, state := range availability.States() {
+		for _, reason := range availability.Reasons() {
+			if availability.ValidPair(state, reason) {
+				fmt.Fprintf(&b, "| `%s` | `%s` |\n", state, reason)
+			}
+		}
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
 
 // scopes renders the declared Graph permissions in DECLARATION order — the

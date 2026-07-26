@@ -5,11 +5,13 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/rknightion/graph2otel/internal/availability"
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
@@ -528,10 +530,17 @@ func TestScheduler_PartialRunIsUnhealthyAndDoesNotResetStaleness(t *testing.T) {
 func TestScheduler_PanicRetainsRecordedProgress(t *testing.T) {
 	rec := telemetrytest.New()
 	status := collector.NewStatusTracker()
+	availabilityTracker := availability.NewTracker("tenant-a", []availability.Static{{
+		Collector: "devices",
+		Transport: telemetry.TransportGraph,
+		State:     availability.StateStarting,
+		Reason:    availability.ReasonNoCompletedRun,
+	}})
 	s := collector.NewScheduler(
 		rec.Emitter(),
 		collector.NewMemoryStore(),
 		collector.WithStatusTracker(status),
+		collector.WithAvailabilityTracker(availabilityTracker),
 	)
 	entry := collector.Entry{
 		Collector: snapFunc{
@@ -564,6 +573,61 @@ func TestScheduler_PanicRetainsRecordedProgress(t *testing.T) {
 	if run.LastOutcome.Result != recordoutcome.ResultPartial ||
 		run.LastOutcome.Cause != recordoutcome.CausePanic {
 		t.Fatalf("LastOutcome = %+v, want partial/panic", run.LastOutcome)
+	}
+	point := availabilityTracker.Snapshot()[0]
+	if point.State != availability.StateDegraded ||
+		point.Reason != availability.ReasonPanic ||
+		point.LastOutcome == nil ||
+		point.LastOutcome.Result != recordoutcome.ResultPartial ||
+		point.LastOutcome.Cause != recordoutcome.CausePanic {
+		t.Fatalf("panic availability = %+v, want degraded/panic carrying partial/panic outcome", point)
+	}
+}
+
+func TestScheduler_PanicWithoutProgressRecordsFailedAvailability(t *testing.T) {
+	rec := telemetrytest.New()
+	status := collector.NewStatusTracker()
+	availabilityTracker := availability.NewTracker("tenant-a", []availability.Static{{
+		Collector: "devices",
+		Transport: telemetry.TransportGraph,
+		State:     availability.StateStarting,
+		Reason:    availability.ReasonNoCompletedRun,
+	}})
+	s := collector.NewScheduler(
+		rec.Emitter(),
+		collector.NewMemoryStore(),
+		collector.WithStatusTracker(status),
+		collector.WithAvailabilityTracker(availabilityTracker),
+	)
+	entry := collector.Entry{
+		Collector: snapFunc{
+			name: "devices",
+			def:  time.Minute,
+			fn: func(context.Context, telemetry.Emitter, *recordoutcome.Recorder) error {
+				panic("collector bug")
+			},
+		},
+		Interval: time.Minute,
+	}
+	var lastSuccess time.Time
+
+	s.RunTick(context.Background(), entry, &lastSuccess)
+
+	run := status.Snapshot()["devices"]
+	if run.Runs != 1 ||
+		run.Failures != 1 ||
+		run.LastSuccess ||
+		run.LastOutcome.Result != recordoutcome.ResultFailure ||
+		run.LastOutcome.Cause != recordoutcome.CausePanic {
+		t.Fatalf("panic status = %+v, want one failed panic run", run)
+	}
+	point := availabilityTracker.Snapshot()[0]
+	if point.State != availability.StateFailed ||
+		point.Reason != availability.ReasonPanic ||
+		point.LastOutcome == nil ||
+		point.LastOutcome.Result != recordoutcome.ResultFailure ||
+		point.LastOutcome.Cause != recordoutcome.CausePanic {
+		t.Fatalf("panic availability = %+v, want failed/panic carrying failure/panic outcome", point)
 	}
 }
 
@@ -694,6 +758,131 @@ func TestScheduler_LogsLegitimateLossAsDegradedOutcome(t *testing.T) {
 	}
 	if strings.Contains(got, "outcome accounting failed") {
 		t.Fatalf("logs = %q, legitimate loss must not be called an accounting failure", got)
+	}
+}
+
+func TestSchedulerRecordsAvailabilityWithoutChangingStatusAccounting(t *testing.T) {
+	rec := telemetrytest.New()
+	status := collector.NewStatusTracker()
+	availabilityTracker := availability.NewTracker("tenant-a", []availability.Static{
+		{
+			Collector: "permission",
+			Transport: telemetry.TransportGraph,
+			State:     availability.StateStarting,
+			Reason:    availability.ReasonNoCompletedRun,
+		},
+		{
+			Collector:   "limited",
+			Transport:   telemetry.TransportGraph,
+			State:       availability.StateLimited,
+			Reason:      availability.ReasonPartialLicense,
+			Limitations: []availability.Limitation{"premium_signal"},
+		},
+	})
+	s := collector.NewScheduler(
+		rec.Emitter(),
+		collector.NewMemoryStore(),
+		collector.WithSelfObs(false),
+		collector.WithStatusTracker(status),
+		collector.WithAvailabilityTracker(availabilityTracker),
+	)
+	var lastSuccess time.Time
+
+	s.RunTick(context.Background(), collector.Entry{
+		Collector: snapFunc{
+			name: "permission",
+			def:  time.Minute,
+			fn: func(_ context.Context, _ telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+				outcomes.Cause(recordoutcome.CausePermissionDenied)
+				return errors.New("forbidden")
+			},
+		},
+		Interval: time.Minute,
+	}, &lastSuccess)
+	s.RunTick(context.Background(), collector.Entry{
+		Collector: snapFunc{
+			name: "limited",
+			def:  time.Minute,
+			fn: func(_ context.Context, _ telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+				outcomes.Add(recordoutcome.OutcomeFetched, 1)
+				outcomes.Add(recordoutcome.OutcomeMapped, 1)
+				outcomes.Add(recordoutcome.OutcomeEmitted, 1)
+				return nil
+			},
+		},
+		Interval: time.Minute,
+	}, &lastSuccess)
+
+	points := availabilityTracker.Snapshot()
+	if len(points) != 2 {
+		t.Fatalf("availability points = %d, want 2", len(points))
+	}
+	gotAvailability := map[string][2]string{}
+	for _, point := range points {
+		gotAvailability[point.Collector] = [2]string{string(point.State), string(point.Reason)}
+	}
+	wantAvailability := map[string][2]string{
+		"permission": {string(availability.StateBlocked), string(availability.ReasonPermissionDenied)},
+		"limited":    {string(availability.StateLimited), string(availability.ReasonPartialLicense)},
+	}
+	if !reflect.DeepEqual(gotAvailability, wantAvailability) {
+		t.Fatalf("availability = %v, want %v", gotAvailability, wantAvailability)
+	}
+
+	runs := status.Snapshot()
+	if runs["permission"].Runs != 1 ||
+		runs["permission"].LastSuccess ||
+		runs["permission"].LastOutcome.Result != recordoutcome.ResultFailure ||
+		runs["permission"].LastOutcome.Cause != recordoutcome.CausePermissionDenied {
+		t.Errorf("permission status = %+v, want one permission failure", runs["permission"])
+	}
+	if runs["limited"].Runs != 1 ||
+		!runs["limited"].LastSuccess ||
+		runs["limited"].LastOutcome.Result != recordoutcome.ResultSuccess {
+		t.Errorf("limited status = %+v, want one successful run independent of static limitation", runs["limited"])
+	}
+	if got := rec.MetricPoints(availability.MetricCollectorAvailability); len(got) != 0 {
+		t.Errorf("scheduler emitted availability snapshot during run: %v", got)
+	}
+}
+
+func TestSchedulerAvailabilitySkipsShutdownCancellation(t *testing.T) {
+	status := collector.NewStatusTracker()
+	availabilityTracker := availability.NewTracker("tenant-a", []availability.Static{{
+		Collector: "devices",
+		Transport: telemetry.TransportGraph,
+		State:     availability.StateStarting,
+		Reason:    availability.ReasonNoCompletedRun,
+	}})
+	s := collector.NewScheduler(
+		telemetrytest.New().Emitter(),
+		collector.NewMemoryStore(),
+		collector.WithStatusTracker(status),
+		collector.WithAvailabilityTracker(availabilityTracker),
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var lastSuccess time.Time
+
+	s.RunTick(ctx, collector.Entry{
+		Collector: snapFunc{
+			name: "devices",
+			def:  time.Minute,
+			fn: func(ctx context.Context, _ telemetry.Emitter, _ *recordoutcome.Recorder) error {
+				return ctx.Err()
+			},
+		},
+		Interval: time.Minute,
+	}, &lastSuccess)
+
+	point := availabilityTracker.Snapshot()[0]
+	if point.State != availability.StateStarting ||
+		point.Reason != availability.ReasonNoCompletedRun ||
+		point.LastOutcome != nil {
+		t.Fatalf("shutdown cancellation changed availability to %+v, want untouched starting point", point)
+	}
+	if got := status.Snapshot(); len(got) != 0 {
+		t.Fatalf("shutdown cancellation changed status accounting: %v", got)
 	}
 }
 

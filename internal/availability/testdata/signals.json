@@ -1,0 +1,18 @@
+{
+  "Metrics": [
+    {
+      "Name": "graph2otel.collector.availability",
+      "Unit": "{collector}",
+      "Kind": "gauge",
+      "Description": "Current bounded availability state for each logical collector.",
+      "AttrKeys": [
+        "collector",
+        "collector.transport",
+        "reason",
+        "state",
+        "tenant_id"
+      ]
+    }
+  ],
+  "Logs": null
+}

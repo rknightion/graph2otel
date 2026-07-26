@@ -90,7 +90,7 @@ var annotations = map[string]Annotation{
 	"entra.risk": {
 		Collects: "Current risky-users and risky-service-principals counts, with a log twin per risky entity. The risky-users gauge is reconciled against the directory's deleted-items tombstones so a deleted-but-once-risky user is not counted forever (#155); the twin keeps the entity, marked with a reliable `is_deleted`",
 		Source:   "`/identityProtection/riskyUsers`, `/identityProtection/riskyServicePrincipals`, `/directory/deletedItems/microsoft.graph.user`",
-		Gating:   "risky users need `entra_p2`, risky SPs need `workload_identities_premium` — two INDEPENDENT partial gates checked inside Collect() against the tenant's capabilities, so each half runs and emits only if its own capability is present; neither is declared as a whole-collector requirement",
+		Gating:   "risky users are omitted without Entra ID P2; risky service principals are attempted unconditionally because capability detection is a live-measured false negative, and endpoint 403 drives runtime permission state",
 	},
 	"entra.risky_agents": {
 		Collects: "Current risky Entra Agent ID (AI-agent) identity counts by risk level and state, with a log twin per risky agent (id, agentDisplayName, riskDetail, the enabled/deleted/processing flags). The STATE feed behind `entra.agent_risk_detections`; the agent analog of `entra.risk`. Beta/Experimental, ungated (polls unconditionally; 200/empty or 403 where the feature is absent — a license gate would hide it on tenants where the endpoint works)",

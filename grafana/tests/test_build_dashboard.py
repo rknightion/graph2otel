@@ -195,6 +195,67 @@ class TestOutcomeAccountingPanels(unittest.TestCase):
         self.assertIn("Payload type mismatches", self.panels)
 
 
+class TestCollectorAvailabilityPanels(unittest.TestCase):
+    def setUp(self):
+        board = next(b for name, b in BUILT
+                     if name == "graph2otel-self-observability.json")
+        self.board = board
+        self.panels = {
+            item["spec"]["title"]: item["spec"]
+            for item in board._panels
+            if item.get("spec")
+        }
+        self.availability = SELF_OBS["graph2otel.collector.availability"].prom
+
+    def test_availability_backs_tenant_and_collector_variables(self):
+        self.assertEqual(self.board.tenant_metric, self.availability)
+        collector = next(v for v in self.board.variables() if v["name"] == "collector")
+        self.assertEqual(
+            collector["definition"],
+            f'label_values({self.availability}{{tenant_id=~"$tenant"}}, collector)',
+        )
+
+    def test_current_state_table_preserves_every_availability_dimension(self):
+        panel = self.panels["Current collector availability"]
+        self.assertEqual(panel["type"], "table")
+        self.assertEqual(
+            panel["targets"][0]["expr"],
+            f'max by (tenant_id, collector, collector_transport, state, reason) '
+            f'({self.availability}{{tenant_id=~"$tenant",collector=~"$collector"}})',
+        )
+
+    def test_availability_state_counts_and_state_classes_are_visible(self):
+        self.assertIn("Collector availability by state", self.panels)
+        self.assertIn("Intentional collector absence", self.panels)
+        self.assertIn("Collector availability failures", self.panels)
+        self.assertIn("Subscription and capability limitations", self.panels)
+        self.assertIn("non-failure", self.panels["Subscription and capability limitations"]["description"])
+
+    def test_subscription_limitations_are_not_reported_as_failures(self):
+        limitations = self.panels["Subscription and capability limitations"]
+        limitation_exprs = [target["expr"] for target in limitations["targets"]]
+        self.assertEqual(len(limitation_exprs), 2)
+        self.assertIn('state="limited", reason="partial_license"', limitation_exprs[0])
+        self.assertIn('state="blocked", reason="license_unavailable"', limitation_exprs[1])
+
+        failures = self.panels["Collector availability failures"]
+        failure_exprs = [target["expr"] for target in failures["targets"]]
+        self.assertEqual(len(failure_exprs), 2)
+        self.assertIn('state=~"degraded|failed|startup_failed"', failure_exprs[0])
+        self.assertIn('state="blocked", reason="permission_denied"', failure_exprs[1])
+        self.assertTrue(all('state=~"blocked|' not in expr for expr in failure_exprs))
+
+    def test_availability_never_uses_record_ingest_transport_or_an_alert(self):
+        availability_exprs = [
+            expr for expr in self.board._exprs
+            if self.availability in expr
+        ]
+        self.assertTrue(availability_exprs)
+        self.assertTrue(all("ingest_transport" not in expr for expr in availability_exprs))
+        for panel in self.panels.values():
+            self.assertNotIn("alert", panel)
+
+
 class TestLogPanels(unittest.TestCase):
     def test_every_domain_with_a_log_signal_has_a_log_panel(self):
         self.assertEqual(build_dashboard.log_coverage(CAT, LOG_DOMAINS), [])
