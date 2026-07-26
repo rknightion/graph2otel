@@ -63,9 +63,10 @@ container-smoke:
 
 # The green bar — run this before every commit; CI runs the same steps. The
 # generated-doc drift gate (docs/env-vars.md vs config.example.yaml) rides the
-# `test` target as an ordinary `go test` (TestEnvReferenceDocInSync), so a stale
-# doc fails `check` with no extra step.
-check: vet test lint govulncheck tidy-check tools-check forks-check
+# `test` target as an ordinary `go test` (TestEnvReferenceDocInSync), while the
+# dashboard, alert, recording-rule, and observability-doc gates ride
+# `grafana-check`.
+check: vet test lint govulncheck tidy-check tools-check forks-check grafana-check
 	$(GO) build ./...
 
 # Both modules must be tidy. `-mod=readonly` above only catches a go.mod that is

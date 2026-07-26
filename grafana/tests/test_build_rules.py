@@ -11,11 +11,15 @@ convention). Auto-discovered by:
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import re
 import sys
+import tempfile
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GRAFANA = os.path.dirname(HERE)
@@ -146,6 +150,32 @@ class TestNoRecordingMetricCollision(unittest.TestCase):
 
 
 class TestStaleness(unittest.TestCase):
+    def test_orphan_recording_rule_is_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            alerts_path = os.path.join(tmp, "alerts.yaml")
+            recording_dir = os.path.join(tmp, "recording-rules")
+            os.mkdir(recording_dir)
+            with open(alerts_path, "wb") as f:
+                f.write(build_rules.render_alerts(build_rules.RULES))
+            for fname, data in build_rules.render_recording(
+                    build_rules.RECORDING).items():
+                with open(os.path.join(recording_dir, fname), "wb") as f:
+                    f.write(data)
+            with open(os.path.join(recording_dir, "obsolete.json"), "w") as f:
+                f.write("{}\n")
+
+            stderr = io.StringIO()
+            with (
+                mock.patch.object(build_rules, "ALERTS_PATH", alerts_path),
+                mock.patch.object(build_rules, "RECORDING_DIR", recording_dir),
+                mock.patch.object(sys, "argv", ["build_rules.py", "--check"]),
+                contextlib.redirect_stderr(stderr),
+            ):
+                result = build_rules.main()
+
+        self.assertEqual(result, 1)
+        self.assertIn("recording-rules/obsolete.json", stderr.getvalue())
+
     def test_committed_alerts_yaml_is_not_stale(self):
         with open(build_rules.ALERTS_PATH, "rb") as f:
             committed = f.read()

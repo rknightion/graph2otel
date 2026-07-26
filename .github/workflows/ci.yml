@@ -234,14 +234,14 @@ jobs:
   # spec/signal-catalog.json's own staleness rides build-test's `go test`
   # (TestSignalCatalogInSync), so this job needs no Go toolchain either.
   grafana:
-    name: dashboard coverage + freshness
+    name: Grafana assets + generated docs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           persist-credentials: false
 
-      - name: Verify dashboard metric coverage, log-panel coverage and freshness
+      - name: Verify dashboards, alert rules, recording rules and generated docs
         run: make grafana-check
 
   # Test coverage -> Codacy. Deliberately NOT in ci-success's `needs`: coverage reporting is

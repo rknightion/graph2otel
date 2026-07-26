@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import unittest
 
@@ -17,6 +18,27 @@ import catalog as catalog_mod  # noqa: E402
 
 
 class TestOperatorObservabilityInventory(unittest.TestCase):
+    def test_full_check_runs_the_grafana_asset_gate(self):
+        result = subprocess.run(
+            ["make", "--no-print-directory", "-n", "check"],
+            cwd=REPO,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertIn(
+            "cd grafana && python3 build_dashboard.py --check",
+            result.stdout,
+        )
+        self.assertIn(
+            "cd grafana && python3 build_rules.py --check",
+            result.stdout,
+        )
+        self.assertIn(
+            "cd grafana && python3 -m unittest discover -s tests -t . -q",
+            result.stdout,
+        )
+
     def test_deployment_reference_matches_generated_asset_counts(self):
         docs_path = os.path.join(REPO, "docs", "deploying-observability.md")
         with open(docs_path, encoding="utf-8") as f:

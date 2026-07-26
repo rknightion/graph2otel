@@ -647,6 +647,12 @@ def reverse_validate(cat, rules: list) -> list:
     return violations
 
 
+def recording_rule_orphans(expected_names: set[str],
+                           present_names: set[str]) -> list[str]:
+    """Return deployable recording-rule JSON absent from the generated set."""
+    return sorted(present_names - expected_names)
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -685,6 +691,13 @@ def main() -> int:
         with open(path, "rb") as f:
             if f.read() != data:
                 stale.append(f"recording-rules/{fname}")
+    present_recording = {
+        fname for fname in os.listdir(RECORDING_DIR)
+        if fname.endswith(".json")
+    }
+    for fname in recording_rule_orphans(
+            set(recording_bytes), present_recording):
+        stale.append(f"recording-rules/{fname}")
 
     print(f"rules: {len(RULES)} alert rules ({sum(1 for r in RULES if not r['isPaused'])} "
           f"enabled, {sum(1 for r in RULES if r['isPaused'])} paused), "
