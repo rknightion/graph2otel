@@ -101,10 +101,17 @@ extraVolumeMounts: []
 # Tenant credentials are NEVER read from the rendered config.yaml (see
 # config.example.yaml) — they come from azidentity.DefaultAzureCredential via
 # well-known AZURE_* environment variables, injected here through a Secret.
-# graph2otel's multi-tenant model pins each tenants[].tenant_id into the
-# credential per call, so ONE app registration's AZURE_CLIENT_ID/
-# AZURE_CLIENT_SECRET (or certificate) can authenticate against every tenant
-# listed in config.tenants — there is no per-tenant secret to template.
+# Each config.tenants[].tenant_id must be a hyphenated Entra directory GUID.
+# graph2otel sets it on every token request, restricts that credential to the
+# explicit target, and verifies the returned token's tid before starting any
+# tenant-labelled collector. ONE ambient application identity selected by
+# DefaultAzureCredential can authenticate against every listed directory when
+# it is a multi-tenant app with a consented service principal in each one —
+# there is no per-tenant secret to template.
+#
+# Managed identity is different: it remains bound to its Azure home tenant and
+# ignores cross-tenant targeting. A configured directory / returned tid
+# mismatch fails that tenant closed before data is emitted.
 #
 # Provide credentials either inline here (rendered into a Secret) OR reference
 # an existing Secret via existingSecret. Inline values win only when
@@ -116,13 +123,15 @@ existingSecret: ""
 # credential-chain fallbacks (workload identity, managed identity) still work
 # when you deliberately omit a client-secret/certificate pair.
 secret:
-  # -- Ambient fallback tenant ID for DefaultAzureCredential. Usually NOT
-  # needed: NewTenantAuth pins each tenants[].tenant_id explicitly per
-  # credential, regardless of this value.
+  # -- Ambient/default tenant ID used by DefaultAzureCredential. Environment
+  # client-secret/certificate and workload-identity legs normally require it.
+  # It does not select a per-config tenant: graph2otel still sets each hyphenated
+  # config.tenants[].tenant_id on the request and verifies the returned tid.
   AZURE_TENANT_ID: ""
-  # -- App registration (application) client ID. Required unless every
-  # tenants[] entry sets client_id in config.tenants and you rely on workload/
-  # managed identity instead.
+  # -- Ambient application client ID used by environment credentials, workload
+  # identity, or to select a user-assigned managed identity. One value applies
+  # to the process. config.tenants[].client_id is only a consistency assertion
+  # and never replaces or overrides this credential selection.
   AZURE_CLIENT_ID: ""
   # -- Client secret paired with AZURE_CLIENT_ID. Leave empty when using
   # AZURE_CLIENT_CERTIFICATE_PATH (extraEnv/extraVolumes) or workload/managed
@@ -146,9 +155,9 @@ config:
   # structs, so this list is file/values-only (no G2O_TENANTS__<index>__*
   # env equivalent) — use --set/-f to override it.
   tenants:
-    - # -- Entra tenant GUID or verified domain.
+    - # -- Hyphenated Entra directory GUID only. Verified domains and arbitrary names are rejected.
       tenant_id: "00000000-0000-0000-0000-000000000000"
-      # -- App registration (application) ID. Optional if AZURE_CLIENT_ID (secret, above) is set.
+      # -- Optional expected application ID. A non-secret consistency assertion only; never credential selection.
       client_id: ""
       # Optional per-tenant collector overrides, layered on top of `collectors`
       # below (field-by-field), e.g.:
@@ -160,10 +169,11 @@ config:
       # reads from outside Graph, for signals Graph has no endpoint for at all
       # (MicrosoftGraphActivityLogs et al; see docs/blob-ingest.md). Setting
       # account_url is the opt-in; unset (default) registers no blob collectors,
-      # so a cluster with no storage account is unaffected. Reuses this tenant's
-      # AZURE_* credential, which needs the DATA-plane role "Storage Blob Data
-      # Reader" on that account — Owner grants container listing but NOT blob
-      # content reads, and that failure looks exactly like "no data yet".
+      # so a cluster with no storage account is unaffected. Reuses the process's
+      # tenant-verified ambient credential, which needs the DATA-plane role
+      # "Storage Blob Data Reader" on that account — Owner grants container
+      # listing but NOT blob content reads, and that failure looks exactly like
+      # "no data yet".
       # blob_ingest:
       #   account_url: "https://myaccount.blob.core.windows.net"
       #

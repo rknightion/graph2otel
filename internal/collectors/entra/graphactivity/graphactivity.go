@@ -71,7 +71,8 @@ func newCollector(d collectors.BlobDeps) collector.SnapshotCollector {
 		CollectorName: collectorName,
 		// exclude_self (#154): drop this tenant's own polling exhaust. MGAL carries
 		// the caller's appId, so it is in scope; the filter compares callerAppID
-		// against the tenant's own client_id and no-ops when either is off/unset.
+		// against the poller's proved authenticated application ID and no-ops when
+		// either filtering is off or that proof is unavailable.
 		ExcludeSelf:  d.ExcludeSelf,
 		SelfClientID: d.SelfClientID,
 		SelfAppID:    callerAppID,
@@ -147,7 +148,7 @@ func deriveActivity(rec map[string]any, _ telemetry.Event) []blobpipeline.Metric
 // lives, shared by mapActivity (which labels every record with it) and the
 // exclude_self filter (#154) — so the filter can never compare a different field
 // than the one the record ships. Verified live: this appId equals the poller's
-// own app-registration client_id (14,404 MGAL records matched, #154).
+// authenticated application ID (14,404 MGAL records matched, #154).
 func callerAppID(rec map[string]any) string {
 	return str(nested(rec, "properties"), "appId")
 }

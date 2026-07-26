@@ -13,6 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+
 	"github.com/rknightion/graph2otel/internal/admin"
 	"github.com/rknightion/graph2otel/internal/auth"
 	"github.com/rknightion/graph2otel/internal/availability"
@@ -30,6 +33,94 @@ import (
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
+
+type startupTokenCredential struct {
+	err error
+}
+
+func (c startupTokenCredential) GetToken(
+	context.Context,
+	policy.TokenRequestOptions,
+) (azcore.AccessToken, error) {
+	return azcore.AccessToken{Token: "header.payload.signature"}, c.err
+}
+
+func startupTenantAuth(tenantID string) *auth.TenantAuth {
+	return &auth.TenantAuth{
+		TenantID: tenantID,
+		Cred:     startupTokenCredential{},
+	}
+}
+
+func TestSetupTenantTokenProofFailureRetainsBoundedStartupFailure(t *testing.T) {
+	const sentinel = "tenant-proof super-secret"
+	provider, err := telemetry.NewProvider(context.Background(), telemetry.Options{
+		Protocol:     "stdout",
+		StdoutWriter: io.Discard,
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := provider.Shutdown(context.Background()); err != nil {
+			t.Errorf("provider shutdown: %v", err)
+		}
+	})
+
+	cfg := &config.Config{
+		CheckpointDir: t.TempDir(),
+		Tenants:       []config.TenantConfig{{TenantID: "tenant-a"}},
+	}
+	var wg sync.WaitGroup
+	var logOutput bytes.Buffer
+	source, err := setupTenantWithGraphAndLicenseBuilders(
+		context.Background(),
+		&auth.TenantAuth{
+			TenantID: "tenant-a",
+			Cred:     startupTokenCredential{err: errors.New(sentinel)},
+		},
+		cfg,
+		provider,
+		slog.New(slog.NewTextHandler(&logOutput, nil)),
+		graphclient.NewWorkloadLimiter(),
+		map[admin.SkipKey]string{},
+		&wg,
+		func(context.Context, *auth.TenantAuth, graphclient.Options) (*graphclient.Client, error) {
+			t.Fatal("Graph client builder called after tenant token proof failed")
+			return nil, nil
+		},
+		func(context.Context, *graphclient.Client) (license.Capabilities, error) {
+			t.Fatal("license detector called after tenant token proof failed")
+			return nil, nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("setupTenantWithGraphAndLicenseBuilders() error = %v, want recoverable source", err)
+	}
+	wg.Wait()
+
+	if got := source.StartupFailure; got != admin.StartupFailureCredentialInitialization {
+		t.Fatalf("StartupFailure = %q, want %q", got, admin.StartupFailureCredentialInitialization)
+	}
+	if source.Availability == nil {
+		t.Fatal("failed tenant has nil availability tracker")
+	}
+	for _, point := range source.Availability.Snapshot() {
+		if point.State == availability.StateDisabled {
+			continue
+		}
+		if point.State != availability.StateStartupFailed ||
+			point.Reason != availability.ReasonCredentialInitializationFailed {
+			t.Fatalf("%s = %+v, want bounded credential startup failure", point.Collector, point)
+		}
+	}
+	if strings.Contains(string(source.StartupFailure), sentinel) {
+		t.Fatal("retained startup state contains raw token error")
+	}
+	if !strings.Contains(logOutput.String(), sentinel) {
+		t.Fatalf("startup log = %q, want operator-visible token error", logOutput.String())
+	}
+}
 
 func TestStartTenantsCredentialFailureRetainsCompleteBoundedAvailability(t *testing.T) {
 	const sentinel = "credential super-secret"
@@ -274,7 +365,7 @@ func TestSetupTenantWithGraphClientBuilderSanitizesConstructionFailure(t *testin
 	var wg sync.WaitGroup
 	source, err := setupTenantWithGraphClientBuilder(
 		context.Background(),
-		&auth.TenantAuth{TenantID: "tenant-a"},
+		startupTenantAuth("tenant-a"),
 		cfg,
 		provider,
 		logger,
@@ -350,7 +441,7 @@ func TestSetupTenantLicenseProbeFailureOnlyFailsCapabilityDependentAvailability(
 	var wg sync.WaitGroup
 	source, err := setupTenantWithGraphAndLicenseBuilders(
 		ctx,
-		&auth.TenantAuth{TenantID: "tenant-a"},
+		startupTenantAuth("tenant-a"),
 		&config.Config{CheckpointDir: t.TempDir()},
 		provider,
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -434,7 +525,7 @@ func TestSetupTenantInvalidO365ConfigurationRecomputesCoverage(t *testing.T) {
 	skips := map[admin.SkipKey]string{}
 	source, err := setupTenantWithGraphAndLicenseBuilders(
 		ctx,
-		&auth.TenantAuth{TenantID: "tenant-a"},
+		startupTenantAuth("tenant-a"),
 		cfg,
 		provider,
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -502,7 +593,7 @@ func TestSetupTenantWithoutBlobConfigurationDoesNotRegisterBlobCategories(t *tes
 	var wg sync.WaitGroup
 	source, err := setupTenantWithGraphAndLicenseBuilders(
 		ctx,
-		&auth.TenantAuth{TenantID: "tenant-a"},
+		startupTenantAuth("tenant-a"),
 		&config.Config{CheckpointDir: t.TempDir()},
 		provider,
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -571,7 +662,7 @@ func TestSetupTenantBlobInitializationFailureRecomputesCoverage(t *testing.T) {
 	skips := map[admin.SkipKey]string{}
 	source, err := setupTenantWithGraphAndLicenseBuilders(
 		ctx,
-		&auth.TenantAuth{TenantID: "tenant-a"},
+		startupTenantAuth("tenant-a"),
 		cfg,
 		provider,
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -647,7 +738,7 @@ func TestConfiguredOptionalLaneConstructionFailuresAreBoundedAndSanitized(t *tes
 				}}}
 				return registerMDCACollectors(
 					cfg,
-					&auth.TenantAuth{TenantID: "tenant-a"},
+					startupTenantAuth("tenant-a"),
 					allAvailabilityTestCapabilities(),
 					checkpoint.NewStore(t.TempDir()),
 					logger,
@@ -676,7 +767,7 @@ func TestConfiguredOptionalLaneConstructionFailuresAreBoundedAndSanitized(t *tes
 				}}}
 				return registerEXOCollectors(
 					cfg,
-					&auth.TenantAuth{TenantID: "tenant-a"},
+					startupTenantAuth("tenant-a"),
 					allAvailabilityTestCapabilities(),
 					logger,
 					nil,
@@ -702,7 +793,7 @@ func TestConfiguredOptionalLaneConstructionFailuresAreBoundedAndSanitized(t *tes
 				}}}
 				return registerHuntCollectors(
 					cfg,
-					&auth.TenantAuth{TenantID: "tenant-a"},
+					startupTenantAuth("tenant-a"),
 					allAvailabilityTestCapabilities(),
 					logger,
 					telemetrytest.New().Emitter(),
@@ -832,7 +923,8 @@ func TestOptionalRuntimeFactoriesCannotSilentlyReturnNilWhenActive(t *testing.T)
 					BlobIngest: config.BlobIngestConfig{AccountURL: "https://example.blob.core.windows.net"},
 				}}}
 				_ = registerBlobCollectors(
-					cfg, ta, nil, store, logger, registry, map[admin.SkipKey]string{}, nil,
+					cfg, ta, nil, store, logger, tenantSelfIdentity{},
+					registry, map[admin.SkipKey]string{}, nil,
 					[]collectors.BlobFactory{func(d collectors.BlobDeps) collector.SnapshotCollector {
 						if d.Source != nil {
 							return nil

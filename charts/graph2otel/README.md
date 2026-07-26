@@ -37,6 +37,7 @@ Poll the Microsoft Graph API (Entra ID + Intune) and export OpenTelemetry-native
 helm install g2o oci://ghcr.io/rknightion/charts/graph2otel --version <chart-version> \
   --set "config.tenants[0].tenant_id=<your-tenant-guid>" \
   --set "config.otlp.grafana_cloud.instance_id=<your-instance-id>" \
+  --set "secret.AZURE_TENANT_ID=<your-tenant-guid>" \
   --set "secret.AZURE_CLIENT_ID=<app-registration-client-id>" \
   --set "secret.AZURE_CLIENT_SECRET=<client-secret>" \
   --set "extraEnv[0].name=G2O_OTLP__GRAFANA_CLOUD__TOKEN" \
@@ -62,23 +63,37 @@ before anything renders.
 
 Tenant credentials are never read from `config.tenants` or any other config
 key: they come from `azidentity.DefaultAzureCredential` via well-known
-`AZURE_*` environment variables, injected through a Secret. graph2otel's
-multi-tenant model pins each `tenants[].tenant_id` into the credential per
-call, so **one** app registration's `AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET`
-authenticates against every tenant listed in `config.tenants` — there is no
-per-tenant secret to template.
+`AZURE_*` environment variables, injected through a Secret. Each
+`config.tenants[].tenant_id` must be a hyphenated Entra directory GUID;
+verified domains and arbitrary names are rejected. graph2otel sets that GUID
+on every token request, permits the credential to target only that directory,
+and verifies the returned token's `tid` before any tenant-labelled collector
+starts.
+
+`DefaultAzureCredential` selects one ambient application identity for the
+process. One multi-tenant app registration's `AZURE_CLIENT_ID` and credential
+can authenticate against every listed directory after its service principal
+has permissions and admin consent in each one — there is no per-tenant secret
+to template. `config.tenants[].client_id` is only an optional non-secret
+consistency assertion and cannot select or override that identity.
+
+Workload identity uses the platform-injected environment and federated token.
+Managed identity stays bound to its Azure home tenant; if its returned token
+`tid` differs from a configured directory GUID, graph2otel fails that tenant
+closed before emitting data.
 
 Provide credentials either inline (rendered into a chart-managed Secret) or
 reference a Secret you manage yourself:
 
 ```yaml
 secret:
+  AZURE_TENANT_ID: "11111111-1111-1111-1111-111111111111"
   AZURE_CLIENT_ID: "00000000-0000-0000-0000-000000000000"
   AZURE_CLIENT_SECRET: "..."
 ```
 
 ```yaml
-existingSecret: my-graph2otel-credentials   # must expose AZURE_CLIENT_ID / AZURE_CLIENT_SECRET
+existingSecret: my-graph2otel-credentials   # must expose the AZURE_* keys your credential leg requires
 ```
 
 For certificate-based auth (`AZURE_CLIENT_CERTIFICATE_PATH`), the container
@@ -169,8 +184,8 @@ running two.
 | config.profiling.pyroscope.tenant_id | string | `""` | X-Scope-OrgID for multi-tenant Pyroscope servers; leave empty for Grafana Cloud. |
 | config.profiling.pyroscope.upload_rate | string | `"15s"` | How often profiles are flushed; 0/omit uses the pyroscope default. |
 | config.tenants | list | `[{"client_id":"","tenant_id":"00000000-0000-0000-0000-000000000000"}]` | Tenants graph2otel polls. At least one entry is required unless otlp.protocol is "stdout". A flat env var cannot express a list of structs, so this list is file/values-only (no G2O_TENANTS__<index>__* env equivalent) — use --set/-f to override it. |
-| config.tenants[0].client_id | string | `""` | App registration (application) ID. Optional if AZURE_CLIENT_ID (secret, above) is set. |
-| config.tenants[0].tenant_id | string | `"00000000-0000-0000-0000-000000000000"` | Entra tenant GUID or verified domain. |
+| config.tenants[0].client_id | string | `""` | Optional expected application ID. A non-secret consistency assertion only; never credential selection. |
+| config.tenants[0].tenant_id | string | `"00000000-0000-0000-0000-000000000000"` | Hyphenated Entra directory GUID only. Verified domains and arbitrary names are rejected. |
 | existingSecret | string | `""` | Name of a pre-created Secret exposing the AZURE_* env keys below. When set, no Secret is rendered. |
 | extraEnv | list | `[]` | Extra env vars appended to the container, as-is (e.g. AZURE_CLIENT_CERTIFICATE_PATH pointing at a path mounted via extraVolumes below, for certificate auth instead of a client secret). |
 | extraVolumeMounts | list | `[]` | Extra volume mounts appended to the main container's volumeMounts, as-is. Paired with extraVolumes above by name. |
@@ -193,9 +208,9 @@ running two.
 | replicaCount | int | `1` | Replica count. Keep at 1 — graph2otel is a single-instance poller with no leader election or HA in v1 (see CLAUDE.md Architecture: none of the polled Graph endpoints support consumer-group/delta semantics that would make multi-replica coordination pay for itself). Scaling this up double-polls every tenant and double-emits every metric and log. |
 | resources | object | `{"limits":{"cpu":"500m","memory":"512Mi"},"requests":{"cpu":"50m","memory":"64Mi"}}` | Resource requests and limits. graph2otel caches per-tenant inventory (users/devices/groups/etc.) between polls, so the working set scales with tenant size and enabled-collector count more than tailscale2otel's — raise limits for a large multi-tenant deployment or many opt-in Intune/beta collectors. |
 | secret | object | `{"AZURE_CLIENT_ID":"","AZURE_CLIENT_SECRET":"","AZURE_TENANT_ID":""}` | Inline secret values rendered into a Secret and injected via envFrom. Keys left empty ("") are NOT rendered into the Secret, so azidentity's credential-chain fallbacks (workload identity, managed identity) still work when you deliberately omit a client-secret/certificate pair. |
-| secret.AZURE_CLIENT_ID | string | `""` | App registration (application) client ID. Required unless every tenants[] entry sets client_id in config.tenants and you rely on workload/ managed identity instead. |
+| secret.AZURE_CLIENT_ID | string | `""` | Ambient application client ID used by environment credentials, workload identity, or to select a user-assigned managed identity. One value applies to the process. config.tenants[].client_id is only a consistency assertion and never replaces or overrides this credential selection. |
 | secret.AZURE_CLIENT_SECRET | string | `""` | Client secret paired with AZURE_CLIENT_ID. Leave empty when using AZURE_CLIENT_CERTIFICATE_PATH (extraEnv/extraVolumes) or workload/managed identity instead. |
-| secret.AZURE_TENANT_ID | string | `""` | Ambient fallback tenant ID for DefaultAzureCredential. Usually NOT needed: NewTenantAuth pins each tenants[].tenant_id explicitly per credential, regardless of this value. |
+| secret.AZURE_TENANT_ID | string | `""` | Ambient/default tenant ID used by DefaultAzureCredential. Environment client-secret/certificate and workload-identity legs normally require it. It does not select a per-config tenant: graph2otel still sets each hyphenated config.tenants[].tenant_id on the request and verifies the returned tid. |
 | securityContext | object | `{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true,"runAsGroup":65532,"runAsUser":65532}` | Container-level security context. Drops all capabilities and runs with a read-only root filesystem (the app writes only to the checkpoint volume). Runs as the distroless `nonroot` uid/gid 65532 (a high, non-system id > 10000) to satisfy hardened-cluster policy. |
 | serviceAccount.annotations | object | `{}` | Annotations to add to the ServiceAccount. |
 | serviceAccount.automountServiceAccountToken | bool | `false` | Automount the ServiceAccount API token into the pod. graph2otel makes no Kubernetes API calls, so this defaults to false to drop an unused, attacker-useful credential from the network-facing pod. |

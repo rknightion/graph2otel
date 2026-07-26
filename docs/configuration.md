@@ -82,18 +82,37 @@ A list of Entra tenants to poll. At least one entry is required unless
 
 ```yaml
 tenants:
-  - tenant_id: "00000000-0000-0000-0000-000000000000" # Entra tenant GUID or verified domain
-    client_id: "" # app registration (application) ID; optional if AZURE_CLIENT_ID is set
+  - tenant_id: "00000000-0000-0000-0000-000000000000" # hyphenated Entra directory GUID
+    client_id: "" # optional expected app ID; an assertion, not credential selection
     collectors: # optional per-tenant overrides — see "Per-collector overrides" below
       "entra.signins.interactive":
         enabled: false
 ```
 
-`tenant_id` / `client_id` are **non-secret identifiers only** — they select which
-tenant/app registration a collector run targets. Auth material (client secret,
-certificate, or workload/managed identity) always comes from environment variables read
-by `azidentity.DefaultAzureCredential` — never from this file. See
+`tenant_id` is required to be the hyphenated Entra directory GUID. Hex digits are
+case-insensitive, but verified domains, arbitrary names, compact UUIDs and braced UUIDs
+are rejected. graph2otel sets that GUID on every token request, permits the credential
+to target only that directory, and verifies the returned token's `tid` before any
+collector or tenant-labelled signal starts.
+
+`azidentity.DefaultAzureCredential` independently selects one ambient application
+identity for the process. A configured `client_id` is only an optional, non-secret
+consistency assertion about that identity; it is never passed to the credential chain
+and cannot select or override it. If it differs from the `appid` proved from the actual
+Graph access token, startup warns once and the authenticated ID wins.
+
+Client-secret and certificate material comes from the process environment. Workload
+identity uses the platform-injected federated-token environment; managed identity uses
+the host-assigned identity. `AZURE_CLIENT_ID` selects the single ambient workload or
+user-assigned managed identity where required. Managed identity stays bound to its home
+tenant and ignores a cross-tenant request; a returned `tid` mismatch fails that tenant
+closed before data is emitted. None of that auth material belongs in this file. See
 [Getting Started](getting-started.md#auth-setup).
+
+When `exclude_self: true`, graph2otel compares record `appId` only with the authenticated
+token's proved `appid`. If token acquisition or claim decoding cannot prove a non-empty
+ID, the filter fails open: graph2otel retains every record and emits one bounded startup
+warning for that tenant. A configured `client_id` alone is never proof.
 
 ### `otlp`
 
@@ -273,11 +292,12 @@ is no checkpoint to resume from.
 
 ## Secrets — what never belongs in this file
 
-- Tenant credentials (client secret, certificate path, or workload/managed identity) are
-  **never** read from `tenants[]` or any other key here — only from the environment
-  variables `azidentity.DefaultAzureCredential` reads directly
-  (`AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`,
-  `AZURE_CLIENT_CERTIFICATE_PATH`).
+- Tenant credentials (client secret, certificate path, or workload/managed identity)
+  are **never** read from `tenants[]` or any other key here. They come from the ambient
+  environment or host identity used by `azidentity.DefaultAzureCredential`.
+- `tenants[].tenant_id` is the hyphenated directory GUID used to bind each token request
+  and verify its returned `tid`. `tenants[].client_id` may assert the expected non-secret
+  application ID, but it cannot choose the credential.
 - `otlp.grafana_cloud.token` is a credential and belongs in
   `G2O_OTLP__GRAFANA_CLOUD__TOKEN`, never in YAML.
 - `config.local.yaml` and `.env` are gitignored in this repo for exactly this reason —

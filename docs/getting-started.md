@@ -73,11 +73,16 @@ go build -ldflags "-X github.com/rknightion/graph2otel/internal/version.Version=
 
 ## Auth setup
 
-`graph2otel` uses `azidentity.DefaultAzureCredential` for app-only, client-credentials
-auth against each configured tenant — no signed-in user, no interactive login. Create an
-app registration per tenant (or one multi-tenant app registration reused across
-tenants), grant it the minimum read-only Graph API application permissions your enabled
-collectors need, get admin consent, then set:
+`graph2otel` uses `azidentity.DefaultAzureCredential` for app-only authentication — no
+signed-in user and no interactive login. The ambient credential chain selects one
+application identity for the process. Each `tenants[].tenant_id` must be the hyphenated
+Entra directory GUID; verified domains and arbitrary names are rejected. graph2otel sets
+that GUID on every token request, permits the credential to target only that directory,
+and verifies the returned token's `tid` before any collector or tenant-labelled signal
+starts. One multi-tenant app registration can serve every listed directory after its
+service principal has the required permissions and admin consent in each one.
+
+For client-secret or certificate authentication, configure the process environment:
 
 ```sh
 export AZURE_TENANT_ID="11111111-1111-1111-1111-111111111111"
@@ -86,9 +91,20 @@ export AZURE_CLIENT_SECRET="..."          # or, for certificate auth:
 # export AZURE_CLIENT_CERTIFICATE_PATH="/path/to/cert.pem"
 ```
 
-`tenants[].tenant_id` / `.client_id` in config are non-secret identifiers only — they
-select which tenant/app registration a collector run targets. Auth material is always
-supplied via environment, never written into YAML.
+Workload identity uses the platform-injected federated-token environment, including its
+single ambient `AZURE_CLIENT_ID`. Managed identity uses the identity assigned to the
+Azure host; set `AZURE_CLIENT_ID` for a user-assigned identity, or leave it unset for the
+system-assigned identity. Managed identity remains bound to its home tenant; if the
+returned token `tid` differs from a configured directory GUID, graph2otel fails that
+tenant closed before it emits data. These mechanisms still select one application
+identity for the process.
+
+For multiple tenants, add one YAML entry per directory GUID and keep one process-level
+credential configuration. `tenant_id` binds and verifies the directory. An optional
+`client_id` is only a non-secret consistency assertion about the ambient identity; it
+cannot select or override `DefaultAzureCredential`. If it differs from the `appid`
+proved from the actual Graph access token, startup warns once and the authenticated ID
+wins. Secrets and credential material always stay out of YAML.
 
 Once credentials and a config are in place, run the built-in permission preflight before
 your first real poll — it validates that every enabled collector's required Graph
@@ -110,7 +126,7 @@ log_level: info
 
 tenants:
   - tenant_id: "11111111-1111-1111-1111-111111111111"
-    client_id: "22222222-2222-2222-2222-222222222222"
+    client_id: "22222222-2222-2222-2222-222222222222" # optional identity assertion
 
 otlp:
   protocol: stdout

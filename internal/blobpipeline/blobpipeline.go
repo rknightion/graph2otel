@@ -42,8 +42,9 @@ import (
 const DefaultMaxBytesPerTick = 32 << 20
 
 // metricSelfExcluded counts records dropped by exclude_self (#154): a blob record
-// whose actor appId equals the tenant's own poller client_id — graph2otel's own
-// polling exhaust, up to ~60% of MicrosoftGraphActivityLogs volume (#152). It is
+// whose actor appId equals the poller's proved authenticated application ID —
+// graph2otel's own polling exhaust, up to ~60% of
+// MicrosoftGraphActivityLogs volume (#152). It is
 // a LOUD drop, never a silent one: a self-observability counter labeled per
 // collector, so a blob stream that goes ~60% quieter with the filter on reads as
 // "the filter is working", not "ingest broke". Normalizes to
@@ -140,11 +141,10 @@ type ContainerConfig struct {
 	// cursor advances exactly as for a Map-rejected record — undedupeable is
 	// degraded, misdated is wrong; this is neither, just deliberately unshipped.
 	ExcludeSelf bool
-	// SelfClientID is this tenant's own poller client_id, the value ExcludeSelf
-	// compares each record's SelfAppID against. Empty disables the filter even when
-	// ExcludeSelf is true — there is no "self" to match — so a tenant relying on a
-	// shared AZURE_CLIENT_ID rather than a configured client_id safely no-ops
-	// rather than matching every record's empty appId.
+	// SelfClientID is the poller's application ID proved from this tenant's Graph
+	// access token, the value ExcludeSelf compares each record's SelfAppID
+	// against. Empty disables the filter even when ExcludeSelf is true — there is
+	// no proved "self" to match — rather than matching every record's empty appId.
 	SelfClientID string
 	// SelfAppID extracts the actor appId from a raw record, reading the SAME field
 	// the category's Map does (one source of truth, so the filter can never compare
@@ -412,7 +412,7 @@ func emitLines(
 			// stalls the cursor. Self-ONLY: any other appId falls through
 			// untouched — a third party's records are never filtered.
 			e.Counter(metricSelfExcluded, "{record}",
-				"Blob records dropped by exclude_self because their appId matched this tenant's own poller client_id (#154).",
+				"Blob records dropped by exclude_self because their appId matched the poller's proved authenticated application ID (#154).",
 				1, telemetry.Attrs{semconv.AttrCollector: cfg.CollectorName})
 			outcomes.Add(recordoutcome.OutcomeFiltered, 1)
 			continue

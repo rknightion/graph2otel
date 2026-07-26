@@ -1646,7 +1646,7 @@
       "prometheus_name": "graph2otel_blob_self_excluded_total",
       "unit": "{record}",
       "kind": "sum",
-      "description": "Blob records dropped by exclude_self because their appId matched this tenant's own poller client_id (#154).",
+      "description": "Blob records dropped by exclude_self because their appId matched the poller's proved authenticated application ID (#154).",
       "additive": true,
       "domain": "graph2otel",
       "attr_keys": [
@@ -1985,7 +1985,7 @@
       "prometheus_name": "graph2otel_logpipeline_self_excluded_total",
       "unit": "{record}",
       "kind": "sum",
-      "description": "Graph-polled records dropped by exclude_self because their appId matched this tenant's own poller client_id (#176).",
+      "description": "Graph-polled records dropped by exclude_self because their appId matched the poller's proved authenticated application ID (#176).",
       "additive": true,
       "domain": "graph2otel",
       "attr_keys": [

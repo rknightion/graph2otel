@@ -663,8 +663,9 @@ func selfTestConfig(excludeSelf bool, selfClientID string, selfAppID func(map[st
 }
 
 // TestPollExcludesSelfAuthoredRecordsButNotThirdParty is the #152/#154 guard: a
-// record whose appId is the tenant's own poller client_id is dropped, and a
-// third party's record — ANY other appId — always passes through untouched.
+// record whose appId is the poller's proved authenticated application ID is
+// dropped, and a third party's record — ANY other appId — always passes through
+// untouched.
 func TestPollExcludesSelfAuthoredRecordsButNotThirdParty(t *testing.T) {
 	src := &fakeSource{blobs: map[string]string{
 		"tenantId=t1/y=2026/m=07/d=16/h=00/m=00/PT1H.json": recWithApp("self", "POLLER") + recWithApp("other", "THIRDPARTY"),
@@ -764,9 +765,9 @@ func TestPollNeverFiltersWhenSelfAppIDIsNil(t *testing.T) {
 	}
 }
 
-// TestPollNeverFiltersWhenSelfClientIDIsEmpty guards the "self is unknown" case:
-// a tenant relying on a shared AZURE_CLIENT_ID with no configured client_id must
-// not have every record match an empty appId — the filter no-ops instead.
+// TestPollNeverFiltersWhenSelfClientIDIsEmpty guards the "self is unproved" case:
+// when authenticated application ID proof is unavailable, an empty appId must
+// not match as self — the filter no-ops instead.
 func TestPollNeverFiltersWhenSelfClientIDIsEmpty(t *testing.T) {
 	src := &fakeSource{blobs: map[string]string{
 		// One record deliberately has an empty appId; it must NOT be treated as self.

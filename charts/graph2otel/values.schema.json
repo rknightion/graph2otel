@@ -383,9 +383,13 @@
                     "items": {
                         "type": "object",
                         "additionalProperties": false,
+                        "required": [
+                            "tenant_id"
+                        ],
                         "properties": {
                             "tenant_id": {
-                                "type": "string"
+                                "type": "string",
+                                "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
                             },
                             "client_id": {
                                 "type": "string"

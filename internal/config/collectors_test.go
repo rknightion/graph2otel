@@ -8,6 +8,11 @@ import (
 	"github.com/rknightion/graph2otel/internal/config"
 )
 
+const (
+	collectorTenantA = "4b8c18bd-2f9f-4227-af55-9f1061cf9c32"
+	collectorTenantB = "c98e5057-edde-4666-b301-186a01b4dc58"
+)
+
 // TestDefaultsResolveCollectorsEnabled: with no collectors config at all, every
 // collector resolves to enabled with a zero interval meaning "use the
 // collector's built-in default".
@@ -78,35 +83,35 @@ collectors:
   entra.provisioning:
     source: graph
 tenants:
-  - tenant_id: "aaaa"
+  - tenant_id: "4b8c18bd-2f9f-4227-af55-9f1061cf9c32"
     collectors:
       entra.directory_audits:
         source: graph
-  - tenant_id: "bbbb"
+  - tenant_id: "c98e5057-edde-4666-b301-186a01b4dc58"
     collectors:
       entra.provisioning:
         source: blob
 `
 	cfg := mustLoad(t, y)
 	// Default when nothing is set: graph.
-	if got := cfg.CollectorSource("aaaa", "entra.signins.interactive"); got != "graph" {
+	if got := cfg.CollectorSource(collectorTenantA, "entra.signins.interactive"); got != "graph" {
 		t.Errorf("unset source = %q, want graph", got)
 	}
 	// Global blob, per-tenant override back to graph wins.
-	if got := cfg.CollectorSource("aaaa", "entra.directory_audits"); got != "graph" {
-		t.Errorf("tenant aaaa directory_audits = %q, want graph (override wins)", got)
+	if got := cfg.CollectorSource(collectorTenantA, "entra.directory_audits"); got != "graph" {
+		t.Errorf("tenant A directory_audits = %q, want graph (override wins)", got)
 	}
 	// Global blob, no tenant override → blob.
 	if got := cfg.CollectorSource("cccc", "entra.directory_audits"); got != "blob" {
 		t.Errorf("tenant cccc directory_audits = %q, want blob (global)", got)
 	}
 	// Global graph, per-tenant override to blob wins.
-	if got := cfg.CollectorSource("bbbb", "entra.provisioning"); got != "blob" {
-		t.Errorf("tenant bbbb provisioning = %q, want blob (override wins)", got)
+	if got := cfg.CollectorSource(collectorTenantB, "entra.provisioning"); got != "blob" {
+		t.Errorf("tenant B provisioning = %q, want blob (override wins)", got)
 	}
 	// Global graph, no override → graph.
-	if got := cfg.CollectorSource("aaaa", "entra.provisioning"); got != "graph" {
-		t.Errorf("tenant aaaa provisioning = %q, want graph", got)
+	if got := cfg.CollectorSource(collectorTenantA, "entra.provisioning"); got != "graph" {
+		t.Errorf("tenant A provisioning = %q, want graph", got)
 	}
 }
 
@@ -119,27 +124,27 @@ collectors:
     enabled: true
     interval: "5m"
 tenants:
-  - tenant_id: "aaaa"
+  - tenant_id: "4b8c18bd-2f9f-4227-af55-9f1061cf9c32"
     collectors:
       sign_ins:
         enabled: false
-  - tenant_id: "bbbb"
+  - tenant_id: "c98e5057-edde-4666-b301-186a01b4dc58"
     collectors:
       sign_ins:
         interval: "1m"
 `
 	cfg := mustLoad(t, y)
-	// tenant aaaa disables the globally-enabled collector.
-	if en, _ := cfg.CollectorSettings("aaaa", "sign_ins"); en {
-		t.Errorf("tenant aaaa should have sign_ins disabled by override")
+	// Tenant A disables the globally-enabled collector.
+	if en, _ := cfg.CollectorSettings(collectorTenantA, "sign_ins"); en {
+		t.Errorf("tenant A should have sign_ins disabled by override")
 	}
-	// tenant bbbb keeps it enabled but overrides the interval.
-	en, interval := cfg.CollectorSettings("bbbb", "sign_ins")
+	// Tenant B keeps it enabled but overrides the interval.
+	en, interval := cfg.CollectorSettings(collectorTenantB, "sign_ins")
 	if !en {
-		t.Errorf("tenant bbbb should keep sign_ins enabled")
+		t.Errorf("tenant B should keep sign_ins enabled")
 	}
 	if interval != 1*time.Minute {
-		t.Errorf("tenant bbbb interval = %v, want 1m override", interval)
+		t.Errorf("tenant B interval = %v, want 1m override", interval)
 	}
 	// an unknown tenant falls back to the global config.
 	_, gInterval := cfg.CollectorSettings("unknown", "sign_ins")
@@ -215,7 +220,7 @@ func TestValidateRejectsSubSecondPerTenantInterval(t *testing.T) {
 otlp:
   protocol: stdout
 tenants:
-  - tenant_id: "aaaa"
+  - tenant_id: "4b8c18bd-2f9f-4227-af55-9f1061cf9c32"
     collectors:
       sign_ins:
         interval: "10ms"
@@ -256,7 +261,7 @@ collectors:
   entra.signin_activity:
     enabled: false
 tenants:
-  - tenant_id: t2
+  - tenant_id: "c98e5057-edde-4666-b301-186a01b4dc58"
     collectors:
       entra.signin_activity:
         enabled: true
@@ -274,8 +279,8 @@ tenants:
 	if cfg.CollectorExplicitlyEnabled("t1", "entra.signin_activity") {
 		t.Error("global enabled=false is not explicitly enabled")
 	}
-	// Per-tenant override flips it explicitly true for t2.
-	if !cfg.CollectorExplicitlyEnabled("t2", "entra.signin_activity") {
+	// Per-tenant override flips it explicitly true for tenant B.
+	if !cfg.CollectorExplicitlyEnabled(collectorTenantB, "entra.signin_activity") {
 		t.Error("per-tenant enabled=true should be explicitly enabled for that tenant")
 	}
 }

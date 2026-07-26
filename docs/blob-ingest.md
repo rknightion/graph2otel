@@ -149,20 +149,24 @@ stream with one flag (#176):
 
 ```yaml
 tenants:
-  - tenant_id: "..."
-    client_id: "<the poller's app registration id>"
+  - tenant_id: "11111111-1111-1111-1111-111111111111"
+    client_id: "<optional expected poller app id>"
     exclude_self: true
     blob_ingest:
       account_url: "https://myaccount.blob.core.windows.net"
 ```
 
-- **Self-only, by `appId`.** A record is dropped **if and only if** its actor
-  `appId` equals *this tenant's own* `client_id` — the poller's app registration
-  (live-verified: the poller's `client_id` is exactly the MGAL `appId`, 14,404
-  records matched, #154). Any other `appId` — including Microsoft's own
-  first-party service principals — always passes through untouched.
-- **Per-tenant.** "Self" is that tenant's `client_id`, never a global list, so one
-  deployment polling many tenants filters each against its own poller identity.
+- **Self-only, by proved `appId`.** A record is dropped **if and only if** its
+  actor `appId` equals the non-empty `appid` proved from the Graph access token
+  issued to that tenant-pinned credential. That is the poller's authenticated
+  application identity (live-verified: the poller's application ID is exactly
+  the MGAL `appId`, 14,404 records matched, #154). Any other `appId` — including
+  Microsoft's own first-party service principals — always passes untouched.
+- **Per-tenant proof.** One deployment polling many directories resolves the
+  identity once from each token whose requested tenant and returned `tid` match
+  that entry's hyphenated directory GUID, then shares the result across the
+  Graph and blob paths. The ambient `DefaultAzureCredential` still selects one
+  application identity for the process.
 - **Which transports it covers (live-measured 2026-07-19, #176):**
   - **Blob categories that carry an `appId`** — `MicrosoftGraphActivityLogs`
     (`entra.graph_activity`) and the service-principal sign-in categories. This is
@@ -185,12 +189,13 @@ tenants:
   dashboard is visible and alertable rather than looking like breakage. On the blob
   path the bytes are still consumed, so the byte-offset cursor advances exactly as
   for any other dropped record.
-- **Resolving "self".** The poller's app id comes from the tenant's `client_id`,
-  falling back to the `AZURE_CLIENT_ID` the `DefaultAzureCredential` env leg already
-  uses — so an env-authenticated deployment (the common case) works without duplicating
-  the id into config, while a per-tenant `client_id` still wins for a multi-app process.
-  Only if neither is set can "self" not be identified; the filter then no-ops and
-  graph2otel logs a warning at startup rather than silently doing nothing.
+- **Resolving "self".** `client_id` in YAML is an optional non-secret
+  consistency assertion only. It never selects a credential or controls this
+  comparison. If it disagrees with the token's proved `appid`, graph2otel warns
+  once and uses the authenticated ID; a record matching only the stale configured
+  value still passes. If token acquisition or claim decoding cannot prove a
+  non-empty `appid`, filtering fails open: every record is retained and startup
+  emits one bounded warning for the tenant.
 
 ## Setup
 
@@ -208,13 +213,13 @@ tenants:
 
    ```yaml
    tenants:
-     - tenant_id: "..."
+     - tenant_id: "11111111-1111-1111-1111-111111111111"
        blob_ingest:
          account_url: "https://myaccount.blob.core.windows.net"
    ```
 
-No credential goes in config: the tenant's existing `AZURE_*` credential is reused, and
-the SDK requests the storage audience itself.
+No credential goes in config: the process's ambient `DefaultAzureCredential` identity is
+reused, and the SDK requests the storage audience itself.
 
 graph2otel is **read-only** on the account — it cannot write or delete a blob. Retention
 belongs entirely to the lifecycle rule; see "Why read-only" below.

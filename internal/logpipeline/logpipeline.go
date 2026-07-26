@@ -30,8 +30,8 @@ import (
 )
 
 // metricSelfExcluded counts Graph-polled records dropped by exclude_self because
-// their appId matched this tenant's own poller client_id (#176). It is the
-// logpipeline analog of blobpipeline's graph2otel.blob.self_excluded, and
+// their appId matched the poller's proved authenticated application ID (#176).
+// It is the logpipeline analog of blobpipeline's graph2otel.blob.self_excluded, and
 // normalizes to graph2otel_logpipeline_self_excluded_total on the Prometheus
 // side (#82). A loud, per-collector counter — never a silent drop.
 const metricSelfExcluded = "graph2otel.logpipeline.self_excluded"
@@ -143,11 +143,10 @@ type EndpointConfig struct {
 	// empty window would (the watermark reaches to-SafetyLag regardless), so it
 	// never causes a re-scan loop.
 	ExcludeSelf bool
-	// SelfClientID is this tenant's own poller client_id, the value ExcludeSelf
-	// compares each record's SelfAppID against. Empty disables the filter even
-	// when ExcludeSelf is true — there is no "self" to match — so a tenant relying
-	// on a shared AZURE_CLIENT_ID with no configured client_id safely no-ops
-	// rather than matching every empty appId.
+	// SelfClientID is the poller's application ID proved from this tenant's Graph
+	// access token, the value ExcludeSelf compares each record's SelfAppID
+	// against. Empty disables the filter even when ExcludeSelf is true — there is
+	// no proved "self" to match — rather than matching every empty appId.
 	SelfClientID string
 	// SelfAppID extracts the actor appId from a raw record. nil disables the
 	// filter (a stream whose records carry no appId, i.e. every sign-in stream
@@ -395,7 +394,7 @@ func Poll(
 	}
 	if selfExcluded > 0 {
 		e.Counter(metricSelfExcluded, "{record}",
-			"Graph-polled records dropped by exclude_self because their appId matched this tenant's own poller client_id (#176).",
+			"Graph-polled records dropped by exclude_self because their appId matched the poller's proved authenticated application ID (#176).",
 			float64(selfExcluded), telemetry.Attrs{semconv.AttrCollector: cfg.CollectorName})
 	}
 	for range undated {

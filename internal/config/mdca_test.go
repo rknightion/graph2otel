@@ -5,11 +5,13 @@ import (
 	"testing"
 )
 
+const mdcaTestDirectoryID = "4b8c18bd-2f9f-4227-af55-9f1061cf9c32"
+
 // baseValidConfig returns the smallest config that passes Validate, so an MDCA
 // case can mutate one tenant's mdca block and assert only that.
 func baseValidConfig(mdca MDCAConfig) *Config {
 	c := Default()
-	c.Tenants = []TenantConfig{{TenantID: "t1", MDCA: mdca}}
+	c.Tenants = []TenantConfig{{TenantID: mdcaTestDirectoryID, MDCA: mdca}}
 	return c
 }
 

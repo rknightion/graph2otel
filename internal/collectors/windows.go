@@ -74,10 +74,10 @@ type WindowDeps struct {
 	// live-measured 2026-07-19), so this is opt-in, but the mechanism is wired so
 	// one tenant flag covers both the blob and Graph transports.
 	ExcludeSelf bool
-	// SelfClientID is this tenant's poller client_id (config tenants[].client_id,
-	// falling back to AZURE_CLIENT_ID), the value ExcludeSelf matches a record's
-	// appId against. Per-tenant, never a third party's id. Empty disables the
-	// filter even when ExcludeSelf is true — there is no "self" to match.
+	// SelfClientID is the poller's application ID proved from this tenant's Graph
+	// access token, the value ExcludeSelf matches a record's appId against. A
+	// configured client_id never supplies it. Empty disables the filter even when
+	// ExcludeSelf is true — there is no proved "self" to match.
 	SelfClientID string
 }
 

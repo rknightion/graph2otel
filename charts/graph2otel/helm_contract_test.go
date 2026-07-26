@@ -259,6 +259,45 @@ func TestCollectorOverrideSchemaHasBoundedNamesAndSourceEnum(t *testing.T) {
 	}
 }
 
+func TestSchemaRequiresHyphenatedTenantDirectoryGUID(t *testing.T) {
+	helm, err := exec.LookPath("helm")
+	if err != nil {
+		t.Skip("helm is not installed; schema contract is exercised by the Helm CI job")
+	}
+
+	validArgs := []string{
+		"template", "test", ".",
+		"--set-string", "config.tenants[0].tenant_id=4B8C18BD-2F9F-4227-AF55-9F1061CF9C32",
+	}
+	if rendered, err := exec.Command(helm, validArgs...).CombinedOutput(); err != nil {
+		t.Fatalf("helm template rejected an uppercase hyphenated directory GUID: %v\n%s", err, rendered)
+	}
+
+	invalidArgs := []string{
+		"template", "test", ".",
+		"--set-string", "config.tenants[0].tenant_id=contoso.onmicrosoft.com",
+	}
+	rendered, err := exec.Command(helm, invalidArgs...).CombinedOutput()
+	if err == nil {
+		t.Fatal("helm template accepted a verified domain as config.tenants[0].tenant_id")
+	}
+	if !strings.Contains(string(rendered), "tenant_id") {
+		t.Fatalf("helm schema error does not identify tenant_id:\n%s", rendered)
+	}
+
+	missingArgs := []string{
+		"template", "test", ".",
+		"--set-json", `config.tenants=[{"client_id":""}]`,
+	}
+	rendered, err = exec.Command(helm, missingArgs...).CombinedOutput()
+	if err == nil {
+		t.Fatal("helm template accepted a config.tenants item with no tenant_id")
+	}
+	if !strings.Contains(string(rendered), "tenant_id") {
+		t.Fatalf("helm schema error does not identify missing tenant_id:\n%s", rendered)
+	}
+}
+
 func renderChart(t *testing.T, args ...string) []byte {
 	t.Helper()
 

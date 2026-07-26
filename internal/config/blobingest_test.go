@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+const blobTestDirectoryID = "4b8c18bd-2f9f-4227-af55-9f1061cf9c32"
+
 func writeConfig(t *testing.T, body string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "config.yaml")
@@ -111,7 +113,7 @@ func TestValidateRejectsAMalformedBlobAccountURL(t *testing.T) {
 			cfg := Default()
 			cfg.OTLP.Protocol = "stdout"
 			cfg.Tenants = []TenantConfig{{
-				TenantID:   "t1",
+				TenantID:   blobTestDirectoryID,
 				BlobIngest: BlobIngestConfig{AccountURL: tc.url},
 			}}
 			err := cfg.Validate()
@@ -129,7 +131,7 @@ func TestValidateAcceptsAValidBlobAccountURL(t *testing.T) {
 	cfg := Default()
 	cfg.OTLP.Protocol = "stdout"
 	cfg.Tenants = []TenantConfig{{
-		TenantID:   "t1",
+		TenantID:   blobTestDirectoryID,
 		BlobIngest: BlobIngestConfig{AccountURL: "https://graph2otelm7kni.blob.core.windows.net"},
 	}}
 	if err := cfg.Validate(); err != nil {

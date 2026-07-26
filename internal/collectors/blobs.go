@@ -39,11 +39,10 @@ type BlobDeps struct {
 	// factory copies it into its ContainerConfig; a category with no appId ignores
 	// it by leaving ContainerConfig.SelfAppID nil.
 	ExcludeSelf bool
-	// SelfClientID is this tenant's poller client_id (config tenants[].client_id),
-	// the value ExcludeSelf matches a record's appId against. Per-tenant, never a
-	// global list: one deployment polling many tenants filters each against its own
-	// identity. Empty means "self is unknown" and the filter no-ops even when
-	// ExcludeSelf is true.
+	// SelfClientID is the poller's application ID proved from this tenant's Graph
+	// access token, the value ExcludeSelf matches a record's appId against. A
+	// configured client_id never supplies it. Empty means "self is unproved" and
+	// the filter no-ops even when ExcludeSelf is true.
 	SelfClientID string
 	// MetricRecencyWindow is the tenant's blob_ingest.metric_recency_window (#128):
 	// a factory that derives metrics copies it into ContainerConfig.RecencyWindow,

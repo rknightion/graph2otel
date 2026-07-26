@@ -50,7 +50,7 @@ for where that claim stops holding.
    ```yaml
    tenants:
      - tenant_id: "11111111-1111-1111-1111-111111111111"
-       client_id: "22222222-2222-2222-2222-222222222222" # or omit if AZURE_CLIENT_ID is set
+       client_id: "22222222-2222-2222-2222-222222222222" # optional identity assertion
 
    otlp:
      protocol: http
@@ -225,11 +225,17 @@ mode" metric to build:
 
 ## Auth setup
 
-`graph2otel` uses `azidentity.DefaultAzureCredential` for app-only, client-credentials
-auth against each configured tenant — no signed-in user, no interactive login. Create an
-app registration per tenant (or one multi-tenant app registration reused across tenants),
-grant it the minimum read-only Graph API application permissions your enabled collectors
-need, and get admin consent, then set:
+`graph2otel` uses `azidentity.DefaultAzureCredential` for app-only authentication — no
+signed-in user and no interactive login. The ambient credential chain selects one
+application identity for the process. Each `tenants[].tenant_id` must be the hyphenated
+Entra directory GUID; verified domains and arbitrary names are rejected. graph2otel sets
+that GUID on every token request, permits the credential to target only that directory,
+and verifies the returned token's `tid` before any collector or tenant-labelled signal
+starts. One multi-tenant app registration can therefore be reused across every listed
+directory after its service principal has the required permissions and admin consent in
+each one.
+
+For client-secret or certificate authentication, configure the process environment:
 
 ```sh
 export AZURE_TENANT_ID="11111111-1111-1111-1111-111111111111"
@@ -238,10 +244,23 @@ export AZURE_CLIENT_SECRET="..."          # or, for certificate auth:
 # export AZURE_CLIENT_CERTIFICATE_PATH="/path/to/cert.pem"
 ```
 
-For multiple tenants, repeat the credential env vars per tenant and list each tenant in
-`config.yaml` (see below) — auth material is always supplied via environment, never
-written into YAML. See [`docs/permissions.md`](docs/permissions.md) for the full app
-registration + scope + admin-consent walkthrough.
+Workload identity uses the platform-injected federated-token environment, including its
+single ambient `AZURE_CLIENT_ID`. Managed identity uses the identity assigned to the
+Azure host; set `AZURE_CLIENT_ID` to select a user-assigned identity, or leave it unset
+for the system-assigned identity. Managed identity remains bound to its home tenant and
+ignores cross-tenant targeting; if its returned token `tid` differs from the configured
+directory GUID, graph2otel fails that tenant closed before it emits data. These
+mechanisms still select one application identity for the process.
+
+For multiple tenants, list every directory GUID in `config.yaml`; do not repeat
+credential environment variables per tenant. `tenant_id` binds and verifies the
+directory, not the application identity. An optional YAML `client_id` is a non-secret
+consistency assertion only: it cannot select or override `DefaultAzureCredential`. If it
+disagrees with the `appid` proved from the actual Graph access token, startup warns once
+and the authenticated ID wins. Auth material is always ambient and never written into
+YAML. See
+[`docs/permissions.md`](docs/permissions.md) for the full app registration + scope +
+admin-consent walkthrough.
 
 ## Configuration
 
@@ -249,8 +268,8 @@ registration + scope + admin-consent walkthrough.
 log_level: info # debug | info | warn | error
 
 tenants:
-  - tenant_id: "11111111-1111-1111-1111-111111111111" # Entra tenant GUID or verified domain
-    client_id: "22222222-2222-2222-2222-222222222222" # app registration (application) ID
+  - tenant_id: "11111111-1111-1111-1111-111111111111" # hyphenated Entra directory GUID
+    client_id: "22222222-2222-2222-2222-222222222222" # optional expected app ID
     # collectors:               # optional per-tenant overrides, layered on the global block
     #   "entra.signins.interactive":
     #     enabled: false

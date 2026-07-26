@@ -171,9 +171,10 @@ func newBlobCollector(s blobSpec, d collectors.BlobDeps) *blobCollectorImpl {
 		CollectorName: s.name,
 		// exclude_self (#154): a sign-in record carries the signing-in app's appId,
 		// so a poller-authored sign-in is droppable. Self-only and per-tenant: the
-		// filter compares blobSelfAppID against the tenant's own client_id and
-		// no-ops when either is off/unset — a third party (including Microsoft's own
-		// first-party SPs in MicrosoftServicePrincipalSignInLogs) always passes.
+		// filter compares blobSelfAppID against the poller's proved authenticated
+		// application ID and no-ops when filtering is off or that proof is
+		// unavailable — a third party (including Microsoft's own first-party SPs
+		// in MicrosoftServicePrincipalSignInLogs) always passes.
 		ExcludeSelf:  d.ExcludeSelf,
 		SelfClientID: d.SelfClientID,
 		SelfAppID:    blobSelfAppID,

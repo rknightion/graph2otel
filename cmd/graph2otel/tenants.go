@@ -397,6 +397,32 @@ func setupTenantWithGraphAndLicenseBuilders(
 	inventory := resolveAvailabilityInventory(cfg, ta.TenantID, nil, false)
 	var availabilityFailures []availabilityStartupFailure
 
+	// Prove the configured directory before constructing any tenant-labeled
+	// ingest path. TenantAuth's credential wrapper pins every request and
+	// verifies the returned tid claim; doing one request here prevents a
+	// blob-only or otherwise idle Graph path from emitting under an unproved
+	// tenant label.
+	if err := ta.SmokeToken(ctx); err != nil {
+		tlog.Error("proving tenant credential", "error", err)
+		tracker := availability.NewTracker(
+			ta.TenantID,
+			startupFailedInventory(
+				inventory,
+				cfg,
+				ta.TenantID,
+				nil,
+				false,
+				availability.ReasonCredentialInitializationFailed,
+			),
+		)
+		tracker.Emit(emitter)
+		return admin.CollectorSource{
+			TenantID:       ta.TenantID,
+			Availability:   tracker,
+			StartupFailure: admin.StartupFailureCredentialInitialization,
+		}, nil
+	}
+
 	gc, err := buildGraphClient(ctx, ta, graphclient.Options{
 		Emitter:  emitter,
 		Limiter:  limiter,
@@ -518,11 +544,11 @@ func setupTenantWithGraphAndLicenseBuilders(
 	jobClient := jobpipeline.NewGraphJobClient(gc)
 	// exclude_self also filters the Graph-polled service-principal sign-in stream
 	// (#176): the same tenant flag that drops the poller's blob exhaust drops its
-	// own SP sign-ins. The self-share there is small (~1.1% live-measured) so this
-	// is off by default, but it is wired through so a tenant that opts in filters
-	// both transports with one key. A window collector that is not self-excludable
-	// simply ignores these fields.
-	wExcludeSelf, wClientID := tenantExcludeSelf(cfg, ta.TenantID)
+	// own SP sign-ins. Resolve the application identity once from the token issued
+	// to this TenantAuth, then reuse that proof across both transport paths. A
+	// configured client_id is only a consistency assertion; it is never the
+	// comparison authority.
+	selfIdentity := resolveTenantSelfIdentity(ctx, cfg, ta, logger)
 	// The Exchange Online client is built HERE, once, rather than inside
 	// registerEXOCollectors, because two paths now need it: the EXO snapshot
 	// collectors and the window collectors whose stream lives on that transport
@@ -532,17 +558,16 @@ func setupTenantWithGraphAndLicenseBuilders(
 	// buildErr is nil, for a tenant with no exchange_online block.
 	exoClient, exoBuildErr := tenantEXOClient(cfg, ta, tlog, emitter)
 	wdeps := collectors.WindowDeps{
-		Graph:        gc,
-		EXO:          exoClient,
-		TenantID:     ta.TenantID,
-		Logger:       tlog,
-		Caps:         caps,
-		Fetcher:      fetcher,
-		JobClient:    jobClient,
-		Store:        store,
-		ExcludeSelf:  wExcludeSelf,
-		SelfClientID: wClientID,
+		Graph:     gc,
+		EXO:       exoClient,
+		TenantID:  ta.TenantID,
+		Logger:    tlog,
+		Caps:      caps,
+		Fetcher:   fetcher,
+		JobClient: jobClient,
+		Store:     store,
 	}
+	selfIdentity.applyWindow(&wdeps)
 	for _, wf := range paths.window {
 		expected := newAvailabilityCandidate(
 			wf(snapshotWindowDeps()).Collector,
@@ -579,7 +604,7 @@ func setupTenantWithGraphAndLicenseBuilders(
 	// that has provisioned no storage account registers none of these, so a
 	// default deployment is untouched.
 	if reason := registerBlobCollectors(
-		cfg, ta, caps, store, tlog, registry, skips, polledNames, paths.blob,
+		cfg, ta, caps, store, tlog, selfIdentity, registry, skips, polledNames, paths.blob,
 		func(accountURL string, ta *auth.TenantAuth) (blobpipeline.Source, error) {
 			return blobpipeline.NewAzureSource(accountURL, ta.Cred)
 		},
@@ -817,6 +842,7 @@ func registerBlobCollectors(
 	caps license.Capabilities,
 	store *checkpoint.Store,
 	tlog *slog.Logger,
+	selfIdentity tenantSelfIdentity,
 	registry *collector.Registry,
 	skips map[admin.SkipKey]string,
 	polledNames map[string]bool,
@@ -842,24 +868,11 @@ func registerBlobCollectors(
 		return availability.ReasonTransportInitializationFailed
 	}
 
-	excludeSelf, clientID := tenantExcludeSelf(cfg, ta.TenantID)
-	if excludeSelf && clientID == "" {
-		// exclude_self on but no way to identify "self": the filter would no-op
-		// silently, which is the exact failure mode the loud-drop design (#154)
-		// exists to avoid. Say so once at startup rather than leaving an operator
-		// to wonder why a ~60% reduction never appeared. (Emitted once at the blob
-		// path; the window path shares the same resolver so a second warning would
-		// be redundant.)
-		tlog.Warn("exclude_self is enabled but 'self' cannot be identified; "+
-			"self-exhaust filtering is DISABLED — set tenants[].client_id to the poller's "+
-			"app registration ID, or provide AZURE_CLIENT_ID in the environment (#176)",
-			"tenant", ta.TenantID)
-	}
 	bdeps := collectors.BlobDeps{
 		Source: src, TenantID: ta.TenantID, Logger: tlog, Store: store,
-		ExcludeSelf: excludeSelf, SelfClientID: clientID,
 		MetricRecencyWindow: cfg.BlobMetricRecencyWindow(ta.TenantID),
 	}
+	selfIdentity.applyBlob(&bdeps)
 	for _, bf := range blobFactories {
 		expected := newAvailabilityCandidate(
 			bf(collectors.BlobDeps{}),
@@ -1301,30 +1314,87 @@ func tenantBlobAccountURL(cfg *config.Config, tenantID string) string {
 	return ""
 }
 
-// tenantExcludeSelf returns the tenant's exclude_self flag and its poller
-// client_id — the two values every transport's self-exhaust filter needs (#176,
-// generalized from #154's blob-only tenantBlobExcludeSelf). The flag is a
-// tenant-level key (tenants[].exclude_self) because "self" spans transports; the
-// client_id is the identity "self" is matched against, and an empty one leaves
-// the filter unable to identify self (it then no-ops, and the caller warns).
-func tenantExcludeSelf(cfg *config.Config, tenantID string) (excludeSelf bool, clientID string) {
-	for _, t := range cfg.Tenants {
-		if t.TenantID == tenantID {
-			clientID = t.ClientID
-			if clientID == "" {
-				// The poller commonly authenticates through
-				// DefaultAzureCredential's AZURE_CLIENT_ID env leg (camden does),
-				// which never lands in config — so fall back to it, else
-				// exclude_self silently no-ops on the exact production deployment
-				// it exists for. Config client_id still wins, so a multi-tenant
-				// process running a distinct app per tenant stays per-tenant
-				// correct (#176).
-				clientID = os.Getenv("AZURE_CLIENT_ID")
-			}
-			return t.ExcludeSelf, clientID
+const (
+	selfIdentityReasonTokenRequestFailed = string(auth.ApplicationIdentityTokenRequestFailed)
+	selfIdentityReasonMalformedToken     = string(auth.ApplicationIdentityMalformedToken)
+	selfIdentityReasonMissingAppID       = string(auth.ApplicationIdentityMissingAppID)
+)
+
+// tenantSelfIdentity is the one resolved self-filter pair shared by the Graph
+// window and blob paths. enabled is true only when the tenant opted in and the
+// actual TenantAuth proved a non-empty appid from its Graph access token.
+type tenantSelfIdentity struct {
+	enabled bool
+	appID   string
+}
+
+func (i tenantSelfIdentity) applyWindow(deps *collectors.WindowDeps) {
+	deps.ExcludeSelf = i.enabled
+	deps.SelfClientID = i.appID
+}
+
+func (i tenantSelfIdentity) applyBlob(deps *collectors.BlobDeps) {
+	deps.ExcludeSelf = i.enabled
+	deps.SelfClientID = i.appID
+}
+
+// resolveTenantSelfIdentity proves the tenant's authenticated application once
+// during startup. Failure is deliberately fail-open: disable filtering, keep
+// starting the tenant, and log one bounded warning without the token, payload,
+// or raw credential error.
+func resolveTenantSelfIdentity(
+	ctx context.Context,
+	cfg *config.Config,
+	ta *auth.TenantAuth,
+	logger *slog.Logger,
+) tenantSelfIdentity {
+	var configuredClientID string
+	enabled := false
+	for _, tenant := range cfg.Tenants {
+		if tenant.TenantID == ta.TenantID {
+			enabled = tenant.ExcludeSelf
+			configuredClientID = tenant.ClientID
+			break
 		}
 	}
-	return false, ""
+	if !enabled {
+		return tenantSelfIdentity{}
+	}
+
+	appID, err := ta.AuthenticatedApplicationID(ctx)
+	tlog := logger.With("tenant", ta.TenantID)
+	if err != nil {
+		tlog.Warn(
+			"exclude_self disabled: authenticated application identity could not be proved",
+			"reason", selfIdentityFailureReason(err),
+		)
+		return tenantSelfIdentity{}
+	}
+	if configuredClientID != "" && configuredClientID != appID {
+		tlog.Warn(
+			"configured client_id does not match authenticated application identity",
+			"configured_client_id", configuredClientID,
+			"authenticated_app_id", appID,
+		)
+	}
+	return tenantSelfIdentity{enabled: true, appID: appID}
+}
+
+func selfIdentityFailureReason(err error) string {
+	var identityErr *auth.ApplicationIdentityError
+	if !errors.As(err, &identityErr) {
+		return selfIdentityReasonMissingAppID
+	}
+	switch identityErr.Code {
+	case auth.ApplicationIdentityTokenRequestFailed:
+		return selfIdentityReasonTokenRequestFailed
+	case auth.ApplicationIdentityMalformedToken:
+		return selfIdentityReasonMalformedToken
+	default:
+		// Missing/invalid appid and unfamiliar typed codes stay within the
+		// bounded warning vocabulary and fail open.
+		return selfIdentityReasonMissingAppID
+	}
 }
 
 // gateCollector applies the three registration gates shared by snapshot and

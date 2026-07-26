@@ -18,20 +18,23 @@
 // defaults + environment alone (handy for containers).
 //
 // Tenant auth material (client secrets, certificates) is NEVER read from this
-// package's config surface at all: tenants authenticate via
-// azidentity.DefaultAzureCredential, which reads its own well-known
-// environment variables (AZURE_CLIENT_ID, AZURE_CLIENT_SECRET,
-// AZURE_CLIENT_CERTIFICATE_PATH, AZURE_TENANT_ID, or workload/managed
-// identity). TenantConfig carries only the non-secret identifiers
-// (tenant_id, client_id) needed to select which tenant/credential a
-// collector run applies to.
+// package's config surface at all. TenantID is a hyphenated Entra directory GUID;
+// auth sets it on every token request, restricts the credential to that target,
+// and verifies the returned token's tid before tenant-labeled collection starts.
+// azidentity.DefaultAzureCredential selects one ambient application identity for
+// the process from its well-known environment variables (AZURE_CLIENT_ID,
+// AZURE_CLIENT_SECRET, AZURE_CLIENT_CERTIFICATE_PATH, or workload/managed
+// identity). ClientID is only an optional non-secret assertion about that
+// selected identity; it is never passed to the credential chain.
 package config
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/google/uuid"
 	"github.com/knadh/koanf/parsers/yaml"
 	env "github.com/knadh/koanf/providers/env/v2"
 	"github.com/knadh/koanf/providers/file"
@@ -207,15 +210,19 @@ type ProfilingPyroscope struct {
 }
 
 // TenantConfig identifies one Entra tenant to poll. It intentionally carries
-// no secret material: DefaultAzureCredential resolves the actual credential
-// (client secret, certificate, workload identity, ...) from the process
-// environment at run time, never from this struct or the YAML file.
+// no secret material: TenantID is the hyphenated directory GUID auth binds to
+// each token request and verifies against the token's tid, while
+// DefaultAzureCredential resolves one application identity for the process
+// (client secret, certificate, workload identity, managed identity, ...) from
+// the ambient environment at run time, never from this struct or the YAML file.
 type TenantConfig struct {
-	// TenantID is the Entra (Azure AD) tenant GUID or verified domain name.
+	// TenantID is the hyphenated Entra directory GUID. Verified domains and other
+	// names are rejected because their tenant binding cannot be proved locally.
 	TenantID string `yaml:"tenant_id"`
-	// ClientID is the app registration (application) ID used to authenticate
-	// against this tenant. Optional: a single shared app registration across
-	// tenants can leave this unset and rely on AZURE_CLIENT_ID.
+	// ClientID optionally asserts the expected app registration (application) ID.
+	// It never selects or overrides DefaultAzureCredential. When set, startup
+	// warns if it disagrees with the authenticated token's appid; the
+	// authenticated value remains authoritative.
 	ClientID string `yaml:"client_id"`
 	// ExcludeSelf, when true, drops records authored by this tenant's own poller —
 	// graph2otel's polling exhaust — across every transport whose records carry an
@@ -225,15 +232,14 @@ type TenantConfig struct {
 	// traffic — #152/#154) and the Graph-polled service-principal sign-in stream
 	// (entra.signins.service_principal). Default false.
 	//
-	// "Self" is this tenant's client_id, per-tenant: one deployment polling many
-	// tenants filters each against its own poller identity, and a third party's
-	// records ALWAYS pass through untouched. It requires client_id to be set on the
-	// tenant — with a shared AZURE_CLIENT_ID and no client_id, "self" is taken from
-	// the AZURE_CLIENT_ID env leg; if neither is available the filter safely no-ops
-	// and the composition root logs a warning. Every dropped record increments a
-	// loud per-collector self-obs counter (graph2otel.blob.self_excluded /
-	// graph2otel.logpipeline.self_excluded), so the reduction is visible and
-	// alertable, never silent.
+	// "Self" is proved from the non-empty appid in the Graph access token issued
+	// to this tenant-pinned credential. A configured ClientID is never proof and
+	// never controls the comparison; a mismatch warns once and the authenticated
+	// value wins. If the identity cannot be proved, filtering is disabled for the
+	// tenant, every record is retained, and startup emits one bounded warning.
+	// Every dropped record increments a loud per-collector self-obs counter
+	// (graph2otel.blob.self_excluded / graph2otel.logpipeline.self_excluded), so
+	// the reduction is visible and alertable, never silent.
 	//
 	// Live-measured (2026-07-19, #176): the poller is 59.9% of blob MGAL volume
 	// but only ~1.1% of the Graph service-principal sign-in stream and 0% of the
@@ -682,10 +688,19 @@ func (c *Config) Validate() error {
 		if t.TenantID == "" {
 			return fmt.Errorf("tenants[%d].tenant_id: required", i)
 		}
-		if seen[t.TenantID] {
+		tenantUUID, err := uuid.Parse(t.TenantID)
+		if err != nil || tenantUUID.String() != strings.ToLower(t.TenantID) {
+			return fmt.Errorf(
+				"tenants[%d].tenant_id %q: must be a hyphenated Entra directory GUID",
+				i,
+				t.TenantID,
+			)
+		}
+		tenantKey := tenantUUID.String()
+		if seen[tenantKey] {
 			return fmt.Errorf("tenants[%d].tenant_id %q: duplicate tenant", i, t.TenantID)
 		}
-		seen[t.TenantID] = true
+		seen[tenantKey] = true
 
 		for name, cc := range t.Collectors {
 			if err := validateInterval(cc.Interval); err != nil {

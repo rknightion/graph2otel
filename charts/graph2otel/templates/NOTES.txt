@@ -8,6 +8,10 @@ to your OTLP endpoint ({{ .Values.config.otlp.endpoint }}) for
    kubectl logs -l app.kubernetes.io/instance={{ .Release.Name }} -f
 
 2. Credentials:
+   One ambient application identity serves this process. Every
+   config.tenants[].tenant_id must be a hyphenated Entra directory GUID;
+   graph2otel targets and verifies that directory before starting its
+   collectors. Managed identity works only for its Azure home tenant.
 {{- if .Values.existingSecret }}
    Using existing Secret "{{ .Values.existingSecret }}" — ensure it exposes
    AZURE_TENANT_ID / AZURE_CLIENT_ID / AZURE_CLIENT_SECRET (or

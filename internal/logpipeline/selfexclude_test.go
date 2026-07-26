@@ -12,8 +12,9 @@ import (
 // --- exclude_self on the Graph-polled transport (#176) ---
 //
 // These mirror the blobpipeline exclude_self guards one transport over: a record
-// whose appId is the tenant's own poller client_id is dropped, a third party's
-// record always passes, and every drop is loudly counted per collector.
+// whose appId is the poller's proved authenticated application ID is dropped, a
+// third party's record always passes, and every drop is loudly counted per
+// collector.
 
 const selfWindow = time.Hour
 
@@ -55,8 +56,8 @@ func onePageFetcher(recs []map[string]any) PageFetcher {
 }
 
 // TestPollExcludesSelfSignInsButNotThirdParty is the #176 guard: a
-// service-principal sign-in whose appId is the poller's own client_id is dropped,
-// and any other appId always passes through.
+// service-principal sign-in whose appId is the poller's proved authenticated
+// application ID is dropped, and any other appId always passes through.
 func TestPollExcludesSelfSignInsButNotThirdParty(t *testing.T) {
 	rec := telemetrytest.New()
 	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -153,8 +154,9 @@ func TestPollNeverFiltersWhenSelfAppIDIsNil(t *testing.T) {
 	}
 }
 
-// TestPollNeverFiltersWhenSelfClientIDIsEmpty guards "self is unknown": an empty
-// client_id must not make an empty-appId record match as self.
+// TestPollNeverFiltersWhenSelfClientIDIsEmpty guards "self is unproved": an
+// unavailable authenticated application ID must not make an empty-appId record
+// match as self.
 func TestPollNeverFiltersWhenSelfClientIDIsEmpty(t *testing.T) {
 	rec := telemetrytest.New()
 	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)

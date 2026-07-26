@@ -122,7 +122,8 @@ func newCollector(s spec, d collectors.WindowDeps) *collectorImpl {
 	if s.selfExcludable {
 		// The poller's own service-principal sign-ins carry its appId here (#176).
 		// Wire the tenant's exclude_self flag through; the filter no-ops unless the
-		// flag is on AND a self client_id is resolvable (both come from WindowDeps).
+		// flag is on AND the authenticated application ID was proved (both come
+		// from WindowDeps).
 		cfg.ExcludeSelf = d.ExcludeSelf
 		cfg.SelfClientID = d.SelfClientID
 		cfg.SelfAppID = func(rec map[string]any) string { return str(rec, "appId") }

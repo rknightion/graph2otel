@@ -211,8 +211,8 @@ func TestBlobMetricRecencyWindow_DefaultAndValidation(t *testing.T) {
 		t.Fatalf("default window = %v, want 20m", got)
 	}
 
-	c.Tenants = []config.TenantConfig{{TenantID: "t1", BlobIngest: config.BlobIngestConfig{MetricRecencyWindow: 30 * time.Minute}}}
-	if got := c.BlobMetricRecencyWindow("t1"); got != 30*time.Minute {
+	c.Tenants = []config.TenantConfig{{TenantID: "4b8c18bd-2f9f-4227-af55-9f1061cf9c32", BlobIngest: config.BlobIngestConfig{MetricRecencyWindow: 30 * time.Minute}}}
+	if got := c.BlobMetricRecencyWindow("4b8c18bd-2f9f-4227-af55-9f1061cf9c32"); got != 30*time.Minute {
 		t.Fatalf("per-tenant window = %v, want 30m", got)
 	}
 	if got := c.BlobMetricRecencyWindow("other"); got != 20*time.Minute {
@@ -221,14 +221,14 @@ func TestBlobMetricRecencyWindow_DefaultAndValidation(t *testing.T) {
 
 	bad := config.Default()
 	bad.OTLP.Protocol = "stdout"
-	bad.Tenants = []config.TenantConfig{{TenantID: "t1", BlobIngest: config.BlobIngestConfig{MetricRecencyWindow: 2 * time.Hour}}}
+	bad.Tenants = []config.TenantConfig{{TenantID: "4b8c18bd-2f9f-4227-af55-9f1061cf9c32", BlobIngest: config.BlobIngestConfig{MetricRecencyWindow: 2 * time.Hour}}}
 	if err := bad.Validate(); err == nil {
 		t.Fatal("Validate accepted a metric_recency_window > 1h")
 	}
 
 	neg := config.Default()
 	neg.OTLP.Protocol = "stdout"
-	neg.Tenants = []config.TenantConfig{{TenantID: "t1", BlobIngest: config.BlobIngestConfig{MetricRecencyWindow: -1}}}
+	neg.Tenants = []config.TenantConfig{{TenantID: "4b8c18bd-2f9f-4227-af55-9f1061cf9c32", BlobIngest: config.BlobIngestConfig{MetricRecencyWindow: -1}}}
 	if err := neg.Validate(); err == nil {
 		t.Fatal("Validate accepted a negative metric_recency_window")
 	}
@@ -264,6 +264,63 @@ func TestValidateRejectsMissingTenantID(t *testing.T) {
 	cfg.Tenants = []config.TenantConfig{{TenantID: "", ClientID: "some-client-id"}}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("expected error for tenant with missing tenant_id, got nil")
+	}
+}
+
+func TestValidateTenantIDRequiresHyphenatedDirectoryGUID(t *testing.T) {
+	const directoryID = "4b8c18bd-2f9f-4227-af55-9f1061cf9c32"
+	tests := []struct {
+		name    string
+		tenant  string
+		wantErr bool
+	}{
+		{name: "lowercase hyphenated", tenant: directoryID},
+		{name: "uppercase hyphenated", tenant: strings.ToUpper(directoryID)},
+		{name: "verified domain", tenant: "contoso.onmicrosoft.com", wantErr: true},
+		{name: "arbitrary name", tenant: "production-tenant", wantErr: true},
+		{name: "compact UUID", tenant: "4b8c18bd2f9f4227af559f1061cf9c32", wantErr: true},
+		{name: "braced UUID", tenant: "{4b8c18bd-2f9f-4227-af55-9f1061cf9c32}", wantErr: true},
+		{name: "surrounding whitespace", tenant: " 4b8c18bd-2f9f-4227-af55-9f1061cf9c32 ", wantErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := config.Default()
+			cfg.OTLP.Protocol = "stdout"
+			cfg.Tenants = []config.TenantConfig{{TenantID: tc.tenant}}
+
+			err := cfg.Validate()
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("Validate accepted tenant_id %q", tc.tenant)
+				}
+				if !strings.Contains(err.Error(), "hyphenated Entra directory GUID") {
+					t.Fatalf("Validate error = %q, want hyphenated GUID guidance", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Validate rejected tenant_id %q: %v", tc.tenant, err)
+			}
+		})
+	}
+}
+
+func TestValidateRejectsDuplicateDirectoryGUIDIgnoringCase(t *testing.T) {
+	const directoryID = "4b8c18bd-2f9f-4227-af55-9f1061cf9c32"
+	cfg := config.Default()
+	cfg.OTLP.Protocol = "stdout"
+	cfg.Tenants = []config.TenantConfig{
+		{TenantID: directoryID},
+		{TenantID: strings.ToUpper(directoryID)},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate accepted the same directory GUID in different hex case")
+	}
+	if !strings.Contains(err.Error(), "duplicate tenant") {
+		t.Fatalf("Validate error = %q, want duplicate tenant", err)
 	}
 }
 

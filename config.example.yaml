@@ -17,12 +17,15 @@
 # IMPORTANT — no secrets or auth material belong in this file, ever:
 #   * Tenant credentials (client secret, certificate, or workload/managed
 #     identity) are NEVER read from tenants[] or from any key in this file.
-#     They come from azidentity.DefaultAzureCredential, which reads its own
-#     well-known environment variables at run time:
-#       AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET,
-#       AZURE_CLIENT_CERTIFICATE_PATH, or ambient workload/managed identity.
-#     tenants[].tenant_id / client_id below are non-secret identifiers only —
-#     they select which tenant/app registration a collector run targets.
+#     tenants[].tenant_id is the hyphenated Entra directory GUID. graph2otel sets
+#     it on every token request and verifies the returned token's tid before any
+#     tenant-labelled collection starts. azidentity.DefaultAzureCredential
+#     selects one ambient application identity for the process from its
+#     well-known environment variables or the host's workload/managed identity.
+#     A managed identity works only for its home tenant; a configured mismatch
+#     fails that tenant closed. tenants[].client_id is only an optional
+#     non-secret consistency assertion; it never selects or overrides the
+#     credential.
 #   * otlp.grafana_cloud.token IS a credential and belongs in the
 #     G2O_OTLP__GRAFANA_CLOUD__TOKEN environment variable instead of this
 #     file. It is shown here only to document the key name.
@@ -34,16 +37,19 @@ log_level: info # debug | info | warn | error
 # G2O_TENANTS__<index>__<field> is NOT supported (a flat env var cannot
 # express a list of structs) — use this file for tenants.
 tenants:
-  - tenant_id: "00000000-0000-0000-0000-000000000000" # Entra tenant GUID or verified domain
-    client_id: "" # app registration (application) ID; optional if AZURE_CLIENT_ID is set
+  - tenant_id: "00000000-0000-0000-0000-000000000000" # hyphenated Entra directory GUID only
+    client_id: "" # optional expected app ID; an assertion, not credential selection
     # Opt-in, default-off: drop graph2otel's OWN polling exhaust — records whose
-    # appId is this tenant's poller (client_id above, falling back to
-    # AZURE_CLIENT_ID). A TENANT-level flag because "self" spans transports: it
-    # drives the blob feed (up to ~60% of MicrosoftGraphActivityLogs volume) AND
-    # the Graph-polled entra.signins.service_principal stream (~1.1% there —
-    # live-measured 2026-07-19, #176). Self-only and per-tenant; a third party's
-    # records always pass. Each drop increments graph2otel.blob.self_excluded /
-    # graph2otel.logpipeline.self_excluded, so the reduction is visible, not silent.
+    # appId matches the application identity proved from this tenant's Graph
+    # access token. A TENANT-level flag because "self" spans transports: it drives
+    # the blob feed (up to ~60% of MicrosoftGraphActivityLogs volume) AND the
+    # Graph-polled entra.signins.service_principal stream (~1.1% there —
+    # live-measured 2026-07-19, #176). The client_id assertion above never
+    # controls the comparison: a mismatch warns once and the authenticated app
+    # ID wins. If token identity cannot be proved, filtering is disabled, every
+    # record is retained, and startup emits one bounded warning. Each drop
+    # increments graph2otel.blob.self_excluded /
+    # graph2otel.logpipeline.self_excluded, so the reduction is visible.
     # exclude_self: false
     # Optional per-tenant collector overrides. These layer on top of the global
     # `collectors` block below, winning field-by-field, so one tenant can

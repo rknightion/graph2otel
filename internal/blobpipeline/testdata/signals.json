@@ -56,7 +56,7 @@
       "Name": "graph2otel.blob.self_excluded",
       "Unit": "{record}",
       "Kind": "sum",
-      "Description": "Blob records dropped by exclude_self because their appId matched this tenant's own poller client_id (#154).",
+      "Description": "Blob records dropped by exclude_self because their appId matched the poller's proved authenticated application ID (#154).",
       "AttrKeys": [
         "collector",
         "tenant_id"
