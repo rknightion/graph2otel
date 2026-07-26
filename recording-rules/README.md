@@ -17,8 +17,8 @@ Loki/Mimir data-source-managed ruler rules. `type=recording` on the rule confirm
 
 | file | metric | log twin (`event_name`) | group-by labels |
 | --- | --- | --- | --- |
-| `intune-compliance-alert-count.json` | `intune_compliance_alert_count` | `intune.compliance_alert` | `alert_type, operating_system, scenario_name` |
-| `intune-enrollment-failure-count.json` | `intune_enrollment_failure_count` | `intune.enrollment_event` | `enrollment_type, operating_system, failure_category` |
+| `intune-compliance-alert-count.json` | `intune_compliance_alert_count` | `intune.compliance_alert` | `tenant_id, alert_type, operating_system, scenario_name` |
+| `intune-enrollment-failure-count.json` | `intune_enrollment_failure_count` | `intune.enrollment_event` | `tenant_id, enrollment_type, operating_system, failure_category` |
 
 ## Where these are deployed
 
@@ -55,3 +55,9 @@ gcx api "/api/prometheus/grafana/api/v1/rules?folder_uid=<folderUID>" \
 A healthy tenant emits zero compliance-alert / enrollment-failure events, so the recorded
 series are empty (`noDataState: OK`) until an event occurs — that is the expected steady
 state, not a fault. The rule exists to capture the metric *when* one happens.
+
+Each output series retains `tenant_id`; records from different configured tenants never
+share a materialized series. The current rules evaluate the immediately preceding one-hour
+window. A record accepted by Loki but becoming queryable only after that window can be
+missed. Issue #297 tracks the measured late-arrival policy; no offset or overlapping
+backfill is implied by these manifests.

@@ -80,7 +80,7 @@ count_over_time(
 ...and, grouped for the recording rule below:
 
 ```logql
-sum by (alert_type, operating_system, scenario_name) (
+sum by (tenant_id, alert_type, operating_system, scenario_name) (
   count_over_time(
     {service_name="graph2otel"}
       | event_name=`intune.compliance_alert`
@@ -125,12 +125,20 @@ Key fields (see the JSON for the full shape):
   evaluation — evaluate no more often than the window you count over, or overlapping windows
   double-count. Set it with
   `PUT /api/v1/provisioning/folder/<folderUID>/rule-groups/blob-derived`.
+- `tenant_id` is included in every output grouping. Identical events from different
+  configured tenants remain separate materialized series.
 - `noDataState: OK` — a healthy tenant emits zero of these events (the twin is empty), so an
   empty query result records nothing and stays green rather than firing a no-data error. This
   is the expected steady state; the rule exists to capture the metric *when* an event occurs.
 
 Once materialized the recorded series queries and dashboards exactly like a native metric,
 with none of the active-series cost graph2otel would have paid to emit it natively.
+
+The current schedule counts the immediately preceding one-hour query window. Loki can accept
+a backdated record before that evaluation but make it queryable only after its nominal window
+has passed. That record is then absent from the materialized metric. Issue #297 tracks the
+measurement and bounded offset/backfill decision; the shipped rules make no completeness
+claim for late-queryable records.
 
 Deduplication: the underlying log twin is at-least-once (~2.7-4% duplicate rate,
 [Signals](signals.md#deduplicating-blob-sourced-records-azure-delivers-at-least-once)).
@@ -151,7 +159,7 @@ rule over its log twin is the way to get an enrollment-failure-rate metric witho
 the collector engine. Same Grafana-managed shape as the compliance rule above; the LogQL is:
 
 ```logql
-sum by (enrollment_type, operating_system, failure_category) (
+sum by (tenant_id, enrollment_type, operating_system, failure_category) (
   count_over_time(
     {service_name="graph2otel"}
       | event_name=`intune.enrollment_event`

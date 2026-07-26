@@ -188,6 +188,33 @@ class TestReverseValidation(unittest.TestCase):
             self.assertEqual(len(found), 1, f"{fname}: {event}")
             self.assertIn(found[0], CAT.logs, fname)
 
+    def test_recording_rules_keep_two_tenants_as_distinct_series(self):
+        fixture = [
+            {"tenant_id": "11111111-1111-1111-1111-111111111111",
+             "alert_type": "noncompliant"},
+            {"tenant_id": "22222222-2222-2222-2222-222222222222",
+             "alert_type": "noncompliant"},
+        ]
+
+        for fname, rule in build_rules.RECORDING:
+            expr = rule["data"][0]["model"]["expr"]
+            match = re.match(r"sum by \(([^)]+)\)", expr)
+            self.assertIsNotNone(match, fname)
+            group_labels = [label.strip() for label in match.group(1).split(",")]
+            grouped_series = {
+                tuple(row.get(label) for label in group_labels)
+                for row in fixture
+            }
+            self.assertIn("tenant_id", group_labels, fname)
+            self.assertEqual(len(grouped_series), 2, fname)
+
+    def test_recording_expression_adds_tenant_once(self):
+        expr = build_rules._recording_expr(
+            "intune.compliance_alert",
+            ["tenant_id", "tenant_id", "alert_type"],
+        )
+        self.assertTrue(expr.startswith("sum by (tenant_id, alert_type)"))
+
 
 class TestNoRecordingMetricCollision(unittest.TestCase):
     def test_recording_rule_metric_does_not_collide_with_a_catalog_metric(self):

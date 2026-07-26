@@ -477,7 +477,8 @@ RULE_GROUP = "blob-derived"
 def _recording_expr(event: str, by_labels: list) -> str:
     CAT.log(event)  # validates the event name; KeyError at build time on a typo
     sel = f'{{service_name="graph2otel"}} | event_name=`{event}`'
-    return f"sum by ({', '.join(by_labels)}) (count_over_time({sel} [1h]))"
+    group_labels = list(dict.fromkeys(["tenant_id", *by_labels]))
+    return f"sum by ({', '.join(group_labels)}) (count_over_time({sel} [1h]))"
 
 
 def _record(metric: str, event: str, by_labels: list) -> dict:

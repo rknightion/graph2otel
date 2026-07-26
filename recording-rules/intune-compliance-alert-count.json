@@ -30,7 +30,7 @@
           "type": "loki",
           "uid": "grafanacloud-logs"
         },
-        "expr": "sum by (alert_type, operating_system, scenario_name) (count_over_time({service_name=\"graph2otel\"} | event_name=`intune.compliance_alert` [1h]))",
+        "expr": "sum by (tenant_id, alert_type, operating_system, scenario_name) (count_over_time({service_name=\"graph2otel\"} | event_name=`intune.compliance_alert` [1h]))",
         "queryType": "range",
         "editorMode": "code",
         "intervalMs": 1000,
