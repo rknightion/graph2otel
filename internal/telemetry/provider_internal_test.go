@@ -17,11 +17,20 @@ import (
 // external-package signal capture needs. Keeping it in a _test.go file means
 // production callers cannot bypass NewProvider, while the signal fixture still
 // drives the real Provider.ReportSelfObs orchestration.
-func NewSelfObsProviderForTest(e Emitter, card *CardinalityTracker, limiter *Limiter) *Provider {
+func NewSelfObsProviderForTest(
+	e Emitter,
+	card *CardinalityTracker,
+	limiter *Limiter,
+	delivery DeliverySnapshot,
+) *Provider {
+	deliveryTracker := newDeliveryTracker()
+	deliveryTracker.metrics = delivery.Metrics
+	deliveryTracker.logs = delivery.Logs
 	return &Provider{
 		selfObsEmitter: e,
 		card:           card,
 		limiter:        limiter,
+		delivery:       deliveryTracker,
 	}
 }
 

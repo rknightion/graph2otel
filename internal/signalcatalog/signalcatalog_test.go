@@ -138,11 +138,17 @@ func TestSelfObservabilityScopeIsGeneratedAndProcessSetIsExact(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 	wantProcess := map[string]bool{
-		"graph2otel.build_info":     true,
-		"graph2otel.series.active":  true,
-		"graph2otel.series.clipped": true,
-		"graph2otel.series.limit":   true,
-		"graph2otel.series.total":   true,
+		"graph2otel.build_info":                         true,
+		"graph2otel.otlp.delivery.degraded":             true,
+		"graph2otel.otlp.delivery.export_attempts":      true,
+		"graph2otel.otlp.delivery.export_failures":      true,
+		"graph2otel.otlp.delivery.export_successes":     true,
+		"graph2otel.otlp.delivery.force_flush_failures": true,
+		"graph2otel.otlp.delivery.shutdown_failures":    true,
+		"graph2otel.series.active":                      true,
+		"graph2otel.series.clipped":                     true,
+		"graph2otel.series.limit":                       true,
+		"graph2otel.series.total":                       true,
 	}
 	gotProcess := map[string]bool{}
 	for _, metric := range cat.Metrics {

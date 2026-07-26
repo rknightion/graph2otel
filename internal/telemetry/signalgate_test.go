@@ -39,8 +39,43 @@ func TestSignalGolden(t *testing.T) {
 		"path":               "a",
 	})
 
-	provider := telemetry.NewSelfObsProviderForTest(selfObs.Emitter(), card, limiter)
+	provider := telemetry.NewSelfObsProviderForTest(
+		selfObs.Emitter(),
+		card,
+		limiter,
+		telemetry.DeliverySnapshot{
+			Metrics: telemetry.DeliverySignal{
+				State:              telemetry.DeliveryStateDegraded,
+				ExportAttempts:     1,
+				ExportFailures:     1,
+				ForceFlushFailures: 1,
+				ShutdownFailures:   1,
+				LastFailureCode:    telemetry.DeliveryFailureShutdownFailed,
+			},
+			Logs: telemetry.DeliverySignal{
+				State:           telemetry.DeliveryStateHealthy,
+				ExportAttempts:  1,
+				ExportSuccesses: 1,
+			},
+		},
+	)
 	provider.ReportSelfObs()
+	gotMetricNames := map[string]bool{}
+	for _, name := range selfObs.MetricNames() {
+		gotMetricNames[name] = true
+	}
+	for _, name := range []string{
+		"graph2otel.otlp.delivery.export_attempts",
+		"graph2otel.otlp.delivery.export_successes",
+		"graph2otel.otlp.delivery.export_failures",
+		"graph2otel.otlp.delivery.force_flush_failures",
+		"graph2otel.otlp.delivery.shutdown_failures",
+		"graph2otel.otlp.delivery.degraded",
+	} {
+		if !gotMetricNames[name] {
+			t.Errorf("signal capture missing Provider.ReportSelfObs delivery metric %s", name)
+		}
+	}
 	telemetry.WithEventLag(
 		telemetry.WithTenant(metricOnlyEmitter{Emitter: selfObs.Emitter()}, "tenant-capture"),
 		"entra.capture",

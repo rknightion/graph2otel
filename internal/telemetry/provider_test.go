@@ -10,10 +10,10 @@ import (
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
-// TestProvider_StdoutFlushesMetricOnShutdown asserts the "stdout" protocol
-// resolves to a working exporter: Shutdown flushes the metric pipeline to the
-// configured writer.
-func TestProvider_StdoutFlushesMetricOnShutdown(t *testing.T) {
+// TestProvider_StdoutDeliveryBecomesHealthyForBothSignals asserts the "stdout"
+// protocol resolves to working exporters. A successful local writer callback
+// is the acceptance boundary for stdout metrics and logs independently.
+func TestProvider_StdoutDeliveryBecomesHealthyForBothSignals(t *testing.T) {
 	var buf bytes.Buffer
 	ctx := context.Background()
 	p, err := telemetry.NewProvider(ctx, telemetry.Options{
@@ -27,11 +27,22 @@ func TestProvider_StdoutFlushesMetricOnShutdown(t *testing.T) {
 		t.Fatalf("NewProvider: %v", err)
 	}
 	p.Emitter().Counter("entra.test.counter", "1", "", 1, nil)
+	p.Emitter().LogEvent(telemetry.Event{Name: "entra.test", Body: "test"})
 	if err := p.Shutdown(ctx); err != nil {
 		t.Fatalf("Shutdown: %v", err)
 	}
 	if !strings.Contains(buf.String(), "entra.test.counter") {
 		t.Fatalf("stdout output missing metric name; got:\n%s", buf.String())
+	}
+	if !strings.Contains(buf.String(), "entra.test") {
+		t.Fatalf("stdout output missing log event name; got:\n%s", buf.String())
+	}
+	got := p.Delivery()
+	if got.Metrics.State != telemetry.DeliveryStateHealthy || got.Metrics.ExportSuccesses != 1 {
+		t.Errorf("stdout metric delivery = %+v, want one successful local writer callback", got.Metrics)
+	}
+	if got.Logs.State != telemetry.DeliveryStateHealthy || got.Logs.ExportSuccesses != 1 {
+		t.Errorf("stdout log delivery = %+v, want one successful local writer callback", got.Logs)
 	}
 }
 

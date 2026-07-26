@@ -56,6 +56,59 @@ type ReadinessStatus struct {
 	Reason            string `json:"reason"`
 }
 
+// DeliverySource reports the process-wide exporter callback state. The
+// telemetry Provider satisfies it alongside ThroughputSource. It is optional:
+// a caller that supplies only ThroughputSource retains the pre-delivery admin
+// surface.
+type DeliverySource interface {
+	Delivery() telemetry.DeliverySnapshot
+}
+
+// DeliveryStatus is the bounded admin projection of one process-wide delivery
+// snapshot. Metrics and logs are fixed fields because the underlying signal set
+// is closed and their state must remain independent.
+type DeliveryStatus struct {
+	Metrics DeliverySignalStatus `json:"metrics"`
+	Logs    DeliverySignalStatus `json:"logs"`
+}
+
+// DeliverySignalStatus contains only the frozen counters, timestamps, state,
+// and failure code. Raw exporter errors never enter this package.
+type DeliverySignalStatus struct {
+	State telemetry.DeliveryState `json:"state"`
+
+	ExportAttempts     uint64 `json:"export_attempts"`
+	ExportSuccesses    uint64 `json:"export_successes"`
+	ExportFailures     uint64 `json:"export_failures"`
+	ForceFlushFailures uint64 `json:"force_flush_failures"`
+	ShutdownFailures   uint64 `json:"shutdown_failures"`
+
+	LastSuccessAt   string                        `json:"last_success_at,omitempty"`
+	LastFailureAt   string                        `json:"last_failure_at,omitempty"`
+	LastFailureCode telemetry.DeliveryFailureCode `json:"last_failure_code,omitempty"`
+}
+
+func deliveryStatusFrom(snapshot telemetry.DeliverySnapshot) *DeliveryStatus {
+	return &DeliveryStatus{
+		Metrics: deliverySignalStatusFrom(snapshot.Metrics),
+		Logs:    deliverySignalStatusFrom(snapshot.Logs),
+	}
+}
+
+func deliverySignalStatusFrom(signal telemetry.DeliverySignal) DeliverySignalStatus {
+	return DeliverySignalStatus{
+		State:              signal.State,
+		ExportAttempts:     signal.ExportAttempts,
+		ExportSuccesses:    signal.ExportSuccesses,
+		ExportFailures:     signal.ExportFailures,
+		ForceFlushFailures: signal.ForceFlushFailures,
+		ShutdownFailures:   signal.ShutdownFailures,
+		LastSuccessAt:      signal.LastSuccessAt,
+		LastFailureAt:      signal.LastFailureAt,
+		LastFailureCode:    signal.LastFailureCode,
+	}
+}
+
 // consecutiveFailureThreshold is the number of back-to-back failures at which
 // a collector drags overall health to "degraded".
 const consecutiveFailureThreshold = 3
@@ -134,6 +187,10 @@ type Status struct {
 	Runtime    RuntimeInfo    `json:"runtime"`
 	Throughput ThroughputInfo `json:"throughput"`
 	Fleet      FleetInfo      `json:"fleet"`
+	// Delivery is a fresh, process-wide exporter callback snapshot. It is
+	// omitted when the existing throughput-provider argument does not also
+	// implement DeliverySource.
+	Delivery *DeliveryStatus `json:"delivery,omitempty"`
 	// SeriesTrend is deliberately NOT named Cardinality: pageModel already has a
 	// Cardinality field (the tab view), and an embedded Status field of the same
 	// name would be silently shadowed in every template expression.

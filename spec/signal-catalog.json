@@ -2136,6 +2136,96 @@
       ]
     },
     {
+      "name": "graph2otel.otlp.delivery.degraded",
+      "prometheus_name": "graph2otel_otlp_delivery_degraded_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "description": "Whether the most recent exporter callback failure remains unrecovered by a successful export.",
+      "additive": false,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "signal"
+      ],
+      "packages": [
+        "internal/telemetry"
+      ]
+    },
+    {
+      "name": "graph2otel.otlp.delivery.export_attempts",
+      "prometheus_name": "graph2otel_otlp_delivery_export_attempts_total",
+      "unit": "{operation}",
+      "kind": "sum",
+      "description": "Exporter callback attempts since process start.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "signal"
+      ],
+      "packages": [
+        "internal/telemetry"
+      ]
+    },
+    {
+      "name": "graph2otel.otlp.delivery.export_failures",
+      "prometheus_name": "graph2otel_otlp_delivery_export_failures_total",
+      "unit": "{operation}",
+      "kind": "sum",
+      "description": "Exporter callbacks that returned an error since process start.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "signal"
+      ],
+      "packages": [
+        "internal/telemetry"
+      ]
+    },
+    {
+      "name": "graph2otel.otlp.delivery.export_successes",
+      "prometheus_name": "graph2otel_otlp_delivery_export_successes_total",
+      "unit": "{operation}",
+      "kind": "sum",
+      "description": "Exporter callbacks accepted since process start.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "signal"
+      ],
+      "packages": [
+        "internal/telemetry"
+      ]
+    },
+    {
+      "name": "graph2otel.otlp.delivery.force_flush_failures",
+      "prometheus_name": "graph2otel_otlp_delivery_force_flush_failures_total",
+      "unit": "{operation}",
+      "kind": "sum",
+      "description": "Exporter force-flush callbacks that returned an error since process start.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "signal"
+      ],
+      "packages": [
+        "internal/telemetry"
+      ]
+    },
+    {
+      "name": "graph2otel.otlp.delivery.shutdown_failures",
+      "prometheus_name": "graph2otel_otlp_delivery_shutdown_failures_total",
+      "unit": "{operation}",
+      "kind": "sum",
+      "description": "Exporter shutdown callbacks that returned an error since process start.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "signal"
+      ],
+      "packages": [
+        "internal/telemetry"
+      ]
+    },
+    {
       "name": "graph2otel.payload.type_mismatches",
       "prometheus_name": "graph2otel_payload_type_mismatches_total",
       "unit": "{record}",

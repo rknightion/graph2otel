@@ -163,7 +163,7 @@
 
     <div class="sub-h">Throughput &amp; fleet trend (~10 min)</div>
     <div class="cards">
-      <div class="card"><div class="k">Emitted</div><div class="v" id="metricRate">{{printf "%.1f" .Throughput.MetricPointsPerSec}}</div><div class="sub">metric points/sec &middot; <span id="logRate">{{printf "%.1f" .Throughput.LogRecordsPerSec}}</span> log records/sec</div>
+      <div class="card"><div class="k">Emitted to SDK</div><div class="v" id="metricRate">{{printf "%.1f" .Throughput.MetricPointsPerSec}}</div><div class="sub">metric points/sec &middot; <span id="logRate">{{printf "%.1f" .Throughput.LogRecordsPerSec}}</span> log records/sec</div>
         <div class="chart-wrap"><svg class="chart" id="chEmit"></svg><div class="chart-tip"></div></div></div>
       <div class="card"><div class="k">Active series</div><div class="v" id="activeSeries">{{.SeriesTrend.TotalSeries}}</div><div class="sub">distinct series last export</div>
         <div class="chart-wrap"><svg class="chart" id="chCard"></svg><div class="chart-tip"></div></div></div>
@@ -172,6 +172,28 @@
       <div class="card"><div class="k">Mean run duration</div><div class="v" id="meanDuration">{{printf "%.0f" .Fleet.MeanDurationMs}}ms</div><div class="sub">across every collector</div>
         <div class="chart-wrap"><svg class="chart" id="chDuration"></svg><div class="chart-tip"></div></div></div>
     </div>
+
+    {{with .Delivery}}
+    <div class="sub-h">Exporter accepted</div>
+    <div class="cards" id="deliveryStatus">
+      <div class="card">
+        <div class="k">Metrics</div>
+        <div class="v"><span class="badge {{if eq .Metrics.State "healthy"}}ok{{else if eq .Metrics.State "degraded"}}err{{else}}pending{{end}}" id="metricDeliveryState">{{.Metrics.State}}</span></div>
+        <div class="sub"><span id="metricDeliveryAttempts">{{.Metrics.ExportAttempts}}</span> attempts &middot; <span id="metricDeliverySuccesses">{{.Metrics.ExportSuccesses}}</span> accepted &middot; <span id="metricDeliveryFailures">{{.Metrics.ExportFailures}}</span> failed</div>
+        <div class="sub">flush failures <span id="metricDeliveryFlushFailures">{{.Metrics.ForceFlushFailures}}</span> &middot; shutdown failures <span id="metricDeliveryShutdownFailures">{{.Metrics.ShutdownFailures}}</span></div>
+        <div class="sub mono" id="metricDeliveryLastSuccess">last success {{if .Metrics.LastSuccessAt}}{{.Metrics.LastSuccessAt}}{{else}}&mdash;{{end}}</div>
+        <div class="sub mono" id="metricDeliveryLastFailure">last failure {{if .Metrics.LastFailureAt}}{{.Metrics.LastFailureAt}}{{if .Metrics.LastFailureCode}} &middot; {{.Metrics.LastFailureCode}}{{end}}{{else}}&mdash;{{end}}</div>
+      </div>
+      <div class="card">
+        <div class="k">Logs</div>
+        <div class="v"><span class="badge {{if eq .Logs.State "healthy"}}ok{{else if eq .Logs.State "degraded"}}err{{else}}pending{{end}}" id="logDeliveryState">{{.Logs.State}}</span></div>
+        <div class="sub"><span id="logDeliveryAttempts">{{.Logs.ExportAttempts}}</span> attempts &middot; <span id="logDeliverySuccesses">{{.Logs.ExportSuccesses}}</span> accepted &middot; <span id="logDeliveryFailures">{{.Logs.ExportFailures}}</span> failed</div>
+        <div class="sub">flush failures <span id="logDeliveryFlushFailures">{{.Logs.ForceFlushFailures}}</span> &middot; shutdown failures <span id="logDeliveryShutdownFailures">{{.Logs.ShutdownFailures}}</span></div>
+        <div class="sub mono" id="logDeliveryLastSuccess">last success {{if .Logs.LastSuccessAt}}{{.Logs.LastSuccessAt}}{{else}}&mdash;{{end}}</div>
+        <div class="sub mono" id="logDeliveryLastFailure">last failure {{if .Logs.LastFailureAt}}{{.Logs.LastFailureAt}}{{if .Logs.LastFailureCode}} &middot; {{.Logs.LastFailureCode}}{{end}}{{else}}&mdash;{{end}}</div>
+      </div>
+    </div>
+    {{end}}
   </section>
 
   <!-- ═══ COLLECTORS ═══ -->
@@ -547,6 +569,22 @@ function updateRollup(d){
   (d.tenants||[]).forEach(function(t){ enabled+=t.enabled_count||0; failing+=t.failing_count||0; pending+=t.pending_count||0; });
   setText('ruEnabled',enabled); setText('ruFailing',failing); setText('ruPending',pending);
 }
+function updateDelivery(d){
+  if(!d.delivery || !document.getElementById('deliveryStatus')) return;
+  [['metric',d.delivery.metrics],['log',d.delivery.logs]].forEach(function(row){
+    var prefix=row[0], signal=row[1]||{}, state=document.getElementById(prefix+'DeliveryState');
+    if(state){ state.textContent=signal.state||''; state.className='badge '+(signal.state==='healthy'?'ok':signal.state==='degraded'?'err':'pending'); }
+    setText(prefix+'DeliveryAttempts',signal.export_attempts);
+    setText(prefix+'DeliverySuccesses',signal.export_successes);
+    setText(prefix+'DeliveryFailures',signal.export_failures);
+    setText(prefix+'DeliveryFlushFailures',signal.force_flush_failures);
+    setText(prefix+'DeliveryShutdownFailures',signal.shutdown_failures);
+    var success=document.getElementById(prefix+'DeliveryLastSuccess');
+    if(success) success.textContent='last success '+(signal.last_success_at||'—');
+    var failure=document.getElementById(prefix+'DeliveryLastFailure');
+    if(failure) failure.textContent='last failure '+(signal.last_failure_at||'—')+(signal.last_failure_code?' · '+signal.last_failure_code:'');
+  });
+}
 function setHealth(d){
   var b=document.getElementById('healthBadge'); if(b){ b.textContent=d.health; b.className='badge '+(d.health==='healthy'?'ok':d.health==='degraded'?'err':'pending'); b.title=(d.health_reasons||[]).join('\n'); }
   var rb=document.getElementById('healthReasons'); if(rb){ if(d.health_reasons && d.health_reasons.length){ rb.textContent=d.health_reasons.join(' · '); rb.style.display=''; } else { rb.style.display='none'; } }
@@ -561,7 +599,7 @@ function refresh(){
   fetch('/api/status.json',{cache:'no-store'}).then(function(r){ if(!r.ok) throw new Error('status '+r.status); return r.json(); }).then(function(d){
     lastOkMs=Date.now(); setStale(false);
     lastData=d;
-    setHealth(d); setReadiness(d); updateRollup(d); updateTrends(d); redrawCharts();
+    setHealth(d); setReadiness(d); updateRollup(d); updateTrends(d); updateDelivery(d); redrawCharts();
     if(d.service) setText('uptime', d.service.uptime);
     setText('generatedAt', d.generated_at);
     rebuildThrottle(d.tenants); rebuildTenants(d.tenants);

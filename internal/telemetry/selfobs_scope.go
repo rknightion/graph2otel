@@ -22,4 +22,11 @@ var providerSelfObsScopes = map[string]selfObsScope{
 	seriesLimitMetric:   selfObsScopeProcess,
 	seriesClippedMetric: selfObsScopeProcess,
 	seriesTotalMetric:   selfObsScopeProcess,
+
+	deliveryExportAttemptsMetric:     selfObsScopeProcess,
+	deliveryExportSuccessesMetric:    selfObsScopeProcess,
+	deliveryExportFailuresMetric:     selfObsScopeProcess,
+	deliveryForceFlushFailuresMetric: selfObsScopeProcess,
+	deliveryShutdownFailuresMetric:   selfObsScopeProcess,
+	deliveryDegradedMetric:           selfObsScopeProcess,
 }

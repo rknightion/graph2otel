@@ -46,6 +46,7 @@ type Server struct {
 	sources     []CollectorSource
 	skipReasons map[SkipKey]string
 	limiter     RateLimiter
+	delivery    DeliverySource
 	startedAt   time.Time
 	now         func() time.Time
 	refreshMs   int
@@ -95,12 +96,15 @@ type Server struct {
 // fullCfg renders an empty Config view, a nil card an empty Cardinality view.
 //
 // tp is the emit-side throughput source for the Overview tab's throughput
-// trend (#227) — *telemetry.Provider satisfies it. Nil leaves that one chart
-// empty and changes nothing else.
+// trend (#227) — *telemetry.Provider satisfies it. When the same value also
+// implements DeliverySource, the status JSON and page expose the independent
+// exporter-callback snapshot. Nil leaves both surfaces empty and changes
+// nothing else.
 func New(cfg config.AdminConfig, sources []CollectorSource, skipReasons map[SkipKey]string, limiter RateLimiter, fullCfg *config.Config, card *telemetry.CardinalityTracker, tp ThroughputSource) *Server {
 	if !cfg.Enabled {
 		return nil
 	}
+	delivery, _ := tp.(DeliverySource)
 	refreshMs := int(cfg.RefreshInterval / time.Millisecond)
 	if refreshMs <= 0 {
 		refreshMs = 5000
@@ -109,6 +113,7 @@ func New(cfg config.AdminConfig, sources []CollectorSource, skipReasons map[Skip
 		sources:     sources,
 		skipReasons: skipReasons,
 		limiter:     limiter,
+		delivery:    delivery,
 		startedAt:   time.Now(),
 		now:         time.Now,
 		refreshMs:   refreshMs,
@@ -191,6 +196,10 @@ func (s *Server) snapshot() Status {
 	health, reasons := deriveHealth(tenants)
 	readiness := deriveReadiness(tenants)
 	uptime := now.Sub(s.startedAt)
+	var delivery *DeliveryStatus
+	if s.delivery != nil {
+		delivery = deliveryStatusFrom(s.delivery.Delivery())
+	}
 	return Status{
 		Service: ServiceInfo{
 			Version:   version.String(),
@@ -208,6 +217,7 @@ func (s *Server) snapshot() Status {
 		Runtime:       s.trend.runtimeInfo(),
 		Throughput:    s.trend.throughputInfo(),
 		Fleet:         s.trend.fleetInfo(),
+		Delivery:      delivery,
 		SeriesTrend:   s.trend.cardinalityTrend(),
 	}
 }

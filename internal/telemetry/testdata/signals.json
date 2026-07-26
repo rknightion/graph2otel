@@ -12,6 +12,60 @@
       ]
     },
     {
+      "Name": "graph2otel.otlp.delivery.degraded",
+      "Unit": "1",
+      "Kind": "gauge",
+      "Description": "Whether the most recent exporter callback failure remains unrecovered by a successful export.",
+      "AttrKeys": [
+        "signal"
+      ]
+    },
+    {
+      "Name": "graph2otel.otlp.delivery.export_attempts",
+      "Unit": "{operation}",
+      "Kind": "sum",
+      "Description": "Exporter callback attempts since process start.",
+      "AttrKeys": [
+        "signal"
+      ]
+    },
+    {
+      "Name": "graph2otel.otlp.delivery.export_failures",
+      "Unit": "{operation}",
+      "Kind": "sum",
+      "Description": "Exporter callbacks that returned an error since process start.",
+      "AttrKeys": [
+        "signal"
+      ]
+    },
+    {
+      "Name": "graph2otel.otlp.delivery.export_successes",
+      "Unit": "{operation}",
+      "Kind": "sum",
+      "Description": "Exporter callbacks accepted since process start.",
+      "AttrKeys": [
+        "signal"
+      ]
+    },
+    {
+      "Name": "graph2otel.otlp.delivery.force_flush_failures",
+      "Unit": "{operation}",
+      "Kind": "sum",
+      "Description": "Exporter force-flush callbacks that returned an error since process start.",
+      "AttrKeys": [
+        "signal"
+      ]
+    },
+    {
+      "Name": "graph2otel.otlp.delivery.shutdown_failures",
+      "Unit": "{operation}",
+      "Kind": "sum",
+      "Description": "Exporter shutdown callbacks that returned an error since process start.",
+      "AttrKeys": [
+        "signal"
+      ]
+    },
+    {
       "Name": "graph2otel.series.active",
       "Unit": "{series}",
       "Kind": "gauge",

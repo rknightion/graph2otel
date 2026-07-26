@@ -114,6 +114,9 @@ type Options struct {
 type Provider struct {
 	mp *sdkmetric.MeterProvider
 	lp *sdklog.LoggerProvider
+	// delivery is the one process-wide tracker shared by both exporter wrappers.
+	// Its fixed metrics/logs fields keep the two delivery paths independent.
+	delivery *deliveryTracker
 	// emitter is held as the concrete *otelEmitter, not the Emitter interface,
 	// so Throughput can read its emit counters without a type assertion.
 	emitter *otelEmitter
@@ -198,7 +201,39 @@ func NewProvider(ctx context.Context, opts Options) (*Provider, error) {
 	if err != nil {
 		return nil, fmt.Errorf("log exporter: %w", err)
 	}
+	return newProvider(opts, metricRes, logRes, metricExp, logExp), nil
+}
 
+// newProviderWithExporters is the narrow injected construction seam used by
+// package tests to exercise the real SDK reader and batch processor around
+// controlled exporters. SDK types remain absent from public Options.
+func newProviderWithExporters(
+	ctx context.Context,
+	opts Options,
+	metricExp sdkmetric.Exporter,
+	logExp sdklog.Exporter,
+) (*Provider, error) {
+	metricRes, err := buildResource(ctx, opts, false)
+	if err != nil {
+		return nil, fmt.Errorf("build metrics resource: %w", err)
+	}
+	logRes, err := buildResource(ctx, opts, true)
+	if err != nil {
+		return nil, fmt.Errorf("build logs resource: %w", err)
+	}
+	return newProvider(opts, metricRes, logRes, metricExp, logExp), nil
+}
+
+func newProvider(
+	opts Options,
+	metricRes *resource.Resource,
+	logRes *resource.Resource,
+	metricExp sdkmetric.Exporter,
+	logExp sdklog.Exporter,
+) *Provider {
+	delivery := newDeliveryTracker()
+	metricExp = wrapMetricExporter(metricExp, delivery)
+	logExp = wrapLogExporter(logExp, delivery)
 	interval := opts.MetricInterval
 	if interval <= 0 {
 		interval = 60 * time.Second
@@ -224,6 +259,7 @@ func NewProvider(ctx context.Context, opts Options) (*Provider, error) {
 	return &Provider{
 		mp:             mp,
 		lp:             lp,
+		delivery:       delivery,
 		emitter:        emitter,
 		selfObsEmitter: emitter,
 		card:           card,
@@ -234,7 +270,7 @@ func NewProvider(ctx context.Context, opts Options) (*Provider, error) {
 		// identity, so a limiter running before that stamp would rank and fold
 		// two tenants' series against each other as if they were one set.
 		limited: limiter.Wrap(emitter),
-	}, nil
+	}
 }
 
 // Emitter returns the Emitter collectors should use.
@@ -242,6 +278,18 @@ func (p *Provider) Emitter() Emitter { return p.limited }
 
 // Limiter returns the cardinality limiter this provider's Emitter enforces.
 func (p *Provider) Limiter() *Limiter { return p.limiter }
+
+// Delivery returns an immutable snapshot of the process-wide metric and log
+// exporter callback state.
+func (p *Provider) Delivery() DeliverySnapshot {
+	if p.delivery == nil {
+		return DeliverySnapshot{
+			Metrics: DeliverySignal{State: DeliveryStateStarting},
+			Logs:    DeliverySignal{State: DeliveryStateStarting},
+		}
+	}
+	return p.delivery.snapshot()
+}
 
 // ReportSelfObs emits one export interval's cardinality self-observability: the
 // per-metric active-series counts, then what the limiter clipped and the global
@@ -259,6 +307,9 @@ func (p *Provider) Limiter() *Limiter { return p.limiter }
 func (p *Provider) ReportSelfObs() {
 	p.card.Report(p.selfObsEmitter)
 	p.limiter.Report(p.selfObsEmitter, p.card.Snapshot())
+	if p.delivery != nil {
+		p.delivery.report(p.selfObsEmitter)
+	}
 }
 
 // Throughput returns the cumulative count of metric data points and log

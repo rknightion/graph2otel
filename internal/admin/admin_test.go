@@ -26,6 +26,21 @@ type fakeLimiter struct {
 
 func (f fakeLimiter) Snapshot(time.Time) []graphclient.WorkloadHeadroom { return f.headroom }
 
+// fakeTelemetryStatus is the process-wide provider shape consumed by the
+// Overview page: throughput is emit-side SDK handoff, while delivery is the
+// independent exporter-callback snapshot. rawError proves the admin boundary
+// never reflects arbitrary provider internals.
+type fakeTelemetryStatus struct {
+	throughput telemetry.Throughput
+	delivery   telemetry.DeliverySnapshot
+	rawError   string
+}
+
+func (f fakeTelemetryStatus) Throughput() telemetry.Throughput { return f.throughput }
+func (f fakeTelemetryStatus) Delivery() telemetry.DeliverySnapshot {
+	return f.delivery
+}
+
 func TestSnapshot_RateLimitsLandOnRightTenant(t *testing.T) {
 	tr, reg := runOnceAndTrack(t, "devices", nil)
 	lim := fakeLimiter{headroom: []graphclient.WorkloadHeadroom{
@@ -209,6 +224,144 @@ func TestHandleStatusJSON_ReflectsCollectorState(t *testing.T) {
 	if got.Service.Version == "" {
 		t.Errorf("Service.Version is empty")
 	}
+}
+
+func TestHandleStatusJSON_DeliveryProjectsIndependentBoundedSignals(t *testing.T) {
+	const secret = "Authorization: Bearer delivery-secret"
+	provider := fakeTelemetryStatus{
+		rawError: secret,
+		delivery: telemetry.DeliverySnapshot{
+			Metrics: telemetry.DeliverySignal{
+				State:              telemetry.DeliveryStateDegraded,
+				ExportAttempts:     4,
+				ExportSuccesses:    2,
+				ExportFailures:     2,
+				ForceFlushFailures: 1,
+				ShutdownFailures:   1,
+				LastSuccessAt:      "2026-07-26T10:00:00.123456789Z",
+				LastFailureAt:      "2026-07-26T10:01:00.123456789Z",
+				LastFailureCode:    telemetry.DeliveryFailureShutdownFailed,
+			},
+			Logs: telemetry.DeliverySignal{
+				State:           telemetry.DeliveryStateHealthy,
+				ExportAttempts:  7,
+				ExportSuccesses: 7,
+				LastSuccessAt:   "2026-07-26T10:02:00.123456789Z",
+			},
+		},
+	}
+	s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, nil, nil, nil, nil, nil, provider)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/status.json", nil)
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /api/status.json status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if strings.Contains(w.Body.String(), secret) {
+		t.Fatalf("delivery JSON retained provider error secret: %s", w.Body.String())
+	}
+
+	var got struct {
+		Delivery *struct {
+			Metrics struct {
+				State              telemetry.DeliveryState       `json:"state"`
+				ExportAttempts     uint64                        `json:"export_attempts"`
+				ExportSuccesses    uint64                        `json:"export_successes"`
+				ExportFailures     uint64                        `json:"export_failures"`
+				ForceFlushFailures uint64                        `json:"force_flush_failures"`
+				ShutdownFailures   uint64                        `json:"shutdown_failures"`
+				LastSuccessAt      string                        `json:"last_success_at"`
+				LastFailureAt      string                        `json:"last_failure_at"`
+				LastFailureCode    telemetry.DeliveryFailureCode `json:"last_failure_code"`
+			} `json:"metrics"`
+			Logs struct {
+				State           telemetry.DeliveryState       `json:"state"`
+				ExportAttempts  uint64                        `json:"export_attempts"`
+				ExportSuccesses uint64                        `json:"export_successes"`
+				ExportFailures  uint64                        `json:"export_failures"`
+				LastSuccessAt   string                        `json:"last_success_at"`
+				LastFailureAt   string                        `json:"last_failure_at"`
+				LastFailureCode telemetry.DeliveryFailureCode `json:"last_failure_code"`
+			} `json:"logs"`
+		} `json:"delivery"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if got.Delivery == nil {
+		t.Fatal("delivery JSON is absent with a DeliverySource")
+	}
+	if m := got.Delivery.Metrics; m.State != telemetry.DeliveryStateDegraded ||
+		m.ExportAttempts != 4 || m.ExportSuccesses != 2 || m.ExportFailures != 2 ||
+		m.ForceFlushFailures != 1 || m.ShutdownFailures != 1 ||
+		m.LastSuccessAt != "2026-07-26T10:00:00.123456789Z" ||
+		m.LastFailureAt != "2026-07-26T10:01:00.123456789Z" ||
+		m.LastFailureCode != telemetry.DeliveryFailureShutdownFailed {
+		t.Errorf("metric delivery = %+v, want independent degraded snapshot", m)
+	}
+	if l := got.Delivery.Logs; l.State != telemetry.DeliveryStateHealthy ||
+		l.ExportAttempts != 7 || l.ExportSuccesses != 7 || l.ExportFailures != 0 ||
+		l.LastSuccessAt != "2026-07-26T10:02:00.123456789Z" ||
+		l.LastFailureAt != "" || l.LastFailureCode != "" {
+		t.Errorf("log delivery = %+v, want independent healthy snapshot", l)
+	}
+}
+
+func TestDeliveryDegradation_DoesNotChangeHealthzOrReadyz(t *testing.T) {
+	provider := fakeTelemetryStatus{delivery: telemetry.DeliverySnapshot{
+		Metrics: telemetry.DeliverySignal{
+			State:           telemetry.DeliveryStateDegraded,
+			ExportAttempts:  1,
+			ExportFailures:  1,
+			LastFailureCode: telemetry.DeliveryFailureExportFailed,
+		},
+		Logs: telemetry.DeliverySignal{State: telemetry.DeliveryStateStarting},
+	}}
+
+	t.Run("successful tenant stays live and ready", func(t *testing.T) {
+		tr, reg := runOnceAndTrack(t, "devices", nil)
+		s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, []CollectorSource{{
+			TenantID: "tenant-a",
+			Registry: reg,
+			Status:   tr,
+		}}, nil, nil, nil, nil, provider)
+
+		for _, path := range []string{"/healthz", "/readyz"} {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			w := httptest.NewRecorder()
+			s.Handler().ServeHTTP(w, req)
+			if w.Code != http.StatusOK {
+				t.Errorf("GET %s status = %d, want %d under degraded delivery",
+					path, w.Code, http.StatusOK)
+			}
+		}
+	})
+
+	t.Run("waiting tenant still waits for first collector success", func(t *testing.T) {
+		reg := collector.NewRegistry()
+		reg.Register(&fakeCollector{name: "devices"}, time.Hour)
+		s := New(config.AdminConfig{Enabled: true, Addr: ":0"}, []CollectorSource{{
+			TenantID: "tenant-a",
+			Registry: reg,
+			Status:   collector.NewStatusTracker(),
+		}}, nil, nil, nil, nil, provider)
+
+		req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, req)
+		if w.Code != http.StatusServiceUnavailable {
+			t.Fatalf("GET /readyz status = %d, want %d while waiting for first success",
+				w.Code, http.StatusServiceUnavailable)
+		}
+		var got ReadinessStatus
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+			t.Fatalf("unmarshal /readyz: %v", err)
+		}
+		if got.State != readinessWaitingForFirstSuccess {
+			t.Errorf("readiness state = %q, want %q", got.State, readinessWaitingForFirstSuccess)
+		}
+	})
 }
 
 func TestHandleStatusJSON_ExposesNestedCanonicalAvailabilityAndLastOutcome(t *testing.T) {

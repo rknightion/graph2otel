@@ -21,6 +21,7 @@ GRAFANA = os.path.dirname(HERE)
 sys.path.insert(0, GRAFANA)
 
 import build_dashboard  # noqa: E402
+import build_rules  # noqa: E402
 import catalog as catalog_mod  # noqa: E402
 from builder import Builder, TENANT_SEL, dumps, group_keys  # noqa: E402
 from promname import prom_name  # noqa: E402
@@ -193,6 +194,100 @@ class TestOutcomeAccountingPanels(unittest.TestCase):
     def test_loss_and_payload_drift_are_visible(self):
         self.assertIn("Dropped / errored source records", self.panels)
         self.assertIn("Payload type mismatches", self.panels)
+
+
+class TestOTLPDeliveryPanels(unittest.TestCase):
+    METRICS = {
+        "graph2otel.otlp.delivery.degraded",
+        "graph2otel.otlp.delivery.export_attempts",
+        "graph2otel.otlp.delivery.export_successes",
+        "graph2otel.otlp.delivery.export_failures",
+        "graph2otel.otlp.delivery.force_flush_failures",
+        "graph2otel.otlp.delivery.shutdown_failures",
+    }
+
+    def setUp(self):
+        self.board = next(b for name, b in BUILT
+                          if name == "graph2otel-self-observability.json")
+        self.panels = {
+            item["spec"]["title"]: item["spec"]
+            for item in self.board._panels
+            if item.get("spec")
+        }
+
+    def test_all_six_delivery_metrics_are_process_wide_and_panelled(self):
+        referenced = set()
+        for expr in self.board._exprs:
+            names = CAT.metrics_referenced_by(expr) & self.METRICS
+            if not names:
+                continue
+            referenced.update(names)
+            self.assertNotIn(TENANT_SEL, expr)
+            self.assertNotIn("$tenant", expr)
+            self.assertNotIn("tenant_id", expr)
+            self.assertNotIn("$collector", expr)
+            self.assertNotIn("collector", expr)
+        self.assertEqual(referenced, self.METRICS)
+        self.assertTrue(all(
+            SELF_OBS[name].scope == catalog_mod.PROCESS_SCOPE
+            for name in self.METRICS
+        ))
+
+    def test_export_callback_rates_are_split_by_signal_and_unstacked(self):
+        panel = self.panels["Exporter callback rates by signal"]
+        exprs = [target["expr"] for target in panel["targets"]]
+        self.assertEqual(len(exprs), 3)
+        self.assertTrue(all(expr.startswith("sum by (signal) (rate(") for expr in exprs))
+        self.assertEqual(
+            {
+                name
+                for expr in exprs
+                for name in CAT.metrics_referenced_by(expr)
+            },
+            {
+                "graph2otel.otlp.delivery.export_attempts",
+                "graph2otel.otlp.delivery.export_successes",
+                "graph2otel.otlp.delivery.export_failures",
+            },
+        )
+        self.assertNotIn("stacking", panel["fieldConfig"]["defaults"]["custom"])
+
+    def test_flush_and_shutdown_failures_preserve_signal_identity(self):
+        for title, metric_name in {
+            "Force-flush failure rate by signal":
+                "graph2otel.otlp.delivery.force_flush_failures",
+            "Shutdown failure total by signal":
+                "graph2otel.otlp.delivery.shutdown_failures",
+        }.items():
+            with self.subTest(panel=title):
+                expr = self.panels[title]["targets"][0]["expr"]
+                self.assertEqual(
+                    CAT.metrics_referenced_by(expr),
+                    {metric_name},
+                )
+                self.assertIn("by (signal)", expr)
+
+    def test_no_delivery_alert_or_recording_rule_is_added(self):
+        rendered = json.dumps({
+            "alerts": build_rules.RULES,
+            "recording": build_rules.RECORDING,
+        })
+        self.assertNotIn("graph2otel_otlp_delivery_", rendered)
+
+    def test_docs_define_the_callback_boundary_and_local_fallbacks(self):
+        path = os.path.join(os.path.dirname(GRAFANA), "docs", "signals.md")
+        with open(path) as f:
+            docs = re.sub(r"\s+", " ", f.read().lower().replace("**", ""))
+        for phrase in [
+            "exporter accepted",
+            "not exactly-once",
+            "not backend retention",
+            "local writer",
+            "admin status",
+            "structured logs",
+        ]:
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, docs)
 
 
 class TestCollectorAvailabilityPanels(unittest.TestCase):

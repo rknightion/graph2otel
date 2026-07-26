@@ -489,6 +489,59 @@ func TestRender_TrendChartsAndCards(t *testing.T) {
 	}
 }
 
+func TestRender_DeliveryDistinguishesSDKHandoffFromExporterAcceptance(t *testing.T) {
+	body := renderString(t, Status{
+		Service: ServiceInfo{Version: "0.1.0"},
+		Health:  healthHealthy,
+		Delivery: &DeliveryStatus{
+			Metrics: DeliverySignalStatus{
+				State:              telemetry.DeliveryStateDegraded,
+				ExportAttempts:     4,
+				ExportSuccesses:    2,
+				ExportFailures:     2,
+				ForceFlushFailures: 1,
+				ShutdownFailures:   1,
+				LastSuccessAt:      "2026-07-26T10:00:00.123456789Z",
+				LastFailureAt:      "2026-07-26T10:01:00.123456789Z",
+				LastFailureCode:    telemetry.DeliveryFailureShutdownFailed,
+			},
+			Logs: DeliverySignalStatus{
+				State:           telemetry.DeliveryStateHealthy,
+				ExportAttempts:  7,
+				ExportSuccesses: 7,
+				LastSuccessAt:   "2026-07-26T10:02:00.123456789Z",
+			},
+		},
+	})
+
+	for _, want := range []string{
+		"Emitted to SDK",
+		"Exporter accepted",
+		"Metrics",
+		"Logs",
+		string(telemetry.DeliveryStateDegraded),
+		string(telemetry.DeliveryStateHealthy),
+		string(telemetry.DeliveryFailureShutdownFailed),
+		"2026-07-26T10:00:00.123456789Z",
+		"2026-07-26T10:01:00.123456789Z",
+		"d.delivery",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("delivery status page missing %q", want)
+		}
+	}
+}
+
+func TestRender_DeliveryBlockIsAbsentWithoutSource(t *testing.T) {
+	body := renderString(t, Status{
+		Service: ServiceInfo{Version: "0.1.0"},
+		Health:  healthHealthy,
+	})
+	if strings.Contains(body, "Exporter accepted") {
+		t.Errorf("delivery block rendered without a DeliverySource")
+	}
+}
+
 // TestRender_ThrottleHeadroomSparkline asserts each throttle row carries its
 // headroom trend, so a bucket that is draining is visible as a slope and not
 // only as a single instantaneous percentage.

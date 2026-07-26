@@ -511,8 +511,10 @@ facet — two facts follow that a dashboard author must know.
 
 ## Multi-tenant labeling
 
-**Every signal carries a `tenant_id` attribute** — domain and self-observability, metrics
-and logs alike (#143). Filtering or grouping any panel by `tenant_id` works.
+**Every tenant-domain signal and tenant-scoped self-observability signal carries a
+`tenant_id` attribute** (#143). Filtering or grouping those panels by `tenant_id` works.
+Process-wide facts are the deliberate exception: build identity, cardinality policy and
+OTLP delivery health describe one graph2otel process and carry no tenant selector.
 
 graph2otel runs one Scheduler per configured tenant, and `telemetry.WithTenant` stamps the
 tenant at the emitter boundary, so it reaches all 58 collectors without any of them knowing
@@ -535,6 +537,37 @@ Why this does not violate the cardinality rule: `tenant_id` grows with the numbe
 an operator **deliberately configured**, not with tenant size. The [cardinality
 rule](#cardinality-shape) forbids the latter.
 
+## OTLP delivery health: exporter callbacks, not backend retention
+
+graph2otel tracks metrics and logs delivery independently at the SDK exporter boundary. A
+nil export callback means the **exporter accepted** that batch. It is local evidence of a
+successful callback, **not exactly-once** delivery, not a durable queue, and **not backend
+retention**, ingest completion, or queryability. With stdout export, success means the
+**local writer** callback completed; it says nothing about a remote backend.
+
+Six process-wide self-observability metrics expose that boundary. Their only attribute is
+the closed `signal="metrics"|"logs"` value:
+
+| Metric | Meaning |
+| --- | --- |
+| `graph2otel.otlp.delivery.export_attempts{signal}` | Export callbacks attempted since process start |
+| `graph2otel.otlp.delivery.export_successes{signal}` | Export callbacks accepted since process start |
+| `graph2otel.otlp.delivery.export_failures{signal}` | Export callbacks that returned an error since process start |
+| `graph2otel.otlp.delivery.force_flush_failures{signal}` | Force-flush callbacks that returned an error since process start |
+| `graph2otel.otlp.delivery.shutdown_failures{signal}` | Shutdown callbacks that returned an error since process start |
+| `graph2otel.otlp.delivery.degraded{signal}` | Complete two-row snapshot: `1` after a callback failure, cleared to `0` only by a later successful export |
+
+For each signal, `export_attempts = export_successes + export_failures`. Force-flush and
+shutdown failures have separate lifetime counters; a successful empty flush or shutdown
+cannot invent evidence that a payload was accepted. Delivery degradation is visible but
+does not change dependency-free liveness or the lifetime first-success readiness latch.
+
+These delivery metrics themselves travel through the metrics exporter. They may therefore
+be unobservable in the backend precisely while metrics delivery is failing. The **admin
+status** is the process-local source of truth in that case, and the existing **structured
+logs** retain the raw exporter error for diagnosis. Error text, endpoints, credentials,
+failure codes, tenants, collectors, and transports never become delivery metric labels.
+
 ## End-to-end record outcome accounting
 
 Every collector run reconciles source records through two conservation equations:
@@ -545,9 +578,10 @@ mapped  = emitted + deduped
 ```
 
 A source record counts once even when it produces several metric points and a log twin.
-`emitted` means graph2otel handed useful telemetry to its emitter; backend delivery and
-acceptance are separate OTLP concerns. Intentional filters and overlap dedupe are visible
-without being treated as loss. A failed reconciliation is itself a failed run with cause
+`emitted` means graph2otel handed useful telemetry to its emitter; it does not mean the
+exporter accepted it or that a backend ingested it. Backend delivery and acceptance are
+separate OTLP concerns. Intentional filters and overlap dedupe are visible without being
+treated as loss. A failed reconciliation is itself a failed run with cause
 `accounting_mismatch`.
 
 Four self-observability metrics expose the result:
