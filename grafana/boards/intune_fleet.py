@@ -11,6 +11,7 @@ DESCRIPTION = (
 )
 TAGS = ["graph2otel", "intune", "fleet", "generated"]
 TENANT_METRIC = "intune_devices_count"
+AVAILABILITY_PATTERN = r"intune\..+"
 
 SECTIONS = [
     ("Managed devices and inventory", [

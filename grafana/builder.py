@@ -51,6 +51,57 @@ NO_LOKI = (
     '{service_name="graph2otel"}, never {attr="…"}.'
 )
 
+NO_METRIC = (
+    "No metric rows. Check Signal availability above: this result alone is not "
+    "evidence that the collector is disabled, healthy, or failed. A datasource "
+    "or query error is shown separately."
+)
+
+NO_AVAILABILITY = (
+    "Availability unknown. No availability rows were returned; this does not mean "
+    "disabled. Verify the Prometheus datasource, tenant selection, and deployment."
+)
+
+AVAILABILITY_STATES = {
+    "disabled": {"text": "Disabled"},
+    "blocked": {"text": "Blocked"},
+    "covered": {"text": "Covered by alternative"},
+    "starting": {"text": "Starting"},
+    "healthy_empty": {"text": "Healthy, empty"},
+    "healthy": {"text": "Healthy"},
+    "limited": {"text": "Limited"},
+    "degraded": {"text": "Degraded"},
+    "failed": {"text": "Failed"},
+    "startup_failed": {"text": "Startup failed"},
+}
+
+AVAILABILITY_REASONS = {
+    "transport_not_configured": {"text": "Transport not configured"},
+    "experimental_not_enabled": {"text": "Experimental collector not enabled"},
+    "high_volume_not_enabled": {"text": "High-volume collector not enabled"},
+    "disabled_by_config": {"text": "Disabled by configuration"},
+    "permission_denied": {"text": "Permission denied"},
+    "license_unavailable": {"text": "Required licence unavailable"},
+    "covered_by_alternative": {"text": "Covered by another transport"},
+    "no_completed_run": {"text": "No completed run yet"},
+    "license_detection_failed": {"text": "Licence detection failed"},
+    "transport_initialization_failed": {"text": "Transport initialization failed"},
+    "invalid_transport_configuration": {"text": "Invalid transport configuration"},
+    "transport_fallback": {"text": "Running on fallback transport"},
+    "empty": {"text": "Successful source response with zero rows"},
+    "success": {"text": "Successful source response"},
+    "partial_license": {"text": "Running with a partial licence"},
+    "source_error": {"text": "Source error"},
+    "decode_error": {"text": "Decode error"},
+    "mapping_error": {"text": "Mapping error"},
+    "missing_event_time": {"text": "Missing event time"},
+    "accounting_mismatch": {"text": "Record accounting mismatch"},
+    "timeout": {"text": "Timeout"},
+    "panic": {"text": "Collector panic"},
+    "credential_initialization_failed": {"text": "Credential initialization failed"},
+    "graph_client_initialization_failed": {"text": "Graph client initialization failed"},
+}
+
 # UCUM unit -> Grafana field unit id. An annotation unit ("{device}") is a count
 # of a thing, which Grafana renders as "short".
 GRAFANA_UNITS = {
@@ -275,7 +326,7 @@ class Builder:
     def _viz_panel(self, viz: str, title: str, queries: list, unit: str,
                    desc: str, w: int, h: int):
         field_config = {
-            "defaults": {"unit": unit, "custom": {}},
+            "defaults": {"unit": unit, "custom": {}, "noValue": NO_METRIC},
             "overrides": [],
         }
         options = {}
@@ -292,7 +343,7 @@ class Builder:
         elif viz == "stat":
             options = {
                 "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
-                "colorMode": "value", "graphMode": "area", "textMode": "auto",
+                "colorMode": "none", "graphMode": "area", "textMode": "auto",
                 "justifyMode": "auto", "orientation": "auto",
             }
         elif viz == "table":
@@ -315,6 +366,49 @@ class Builder:
             "description": desc, "gridPos": {}, "datasource": PROM_DS,
             "fieldConfig": field_config, "options": options, "targets": queries,
         }, w, h)
+
+    def availability(self, collector_pattern: str):
+        """Add the domain's truthful current collector-state table.
+
+        The metric value is always one. Its bounded ``state`` and ``reason``
+        labels carry the meaning, so the table maps those string values rather
+        than inventing a numeric health score.
+        """
+        metric = self.cat.metric("graph2otel.collector.availability")
+        expr = (
+            "max by (tenant_id, collector, collector_transport, state, reason) "
+            f'({metric.prom}{{{TENANT_SEL},collector=~"{collector_pattern}"}})'
+        )
+        guide = (
+            "Current collector state from graph2otel.collector.availability. "
+            "Intentional absence is disabled "
+            "(transport_not_configured, experimental_not_enabled, "
+            "high_volume_not_enabled, disabled_by_config) or covered "
+            "(covered_by_alternative). healthy_empty/empty is a successful "
+            "zero-row source response. limited/partial_license is non-failure; "
+            "blocked/license_unavailable identifies a missing entitlement, while "
+            "blocked/permission_denied requires access. degraded and failed "
+            "(including source_error) describe completed runtime outcomes; "
+            "startup_failed describes initialization failure. An empty table is "
+            "unknown, never evidence of disabled."
+        )
+        panel = self.raw(
+            "Signal availability",
+            [expr],
+            viz="table",
+            desc=guide,
+            w=24,
+            h=8,
+        )
+        panel["fieldConfig"]["defaults"]["noValue"] = NO_AVAILABILITY
+        panel["fieldConfig"]["overrides"] = [
+            _value_mapping("state", AVAILABILITY_STATES),
+            _value_mapping("reason", AVAILABILITY_REASONS),
+        ]
+        panel["transformations"] = [
+            {"id": "labelsToFields", "options": {"mode": "columns"}},
+        ]
+        return panel
 
     # ----- Loki panels (#162) ---------------------------------------------
 
@@ -462,6 +556,16 @@ def _loki_note() -> str:
             "*structured metadata*, not stream labels: filter with "
             "`| event_name=…` after `{service_name=\"graph2otel\"}`. A stream selector "
             "on an attribute matches zero rows silently (#90).")
+
+
+def _value_mapping(field: str, values: dict) -> dict:
+    return {
+        "matcher": {"id": "byName", "options": field},
+        "properties": [{
+            "id": "mappings",
+            "value": [{"type": "value", "options": values}],
+        }],
+    }
 
 
 def dumps(dashboard: dict) -> str:

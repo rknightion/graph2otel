@@ -102,7 +102,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "**Metrics answer \"how many\"; logs answer \"which one\".** graph2otel puts bounded,\ntenant-shaped aggregates on metrics and per-entity detail on the log twin (#112).\nIf a panel here cannot tell you *which* device or user, the Logs row at the bottom\ncan.\n\n**Metric names are the OTLP\u2192Prometheus normalized form** \u2014 dots become underscores\nand unit/type suffixes are appended (`_total` on counters, `_seconds`, `_ratio`,\n`_percent`). Every query on this dashboard is generated from\n`spec/signal-catalog.json`, which is itself generated from what the collectors\nactually emit, so a panel cannot name a metric that does not exist.\n\n**LogQL: attributes are structured metadata, not stream labels.** Only\n`service_name` is a stream label. `{event_name=\"entra.signin\"}` matches **zero rows,\nsilently** \u2014 it is not an error. Always:\n\n```logql\n{service_name=\"graph2otel\"} | event_name=`entra.signin` | status_error_code!=`0`\n```\n\n**Empty is often correct.** Several collectors are opt-in (blob ingest, beta Graph\nsurfaces, high-volume feeds) and several are empty on a healthy tenant. A blank panel\nis not evidence of a broken pipeline.\n"
+        "content": "**Metrics answer \"how many\"; logs answer \"which one\".** graph2otel puts bounded,\ntenant-shaped aggregates on metrics and per-entity detail on the log twin (#112).\nIf a panel here cannot tell you *which* device or user, the Logs row at the bottom\ncan.\n\n**Metric names are the OTLP\u2192Prometheus normalized form** \u2014 dots become underscores\nand unit/type suffixes are appended (`_total` on counters, `_seconds`, `_ratio`,\n`_percent`). Every query on this dashboard is generated from\n`spec/signal-catalog.json`, which is itself generated from what the collectors\nactually emit, so a panel cannot name a metric that does not exist.\n\n**LogQL: attributes are structured metadata, not stream labels.** Only\n`service_name` is a stream label. `{event_name=\"entra.signin\"}` matches **zero rows,\nsilently** \u2014 it is not an error. Always:\n\n```logql\n{service_name=\"graph2otel\"} | event_name=`entra.signin` | status_error_code!=`0`\n```\n\n**Empty is often correct.** Several collectors are opt-in (blob ingest, beta Graph\nsurfaces, high-volume feeds) and several are empty on a healthy tenant. Check the\nSignal availability row before interpreting an empty metric panel: it distinguishes\ndisabled, covered, healthy-empty, limited, blocked and failed collectors. An empty\navailability table is unknown, not evidence that a collector is disabled.\n"
       }
     },
     {
@@ -142,7 +142,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -199,7 +200,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -256,7 +258,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -313,7 +316,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -370,7 +374,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -427,7 +432,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -484,7 +490,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -552,7 +559,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -616,7 +624,8 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": {}
+          "custom": {},
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -669,7 +678,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -751,7 +761,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -809,7 +820,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -867,7 +879,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -925,7 +938,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -990,7 +1004,8 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": {}
+          "custom": {},
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1037,7 +1052,8 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": {}
+          "custom": {},
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1085,7 +1101,8 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": {}
+          "custom": {},
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1132,7 +1149,8 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": {}
+          "custom": {},
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1190,7 +1208,8 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": {}
+          "custom": {},
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1267,7 +1286,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1324,7 +1344,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1375,7 +1396,8 @@
       "fieldConfig": {
         "defaults": {
           "unit": "s",
-          "custom": {}
+          "custom": {},
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1428,7 +1450,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1485,7 +1508,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1542,7 +1566,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1599,7 +1624,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1669,7 +1695,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1727,7 +1754,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1785,7 +1813,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1843,7 +1872,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1907,7 +1937,8 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": {}
+          "custom": {},
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1973,7 +2004,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -2031,7 +2063,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -2083,7 +2116,8 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": {}
+          "custom": {},
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -2144,7 +2178,8 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": {}
+          "custom": {},
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -2191,7 +2226,8 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": {}
+          "custom": {},
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -2257,7 +2293,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -2314,7 +2351,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -2371,7 +2409,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -2428,7 +2467,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -2492,7 +2532,8 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": {}
+          "custom": {},
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -2545,7 +2586,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -2596,7 +2638,8 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": {}
+          "custom": {},
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -2608,7 +2651,7 @@
           "fields": "",
           "values": false
         },
-        "colorMode": "value",
+        "colorMode": "none",
         "graphMode": "area",
         "textMode": "auto",
         "justifyMode": "auto",
@@ -2646,7 +2689,8 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": {}
+          "custom": {},
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -2658,7 +2702,7 @@
           "fields": "",
           "values": false
         },
-        "colorMode": "value",
+        "colorMode": "none",
         "graphMode": "area",
         "textMode": "auto",
         "justifyMode": "auto",
@@ -2715,7 +2759,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -2772,7 +2817,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -2829,7 +2875,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -2886,7 +2933,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -2969,7 +3017,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -3026,7 +3075,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -3108,7 +3158,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -3165,7 +3216,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -3247,7 +3299,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -3304,7 +3357,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -3386,7 +3440,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -3443,7 +3498,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },

@@ -26,6 +26,8 @@ DESCRIPTION = (
 )
 TAGS = ["graph2otel", "self-observability", "generated"]
 TENANT_METRIC = SELF_OBS["graph2otel.collector.availability"].prom
+# This board owns the complete cross-domain availability presentation below.
+AVAILABILITY_PATTERN = None
 
 SECTIONS = [
     ("Blob ingest health and API drift", [

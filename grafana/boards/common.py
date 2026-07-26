@@ -30,8 +30,10 @@ silently** — it is not an error. Always:
 ```
 
 **Empty is often correct.** Several collectors are opt-in (blob ingest, beta Graph
-surfaces, high-volume feeds) and several are empty on a healthy tenant. A blank panel
-is not evidence of a broken pipeline.
+surfaces, high-volume feeds) and several are empty on a healthy tenant. Check the
+Signal availability row before interpreting an empty metric panel: it distinguishes
+disabled, covered, healthy-empty, limited, blocked and failed collectors. An empty
+availability table is unknown, not evidence that a collector is disabled.
 """
 
 
@@ -65,6 +67,15 @@ def build(mod, cat) -> Builder:
         needs_loki=bool(getattr(mod, "LOGS", ())),
     )
     b.text(PREAMBLE, title="Read this before writing your own query", h=12)
+    if not hasattr(mod, "AVAILABILITY_PATTERN"):
+        raise ValueError(
+            f"{mod.__name__} must declare AVAILABILITY_PATTERN; use None only "
+            "when the board owns an equivalent availability presentation"
+        )
+    availability_pattern = mod.AVAILABILITY_PATTERN
+    if availability_pattern:
+        b.row("Collector availability")
+        b.availability(availability_pattern)
     for section_title, items in mod.SECTIONS:
         b.row(section_title)
         for item in items:

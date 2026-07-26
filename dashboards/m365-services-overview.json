@@ -80,13 +80,13 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "**Metrics answer \"how many\"; logs answer \"which one\".** graph2otel puts bounded,\ntenant-shaped aggregates on metrics and per-entity detail on the log twin (#112).\nIf a panel here cannot tell you *which* device or user, the Logs row at the bottom\ncan.\n\n**Metric names are the OTLP\u2192Prometheus normalized form** \u2014 dots become underscores\nand unit/type suffixes are appended (`_total` on counters, `_seconds`, `_ratio`,\n`_percent`). Every query on this dashboard is generated from\n`spec/signal-catalog.json`, which is itself generated from what the collectors\nactually emit, so a panel cannot name a metric that does not exist.\n\n**LogQL: attributes are structured metadata, not stream labels.** Only\n`service_name` is a stream label. `{event_name=\"entra.signin\"}` matches **zero rows,\nsilently** \u2014 it is not an error. Always:\n\n```logql\n{service_name=\"graph2otel\"} | event_name=`entra.signin` | status_error_code!=`0`\n```\n\n**Empty is often correct.** Several collectors are opt-in (blob ingest, beta Graph\nsurfaces, high-volume feeds) and several are empty on a healthy tenant. A blank panel\nis not evidence of a broken pipeline.\n"
+        "content": "**Metrics answer \"how many\"; logs answer \"which one\".** graph2otel puts bounded,\ntenant-shaped aggregates on metrics and per-entity detail on the log twin (#112).\nIf a panel here cannot tell you *which* device or user, the Logs row at the bottom\ncan.\n\n**Metric names are the OTLP\u2192Prometheus normalized form** \u2014 dots become underscores\nand unit/type suffixes are appended (`_total` on counters, `_seconds`, `_ratio`,\n`_percent`). Every query on this dashboard is generated from\n`spec/signal-catalog.json`, which is itself generated from what the collectors\nactually emit, so a panel cannot name a metric that does not exist.\n\n**LogQL: attributes are structured metadata, not stream labels.** Only\n`service_name` is a stream label. `{event_name=\"entra.signin\"}` matches **zero rows,\nsilently** \u2014 it is not an error. Always:\n\n```logql\n{service_name=\"graph2otel\"} | event_name=`entra.signin` | status_error_code!=`0`\n```\n\n**Empty is often correct.** Several collectors are opt-in (blob ingest, beta Graph\nsurfaces, high-volume feeds) and several are empty on a healthy tenant. Check the\nSignal availability row before interpreting an empty metric panel: it distinguishes\ndisabled, covered, healthy-empty, limited, blocked and failed collectors. An empty\navailability table is unknown, not evidence that a collector is disabled.\n"
       }
     },
     {
       "id": 2,
       "type": "row",
-      "title": "Exchange Online",
+      "title": "Collector availability",
       "collapsed": false,
       "panels": [],
       "gridPos": {
@@ -98,6 +98,214 @@
     },
     {
       "id": 3,
+      "type": "table",
+      "title": "Signal availability",
+      "description": "Current collector state from graph2otel.collector.availability. Intentional absence is disabled (transport_not_configured, experimental_not_enabled, high_volume_not_enabled, disabled_by_config) or covered (covered_by_alternative). healthy_empty/empty is a successful zero-row source response. limited/partial_license is non-failure; blocked/license_unavailable identifies a missing entitlement, while blocked/permission_denied requires access. degraded and failed (including source_error) describe completed runtime outcomes; startup_failed describes initialization failure. An empty table is unknown, never evidence of disabled.",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {},
+          "noValue": "Availability unknown. No availability rows were returned; this does not mean disabled. Verify the Prometheus datasource, tenant selection, and deployment."
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "state"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "disabled": {
+                        "text": "Disabled"
+                      },
+                      "blocked": {
+                        "text": "Blocked"
+                      },
+                      "covered": {
+                        "text": "Covered by alternative"
+                      },
+                      "starting": {
+                        "text": "Starting"
+                      },
+                      "healthy_empty": {
+                        "text": "Healthy, empty"
+                      },
+                      "healthy": {
+                        "text": "Healthy"
+                      },
+                      "limited": {
+                        "text": "Limited"
+                      },
+                      "degraded": {
+                        "text": "Degraded"
+                      },
+                      "failed": {
+                        "text": "Failed"
+                      },
+                      "startup_failed": {
+                        "text": "Startup failed"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reason"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "transport_not_configured": {
+                        "text": "Transport not configured"
+                      },
+                      "experimental_not_enabled": {
+                        "text": "Experimental collector not enabled"
+                      },
+                      "high_volume_not_enabled": {
+                        "text": "High-volume collector not enabled"
+                      },
+                      "disabled_by_config": {
+                        "text": "Disabled by configuration"
+                      },
+                      "permission_denied": {
+                        "text": "Permission denied"
+                      },
+                      "license_unavailable": {
+                        "text": "Required licence unavailable"
+                      },
+                      "covered_by_alternative": {
+                        "text": "Covered by another transport"
+                      },
+                      "no_completed_run": {
+                        "text": "No completed run yet"
+                      },
+                      "license_detection_failed": {
+                        "text": "Licence detection failed"
+                      },
+                      "transport_initialization_failed": {
+                        "text": "Transport initialization failed"
+                      },
+                      "invalid_transport_configuration": {
+                        "text": "Invalid transport configuration"
+                      },
+                      "transport_fallback": {
+                        "text": "Running on fallback transport"
+                      },
+                      "empty": {
+                        "text": "Successful source response with zero rows"
+                      },
+                      "success": {
+                        "text": "Successful source response"
+                      },
+                      "partial_license": {
+                        "text": "Running with a partial licence"
+                      },
+                      "source_error": {
+                        "text": "Source error"
+                      },
+                      "decode_error": {
+                        "text": "Decode error"
+                      },
+                      "mapping_error": {
+                        "text": "Mapping error"
+                      },
+                      "missing_event_time": {
+                        "text": "Missing event time"
+                      },
+                      "accounting_mismatch": {
+                        "text": "Record accounting mismatch"
+                      },
+                      "timeout": {
+                        "text": "Timeout"
+                      },
+                      "panic": {
+                        "text": "Collector panic"
+                      },
+                      "credential_initialization_failed": {
+                        "text": "Credential initialization failed"
+                      },
+                      "graph_client_initialization_failed": {
+                        "text": "Graph client initialization failed"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~\"m365\\..+\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "row",
+      "title": "Exchange Online",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      }
+    },
+    {
+      "id": 5,
       "type": "timeseries",
       "title": "Exchange mailboxes",
       "description": "",
@@ -105,7 +313,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 13
+        "y": 22
       },
       "datasource": {
         "type": "prometheus",
@@ -120,7 +328,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -154,7 +363,7 @@
       ]
     },
     {
-      "id": 4,
+      "id": 6,
       "type": "timeseries",
       "title": "Exchange mailboxes setting enabled",
       "description": "",
@@ -162,7 +371,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 13
+        "y": 22
       },
       "datasource": {
         "type": "prometheus",
@@ -177,7 +386,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -211,7 +421,7 @@
       ]
     },
     {
-      "id": 5,
+      "id": 7,
       "type": "table",
       "title": "Exchange audit configuration",
       "description": "",
@@ -219,7 +429,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 21
+        "y": 30
       },
       "datasource": {
         "type": "prometheus",
@@ -228,7 +438,8 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": {}
+          "custom": {},
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -258,7 +469,7 @@
       ]
     },
     {
-      "id": 6,
+      "id": 8,
       "type": "table",
       "title": "Exchange org configuration",
       "description": "",
@@ -266,7 +477,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 21
+        "y": 30
       },
       "datasource": {
         "type": "prometheus",
@@ -275,7 +486,8 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": {}
+          "custom": {},
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -305,7 +517,7 @@
       ]
     },
     {
-      "id": 7,
+      "id": 9,
       "type": "timeseries",
       "title": "Mail-flow connectors",
       "description": "",
@@ -313,7 +525,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 29
+        "y": 38
       },
       "datasource": {
         "type": "prometheus",
@@ -328,7 +540,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -373,7 +586,7 @@
       ]
     },
     {
-      "id": 8,
+      "id": 10,
       "type": "timeseries",
       "title": "Transport rules",
       "description": "",
@@ -381,7 +594,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 29
+        "y": 38
       },
       "datasource": {
         "type": "prometheus",
@@ -396,7 +609,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -441,7 +655,7 @@
       ]
     },
     {
-      "id": 9,
+      "id": 11,
       "type": "timeseries",
       "title": "Exchange remote domains",
       "description": "",
@@ -449,7 +663,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 37
+        "y": 46
       },
       "datasource": {
         "type": "prometheus",
@@ -464,7 +678,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -498,7 +713,7 @@
       ]
     },
     {
-      "id": 10,
+      "id": 12,
       "type": "timeseries",
       "title": "Exchange DKIM signing",
       "description": "",
@@ -506,7 +721,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 37
+        "y": 46
       },
       "datasource": {
         "type": "prometheus",
@@ -521,7 +736,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -555,7 +771,7 @@
       ]
     },
     {
-      "id": 11,
+      "id": 13,
       "type": "row",
       "title": "SharePoint and OneDrive",
       "collapsed": false,
@@ -564,11 +780,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 45
+        "y": 54
       }
     },
     {
-      "id": 12,
+      "id": 14,
       "type": "table",
       "title": "SharePoint tenant sharing posture",
       "description": "",
@@ -576,7 +792,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 46
+        "y": 55
       },
       "datasource": {
         "type": "prometheus",
@@ -585,7 +801,8 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": {}
+          "custom": {},
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -615,7 +832,7 @@
       ]
     },
     {
-      "id": 13,
+      "id": 15,
       "type": "timeseries",
       "title": "Sharing domain allow/block lists",
       "description": "",
@@ -623,7 +840,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 46
+        "y": 55
       },
       "datasource": {
         "type": "prometheus",
@@ -638,7 +855,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -685,7 +903,7 @@
       ]
     },
     {
-      "id": 14,
+      "id": 16,
       "type": "timeseries",
       "title": "SharePoint tenant switches",
       "description": "",
@@ -693,7 +911,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 54
+        "y": 63
       },
       "datasource": {
         "type": "prometheus",
@@ -708,7 +926,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -779,7 +998,7 @@
       ]
     },
     {
-      "id": 15,
+      "id": 17,
       "type": "timeseries",
       "title": "Storage limits",
       "description": "",
@@ -787,7 +1006,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 62
+        "y": 71
       },
       "datasource": {
         "type": "prometheus",
@@ -802,7 +1021,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -849,7 +1069,7 @@
       ]
     },
     {
-      "id": 16,
+      "id": 18,
       "type": "stat",
       "title": "Sharepoint deleted user retention days",
       "description": "",
@@ -857,7 +1077,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 62
+        "y": 71
       },
       "datasource": {
         "type": "prometheus",
@@ -866,7 +1086,8 @@
       "fieldConfig": {
         "defaults": {
           "unit": "d",
-          "custom": {}
+          "custom": {},
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -878,7 +1099,7 @@
           "fields": "",
           "values": false
         },
-        "colorMode": "value",
+        "colorMode": "none",
         "graphMode": "area",
         "textMode": "auto",
         "justifyMode": "auto",
@@ -899,7 +1120,7 @@
       ]
     },
     {
-      "id": 17,
+      "id": 19,
       "type": "timeseries",
       "title": "Storage drives total",
       "description": "",
@@ -907,7 +1128,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 70
+        "y": 79
       },
       "datasource": {
         "type": "prometheus",
@@ -922,7 +1143,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -956,7 +1178,7 @@
       ]
     },
     {
-      "id": 18,
+      "id": 20,
       "type": "timeseries",
       "title": "Drive storage used vs total",
       "description": "",
@@ -964,7 +1186,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 70
+        "y": 79
       },
       "datasource": {
         "type": "prometheus",
@@ -979,7 +1201,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1024,7 +1247,7 @@
       ]
     },
     {
-      "id": 19,
+      "id": 21,
       "type": "row",
       "title": "Teams",
       "collapsed": false,
@@ -1033,11 +1256,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 78
+        "y": 87
       }
     },
     {
-      "id": 20,
+      "id": 22,
       "type": "timeseries",
       "title": "Teams total",
       "description": "",
@@ -1045,7 +1268,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 79
+        "y": 88
       },
       "datasource": {
         "type": "prometheus",
@@ -1060,7 +1283,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1094,7 +1318,7 @@
       ]
     },
     {
-      "id": 21,
+      "id": 23,
       "type": "timeseries",
       "title": "Teams channels total",
       "description": "",
@@ -1102,7 +1326,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 79
+        "y": 88
       },
       "datasource": {
         "type": "prometheus",
@@ -1117,7 +1341,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1151,7 +1376,7 @@
       ]
     },
     {
-      "id": 22,
+      "id": 24,
       "type": "timeseries",
       "title": "Teams membership total",
       "description": "",
@@ -1159,7 +1384,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 87
+        "y": 96
       },
       "datasource": {
         "type": "prometheus",
@@ -1174,7 +1399,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1208,7 +1434,7 @@
       ]
     },
     {
-      "id": 23,
+      "id": 25,
       "type": "timeseries",
       "title": "Teams installed apps total",
       "description": "",
@@ -1216,7 +1442,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 87
+        "y": 96
       },
       "datasource": {
         "type": "prometheus",
@@ -1231,7 +1457,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1265,7 +1492,7 @@
       ]
     },
     {
-      "id": 24,
+      "id": 26,
       "type": "timeseries",
       "title": "Teams governance gaps",
       "description": "",
@@ -1273,7 +1500,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 95
+        "y": 104
       },
       "datasource": {
         "type": "prometheus",
@@ -1288,7 +1515,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1335,7 +1563,7 @@
       ]
     },
     {
-      "id": 25,
+      "id": 27,
       "type": "row",
       "title": "Service health",
       "collapsed": false,
@@ -1344,11 +1572,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 103
+        "y": 112
       }
     },
     {
-      "id": 26,
+      "id": 28,
       "type": "timeseries",
       "title": "Service health issues total",
       "description": "",
@@ -1356,7 +1584,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 104
+        "y": 113
       },
       "datasource": {
         "type": "prometheus",
@@ -1371,7 +1599,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1405,7 +1634,7 @@
       ]
     },
     {
-      "id": 27,
+      "id": 29,
       "type": "timeseries",
       "title": "Service health services total",
       "description": "",
@@ -1413,7 +1642,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 104
+        "y": 113
       },
       "datasource": {
         "type": "prometheus",
@@ -1428,7 +1657,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1462,7 +1692,7 @@
       ]
     },
     {
-      "id": 28,
+      "id": 30,
       "type": "table",
       "title": "Service health status ladder",
       "description": "",
@@ -1470,7 +1700,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 112
+        "y": 121
       },
       "datasource": {
         "type": "prometheus",
@@ -1479,7 +1709,8 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": {}
+          "custom": {},
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1509,7 +1740,7 @@
       ]
     },
     {
-      "id": 29,
+      "id": 31,
       "type": "timeseries",
       "title": "Service messages total",
       "description": "",
@@ -1517,7 +1748,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 120
+        "y": 129
       },
       "datasource": {
         "type": "prometheus",
@@ -1532,7 +1763,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1566,7 +1798,7 @@
       ]
     },
     {
-      "id": 30,
+      "id": 32,
       "type": "row",
       "title": "Mail flow (message trace \u2014 HIGH VOLUME, opt-in)",
       "collapsed": false,
@@ -1575,11 +1807,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 128
+        "y": 137
       }
     },
     {
-      "id": 31,
+      "id": 33,
       "type": "timeseries",
       "title": "Message trace messages",
       "description": "",
@@ -1587,7 +1819,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 129
+        "y": 138
       },
       "datasource": {
         "type": "prometheus",
@@ -1602,7 +1834,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1636,7 +1869,7 @@
       ]
     },
     {
-      "id": 32,
+      "id": 34,
       "type": "timeseries",
       "title": "Message trace bytes",
       "description": "",
@@ -1644,7 +1877,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 129
+        "y": 138
       },
       "datasource": {
         "type": "prometheus",
@@ -1659,7 +1892,8 @@
             "fillOpacity": 10,
             "showPoints": "never",
             "spanNulls": true
-          }
+          },
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
         },
         "overrides": []
       },
@@ -1693,7 +1927,7 @@
       ]
     },
     {
-      "id": 33,
+      "id": 35,
       "type": "row",
       "title": "Logs \u2014 which one, not how many (#162)",
       "collapsed": false,
@@ -1702,11 +1936,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 137
+        "y": 146
       }
     },
     {
-      "id": 34,
+      "id": 36,
       "type": "logs",
       "title": "Unified audit \u2014 which user, which operation",
       "description": "user_key is the opaque classic UserKey; user_id is usually the UPN but carries sentinels too. Correlate the two M365 audit transports on user_id.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
@@ -1714,7 +1948,7 @@
         "h": 12,
         "w": 24,
         "x": 0,
-        "y": 138
+        "y": 147
       },
       "datasource": {
         "type": "loki",
@@ -1748,7 +1982,7 @@
       ]
     },
     {
-      "id": 35,
+      "id": 37,
       "type": "table",
       "title": "Top audited operations by workload",
       "description": "\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
@@ -1756,7 +1990,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 150
+        "y": 159
       },
       "datasource": {
         "type": "loki",
@@ -1806,7 +2040,7 @@
       ]
     },
     {
-      "id": 36,
+      "id": 38,
       "type": "timeseries",
       "title": "Audit record rate by result status",
       "description": "\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
@@ -1814,7 +2048,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 150
+        "y": 159
       },
       "datasource": {
         "type": "loki",
@@ -1863,7 +2097,7 @@
       ]
     },
     {
-      "id": 37,
+      "id": 39,
       "type": "table",
       "title": "Message trace: top senders (HIGH VOLUME, opt-in)",
       "description": "One record per message per recipient \u2014 the rate scales with traffic, not tenant size. Empty unless the collector is explicitly enabled.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
@@ -1871,7 +2105,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 158
+        "y": 167
       },
       "datasource": {
         "type": "loki",

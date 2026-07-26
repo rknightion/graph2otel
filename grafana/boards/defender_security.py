@@ -19,6 +19,7 @@ DESCRIPTION = (
 )
 TAGS = ["graph2otel", "defender", "mdca", "security", "generated"]
 TENANT_METRIC = "defender_vulnerability_cves"
+AVAILABILITY_PATTERN = r"(?:defender|mdca)\..+"
 
 SECTIONS = [
     ("Vulnerabilities and software", [

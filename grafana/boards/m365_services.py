@@ -10,6 +10,7 @@ DESCRIPTION = (
 )
 TAGS = ["graph2otel", "m365", "generated"]
 TENANT_METRIC = "m365_service_health_services_total"
+AVAILABILITY_PATTERN = r"m365\..+"
 
 SECTIONS = [
     ("Exchange Online", [

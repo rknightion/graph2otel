@@ -15,6 +15,7 @@ import os
 import re
 import sys
 import unittest
+from types import SimpleNamespace
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GRAFANA = os.path.dirname(HERE)
@@ -23,7 +24,15 @@ sys.path.insert(0, GRAFANA)
 import build_dashboard  # noqa: E402
 import build_rules  # noqa: E402
 import catalog as catalog_mod  # noqa: E402
-from builder import Builder, TENANT_SEL, dumps, group_keys  # noqa: E402
+from boards import common  # noqa: E402
+from builder import (  # noqa: E402
+    AVAILABILITY_REASONS,
+    AVAILABILITY_STATES,
+    Builder,
+    TENANT_SEL,
+    dumps,
+    group_keys,
+)
 from promname import prom_name  # noqa: E402
 
 CAT = catalog_mod.load()
@@ -446,6 +455,156 @@ class TestCollectorAvailabilityPanels(unittest.TestCase):
         self.assertTrue(all("ingest_transport" not in expr for expr in availability_exprs))
         for panel in self.panels.values():
             self.assertNotIn("alert", panel)
+
+
+class TestDomainAvailabilityPresentation(unittest.TestCase):
+    DOMAIN_PATTERNS = {
+        "intune-fleet-overview.json": r"intune\..+",
+        "entra-compliance-overview.json": r"entra\..+",
+        "m365-services-overview.json": r"m365\..+",
+        "defender-security-overview.json": r"(?:defender|mdca)\..+",
+        "purview-compliance-overview.json": r"purview\..+",
+    }
+
+    def _panels(self, board):
+        return [
+            item["spec"]
+            for item in board._panels
+            if item.get("spec")
+        ]
+
+    def test_new_board_must_declare_availability_ownership(self):
+        module = SimpleNamespace(
+            __name__="boards.test_missing_availability",
+            UID="test",
+            TITLE="test",
+            DESCRIPTION="",
+            TAGS=[],
+            TENANT_METRIC="entra_users_total",
+            SECTIONS=[],
+            LOGS=[],
+        )
+        with self.assertRaisesRegex(ValueError, "AVAILABILITY_PATTERN"):
+            common.build(module, CAT)
+
+    def test_each_domain_board_has_one_truthful_availability_table(self):
+        availability = SELF_OBS["graph2otel.collector.availability"].prom
+        for filename, board in BUILT:
+            if filename not in self.DOMAIN_PATTERNS:
+                continue
+            with self.subTest(board=filename):
+                panels = [
+                    panel for panel in self._panels(board)
+                    if panel["title"] == "Signal availability"
+                ]
+                self.assertEqual(len(panels), 1)
+                panel = panels[0]
+                self.assertEqual(panel["type"], "table")
+                self.assertEqual(panel["gridPos"], {})
+                self.assertIn(
+                    "max by (tenant_id, collector, collector_transport, state, reason)",
+                    panel["targets"][0]["expr"],
+                )
+                self.assertIn(availability, panel["targets"][0]["expr"])
+                self.assertIn(TENANT_SEL, panel["targets"][0]["expr"])
+                self.assertIn(
+                    f'collector=~"{self.DOMAIN_PATTERNS[filename]}"',
+                    panel["targets"][0]["expr"],
+                )
+                no_value = panel["fieldConfig"]["defaults"]["noValue"].lower()
+                self.assertIn("unknown", no_value)
+                self.assertIn("does not mean disabled", no_value)
+
+    def test_availability_table_maps_the_complete_bounded_state_set(self):
+        expected = {
+            "disabled",
+            "blocked",
+            "covered",
+            "starting",
+            "healthy_empty",
+            "healthy",
+            "limited",
+            "degraded",
+            "failed",
+            "startup_failed",
+        }
+        for filename, board in BUILT:
+            if filename not in self.DOMAIN_PATTERNS:
+                continue
+            panel = next(
+                panel for panel in self._panels(board)
+                if panel["title"] == "Signal availability"
+            )
+            override = next(
+                item for item in panel["fieldConfig"]["overrides"]
+                if item["matcher"] == {"id": "byName", "options": "state"}
+            )
+            mapping = next(
+                prop["value"][0]["options"]
+                for prop in override["properties"]
+                if prop["id"] == "mappings"
+            )
+            self.assertEqual(set(mapping), expected, filename)
+            self.assertTrue(all("color" not in value for value in mapping.values()))
+
+    def test_mappings_cover_the_generated_go_contract(self):
+        path = os.path.join(os.path.dirname(GRAFANA), "docs", "collectors.md")
+        with open(path) as f:
+            availability_section = f.read().split(
+                "## Collector availability", 1
+            )[1].split("\n## ", 1)[0]
+        pairs = re.findall(
+            r"^\| `([^`]+)` \| `([^`]+)` \|$",
+            availability_section,
+            re.MULTILINE,
+        )
+        self.assertTrue(pairs)
+        self.assertEqual(set(AVAILABILITY_STATES), {state for state, _ in pairs})
+        self.assertEqual(set(AVAILABILITY_REASONS), {reason for _, reason in pairs})
+
+    def test_distinct_empty_and_failure_reasons_are_documented(self):
+        required = {
+            "transport_not_configured",
+            "experimental_not_enabled",
+            "high_volume_not_enabled",
+            "disabled_by_config",
+            "covered_by_alternative",
+            "partial_license",
+            "license_unavailable",
+            "empty",
+            "permission_denied",
+            "source_error",
+            "startup_failed",
+        }
+        for filename, board in BUILT:
+            if filename not in self.DOMAIN_PATTERNS:
+                continue
+            panel = next(
+                panel for panel in self._panels(board)
+                if panel["title"] == "Signal availability"
+            )
+            text = panel["description"] + json.dumps(
+                panel["fieldConfig"]["overrides"]
+            )
+            for reason in required:
+                with self.subTest(board=filename, reason=reason):
+                    self.assertIn(reason, text)
+
+    def test_metric_empty_state_is_neutral_and_never_green(self):
+        for filename, board in BUILT:
+            if filename not in self.DOMAIN_PATTERNS:
+                continue
+            for panel in self._panels(board):
+                if panel.get("datasource", {}).get("type") != "prometheus":
+                    continue
+                if panel["title"] == "Signal availability":
+                    continue
+                with self.subTest(board=filename, panel=panel["title"]):
+                    no_value = panel["fieldConfig"]["defaults"]["noValue"].lower()
+                    self.assertIn("check signal availability", no_value)
+                    self.assertIn("not evidence", no_value)
+                    if panel["type"] == "stat":
+                        self.assertEqual(panel["options"]["colorMode"], "none")
 
 
 class TestLogPanels(unittest.TestCase):

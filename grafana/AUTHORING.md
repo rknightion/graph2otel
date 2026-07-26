@@ -133,10 +133,21 @@ like they belong there and do not.
 ## Adding a dashboard
 
 Write `boards/<name>.py` with `UID`, `TITLE`, `DESCRIPTION`, `TAGS`, `TENANT_METRIC`
-(a Prometheus name that exists, for the tenant dropdown's `label_values`), `SECTIONS`,
-and optionally `LOGS` and `extra(b)`. Then add `("boards.<name>", "<file>.json")` to
-`BOARDS` in `build_dashboard.py`. `test_no_orphan_dashboard_files` fails if a renamed
-board leaves its old JSON behind.
+(a Prometheus name that exists, for the tenant dropdown's `label_values`),
+`AVAILABILITY_PATTERN`, `SECTIONS`, and optionally `LOGS` and `extra(b)`. The
+availability pattern selects the logical collector IDs shown in the generated
+**Signal availability** table; declare it explicitly rather than inferring a collector
+ID from a signal-catalog package path. Use `None` only when the dashboard owns an
+equivalent availability presentation, as the self-observability board does.
+
+Every Prometheus query panel gets a neutral `noValue` explanation that points to that
+table. Stat panels default to no color so an empty or unmapped value cannot inherit
+Grafana's green base threshold; evidence-backed colors belong in an explicit panel
+mapping or threshold.
+
+Then add `("boards.<name>", "<file>.json")` to `BOARDS` in
+`build_dashboard.py`. `test_no_orphan_dashboard_files` fails if a renamed board leaves
+its old JSON behind.
 
 ## Self-observability uses the same catalog
 

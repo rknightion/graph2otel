@@ -10,6 +10,7 @@ DESCRIPTION = (
 )
 TAGS = ["graph2otel", "entra", "compliance", "generated"]
 TENANT_METRIC = "entra_users_total"
+AVAILABILITY_PATTERN = r"entra\..+"
 
 SECTIONS = [
     ("Directory objects", [

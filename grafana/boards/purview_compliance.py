@@ -10,6 +10,7 @@ DESCRIPTION = (
 )
 TAGS = ["graph2otel", "purview", "compliance", "generated"]
 TENANT_METRIC = "purview_labels_count"
+AVAILABILITY_PATTERN = r"purview\..+"
 
 SECTIONS = [
     ("Data loss prevention", [
