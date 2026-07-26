@@ -2,9 +2,17 @@
 #
 # This file is optional: with no -config flag graph2otel runs from its
 # built-in defaults plus environment variables alone (the container-friendly
-# path). Any key you omit here keeps its default; any key you set here is
-# overridden by the matching G2O_ environment variable if one is set (env
-# always wins). See the "__" nesting rule below.
+# path). Any key you omit here keeps its default; a supported G2O_ environment
+# variable overrides the matching YAML scalar if both are set (env always
+# wins). tenants[] and profiling.pyroscope.tags are file-only; the global
+# collectors map has the dynamic env form documented below.
+#
+# Configuration is strict. Startup and `graph2otel check` reject unknown YAML
+# keys, unknown G2O_* variables, and unknown collector names before credentials
+# or network clients are constructed. Diagnostics name the exact offending
+# path or environment variable without printing its value. Fixed objects are
+# closed; only collector-name maps and profiling.pyroscope.tags accept dynamic
+# keys.
 #
 # IMPORTANT — no secrets or auth material belong in this file, ever:
 #   * Tenant credentials (client secret, certificate, or workload/managed
@@ -41,7 +49,7 @@ tenants:
     # `collectors` block below, winning field-by-field, so one tenant can
     # disable a collector (or retune its interval) that the rest keep enabled.
     # collectors:
-    #   sign_ins:
+    #   "entra.signins.interactive":
     #     enabled: false
     #
     # Optional read-only Azure Storage blob ingest — the ONE place graph2otel
@@ -144,13 +152,22 @@ otlp:
 # keyed by collector name. A collector omitted here runs enabled at its
 # built-in default interval. `enabled` unset means "default true" (distinct from
 # an explicit false); `interval` unset (or 0) means "use the collector default".
-# A collector name containing an underscore stays addressable via env using the
-# "__" nesting / single "_" preserved rule, e.g. collectors.sign_ins.enabled ->
-# G2O_COLLECTORS__SIGN_INS__ENABLED=false.
+# Names must match the generated collector reference exactly; an unambiguous
+# typo gets a "did you mean" suggestion. The only dynamic env form is
+# G2O_COLLECTORS__<NAME>__(ENABLED|INTERVAL|SOURCE), with the collector name
+# uppercased and otherwise preserved, e.g.
+# G2O_COLLECTORS__ENTRA.SIGNINS.INTERACTIVE__ENABLED=false.
 collectors: {}
-#   sign_ins:
+#   "entra.signins.interactive":
 #     enabled: true
 #     interval: "5m"  # duration string: "30s", "5m", "168h" (minimum 1s)
+#
+# `source` is optional and must be exactly `graph` or `blob`. It applies only to
+# the three source-switchable collectors: entra.directory_audits,
+# entra.provisioning, and entra.risk_detections. Setting even `source: graph` on
+# any other collector is rejected instead of being ignored.
+#   "entra.directory_audits":
+#     source: blob
 #
 # Experimental (beta / new-surface) collectors are OFF unless explicitly enabled
 # here — a beta Graph change can never break a default deployment. To opt in

@@ -252,7 +252,7 @@ tenants:
   - tenant_id: "11111111-1111-1111-1111-111111111111" # Entra tenant GUID or verified domain
     client_id: "22222222-2222-2222-2222-222222222222" # app registration (application) ID
     # collectors:               # optional per-tenant overrides, layered on the global block
-    #   sign_ins:
+    #   "entra.signins.interactive":
     #     enabled: false
 
 otlp:
@@ -263,7 +263,7 @@ otlp:
     token: "" # DO NOT set here — use G2O_OTLP__GRAFANA_CLOUD__TOKEN instead
 
 collectors: {}    # per-collector enable/disable + interval overrides; omitted = enabled at its default
-#   sign_ins:
+#   "entra.signins.interactive":
 #     enabled: true
 #     interval: "5m"
 
@@ -276,8 +276,8 @@ checkpoint_dir: "/var/lib/graph2otel"  # persistent, writable container checkpoi
 
 Config is layered: built-in defaults < `config.yaml` (`--config` flag) < `G2O_*`
 environment variables (double underscore for nesting, e.g. `G2O_OTLP__ENDPOINT`; a
-collector name's own underscore is preserved, e.g.
-`G2O_COLLECTORS__SIGN_INS__ENABLED=false`). See `config.example.yaml` for the
+collector name is uppercased and otherwise preserved, e.g.
+`G2O_COLLECTORS__ENTRA.SIGNINS.INTERACTIVE__ENABLED=false`). See `config.example.yaml` for the
 authoritative, fully-commented schema, and [`docs/collectors.md`](docs/collectors.md) for
 what each `collectors:` key gates.
 

@@ -2,7 +2,7 @@
 
 Config is layered, lowest precedence first: **built-in defaults** < an optional
 **YAML file** (`--config path.yaml`) < **`G2O_*` environment variables**. A key you omit
-from the YAML file keeps its default; env always wins over both. See
+from the YAML file keeps its default; a supported environment override always wins. See
 [`config.example.yaml`](https://github.com/rknightion/graph2otel/blob/main/config.example.yaml)
 in the repo for the fully-commented authoritative source this page mirrors.
 
@@ -10,11 +10,39 @@ No config file is required at all — with no `--config` flag, graph2otel runs f
 built-in defaults plus whatever `G2O_*` environment variables are set, which is the
 container-friendly path (see [Getting Started](getting-started.md)).
 
+## Strict validation
+
+Configuration mistakes stop the process. Normal startup and `graph2otel check` run the
+same validation before constructing credentials, checkpoint stores, telemetry exporters,
+collectors, or network clients:
+
+- Unknown keys in fixed YAML objects fail with the complete path, including sequence
+  indexes and collector map keys, such as
+  `tenants[0].collectors["entra.directory_audits"].soruce`.
+- Unknown `G2O_*` variables fail by their exact environment-variable name, such as
+  `G2O_OTLP__GRAFANA_CLOUD__TOKNE`. Values are not included in these diagnostics.
+- Collector override names must match a name in the generated
+  [collector reference](collectors.md). An unambiguous near miss also gets a
+  `did you mean "..."` suggestion.
+- `source` must be unset or exactly `graph` or `blob`, and is accepted only for a
+  source-switchable collector. Setting it on any other collector is an error, including
+  an explicit `source: graph`.
+
+Collector-name, interval, and source faults from YAML use paths such as
+`collectors["entra.directory_audits"].source` or
+`tenants[0].collectors["entra.directory_audits"].source`. The same faults supplied by
+environment report the exact `G2O_COLLECTORS__...` variable instead.
+
+The dynamic keys are deliberate and limited: collector-name maps remain open long enough
+to validate names against the runtime registry, while `profiling.pyroscope.tags` accepts
+arbitrary string keys. Their containing objects and collector override values remain
+strict.
+
 ## Environment variable mapping
 
-Every key is settable via an environment variable named with the **`G2O_`** prefix and
-**`__`** (double underscore) as the nesting delimiter. A single underscore inside a field
-name (e.g. `client_id`, `log_level`) is preserved as-is — only level boundaries use `__`:
+Fixed scalar keys are settable via environment variables named with the **`G2O_`** prefix
+and **`__`** (double underscore) as the nesting delimiter. A single underscore inside a
+field name (e.g. `log_level`) is preserved as-is — only level boundaries use `__`:
 
 | YAML key | Environment variable |
 | --- | --- |
@@ -28,12 +56,18 @@ name (e.g. `client_id`, `log_level`) is preserved as-is — only level boundarie
 | `admin.refresh_interval` | `G2O_ADMIN__REFRESH_INTERVAL` |
 | `checkpoint_dir` | `G2O_CHECKPOINT_DIR` |
 | `backfill.initial_lookback` | `G2O_BACKFILL__INITIAL_LOOKBACK` |
-| `collectors.sign_ins.enabled` | `G2O_COLLECTORS__SIGN_INS__ENABLED` |
-| `collectors.sign_ins.interval` | `G2O_COLLECTORS__SIGN_INS__INTERVAL` |
+| `collectors["entra.signins.interactive"].enabled` | `G2O_COLLECTORS__ENTRA.SIGNINS.INTERACTIVE__ENABLED` |
+| `collectors["entra.signins.interactive"].interval` | `G2O_COLLECTORS__ENTRA.SIGNINS.INTERACTIVE__INTERVAL` |
+| `collectors["entra.directory_audits"].source` | `G2O_COLLECTORS__ENTRA.DIRECTORY_AUDITS__SOURCE` |
 
-`tenants` is the one section env cannot express: a flat environment variable can't
-represent a list of structs, so multi-tenant setups need the YAML file for `tenants:`
-even if every other key comes from the environment.
+Global collector overrides are the only dynamic environment form:
+`G2O_COLLECTORS__<NAME>__(ENABLED|INTERVAL|SOURCE)`. `<NAME>` is the exact collector
+name uppercased, with dots and single underscores preserved. No other collector leaf is
+accepted.
+
+Structured `tenants` and free-form `profiling.pyroscope.tags` cannot be expressed by a
+flat environment variable. Multi-tenant setups therefore need YAML for `tenants:`, and
+profile tags must also stay in the file.
 
 ## Top-level keys
 
@@ -51,7 +85,7 @@ tenants:
   - tenant_id: "00000000-0000-0000-0000-000000000000" # Entra tenant GUID or verified domain
     client_id: "" # app registration (application) ID; optional if AZURE_CLIENT_ID is set
     collectors: # optional per-tenant overrides — see "Per-collector overrides" below
-      sign_ins:
+      "entra.signins.interactive":
         enabled: false
 ```
 
@@ -87,7 +121,7 @@ Global per-collector overrides, keyed by collector name, applied across every te
 
 ```yaml
 collectors:
-  sign_ins:
+  "entra.signins.interactive":
     enabled: true
     interval: "5m" # duration string: "30s", "5m", "168h" (minimum 1s)
 ```
@@ -96,11 +130,23 @@ A collector absent from this map runs **enabled at its built-in default interval
 `enabled` unset means "default true", which is distinct from an explicit `false` — the
 config layer tracks that difference so a lower layer's explicit disable isn't silently
 overridden by a higher layer's absence of an opinion. `interval` unset (or `0`) means
-"use the collector's built-in default".
+"use the collector's built-in default". Collector names must match the generated
+[collector reference](collectors.md) exactly.
+
+`source` selects the ingest transport for the current source-switchable collectors:
+`entra.directory_audits`, `entra.provisioning`, and `entra.risk_detections`. It is
+optional; unset defaults to `graph`. The only accepted values are `graph` and `blob`.
+Applying either value to any other collector is rejected:
+
+```yaml
+collectors:
+  "entra.directory_audits":
+    source: blob
+```
 
 #### Per-collector overrides (tenant beats global)
 
-The same `CollectorConfig` shape (`enabled` / `interval`) appears both at the top level
+The same `CollectorConfig` shape (`enabled` / `interval` / `source`) appears at the top level
 (`collectors:`, applied to every tenant) and per-tenant (`tenants[].collectors:`).
 Resolution order, field-by-field:
 
@@ -176,7 +222,8 @@ is not free, so leave the defaults unless you are actively investigating content
 
 `basic_auth_password` is a secret — set it via `G2O_PROFILING__PYROSCOPE__BASIC_AUTH_PASSWORD`,
 never in committed YAML (see [Secrets](#secrets--what-never-belongs-in-this-file)). Every
-field here also has a `G2O_PROFILING__*` env var — see [Environment variables](env-vars.md).
+scalar field here also has a `G2O_PROFILING__*` env var; `tags` is file-only. See
+[Environment variables](env-vars.md).
 
 ### `checkpoint_dir`
 

@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -277,6 +278,187 @@ tenants:
 	if !cfg.CollectorExplicitlyEnabled("t2", "entra.signin_activity") {
 		t.Error("per-tenant enabled=true should be explicitly enabled for that tenant")
 	}
+}
+
+func TestCollectorOverrideValidationRejectsUnknownNames(t *testing.T) {
+	known := map[string]bool{
+		"entra.directory_audits": true,
+		"sample.bar":             true,
+		"sample.baz":             true,
+	}
+
+	t.Run("global unique suggestion", func(t *testing.T) {
+		cfg := config.Default()
+		cfg.Collectors = map[string]config.CollectorConfig{
+			"entra.directory_audit": {},
+		}
+		err := cfg.ValidateCollectorOverrides(known, nil)
+		if err == nil {
+			t.Fatal("ValidateCollectorOverrides accepted an unknown global collector")
+		}
+		for _, want := range []string{
+			`collectors["entra.directory_audit"]`,
+			`did you mean "entra.directory_audits"`,
+		} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error %q does not contain %q", err, want)
+			}
+		}
+	})
+
+	t.Run("tenant ambiguous suggestion omitted", func(t *testing.T) {
+		cfg := config.Default()
+		cfg.Tenants = []config.TenantConfig{{
+			TenantID: "example",
+			Collectors: map[string]config.CollectorConfig{
+				"sample.bat": {},
+			},
+		}}
+		err := cfg.ValidateCollectorOverrides(known, nil)
+		if err == nil {
+			t.Fatal("ValidateCollectorOverrides accepted an unknown tenant collector")
+		}
+		if !strings.Contains(err.Error(), `tenants[0].collectors["sample.bat"]`) {
+			t.Errorf("error %q does not contain the tenant collector path", err)
+		}
+		if strings.Contains(err.Error(), "did you mean") {
+			t.Errorf("ambiguous nearest-name tie produced a suggestion: %q", err)
+		}
+	})
+}
+
+func TestCollectorOverrideValidationRejectsInvalidIntervals(t *testing.T) {
+	cfg := config.Default()
+	cfg.Tenants = []config.TenantConfig{{
+		TenantID: "example",
+		Collectors: map[string]config.CollectorConfig{
+			"entra.directory_audits": {Interval: 500 * time.Millisecond},
+		},
+	}}
+	err := cfg.ValidateCollectorOverrides(
+		map[string]bool{"entra.directory_audits": true},
+		map[string]bool{"entra.directory_audits": true},
+	)
+	if err == nil {
+		t.Fatal("ValidateCollectorOverrides accepted a sub-second interval")
+	}
+	if !strings.Contains(err.Error(), `tenants[0].collectors["entra.directory_audits"].interval`) {
+		t.Errorf("error %q does not contain the interval path", err)
+	}
+}
+
+func TestCollectorOverrideValidationRejectsInvalidSources(t *testing.T) {
+	known := map[string]bool{
+		"entra.directory_audits": true,
+		"intune.devices":         true,
+	}
+	switchable := map[string]bool{"entra.directory_audits": true}
+
+	tests := []struct {
+		name     string
+		cfg      *config.Config
+		wantPath string
+	}{
+		{
+			name: "invalid spelling",
+			cfg: &config.Config{Collectors: map[string]config.CollectorConfig{
+				"entra.directory_audits": {Source: "secret-source-value"},
+			}},
+			wantPath: `collectors["entra.directory_audits"].source`,
+		},
+		{
+			name: "inapplicable global graph",
+			cfg: &config.Config{Collectors: map[string]config.CollectorConfig{
+				"intune.devices": {Source: "graph"},
+			}},
+			wantPath: `collectors["intune.devices"].source`,
+		},
+		{
+			name: "inapplicable tenant blob",
+			cfg: &config.Config{Tenants: []config.TenantConfig{{
+				TenantID: "example",
+				Collectors: map[string]config.CollectorConfig{
+					"intune.devices": {Source: "blob"},
+				},
+			}}},
+			wantPath: `tenants[0].collectors["intune.devices"].source`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cfg.ValidateCollectorOverrides(known, switchable)
+			if err == nil {
+				t.Fatalf("ValidateCollectorOverrides accepted %s", tt.name)
+			}
+			if !strings.Contains(err.Error(), tt.wantPath) {
+				t.Errorf("error %q does not contain source path %q", err, tt.wantPath)
+			}
+			if strings.Contains(err.Error(), "secret-source-value") {
+				t.Errorf("error exposed the rejected source value: %q", err)
+			}
+		})
+	}
+}
+
+func TestCollectorOverrideValidationAllowsSwitchableSources(t *testing.T) {
+	known := map[string]bool{"entra.directory_audits": true}
+	switchable := map[string]bool{"entra.directory_audits": true}
+
+	for _, source := range []string{"", "graph", "blob"} {
+		cfg := &config.Config{Collectors: map[string]config.CollectorConfig{
+			"entra.directory_audits": {Source: source},
+		}}
+		if err := cfg.ValidateCollectorOverrides(known, switchable); err != nil {
+			t.Errorf("source %q rejected for switchable collector: %v", source, err)
+		}
+	}
+}
+
+func TestCollectorOverrideValidationReportsEnvironmentOrigin(t *testing.T) {
+	t.Run("unknown collector", func(t *testing.T) {
+		const variable = "G2O_COLLECTORS__ENTRA.DIRECTORY_AUDIT__ENABLED"
+		t.Setenv(variable, "false")
+		cfg, err := config.Load("")
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		err = cfg.ValidateCollectorOverrides(
+			map[string]bool{"entra.directory_audits": true},
+			map[string]bool{"entra.directory_audits": true},
+		)
+		if err == nil {
+			t.Fatal("ValidateCollectorOverrides accepted an unknown environment collector")
+		}
+		if !strings.Contains(err.Error(), variable) {
+			t.Errorf("error %q does not name exact environment origin %s", err, variable)
+		}
+	})
+
+	t.Run("invalid source", func(t *testing.T) {
+		const (
+			variable = "G2O_COLLECTORS__ENTRA.DIRECTORY_AUDITS__SOURCE"
+			value    = "secret-source-value"
+		)
+		t.Setenv(variable, value)
+		cfg, err := config.Load("")
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		err = cfg.ValidateCollectorOverrides(
+			map[string]bool{"entra.directory_audits": true},
+			map[string]bool{"entra.directory_audits": true},
+		)
+		if err == nil {
+			t.Fatal("ValidateCollectorOverrides accepted an invalid environment source")
+		}
+		if !strings.Contains(err.Error(), variable) {
+			t.Errorf("error %q does not name exact environment origin %s", err, variable)
+		}
+		if strings.Contains(err.Error(), value) {
+			t.Errorf("error exposed environment value for %s: %q", variable, err)
+		}
+	})
 }
 
 func mustLoad(t *testing.T, y string) *config.Config {

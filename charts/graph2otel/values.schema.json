@@ -1,5 +1,211 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
+    "definitions": {
+        "collectorName": {
+            "type": "string",
+            "enum": [
+                "defender.alert_evidence",
+                "defender.alert_info",
+                "defender.allow_block_list",
+                "defender.behavior",
+                "defender.behavior_entity",
+                "defender.cloud_app_event",
+                "defender.device_event",
+                "defender.device_file",
+                "defender.device_file_certificate",
+                "defender.device_image_load",
+                "defender.device_info",
+                "defender.device_logon",
+                "defender.device_network",
+                "defender.device_network_info",
+                "defender.device_process",
+                "defender.device_registry",
+                "defender.email",
+                "defender.email_attachment",
+                "defender.email_post_delivery",
+                "defender.email_url",
+                "defender.identity_info",
+                "defender.identity_logon",
+                "defender.mdo_policies",
+                "defender.oauth_app",
+                "defender.quarantine",
+                "defender.secure_config",
+                "defender.software_inventory",
+                "defender.teams_message",
+                "defender.teams_message_url",
+                "defender.url_click_event",
+                "defender.vulnerabilities",
+                "entra.access_reviews",
+                "entra.agent_risk_detections",
+                "entra.agreements",
+                "entra.app_ownership",
+                "entra.auth_methods_policy",
+                "entra.conditional_access",
+                "entra.consent",
+                "entra.credential_expiry",
+                "entra.deleted_items",
+                "entra.devices",
+                "entra.directory_audits",
+                "entra.directory_counts",
+                "entra.domains",
+                "entra.graph_activity",
+                "entra.graph_notifications",
+                "entra.groups",
+                "entra.gsa",
+                "entra.licensing",
+                "entra.mfa_registration",
+                "entra.organization",
+                "entra.pim_alerts",
+                "entra.pim_role_policies",
+                "entra.provisioning",
+                "entra.recommendations",
+                "entra.risk",
+                "entra.risk_detections",
+                "entra.risky_agents",
+                "entra.risky_users",
+                "entra.roles",
+                "entra.secure_score",
+                "entra.security_alerts",
+                "entra.security_incidents",
+                "entra.service_principal_risk_detections",
+                "entra.signin_activity",
+                "entra.signins.interactive",
+                "entra.signins.managed_identity",
+                "entra.signins.managed_identity.blob",
+                "entra.signins.microsoft_service_principal",
+                "entra.signins.non_interactive",
+                "entra.signins.non_interactive.blob",
+                "entra.signins.service_principal",
+                "entra.signins.service_principal.blob",
+                "entra.syncerrors",
+                "entra.tenant_policy",
+                "entra.users",
+                "graph2otel.blob_categories",
+                "intune.app_install_status",
+                "intune.app_protection",
+                "intune.apple_tokens",
+                "intune.audit_events",
+                "intune.autopilot",
+                "intune.autopilot_deployment",
+                "intune.autopilot_deployment_apps",
+                "intune.autopilot_deployment_scripts",
+                "intune.autopilot_events",
+                "intune.cert_inventory",
+                "intune.certificates",
+                "intune.cloud_pc_audit",
+                "intune.cloud_pki",
+                "intune.compliance",
+                "intune.compliance_alerts",
+                "intune.config_assignment_status",
+                "intune.config_profile_device_status",
+                "intune.config_profiles",
+                "intune.config_setting_status",
+                "intune.connectors",
+                "intune.defender_agents",
+                "intune.detected_apps",
+                "intune.device_attestation",
+                "intune.device_boot_security",
+                "intune.device_encryption",
+                "intune.devices",
+                "intune.devices_blob",
+                "intune.devices_without_compliance_policy",
+                "intune.driver_update_summary",
+                "intune.endpoint_analytics",
+                "intune.enrollment",
+                "intune.enrollment_events",
+                "intune.epm_denied",
+                "intune.epm_elevation_events",
+                "intune.epm_elevations",
+                "intune.epm_elevations_by_publisher",
+                "intune.epm_elevations_by_user",
+                "intune.feature_update_summary",
+                "intune.firewall_status",
+                "intune.gpo_analytics",
+                "intune.hardware_inventory",
+                "intune.malware",
+                "intune.mobile_apps",
+                "intune.noncompliant_settings",
+                "intune.quality_update_summary",
+                "intune.rbac",
+                "intune.remediation_run_states",
+                "intune.scripts",
+                "intune.settings_catalog",
+                "intune.updates",
+                "intune.windows_updates",
+                "m365.activity",
+                "m365.exchange_audit_config",
+                "m365.exchange_connectors",
+                "m365.exchange_dkim",
+                "m365.exchange_mailboxes",
+                "m365.exchange_org_config",
+                "m365.exchange_remote_domains",
+                "m365.exchange_transport_rules",
+                "m365.message_trace",
+                "m365.servicehealth",
+                "m365.servicemessages",
+                "m365.sharepoint_settings",
+                "m365.storage",
+                "m365.teams",
+                "m365.unified_audit",
+                "mdca.discovery_parse",
+                "purview.dlp_policies",
+                "purview.ediscovery_cases",
+                "purview.retention_labels",
+                "purview.sensitivity_labels"
+            ]
+        },
+        "collectorOverride": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "interval": {
+                    "type": "string"
+                }
+            }
+        },
+        "sourceSwitchableCollectorOverride": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "interval": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string",
+                    "enum": [
+                        "graph",
+                        "blob"
+                    ]
+                }
+            }
+        },
+        "collectorOverrides": {
+            "type": "object",
+            "propertyNames": {
+                "$ref": "#/definitions/collectorName"
+            },
+            "properties": {
+                "entra.directory_audits": {
+                    "$ref": "#/definitions/sourceSwitchableCollectorOverride"
+                },
+                "entra.provisioning": {
+                    "$ref": "#/definitions/sourceSwitchableCollectorOverride"
+                },
+                "entra.risk_detections": {
+                    "$ref": "#/definitions/sourceSwitchableCollectorOverride"
+                }
+            },
+            "additionalProperties": {
+                "$ref": "#/definitions/collectorOverride"
+            }
+        }
+    },
     "type": "object",
     "properties": {
         "image": {
@@ -167,6 +373,7 @@
         },
         "config": {
             "type": "object",
+            "additionalProperties": false,
             "properties": {
                 "log_level": {
                     "type": "string"
@@ -175,6 +382,7 @@
                     "type": "array",
                     "items": {
                         "type": "object",
+                        "additionalProperties": false,
                         "properties": {
                             "tenant_id": {
                                 "type": "string"
@@ -182,19 +390,39 @@
                             "client_id": {
                                 "type": "string"
                             },
+                            "exclude_self": {
+                                "type": "boolean"
+                            },
                             "collectors": {
-                                "type": "object"
+                                "$ref": "#/definitions/collectorOverrides"
                             },
                             "blob_ingest": {
                                 "type": "object",
+                                "additionalProperties": false,
                                 "properties": {
                                     "account_url": {
                                         "type": "string"
+                                    },
+                                    "metric_recency_window": {
+                                        "type": "string"
+                                    }
+                                }
+                            },
+                            "o365_activity": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                    "content_types": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        }
                                     }
                                 }
                             },
                             "mdca": {
                                 "type": "object",
+                                "additionalProperties": false,
                                 "properties": {
                                     "portal_url": {
                                         "type": "string"
@@ -203,12 +431,31 @@
                                         "type": "string"
                                     }
                                 }
+                            },
+                            "exchange_online": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                    "enabled": {
+                                        "type": "boolean"
+                                    }
+                                }
+                            },
+                            "hunting": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                    "enabled": {
+                                        "type": "boolean"
+                                    }
+                                }
                             }
                         }
                     }
                 },
                 "otlp": {
                     "type": "object",
+                    "additionalProperties": false,
                     "properties": {
                         "protocol": {
                             "type": "string"
@@ -218,11 +465,15 @@
                         },
                         "grafana_cloud": {
                             "type": "object",
+                            "additionalProperties": false,
                             "properties": {
                                 "instance_id": {
                                     "type": "string"
                                 },
                                 "token": {
+                                    "type": "string"
+                                },
+                                "token_file": {
                                     "type": "string"
                                 }
                             }
@@ -230,10 +481,11 @@
                     }
                 },
                 "collectors": {
-                    "type": "object"
+                    "$ref": "#/definitions/collectorOverrides"
                 },
                 "admin": {
                     "type": "object",
+                    "additionalProperties": false,
                     "properties": {
                         "enabled": {
                             "type": "boolean"
@@ -248,9 +500,11 @@
                 },
                 "profiling": {
                     "type": "object",
+                    "additionalProperties": false,
                     "properties": {
                         "pyroscope": {
                             "type": "object",
+                            "additionalProperties": false,
                             "properties": {
                                 "enabled": {
                                     "type": "boolean"
@@ -264,6 +518,9 @@
                                 "basic_auth_password": {
                                     "type": "string"
                                 },
+                                "basic_auth_password_file": {
+                                    "type": "string"
+                                },
                                 "tenant_id": {
                                     "type": "string"
                                 },
@@ -271,7 +528,10 @@
                                     "type": "string"
                                 },
                                 "tags": {
-                                    "type": "object"
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
                                 }
                             }
                         },
@@ -285,6 +545,7 @@
                 },
                 "cardinality": {
                     "type": "object",
+                    "additionalProperties": false,
                     "properties": {
                         "per_metric_limit": {
                             "type": "integer"
@@ -296,6 +557,7 @@
                 },
                 "backfill": {
                     "type": "object",
+                    "additionalProperties": false,
                     "properties": {
                         "initial_lookback": {
                             "type": "string"
@@ -309,6 +571,7 @@
         },
         "persistence": {
             "type": "object",
+            "additionalProperties": false,
             "properties": {
                 "enabled": {
                     "type": "boolean"

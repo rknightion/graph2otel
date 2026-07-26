@@ -23,6 +23,8 @@ import (
 
 const exchangeOnlineManualPrerequisite = "Exchange.ManageAsApp and the required Entra directory role cannot be proven from a Graph token"
 
+var buildTenantAuths = auth.BuildAll
+
 // runCheck implements `graph2otel check`: a read-only, side-effect-free
 // permission preflight (#11). It loads config, builds each tenant's real
 // credential, and delegates the actual check to runCheckCore so the
@@ -44,16 +46,12 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 		return 2
 	}
 
-	cfg, err := config.Load(*configPath)
+	cfg, err := loadValidatedConfig(*configPath)
 	if err != nil {
-		fmt.Fprintf(stderr, "failed to load config: %v\n", err)
+		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	if err := cfg.Validate(); err != nil {
-		fmt.Fprintf(stderr, "invalid config: %v\n", err)
-		return 1
-	}
-	tenantAuths, err := auth.BuildAll(cfg.Tenants)
+	tenantAuths, err := buildTenantAuths(cfg.Tenants)
 	if err != nil {
 		fmt.Fprintf(stderr, "failed to build tenant credentials: %v\n", err)
 		return 1

@@ -3,16 +3,19 @@
 //
 // Configuration is layered, lowest precedence first: built-in defaults
 // (Default) -> an optional YAML file -> environment variables. Every field is
-// settable via an environment variable named with the G2O_ prefix and "__" as
-// the nesting delimiter (single underscores inside a name are preserved):
+// Scalar fields are settable via an environment variable named with the G2O_
+// prefix and "__" as the nesting delimiter (single underscores inside a name
+// are preserved):
 //
 //	G2O_OTLP__ENDPOINT       -> otlp.endpoint
 //	G2O_OTLP__GRAFANA_CLOUD__TOKEN -> otlp.grafana_cloud.token
 //
-// The env layer overrides the file, so secrets live in environment variables
-// and never need to appear in the YAML. The file is optional: with no -config
-// path the process runs from defaults + environment alone (handy for
-// containers).
+// The global collectors map additionally supports
+// G2O_COLLECTORS__<NAME>__(ENABLED|INTERVAL|SOURCE). Structured tenants and
+// free-form Pyroscope tags remain file-only. The env layer overrides the file,
+// so secrets live in environment variables and never need to appear in the
+// YAML. The file is optional: with no -config path the process runs from
+// defaults + environment alone (handy for containers).
 //
 // Tenant auth material (client secrets, certificates) is NEVER read from this
 // package's config surface at all: tenants authenticate via
@@ -69,6 +72,11 @@ type Config struct {
 	// CheckpointDir is the root directory for the file-based CheckpointStore
 	// (#7); each (tenant, endpoint) window poller persists its watermark there.
 	CheckpointDir string `yaml:"checkpoint_dir"`
+
+	// collectorEnvOrigins associates dynamic collector override paths with the
+	// exact environment variable that supplied them. It is per-loaded Config
+	// so concurrent loads cannot race or misattribute a diagnostic.
+	collectorEnvOrigins map[string]string
 }
 
 // CollectorConfig overrides a single collector's runtime behavior. It is used
@@ -88,13 +96,13 @@ type CollectorConfig struct {
 	// Storage diagnostic-settings container instead). Empty means unset →
 	// "graph". Only meaningful for a source-switchable collector — a log-shaped
 	// event stream whose blob twin reuses the same mapper and emits the same
-	// records (e.g. entra.directory_audits); it is ignored on a collector with
-	// no blob source. The two transports are mutually exclusive per collector
-	// (#131/#144): exactly one is active, so the same event is never ingested
-	// twice. Blob scales better on high-volume tenants (Graph's reporting
-	// endpoints throttle hard, blob does not), so it is the right choice for a
-	// large deployment; graph is the default because a deployment with no blob
-	// ingest configured has no blob source to switch to.
+	// records (e.g. entra.directory_audits); setting it on a collector with no
+	// blob source is invalid. The two transports are mutually exclusive per
+	// collector (#131/#144): exactly one is active, so the same event is never
+	// ingested twice. Blob scales better on high-volume tenants (Graph's
+	// reporting endpoints throttle hard, blob does not), so it is the right
+	// choice for a large deployment; graph is the default because a deployment
+	// with no blob ingest configured has no blob source to switch to.
 	Source string `yaml:"source"`
 }
 
@@ -470,9 +478,10 @@ func (c *Config) CollectorExplicitlyEnabled(tenantID, collectorName string) bool
 
 // CollectorSource resolves the ingest transport for a collector, applying the
 // same precedence as CollectorSettings (per-tenant override > global collectors
-// config > built-in default). Returns "graph" (the default) or "blob"; any
-// unset or unrecognized value resolves to "graph", so a typo can never silently
-// disable a collector by selecting a transport that does not exist.
+// config > built-in default). Returns "graph" (the default) or "blob".
+// ValidateCollectorOverrides rejects an unrecognized or inapplicable source
+// before runtime construction; the graph fallback here is defensive for direct
+// callers that construct Config values without running startup validation.
 func (c *Config) CollectorSource(tenantID, collectorName string) string {
 	src := ""
 	if gc, ok := c.Collectors[collectorName]; ok && gc.Source != "" {
@@ -566,6 +575,11 @@ func Default() *Config {
 func Load(path string) (*Config, error) {
 	k := koanf.New(keyDelim)
 
+	collectorEnv, err := strictEnvironment()
+	if err != nil {
+		return nil, err
+	}
+
 	// 1. Built-in defaults.
 	if err := k.Load(structs.Provider(Default(), "yaml"), nil); err != nil {
 		return nil, fmt.Errorf("load defaults: %w", err)
@@ -573,6 +587,9 @@ func Load(path string) (*Config, error) {
 
 	// 2. Optional YAML file (overrides defaults).
 	if path != "" {
+		if err := validateYAMLFile(path); err != nil {
+			return nil, err
+		}
 		if err := k.Load(file.Provider(path), yaml.Parser()); err != nil {
 			return nil, fmt.Errorf("read config %s: %w", path, err)
 		}
@@ -607,6 +624,7 @@ func Load(path string) (*Config, error) {
 		DecoderConfig: &mapstructure.DecoderConfig{
 			Result:           &cfg,
 			WeaklyTypedInput: true, // env values are strings ("true", "10", ...)
+			ErrorUnused:      true,
 			// Decode duration strings ("5m", "30s") from the file/env layers
 			// into time.Duration fields (collector intervals). Values already
 			// typed as time.Duration (the structs defaults layer) pass through.
@@ -614,6 +632,10 @@ func Load(path string) (*Config, error) {
 		},
 	}); err != nil {
 		return nil, fmt.Errorf("decode config: %w", err)
+	}
+
+	if err := applyCollectorEnvironment(&cfg, collectorEnv); err != nil {
+		return nil, err
 	}
 
 	// Resolve the *_file secret siblings once all layers are merged, so an

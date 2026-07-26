@@ -125,6 +125,8 @@ func newTelemetryProvider(ctx context.Context, cfg *config.Config, stdout io.Wri
 	})
 }
 
+var buildTelemetryProvider = newTelemetryProvider
+
 // run parses flags, loads and validates the config, and (barring -version or
 // an error) blocks until ctx is canceled — by a real SIGINT/SIGTERM in main,
 // or directly by a test. Splitting it out of main lets every exit path be
@@ -143,13 +145,9 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 
-	cfg, err := config.Load(*configPath)
+	cfg, err := loadValidatedConfig(*configPath)
 	if err != nil {
-		fmt.Fprintf(stderr, "failed to load config: %v\n", err)
-		return 1
-	}
-	if err := cfg.Validate(); err != nil {
-		fmt.Fprintf(stderr, "invalid config: %v\n", err)
+		fmt.Fprintln(stderr, err)
 		return 1
 	}
 
@@ -182,7 +180,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 	// Telemetry provider: the single OTLP metrics+logs pipeline everything emits
 	// through. Built here so the process fails fast on a bad exporter config.
-	provider, err := newTelemetryProvider(ctx, cfg, stdout)
+	provider, err := buildTelemetryProvider(ctx, cfg, stdout)
 	if err != nil {
 		fmt.Fprintf(stderr, "failed to build telemetry provider: %v\n", err)
 		return 1

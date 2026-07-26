@@ -136,7 +136,7 @@ secret:
 # the Auth section above). Helm deep-merges maps, so single-key overrides
 # keep working, e.g.:
 #   --set config.log_level=debug
-#   --set config.collectors.sign_ins.enabled=false
+#   --set 'config.collectors.entra\.signins\.interactive.enabled=false'
 config:
   # -- Log verbosity: debug | info | warn | error.
   log_level: info
@@ -153,7 +153,7 @@ config:
       # Optional per-tenant collector overrides, layered on top of `collectors`
       # below (field-by-field), e.g.:
       # collectors:
-      #   sign_ins:
+      #   "entra.signins.interactive":
       #     enabled: false
       #
       # Optional read-only Azure Storage blob ingest — the one place graph2otel
@@ -201,7 +201,7 @@ config:
   # default interval. Experimental/beta collectors need explicit enabling —
   # see docs/collectors.md. Example:
   # collectors:
-  #   sign_ins:
+  #   "entra.signins.interactive":
   #     enabled: true
   #     interval: "5m"
   collectors: {}
