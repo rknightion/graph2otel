@@ -74,9 +74,16 @@ class TestOperatorObservabilityInventory(unittest.TestCase):
         self.assertIn(v2.MIN_GRAFANA_VERSION, docs)
         self.assertIn(v2.MIN_GRAFANA_VERSION, readme)
         self.assertIn(
-            f"| `alerts/` | {alert_count} alert rules (**generated**)",
+            f"| `alerts/rules/` | {alert_count} alert rules (**generated**)",
             docs,
         )
+        # #294: one representation only, and the generator really does emit
+        # exactly one manifest per rule, so the prose cannot drift from the build.
+        self.assertEqual(
+            len(os.listdir(os.path.join(REPO, "alerts", "rules"))),
+            alert_count + detection_count,
+        )
+        self.assertIn("rules.alerting.grafana.app/v0alpha1", docs)
         # #297 retired both recording rules. The reference may explain the
         # retirement (it does, and should), but must not advertise a directory
         # that no longer exists or carry a count that can drift.

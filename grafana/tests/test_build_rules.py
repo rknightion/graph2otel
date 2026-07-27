@@ -289,32 +289,36 @@ class TestReverseValidation(unittest.TestCase):
 
 
 class TestStaleness(unittest.TestCase):
-    def test_committed_alerts_yaml_is_not_stale(self):
-        with open(build_rules.ALERTS_PATH, "rb") as f:
-            committed = f.read()
-        self.assertEqual(committed, build_rules.render_alerts(build_rules.RULES),
-                         "alerts/graph2otel-alerts.yaml is stale — run `make rules`")
+
 
     def test_output_is_deterministic(self):
-        self.assertEqual(build_rules.render_alerts(build_rules.RULES),
-                         build_rules.render_alerts(build_rules.RULES))
+        self.assertEqual(build_rules.render_app_platform(),
+                         build_rules.render_app_platform())
 
 
 class TestYamlRoundTrips(unittest.TestCase):
-    def test_alerts_yaml_round_trips_through_pyyaml(self):
+    def test_every_manifest_round_trips_through_pyyaml(self):
         """Best-effort: PyYAML is NOT a build/CI dependency (pure-stdlib
-        generator, no setup-python step — see Makefile / ci.yml), so this
-        skips rather than fails when it is unavailable."""
+        generator, no setup-python step — see Makefile / ci.yml), so this skips
+        rather than fails when it is unavailable. It still matters, because the
+        generator emits YAML with its own yamlify() and a real parser is the only
+        thing that proves the output is valid YAML rather than merely
+        plausible-looking text."""
         try:
             import yaml
         except ImportError:
             self.skipTest("PyYAML not installed — not a dependency of this repo")
-        doc = yaml.safe_load(build_rules.render_alerts(build_rules.RULES))
-        self.assertEqual(doc["apiVersion"], 1)
-        rules = doc["groups"][0]["rules"]
-        self.assertEqual(len(rules), 14)
-        uids = {r["uid"] for r in rules}
-        self.assertEqual(uids, set(EXPECTED_PAUSED))
+        rendered = build_rules.render_app_platform()
+        self.assertEqual(len(rendered), 19)
+        uids = set()
+        for fname, data in rendered.items():
+            doc = yaml.safe_load(data)
+            self.assertEqual(doc["kind"], "AlertRule", fname)
+            self.assertEqual(doc["apiVersion"], build_rules.APP_PLATFORM_API)
+            uids.add(doc["metadata"]["name"])
+        expected = {r["uid"] for r in build_rules.RULES}
+        expected |= {r["uid"] for r in build_rules.DETECTIONS}
+        self.assertEqual(uids, expected)
 
 
 class TestRoutableLabelContract(unittest.TestCase):
@@ -416,14 +420,13 @@ class TestNoRoutingAssetsShipped(unittest.TestCase):
             [build_rules.ALERTS_DIR])
         self.assertEqual(violations, [])
 
-    def test_alerts_directory_contains_exactly_the_expected_files(self):
+    def test_alerts_directory_contains_exactly_the_expected_entries(self):
         # An allowlist, not a convention: a new file under alerts/ has to be
         # added here deliberately, which is how a stray contact-point or policy
-        # bundle gets noticed. graph2otel-detections.yaml is the paused portable
-        # detection pack (#300), kept separate from the health rules on purpose.
+        # bundle gets noticed. Generated manifests live one level down in
+        # alerts/rules/ and are covered by the staleness/orphan gate.
         actual = set(os.listdir(build_rules.ALERTS_DIR))
-        self.assertEqual(actual, {"graph2otel-alerts.yaml",
-                                  "graph2otel-detections.yaml", "README.md"})
+        self.assertEqual(actual, {"rules", "README.md"})
 
     def test_the_gate_actually_rejects_a_synthetic_offending_document(self):
         """A gate nobody has seen fail is a hope, not a gate (same framing as
@@ -527,21 +530,26 @@ class TestDetectionExamples(unittest.TestCase):
             self.assertIsNone(ipv4.search(blob), f"{rule['uid']} carries an IPv4")
             self.assertIsNone(ipv6.search(blob), f"{rule['uid']} carries an IPv6")
 
-    def test_detections_ship_separately_from_the_health_rules(self):
-        """Different file, group and folder. graph2otel-alerts.yaml means
-        'is graph2otel working'; mixing tenant-security detections into it would
-        blur what an operator agrees to when they provision it."""
-        doc = build_rules.render_detections(build_rules.DETECTIONS).decode()
-        self.assertIn("graph2otel-detections", doc)
-        self.assertIn("graph2otel detections", doc)
-        health = build_rules.render_alerts(build_rules.RULES).decode()
+    def test_detections_ship_in_a_separate_group_from_the_health_rules(self):
+        """Different group and folder. graph2otel-alerts means 'is graph2otel
+        working'; mixing tenant-security detections into it would blur what an
+        operator agrees to when they provision it."""
+        manifests = build_rules.render_app_platform()
         for rule in build_rules.DETECTIONS:
-            self.assertNotIn(rule["uid"], health)
+            doc = manifests[f"{rule['uid']}.yaml"].decode()
+            self.assertIn(build_rules.DETECTION_GROUP, doc, rule["uid"])
+            self.assertNotIn(build_rules.ALERT_GROUP, doc, rule["uid"])
+        for rule in build_rules.RULES:
+            doc = manifests[f"{rule['uid']}.yaml"].decode()
+            self.assertIn(build_rules.ALERT_GROUP, doc, rule["uid"])
+            self.assertNotIn(build_rules.DETECTION_GROUP, doc, rule["uid"])
 
-    def test_the_detections_file_on_disk_is_current(self):
-        with open(build_rules.DETECTIONS_PATH, "rb") as f:
-            self.assertEqual(
-                f.read(), build_rules.render_detections(build_rules.DETECTIONS))
+    def test_every_detection_manifest_on_disk_is_current(self):
+        rendered = build_rules.render_app_platform()
+        for rule in build_rules.DETECTIONS:
+            fname = f"{rule['uid']}.yaml"
+            with open(os.path.join(build_rules.RULES_DIR, fname), "rb") as f:
+                self.assertEqual(f.read(), rendered[fname], fname)
 
 
 class TestRecordingRulesAreRetired(unittest.TestCase):
@@ -600,3 +608,181 @@ class TestRecordingRulesAreRetired(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAppPlatformProjection(unittest.TestCase):
+    """#294: the deployable representation is App Platform
+    `rules.alerting.grafana.app/v0alpha1` AlertRule manifests, one YAML per
+    rule, pushed by stable `metadata.name` with create-or-update semantics.
+
+    Every field shape asserted here was measured off the live wire on
+    2026-07-27 by reading an existing rule back with
+    `gcx resources get alertrules.v0alpha1.rules.alerting.grafana.app/<uid>`
+    and then pushing a projected manifest and reading it back again. It is a
+    frozen contract, not an inference from documentation — the classic
+    `apiVersion: 1` file-provisioning bundles this replaces were rejected with
+    HTTP 400 when posted as individual objects.
+    """
+
+    def _project(self, uid="g2o-collector-staleness"):
+        rule = next(r for r in build_rules.RULES if r["uid"] == uid)
+        return build_rules.to_app_platform(
+            rule, group="graph2otel-alerts", interval="5m", index=6)
+
+    def test_identity_is_the_stable_uid_as_metadata_name(self):
+        m = self._project()
+        self.assertEqual(m["apiVersion"], "rules.alerting.grafana.app/v0alpha1")
+        self.assertEqual(m["kind"], "AlertRule")
+        self.assertEqual(m["metadata"]["name"], "g2o-collector-staleness")
+
+    def test_group_and_index_are_metadata_labels(self):
+        labels = self._project()["metadata"]["labels"]
+        self.assertEqual(labels["grafana.com/group"], "graph2otel-alerts")
+        self.assertEqual(labels["grafana.com/group-index"], "6")
+
+    def test_folder_is_a_loud_substitution_token_not_a_guess(self):
+        """A folder UID is stack-specific, so a public repository cannot know
+        it. Measured 2026-07-27: pushing an unresolvable folder UID fails with
+        `403 Forbidden` and creates nothing, so an unsubstituted token fails
+        VISIBLY. Omitting the annotation instead would silently file every rule
+        in the General folder, which is the failure mode worth avoiding."""
+        annotations = self._project()["metadata"]["annotations"]
+        self.assertEqual(annotations["grafana.app/folder"],
+                         build_rules.FOLDER_TOKEN)
+        self.assertIn("REPLACE", build_rules.FOLDER_TOKEN)
+
+    def test_expressions_are_a_map_keyed_by_refid_not_a_data_list(self):
+        exprs = self._project()["spec"]["expressions"]
+        self.assertEqual(sorted(exprs), ["A", "B", "C"])
+
+    def test_the_condition_node_is_marked_source_true(self):
+        """`condition: "C"` has no App Platform equivalent — the condition is
+        identified by `source: true` on that expression instead."""
+        exprs = self._project()["spec"]["expressions"]
+        self.assertTrue(exprs["C"]["source"])
+        self.assertNotIn("source", exprs["A"])
+        self.assertNotIn("source", exprs["B"])
+        self.assertNotIn("condition", self._project()["spec"])
+
+    def test_durations_are_go_duration_strings_not_second_counts(self):
+        spec = self._project()["spec"]
+        self.assertEqual(spec["expressions"]["A"]["relativeTimeRange"],
+                         {"from": "1h0m0s", "to": "0s"})
+        self.assertEqual(spec["for"], "5m0s")
+
+    def test_only_datasource_backed_nodes_carry_a_datasource_and_time_range(self):
+        """Expression nodes (`__expr__`) carry neither on the wire."""
+        exprs = self._project()["spec"]["expressions"]
+        self.assertEqual(exprs["A"]["datasourceUID"], "grafanacloud-prom")
+        for ref in ("B", "C"):
+            self.assertNotIn("datasourceUID", exprs[ref])
+            self.assertNotIn("relativeTimeRange", exprs[ref])
+
+    def test_group_interval_becomes_a_per_rule_trigger(self):
+        self.assertEqual(self._project()["spec"]["trigger"], {"interval": "5m"})
+
+    def test_evaluator_states_labels_and_annotations_survive(self):
+        spec = self._project()["spec"]
+        self.assertEqual(spec["execErrState"], "Error")
+        self.assertEqual(spec["noDataState"], "Alerting")
+        self.assertEqual(spec["labels"]["pipeline"], "graph2otel")
+        self.assertIn("runbook_url", spec["annotations"])
+
+    def test_paused_is_carried_for_every_paused_rule(self):
+        for rule in build_rules.RULES:
+            m = build_rules.to_app_platform(
+                rule, group="graph2otel-alerts", interval="5m", index=0)
+            self.assertEqual(m["spec"]["paused"], rule["isPaused"], rule["uid"])
+        for rule in build_rules.DETECTIONS:
+            m = build_rules.to_app_platform(
+                rule, group="graph2otel-detections", interval="5m", index=0)
+            self.assertTrue(m["spec"]["paused"], rule["uid"])
+
+    def test_every_rule_and_detection_gets_one_committed_manifest(self):
+        rendered = build_rules.render_app_platform()
+        expected = {f"{r['uid']}.yaml" for r in build_rules.RULES}
+        expected |= {f"{r['uid']}.yaml" for r in build_rules.DETECTIONS}
+        self.assertEqual(set(rendered), expected)
+        self.assertEqual(len(rendered), 19)
+
+    def test_committed_manifests_are_not_stale(self):
+        for fname, data in build_rules.render_app_platform().items():
+            path = os.path.join(build_rules.RULES_DIR, fname)
+            with open(path, "rb") as f:
+                self.assertEqual(f.read(), data,
+                                 f"{fname} is stale — run `make rules`")
+
+    def test_no_classic_file_provisioning_bundle_is_committed(self):
+        """#294: one representation only. A committed `apiVersion: 1` +
+        `groups:` bundle was measured to be rejected with HTTP 400 when posted
+        as an individual object, and keeping it alongside the App Platform
+        manifests would be two generated representations to gate and drift."""
+        for dirpath, dirnames, fnames in os.walk(build_rules.ALERTS_DIR):
+            for fname in fnames:
+                if not fname.endswith((".yaml", ".yml")):
+                    continue
+                keys = build_rules._top_level_keys(os.path.join(dirpath, fname))
+                self.assertNotIn("groups", keys, fname)
+                self.assertIn("apiVersion", keys, fname)
+        self.assertFalse(hasattr(build_rules, "render_alerts"))
+        self.assertFalse(hasattr(build_rules, "render_detections"))
+
+    def test_ok_states_are_spelled_Ok_not_OK(self):
+        """Measured 2026-07-27: 18 of 19 rules were rejected with
+        `403 Forbidden: spec.noDataState: Invalid value: "OK": value is not one
+        of the allowed values ["NoData","Ok","Alerting","KeepLast"]`. The classic
+        file-provisioning API accepted `OK`, so this is a genuine representation
+        difference between the two APIs, and no documentation mentions it."""
+        healthy_empty = next(r for r in build_rules.RULES
+                             if r["uid"] == "g2o-throttle-saturation")
+        self.assertEqual(healthy_empty["noDataState"], "OK")
+        m = build_rules.to_app_platform(
+            healthy_empty, group="graph2otel-alerts", interval="5m", index=0)
+        self.assertEqual(m["spec"]["noDataState"], "Ok")
+
+    def test_no_manifest_carries_the_rejected_spelling(self):
+        for fname, data in build_rules.render_app_platform().items():
+            text = data.decode()
+            self.assertNotIn('noDataState: "OK"', text, fname)
+            self.assertNotIn('execErrState: "OK"', text, fname)
+
+    def test_go_duration_omits_leading_zero_units(self):
+        """Go's own time.Duration.String() format, measured off the wire. The
+        obvious `HhMmSs` implementation emits `0h5m0s`, which reads back as
+        `5m0s` and reported all 11 deployed rules as divergent on nothing."""
+        self.assertEqual(build_rules.go_duration(0), "0s")
+        self.assertEqual(build_rules.go_duration(30), "30s")
+        self.assertEqual(build_rules.go_duration(300), "5m0s")
+        self.assertEqual(build_rules.go_duration(900), "15m0s")
+        self.assertEqual(build_rules.go_duration(3600), "1h0m0s")
+        self.assertEqual(build_rules.go_duration(5400), "1h30m0s")
+
+    def test_a_zero_for_is_omitted_rather_than_spelled(self):
+        """The server drops `for: 0m0s`, so emitting it makes every
+        instant-firing rule permanently divergent and buries real drift."""
+        instant = next(r for r in build_rules.RULES
+                       if build_rules.parse_duration(r["for"]) == 0)
+        m = build_rules.to_app_platform(
+            instant, group="graph2otel-alerts", interval="5m", index=0)
+        self.assertNotIn("for", m["spec"])
+
+    def test_a_nonzero_for_is_carried(self):
+        m = self._project()          # g2o-collector-staleness, for: 5m
+        self.assertEqual(m["spec"]["for"], "5m0s")
+
+    def test_parse_duration_refuses_to_guess(self):
+        """An unparseable `for` silently becoming 0 would turn a 5-minute alert
+        into an instant one."""
+        self.assertEqual(build_rules.parse_duration("1h30m"), 5400)
+        for bad in ("", "soon", "5", "5 minutes", "-5m"):
+            with self.assertRaises(ValueError, msg=bad):
+                build_rules.parse_duration(bad)
+
+    def test_expression_nodes_carry_the_defaults_the_server_fills_in(self):
+        """The server stores `intervalMs`/`maxDataPoints` on every expression
+        node, including the reduce/threshold nodes the canonical rule dicts omit
+        them on. Emitting them keeps the read-back free of normalization."""
+        exprs = self._project()["spec"]["expressions"]
+        for ref in ("A", "B", "C"):
+            self.assertEqual(exprs[ref]["model"]["intervalMs"], 1000, ref)
+            self.assertEqual(exprs[ref]["model"]["maxDataPoints"], 43200, ref)

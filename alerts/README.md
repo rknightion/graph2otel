@@ -3,7 +3,7 @@
 Example Grafana alert rules that complement the dashboards in `../dashboards/`.
 One file:
 
-- [`graph2otel-alerts.yaml`](graph2otel-alerts.yaml) — Grafana-managed alert
+- [the generated manifests](graph2otel-alerts.yaml) — Grafana-managed alert
   rules (file provisioning: `apiVersion: 1` + `groups:`). **Generated** by
   [`grafana/build_rules.py`](../grafana/build_rules.py) (#219) — do not
   hand-edit it; `make grafana-check` fails on a hand-edited file. Edit the
@@ -417,7 +417,7 @@ tenant, which is exactly why they are yours to write and not ours to ship.
 ## Validating
 
 ```bash
-python3 -c "import yaml; yaml.safe_load(open('alerts/graph2otel-alerts.yaml'))"
+python3 -c "import yaml; yaml.safe_load(open('alerts/rules/*.yaml'))"
 ```
 
 Parses as well-formed YAML matching Grafana's file-provisioning shape

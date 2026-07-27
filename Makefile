@@ -32,6 +32,7 @@ export PATH := $(TOOLS_DIR):$(PATH)
         helm-docs tools-helm-docs tools-check tools-graphdrift \
         graphdrift graphdrift-update tidy tidy-check forks-check dashboard grafana-check rules \
         grafana-canary-check grafana-canary grafana-performance-check \
+        grafana-rules-check rules-push rules-readback \
         grafana-performance-baseline grafana-performance-render container-smoke
 
 build:
@@ -138,9 +139,10 @@ regen:
 dashboard:
 	cd grafana && python3 build_dashboard.py
 
-# Regenerate alerts/graph2otel-alerts.yaml + alerts/graph2otel-detections.yaml from
-# grafana/build_rules.py's RULES/RECORDING lists (#219). Same pure-stdlib
-# python3, no PyYAML, no setup-python step — see build_rules.py's docstring.
+# Regenerate alerts/rules/*.yaml — one App Platform AlertRule manifest per rule
+# and per detection (#294) — from grafana/build_rules.py's RULES/DETECTIONS
+# lists. Same pure-stdlib python3, no PyYAML, no setup-python step — see
+# build_rules.py's docstring.
 rules:
 	cd grafana && python3 build_rules.py
 
@@ -154,7 +156,8 @@ rules:
 #                PromQL metric token in every rule resolves to a real catalog
 #                Prometheus name — no waiver concept, an unresolvable
 #                name is just a failure) plus its own regen-staleness check on
-#                alerts/graph2otel-alerts.yaml and alerts/graph2otel-detections.yaml.
+#                alerts/rules/*.yaml, including an orphan check for a manifest
+#                no rule generates.
 #   3. unittest  staleness — TestStructure.test_committed_dashboards_are_not_stale
 #                (dashboards) and TestStaleness (rules) compare each committed
 #                generated file against what its builder produces right now —
@@ -196,6 +199,36 @@ grafana-canary:
 		--context "$(GRAFANA_CONTEXT)" \
 		--prometheus-datasource "$(GRAFANA_PROMETHEUS_DATASOURCE)" \
 		--loki-datasource "$(GRAFANA_LOKI_DATASOURCE)"
+
+# Offline contract tests for #294's rule deployer and its semantic read-back.
+grafana-rules-check:
+	cd grafana && python3 -m unittest tests.test_rules_deploy -q
+
+# Credentialed rule deployment (#294). WRITES to the configured stack: it
+# create-or-updates every generated rule by stable metadata.name, never
+# delete-then-create, then proves the stack matches source by comparing projected
+# CONTENT field by field — because the drift this closes was invisible to a count
+# (a rule present with stale content). GRAFANA_CONTEXT is a gcx CONTEXT NAME, not
+# a server hostname.
+#
+# The paused portable detection pack is NOT deployed unless you ask for it: those
+# are security-content examples an operator opts into, and they land in their own
+# folder. Add INCLUDE_DETECTIONS=1.
+GRAFANA_RULES_FOLDER ?= graph2otel
+INCLUDE_DETECTIONS ?=
+rules-push:
+	@test -n "$(GRAFANA_CONTEXT)" || { echo "GRAFANA_CONTEXT is required (a gcx context NAME, not a hostname)" >&2; exit 2; }
+	@python3 grafana/rules_deploy.py \
+		--context "$(GRAFANA_CONTEXT)" \
+		--folder-title "$(GRAFANA_RULES_FOLDER)" \
+		$(if $(INCLUDE_DETECTIONS),--include-detections,)
+
+# Read-only: does the stack still match the repository? Changes nothing.
+rules-readback:
+	@test -n "$(GRAFANA_CONTEXT)" || { echo "GRAFANA_CONTEXT is required (a gcx context NAME, not a hostname)" >&2; exit 2; }
+	@python3 grafana/rules_deploy.py \
+		--context "$(GRAFANA_CONTEXT)" --readback-only \
+		$(if $(INCLUDE_DETECTIONS),--include-detections,)
 
 grafana-performance-check:
 	cd grafana && python3 -m unittest tests.test_performance_baseline -q

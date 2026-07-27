@@ -7,8 +7,8 @@ directory. The generated inventory is drift-gated at
 | Directory | Assets | Format | Target Grafana Cloud folder |
 | --- | --- | --- | --- |
 | `dashboards/` | 1 dashboard (**generated**) | Grafana **v2 dynamic dashboard** resource (`dashboard.grafana.app/v2`) | folder of your choice |
-| `alerts/` | 14 alert rules (**generated**) | Grafana **file-provisioning** YAML (`apiVersion: 1` + `groups:`) | `graph2otel` |
-| `alerts/` | 5 detection examples (**generated**, all **paused**) | same file-provisioning YAML, separate group | `graph2otel detections` |
+| `alerts/rules/` | 14 alert rules (**generated**) | Grafana **App Platform** `AlertRule` (`rules.alerting.grafana.app/v0alpha1`) | `graph2otel` |
+| `alerts/rules/` | 5 detection examples (**generated**, all **paused**) | same, separate rule group | `graph2otel detections` |
 
 The `gcx` CLI is the reproducible deploy path documented here. There is **no
 GitSync flow in this repo today** — if one is later adopted, document its repo
@@ -109,38 +109,108 @@ annotations); leave both as-is.
 
 ## Alert rules
 
-`alerts/graph2otel-alerts.yaml` is Grafana **file-provisioning** schema
-(`apiVersion: 1` + `groups:`), not a `grafana.app` resource manifest — so it is
-applied through Grafana's HTTP **provisioning API** (which `gcx api` proxies),
-Terraform (`grafana_rule_group`), or Grizzly. It is **not** a
-`gcx resources push` target (that command consumes `rules.alerting.grafana.app`
-resource manifests, which these files are not).
+`alerts/rules/*.yaml` are **Grafana App Platform** resources —
+`rules.alerting.grafana.app/v0alpha1`, kind `AlertRule` — one manifest per rule,
+identified by `metadata.name` (the stable rule UID). They are generated from the
+`RULES` and `DETECTIONS` lists in `grafana/build_rules.py`; do not hand-edit them.
+Change the builder, run `make rules`, then `make grafana-check`.
 
-The alert-rule file is generated from the `RULES` list in
-`grafana/build_rules.py`; do not hand-edit it. Change the builder, run
-`make rules`, then run `make grafana-check`. graph2otel ships **no** contact
-point, notification policy, or route — see
-[Operator-owned routing](#operator-owned-routing) below for the receiver side
-of the deployment, which is entirely yours to own.
+The classic `/api/v1/provisioning/*` representation was **removed**, not kept as a
+fallback: those endpoints are deprecated upstream, a committed `apiVersion: 1` +
+`groups:` bundle is rejected with HTTP 400 when posted as an individual object,
+and a repeated classic POST created duplicate rules with fresh UIDs. Two generated
+representations would also be two things to gate, and would drift.
 
-The rules land in the Grafana Cloud folder **`graph2otel`**.
+### Deploy
 
 ```bash
-# Create the folder once (note its uid):
-gcx api /api/folders -X POST -d '{"title":"graph2otel"}'
+make rules-push GRAFANA_CONTEXT=<gcx-context>
 
-# Apply the rule group via the provisioning API:
-gcx api /api/v1/provisioning/alert-rules -X POST -d @alerts/graph2otel-alerts.yaml
+# also deploy the PAUSED portable detection pack (its own folder):
+make rules-push GRAFANA_CONTEXT=<gcx-context> INCLUDE_DETECTIONS=1
+
+# read-only: does the stack still match the repository?
+make rules-readback GRAFANA_CONTEXT=<gcx-context>
 ```
 
-**Datasource UID substitution:** every `expr` in `graph2otel-alerts.yaml` uses
-the portable default `datasourceUid: "grafanacloud-prom"`. Replace it with your
-actual Prometheus/Mimir datasource UID (`gcx datasources list`, or Connections
-→ Data sources in the UI) before applying if yours differs.
+`GRAFANA_CONTEXT` is a `gcx` **context name**, not a server hostname — check
+`gcx config view` if unsure. The context is pinned on every call rather than
+inherited: an ambient current-context pointing at a different stack returns a
+complete-looking inventory with none of your resources in it, which reads exactly
+like everything having been deleted.
+
+The target folder must already exist (`--folder-title`, default `graph2otel`); the
+deploy does not create folders, and refuses to guess if two folders share the
+title.
+
+### Why a deploy tool and not a bare `gcx resources push`
+
+Four things about this API are not guessable, and each one was found by pushing
+rather than by reading documentation. They are why `grafana/rules_deploy.py`
+exists:
+
+1. **`grafana.app/folder` is a stack-specific UID**, so the committed manifests
+   carry the token `REPLACE_WITH_FOLDER_UID` and the tool resolves a real UID from
+   a folder *title*. The token is deliberately loud: pushing an unresolvable
+   folder UID fails with `403 Forbidden` and creates nothing, whereas *omitting*
+   the annotation silently files every rule in the General folder.
+2. **The push needs `--omit-manager-fields`.** Without it the update is refused
+   with `409 Conflict: cannot update with provided provenance 'api', needs 'api'`
+   — a message that contradicts itself.
+3. **Each manifest must declare `grafana.com/provenance: api`.** Without it:
+   `409 Conflict: cannot update with provided provenance '', needs 'api'`. It also
+   makes the rule read-only in the Grafana UI, which is correct for a generated
+   asset — a UI edit would silently diverge from this repository until the next
+   push overwrote it.
+4. **`Ok`, not `OK`.** The App Platform enum is
+   `["NoData","Ok","Alerting","KeepLast"]`. The classic API accepted `OK`, so this
+   is a real difference between the two representations; the generator maps it.
+
+### Read-back proves content, not counts
+
+A push reporting success is not a deployment that matches source. `rules-readback`
+compares the **projected content** of every rule against the stack field by field
+— title, `for`, `noDataState`, `execErrState`, `trigger`, labels, annotations and
+the whole `expressions` map.
+
+Counting is not enough, and this is not hypothetical. Before this existed, the
+repository had been diverging from the stack for the whole of the #375 programme:
+two rules were missing entirely (detectable by counting), the evaluator-error fix
+from #298 was still `Ok` live, the interval-aware staleness threshold from #299 was
+still a fixed `3600`, and the runbook annotations from #307 were absent on all 19
+rules. Every one of those except the missing pair is a rule that is **present with
+stale content**, which no count can ever reveal.
+
+The comparison needs no duration or default normalization, on purpose: the
+generator emits the server's exact spellings (Go durations like `5m0s`, a zero
+`for` omitted entirely, `intervalMs`/`maxDataPoints` on every expression node).
+A normalization step is somewhere a real difference can hide.
+
+Exit `0` means the stack matches, `1` means it drifted, `2` means the tool could
+not run.
+
+### One known limitation, stated rather than hidden
+
+**This API cannot place a rule it just created into a named group.** Creating with
+a group is refused (`cannot set group when creating a new rule`) and so is adding
+one afterwards (`cannot set group when updating un-grouped rule`). `RuleSequence`
+is not a way around it — it requires at least one recording rule, and this
+repository ships none (#297).
+
+The consequence is cosmetic but you should know it: a newly created rule sits in
+its folder outside the named group. It evaluates on exactly the right cadence,
+because `spec.trigger.interval` is per-rule. The read-back reports those rules
+under `ungrouped` with status `matched_content_ungrouped` — a clean pass, since
+their content matches — rather than either hiding them or calling them drift. Move
+them into the group by hand in the Grafana UI if the grouping matters to you.
+
+**Datasource UID substitution:** every query uses the portable Grafana Cloud
+default `grafanacloud-prom`. Replace it if your Prometheus/Mimir datasource UID
+differs (`gcx datasources list`, or Connections → Data sources).
 
 See [`alerts/README.md`](https://github.com/rknightion/graph2otel/blob/main/alerts/README.md) for the per-rule rationale,
-thresholds, the OTLP→Prometheus metric-name normalization, and the
-multi-tenant grouping model.
+thresholds, the OTLP→Prometheus metric-name normalization, and the multi-tenant
+grouping model.
 
 ## Operator-owned routing
 
