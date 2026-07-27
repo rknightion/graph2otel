@@ -51,7 +51,8 @@ import catalog as catalog_mod  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
-ALERTS_PATH = os.path.join(REPO, "alerts", "graph2otel-alerts.yaml")
+ALERTS_DIR = os.path.join(REPO, "alerts")
+ALERTS_PATH = os.path.join(ALERTS_DIR, "graph2otel-alerts.yaml")
 RECORDING_DIR = os.path.join(REPO, "recording-rules")
 
 PROM_UID = "grafanacloud-prom"
@@ -59,6 +60,41 @@ LOKI_UID = "grafanacloud-logs"
 EXPR_UID = "__expr__"
 
 CAT = catalog_mod.load()
+
+# ---------------------------------------------------------------------------
+# the frozen routable label contract (#293/#296). graph2otel ships alert
+# *rules* only — no contact point, notification policy, or route (see the
+# repository-content gate below) — so this is the entire public interface an
+# operator routes their own notification policy against.
+#
+# pipeline/severity/source/category are MANDATORY on every rule and non-empty.
+# `source` is the DOMAIN (what an operator would send to a whole owning team),
+# so it does not fragment per rule — do not add a value to it for a single
+# rule's sake. `component` is OPTIONAL and carries a finer distinction than
+# `source` allows for a small number of rules; only add a rule to the
+# COMPONENT_VALUES set (and only set component=... on a rule) with the same
+# care as extending SOURCE_VALUES — this is a frozen seam, not a place to
+# silently rewrite a rule's meaning.
+# ---------------------------------------------------------------------------
+
+PIPELINE = "graph2otel"
+
+SEVERITY_VALUES = {"critical", "warning"}
+
+SOURCE_VALUES = {
+    "entra", "intune", "m365", "purview", "defender", "mdca", "graph2otel",
+}
+
+CATEGORY_VALUES = {
+    "credential-expiry", "compliance", "self-observability",
+    "record-integrity", "throttle", "mdca-discovery",
+}
+
+# Optional fifth label. Only g2o-intune-apple-token-expiry-critical and
+# g2o-intune-cert-expiry-critical carry it today — both are source=intune,
+# and component is the only label distinguishing them from each other and
+# from the other intune-sourced rules.
+COMPONENT_VALUES = {"apple-token", "certificate"}
 
 
 def _m(name: str) -> str:
@@ -183,12 +219,18 @@ def _threshold_node(op: str, params: list) -> dict:
 def _alert(uid: str, title: str, expr: str, op: str, params: list, for_: str,
            labels: dict, summary: str, description: str, is_paused: bool,
            no_data_state: str = "OK", exec_err_state: str = "Error",
-           exec_err_waiver: str = "") -> dict:
+           exec_err_waiver: str = "", component: str = "") -> dict:
     if exec_err_state == "OK" and not exec_err_waiver.strip():
         raise ValueError(f"{uid}: execErrState OK requires a documented waiver")
     annotations = {"summary": summary, "description": description}
     if exec_err_waiver:
         annotations["exec_error_waiver"] = exec_err_waiver
+    # pipeline is the fixed ownership label on every rule (#293/#296) — every
+    # caller gets it for free rather than repeating it at all 14 call sites.
+    full_labels = dict(labels)
+    full_labels["pipeline"] = PIPELINE
+    if component:
+        full_labels["component"] = component
     return {
         "uid": uid,
         "title": title,
@@ -197,7 +239,7 @@ def _alert(uid: str, title: str, expr: str, op: str, params: list, for_: str,
         "noDataState": no_data_state,
         "execErrState": exec_err_state,
         "for": for_,
-        "labels": labels,
+        "labels": full_labels,
         "annotations": annotations,
         "isPaused": is_paused,
     }
@@ -252,7 +294,7 @@ RULES = [
         f'({_m("intune.apple_token.days_until_expiry")})',
         "lt", [14], "15m",
         {"severity": "critical", "category": "credential-expiry",
-         "source": "intune-apple-token"},
+         "source": "intune"},
         'Apple {{ $labels.type }} token "{{ $labels.token_name }}" expires in under 14 '
         "days (tenant {{ $labels.tenant_id }})",
         "intune_apple_token_days_until_expiry (APNS/VPP/DEP) is below 14 for "
@@ -262,6 +304,7 @@ RULES = [
         "Paused by default (companion of the primary compliance/credential set) — enable "
         "once the apple_tokens collector is on for tenants that use Apple MDM.",
         True,
+        component="apple-token",
     ),
     _alert(
         "g2o-intune-cert-expiry-critical",
@@ -270,7 +313,7 @@ RULES = [
         f'({_m("intune.certificate.days_until_expiry")}{{expiry_bucket=~"0d_7d|expired"}})',
         "gt", [0], "15m",
         {"severity": "critical", "category": "credential-expiry",
-         "source": "intune-certificate"},
+         "source": "intune"},
         'Intune certificate profile "{{ $labels.cert_profile_name }}" has certificates '
         "expiring within 7 days (tenant {{ $labels.tenant_id }})",
         "intune_certificate_days_until_expiry is non-zero in the 0d_7d/expired buckets for "
@@ -280,6 +323,7 @@ RULES = [
         "expired) — see README.md. Paused by default — enable once the certificates "
         "collector (beta) is on.",
         True,
+        component="certificate",
     ),
     # --- Compliance drop (alerts/README.md doc block 2) ---------------------
     _alert(
@@ -661,6 +705,128 @@ def recording_rule_orphans(expected_names: set[str],
 
 
 # ---------------------------------------------------------------------------
+# routable label gate (#293/#296): every generated rule carries the frozen
+# pipeline/severity/source/category contract, non-empty and drawn from its
+# closed set; the optional component label is closed-set-validated when
+# present. This is the entire public routing interface graph2otel ships —
+# see the repository-content gate below for the other half of the contract
+# (no route/receiver/policy ships alongside it).
+# ---------------------------------------------------------------------------
+
+def validate_labels(rules: list) -> list:
+    """Every rule's labels satisfy the frozen routable contract, or a violation.
+
+    Returns human-readable violation strings naming the rule uid and the
+    offending label, same style as reverse_validate above.
+    """
+    violations = []
+    for rule in rules:
+        uid = rule.get("uid", "<unknown>")
+        labels = rule.get("labels", {})
+
+        pipeline = labels.get("pipeline")
+        if pipeline != PIPELINE:
+            violations.append(
+                f"{uid}: labels.pipeline is {pipeline!r}, want {PIPELINE!r}")
+
+        severity = labels.get("severity")
+        if not severity or severity not in SEVERITY_VALUES:
+            violations.append(
+                f"{uid}: labels.severity is {severity!r}, "
+                f"not in {sorted(SEVERITY_VALUES)}")
+
+        source = labels.get("source")
+        if not source or source not in SOURCE_VALUES:
+            violations.append(
+                f"{uid}: labels.source is {source!r}, not in {sorted(SOURCE_VALUES)}")
+
+        category = labels.get("category")
+        if not category or category not in CATEGORY_VALUES:
+            violations.append(
+                f"{uid}: labels.category is {category!r}, "
+                f"not in {sorted(CATEGORY_VALUES)}")
+
+        if "component" in labels:
+            component = labels["component"]
+            if not component or component not in COMPONENT_VALUES:
+                violations.append(
+                    f"{uid}: labels.component is {component!r}, "
+                    f"not in {sorted(COMPONENT_VALUES)}")
+
+    return violations
+
+
+# ---------------------------------------------------------------------------
+# repository-content gate (#293/#296): graph2otel ships alert *rules* only —
+# no contact point, notification policy, or route, in any form. A real
+# content check on committed YAML/JSON top-level keys under alerts/ and
+# recording-rules/, not a filename convention (a routing asset could be
+# renamed to dodge a filename check; it cannot rename its own top-level
+# keys and remain a valid Grafana provisioning document).
+# ---------------------------------------------------------------------------
+
+ROUTING_ASSET_KEYS = {
+    "contactPoints", "policies", "notification_policies", "receiver",
+    "routes", "route",
+}
+
+_YAML_TOP_LEVEL_KEY = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*:")
+
+
+def _top_level_keys(path: str) -> set:
+    """Top-level mapping keys of a committed YAML or JSON file.
+
+    No PyYAML dependency (see the module docstring), so YAML is scanned
+    line-by-line for an unindented ``key:`` — matching the block style this
+    generator's own ``yamlify()`` emits, and Grafana's file-provisioning
+    layout generally (``apiVersion:``, ``groups:``, ``contactPoints:``,
+    ``policies:`` are all unindented top-level keys). JSON is parsed for
+    real via the stdlib, since ``json`` carries no such restriction.
+    """
+    with open(path, "r", encoding="utf-8") as f:
+        text = f.read()
+    if path.endswith(".json"):
+        try:
+            doc = json.loads(text)
+        except json.JSONDecodeError:
+            return set()
+        return set(doc.keys()) if isinstance(doc, dict) else set()
+    keys = set()
+    for line in text.splitlines():
+        if not line or line[0] in " \t#":
+            continue
+        m = _YAML_TOP_LEVEL_KEY.match(line)
+        if m:
+            keys.add(m.group(1))
+    return keys
+
+
+def routing_asset_violations(dirpaths: list) -> list:
+    """Committed alert/recording-rule files must never be routing assets.
+
+    Scans every ``.yaml``/``.yml``/``.json`` file directly under each given
+    directory for a routing-shaped top-level key (``ROUTING_ASSET_KEYS``).
+    Returns human-readable violation strings naming the file and the
+    offending key(s); empty means clean.
+    """
+    violations = []
+    for dirpath in dirpaths:
+        if not os.path.isdir(dirpath):
+            continue
+        for fname in sorted(os.listdir(dirpath)):
+            if not fname.endswith((".yaml", ".yml", ".json")):
+                continue
+            path = os.path.join(dirpath, fname)
+            if not os.path.isfile(path):
+                continue
+            hit = _top_level_keys(path) & ROUTING_ASSET_KEYS
+            if hit:
+                rel = os.path.relpath(path, REPO)
+                violations.append(f"{rel}: routing-shaped key(s) {sorted(hit)}")
+    return violations
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -675,6 +841,23 @@ def main() -> int:
         print(f"RULE EXPR NAMES A METRIC graph2otel DOES NOT EMIT ({len(violations)}):",
               file=sys.stderr)
         for v in violations:
+            print(f"  - {v}", file=sys.stderr)
+        return 1
+
+    label_violations = validate_labels(RULES)
+    if label_violations:
+        print(f"RULE LABELS VIOLATE THE FROZEN ROUTABLE CONTRACT ({len(label_violations)}):",
+              file=sys.stderr)
+        for v in label_violations:
+            print(f"  - {v}", file=sys.stderr)
+        return 1
+
+    routing_violations = routing_asset_violations([ALERTS_DIR, RECORDING_DIR])
+    if routing_violations:
+        print(f"COMMITTED FILE LOOKS LIKE A ROUTING ASSET ({len(routing_violations)}) — "
+              f"graph2otel ships alert rules only, no contact point/policy/route:",
+              file=sys.stderr)
+        for v in routing_violations:
             print(f"  - {v}", file=sys.stderr)
         return 1
 

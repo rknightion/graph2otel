@@ -1,7 +1,7 @@
 # graph2otel — example alert rules
 
 Example Grafana alert rules that complement the dashboards in `../dashboards/`.
-Two files:
+One file:
 
 - [`graph2otel-alerts.yaml`](graph2otel-alerts.yaml) — Grafana-managed alert
   rules (file provisioning: `apiVersion: 1` + `groups:`). **Generated** by
@@ -9,10 +9,16 @@ Two files:
   hand-edit it; `make grafana-check` fails on a hand-edited file. Edit the
   `RULES` list in that script, then run `make rules`. This file (the prose
   below) stays hand-authored: the generator never touches it.
-- [`graph2otel-contactpoints.yaml`](graph2otel-contactpoints.yaml) — a
-  documented no-op contact point + root notification policy, so the rule
-  group has somewhere to attach. **Replace it** with your own receiver before
-  relying on these alerts to page anyone. Hand-authored, not generated.
+
+graph2otel ships **rules only** — no contact point, notification policy, or
+route in any form (#293/#296). Every rule instead carries a stable, documented
+label set (`pipeline`/`severity`/`source`/`category`, plus an optional
+`component` on two rules) so you can write your own notification-policy route
+against it — see
+[Operator-owned routing](../docs/deploying-observability.md#operator-owned-routing)
+for the label reference and a worked example route. A repository-content gate
+rejects any future committed file under `alerts/` or `recording-rules/` that
+looks like a contact point, policy, or route.
 
 Fourteen rule objects across six alert categories, matching the four bullets in
 tracking issue #30 (credential/token expiry, compliance drop, collector
@@ -329,36 +335,34 @@ metric contains source record identifiers or values.
 
 ```bash
 python3 -c "import yaml; yaml.safe_load(open('alerts/graph2otel-alerts.yaml'))"
-python3 -c "import yaml; yaml.safe_load(open('alerts/graph2otel-contactpoints.yaml'))"
 ```
 
-Both parse as well-formed YAML matching Grafana's file-provisioning shape
-(`apiVersion: 1` + `groups:`/`contactPoints:`/`policies:`, each rule the
-canonical `A` query → `B` reduce(last) → `C` threshold pipeline,
-`condition: C`). **Full validation needs a live Grafana** — `promtool` doesn't
-apply here since this is the Grafana-managed provisioning schema, not
-Prometheus ruler YAML. Import the file into a real Grafana Cloud instance
-(file provisioning path, or the HTTP provisioning API,
-`POST /api/v1/provisioning/alert-rules`) to confirm each rule evaluates and
-the seven default-enabled rules provably fire under a synthetic bad-state
-condition: credential expiry, compliance ratio, collector staleness, record
-integrity loss, throttle saturation, MDCA upload stoppage, and MDCA parse
-failure. That step is **not done here** and is called out as outstanding in
-issue #30's acceptance criteria.
+Parses as well-formed YAML matching Grafana's file-provisioning shape
+(`apiVersion: 1` + `groups:`, each rule the canonical `A` query → `B`
+reduce(last) → `C` threshold pipeline, `condition: C`). **Full validation
+needs a live Grafana** — `promtool` doesn't apply here since this is the
+Grafana-managed provisioning schema, not Prometheus ruler YAML. Import the
+file into a real Grafana Cloud instance (file provisioning path, or the HTTP
+provisioning API, `POST /api/v1/provisioning/alert-rules`) to confirm each
+rule evaluates and the seven default-enabled rules provably fire under a
+synthetic bad-state condition: credential expiry, compliance ratio, collector
+staleness, record integrity loss, throttle saturation, MDCA upload stoppage,
+and MDCA parse failure. That step is **not done here** and is called out as
+outstanding in issue #30's acceptance criteria.
 
 ## Loading
 
 - **File provisioning** (self-hosted Grafana / Grafana Agent config): drop
-  both files in `/etc/grafana/provisioning/alerting/` and restart Grafana. It
+  the file in `/etc/grafana/provisioning/alerting/` and restart Grafana. It
   creates the `graph2otel` folder and the rule group.
 - **Grafana Cloud:** file-provisioning isn't importable via the UI directly;
-  use Terraform (`grafana_rule_group` / `grafana_contact_point` /
-  `grafana_notification_policy`) or [Grizzly](https://grafana.github.io/grizzly/),
-  which consume this same file-provisioning model, or the HTTP provisioning
-  API.
+  use Terraform (`grafana_rule_group`) or
+  [Grizzly](https://grafana.github.io/grizzly/), which consume this same
+  file-provisioning model, or the HTTP provisioning API.
 
-Wire the `severity` (`critical`/`warning`) and `category`
-(`credential-expiry`/`compliance`/`self-observability`/`record-integrity`/
-`throttle`/`mdca-discovery`) labels
-into your own notification policy routes once you replace the no-op contact
-point.
+graph2otel ships no contact point, notification policy, or route — that is an
+explicit operator decision this repository does not make for you (#293/#296).
+Wire your own receiver and notification-policy route against the
+`pipeline`/`severity`/`source`/`category`/`component` labels documented in
+[Operator-owned routing](../docs/deploying-observability.md#operator-owned-routing),
+which also gives a worked example route.

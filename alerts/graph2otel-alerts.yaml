@@ -88,6 +88,7 @@ groups:
           severity: "critical"
           category: "credential-expiry"
           source: "entra"
+          pipeline: "graph2otel"
         annotations:
           summary: "{{ $labels.owner_type }} {{ $labels.credential_type }} credential(s) expiring within 7 days (tenant {{ $labels.tenant_id }})"
           description: "entra_credentials_expiring_total is non-zero in the lt_7d/expired buckets for tenant {{ $labels.tenant_id }}, owner_type={{ $labels.owner_type }}, credential_type={{ $labels.credential_type }} for 15m. Bucket-count based (never per-credential) — see README.md doc block 1 for the false-positive notes and the lt_30d warning-tier companion rule."
@@ -158,6 +159,7 @@ groups:
           severity: "warning"
           category: "credential-expiry"
           source: "entra"
+          pipeline: "graph2otel"
         annotations:
           summary: "{{ $labels.owner_type }} {{ $labels.credential_type }} credential(s) expiring within 30 days (tenant {{ $labels.tenant_id }})"
           description: "Companion to g2o-entra-cred-expiry-critical: earlier warning tier on the lt_30d bucket. Paused by default — enable once you've picked a rotation-lead-time that matches your tenant's actual credential renewal process."
@@ -227,7 +229,9 @@ groups:
         labels:
           severity: "critical"
           category: "credential-expiry"
-          source: "intune-apple-token"
+          source: "intune"
+          pipeline: "graph2otel"
+          component: "apple-token"
         annotations:
           summary: "Apple {{ $labels.type }} token \"{{ $labels.token_name }}\" expires in under 14 days (tenant {{ $labels.tenant_id }})"
           description: "intune_apple_token_days_until_expiry (APNS/VPP/DEP) is below 14 for token_name={{ $labels.token_name }}, tenant {{ $labels.tenant_id }}, for 15m. Unlike the bucketed metrics, this is a raw days-remaining gauge over a tiny admin-configured token set, so the threshold is an exact day count — tune freely. Paused by default (companion of the primary compliance/credential set) — enable once the apple_tokens collector is on for tenants that use Apple MDM."
@@ -297,7 +301,9 @@ groups:
         labels:
           severity: "critical"
           category: "credential-expiry"
-          source: "intune-certificate"
+          source: "intune"
+          pipeline: "graph2otel"
+          component: "certificate"
         annotations:
           summary: "Intune certificate profile \"{{ $labels.cert_profile_name }}\" has certificates expiring within 7 days (tenant {{ $labels.tenant_id }})"
           description: "intune_certificate_days_until_expiry is non-zero in the 0d_7d/expired buckets for cert_profile_name={{ $labels.cert_profile_name }}, tenant {{ $labels.tenant_id }}, for 15m. NOTE: cert expiry buckets are named differently from the entra credential buckets (0d_7d/7d_30d/30d_90d/over_90d/unknown vs lt_7d/lt_30d/lt_90d/gt_90d/expired) — see README.md. Paused by default — enable once the certificates collector (beta) is on."
@@ -368,6 +374,7 @@ groups:
           severity: "warning"
           category: "compliance"
           source: "intune"
+          pipeline: "graph2otel"
         annotations:
           summary: "Intune compliant-device fraction below 90% (tenant {{ $labels.tenant_id }})"
           description: "compliant / total intune_compliance_devices is below 0.9 for tenant {{ $labels.tenant_id }} for 30m. The `and ... >= 5` guard suppresses the ratio on tiny fleets where one non-compliant device swings the percentage — see README.md doc block 2 for the false-positive notes."
@@ -438,6 +445,7 @@ groups:
           severity: "warning"
           category: "compliance"
           source: "intune"
+          pipeline: "graph2otel"
         annotations:
           summary: "Intune non-compliant device share rose more than 10 percentage points in an hour (tenant {{ $labels.tenant_id }})"
           description: "Companion to g2o-intune-compliance-ratio-low: catches a sharp swing even when the absolute ratio hasn't crossed 90% yet (e.g. a large compliant fleet with a sudden policy regression). Paused by default — the 1h/10pp thresholds are unvalidated against real fleet churn."
@@ -508,6 +516,7 @@ groups:
           severity: "critical"
           category: "self-observability"
           source: "graph2otel"
+          pipeline: "graph2otel"
         annotations:
           summary: "Collector {{ $labels.collector }} hasn't scraped successfully in over an hour (tenant {{ $labels.tenant_id }})"
           description: "graph2otel_scrape_staleness_seconds for collector={{ $labels.collector }}, tenant {{ $labels.tenant_id }} has exceeded 3600s (the placeholder default: 3x a 20-minute poll interval) for 5m. Replace 3600 with 3x YOUR configured collector interval in seconds. noDataState is Alerting (not OK) because self-obs metrics are emitted by every running collector — a fully missing series means the process died or that collector was removed, same semantics as tailscale2otel's ExporterDown."
@@ -578,6 +587,7 @@ groups:
           severity: "warning"
           category: "self-observability"
           source: "graph2otel"
+          pipeline: "graph2otel"
         annotations:
           summary: "Collector {{ $labels.collector }} failing to persist its checkpoint (tenant {{ $labels.tenant_id }})"
           description: "Companion to g2o-collector-staleness: a WindowCollector's high-water mark isn't reaching disk, so a restart re-polls (or drops, depending on store) an already-processed window. Even one increment is worth knowing about — for is 0m. Paused by default — enable once you've picked a notification channel for it."
@@ -648,6 +658,7 @@ groups:
           severity: "warning"
           category: "record-integrity"
           source: "graph2otel"
+          pipeline: "graph2otel"
         annotations:
           summary: "Collector {{ $labels.collector }} lost source records on {{ $labels.ingest_transport }} (tenant {{ $labels.tenant_id }})"
           description: "At least one source record was dropped or errored in the last 15m. `dropped` covers deliberate rejection such as an unparseable event timestamp; `errored` covers decode or processing failure. This is default-enabled because either outcome means fetched source data did not become useful telemetry."
@@ -718,6 +729,7 @@ groups:
           severity: "warning"
           category: "record-integrity"
           source: "graph2otel"
+          pipeline: "graph2otel"
         annotations:
           summary: "Payload type changed for {{ $labels.collector }} field {{ $labels.field }} (tenant {{ $labels.tenant_id }})"
           description: "A source-controlled optional field arrived with a different JSON type. The otherwise-usable record was still emitted. Paused initially until the tenant's normal payload-shape baseline is established; labels never contain field values."
@@ -788,6 +800,7 @@ groups:
           severity: "warning"
           category: "throttle"
           source: "graph2otel"
+          pipeline: "graph2otel"
         annotations:
           summary: "Sustained 429s from Microsoft Graph on the {{ $labels.workload }} workload (tenant {{ $labels.tenant_id }})"
           description: "rate(graph2otel_throttle_count_total[10m]) (429 responses observed by the client-side rate limiter) is above 0 for workload={{ $labels.workload }}, tenant {{ $labels.tenant_id }}, sustained for 15m — i.e. throttling that isn't a one-off blip but is still happening 10-15 minutes later. noDataState is OK — zero throttle events is the healthy steady state, not an absence worth alerting on. See README.md doc block 4 for per-workload ceiling context (none of the reporting 5/10s, Identity Protection 1/s, Intune reports-export 48/min, or directory RU workloads send Retry-After, so silent throttling degrades data freshness before anything else visibly breaks)."
@@ -858,6 +871,7 @@ groups:
           severity: "warning"
           category: "throttle"
           source: "graph2otel"
+          pipeline: "graph2otel"
         annotations:
           summary: "Graph-reported throttle budget consumption above 80% on the {{ $labels.workload }} workload (tenant {{ $labels.tenant_id }})"
           description: "graph2otel_throttle_limit_percentage_percent (from the x-ms-throttle-limit-percentage response header) is above 80 for workload={{ $labels.workload }}, tenant {{ $labels.tenant_id }}, sustained for 15m. Best-effort: this header isn't guaranteed on every 429 or every workload, so absence of data here does NOT mean the budget is healthy — g2o-throttle-saturation is the primary signal; this is a companion when the header happens to be present. Paused by default."
@@ -928,6 +942,7 @@ groups:
           severity: "critical"
           category: "mdca-discovery"
           source: "graph2otel"
+          pipeline: "graph2otel"
         annotations:
           summary: "MDCA Cloud Discovery stream {{ $labels.input_stream_id }} hasn't parsed successfully in over 3h (tenant {{ $labels.tenant_id }})"
           description: "mdca_discovery_parse_last_success_age_seconds for input_stream_id={{ $labels.input_stream_id }}, tenant {{ $labels.tenant_id }} has exceeded 10800s (3h) for 15m. This is the alert-on-SILENCE signal a failure counter cannot produce: a dead uploader emits no failed parse tasks, so g2o-mdca-parse-failing stays green while data silently stops. Replace 10800 with ~3x YOUR upload cadence in seconds. noDataState is OK because a tenant with no Cloud Discovery streams legitimately emits no series; once a stream has parsed once, the gauge is always present and keeps climbing when uploads stop."
@@ -998,6 +1013,7 @@ groups:
           severity: "warning"
           category: "mdca-discovery"
           source: "graph2otel"
+          pipeline: "graph2otel"
         annotations:
           summary: "MDCA Cloud Discovery parse failing on stream {{ $labels.input_stream_id }} (tenant {{ $labels.tenant_id }})"
           description: "increase(mdca_discovery_parse_tasks_total{is_success=\"false\"}[1h]) > 0 for input_stream_id={{ $labels.input_stream_id }}, template={{ $labels.template }}, tenant {{ $labels.tenant_id }}: at least one Cloud Discovery parse task FAILED in the last hour while the upload almost certainly reported HTTP 200. The template label names which failure (e.g. REPOOPER_COMPLETION_STATUS_BASELOGPARSER_UNEXPECTED_FORMAT = malformed log format). This is the 22-silent-failures outage from #145. Default-enabled; pair with g2o-mdca-uploads-stopped, which catches a dead uploader this rule cannot see."

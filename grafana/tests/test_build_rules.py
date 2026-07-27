@@ -298,5 +298,141 @@ class TestRecordingRulesAreValidJson(unittest.TestCase):
             self.assertEqual(d["ruleGroup"], "blob-derived")
 
 
+class TestRoutableLabelContract(unittest.TestCase):
+    """#293/#296: graph2otel ships alert *rules* only, no routing — so every
+    generated rule instead carries a stable, documented, routable label set
+    an operator writes their own notification-policy route against.
+    pipeline/severity/source/category are mandatory; component is optional
+    and only present on the two Intune credential rules that need a finer
+    distinction than the frozen `source` domain enum allows."""
+
+    def test_every_rule_has_the_four_mandatory_labels_non_empty(self):
+        for rule in build_rules.RULES:
+            labels = rule["labels"]
+            for key in ("pipeline", "severity", "source", "category"):
+                self.assertIn(key, labels, f"{rule['uid']}: missing {key}")
+                self.assertTrue(labels[key], f"{rule['uid']}: empty {key}")
+
+    def test_pipeline_is_the_constant_graph2otel_on_every_rule(self):
+        for rule in build_rules.RULES:
+            self.assertEqual(rule["labels"]["pipeline"], "graph2otel", rule["uid"])
+
+    def test_severity_source_category_values_are_in_their_closed_sets(self):
+        for rule in build_rules.RULES:
+            labels = rule["labels"]
+            self.assertIn(labels["severity"], build_rules.SEVERITY_VALUES, rule["uid"])
+            self.assertIn(labels["source"], build_rules.SOURCE_VALUES, rule["uid"])
+            self.assertIn(labels["category"], build_rules.CATEGORY_VALUES, rule["uid"])
+
+    def test_component_present_only_on_the_two_intune_credential_rules(self):
+        expected = {
+            "g2o-intune-apple-token-expiry-critical": "apple-token",
+            "g2o-intune-cert-expiry-critical": "certificate",
+        }
+        for rule in build_rules.RULES:
+            uid = rule["uid"]
+            if uid in expected:
+                self.assertEqual(rule["labels"].get("component"), expected[uid], uid)
+            else:
+                self.assertNotIn("component", rule["labels"], uid)
+
+    def test_component_values_are_in_their_closed_set(self):
+        for rule in build_rules.RULES:
+            component = rule["labels"].get("component")
+            if component is not None:
+                self.assertIn(component, build_rules.COMPONENT_VALUES, rule["uid"])
+
+    def test_validate_labels_rejects_a_rule_missing_pipeline(self):
+        bogus = [{
+            "uid": "test-missing-pipeline",
+            "labels": {"severity": "warning", "source": "entra", "category": "compliance"},
+        }]
+        violations = build_rules.validate_labels(bogus)
+        self.assertEqual(len(violations), 1)
+        self.assertIn("test-missing-pipeline", violations[0])
+        self.assertIn("pipeline", violations[0])
+
+    def test_validate_labels_rejects_out_of_set_severity_source_category(self):
+        bogus = [{
+            "uid": "test-bad-values",
+            "labels": {
+                "pipeline": "graph2otel",
+                "severity": "critical",
+                "source": "not-a-real-domain",
+                "category": "not-a-real-category",
+            },
+        }]
+        violations = build_rules.validate_labels(bogus)
+        self.assertEqual(len(violations), 2)
+        joined = " ".join(violations)
+        self.assertIn("source", joined)
+        self.assertIn("category", joined)
+
+    def test_validate_labels_rejects_out_of_set_component(self):
+        bogus = [{
+            "uid": "test-bad-component",
+            "labels": {
+                "pipeline": "graph2otel",
+                "severity": "warning",
+                "source": "intune",
+                "category": "compliance",
+                "component": "not-a-real-component",
+            },
+        }]
+        violations = build_rules.validate_labels(bogus)
+        self.assertEqual(len(violations), 1)
+        self.assertIn("component", violations[0])
+
+    def test_validate_labels_accepts_the_real_rule_set(self):
+        self.assertEqual(build_rules.validate_labels(build_rules.RULES), [])
+
+
+class TestNoRoutingAssetsShipped(unittest.TestCase):
+    """#293/#296: no contact point, notification policy, or route ships in
+    this repository, in any form, under alerts/ or recording-rules/. A real
+    content check on committed YAML/JSON top-level keys, not a filename
+    convention."""
+
+    def test_committed_alerts_and_recording_rule_files_carry_no_routing_keys(self):
+        violations = build_rules.routing_asset_violations(
+            [build_rules.ALERTS_DIR, build_rules.RECORDING_DIR])
+        self.assertEqual(violations, [])
+
+    def test_alerts_directory_contains_exactly_the_expected_files(self):
+        actual = set(os.listdir(build_rules.ALERTS_DIR))
+        self.assertEqual(actual, {"graph2otel-alerts.yaml", "README.md"})
+
+    def test_the_gate_actually_rejects_a_synthetic_offending_document(self):
+        """A gate nobody has seen fail is a hope, not a gate (same framing as
+        TestReverseValidation.test_an_unresolvable_token_is_reported above)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            offending = os.path.join(tmp, "sneaky-notification-policy.yaml")
+            with open(offending, "w", encoding="utf-8") as f:
+                f.write(
+                    "apiVersion: 1\n"
+                    "\n"
+                    "contactPoints:\n"
+                    "  - orgId: 1\n"
+                    "    name: sneaky\n"
+                    "\n"
+                    "policies:\n"
+                    "  - orgId: 1\n"
+                    "    receiver: sneaky\n"
+                )
+            violations = build_rules.routing_asset_violations([tmp])
+        self.assertEqual(len(violations), 1)
+        self.assertIn("sneaky-notification-policy.yaml", violations[0])
+        self.assertIn("contactPoints", violations[0])
+        self.assertIn("policies", violations[0])
+
+    def test_a_clean_recording_rule_json_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            clean = os.path.join(tmp, "clean.json")
+            with open(clean, "w", encoding="utf-8") as f:
+                json.dump({"title": "x", "record": {"metric": "y"}}, f)
+            violations = build_rules.routing_asset_violations([tmp])
+        self.assertEqual(violations, [])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -7,7 +7,7 @@ directory. The generated inventory is drift-gated at
 | Directory | Assets | Format | Target Grafana Cloud folder |
 | --- | --- | --- | --- |
 | `dashboards/` | 6 dashboards (**generated**) | raw Grafana dashboard JSON (top-level `uid`) | folder of your choice |
-| `alerts/` | 14 alert rules (**generated**) + 1 contact-point/policy file | Grafana **file-provisioning** YAML (`apiVersion: 1` + `groups:`) | `graph2otel` |
+| `alerts/` | 14 alert rules (**generated**) | Grafana **file-provisioning** YAML (`apiVersion: 1` + `groups:`) | `graph2otel` |
 | `recording-rules/` | 2 recording rules (**generated**) | Grafana-managed rule objects (provisioning API JSON) | `graph2otel derived metrics` |
 
 The `gcx` CLI is the reproducible deploy path documented here. There is **no
@@ -88,15 +88,16 @@ annotations); leave both as-is.
 `alerts/graph2otel-alerts.yaml` is Grafana **file-provisioning** schema
 (`apiVersion: 1` + `groups:`), not a `grafana.app` resource manifest — so it is
 applied through Grafana's HTTP **provisioning API** (which `gcx api` proxies),
-Terraform (`grafana_rule_group` / `grafana_contact_point` /
-`grafana_notification_policy`), or Grizzly. It is **not** a
+Terraform (`grafana_rule_group`), or Grizzly. It is **not** a
 `gcx resources push` target (that command consumes `rules.alerting.grafana.app`
 resource manifests, which these files are not).
 
 The alert-rule file is generated from the `RULES` list in
 `grafana/build_rules.py`; do not hand-edit it. Change the builder, run
-`make rules`, then run `make grafana-check`. The contact-point/policy file is
-hand-authored and remains the operator-owned deployment seam.
+`make rules`, then run `make grafana-check`. graph2otel ships **no** contact
+point, notification policy, or route — see
+[Operator-owned routing](#operator-owned-routing) below for the receiver side
+of the deployment, which is entirely yours to own.
 
 The rules land in the Grafana Cloud folder **`graph2otel`**.
 
@@ -104,9 +105,8 @@ The rules land in the Grafana Cloud folder **`graph2otel`**.
 # Create the folder once (note its uid):
 gcx api /api/folders -X POST -d '{"title":"graph2otel"}'
 
-# Apply the rule group + contact point / policy via the provisioning API:
-gcx api /api/v1/provisioning/alert-rules   -X POST -d @alerts/graph2otel-alerts.yaml
-gcx api /api/v1/provisioning/contact-points -X POST -d @alerts/graph2otel-contactpoints.yaml
+# Apply the rule group via the provisioning API:
+gcx api /api/v1/provisioning/alert-rules -X POST -d @alerts/graph2otel-alerts.yaml
 ```
 
 **Datasource UID substitution:** every `expr` in `graph2otel-alerts.yaml` uses
@@ -116,8 +116,51 @@ actual Prometheus/Mimir datasource UID (`gcx datasources list`, or Connections
 
 See [`alerts/README.md`](https://github.com/rknightion/graph2otel/blob/main/alerts/README.md) for the per-rule rationale,
 thresholds, the OTLP→Prometheus metric-name normalization, and the
-multi-tenant grouping model. Replace the no-op contact point with a real
-receiver before relying on these to page anyone.
+multi-tenant grouping model.
+
+## Operator-owned routing
+
+graph2otel provisions **alert rules only**. It ships no contact point,
+notification policy, or route in any form — deciding who gets paged, how
+alerts are grouped, and on what timing is an explicit operator decision that
+a public repository cannot make on your behalf, because a Grafana stack has
+exactly one notification-policy tree and provisioning one takes ownership of
+it (#293). A repository-content gate
+(`grafana/tests/test_build_rules.py::TestNoRoutingAssetsShipped`) rejects any
+future YAML/JSON committed under `alerts/` or `recording-rules/` that looks
+like one — a top-level `contactPoints`, `policies`, `notification_policies`,
+`receiver`, `routes`, or `route` key — so this cannot silently regress.
+
+Instead, every generated rule carries a stable, documented label set to route
+on (#296):
+
+| Label | Mandatory? | Values | Meaning |
+| --- | --- | --- | --- |
+| `pipeline` | yes | `graph2otel` (constant) | Ownership. Every rule this repository generates carries it, so a route can be scoped to "graph2otel and nothing else" without matching on anything more fragile. |
+| `severity` | yes | `critical`, `warning` | Paging urgency. |
+| `source` | yes | `entra`, `intune`, `m365`, `purview`, `defender`, `mdca`, `graph2otel` | The Microsoft workload the rule is about (or `graph2otel` for the exporter's own self-observability, throttle, and record-integrity signals) — route a whole domain to the team that owns it. |
+| `category` | yes | `credential-expiry`, `compliance`, `self-observability`, `record-integrity`, `throttle`, `mdca-discovery` | The failure class within a domain. |
+| `component` | **no** | `apple-token`, `certificate` | A finer distinction than `source` allows, present **only** on the two Intune credential-expiry rules that need it: `g2o-intune-apple-token-expiry-critical` and `g2o-intune-cert-expiry-critical`. Absent on every other rule — do not write a route that assumes it exists. |
+
+A worked example — a child route under your existing policy tree that sends
+every graph2otel rule to a dedicated receiver, without touching anything else
+already in that tree:
+
+```yaml
+routes:
+  - receiver: "your-graph2otel-receiver"
+    matchers:
+      - pipeline = graph2otel
+    group_by: ["alertname", "tenant_id"]
+    continue: false
+```
+
+Nest further routes under it matching `severity`, `source`, or `category` for
+finer-grained receivers (for example `severity = critical` to a pager,
+everything else to chat) — those three labels are mandatory on every rule, so
+a route keyed on them never silently stops matching. `component` is present
+on two rules only; do not key a route on it without a fallback receiver for
+the other twelve.
 
 ## Recording rules
 
