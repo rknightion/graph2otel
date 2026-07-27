@@ -105,6 +105,14 @@ type Deps struct {
 	// configured (paired with ARM). The composition root fills it via
 	// BlobContainers(); nil means "not applicable", the census no-ops.
 	BlobContainerNames []string
+	// PrivilegedGroupAllowlist is the per-tenant list of group IDs the
+	// privileged-group member-count collector may emit a series for (#337). It
+	// is config, not discovery: the allowlist IS that collector's cardinality
+	// bound, so it can never grow with tenant size at runtime. Same shape and
+	// same reason as BlobContainerNames above — a config-derived slice on the
+	// existing graph transport, not a new registration path. Empty (the default)
+	// means the collector registers and no-ops, which is the opt-out.
+	PrivilegedGroupAllowlist []string
 	// SuppressedTwins names the per-entity log-twin EVENT names this collector
 	// must NOT emit because a blob-sourced twin already owns them (#135-C). A
 	// metric-emitting SnapshotCollector that also emits a per-entity twin (e.g.

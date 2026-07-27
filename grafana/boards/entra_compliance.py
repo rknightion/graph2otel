@@ -24,6 +24,13 @@ SECTIONS = [
         "entra.devices.os.total",
         "entra.groups.total",
         "entra.groups.role_assignable.total",
+        "entra.privileged_groups.members.total",
+        # Its own panel, not stacked with the member counts: accessible is a 0/1
+        # reachability flag and members.total is a population, so one axis cannot
+        # describe both (#304). A group that drops to accessible=0 is the signal
+        # that its member count went ABSENT rather than to zero.
+        ("Privileged group reachability", ["entra.privileged_groups.accessible"],
+         {"viz": "table", "w": 12, "h": 6}),
         "entra.domains.total",
         ("Federated and verified domains",
          ["entra.domains.federated.total", "entra.organization.verified_domains.total"]),

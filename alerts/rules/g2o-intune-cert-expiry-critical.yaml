@@ -34,8 +34,8 @@ spec:
     description: "intune_certificate_days_until_expiry is non-zero in the 0d_7d/expired buckets for cert_profile_name={{ $labels.cert_profile_name }}, tenant {{ $labels.tenant_id }}, for 15m. NOTE: cert expiry buckets are named differently from the entra credential buckets (0d_7d/7d_30d/30d_90d/over_90d/unknown vs lt_7d/lt_30d/lt_90d/gt_90d/expired); the runbook lists both ladders. Paused by default — enable once the certificates collector (beta) is on."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-intune-cert-expiry-critical"
     __dashboardUid__: "graph2otel"
-    __panelId__: "199"
-    dashboard_path: "/d/graph2otel?dtab=Intune&viewPanel=199"
+    __panelId__: "201"
+    dashboard_path: "/d/graph2otel?dtab=Intune&viewPanel=201"
   expressions:
     A:
       model:

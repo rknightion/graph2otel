@@ -1,0 +1,33 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.privileged_groups.accessible",
+      "Unit": "1",
+      "Kind": "gauge",
+      "Description": "Whether graph2otel could read each allowlisted privileged group this cycle (1) or not (0) — present for every configured group every cycle, so a missing member count is never mistaken for zero members.",
+      "AttrKeys": [
+        "group_id"
+      ]
+    },
+    {
+      "Name": "entra.privileged_groups.members.total",
+      "Unit": "{member}",
+      "Kind": "gauge",
+      "Description": "Member count for allowlisted privileged Entra groups. Only groups explicitly configured in privileged_groups.group_ids ever appear here.",
+      "AttrKeys": [
+        "group_id"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "entra.privileged_group",
+      "AttrKeys": [
+        "accessible",
+        "group_id",
+        "member_count",
+        "reason"
+      ]
+    }
+  ]
+}

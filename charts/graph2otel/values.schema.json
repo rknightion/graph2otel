@@ -57,6 +57,7 @@
                 "entra.organization",
                 "entra.pim_alerts",
                 "entra.pim_role_policies",
+                "entra.privileged_groups",
                 "entra.provisioning",
                 "entra.recommendations",
                 "entra.risk",
@@ -133,6 +134,7 @@
                 "intune.updates",
                 "intune.windows_updates",
                 "m365.activity",
+                "m365.exchange_accepted_domains",
                 "m365.exchange_audit_config",
                 "m365.exchange_connectors",
                 "m365.exchange_dkim",
@@ -451,6 +453,18 @@
                                 "properties": {
                                     "enabled": {
                                         "type": "boolean"
+                                    }
+                                }
+                            },
+                            "privileged_groups": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                    "group_ids": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        }
                                     }
                                 }
                             }

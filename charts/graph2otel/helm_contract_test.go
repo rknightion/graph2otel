@@ -453,8 +453,8 @@ func TestCollectorOverrideSchemaHasBoundedNamesAndSourceEnum(t *testing.T) {
 
 	names := schemaObject(t, definitions, "collectorName")
 	gotNames := schemaStrings(t, names, "enum")
-	if len(gotNames) != 148 {
-		t.Fatalf("collector name inventory has %d entries, want 148", len(gotNames))
+	if len(gotNames) != 150 {
+		t.Fatalf("collector name inventory has %d entries, want 150", len(gotNames))
 	}
 	if !slices.IsSorted(gotNames) {
 		t.Error("collector name inventory is not sorted")

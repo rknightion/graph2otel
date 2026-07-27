@@ -60,7 +60,7 @@ const fixture = `{"value":[
 ]}`
 
 func newFixtureCollector() *Collector {
-	return New(&fakeGraph{bodies: map[string]string{overviewsURL: fixture}}, nil)
+	return New(&fakeGraph{bodies: map[string]string{overviewsURL: fixture}}, nil, "", nil)
 }
 
 func TestCollectEmitsBoundedServiceAndIssueGauges(t *testing.T) {
@@ -177,7 +177,7 @@ func TestNoIssuesEmitsNoTwins(t *testing.T) {
 	body := `{"value":[{"id":"Teams","service":"Microsoft Teams","status":"serviceOperational","issues":[]}]}`
 	g := &fakeGraph{bodies: map[string]string{overviewsURL: body}}
 	rec := telemetrytest.New()
-	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
+	if err := New(g, nil, "", nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 	if n := len(rec.LogRecords()); n != 0 {

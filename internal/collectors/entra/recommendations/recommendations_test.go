@@ -34,7 +34,14 @@ func (f *fakeGraph) RawGetWithHeaders(_ context.Context, url string, _ map[strin
 
 var _ collectors.GraphClient = (*fakeGraph)(nil)
 
-const listURL = "https://graph.microsoft.com/beta/directory/recommendations"
+// listURL is the FROZEN request shape from the live-measured decision on #315:
+// one paged list request with $expand=impactedResources, the cheapest complete
+// shape measured on the tenant (1 request vs 15 for either fan-out).
+const listURL = "https://graph.microsoft.com/beta/directory/recommendations?$expand=impactedResources"
+
+// bareListURL is the OLD, unexpanded request shape. It must never be requested
+// once #315 lands — see TestCollectRequestsExpandedURL.
+const bareListURL = "https://graph.microsoft.com/beta/directory/recommendations"
 
 // liveRecommendations is a VERBATIM GET /beta/directory/recommendations
 // response captured from the m7kni tenant, read as graph2otel-poller on
@@ -296,21 +303,14 @@ const liveRecommendations = `{
   ]
 }`
 
-// TestCollectEmitsStatusPriorityAndImpactedCounts drives the VERBATIM live
-// recommendations response through the real collector into a recorder.
+// TestCollectEmitsStatusPriorityCounts drives the VERBATIM live recommendations
+// response through the real collector into a recorder.
 //
 // Status x priority buckets track the wire: the capture holds two active/high
 // records (userRiskPolicy, signinRiskPolicy), one active/medium
 // (insiderRiskPolicy) and two completedBySystem/low (selfServicePasswordReset,
 // roleOverlap).
-//
-// WIRE FACT (#165): the list endpoint returns NO impactedResources on any
-// record — the property is a navigation property the collection response omits
-// entirely, so every impacted count is 0. The collector reads impactedResources
-// inline by design and its own doc comment anticipates the omission ("a beta
-// schema that omits it simply yields a zero impacted count"); this test pins
-// that the impacted metric is therefore always-zero on the real wire.
-func TestCollectEmitsStatusPriorityAndImpactedCounts(t *testing.T) {
+func TestCollectEmitsStatusPriorityCounts(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{listURL: liveRecommendations}}
 	rec := telemetrytest.New()
 
@@ -335,22 +335,119 @@ func TestCollectEmitsStatusPriorityAndImpactedCounts(t *testing.T) {
 	if counts["completedBySystem/low"] != 2 {
 		t.Errorf("completedBySystem/low = %v, want 2", counts["completedBySystem/low"])
 	}
+}
 
-	// impacted resources by recommendation type: one series per type, all zero,
-	// because the list endpoint omits impactedResources on every record.
+// TestCollectRequestsExpandedURL pins the FROZEN request shape from the
+// live-measured decision on #315: one list request with
+// $expand=impactedResources, never the bare list. bareListURL is wired to an
+// error so the test fails loudly if the collector ever falls back to it.
+func TestCollectRequestsExpandedURL(t *testing.T) {
+	g := &fakeGraph{
+		bodies: map[string]string{listURL: liveRecommendations},
+		errs:   map[string]error{bareListURL: errors.New("must not request the bare (unexpanded) list URL")},
+	}
+	rec := telemetrytest.New()
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
+		t.Fatalf("Collect: %v (the collector must request %q, not %q)", err, listURL, bareListURL)
+	}
+}
+
+// TestCollectOmittedImpactedResourcesEmitsNoImpactSeries proves the #315 bug
+// fix. WIRE FACT (#165): the list endpoint's capture on this tenant returns NO
+// impactedResources property on any record — it is an omitted navigation
+// property, not an empty array. The old collector read len(nil) as 0 and
+// published a fabricated zero series per type; the frozen contract says an
+// omitted relationship must emit NO impact series at all.
+func TestCollectOmittedImpactedResourcesEmitsNoImpactSeries(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{listURL: liveRecommendations}}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	if got := rec.MetricPoints(impactedMetric); len(got) != 0 {
+		t.Errorf("impacted metric points = %v, want 0: the live fixture omits impactedResources on every record, "+
+			"so no impact series may be emitted at all", got)
+	}
+}
+
+// expandedRecommendations is a CONSTRUCTED fixture, NOT a live capture. It
+// takes the first two records of the live liveRecommendations capture
+// verbatim and adds an inline "impactedResources" array to each, shaped per
+// the Graph beta $metadata's impactedResource EDM (id, impactType,
+// impactedResourceRecommendationDetail as an @odata.type-discriminated
+// dictionary) — this is how the frozen #315 decision says
+// $expand=impactedResources renders the relationship, not something captured
+// from a real tenant response body. It exists only to prove the gauge DOES
+// emit when the navigation property is present, including a present-but-empty
+// case.
+const expandedRecommendations = `{
+  "@odata.context": "https://graph.microsoft.com/beta/$metadata#directory/recommendations",
+  "value": [
+    {
+      "id": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32_insiderRiskPolicy",
+      "displayName": "Protect your tenant with Insider Risk condition in Conditional Access policy",
+      "category": "identitySecureScore",
+      "priority": "medium",
+      "recommendationType": "insiderRiskPolicy",
+      "status": "active",
+      "impactedResources": [
+        {
+          "id": "aaaaaaaa-0000-0000-0000-000000000001",
+          "@odata.type": "#microsoft.graph.impactedResource",
+          "impactType": "users"
+        },
+        {
+          "id": "aaaaaaaa-0000-0000-0000-000000000002",
+          "@odata.type": "#microsoft.graph.impactedResource",
+          "impactType": "users"
+        },
+        {
+          "id": "aaaaaaaa-0000-0000-0000-000000000003",
+          "@odata.type": "#microsoft.graph.impactedResource",
+          "impactType": "users"
+        }
+      ]
+    },
+    {
+      "id": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32_userRiskPolicy",
+      "displayName": "Protect all users with a user risk policy ",
+      "category": "identitySecureScore",
+      "priority": "high",
+      "recommendationType": "userRiskPolicy",
+      "status": "active",
+      "impactedResources": []
+    }
+  ]
+}`
+
+// TestCollectExpandedImpactedResourcesEmitsImpactSeries proves the other half
+// of the #315 contract on the constructed expandedRecommendations fixture:
+// when the navigation property IS present, the gauge emits a series per type
+// carrying the real row count — including a present-but-EMPTY array, which
+// must still emit a (zero) series, distinguishing "present, nothing impacted"
+// from "omitted, unknown".
+func TestCollectExpandedImpactedResourcesEmitsImpactSeries(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{listURL: expandedRecommendations}}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
 	impacted := map[string]float64{}
 	for _, p := range rec.MetricPoints(impactedMetric) {
 		impacted[p.Attrs["recommendation"]] = p.Value
 	}
-	for _, typ := range []string{
-		"insiderRiskPolicy", "userRiskPolicy", "signinRiskPolicy",
-		"selfServicePasswordReset", "roleOverlap",
-	} {
-		if v, present := impacted[typ]; !present {
-			t.Errorf("impacted type %q missing a series", typ)
-		} else if v != 0 {
-			t.Errorf("impacted[%s] = %v, want 0 (list endpoint omits impactedResources)", typ, v)
-		}
+	if v, ok := impacted["insiderRiskPolicy"]; !ok || v != 3 {
+		t.Errorf("impacted[insiderRiskPolicy] = %v (present=%v), want 3", v, ok)
+	}
+	if v, ok := impacted["userRiskPolicy"]; !ok || v != 0 {
+		t.Errorf("impacted[userRiskPolicy] = %v (present=%v), want 0 (present-but-empty still emits a series)", v, ok)
+	}
+	if len(impacted) != 2 {
+		t.Errorf("impacted series = %v, want exactly 2 (both records carried the property)", impacted)
 	}
 }
 
@@ -407,6 +504,118 @@ func TestCollectReportsUnmappedEnums(t *testing.T) {
 	}
 	if len(rec.MetricPoints(totalMetric)) == 0 {
 		t.Error("the total gauge must still emit (report-only)")
+	}
+}
+
+// TestCollectEmitsRecommendationStateTwin proves every recommendation gets a
+// state twin (#315 acceptance criterion 2), built from the fields the response
+// already returns and the collector previously decoded and discarded. Driven
+// on the VERBATIM live fixture, so this also pins that a null
+// postponeUntilDateTime and an omitted impactedResources are both correctly
+// OMITTED from the twin rather than stamped as a fabricated blank/zero.
+func TestCollectEmitsRecommendationStateTwin(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{listURL: liveRecommendations}}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	logs := rec.LogRecords()
+	twins := 0
+	for _, l := range logs {
+		if l.EventName == eventRecommendation {
+			twins++
+		}
+	}
+	if twins != 5 {
+		t.Fatalf("recommendation twins = %d, want 5 (one per record in the live fixture)", twins)
+	}
+
+	var insiderRisk *telemetrytest.LogRecord
+	for i := range logs {
+		if logs[i].EventName == eventRecommendation && logs[i].Attrs[semconv.AttrId] == "4b8c18bd-2f9f-4227-af55-9f1061cf9c32_insiderRiskPolicy" {
+			insiderRisk = &logs[i]
+		}
+	}
+	if insiderRisk == nil {
+		t.Fatalf("no twin found for the insiderRiskPolicy recommendation; got %+v", logs)
+	}
+
+	want := map[string]string{
+		semconv.AttrId:                   "4b8c18bd-2f9f-4227-af55-9f1061cf9c32_insiderRiskPolicy",
+		semconv.AttrDisplayName:          "Protect your tenant with Insider Risk condition in Conditional Access policy",
+		semconv.AttrCategory:             "identitySecureScore",
+		semconv.AttrStatus:               "active",
+		semconv.AttrPriority:             "medium",
+		semconv.AttrRecommendation:       "insiderRiskPolicy",
+		semconv.AttrRequiredLicenses:     "microsoftEntraIdP2",
+		semconv.AttrReleaseType:          "generallyAvailable",
+		semconv.AttrImpactType:           "users",
+		semconv.AttrCreatedDateTime:      "2025-09-11T08:14:22Z",
+		semconv.AttrLastModifiedDateTime: "2026-07-17T08:12:01Z",
+		semconv.AttrLastModifiedBy:       "System",
+		semconv.AttrImpactStartDateTime:  "2025-09-11T08:14:22Z",
+	}
+	for k, v := range want {
+		if got := insiderRisk.Attrs[k]; got != v {
+			t.Errorf("twin attr %q = %q, want %q", k, got, v)
+		}
+	}
+	if got := insiderRisk.Attrs[semconv.AttrScore]; got != "0" {
+		t.Errorf("twin attr %q = %q, want %q (currentScore=0.0, present on the wire)", semconv.AttrScore, got, "0")
+	}
+	if got := insiderRisk.Attrs[semconv.AttrMaxScore]; got != "5" {
+		t.Errorf("twin attr %q = %q, want %q (maxScore=5.0)", semconv.AttrMaxScore, got, "5")
+	}
+	if got, ok := insiderRisk.Attrs[semconv.AttrBenefits]; !ok || got == "" {
+		t.Errorf("twin attr %q missing or empty, want the wire's benefits text", semconv.AttrBenefits)
+	}
+	if got, ok := insiderRisk.Attrs[semconv.AttrInsights]; !ok || got == "" {
+		t.Errorf("twin attr %q missing or empty, want the wire's insights text", semconv.AttrInsights)
+	}
+	if got, ok := insiderRisk.Attrs[semconv.AttrFeatureAreas]; !ok || got != "conditionalAccess" {
+		t.Errorf("twin attr %q = %q (present=%v), want \"conditionalAccess\"", semconv.AttrFeatureAreas, got, ok)
+	}
+	if got, ok := insiderRisk.Attrs[semconv.AttrActionStepTexts]; !ok || got == "" {
+		t.Errorf("twin attr %q missing or empty (got %q), want the wire's action step text", semconv.AttrActionStepTexts, got)
+	}
+
+	// The live fixture's postponeUntilDateTime is JSON null, and its
+	// impactedResources is omitted entirely: both must be OMITTED from the
+	// twin, never stamped as a fabricated blank/zero.
+	if got, ok := insiderRisk.Attrs[semconv.AttrPostponeUntilDateTime]; ok {
+		t.Errorf("twin attr %q = %q, want it omitted (postponeUntilDateTime is null on the wire)", semconv.AttrPostponeUntilDateTime, got)
+	}
+	if got, ok := insiderRisk.Attrs[semconv.AttrImpactedResourceCount]; ok {
+		t.Errorf("twin attr %q = %q, want it omitted (impactedResources is omitted on the wire)", semconv.AttrImpactedResourceCount, got)
+	}
+}
+
+// TestCollectExpandedRecommendationTwinCarriesImpactedResourceCount proves the
+// twin's impacted-resource-count attribute mirrors the gauge's
+// present-vs-omitted rule: on the constructed expandedRecommendations fixture,
+// where the navigation property IS present, the twin carries the count
+// (including the present-but-empty zero case).
+func TestCollectExpandedRecommendationTwinCarriesImpactedResourceCount(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{listURL: expandedRecommendations}}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	counts := map[string]string{}
+	for _, l := range rec.LogRecords() {
+		if l.EventName == eventRecommendation {
+			counts[l.Attrs[semconv.AttrRecommendation]] = l.Attrs[semconv.AttrImpactedResourceCount]
+		}
+	}
+	if counts["insiderRiskPolicy"] != "3" {
+		t.Errorf("insiderRiskPolicy impacted_resource_count = %q, want \"3\"", counts["insiderRiskPolicy"])
+	}
+	if got, ok := counts["userRiskPolicy"]; !ok || got != "0" {
+		t.Errorf("userRiskPolicy impacted_resource_count = %q (present=%v), want \"0\" (present-but-empty)", got, ok)
 	}
 }
 

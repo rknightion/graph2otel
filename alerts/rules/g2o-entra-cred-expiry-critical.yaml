@@ -33,8 +33,8 @@ spec:
     description: "entra_credentials_expiring_total is non-zero in the lt_7d/expired buckets for tenant {{ $labels.tenant_id }}, owner_type={{ $labels.owner_type }}, credential_type={{ $labels.credential_type }} for 15m. Bucket-count based, never per-credential. The runbook covers the false-positive notes and the lt_30d warning-tier companion rule."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-entra-cred-expiry-critical"
     __dashboardUid__: "graph2otel"
-    __panelId__: "30"
-    dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=30"
+    __panelId__: "32"
+    dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=32"
   expressions:
     A:
       model:

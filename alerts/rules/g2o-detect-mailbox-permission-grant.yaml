@@ -33,8 +33,8 @@ spec:
     tuning_required: "Shared mailboxes, resource calendars and migration tooling all produce legitimate grants in bursts. Run the audit-operation hunt for 30 days to separate your routine grant sources from the rest, and to confirm the operation spelling, before enabling."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-detect-mailbox-permission-grant"
     __dashboardUid__: "graph2otel"
-    __panelId__: "303"
-    dashboard_path: "/d/graph2otel?dtab=M365&viewPanel=303"
+    __panelId__: "306"
+    dashboard_path: "/d/graph2otel?dtab=M365&viewPanel=306"
   expressions:
     A:
       model:

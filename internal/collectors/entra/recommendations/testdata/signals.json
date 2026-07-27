@@ -31,5 +31,32 @@
       ]
     }
   ],
-  "Logs": null
+  "Logs": [
+    {
+      "EventName": "entra.recommendation",
+      "AttrKeys": [
+        "action_step_texts",
+        "benefits",
+        "category",
+        "created_date_time",
+        "display_name",
+        "feature_areas",
+        "id",
+        "impact_start_date_time",
+        "impact_type",
+        "impacted_resource_count",
+        "insights",
+        "last_modified_by",
+        "last_modified_date_time",
+        "max_score",
+        "priority",
+        "recommendation",
+        "release_type",
+        "remediation_impact",
+        "required_licenses",
+        "score",
+        "status"
+      ]
+    }
+  ]
 }

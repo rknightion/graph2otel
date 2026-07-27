@@ -502,7 +502,11 @@ func setupTenantWithGraphAndLicenseBuilders(
 	// shorter default interval; widening either interval past 30m (large-tenant
 	// tuning) just reduces the reuse rate, never correctness.
 	fleet := collectors.NewCachingFleetFetcher(gc, "https://graph.microsoft.com/v1.0", 30*time.Minute)
-	deps := collectors.Deps{Graph: gc, TenantID: ta.TenantID, Logger: tlog, Caps: caps, Export: exporter, Fleet: fleet, Store: store}
+	deps := collectors.Deps{
+		Graph: gc, TenantID: ta.TenantID, Logger: tlog, Caps: caps,
+		Export: exporter, Fleet: fleet, Store: store,
+		PrivilegedGroupAllowlist: tenantPrivilegedGroupIDs(cfg, ta.TenantID),
+	}
 	var paths runtimeFactoryVisitor
 	visitRegisteredCollectorFactories(&paths)
 	// polledNames records the stable name of every graph/window (polled)
@@ -1377,6 +1381,19 @@ func tenantO365ContentTypes(cfg *config.Config, tenantID string) ([]o365activity
 
 // tenantBlobAccountURL returns the storage account URL configured for tenantID,
 // or "" when blob ingest is off for it.
+// tenantPrivilegedGroupIDs returns the tenant's configured privileged-group
+// allowlist (#337), or nil when the tenant configured none — which is the
+// opt-out: the collector registers and no-ops rather than being absent, so its
+// documented surface does not change with configuration.
+func tenantPrivilegedGroupIDs(cfg *config.Config, tenantID string) []string {
+	for _, t := range cfg.Tenants {
+		if t.TenantID == tenantID {
+			return t.PrivilegedGroups.GroupIDs
+		}
+	}
+	return nil
+}
+
 func tenantBlobAccountURL(cfg *config.Config, tenantID string) string {
 	for _, t := range cfg.Tenants {
 		if t.TenantID == tenantID {

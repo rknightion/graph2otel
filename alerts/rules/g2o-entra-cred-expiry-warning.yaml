@@ -33,8 +33,8 @@ spec:
     description: "Companion to g2o-entra-cred-expiry-critical: earlier warning tier on the lt_30d bucket. Paused by default — enable once you've picked a rotation-lead-time that matches your tenant's actual credential renewal process."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-entra-cred-expiry-warning"
     __dashboardUid__: "graph2otel"
-    __panelId__: "30"
-    dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=30"
+    __panelId__: "32"
+    dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=32"
   expressions:
     A:
       model:

@@ -1,0 +1,42 @@
+{
+  "Metrics": [
+    {
+      "Name": "m365.exchange.accepted_domains",
+      "Unit": "{domain}",
+      "Kind": "gauge",
+      "Description": "Exchange Online accepted domains by domain type and whether each is the tenant's default domain. domain_type and is_default_domain are both bounded by the API (a small enum and a strict boolean); the domain NAME itself lives on the m365.exchange_accepted_domain log twin only, never here (#112).",
+      "AttrKeys": [
+        "domain_type",
+        "is_default_domain"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.exchange_accepted_domain",
+      "AttrKeys": [
+        "address_book_enabled",
+        "authentication_type",
+        "distinguished_name",
+        "domain",
+        "domain_type",
+        "email_only",
+        "exchange_version",
+        "externally_managed",
+        "federated_organization_link",
+        "ingest_transport",
+        "is_coexistence_domain",
+        "is_default_domain",
+        "is_initial_domain",
+        "match_subdomains",
+        "name",
+        "outbound_only",
+        "pending_completion",
+        "pending_removal",
+        "sending_from_domain_disabled",
+        "sending_to_domain_disabled",
+        "smtp_dane_status"
+      ]
+    }
+  ]
+}

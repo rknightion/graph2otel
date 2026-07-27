@@ -1,5 +1,5 @@
 {
-  "package_count": 154,
+  "package_count": 156,
   "domains": [
     "defender",
     "entra",
@@ -1156,6 +1156,36 @@
       ],
       "packages": [
         "internal/collectors/entra/pimrolepolicies"
+      ]
+    },
+    {
+      "name": "entra.privileged_groups.accessible",
+      "prometheus_name": "entra_privileged_groups_accessible_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "description": "Whether graph2otel could read each allowlisted privileged group this cycle (1) or not (0) — present for every configured group every cycle, so a missing member count is never mistaken for zero members.",
+      "additive": false,
+      "domain": "entra",
+      "attr_keys": [
+        "group_id"
+      ],
+      "packages": [
+        "internal/collectors/entra/privilegedgroups"
+      ]
+    },
+    {
+      "name": "entra.privileged_groups.members.total",
+      "prometheus_name": "entra_privileged_groups_members_total",
+      "unit": "{member}",
+      "kind": "gauge",
+      "description": "Member count for allowlisted privileged Entra groups. Only groups explicitly configured in privileged_groups.group_ids ever appear here.",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "group_id"
+      ],
+      "packages": [
+        "internal/collectors/entra/privilegedgroups"
       ]
     },
     {
@@ -4552,6 +4582,22 @@
       ]
     },
     {
+      "name": "m365.exchange.accepted_domains",
+      "prometheus_name": "m365_exchange_accepted_domains",
+      "unit": "{domain}",
+      "kind": "gauge",
+      "description": "Exchange Online accepted domains by domain type and whether each is the tenant's default domain. domain_type and is_default_domain are both bounded by the API (a small enum and a strict boolean); the domain NAME itself lives on the m365.exchange_accepted_domain log twin only, never here (#112).",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "domain_type",
+        "is_default_domain"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangeaccepteddomains"
+      ]
+    },
+    {
       "name": "m365.exchange.audit_config.enabled",
       "prometheus_name": "m365_exchange_audit_config_enabled",
       "unit": "{setting}",
@@ -6557,6 +6603,19 @@
       ]
     },
     {
+      "event_name": "entra.privileged_group",
+      "domain": "entra",
+      "attr_keys": [
+        "accessible",
+        "group_id",
+        "member_count",
+        "reason"
+      ],
+      "packages": [
+        "internal/collectors/entra/privilegedgroups"
+      ]
+    },
+    {
       "event_name": "entra.provisioning",
       "domain": "entra",
       "attr_keys": [
@@ -6575,6 +6634,36 @@
       ],
       "packages": [
         "internal/collectors/entra/provisioning"
+      ]
+    },
+    {
+      "event_name": "entra.recommendation",
+      "domain": "entra",
+      "attr_keys": [
+        "action_step_texts",
+        "benefits",
+        "category",
+        "created_date_time",
+        "display_name",
+        "feature_areas",
+        "id",
+        "impact_start_date_time",
+        "impact_type",
+        "impacted_resource_count",
+        "insights",
+        "last_modified_by",
+        "last_modified_date_time",
+        "max_score",
+        "priority",
+        "recommendation",
+        "release_type",
+        "remediation_impact",
+        "required_licenses",
+        "score",
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/entra/recommendations"
       ]
     },
     {
@@ -7945,6 +8034,36 @@
       ]
     },
     {
+      "event_name": "m365.exchange_accepted_domain",
+      "domain": "m365",
+      "attr_keys": [
+        "address_book_enabled",
+        "authentication_type",
+        "distinguished_name",
+        "domain",
+        "domain_type",
+        "email_only",
+        "exchange_version",
+        "externally_managed",
+        "federated_organization_link",
+        "ingest_transport",
+        "is_coexistence_domain",
+        "is_default_domain",
+        "is_initial_domain",
+        "match_subdomains",
+        "name",
+        "outbound_only",
+        "pending_completion",
+        "pending_removal",
+        "sending_from_domain_disabled",
+        "sending_to_domain_disabled",
+        "smtp_dane_status"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangeaccepteddomains"
+      ]
+    },
+    {
       "event_name": "m365.exchange_audit_config",
       "domain": "m365",
       "attr_keys": [
@@ -8199,6 +8318,21 @@
         "start_date_time",
         "status",
         "title"
+      ],
+      "packages": [
+        "internal/collectors/m365/servicehealth"
+      ]
+    },
+    {
+      "event_name": "m365.service_health_post",
+      "domain": "m365",
+      "attr_keys": [
+        "body_truncated",
+        "content_type",
+        "description",
+        "description_original_length",
+        "issue_id",
+        "post_type"
       ],
       "packages": [
         "internal/collectors/m365/servicehealth"

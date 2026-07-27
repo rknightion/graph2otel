@@ -1,11 +1,34 @@
 // Package recommendations is the Entra recommendations collector (BETA):
 // Microsoft's own tenant-posture scoreboard from /beta/directory/recommendations,
-// emitted as bounded counts by status/priority and by recommendation type.
+// emitted as bounded counts by status/priority and by recommendation type, plus
+// one entra.recommendation state twin per recommendation carrying the
+// per-entity remediation detail the gauges cannot.
 //
 // Beta-only: the endpoint lives on /beta and its schema is unstable, so this
 // collector implements collectors.Experimental (opt-in, off by default) and
 // degrades cleanly — a 403/404 (endpoint unavailable or unlicensed on the
 // tenant) is skipped-and-logged rather than treated as a failure.
+//
+// # The impacted-resources gauge and the omitted-relationship rule (#315)
+//
+// impactedResources is a Graph navigation property, requested inline via
+// $expand=impactedResources on the single list request — the cheapest
+// complete request shape, live-measured on the m7kni tenant 2026-07-26 (#315):
+// one list page carrying the property beats either N+1 fan-out
+// (per-recommendation /impactedResources or its $count) by 15 fewer requests
+// for ~10KB more response body, with zero relationship-count mismatches
+// against either fan-out.
+//
+// The property is OPTIONAL even when requested: Graph omits it on tenants/API
+// versions where the relationship isn't populated. The collector distinguishes
+// "omitted" (decodes to a nil pointer) from "present but empty" (decodes to a
+// non-nil pointer to a zero-length slice): only a present relationship
+// contributes to the impacted-resources gauge and the twin's
+// impacted_resource_count attribute. An omitted relationship emits NEITHER —
+// never a fabricated zero. The prior implementation read impactedResources as
+// a bare (non-pointer) slice, so `len(nil) == 0` was indistinguishable from a
+// genuinely empty relationship, and every impacted series on every real tenant
+// was a fabricated zero (the #315 bug).
 package recommendations
 
 import (
@@ -30,6 +53,14 @@ const (
 	totalMetric    = "entra.recommendations.total"
 	impactedMetric = "entra.recommendations.impacted_resources.total"
 	betaBaseURL    = "https://graph.microsoft.com/beta"
+	// recommendationsPath is the FROZEN request shape from the live-measured
+	// decision on #315: one list request with $expand=impactedResources. See
+	// the package doc for why this beats either per-recommendation fan-out.
+	recommendationsPath = "/directory/recommendations?$expand=impactedResources"
+	// eventRecommendation is the state-twin EventName: one record per
+	// recommendation per poll, carrying the fields the two gauges above cannot
+	// (#315 acceptance criterion 2).
+	eventRecommendation = "entra.recommendation"
 )
 
 // status, priority and recommendationType are all METRIC LABELS passed RAW (the
@@ -58,15 +89,52 @@ var (
 	)
 )
 
-// recommendation is the subset of the beta recommendation resource this
-// collector reads. impactedResources is read inline (avoiding an N+1 call to
-// the per-recommendation impactedResources endpoint); a beta schema that omits
-// it simply yields a zero impacted count.
+// actionStep is one element of a recommendation's actionSteps array — the
+// numbered remediation walkthrough. Only the human-readable text is decoded;
+// see AttrActionStepTexts for why actionUrl/stepNumber are not carried.
+type actionStep struct {
+	Text string `json:"text"`
+}
+
+// recommendation is the beta recommendation resource this collector reads.
+// Every field is one this endpoint already returns on the wire; before #315
+// only RecommendationType/Status/Priority/ImpactedResources were decoded and
+// everything else was fetched and discarded.
+//
+// ImpactedResources is requested inline via $expand=impactedResources
+// (avoiding an N+1 call to the per-recommendation impactedResources endpoint)
+// and decoded as a POINTER, deliberately: a plain slice cannot distinguish
+// "Graph omitted the navigation property" (nil pointer) from "the
+// relationship is genuinely empty" (non-nil pointer to a zero-length slice).
+// Only the former must emit no series/attribute — see the package doc.
+//
+// CurrentScore/MaxScore are POINTERS for the same reason CLAUDE.md's
+// absent-field-is-not-a-sentinel rule requires generally: a plain float64
+// cannot tell "the wire said 0.0" from "the wire said nothing", and a nil
+// pointer omits the twin attribute rather than publishing a fabricated 0.
 type recommendation struct {
-	RecommendationType string            `json:"recommendationType"`
-	Status             string            `json:"status"`
-	Priority           string            `json:"priority"`
-	ImpactedResources  []json.RawMessage `json:"impactedResources"`
+	ID                    string             `json:"id"`
+	DisplayName           string             `json:"displayName"`
+	Category              string             `json:"category"`
+	RecommendationType    string             `json:"recommendationType"`
+	Status                string             `json:"status"`
+	Priority              string             `json:"priority"`
+	CurrentScore          *float64           `json:"currentScore"`
+	MaxScore              *float64           `json:"maxScore"`
+	Benefits              string             `json:"benefits"`
+	RemediationImpact     string             `json:"remediationImpact"`
+	RequiredLicenses      string             `json:"requiredLicenses"`
+	ReleaseType           string             `json:"releaseType"`
+	ImpactType            string             `json:"impactType"`
+	Insights              string             `json:"insights"`
+	CreatedDateTime       string             `json:"createdDateTime"`
+	LastModifiedDateTime  string             `json:"lastModifiedDateTime"`
+	LastModifiedBy        string             `json:"lastModifiedBy"`
+	ImpactStartDateTime   string             `json:"impactStartDateTime"`
+	PostponeUntilDateTime string             `json:"postponeUntilDateTime"`
+	FeatureAreas          []string           `json:"featureAreas"`
+	ActionSteps           []actionStep       `json:"actionSteps"`
+	ImpactedResources     *[]json.RawMessage `json:"impactedResources"`
 }
 
 // Collector polls /beta/directory/recommendations.
@@ -106,7 +174,7 @@ func (c *Collector) RequiredPermissions() []string {
 // the endpoint is beta, a 4xx (unavailable/unlicensed) is skipped-and-logged,
 // not surfaced as an error.
 func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
-	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/directory/recommendations", nil, outcomes)
+	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+recommendationsPath, nil, outcomes)
 	if err != nil {
 		if isUnavailable(err) {
 			if strings.Contains(err.Error(), "status 403") {
@@ -137,9 +205,14 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *
 		status := orUnknown(rec.Status)
 		priority := orUnknown(rec.Priority)
 		byStatusPriority[[2]string{status, priority}]++
-		if rec.RecommendationType != "" {
-			impactedByType[rec.RecommendationType] += len(rec.ImpactedResources)
+		// Only a PRESENT navigation property contributes to the impacted-resources
+		// gauge (#315): an omitted relationship (nil pointer) adds nothing, so a
+		// type with no present relationship on any record gets no series at all,
+		// rather than the fabricated zero the pre-#315 collector published.
+		if rec.ImpactedResources != nil && rec.RecommendationType != "" {
+			impactedByType[rec.RecommendationType] += len(*rec.ImpactedResources)
 		}
+		e.LogEvent(recommendationTwin(rec))
 		entraoutcome.Emitted(outcomes, 1)
 	}
 
@@ -176,6 +249,65 @@ func orUnknown(s string) string {
 		return "unknown"
 	}
 	return s
+}
+
+// recommendationTwin renders one recommendation as the entra.recommendation
+// state twin (#315 acceptance criterion 2): every field the response already
+// returns, none of it a metric label. This is a STATE feed like
+// entra/risk — the same recommendation is re-emitted every cycle for as long
+// as it stays in scope, which is what makes "what did this recommendation say
+// at 14:00" answerable; Timestamp is therefore left zero (poll time).
+func recommendationTwin(r recommendation) telemetry.Event {
+	attrs := telemetry.Attrs{}
+	telemetry.SetStr(attrs, semconv.AttrId, r.ID)
+	telemetry.SetStr(attrs, semconv.AttrDisplayName, r.DisplayName)
+	telemetry.SetStr(attrs, semconv.AttrCategory, r.Category)
+	telemetry.SetStr(attrs, semconv.AttrStatus, r.Status)
+	telemetry.SetStr(attrs, semconv.AttrPriority, r.Priority)
+	telemetry.SetStr(attrs, semconv.AttrRecommendation, r.RecommendationType)
+	if r.CurrentScore != nil {
+		attrs[semconv.AttrScore] = *r.CurrentScore
+	}
+	if r.MaxScore != nil {
+		attrs[semconv.AttrMaxScore] = *r.MaxScore
+	}
+	telemetry.SetStr(attrs, semconv.AttrBenefits, r.Benefits)
+	telemetry.SetStr(attrs, semconv.AttrRemediationImpact, r.RemediationImpact)
+	telemetry.SetStr(attrs, semconv.AttrRequiredLicenses, r.RequiredLicenses)
+	telemetry.SetStr(attrs, semconv.AttrReleaseType, r.ReleaseType)
+	telemetry.SetStr(attrs, semconv.AttrImpactType, r.ImpactType)
+	telemetry.SetStr(attrs, semconv.AttrInsights, r.Insights)
+	telemetry.SetStr(attrs, semconv.AttrCreatedDateTime, r.CreatedDateTime)
+	telemetry.SetStr(attrs, semconv.AttrLastModifiedDateTime, r.LastModifiedDateTime)
+	telemetry.SetStr(attrs, semconv.AttrLastModifiedBy, r.LastModifiedBy)
+	telemetry.SetStr(attrs, semconv.AttrImpactStartDateTime, r.ImpactStartDateTime)
+	// postponeUntilDateTime is null on a non-postponed recommendation (JSON null
+	// decodes to "" here); SetStr omits it rather than stamping a fabricated
+	// blank.
+	telemetry.SetStr(attrs, semconv.AttrPostponeUntilDateTime, r.PostponeUntilDateTime)
+	telemetry.SetStrs(attrs, semconv.AttrFeatureAreas, r.FeatureAreas)
+	if len(r.ActionSteps) > 0 {
+		texts := make([]string, 0, len(r.ActionSteps))
+		for _, s := range r.ActionSteps {
+			if s.Text != "" {
+				texts = append(texts, s.Text)
+			}
+		}
+		telemetry.SetStrs(attrs, semconv.AttrActionStepTexts, texts)
+	}
+	// Mirrors the gauge's own present-vs-omitted rule (#315): the twin's count
+	// is emitted only when the navigation property was present on this record,
+	// never fabricated from a nil (omitted) relationship.
+	if r.ImpactedResources != nil {
+		attrs[semconv.AttrImpactedResourceCount] = len(*r.ImpactedResources)
+	}
+
+	return telemetry.Event{
+		Name:     eventRecommendation,
+		Body:     fmt.Sprintf("recommendation %s: %s (status=%s priority=%s)", orUnknown(r.RecommendationType), r.DisplayName, orUnknown(r.Status), orUnknown(r.Priority)),
+		Severity: telemetry.SeverityInfo,
+		Attrs:    attrs,
+	}
 }
 
 func init() {

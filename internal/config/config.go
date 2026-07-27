@@ -301,6 +301,10 @@ type TenantConfig struct {
 	// threat-and-vulnerability-management posture, reached over the Graph
 	// runHuntingQuery API. Off unless hunting.enabled is true. See HuntingConfig.
 	Hunting HuntingConfig `yaml:"hunting"`
+	// PrivilegedGroups configures the allowlisted privileged-group
+	// member-count gauge (#337). Off unless privileged_groups.group_ids is
+	// non-empty. See PrivilegedGroupsConfig.
+	PrivilegedGroups PrivilegedGroupsConfig `yaml:"privileged_groups"`
 }
 
 // ExchangeOnlineConfig enables the Exchange Online admin API collectors for a
@@ -752,6 +756,10 @@ func (c *Config) Validate() error {
 
 		if err := t.MDCA.validate(); err != nil {
 			return fmt.Errorf("tenants[%d].mdca.%w", i, err)
+		}
+
+		if err := t.PrivilegedGroups.validate(); err != nil {
+			return fmt.Errorf("tenants[%d].privileged_groups.%w", i, err)
 		}
 	}
 

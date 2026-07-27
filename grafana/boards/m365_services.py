@@ -23,6 +23,7 @@ SECTIONS = [
         ("Transport rules",
          ["m365.exchange.transport_rules", "m365.exchange.transport_rules.redirecting"],
          {"viz": "timeseries"}),
+        "m365.exchange.accepted_domains",
         "m365.exchange.remote_domains",
         "m365.exchange.dkim.signing",
     ]),

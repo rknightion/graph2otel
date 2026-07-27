@@ -46,6 +46,17 @@
         "status",
         "title"
       ]
+    },
+    {
+      "EventName": "m365.service_health_post",
+      "AttrKeys": [
+        "body_truncated",
+        "content_type",
+        "description",
+        "description_original_length",
+        "issue_id",
+        "post_type"
+      ]
     }
   ]
 }
