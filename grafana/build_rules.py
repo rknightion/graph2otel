@@ -49,6 +49,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import catalog as catalog_mod
 import logquery
+import v2
 from logquery import f  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -57,6 +58,8 @@ ALERTS_DIR = os.path.join(REPO, "alerts")
 ALERTS_PATH = os.path.join(ALERTS_DIR, "graph2otel-alerts.yaml")
 DETECTIONS_PATH = os.path.join(ALERTS_DIR, "graph2otel-detections.yaml")
 RECORDING_DIR = os.path.join(REPO, "recording-rules")
+DASHBOARD_MANIFEST = os.path.join(REPO, "dashboards", "graph2otel.json")
+RUNBOOKS_SOURCE = os.path.join(REPO, "docs", "runbooks.md")
 
 PROM_UID = "grafanacloud-prom"
 LOKI_UID = "grafanacloud-logs"
@@ -275,9 +278,9 @@ RULES = [
         "within 7 days (tenant {{ $labels.tenant_id }})",
         "entra_credentials_expiring_total is non-zero in the lt_7d/expired buckets for "
         "tenant {{ $labels.tenant_id }}, owner_type={{ $labels.owner_type }}, "
-        "credential_type={{ $labels.credential_type }} for 15m. Bucket-count based (never "
-        "per-credential) — see README.md doc block 1 for the false-positive notes and the "
-        "lt_30d warning-tier companion rule.",
+        "credential_type={{ $labels.credential_type }} for 15m. Bucket-count based, never "
+        "per-credential. The runbook covers the false-positive notes and the lt_30d "
+        "warning-tier companion rule.",
         False,
     ),
     _alert(
@@ -327,8 +330,8 @@ RULES = [
         "cert_profile_name={{ $labels.cert_profile_name }}, tenant {{ $labels.tenant_id }}, "
         "for 15m. NOTE: cert expiry buckets are named differently from the entra credential "
         "buckets (0d_7d/7d_30d/30d_90d/over_90d/unknown vs lt_7d/lt_30d/lt_90d/gt_90d/"
-        "expired) — see README.md. Paused by default — enable once the certificates "
-        "collector (beta) is on.",
+        "expired); the runbook lists both ladders. Paused by default — enable once the "
+        "certificates collector (beta) is on.",
         True,
         component="certificate",
     ),
@@ -343,9 +346,9 @@ RULES = [
         {"severity": "warning", "category": "compliance", "source": "intune"},
         "Intune compliant-device fraction below 90% (tenant {{ $labels.tenant_id }})",
         "compliant / total intune_compliance_devices is below 0.9 for tenant "
-        "{{ $labels.tenant_id }} for 30m. The `and ... >= 5` guard suppresses the ratio on "
-        "tiny fleets where one non-compliant device swings the percentage — see README.md "
-        "doc block 2 for the false-positive notes.",
+        "{{ $labels.tenant_id }} for 30m. The `and >= 5` fleet-size guard suppresses the "
+        "ratio on tiny fleets where one non-compliant device swings the percentage. The "
+        "runbook covers the false-positive notes.",
         False,
     ),
     _alert(
@@ -391,8 +394,8 @@ RULES = [
         "paging — several workloads have mandatory client-side rate limiters (reporting "
         "5/10s, Identity Protection 1/s, Intune export 48/min) that make an occasional missed "
         "poll routine rather than a fault; a tighter 2x was rejected for exactly that reason. "
-        "noDataState is Alerting because the whole query returning zero rows means every "
-        "collector's self-obs signal went dark at once — the exporter process died, or a "
+        "The rule sets its no-data state to Alerting because the whole query returning zero "
+        "rows means every collector's self-obs signal went dark at once — the exporter process died, or a "
         "tenant's only collector was removed. It does NOT mean one collector's series "
         "disappearing: Grafana evaluates this rule per (tenant_id, collector) combination the "
         "query actually returns, so when ONE collector among several is deliberately "
@@ -414,7 +417,8 @@ RULES = [
         "{{ $labels.tenant_id }})",
         "Companion to g2o-collector-staleness: a WindowCollector's high-water mark isn't "
         "reaching disk, so a restart re-polls (or drops, depending on store) an "
-        "already-processed window. Even one increment is worth knowing about — for is 0m. "
+        "already-processed window. Even one increment is worth knowing about, so the rule "
+        "fires on the first failed persist with no `for` delay. "
         "Paused by default — enable once you've picked a notification channel for it.",
         True,
     ),
@@ -462,9 +466,9 @@ RULES = [
         "rate(graph2otel_throttle_count_total[10m]) (429 responses observed by the "
         "client-side rate limiter) is above 0 for workload={{ $labels.workload }}, tenant "
         "{{ $labels.tenant_id }}, sustained for 15m — i.e. throttling that isn't a one-off "
-        "blip but is still happening 10-15 minutes later. noDataState is OK — zero throttle "
-        "events is the healthy steady state, not an absence worth alerting on. See "
-        "README.md doc block 4 for per-workload ceiling context (none of the reporting "
+        "blip but is still happening 10-15 minutes later. The rule treats no data as OK: "
+        "zero throttle events is the healthy steady state, not an absence worth alerting on. "
+        "The runbook has the per-workload ceiling context (none of the reporting "
         "5/10s, Identity Protection 1/s, Intune reports-export 48/min, or directory RU "
         "workloads send Retry-After, so silent throttling degrades data freshness before "
         "anything else visibly breaks).",
@@ -505,7 +509,7 @@ RULES = [
         "exceeded 10800s (3h) for 15m. This is the alert-on-SILENCE signal a failure "
         "counter cannot produce: a dead uploader emits no failed parse tasks, so "
         "g2o-mdca-parse-failing stays green while data silently stops. Replace 10800 with "
-        "~3x YOUR upload cadence in seconds. noDataState is OK because a tenant with no "
+        "~3x YOUR upload cadence in seconds. The rule treats no data as OK because a tenant with no "
         "Cloud Discovery streams legitimately emits no series; once a stream has parsed "
         "once, the gauge is always present and keeps climbing when uploads stop.",
         False,
@@ -1131,6 +1135,465 @@ def routing_asset_violations(dirpaths: list) -> list:
 
 
 # ---------------------------------------------------------------------------
+# runbook + dashboard navigation metadata (#307)
+#
+# Three annotations are attached to EVERY rule, paused ones included:
+#
+#   runbook_url        the docs-site runbook section for this rule
+#   __dashboardUid__   Grafana's own panel-link feature; must be set TOGETHER
+#   __panelId__        with __dashboardUid__ or Grafana ignores both
+#   dashboard_path     the same target as a deep link, relative to the
+#                      operator's own Grafana host
+#
+# Paused rules get the same treatment on purpose. A paused rule is precisely the
+# one an operator is about to enable, and the runbook is what tells them whether
+# enabling it is safe — withholding it from exactly those rules would invert the
+# need.
+#
+# Nothing here is hand-typed. The runbook URL is derived from the rule uid; the
+# panel id and tab slug are resolved out of the GENERATED dashboard manifest by
+# (tab title, panel title). A wrong ``dtab`` slug is silently ignored by Grafana
+# (measured, #399) and a wrong panel id renders "Panel not found", so neither may
+# be written by hand at a link site. Renaming a panel therefore breaks the build
+# here rather than shipping a dead link.
+#
+# CONSEQUENCE, deliberately accepted: the generated alerts YAML now depends on
+# dashboards/graph2otel.json. Change the dashboard, re-run `make rules`. The
+# staleness gate says so.
+# ---------------------------------------------------------------------------
+
+DASHBOARD_UID = "graph2otel"
+RUNBOOK_URL_BASE = "https://m7kni.io/graph2otel/runbooks/"
+
+# Every section of docs/runbooks.md must answer all four, because these are the
+# four states a responder actually meets: the rule fired, the rule went to no
+# data, the rule errored, or the rule was wrong.
+RUNBOOK_REQUIRED_SECTIONS = (
+    "**No data:**",
+    "**Evaluator error:**",
+    "**False positives:**",
+    "**Remediation:**",
+)
+
+# rule uid -> (top-level dashboard tab title, panel title). Resolved to a numeric
+# panel id at build time. Every rule is mapped: an unmapped rule fails the gate
+# rather than shipping with no dashboard context.
+DASHBOARD_TARGETS = {
+    "g2o-entra-cred-expiry-critical": ("Entra", "Credentials expiring total"),
+    "g2o-entra-cred-expiry-warning": ("Entra", "Credentials expiring total"),
+    "g2o-intune-apple-token-expiry-critical":
+        ("Intune", "Apple token days until expiry"),
+    "g2o-intune-cert-expiry-critical":
+        ("Intune", "Certificate days until expiry"),
+    "g2o-intune-compliance-ratio-low": ("Intune", "Compliance devices"),
+    "g2o-intune-compliance-noncompliant-spike": ("Intune", "Compliance devices"),
+    "g2o-collector-staleness":
+        ("Self-obs", "Scrape staleness (seconds since last healthy result)"),
+    "g2o-checkpoint-persist-errors":
+        ("Self-obs", "Checkpoint persist error rate"),
+    "g2o-record-integrity-loss":
+        ("Self-obs", "Dropped / errored source-record rate"),
+    "g2o-payload-type-mismatch": ("Self-obs", "Payload type-mismatch rate"),
+    "g2o-throttle-saturation":
+        ("Self-obs", "Throttle (429) rate by workload"),
+    "g2o-throttle-budget-consumption":
+        ("Self-obs", "Graph-reported throttle budget consumed"),
+    "g2o-mdca-uploads-stopped":
+        ("Defender", "Discovery parse last success age"),
+    "g2o-mdca-parse-failing": ("Defender", "Discovery parse tasks rate"),
+    "g2o-detect-privileged-directory-change":
+        ("Entra", "Top directory audit activities"),
+    "g2o-detect-security-alert-unresolved":
+        ("Defender", "Defender alerts — which alert, which source"),
+    "g2o-detect-security-incident-active":
+        ("Defender", "Alerts by severity and detection source"),
+    "g2o-detect-graph-403-burst": ("Entra", "Graph activity requests rate"),
+    "g2o-detect-interactive-signin-anomaly":
+        ("Entra", "Failed sign-ins — which user, which IP, which error"),
+}
+
+
+def load_manifest(path: str = DASHBOARD_MANIFEST) -> dict:
+    with open(path, "r", encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def _rows_of(spec: dict) -> list:
+    layout = spec.get("layout", {})
+    if layout.get("kind") == "RowsLayout":
+        return layout["spec"]["rows"]
+    return []
+
+
+def panel_index(man: dict) -> dict:
+    """``(top-level tab title, panel title) -> numeric panel id``.
+
+    Keyed on the TOP-LEVEL tab because that is the only slug in a deep link that
+    is measured (``?dtab=<Tab-Slug>``); leaf-tab nesting is irrelevant to a
+    ``viewPanel`` link, which opens full-screen. A duplicate key is a build
+    error: it would make the resolution ambiguous, and an ambiguous slug is the
+    one failure Grafana does not report.
+    """
+    elements = {name: el["spec"] for name, el in man["spec"]["elements"].items()}
+    index: dict = {}
+    for tab in man["spec"]["layout"]["spec"]["tabs"]:
+        top = tab["spec"]["title"]
+
+        def walk(spec: dict) -> None:
+            layout = spec.get("layout", {})
+            if layout.get("kind") == "TabsLayout":
+                for nested in layout["spec"]["tabs"]:
+                    walk(nested["spec"])
+                return
+            for row in _rows_of(spec):
+                grid = row["spec"].get("layout", {})
+                if grid.get("kind") != "GridLayout":
+                    continue
+                for item in grid["spec"]["items"]:
+                    panel = elements[item["spec"]["element"]["name"]]
+                    key = (top, panel.get("title", ""))
+                    if key in index and index[key] != panel["id"]:
+                        raise ValueError(
+                            f"panel title {key[1]!r} appears twice under tab "
+                            f"{top!r}: a link to it would be ambiguous")
+                    index[key] = panel["id"]
+
+        walk(tab["spec"])
+    return index
+
+
+def resolve_target(man: dict, tab: str, panel_title: str) -> tuple:
+    """``(panel id, tab slug)`` for a dashboard target, or ``KeyError``.
+
+    The error names the tab and lists its real panel titles, because the common
+    cause is a deliberate panel rename in a file this module does not own — that
+    is a one-line fix here, provided the message says what to change it to.
+    """
+    index = panel_index(man)
+    titles = sorted(title for existing, title in index if existing == tab)
+    if not titles:
+        raise KeyError(
+            f"no top-level dashboard tab titled {tab!r}; known tabs: "
+            f"{sorted({t for t, _ in index})}")
+    try:
+        panel_id = index[(tab, panel_title)]
+    except KeyError:
+        raise KeyError(
+            f"no panel titled {panel_title!r} under dashboard tab {tab!r} — a "
+            f"panel was renamed. Titles under {tab!r}: {titles}"
+        ) from None
+    return panel_id, v2.slug(tab)
+
+
+# uid -> reason. A rule whose linked panel legitimately plots a DIFFERENT signal
+# from the rule's own. Same principle as the dashboard coverage waivers: a gate
+# with no escape hatch gets turned off, and one with an undocumented escape hatch
+# is not a gate. An unused entry here fails too, so a waiver cannot outlive the
+# panel that justified it.
+SIGNAL_MATCH_WAIVERS = {
+    "g2o-detect-security-alert-unresolved":
+        "no panel plots the entra.security_alert stream; the Defender alert log "
+        "panel (defender.alert) is the nearest investigation surface, and the "
+        "two streams overlap in content without sharing a signal name",
+    "g2o-detect-security-incident-active":
+        "no panel plots entra.security_incident at all — incidents are the "
+        "correlation layer above alerts, so the alert-severity panel is the "
+        "closest context a responder can pivot to",
+}
+
+
+def rule_signal_tokens(rule: dict) -> set:
+    """Every signal name a rule's own queries reference.
+
+    Prometheus metric names for a metric rule, log event names for a Loki
+    detection. Derived from the rendered query text, so it cannot disagree with
+    what the rule actually evaluates.
+    """
+    tokens = set()
+    for node in rule.get("data", []):
+        model = node.get("model", {})
+        expr = model.get("expr", "")
+        ds_type = model.get("datasource", {}).get("type")
+        if ds_type == "prometheus":
+            tokens |= _metric_tokens(expr)
+        elif ds_type == "loki":
+            tokens |= set(re.findall(r"event_name=`([^`]+)`", expr))
+    return tokens
+
+
+def panel_query_text(man: dict) -> dict:
+    """``panel id -> the concatenated text of its queries``."""
+    text = {}
+    for element in man["spec"]["elements"].values():
+        spec = element["spec"]
+        queries = spec.get("data", {}).get("spec", {}).get("queries", [])
+        text[spec["id"]] = " ".join(
+            json.dumps(q["spec"]["query"]["spec"]) for q in queries)
+    return text
+
+
+def dashboard_path(slug: str, panel_id: int) -> str:
+    """A deep link relative to the operator's own Grafana host.
+
+    Carries the owning tab's ``dtab`` as well as ``viewPanel``: a ``viewPanel``
+    link whose ancestor tab is conditioned away renders a completely blank body
+    with no message, and a ``dtab`` overrides that hiding (both measured, #399).
+    """
+    return f"/d/{DASHBOARD_UID}?dtab={slug}&viewPanel={panel_id}"
+
+
+def attach_navigation(rules: list, man: dict) -> None:
+    """Add the runbook + dashboard annotations to every rule, in place."""
+    for rule in rules:
+        uid = rule["uid"]
+        tab, panel_title = DASHBOARD_TARGETS[uid]
+        panel_id, slug = resolve_target(man, tab, panel_title)
+        rule["annotations"].update({
+            "runbook_url": f"{RUNBOOK_URL_BASE}#{uid}",
+            "__dashboardUid__": DASHBOARD_UID,
+            "__panelId__": str(panel_id),
+            "dashboard_path": dashboard_path(slug, panel_id),
+        })
+
+
+_RUNBOOK_HEADING = re.compile(r"^###\s+(?:`)?([a-z0-9][a-z0-9-]*)(?:`)?\s*$")
+
+
+def runbook_sections(path: str = RUNBOOKS_SOURCE) -> dict:
+    """``anchor -> section body`` for every per-rule section of the runbook page.
+
+    The anchor is the ``###`` heading text verbatim, which is also the rule uid:
+    the docs-site slugifier leaves an already-lowercase hyphenated string alone,
+    so ``#<uid>`` resolves without a second naming scheme to keep in step.
+    """
+    with open(path, "r", encoding="utf-8") as fh:
+        lines = fh.read().splitlines()
+    sections: dict = {}
+    current = None
+    for line in lines:
+        m = _RUNBOOK_HEADING.match(line)
+        if m:
+            current = m.group(1)
+            sections[current] = []
+            continue
+        if line.startswith("## "):
+            current = None
+            continue
+        if current is not None:
+            sections[current].append(line)
+    return {anchor: "\n".join(body) for anchor, body in sections.items()}
+
+
+def navigation_violations(rules: list, man: dict) -> list:
+    """Every unreachable runbook or dashboard link, as human-readable strings."""
+    violations = []
+    anchors = set(runbook_sections())
+    ids = {el["spec"]["id"] for el in man["spec"]["elements"].values()}
+    index = panel_index(man)
+    tab_of_id: dict = {}
+    for (tab, _title), panel_id in index.items():
+        tab_of_id.setdefault(panel_id, set()).add(v2.slug(tab))
+    tab_slugs = {v2.slug(tab["spec"]["title"])
+                 for tab in man["spec"]["layout"]["spec"]["tabs"]}
+    queries = panel_query_text(man)
+    waivers_used = set()
+
+    for rule in rules:
+        uid = rule.get("uid", "<unknown>")
+        ann = rule.get("annotations", {})
+
+        url = ann.get("runbook_url", "")
+        if not url:
+            violations.append(
+                f"{uid}: no runbook_url — a rule with no runbook leaves a "
+                "responder reading the expr at 3am")
+        elif not url.startswith(RUNBOOK_URL_BASE + "#"):
+            violations.append(
+                f"{uid}: runbook_url {url!r} is not a {RUNBOOK_URL_BASE} anchor")
+        elif url.split("#", 1)[1] not in anchors:
+            violations.append(
+                f"{uid}: runbook_url anchor {url.split('#', 1)[1]!r} has no "
+                "section in docs/runbooks.md — the link would silently land on "
+                "the page top")
+
+        dash_uid = ann.get("__dashboardUid__", "")
+        panel = ann.get("__panelId__", "")
+        if dash_uid and not panel:
+            violations.append(
+                f"{uid}: __dashboardUid__ without __panelId__ — Grafana needs "
+                "both set together or it renders no panel link")
+        if panel and not dash_uid:
+            violations.append(
+                f"{uid}: __panelId__ without __dashboardUid__ — Grafana needs "
+                "both set together or it renders no panel link")
+        if not panel:
+            violations.append(
+                f"{uid}: no __panelId__ — the alert offers no dashboard context")
+            continue
+        if dash_uid != DASHBOARD_UID:
+            violations.append(
+                f"{uid}: __dashboardUid__ is {dash_uid!r}, want {DASHBOARD_UID!r}")
+        if not panel.isdigit():
+            violations.append(
+                f"{uid}: __panelId__ {panel!r} is not a numeric panel id "
+                "(viewPanel keys on spec.id, never on an element name)")
+            continue
+        panel_id = int(panel)
+        if panel_id not in ids:
+            violations.append(
+                f"{uid}: __panelId__ {panel_id} is not a panel in the generated "
+                "dashboard — the drilldown renders 'Panel not found'")
+        else:
+            # A title check alone proves the label survived, not that the panel is
+            # still ABOUT this rule's signal. Match the panel's own query text
+            # against the signals the rule evaluates, accepting a log event's
+            # metric-twin spelling (entra.graph_activity -> entra_graph_activity).
+            wanted = rule_signal_tokens(rule)
+            text = queries.get(panel_id, "")
+            hit = any(token in text or token.replace(".", "_") in text
+                      for token in wanted)
+            if wanted and not hit:
+                if uid in SIGNAL_MATCH_WAIVERS:
+                    waivers_used.add(uid)
+                    if not SIGNAL_MATCH_WAIVERS[uid].strip():
+                        violations.append(
+                            f"{uid}: signal-match waiver has no reason")
+                else:
+                    violations.append(
+                        f"{uid}: linked panel {panel_id} queries none of the "
+                        f"rule's own signals {sorted(wanted)} — the link points "
+                        "at a panel about something else. Re-point it, or add a "
+                        "SIGNAL_MATCH_WAIVERS reason")
+
+        path = ann.get("dashboard_path", "")
+        if not path:
+            violations.append(f"{uid}: no dashboard_path deep link")
+            continue
+        dtab = re.search(r"[?&]dtab=([^&]+)", path)
+        view = re.search(r"[?&]viewPanel=(\d+)", path)
+        if not dtab or not view:
+            violations.append(
+                f"{uid}: dashboard_path {path!r} must carry both dtab and "
+                "viewPanel")
+            continue
+        if dtab.group(1) not in tab_slugs:
+            violations.append(
+                f"{uid}: dashboard_path names dtab {dtab.group(1)!r}, which is "
+                "not a tab slug in the generated dashboard — Grafana ignores a "
+                f"wrong dtab SILENTLY. Known: {sorted(tab_slugs)}")
+        elif dtab.group(1) not in tab_of_id.get(panel_id, set()):
+            violations.append(
+                f"{uid}: panel {panel_id} does not sit under dtab "
+                f"{dtab.group(1)!r}")
+        if view.group(1) != panel:
+            violations.append(
+                f"{uid}: dashboard_path viewPanel={view.group(1)} disagrees with "
+                f"__panelId__={panel}")
+
+    # Only meaningful when every waived rule is in scope, so it is skipped for
+    # the single-rule mutation tests.
+    uids_in_scope = {rule.get("uid") for rule in rules}
+    if set(SIGNAL_MATCH_WAIVERS) <= uids_in_scope:
+        for uid in sorted(set(SIGNAL_MATCH_WAIVERS) - waivers_used):
+            violations.append(
+                f"{uid}: SIGNAL_MATCH_WAIVERS entry is unused — the panel it "
+                "excused now matches, so delete the waiver")
+
+    return violations
+
+
+# ---------------------------------------------------------------------------
+# annotation lint (#307): the prose a responder actually reads
+#
+# Generalized from one shipped defect rather than special-cased to it: the
+# checkpoint rule's description ended `Even one increment is worth knowing
+# about — for is 0m.`, a rule FIELD used as a bare English subject, and several
+# descriptions pointed at "README doc block N", which is not clickable from a
+# Grafana notification. Both classes are linted, not just those two strings.
+# ---------------------------------------------------------------------------
+
+# The prose keys. runbook_url/dashboard_path/__*__ are machine targets, gated by
+# navigation_violations above, and would trip the file-reference check.
+PROSE_ANNOTATIONS = ("summary", "description", "tuning_required",
+                     "exec_error_waiver")
+
+# A repository path is meaningless in a notification: the reader is in Grafana or
+# a chat client, not a checkout.
+_REPO_FILE = re.compile(r"\b[\w][\w./-]*\.(?:md|ya?ml|json|py|go|toml)\b")
+_DOC_BLOCK = re.compile(r"\bdoc block\b", re.IGNORECASE)
+# A rule field used as a bare subject. Backticked (`for` is 0m) is fine, which
+# the pattern gets for free: a backtick sits between the field and the verb.
+_FIELD_SUBJECT = re.compile(
+    r"\b(for|noDataState|execErrState|isPaused)\s+(?:is|are)\b")
+_PLACEHOLDER = re.compile(r"\b(TODO|TBD|FIXME|XXX)\b")
+# Doubled spacing, or whitespace before punctuation. An ellipsis inside a quoted
+# PromQL fragment (``sum ... >= 5``) is not that, hence the negative lookahead.
+_DOUBLE_SPACE = re.compile(r"[ \t]{2,}|\s+,|\s+\.(?!\.)")
+_TERMINATORS = ".!)}"
+# A summary is a notification HEADLINE, not prose, so it is exempt from the
+# sentence-terminator check that the multi-sentence keys take.
+_UNTERMINATED_EXEMPT = ("summary",)
+
+
+def linted_annotation_count(rules: list) -> int:
+    """How many annotation values the lint actually inspected.
+
+    Exposed so a caller can assert it did not pass vacuously over an empty set.
+    """
+    return sum(1 for rule in rules
+               for key in PROSE_ANNOTATIONS
+               if key in rule.get("annotations", {}))
+
+
+def annotation_violations(rules: list) -> list:
+    """Every rotted or malformed annotation string, as violations."""
+    violations = []
+    for rule in rules:
+        uid = rule.get("uid", "<unknown>")
+        ann = rule.get("annotations", {})
+        for key in ("summary", "description"):
+            if not ann.get(key, "").strip():
+                violations.append(f"{uid}: {key} is empty")
+        for key in PROSE_ANNOTATIONS:
+            text = ann.get(key)
+            if text is None:
+                continue
+            if not text.strip():
+                continue
+            for m in _REPO_FILE.finditer(text):
+                violations.append(
+                    f"{uid}: {key} names repository file {m.group(0)!r}, which "
+                    "a reader cannot open from Grafana — point at the runbook")
+            if _DOC_BLOCK.search(text):
+                violations.append(
+                    f"{uid}: {key} refers to a 'doc block', a stale internal "
+                    "reference with no clickable target")
+            m = _FIELD_SUBJECT.search(text)
+            if m:
+                violations.append(
+                    f"{uid}: {key} uses the rule field {m.group(1)!r} as a bare "
+                    f"English subject ({m.group(0)!r}) — write it as a code "
+                    f"span (`{m.group(1)}`) or as a full clause")
+            m = _PLACEHOLDER.search(text)
+            if m:
+                violations.append(
+                    f"{uid}: {key} still carries the placeholder marker "
+                    f"{m.group(1)!r}")
+            if _DOUBLE_SPACE.search(text):
+                violations.append(
+                    f"{uid}: {key} has doubled or misplaced whitespace")
+            if key not in _UNTERMINATED_EXEMPT and text.rstrip()[-1] not in _TERMINATORS:
+                violations.append(
+                    f"{uid}: {key} ends without a sentence terminator "
+                    f"({text.rstrip()[-40:]!r})")
+    return violations
+
+
+attach_navigation(RULES, load_manifest())
+attach_navigation(DETECTIONS, load_manifest())
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -1175,6 +1638,25 @@ def main() -> int:
         print(f"RULE LABELS VIOLATE THE FROZEN ROUTABLE CONTRACT ({len(label_violations)}):",
               file=sys.stderr)
         for v in label_violations:
+            print(f"  - {v}", file=sys.stderr)
+        return 1
+
+    manifest = load_manifest()
+    nav_violations = navigation_violations(RULES + DETECTIONS, manifest)
+    if nav_violations:
+        print(f"RULE LINKS TO SOMETHING THAT DOES NOT EXIST ({len(nav_violations)}) "
+              f"— a wrong dtab slug is ignored SILENTLY and an unreachable "
+              f"runbook is worse than none:", file=sys.stderr)
+        for v in nav_violations:
+            print(f"  - {v}", file=sys.stderr)
+        return 1
+
+    prose_violations = (annotation_violations(RULES)
+                        + annotation_violations(DETECTIONS))
+    if prose_violations:
+        print(f"ANNOTATION TEXT IS BROKEN OR STALE ({len(prose_violations)}):",
+              file=sys.stderr)
+        for v in prose_violations:
             print(f"  - {v}", file=sys.stderr)
         return 1
 

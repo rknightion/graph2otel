@@ -29,7 +29,8 @@ nav = [
       { "API Drift Canary" = "api-drift.md" },
       { "Scale & Soak Validation" = "scale-validation.md" },
       { "PII & Cardinality Audit" = "pii-cardinality-audit.md" },
-      { "Deploying Observability" = "deploying-observability.md" }
+      { "Deploying Observability" = "deploying-observability.md" },
+      { Runbooks = "runbooks.md" }
     ] }
 ]
 copyright = """<a href=\"https://m7kni.io\" target=\"_blank\" rel=\"noopener\">m7kni.io</a>"""

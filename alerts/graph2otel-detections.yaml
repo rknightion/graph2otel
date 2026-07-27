@@ -100,6 +100,10 @@ groups:
           summary: "A high-risk Entra directory change was recorded"
           description: "An entra.directory_audit activity matched the high-risk set: application credential or secret added, admin consent granted, app role or delegated permission granted, service principal or application created, directory role member added, owner added, or a Conditional Access policy changed. Each is a step an attacker takes to establish persistence, and each is also ordinary administrative work, so this fires on legitimate changes too by design. Inspect initiated_by and target_resources on the record. The activity list is the valuable part of this rule: it is tenant independent and tedious to reconstruct."
           tuning_required: "Fires on your own admin work. Run the query over 30 days to learn your tenant's normal change rate, then decide whether to route it to a review queue rather than a pager, or to exclude specific initiators."
+          runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-detect-privileged-directory-change"
+          __dashboardUid__: "graph2otel"
+          __panelId__: "90"
+          dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=90"
         isPaused: true
       - uid: "g2o-detect-security-alert-unresolved"
         title: "Security alert, medium or high, still unresolved"
@@ -172,6 +176,10 @@ groups:
           summary: "An unresolved medium/high security alert is open"
           description: "The entra.security_alert stream carries alerts from ALL Microsoft sources that surface through the security API: Defender for Endpoint, Defender for Cloud Apps and Entra ID Protection all arrive here, so one rule covers products that are separate consoles in the portal. Inspect title, category and service_source to see which product raised it."
           tuning_required: "Volume depends entirely on your Defender licensing and tenant size. Measure the alert rate over 30 days before enabling; on a noisy tenant raise the threshold or narrow to severity=high."
+          runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-detect-security-alert-unresolved"
+          __dashboardUid__: "graph2otel"
+          __panelId__: "262"
+          dashboard_path: "/d/graph2otel?dtab=Defender&viewPanel=262"
         isPaused: true
       - uid: "g2o-detect-security-incident-active"
         title: "Security incident, medium or high, active"
@@ -244,6 +252,10 @@ groups:
           summary: "An active medium/high security incident is open"
           description: "Incidents are the CORRELATION layer above individual alerts: one incident groups related alerts Microsoft believes are the same attack. This therefore OVERLAPS with the unresolved-alert detection above, and a single security event will usually match both. That is deliberate, since the incident carries the correlation and the alert carries the detail, but decide which one you want to page on rather than enabling both and being paged twice for one event."
           tuning_required: "Enable this or the alert rule, not both, until you have watched a real incident arrive and seen which gives your responders the better entry point."
+          runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-detect-security-incident-active"
+          __dashboardUid__: "graph2otel"
+          __panelId__: "263"
+          dashboard_path: "/d/graph2otel?dtab=Defender&viewPanel=263"
         isPaused: true
       - uid: "g2o-detect-graph-403-burst"
         title: "Graph API authorization-denial burst from a single application"
@@ -316,6 +328,10 @@ groups:
           summary: "One application received more than 10 Graph 403s in 5 minutes"
           description: "A burst of authorization denials from a single caller can indicate permission probing or a compromised identity exploring what it can reach. It is equally often an application that lost a consent grant, which is worth knowing either way. Check app_id and the denied paths."
           tuning_required: "Needs entra.graph_activity, which arrives over blob ingest. The threshold of 10 in 5 minutes is a starting point from one small tenant; a tenant with more automation will need a higher one. Measure your own per-app 403 baseline before enabling."
+          runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-detect-graph-403-burst"
+          __dashboardUid__: "graph2otel"
+          __panelId__: "80"
+          dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=80"
         isPaused: true
       - uid: "g2o-detect-interactive-signin-anomaly"
         title: "Interactive sign-in blocked by Conditional Access or flagged at risk"
@@ -388,4 +404,8 @@ groups:
           summary: "An interactive sign-in was CA-blocked or risk-flagged"
           description: "A real user sign-in that Conditional Access blocked, or that Entra ID Protection scored atRisk or confirmedCompromised. Check user_principal_name, app_display_name and ip_address on the record. The tenant this came from adds a third clause for sign-ins outside its expected country; that is a per-tenant policy statement rather than a portable default, so it is not shipped. Add another OR term filtering location_country_or_region against your own country code if you want it."
           tuning_required: "Conditional Access failures include ordinary events such as a user declining an MFA prompt, so on most tenants this needs either a threshold above zero or a narrowing to risk_state alone. Measure your CA failure rate over 30 days first. Risk states require Entra ID P2."
+          runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-detect-interactive-signin-anomaly"
+          __dashboardUid__: "graph2otel"
+          __panelId__: "85"
+          dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=85"
         isPaused: true

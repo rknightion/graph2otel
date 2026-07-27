@@ -91,7 +91,11 @@ groups:
           pipeline: "graph2otel"
         annotations:
           summary: "{{ $labels.owner_type }} {{ $labels.credential_type }} credential(s) expiring within 7 days (tenant {{ $labels.tenant_id }})"
-          description: "entra_credentials_expiring_total is non-zero in the lt_7d/expired buckets for tenant {{ $labels.tenant_id }}, owner_type={{ $labels.owner_type }}, credential_type={{ $labels.credential_type }} for 15m. Bucket-count based (never per-credential) — see README.md doc block 1 for the false-positive notes and the lt_30d warning-tier companion rule."
+          description: "entra_credentials_expiring_total is non-zero in the lt_7d/expired buckets for tenant {{ $labels.tenant_id }}, owner_type={{ $labels.owner_type }}, credential_type={{ $labels.credential_type }} for 15m. Bucket-count based, never per-credential. The runbook covers the false-positive notes and the lt_30d warning-tier companion rule."
+          runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-entra-cred-expiry-critical"
+          __dashboardUid__: "graph2otel"
+          __panelId__: "29"
+          dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=29"
         isPaused: false
       - uid: "g2o-entra-cred-expiry-warning"
         title: "Entra app/SP credential expiring within 30 days"
@@ -163,6 +167,10 @@ groups:
         annotations:
           summary: "{{ $labels.owner_type }} {{ $labels.credential_type }} credential(s) expiring within 30 days (tenant {{ $labels.tenant_id }})"
           description: "Companion to g2o-entra-cred-expiry-critical: earlier warning tier on the lt_30d bucket. Paused by default — enable once you've picked a rotation-lead-time that matches your tenant's actual credential renewal process."
+          runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-entra-cred-expiry-warning"
+          __dashboardUid__: "graph2otel"
+          __panelId__: "29"
+          dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=29"
         isPaused: true
       - uid: "g2o-intune-apple-token-expiry-critical"
         title: "Intune Apple MDM token expiring soon"
@@ -235,6 +243,10 @@ groups:
         annotations:
           summary: "Apple {{ $labels.type }} token \"{{ $labels.token_name }}\" expires in under 14 days (tenant {{ $labels.tenant_id }})"
           description: "intune_apple_token_days_until_expiry (APNS/VPP/DEP) is below 14 for token_name={{ $labels.token_name }}, tenant {{ $labels.tenant_id }}, for 15m. Unlike the bucketed metrics, this is a raw days-remaining gauge over a tiny admin-configured token set, so the threshold is an exact day count — tune freely. Paused by default (companion of the primary compliance/credential set) — enable once the apple_tokens collector is on for tenants that use Apple MDM."
+          runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-intune-apple-token-expiry-critical"
+          __dashboardUid__: "graph2otel"
+          __panelId__: "196"
+          dashboard_path: "/d/graph2otel?dtab=Intune&viewPanel=196"
         isPaused: true
       - uid: "g2o-intune-cert-expiry-critical"
         title: "Intune certificate expiring within 7 days"
@@ -306,7 +318,11 @@ groups:
           component: "certificate"
         annotations:
           summary: "Intune certificate profile \"{{ $labels.cert_profile_name }}\" has certificates expiring within 7 days (tenant {{ $labels.tenant_id }})"
-          description: "intune_certificate_days_until_expiry is non-zero in the 0d_7d/expired buckets for cert_profile_name={{ $labels.cert_profile_name }}, tenant {{ $labels.tenant_id }}, for 15m. NOTE: cert expiry buckets are named differently from the entra credential buckets (0d_7d/7d_30d/30d_90d/over_90d/unknown vs lt_7d/lt_30d/lt_90d/gt_90d/expired) — see README.md. Paused by default — enable once the certificates collector (beta) is on."
+          description: "intune_certificate_days_until_expiry is non-zero in the 0d_7d/expired buckets for cert_profile_name={{ $labels.cert_profile_name }}, tenant {{ $labels.tenant_id }}, for 15m. NOTE: cert expiry buckets are named differently from the entra credential buckets (0d_7d/7d_30d/30d_90d/over_90d/unknown vs lt_7d/lt_30d/lt_90d/gt_90d/expired); the runbook lists both ladders. Paused by default — enable once the certificates collector (beta) is on."
+          runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-intune-cert-expiry-critical"
+          __dashboardUid__: "graph2otel"
+          __panelId__: "198"
+          dashboard_path: "/d/graph2otel?dtab=Intune&viewPanel=198"
         isPaused: true
       - uid: "g2o-intune-compliance-ratio-low"
         title: "Intune compliant-device fraction below 90%"
@@ -377,7 +393,11 @@ groups:
           pipeline: "graph2otel"
         annotations:
           summary: "Intune compliant-device fraction below 90% (tenant {{ $labels.tenant_id }})"
-          description: "compliant / total intune_compliance_devices is below 0.9 for tenant {{ $labels.tenant_id }} for 30m. The `and ... >= 5` guard suppresses the ratio on tiny fleets where one non-compliant device swings the percentage — see README.md doc block 2 for the false-positive notes."
+          description: "compliant / total intune_compliance_devices is below 0.9 for tenant {{ $labels.tenant_id }} for 30m. The `and >= 5` fleet-size guard suppresses the ratio on tiny fleets where one non-compliant device swings the percentage. The runbook covers the false-positive notes."
+          runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-intune-compliance-ratio-low"
+          __dashboardUid__: "graph2otel"
+          __panelId__: "113"
+          dashboard_path: "/d/graph2otel?dtab=Intune&viewPanel=113"
         isPaused: false
       - uid: "g2o-intune-compliance-noncompliant-spike"
         title: "Intune non-compliant device share spiking"
@@ -449,6 +469,10 @@ groups:
         annotations:
           summary: "Intune non-compliant device share rose more than 10 percentage points in an hour (tenant {{ $labels.tenant_id }})"
           description: "Companion to g2o-intune-compliance-ratio-low: catches a sharp swing even when the absolute ratio hasn't crossed 90% yet (e.g. a large compliant fleet with a sudden policy regression). Paused by default — the 1h/10pp thresholds are unvalidated against real fleet churn."
+          runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-intune-compliance-noncompliant-spike"
+          __dashboardUid__: "graph2otel"
+          __panelId__: "113"
+          dashboard_path: "/d/graph2otel?dtab=Intune&viewPanel=113"
         isPaused: true
       - uid: "g2o-collector-staleness"
         title: "graph2otel collector scrape stale"
@@ -519,7 +543,11 @@ groups:
           pipeline: "graph2otel"
         annotations:
           summary: "Collector {{ $labels.collector }} is more than 3x its expected poll interval overdue (tenant {{ $labels.tenant_id }})"
-          description: "graph2otel_scrape_staleness_seconds / graph2otel_collector_expected_interval_seconds for collector={{ $labels.collector }}, tenant {{ $labels.tenant_id }} has exceeded 3 for 5m — i.e. it has been more than 3x that COLLECTOR'S OWN effective poll interval (not a fixed second count) since its last successful scrape. Both metrics carry exactly (tenant_id, collector), so the division is a one-to-one vector match with no on()/ignoring() needed. 3x tolerates one missed poll plus backoff jitter without paging — several workloads have mandatory client-side rate limiters (reporting 5/10s, Identity Protection 1/s, Intune export 48/min) that make an occasional missed poll routine rather than a fault; a tighter 2x was rejected for exactly that reason. noDataState is Alerting because the whole query returning zero rows means every collector's self-obs signal went dark at once — the exporter process died, or a tenant's only collector was removed. It does NOT mean one collector's series disappearing: Grafana evaluates this rule per (tenant_id, collector) combination the query actually returns, so when ONE collector among several is deliberately removed (or disabled), its ratio series simply stops existing and its alert instance resolves silently — the other collectors' instances are unaffected and noDataState never applies to it. That silent, clean disappearance is the deliberately removed collector's correct outcome, not an accident."
+          description: "graph2otel_scrape_staleness_seconds / graph2otel_collector_expected_interval_seconds for collector={{ $labels.collector }}, tenant {{ $labels.tenant_id }} has exceeded 3 for 5m — i.e. it has been more than 3x that COLLECTOR'S OWN effective poll interval (not a fixed second count) since its last successful scrape. Both metrics carry exactly (tenant_id, collector), so the division is a one-to-one vector match with no on()/ignoring() needed. 3x tolerates one missed poll plus backoff jitter without paging — several workloads have mandatory client-side rate limiters (reporting 5/10s, Identity Protection 1/s, Intune export 48/min) that make an occasional missed poll routine rather than a fault; a tighter 2x was rejected for exactly that reason. The rule sets its no-data state to Alerting because the whole query returning zero rows means every collector's self-obs signal went dark at once — the exporter process died, or a tenant's only collector was removed. It does NOT mean one collector's series disappearing: Grafana evaluates this rule per (tenant_id, collector) combination the query actually returns, so when ONE collector among several is deliberately removed (or disabled), its ratio series simply stops existing and its alert instance resolves silently — the other collectors' instances are unaffected and noDataState never applies to it. That silent, clean disappearance is the deliberately removed collector's correct outcome, not an accident."
+          runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-collector-staleness"
+          __dashboardUid__: "graph2otel"
+          __panelId__: "351"
+          dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=351"
         isPaused: false
       - uid: "g2o-checkpoint-persist-errors"
         title: "graph2otel checkpoint persist failing"
@@ -590,7 +618,11 @@ groups:
           pipeline: "graph2otel"
         annotations:
           summary: "Collector {{ $labels.collector }} failing to persist its checkpoint (tenant {{ $labels.tenant_id }})"
-          description: "Companion to g2o-collector-staleness: a WindowCollector's high-water mark isn't reaching disk, so a restart re-polls (or drops, depending on store) an already-processed window. Even one increment is worth knowing about — for is 0m. Paused by default — enable once you've picked a notification channel for it."
+          description: "Companion to g2o-collector-staleness: a WindowCollector's high-water mark isn't reaching disk, so a restart re-polls (or drops, depending on store) an already-processed window. Even one increment is worth knowing about, so the rule fires on the first failed persist with no `for` delay. Paused by default — enable once you've picked a notification channel for it."
+          runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-checkpoint-persist-errors"
+          __dashboardUid__: "graph2otel"
+          __panelId__: "356"
+          dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=356"
         isPaused: true
       - uid: "g2o-record-integrity-loss"
         title: "graph2otel dropped or errored source records"
@@ -662,6 +694,10 @@ groups:
         annotations:
           summary: "Collector {{ $labels.collector }} lost source records on {{ $labels.ingest_transport }} (tenant {{ $labels.tenant_id }})"
           description: "At least one source record was dropped or errored in the last 15m. `dropped` covers deliberate rejection such as an unparseable event timestamp; `errored` covers decode or processing failure. This is default-enabled because either outcome means fetched source data did not become useful telemetry."
+          runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-record-integrity-loss"
+          __dashboardUid__: "graph2otel"
+          __panelId__: "360"
+          dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=360"
         isPaused: false
       - uid: "g2o-payload-type-mismatch"
         title: "graph2otel payload JSON type changed"
@@ -733,6 +769,10 @@ groups:
         annotations:
           summary: "Payload type changed for {{ $labels.collector }} field {{ $labels.field }} (tenant {{ $labels.tenant_id }})"
           description: "A source-controlled optional field arrived with a different JSON type. The otherwise-usable record was still emitted. Paused initially until the tenant's normal payload-shape baseline is established; labels never contain field values."
+          runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-payload-type-mismatch"
+          __dashboardUid__: "graph2otel"
+          __panelId__: "362"
+          dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=362"
         isPaused: true
       - uid: "g2o-throttle-saturation"
         title: "graph2otel sustained Graph API throttling"
@@ -803,7 +843,11 @@ groups:
           pipeline: "graph2otel"
         annotations:
           summary: "Sustained 429s from Microsoft Graph on the {{ $labels.workload }} workload (tenant {{ $labels.tenant_id }})"
-          description: "rate(graph2otel_throttle_count_total[10m]) (429 responses observed by the client-side rate limiter) is above 0 for workload={{ $labels.workload }}, tenant {{ $labels.tenant_id }}, sustained for 15m — i.e. throttling that isn't a one-off blip but is still happening 10-15 minutes later. noDataState is OK — zero throttle events is the healthy steady state, not an absence worth alerting on. See README.md doc block 4 for per-workload ceiling context (none of the reporting 5/10s, Identity Protection 1/s, Intune reports-export 48/min, or directory RU workloads send Retry-After, so silent throttling degrades data freshness before anything else visibly breaks)."
+          description: "rate(graph2otel_throttle_count_total[10m]) (429 responses observed by the client-side rate limiter) is above 0 for workload={{ $labels.workload }}, tenant {{ $labels.tenant_id }}, sustained for 15m — i.e. throttling that isn't a one-off blip but is still happening 10-15 minutes later. The rule treats no data as OK: zero throttle events is the healthy steady state, not an absence worth alerting on. The runbook has the per-workload ceiling context (none of the reporting 5/10s, Identity Protection 1/s, Intune reports-export 48/min, or directory RU workloads send Retry-After, so silent throttling degrades data freshness before anything else visibly breaks)."
+          runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-throttle-saturation"
+          __dashboardUid__: "graph2otel"
+          __panelId__: "381"
+          dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=381"
         isPaused: false
       - uid: "g2o-throttle-budget-consumption"
         title: "graph2otel throttle budget consumption high"
@@ -875,6 +919,10 @@ groups:
         annotations:
           summary: "Graph-reported throttle budget consumption above 80% on the {{ $labels.workload }} workload (tenant {{ $labels.tenant_id }})"
           description: "graph2otel_throttle_limit_percentage_percent (from the x-ms-throttle-limit-percentage response header) is above 80 for workload={{ $labels.workload }}, tenant {{ $labels.tenant_id }}, sustained for 15m. Best-effort: this header isn't guaranteed on every 429 or every workload, so absence of data here does NOT mean the budget is healthy — g2o-throttle-saturation is the primary signal; this is a companion when the header happens to be present. Paused by default."
+          runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-throttle-budget-consumption"
+          __dashboardUid__: "graph2otel"
+          __panelId__: "382"
+          dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=382"
         isPaused: true
       - uid: "g2o-mdca-uploads-stopped"
         title: "graph2otel MDCA Cloud Discovery uploads stopped"
@@ -945,7 +993,11 @@ groups:
           pipeline: "graph2otel"
         annotations:
           summary: "MDCA Cloud Discovery stream {{ $labels.input_stream_id }} hasn't parsed successfully in over 3h (tenant {{ $labels.tenant_id }})"
-          description: "mdca_discovery_parse_last_success_age_seconds for input_stream_id={{ $labels.input_stream_id }}, tenant {{ $labels.tenant_id }} has exceeded 10800s (3h) for 15m. This is the alert-on-SILENCE signal a failure counter cannot produce: a dead uploader emits no failed parse tasks, so g2o-mdca-parse-failing stays green while data silently stops. Replace 10800 with ~3x YOUR upload cadence in seconds. noDataState is OK because a tenant with no Cloud Discovery streams legitimately emits no series; once a stream has parsed once, the gauge is always present and keeps climbing when uploads stop."
+          description: "mdca_discovery_parse_last_success_age_seconds for input_stream_id={{ $labels.input_stream_id }}, tenant {{ $labels.tenant_id }} has exceeded 10800s (3h) for 15m. This is the alert-on-SILENCE signal a failure counter cannot produce: a dead uploader emits no failed parse tasks, so g2o-mdca-parse-failing stays green while data silently stops. Replace 10800 with ~3x YOUR upload cadence in seconds. The rule treats no data as OK because a tenant with no Cloud Discovery streams legitimately emits no series; once a stream has parsed once, the gauge is always present and keeps climbing when uploads stop."
+          runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-mdca-uploads-stopped"
+          __dashboardUid__: "graph2otel"
+          __panelId__: "258"
+          dashboard_path: "/d/graph2otel?dtab=Defender&viewPanel=258"
         isPaused: false
       - uid: "g2o-mdca-parse-failing"
         title: "graph2otel MDCA Cloud Discovery parse failing"
@@ -1017,4 +1069,8 @@ groups:
         annotations:
           summary: "MDCA Cloud Discovery parse failing on stream {{ $labels.input_stream_id }} (tenant {{ $labels.tenant_id }})"
           description: "increase(mdca_discovery_parse_tasks_total{is_success=\"false\"}[1h]) > 0 for input_stream_id={{ $labels.input_stream_id }}, template={{ $labels.template }}, tenant {{ $labels.tenant_id }}: at least one Cloud Discovery parse task FAILED in the last hour while the upload almost certainly reported HTTP 200. The template label names which failure (e.g. REPOOPER_COMPLETION_STATUS_BASELOGPARSER_UNEXPECTED_FORMAT = malformed log format). This is the 22-silent-failures outage from #145. Default-enabled; pair with g2o-mdca-uploads-stopped, which catches a dead uploader this rule cannot see."
+          runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-mdca-parse-failing"
+          __dashboardUid__: "graph2otel"
+          __panelId__: "257"
+          dashboard_path: "/d/graph2otel?dtab=Defender&viewPanel=257"
         isPaused: false

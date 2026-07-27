@@ -157,6 +157,11 @@ func TestDocsSiteNavigationIncludesShippedIngestAndGeneratedReferences(t *testin
 		"blob-ingest.md",
 		"o365-management-api.md",
 		"deploying-observability.md",
+		// Every generated alert rule carries a runbook_url pointing at this page
+		// (#307). If the nav drops it the page stops being published and all 19
+		// runbook links 404 — silently, from the operator's point of view, at the
+		// exact moment they are following one.
+		"runbooks.md",
 	} {
 		if !strings.Contains(nav, page) {
 			t.Errorf("zensical navigation omits shipped reference %q", page)

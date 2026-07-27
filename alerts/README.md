@@ -10,6 +10,16 @@ One file:
   `RULES` list in that script, then run `make rules`. This file (the prose
   below) stays hand-authored: the generator never touches it.
 
+**Per-rule runbooks live on the docs site:**
+[Alert runbooks](https://m7kni.io/graph2otel/runbooks/). Every rule carries a
+`runbook_url` annotation pointing at its own section there, plus
+`__dashboardUid__` + `__panelId__` so Grafana renders a link to the panel showing
+the same signal. Both are generated from the rule uid and from
+`dashboards/graph2otel.json`, and `make grafana-check` fails on a runbook anchor
+or panel that does not exist (#307). The doc blocks below carry the design
+rationale — thresholds, why a companion exists, what was rejected; the runbook
+page carries what to *do* when one fires.
+
 graph2otel ships **rules only** — no contact point, notification policy, or
 route in any form (#293/#296). Every rule instead carries a stable, documented
 label set (`pipeline`/`severity`/`source`/`category`, plus an optional
