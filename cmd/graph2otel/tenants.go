@@ -727,6 +727,15 @@ func setupTenantWithGraphAndLicenseBuilders(
 	if err := validateRuntimeRegistryCensus(registry, inventory); err != nil {
 		return admin.CollectorSource{}, fmt.Errorf("tenant %s: %w", ta.TenantID, err)
 	}
+	// graph2otel.collector.expected_interval (#299): one snapshot, taken once the
+	// registry is final. Every entry's Interval is already the scheduler's
+	// EFFECTIVE value (Register/RegisterWindow resolve a non-positive override to
+	// the collector's DefaultInterval — see internal/collector/collector.go), so
+	// this reports the real interval the staleness alert's ratio compares
+	// against, not the raw config override. No periodic re-emission is needed:
+	// the interval is fixed for the process's life, and GaugeSnapshot's
+	// observable callback keeps reporting this exact set on its own.
+	registry.EmitExpectedIntervals(emitter, ta.TenantID)
 	status := collector.NewStatusTracker()
 	availabilityTracker := availability.NewTracker(ta.TenantID, inventory)
 	// The transport baseline (#141). Every collector receives its emitter from

@@ -180,26 +180,45 @@ the window succeeded but its watermark isn't reaching disk, so a restart can
 re-poll or drop an already-processed window depending on the checkpoint
 store.
 
-**Threshold rationale:** the primary fires at `> 3600` seconds — documented
-as "3x a 20-minute default poll interval." **This is a placeholder, not a
-tuned default** — replace `3600` with 3x *your* configured collector
-interval in seconds (e.g. an hourly collector wants `> 10800`). The companion
-fires on any increment (`> 0`) over a 15m window with `for: 0m` — even one
-failed persist is worth a (paused, low-severity) notification, since it's a
+**Threshold rationale (#299 — interval-aware, replacing the fixed placeholder):**
+the primary used to fire at a hand-picked `> 3600` seconds ("3x a 20-minute
+default poll interval"), which was wrong for anything but a ~20-minute
+collector — graph2otel's collectors range from minutes to 24h. It now fires on
+`graph2otel_scrape_staleness_seconds / graph2otel_collector_expected_interval_seconds
+> 3`: each collector's own staleness divided by ITS OWN effective poll interval
+(`graph2otel.collector.expected_interval`, the scheduler's resolved value —
+reflecting a clamped or defaulted interval, never the raw config override), so a
+5-minute and a 24-hour collector each get a correct threshold with no manual rule
+edit. Both metrics carry exactly `(tenant_id, collector)`, so the division is a
+plain one-to-one vector match — no `on()`/`ignoring()` needed. The multiplier is
+`3`, not `2`: several workloads have mandatory client-side rate limiters
+(reporting 5/10s, Identity Protection 1/s per tenant, Intune export 48/min) that
+make an occasional missed poll routine rather than a fault, and 3x is the margin
+that tolerates one missed poll plus backoff jitter without paging on that. The
+companion fires on any increment (`> 0`) over a 15m window with `for: 0m` — even
+one failed persist is worth a (paused, low-severity) notification, since it's a
 data-durability signal, not a noisy one.
 
-**False positive looks like:** a long-running Graph API call near a
-collector's interval boundary can transiently push staleness above a
-too-tight multiple; 3x margin is meant to absorb one slow cycle, not zero
-margin. If a tenant's poll interval is deliberately very short (seconds), a
-static 3600s floor may never trip even when genuinely stale — scale the
-threshold to the interval, don't hardcode 3600.
+**False positive looks like:** a long-running Graph API call near a collector's
+interval boundary can transiently push the ratio above 3 for one cycle; the `for:
+5m` window and the 3x margin together are meant to absorb one slow cycle, not
+zero margin.
 
-**Applicability:** self-obs metrics are emitted by every running collector,
-so this rule applies to all of them uniformly; `noDataState: Alerting` on the
-primary (not the group default `OK`) because a fully missing series here
-means the exporter process died or that collector was removed — same
-semantics as `tailscale2otel`'s `ExporterDown`.
+**Applicability and no-data semantics — corrected (#299):** self-obs metrics are
+emitted by every running collector, so this rule applies to all of them
+uniformly. `noDataState: Alerting` on the primary (not the group default `OK`)
+protects against the WHOLE query returning zero rows — every collector's
+staleness/expected-interval pair gone at once, meaning the exporter process
+died, or (the degenerate case) a tenant's only collector was removed. **It does
+NOT mean, and previously mis-stated, that one collector's series disappearing
+triggers it.** Grafana evaluates this multi-dimensional rule per
+`(tenant_id, collector)` combination the query actually returns: when a single
+collector is deliberately removed (a code change) or disabled (a config change),
+its own ratio series simply stops existing on the next evaluation and that
+alert INSTANCE resolves silently — the surviving collectors' instances, and the
+rule's `noDataState`, are unaffected. That silent disappearance is the correct,
+non-accidental outcome for a deliberately removed collector, not an omission:
+there is nothing left to alert on for a signal nothing emits anymore.
 
 ## Doc block 4 — Throttle saturation
 

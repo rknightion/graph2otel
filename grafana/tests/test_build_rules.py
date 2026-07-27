@@ -137,6 +137,123 @@ class TestEvaluatorErrorState(unittest.TestCase):
         self.assertEqual(healthy_empty["execErrState"], "Error")
 
 
+class TestCollectorStalenessIsIntervalAware(unittest.TestCase):
+    """#299: replace the fixed 3600s placeholder with a per-collector ratio
+    against the scheduler's own effective interval, at the maintainer-approved
+    3x multiplier. Modifies the EXISTING g2o-collector-staleness rule in place
+    (TestRuleIdentity.test_fourteen_alert_rules_two_recording_rules already
+    pins the rule count at 14 — this must not add a 15th)."""
+
+    def _rule(self):
+        return next(r for r in build_rules.RULES if r["uid"] == "g2o-collector-staleness")
+
+    def _expr(self):
+        return self._rule()["data"][0]["model"]["expr"]
+
+    def test_expr_divides_staleness_by_the_scheduler_s_effective_interval(self):
+        expr = self._expr()
+        self.assertIn(build_rules._m("graph2otel.scrape.staleness"), expr)
+        self.assertIn(build_rules._m("graph2otel.collector.expected_interval"), expr)
+        self.assertIn("/", expr)
+
+    def test_threshold_is_the_approved_3x_multiplier_not_a_fixed_second_count(self):
+        threshold_node = self._rule()["data"][2]["model"]
+        condition = threshold_node["conditions"][0]
+        self.assertEqual(condition["evaluator"]["type"], "gt")
+        self.assertEqual(condition["evaluator"]["params"], [3])
+        # The old fixed-seconds placeholder must not survive anywhere in the
+        # expr — a leftover comparison to 3600 would silently coexist with the
+        # new ratio and nobody would notice which one actually gates the rule.
+        self.assertNotIn("3600", self._expr())
+
+    def test_expr_groups_both_sides_by_tenant_and_collector_so_the_ratio_is_one_to_one(self):
+        expr = self._expr()
+        self.assertEqual(expr.count("by (tenant_id, collector)"), 2)
+
+    def test_annotation_no_longer_claims_a_missing_series_means_the_process_died(self):
+        """The issue's own evidence: 'the annotation ... misstates how Grafana
+        handles one missing multidimensional series versus an entirely empty
+        query.' A single collector's series disappearing (deregistered,
+        deliberately removed) does not make Grafana's multi-series alert
+        evaluation empty as long as another collector's series still matches —
+        that alert INSTANCE simply stops existing; noDataState is a
+        whole-query condition, not a per-series one."""
+        description = self._rule()["annotations"]["description"]
+        self.assertNotIn("or that collector was removed", description)
+
+    def test_annotation_documents_the_removed_collector_outcome_explicitly(self):
+        description = self._rule()["annotations"]["description"]
+        self.assertIn("removed", description)
+        self.assertIn("3x", description)
+
+
+class TestCollectorStalenessRatioGrafanaSemantics(unittest.TestCase):
+    """Acceptance criterion 2 (#299): one missing series and all series
+    missing behave differently under Grafana's real per-series alert
+    evaluation, and the rule's noDataState choice only makes sense against
+    that real behavior — so pin it here rather than trust prose alone.
+
+    Grafana evaluates a multi-dimensional rule's threshold PER label
+    combination the query actually returns; noDataState fires only when the
+    whole evaluation returns zero rows, never for one missing combination
+    among several. This models that vector-matching arithmetic directly
+    (dividing two label-keyed fixtures, as PromQL's `/` on identically-labeled
+    vectors does) rather than asserting prose.
+    """
+
+    @staticmethod
+    def _ratio_rows(staleness, expected_interval):
+        """One-to-one vector match on (tenant_id, collector), mirroring what
+        `max by (tenant_id, collector) (A) / max by (tenant_id, collector) (B)`
+        does when both sides carry exactly those two labels: a row survives
+        only where BOTH sides have a value for that exact key."""
+        return {
+            key: staleness[key] / expected_interval[key]
+            for key in staleness
+            if key in expected_interval
+        }
+
+    def test_one_collector_s_series_disappearing_leaves_the_others_evaluable(self):
+        staleness = {
+            ("tenant-a", "entra.domains"): 30.0,
+            ("tenant-a", "intune.devices"): 200.0,
+        }
+        expected_interval = {
+            ("tenant-a", "entra.domains"): 300.0,
+            ("tenant-a", "intune.devices"): 3600.0,
+        }
+        full = self._ratio_rows(staleness, expected_interval)
+        self.assertEqual(len(full), 2)
+
+        # entra.domains is deregistered: BOTH of its series disappear (the
+        # scheduler no longer ticks it, so neither scrape.staleness nor
+        # expected_interval is emitted for it again) — the deliberately
+        # removed collector's own explicit, non-accidental outcome.
+        del staleness[("tenant-a", "entra.domains")]
+        del expected_interval[("tenant-a", "entra.domains")]
+        after_removal = self._ratio_rows(staleness, expected_interval)
+
+        # The query still returns a row for the surviving collector — Grafana
+        # evaluates it exactly as before. Only the removed collector's OWN
+        # alert instance disappears; it does not become a "no data" firing,
+        # and no other collector's evaluation is disturbed.
+        self.assertEqual(set(after_removal), {("tenant-a", "intune.devices")})
+        self.assertNotIn(("tenant-a", "entra.domains"), after_removal)
+
+    def test_every_collector_s_series_disappearing_is_the_only_true_empty_query(self):
+        staleness = {("tenant-a", "entra.domains"): 30.0}
+        expected_interval = {("tenant-a", "entra.domains"): 300.0}
+        self.assertEqual(len(self._ratio_rows(staleness, expected_interval)), 1)
+
+        # The whole tenant's self-obs pipeline goes dark (process died, or —
+        # degenerate case — its only collector was removed): now the query
+        # legitimately returns zero rows, which is the one case
+        # noDataState=Alerting is meant to catch.
+        staleness.clear()
+        expected_interval.clear()
+        self.assertEqual(self._ratio_rows(staleness, expected_interval), {})
+
+
 class TestReverseValidation(unittest.TestCase):
     def test_every_rule_metric_token_resolves(self):
         violations = build_rules.reverse_validate(CAT, build_rules.RULES)

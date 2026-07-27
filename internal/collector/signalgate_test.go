@@ -115,6 +115,14 @@ func TestSignalGolden(t *testing.T) {
 	build := telemetrytest.New()
 	collector.EmitBuildInfo(build.Emitter())
 
+	// #299: graph2otel.collector.expected_interval — one series per registered
+	// collector, the scheduler's effective (defaulted/clamped) poll interval.
+	expectedInterval := telemetrytest.New()
+	intervalRegistry := collector.NewRegistry()
+	intervalRegistry.Register(captureSnapshot{name: "capture.success"}, time.Minute)
+	intervalRegistry.RegisterWindow(captureWindow{}, 0, time.Hour, time.Hour)
+	intervalRegistry.EmitExpectedIntervals(expectedInterval.Emitter(), "capture-tenant")
+
 	if err := signalcapture.GoldenAt(
 		"testdata/signals.json",
 		*updateSignalGolden,
@@ -123,6 +131,7 @@ func TestSignalGolden(t *testing.T) {
 		mismatch,
 		checkpoint,
 		build,
+		expectedInterval,
 	); err != nil {
 		t.Fatal(err)
 	}

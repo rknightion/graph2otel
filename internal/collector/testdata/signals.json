@@ -21,6 +21,16 @@
       ]
     },
     {
+      "Name": "graph2otel.collector.expected_interval",
+      "Unit": "s",
+      "Kind": "gauge",
+      "Description": "Effective poll interval, in seconds, the scheduler uses for each registered collector — the value actually applied after a non-positive override fell back to the collector's own default, never the raw config value.",
+      "AttrKeys": [
+        "collector",
+        "tenant_id"
+      ]
+    },
+    {
       "Name": "graph2otel.ingest.source_records",
       "Unit": "{record}",
       "Kind": "sum",

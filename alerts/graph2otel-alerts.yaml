@@ -464,7 +464,7 @@ groups:
                 type: "prometheus"
                 uid: "grafanacloud-prom"
               editorMode: "code"
-              expr: "max by (tenant_id, collector) (graph2otel_scrape_staleness_seconds)"
+              expr: "max by (tenant_id, collector) (graph2otel_scrape_staleness_seconds) / max by (tenant_id, collector) (graph2otel_collector_expected_interval_seconds)"
               instant: false
               range: true
               intervalMs: 1000
@@ -499,7 +499,7 @@ groups:
                   evaluator:
                     type: "gt"
                     params:
-                      - 3600
+                      - 3
                   operator:
                     type: "and"
                   query:
@@ -518,8 +518,8 @@ groups:
           source: "graph2otel"
           pipeline: "graph2otel"
         annotations:
-          summary: "Collector {{ $labels.collector }} hasn't scraped successfully in over an hour (tenant {{ $labels.tenant_id }})"
-          description: "graph2otel_scrape_staleness_seconds for collector={{ $labels.collector }}, tenant {{ $labels.tenant_id }} has exceeded 3600s (the placeholder default: 3x a 20-minute poll interval) for 5m. Replace 3600 with 3x YOUR configured collector interval in seconds. noDataState is Alerting (not OK) because self-obs metrics are emitted by every running collector — a fully missing series means the process died or that collector was removed, same semantics as tailscale2otel's ExporterDown."
+          summary: "Collector {{ $labels.collector }} is more than 3x its expected poll interval overdue (tenant {{ $labels.tenant_id }})"
+          description: "graph2otel_scrape_staleness_seconds / graph2otel_collector_expected_interval_seconds for collector={{ $labels.collector }}, tenant {{ $labels.tenant_id }} has exceeded 3 for 5m — i.e. it has been more than 3x that COLLECTOR'S OWN effective poll interval (not a fixed second count) since its last successful scrape. Both metrics carry exactly (tenant_id, collector), so the division is a one-to-one vector match with no on()/ignoring() needed. 3x tolerates one missed poll plus backoff jitter without paging — several workloads have mandatory client-side rate limiters (reporting 5/10s, Identity Protection 1/s, Intune export 48/min) that make an occasional missed poll routine rather than a fault; a tighter 2x was rejected for exactly that reason. noDataState is Alerting because the whole query returning zero rows means every collector's self-obs signal went dark at once — the exporter process died, or a tenant's only collector was removed. It does NOT mean one collector's series disappearing: Grafana evaluates this rule per (tenant_id, collector) combination the query actually returns, so when ONE collector among several is deliberately removed (or disabled), its ratio series simply stops existing and its alert instance resolves silently — the other collectors' instances are unaffected and noDataState never applies to it. That silent, clean disappearance is the deliberately removed collector's correct outcome, not an accident."
         isPaused: false
       - uid: "g2o-checkpoint-persist-errors"
         title: "graph2otel checkpoint persist failing"

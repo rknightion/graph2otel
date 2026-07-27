@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -628,6 +629,152 @@ func TestSetupTenantWithoutBlobConfigurationDoesNotRegisterBlobCategories(t *tes
 		return
 	}
 	t.Fatal("blob-category logical point disappeared from availability census")
+}
+
+// TestSetupTenantEmitsExpectedIntervalPerRegisteredCollector is the #299
+// composition-root wiring test: once the registry is final, setupTenant must
+// publish graph2otel.collector.expected_interval for every registered
+// collector, stamped with this tenant, using the SAME effective (resolved)
+// interval value the scheduler itself will tick on.
+func TestSetupTenantEmitsExpectedIntervalPerRegisteredCollector(t *testing.T) {
+	var metrics bytes.Buffer
+	provider, err := telemetry.NewProvider(context.Background(), telemetry.Options{
+		ServiceName:    "graph2otel",
+		Protocol:       "stdout",
+		StdoutWriter:   &metrics,
+		MetricInterval: time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var wg sync.WaitGroup
+	source, err := setupTenantWithGraphAndLicenseBuilders(
+		ctx,
+		startupTenantAuth("tenant-a"),
+		&config.Config{CheckpointDir: t.TempDir()},
+		provider,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		graphclient.NewWorkloadLimiter(),
+		map[admin.SkipKey]string{},
+		&wg,
+		func(context.Context, *auth.TenantAuth, graphclient.Options) (*graphclient.Client, error) {
+			return &graphclient.Client{TenantID: "tenant-a"}, nil
+		},
+		func(context.Context, *graphclient.Client) (license.Capabilities, error) {
+			return allAvailabilityTestCapabilities(), nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("setupTenantWithGraphAndLicenseBuilders() error = %v", err)
+	}
+	wg.Wait()
+
+	entries := source.Registry.Entries()
+	if len(entries) == 0 {
+		t.Fatal("registry has no entries — test fixture is not exercising the wiring")
+	}
+
+	if err := provider.Shutdown(context.Background()); err != nil {
+		t.Fatalf("provider shutdown: %v", err)
+	}
+
+	// Decode the exported points for exactly this metric — never a whole-blob
+	// substring count, which would also match graph2otel.collector.availability
+	// (also keyed by "collector") emitted by the same setupTenant call.
+	got := decodeExpectedIntervalPoints(t, metrics.Bytes())
+	want := map[string]float64{}
+	for _, entry := range entries {
+		want[entry.Collector.Name()] = entry.Interval.Seconds()
+	}
+	if len(got) != len(want) {
+		t.Fatalf("expected_interval series count = %d, want %d (one per registered collector): %+v",
+			len(got), len(want), got)
+	}
+	for collectorName, wantSeconds := range want {
+		gotPoint, ok := got[collectorName]
+		if !ok {
+			t.Fatalf("no expected_interval series for collector %q; got: %+v", collectorName, got)
+		}
+		if gotPoint.seconds != wantSeconds {
+			t.Errorf("collector %q expected_interval = %v seconds, want %v (its resolved Registry.Entry interval)",
+				collectorName, gotPoint.seconds, wantSeconds)
+		}
+		if gotPoint.tenantID != "tenant-a" {
+			t.Errorf("collector %q tenant_id = %q, want tenant-a", collectorName, gotPoint.tenantID)
+		}
+	}
+}
+
+// stdoutMetricPoint is the fields this test needs from one exported
+// stdoutmetric data point.
+type stdoutMetricPoint struct {
+	seconds  float64
+	tenantID string
+}
+
+// decodeExpectedIntervalPoints parses the stdout metrics exporter's JSON
+// output (one or more concatenated top-level documents — Shutdown may flush
+// more than once) and returns every graph2otel.collector.expected_interval
+// data point, keyed by its "collector" attribute. Real decoding rather than
+// substring counting is deliberate: several self-obs metrics this same
+// setupTenant call emits (graph2otel.collector.availability chief among them)
+// are ALSO keyed by a "collector" attribute, so a whole-blob string count
+// would over-count.
+func decodeExpectedIntervalPoints(t *testing.T, raw []byte) map[string]stdoutMetricPoint {
+	t.Helper()
+	type attr struct {
+		Key   string `json:"Key"`
+		Value struct {
+			Value string `json:"Value"`
+		} `json:"Value"`
+	}
+	type dataPoint struct {
+		Attributes []attr  `json:"Attributes"`
+		Value      float64 `json:"Value"`
+	}
+	type metric struct {
+		Name string `json:"Name"`
+		Data struct {
+			DataPoints []dataPoint `json:"DataPoints"`
+		} `json:"Data"`
+	}
+	var doc struct {
+		ScopeMetrics []struct {
+			Metrics []metric `json:"Metrics"`
+		} `json:"ScopeMetrics"`
+	}
+
+	out := map[string]stdoutMetricPoint{}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	for dec.More() {
+		if err := dec.Decode(&doc); err != nil {
+			t.Fatalf("decoding stdout metrics export: %v\nraw:\n%s", err, raw)
+		}
+		for _, sm := range doc.ScopeMetrics {
+			for _, m := range sm.Metrics {
+				if m.Name != collector.MetricCollectorExpectedInterval {
+					continue
+				}
+				for _, dp := range m.Data.DataPoints {
+					var collectorName string
+					point := stdoutMetricPoint{seconds: dp.Value}
+					for _, a := range dp.Attributes {
+						switch a.Key {
+						case "collector":
+							collectorName = a.Value.Value
+						case "tenant_id":
+							point.tenantID = a.Value.Value
+						}
+					}
+					out[collectorName] = point
+				}
+			}
+		}
+	}
+	return out
 }
 
 func TestSetupTenantBlobInitializationFailureRecomputesCoverage(t *testing.T) {

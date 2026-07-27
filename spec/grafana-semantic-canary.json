@@ -53,7 +53,7 @@
       "id": "collector-staleness-query",
       "kind": "promql",
       "datasource": "prometheus",
-      "query": "max by (tenant_id, collector) (graph2otel_scrape_staleness_seconds)",
+      "query": "max by (tenant_id, collector) (graph2otel_scrape_staleness_seconds) / max by (tenant_id, collector) (graph2otel_collector_expected_interval_seconds)",
       "empty": "empty_allowed",
       "required_labels": [
         "tenant_id",

@@ -359,21 +359,40 @@ RULES = [
         True,
     ),
     # --- Collector staleness (alerts/README.md doc block 3) -----------------
+    # #299: interval-aware — the primary rule now compares each collector's
+    # staleness against ITS OWN effective poll interval
+    # (graph2otel.collector.expected_interval, the scheduler's resolved value,
+    # not the raw config override) rather than one fixed 3600s placeholder
+    # that was wrong for anything but a ~20-minute collector. Same rule uid,
+    # same doc block, same 14-rule count — only the expr/threshold/annotations
+    # change.
     _alert(
         "g2o-collector-staleness",
         "graph2otel collector scrape stale",
-        f'max by (tenant_id, collector) '
-        f'({_m("graph2otel.scrape.staleness")})',
-        "gt", [3600], "5m",
+        f'max by (tenant_id, collector) ({_m("graph2otel.scrape.staleness")}) / '
+        f'max by (tenant_id, collector) ({_m("graph2otel.collector.expected_interval")})',
+        "gt", [3], "5m",
         {"severity": "critical", "category": "self-observability", "source": "graph2otel"},
-        "Collector {{ $labels.collector }} hasn't scraped successfully in over an hour "
-        "(tenant {{ $labels.tenant_id }})",
-        "graph2otel_scrape_staleness_seconds for collector={{ $labels.collector }}, tenant "
-        "{{ $labels.tenant_id }} has exceeded 3600s (the placeholder default: 3x a "
-        "20-minute poll interval) for 5m. Replace 3600 with 3x YOUR configured collector "
-        "interval in seconds. noDataState is Alerting (not OK) because self-obs metrics are "
-        "emitted by every running collector — a fully missing series means the process died "
-        "or that collector was removed, same semantics as tailscale2otel's ExporterDown.",
+        "Collector {{ $labels.collector }} is more than 3x its expected poll interval "
+        "overdue (tenant {{ $labels.tenant_id }})",
+        "graph2otel_scrape_staleness_seconds / graph2otel_collector_expected_interval_seconds "
+        "for collector={{ $labels.collector }}, tenant {{ $labels.tenant_id }} has exceeded 3 "
+        "for 5m — i.e. it has been more than 3x that COLLECTOR'S OWN effective poll interval "
+        "(not a fixed second count) since its last successful scrape. Both metrics carry "
+        "exactly (tenant_id, collector), so the division is a one-to-one vector match with no "
+        "on()/ignoring() needed. 3x tolerates one missed poll plus backoff jitter without "
+        "paging — several workloads have mandatory client-side rate limiters (reporting "
+        "5/10s, Identity Protection 1/s, Intune export 48/min) that make an occasional missed "
+        "poll routine rather than a fault; a tighter 2x was rejected for exactly that reason. "
+        "noDataState is Alerting because the whole query returning zero rows means every "
+        "collector's self-obs signal went dark at once — the exporter process died, or a "
+        "tenant's only collector was removed. It does NOT mean one collector's series "
+        "disappearing: Grafana evaluates this rule per (tenant_id, collector) combination the "
+        "query actually returns, so when ONE collector among several is deliberately "
+        "removed (or disabled), its ratio series simply stops existing and its alert "
+        "instance resolves silently — the other collectors' instances are unaffected and "
+        "noDataState never applies to it. That silent, clean disappearance is the deliberately "
+        "removed collector's correct outcome, not an accident.",
         False,
         no_data_state="Alerting",
     ),

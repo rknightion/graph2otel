@@ -1709,6 +1709,22 @@
       ]
     },
     {
+      "name": "graph2otel.collector.expected_interval",
+      "prometheus_name": "graph2otel_collector_expected_interval_seconds",
+      "unit": "s",
+      "kind": "gauge",
+      "description": "Effective poll interval, in seconds, the scheduler uses for each registered collector — the value actually applied after a non-positive override fell back to the collector's own default, never the raw config value.",
+      "additive": false,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/collector"
+      ]
+    },
+    {
       "name": "graph2otel.event.lag",
       "prometheus_name": "graph2otel_event_lag_seconds",
       "unit": "s",

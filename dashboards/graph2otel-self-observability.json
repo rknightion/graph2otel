@@ -219,7 +219,7 @@
           "links": [
             {
               "title": "Open Dropped / errored source records",
-              "url": "/d/graph2otel-self-obs?viewPanel=36&from=${__from}&to=${__to}&${__all_variables}",
+              "url": "/d/graph2otel-self-obs?viewPanel=37&from=${__from}&to=${__to}&${__all_variables}",
               "targetBlank": false
             }
           ]
@@ -329,7 +329,7 @@
           "links": [
             {
               "title": "Open Checkpoint persist error rate",
-              "url": "/d/graph2otel-self-obs?viewPanel=32&from=${__from}&to=${__to}&${__all_variables}",
+              "url": "/d/graph2otel-self-obs?viewPanel=33&from=${__from}&to=${__to}&${__all_variables}",
               "targetBlank": false
             }
           ]
@@ -384,7 +384,7 @@
           "links": [
             {
               "title": "Open Source-event lag at emission",
-              "url": "/d/graph2otel-self-obs?viewPanel=37&from=${__from}&to=${__to}&${__all_variables}",
+              "url": "/d/graph2otel-self-obs?viewPanel=38&from=${__from}&to=${__to}&${__all_variables}",
               "targetBlank": false
             }
           ]
@@ -439,7 +439,7 @@
           "links": [
             {
               "title": "Open Series clipped, by mode (process-wide)",
-              "url": "/d/graph2otel-self-obs?viewPanel=53&from=${__from}&to=${__to}&${__all_variables}",
+              "url": "/d/graph2otel-self-obs?viewPanel=54&from=${__from}&to=${__to}&${__all_variables}",
               "targetBlank": false
             }
           ]
@@ -494,7 +494,7 @@
           "links": [
             {
               "title": "Open Microsoft API drift \u2014 a response no longer matches what a collector expects",
-              "url": "/d/graph2otel-self-obs?viewPanel=71&from=${__from}&to=${__to}&${__all_variables}",
+              "url": "/d/graph2otel-self-obs?viewPanel=72&from=${__from}&to=${__to}&${__all_variables}",
               "targetBlank": false
             }
           ]
@@ -549,7 +549,7 @@
           "links": [
             {
               "title": "Open Graph-reported throttle budget consumed",
-              "url": "/d/graph2otel-self-obs?viewPanel=58&from=${__from}&to=${__to}&${__all_variables}",
+              "url": "/d/graph2otel-self-obs?viewPanel=59&from=${__from}&to=${__to}&${__all_variables}",
               "targetBlank": false
             }
           ]
@@ -1537,14 +1537,62 @@
     },
     {
       "id": 31,
+      "type": "table",
+      "title": "Effective expected poll interval per collector",
+      "description": "The scheduler's EFFECTIVE interval per collector (#299) \u2014 a clamped or defaulted value, never the raw config override. This is exactly what the collector-staleness alert's staleness/expected-interval ratio compares against, so a collector with a short or long interval gets its own correct multiple instead of one placeholder threshold.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 101
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {},
+          "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately."
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\", collector=~\"$collector\"}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "range": false,
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 32,
       "type": "timeseries",
       "title": "Scrape error rate by error type",
       "description": "",
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 101
+        "x": 0,
+        "y": 109
       },
       "datasource": {
         "type": "prometheus",
@@ -1595,14 +1643,14 @@
       ]
     },
     {
-      "id": 32,
+      "id": 33,
       "type": "timeseries",
       "title": "Checkpoint persist error rate",
       "description": "The window succeeded but its high-water mark did not reach disk. The next tick still advances; the window is only re-polled after a restart.",
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
+        "x": 12,
         "y": 109
       },
       "datasource": {
@@ -1654,7 +1702,7 @@
       ]
     },
     {
-      "id": 33,
+      "id": 34,
       "type": "row",
       "title": "Record outcome accounting",
       "collapsed": false,
@@ -1667,7 +1715,7 @@
       }
     },
     {
-      "id": 34,
+      "id": 35,
       "type": "timeseries",
       "title": "Collector runs by reconciled result",
       "description": "Separates healthy-empty polls from successful data-bearing polls and from partial or failed runs.",
@@ -1726,7 +1774,7 @@
       ]
     },
     {
-      "id": 35,
+      "id": 36,
       "type": "timeseries",
       "title": "Source-record rate by outcome",
       "description": "One source row counts once at each lifecycle boundary; fetched, mapped, and terminal outcomes overlap and are deliberately unstacked. This is not the number of OTEL metric points or log records.",
@@ -1785,7 +1833,7 @@
       ]
     },
     {
-      "id": 36,
+      "id": 37,
       "type": "timeseries",
       "title": "Dropped / errored source records",
       "description": "Any nonzero value is record loss. `dropped` is a deliberate rejection such as a missing event timestamp; `errored` is decode or processing failure.",
@@ -1844,7 +1892,7 @@
       ]
     },
     {
-      "id": 37,
+      "id": 38,
       "type": "timeseries",
       "title": "Source-event lag at emission",
       "description": "Source timestamp to graph2otel emission. It does not measure backend acceptance or OTLP delivery latency.",
@@ -1915,7 +1963,7 @@
       ]
     },
     {
-      "id": 38,
+      "id": 39,
       "type": "table",
       "title": "Payload type mismatches",
       "description": "Report-only payload drift. Labels contain only source-controlled field names and closed JSON types, never field values.",
@@ -1963,7 +2011,7 @@
       ]
     },
     {
-      "id": 39,
+      "id": 40,
       "type": "row",
       "title": "Ingest volume and estimated cost",
       "collapsed": false,
@@ -1976,7 +2024,7 @@
       }
     },
     {
-      "id": 40,
+      "id": 41,
       "type": "timeseries",
       "title": "Exact source-record rate by collector and traffic class",
       "description": "Exact logical source records fetched by completed collector runs. This traffic-class view comes from the same immutable snapshot as record.outcomes{outcome=\"fetched\"}. Normal runtime emits steady_state and cold_start_backfill; manual_replay is reserved and not emitted here.",
@@ -2035,7 +2083,7 @@
       ]
     },
     {
-      "id": 41,
+      "id": 42,
       "type": "timeseries",
       "title": "Exact emitted-point rate by collector, signal and traffic class",
       "description": "Exact metric and log points after the central limiter and handed to the OpenTelemetry SDK. This is not backend acceptance or retention.",
@@ -2094,7 +2142,7 @@
       ]
     },
     {
-      "id": 42,
+      "id": 43,
       "type": "table",
       "title": "Estimated projected collector cost (configured period)",
       "description": "Estimate, not invoice. Present only when cost.enabled is true, using the operator-supplied rates and configured projection period. This projects recurring steady_state rows from cumulative process-lifetime observations; exceptional interval cost remains in the admin view. Logical record and point components are exact; the collector payload-byte allocation is estimated. A configured budget is display-only and never changes collector behavior.",
@@ -2143,7 +2191,7 @@
       ]
     },
     {
-      "id": 43,
+      "id": 44,
       "type": "row",
       "title": "Build and licensing",
       "collapsed": false,
@@ -2156,7 +2204,7 @@
       }
     },
     {
-      "id": 44,
+      "id": 45,
       "type": "table",
       "title": "Build info (process-wide)",
       "description": "One series for the graph2otel process. Tenant selection does not apply: duplicating build identity per tenant would create misleading copies of the same process fact.",
@@ -2204,7 +2252,7 @@
       ]
     },
     {
-      "id": 45,
+      "id": 46,
       "type": "table",
       "title": "Detected license tier by tenant",
       "description": "",
@@ -2252,7 +2300,7 @@
       ]
     },
     {
-      "id": 46,
+      "id": 47,
       "type": "row",
       "title": "Export jobs (Intune report exports, M365 audit query)",
       "collapsed": false,
@@ -2265,7 +2313,7 @@
       }
     },
     {
-      "id": 47,
+      "id": 48,
       "type": "timeseries",
       "title": "Export jobs by result",
       "description": "",
@@ -2324,7 +2372,7 @@
       ]
     },
     {
-      "id": 48,
+      "id": 49,
       "type": "timeseries",
       "title": "Export job duration",
       "description": "",
@@ -2383,7 +2431,7 @@
       ]
     },
     {
-      "id": 49,
+      "id": 50,
       "type": "timeseries",
       "title": "Export polls to terminal state",
       "description": "",
@@ -2442,7 +2490,7 @@
       ]
     },
     {
-      "id": 50,
+      "id": 51,
       "type": "timeseries",
       "title": "Downloaded export size",
       "description": "",
@@ -2501,7 +2549,7 @@
       ]
     },
     {
-      "id": 51,
+      "id": 52,
       "type": "row",
       "title": "Cardinality limiter (#235)",
       "collapsed": false,
@@ -2514,7 +2562,7 @@
       }
     },
     {
-      "id": 52,
+      "id": 53,
       "type": "table",
       "title": "Active series by source metric (process-wide)",
       "description": "Distinct series emitted per source metric across the shared process AFTER limiting \u2014 the series actually billed. Tenant selection does not apply.",
@@ -2562,7 +2610,7 @@
       ]
     },
     {
-      "id": 53,
+      "id": 54,
       "type": "timeseries",
       "title": "Series clipped, by mode (process-wide)",
       "description": "mode=folded were summed into the `other` bucket; mode=dropped were discarded because the metric is not additive and a synthetic aggregate would be worse than the loss. Counts cover the shared process; tenant selection does not apply.",
@@ -2620,7 +2668,7 @@
       ]
     },
     {
-      "id": 54,
+      "id": 55,
       "type": "stat",
       "title": "Total active series (process-wide)",
       "description": "Total distinct active series across the shared process during the last export interval. Tenant selection does not apply.",
@@ -2671,7 +2719,7 @@
       ]
     },
     {
-      "id": 55,
+      "id": 56,
       "type": "stat",
       "title": "Configured per-metric series limit (process-wide)",
       "description": "One process-wide cardinality policy. Tenant selection does not apply.",
@@ -2722,7 +2770,7 @@
       ]
     },
     {
-      "id": 56,
+      "id": 57,
       "type": "row",
       "title": "Graph throttling and outbound HTTP",
       "collapsed": false,
@@ -2735,7 +2783,7 @@
       }
     },
     {
-      "id": 57,
+      "id": 58,
       "type": "timeseries",
       "title": "Throttle (429) rate by workload",
       "description": "",
@@ -2794,7 +2842,7 @@
       ]
     },
     {
-      "id": 58,
+      "id": 59,
       "type": "timeseries",
       "title": "Graph-reported throttle budget consumed",
       "description": "From the x-ms-throttle-limit-percentage response header, which is not sent on every 429 or every workload \u2014 an absent series does NOT mean the budget is healthy.",
@@ -2853,7 +2901,7 @@
       ]
     },
     {
-      "id": 59,
+      "id": 60,
       "type": "timeseries",
       "title": "Outbound Graph request latency (p95)",
       "description": "",
@@ -2912,7 +2960,7 @@
       ]
     },
     {
-      "id": 60,
+      "id": 61,
       "type": "timeseries",
       "title": "Outbound Graph 4xx / 5xx rate by workload",
       "description": "",
@@ -2983,7 +3031,7 @@
       ]
     },
     {
-      "id": 61,
+      "id": 62,
       "type": "row",
       "title": "Non-Graph transport HTTP",
       "collapsed": false,
@@ -2996,7 +3044,7 @@
       }
     },
     {
-      "id": 62,
+      "id": 63,
       "type": "timeseries",
       "title": "Exchange Online request latency (p95)",
       "description": "",
@@ -3055,7 +3103,7 @@
       ]
     },
     {
-      "id": 63,
+      "id": 64,
       "type": "timeseries",
       "title": "Exchange Online errors and throttling",
       "description": "",
@@ -3138,7 +3186,7 @@
       ]
     },
     {
-      "id": 64,
+      "id": 65,
       "type": "timeseries",
       "title": "Advanced hunting request latency (p95)",
       "description": "",
@@ -3197,7 +3245,7 @@
       ]
     },
     {
-      "id": 65,
+      "id": 66,
       "type": "timeseries",
       "title": "Advanced hunting errors and throttling",
       "description": "",
@@ -3280,7 +3328,7 @@
       ]
     },
     {
-      "id": 66,
+      "id": 67,
       "type": "timeseries",
       "title": "MDCA request latency (p95)",
       "description": "",
@@ -3339,7 +3387,7 @@
       ]
     },
     {
-      "id": 67,
+      "id": 68,
       "type": "timeseries",
       "title": "MDCA errors and throttling",
       "description": "",
@@ -3422,7 +3470,7 @@
       ]
     },
     {
-      "id": 68,
+      "id": 69,
       "type": "timeseries",
       "title": "O365 Activity request latency (p95)",
       "description": "",
@@ -3481,7 +3529,7 @@
       ]
     },
     {
-      "id": 69,
+      "id": 70,
       "type": "timeseries",
       "title": "O365 Activity errors and throttling",
       "description": "",
@@ -3564,7 +3612,7 @@
       ]
     },
     {
-      "id": 70,
+      "id": 71,
       "type": "row",
       "title": "Microsoft API drift",
       "collapsed": false,
@@ -3577,7 +3625,7 @@
       }
     },
     {
-      "id": 71,
+      "id": 72,
       "type": "timeseries",
       "title": "Microsoft API drift \u2014 a response no longer matches what a collector expects",
       "description": "Report-only wire values outside a collector's mapped assumptions. Unexpected values do not drop records.",
@@ -3636,7 +3684,7 @@
       ]
     },
     {
-      "id": 72,
+      "id": 73,
       "type": "row",
       "title": "Blob ingest health",
       "collapsed": false,
@@ -3649,7 +3697,7 @@
       }
     },
     {
-      "id": 73,
+      "id": 74,
       "type": "timeseries",
       "title": "Blob categories",
       "description": "",
@@ -3708,7 +3756,7 @@
       ]
     },
     {
-      "id": 74,
+      "id": 75,
       "type": "timeseries",
       "title": "Blob endpoint paths",
       "description": "",
@@ -3767,7 +3815,7 @@
       ]
     },
     {
-      "id": 75,
+      "id": 76,
       "type": "timeseries",
       "title": "Blob event age",
       "description": "",
@@ -3826,7 +3874,7 @@
       ]
     },
     {
-      "id": 76,
+      "id": 77,
       "type": "timeseries",
       "title": "Blob records dropped",
       "description": "",
@@ -3885,7 +3933,7 @@
       ]
     },
     {
-      "id": 77,
+      "id": 78,
       "type": "timeseries",
       "title": "Blob self excluded",
       "description": "",
@@ -3944,7 +3992,7 @@
       ]
     },
     {
-      "id": 78,
+      "id": 79,
       "type": "timeseries",
       "title": "Blob records: emitted as metrics vs gated",
       "description": "",
@@ -4015,7 +4063,7 @@
       ]
     },
     {
-      "id": 79,
+      "id": 80,
       "type": "timeseries",
       "title": "Logpipeline self excluded",
       "description": "",
@@ -4074,7 +4122,7 @@
       ]
     },
     {
-      "id": 80,
+      "id": 81,
       "type": "row",
       "title": "Logs \u2014 which one, not how many (#162)",
       "collapsed": false,
@@ -4087,7 +4135,7 @@
       }
     },
     {
-      "id": 81,
+      "id": 82,
       "type": "logs",
       "title": "Blob diagnostic categories \u2014 which container, mapped or not",
       "description": "One record per diagnostic category found in the storage account, saying whether graph2otel has a mapper for it. An unmapped category is data arriving that nothing reads.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",

@@ -53,6 +53,7 @@ SCRAPE_DURATION = SELF_OBS["graph2otel.scrape.duration"].prom
 SCRAPE_STALENESS = SELF_OBS["graph2otel.scrape.staleness"].prom
 SCRAPE_LAST = SELF_OBS["graph2otel.scrape.last_timestamp"].prom
 SCRAPE_BUDGET = SELF_OBS["graph2otel.scrape.budget"].prom
+EXPECTED_INTERVAL = SELF_OBS["graph2otel.collector.expected_interval"].prom
 SCRAPE_ERRORS = SELF_OBS["graph2otel.scrape.errors"].prom
 SCRAPE_OUTCOMES = SELF_OBS["graph2otel.scrape.outcomes"].prom
 RECORD_OUTCOMES = SELF_OBS["graph2otel.record.outcomes"].prom
@@ -369,6 +370,14 @@ def extra(b):
           legends=["{{tenant_id}} {{collector}}"],
           desc="At or above 1 a scrape takes as long as its own poll interval — no "
                "headroom, risk of overrun.")
+    b.raw("Effective expected poll interval per collector",
+          [f"{EXPECTED_INTERVAL}{_SEL}"],
+          viz="table", unit="s",
+          desc="The scheduler's EFFECTIVE interval per collector (#299) — a clamped or "
+               "defaulted value, never the raw config override. This is exactly what the "
+               "collector-staleness alert's staleness/expected-interval ratio compares "
+               "against, so a collector with a short or long interval gets its own "
+               "correct multiple instead of one placeholder threshold.")
     b.raw("Scrape error rate by error type",
           [f"sum by (tenant_id, collector, error_type) "
            f"(rate({SCRAPE_ERRORS}{_SEL}[{RATE}]))"],
