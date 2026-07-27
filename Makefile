@@ -32,7 +32,7 @@ export PATH := $(TOOLS_DIR):$(PATH)
         helm-docs tools-helm-docs tools-check tools-graphdrift \
         graphdrift graphdrift-update tidy tidy-check forks-check dashboard grafana-check rules \
         grafana-canary-check grafana-canary grafana-performance-check \
-        grafana-performance-baseline container-smoke
+        grafana-performance-baseline grafana-performance-render container-smoke
 
 build:
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/$(BINARY)
@@ -204,6 +204,29 @@ grafana-performance-check:
 # optional read-only live snapshot lane; numeric budgets remain #309 work.
 grafana-performance-baseline:
 	@python3 grafana/performance_baseline.py
+
+# Credentialed, read-only live render measurement (#309's render lane).
+# Reuses the #308 semantic-canary read-only service account via
+# GRAFANA_CONTEXT — no separate credential is minted. Render parameters (6h
+# range, 1920x1080, dark, UTC, serial) are fixed so runs are comparable
+# across time; the wildcard "$__all" tenant selection is Grafana's own
+# template-variable "All" token, matching the multi+includeAll `tenant`
+# variable `grafana/builder.py` declares. GRAFANA_PERFORMANCE_BUDGET_SECONDS
+# is deliberately UNSET by default: #309 exists precisely to avoid picking a
+# latency budget from a single measurement, so leave it unset until a
+# maintainer sets one from a real measured distribution — an unset budget is
+# always a clean pass (exit 0), never a failure of any kind.
+GRAFANA_PERFORMANCE_BUDGET_SECONDS ?=
+grafana-performance-render:
+	@test -n "$(GRAFANA_CONTEXT)" || { echo "GRAFANA_CONTEXT is required" >&2; exit 2; }
+	@python3 grafana/performance_baseline.py \
+		--live-context "$(GRAFANA_CONTEXT)" \
+		--since 6h --width 1920 --height 1080 --theme dark --timezone UTC \
+		--repeat 1 \
+		--var datasource=grafanacloud-prom \
+		--var loki_datasource=grafanacloud-logs \
+		--var tenant='$$__all' \
+		$(if $(GRAFANA_PERFORMANCE_BUDGET_SECONDS),--budget-seconds "$(GRAFANA_PERFORMANCE_BUDGET_SECONDS)",)
 
 # Idempotent tool install into .tools/ (gitignored). Re-installs if the cached
 # binary is missing or doesn't execute on this arch (e.g. a wrong-arch CI cache).

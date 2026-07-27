@@ -210,6 +210,46 @@ def _redact(text: str, values) -> str:
     return text
 
 
+def dashboard_exists(dashboard_name: str, context: str) -> bool:
+    """Read-only existence probe, via ``gcx dashboards get``, run BEFORE any
+    snapshot attempt.
+
+    Live-measured 2026-07-27 against grafana.m7kni.com (#309): ``gcx
+    dashboards snapshot <name>`` of a name that does not exist on the stack
+    does NOT fail — it exits 0 and silently renders Grafana's own "Dashboard
+    not found" page as a PNG, indistinguishable from a real render by exit
+    code or file presence alone. So absence must be checked here, with
+    ``dashboards get``, which DOES 404 correctly
+    (``{"error":{"summary":"404 NotFound", ...}}``), and the snapshot must
+    never be asked to answer this question itself.
+
+    Any other failure (auth, transport, malformed response) is a genuine
+    operational error, not evidence of absence, and is raised rather than
+    silently treated as "not present".
+    """
+    args = ["gcx", "dashboards", "get", dashboard_name, "--context", context,
+            "-o", "json"]
+    try:
+        completed = subprocess.run(args, check=False, capture_output=True,
+                                    text=True)
+    except OSError as exc:
+        raise OperationalError(f"cannot execute gcx: {exc}") from exc
+    if completed.returncode == 0:
+        return True
+    detail = completed.stdout.strip() or completed.stderr.strip()
+    try:
+        parsed = json.loads(detail)
+    except json.JSONDecodeError:
+        parsed = {}
+    summary = str(parsed.get("error", {}).get("summary", ""))
+    if "404" in summary or "not found" in detail.lower():
+        return False
+    raise OperationalError(
+        f"cannot verify whether dashboard {dashboard_name!r} exists: "
+        f"{detail or 'no diagnostic'}"
+    )
+
+
 def snapshot_once(dashboard_name: str, context: str, variables: dict,
                   *, since: str = "6h", width: int = 1920,
                   height: int = 1080, theme: str = "dark",
@@ -296,9 +336,21 @@ def add_live_baseline(receipt: dict, context: str, variables: dict,
     for dashboard in receipt["dashboards"]:
         # gcx addresses a dashboard by its v2 identity, metadata.name — there is
         # no v1 "uid" any more (#399).
+        name = dashboard["name"]
+        if not dashboard_exists(name, context):
+            receipt["live"]["dashboards"].append({
+                "name": name,
+                "status": "skipped_absent",
+                "message": (
+                    f"dashboard {name!r} is not present on this Grafana "
+                    "stack — skipping render measurement. This is a clean "
+                    "skip, not a performance failure."
+                ),
+            })
+            continue
         attempts = [
             snapshot_once(
-                dashboard["name"],
+                name,
                 context,
                 variables,
                 since=since,
@@ -310,10 +362,57 @@ def add_live_baseline(receipt: dict, context: str, variables: dict,
             for _ in range(repeat)
         ]
         receipt["live"]["dashboards"].append({
-            "name": dashboard["name"],
+            "name": name,
+            "status": "measured",
             "attempts": attempts,
         })
     return receipt
+
+
+def evaluate_budget(receipt: dict, budget_seconds) -> dict:
+    """Compare measured live attempts against an optional latency budget.
+
+    ``budget_seconds`` is ``None`` until a maintainer sets one from a real
+    measured distribution (#309's whole point is to avoid picking this
+    number from n=1) — deliberately never guessed or defaulted here. The
+    "not configured" and "no measurements" outcomes are BOTH a clean pass:
+    neither is evidence that anything breached a budget, because no budget
+    exists yet in the first case and nothing was measured in the second (an
+    absent dashboard must not silently read as "within budget" — that would
+    claim a measurement that never happened).
+    """
+    live = receipt.get("live")
+    if live is None:
+        return {"status": "not_applicable"}
+
+    attempts = [
+        (dashboard["name"], attempt)
+        for dashboard in live["dashboards"]
+        if dashboard.get("status") == "measured"
+        for attempt in dashboard["attempts"]
+    ]
+    if not attempts:
+        result = {"status": "no_measurements", "budget_seconds": budget_seconds}
+        live["budget"] = result
+        return result
+
+    if budget_seconds is None:
+        result = {"status": "not_configured", "budget_seconds": None}
+        live["budget"] = result
+        return result
+
+    breaches = [
+        {"name": name, "elapsed_seconds": attempt["elapsed_seconds"]}
+        for name, attempt in attempts
+        if attempt["elapsed_seconds"] > budget_seconds
+    ]
+    result = {
+        "status": "breached" if breaches else "within_budget",
+        "budget_seconds": budget_seconds,
+        "breaches": breaches,
+    }
+    live["budget"] = result
+    return result
 
 
 def _parse_variables(values: list) -> dict:
@@ -346,6 +445,16 @@ def main() -> int:
     parser.add_argument("--height", type=int, default=1080)
     parser.add_argument("--theme", choices=("dark", "light"), default="dark")
     parser.add_argument("--timezone", default="UTC")
+    parser.add_argument(
+        "--budget-seconds", type=float, default=None,
+        help=(
+            "Optional render-latency budget in seconds, compared against "
+            "each measured live attempt. Deliberately UNSET by default — "
+            "#309 exists precisely to avoid picking this number from n=1. "
+            "Leave unset until a maintainer sets it from a real measured "
+            "distribution; unset is always a clean pass (exit 0)."
+        ),
+    )
     args = parser.parse_args()
 
     raw_variable_values = [
@@ -356,6 +465,7 @@ def main() -> int:
     try:
         receipt = static_receipt(args.dashboard or _default_dashboards())
         variables = _parse_variables(args.var)
+        budget = {"status": "not_applicable"}
         if args.live_context:
             add_live_baseline(
                 receipt,
@@ -368,6 +478,7 @@ def main() -> int:
                 theme=args.theme,
                 timezone=args.timezone,
             )
+            budget = evaluate_budget(receipt, args.budget_seconds)
     except OperationalError as exc:
         print(json.dumps({
             "schema": 1,
@@ -377,6 +488,15 @@ def main() -> int:
         return 2
 
     print(json.dumps(receipt, indent=2, sort_keys=True))
+    # Exit codes are deliberately distinct and NOT collapsible into one
+    # another (#309): 0 = pass (including "no budget configured" and "no
+    # measurements" — neither is a breach or an error), 1 = a configured
+    # budget was breached, 2 = operational error (handled above, before any
+    # budget comparison ran). A Grafana outage or expired token must never
+    # be misread as a performance regression, and "no budget yet" must never
+    # be misread as either.
+    if budget.get("status") == "breached":
+        return 1
     return 0
 
 

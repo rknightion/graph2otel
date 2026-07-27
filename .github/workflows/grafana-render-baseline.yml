@@ -1,0 +1,198 @@
+name: Grafana render baseline
+
+# Scheduled, read-only execution of #309's render lane
+# (grafana/performance_baseline.py --live-context via `make
+# grafana-performance-render`). It logs into the production stack as the
+# SAME least-privilege read-only service account #308 already provisioned
+# (`graph2otel-semantic-canary`, Viewer role, id 36) — no second credential
+# is minted — and renders the single v2 `graph2otel` dashboard through
+# `gcx dashboards snapshot`, recording end-to-end Grafana Image Renderer
+# latency and PNG bytes as a JSON artifact. It creates, updates, and deletes
+# nothing in Grafana; this workflow never authenticates with write access.
+#
+# Per-TAB rendering is NOT possible with `gcx dashboards snapshot` today:
+# Grafana's tab navigation (`?dtab=<slug>` / `?<domain>-dtab=<slug>`) is a
+# plain URL query parameter, not a dashboard template variable, and the
+# snapshot command's only parameterisation hooks are `--var` (template
+# variable overrides only) and `--panel` (render one panel by numeric id,
+# independent of tab navigation). Neither can select a `dtab`. So this lane
+# measures the one thing that command CAN measure: the whole-dashboard
+# render, which is the default (first) top-level tab's cost end to end. See
+# docs/deploying-observability.md for the full investigation and the exact
+# `--help` evidence.
+#
+# NO LATENCY BUDGET IS SET HERE. #309 exists specifically to avoid picking a
+# numeric threshold from a single measurement. The exit-code plumbing for a
+# budget already exists in grafana/performance_baseline.py (`--budget-seconds`,
+# unset by default) and in `make grafana-performance-render`
+# (GRAFANA_PERFORMANCE_BUDGET_SECONDS, unset by default) — this workflow
+# deliberately does not pass a value, so every run's "budget" outcome is
+# "not_configured", which is always a clean pass. A maintainer sets the
+# budget later, once a real distribution exists from this workflow's own
+# artifact history, and only then does this workflow gain a fourth line
+# wiring GRAFANA_PERFORMANCE_BUDGET_SECONDS through.
+#
+# Absent-dashboard handling: the render lane checks dashboard existence
+# with `gcx dashboards get` BEFORE attempting any render. Live-measured
+# 2026-07-27 against grafana.m7kni.com: `gcx dashboards snapshot` of a name
+# that does not exist does NOT fail — it exits 0 and silently renders
+# Grafana's own "Dashboard not found" page as a PNG, which would otherwise
+# be indistinguishable from a real measurement. So this workflow's "pass"
+# path also covers "the dashboard was not yet published" — that is reported
+# as a distinct `skipped_absent` status in the receipt, never as a
+# performance failure.
+#
+# Daily cadence, offset from every other scheduled workflow in this repo
+# (grafana-canary.yml 05:12 UTC, graph-beta-drift.yml 06:23 UTC, codeql.yml
+# Tuesdays 03:23 UTC, docker-security.yml Tuesdays 05:33 UTC, scorecard.yml
+# Wednesdays 07:41 UTC) and off the top of the hour, away from the shared
+# GitHub Actions scheduler's peak load: 07:07 UTC.
+#
+# Failure routing: the run failing IS the notification surface (#293/#296 —
+# this repository ships no contact point, webhook, or external notifier).
+on:
+  schedule:
+    - cron: "7 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: grafana-render-baseline
+  cancel-in-progress: false
+
+env:
+  # A local gcx context alias, distinct from grafana-canary.yml's for
+  # readability in logs — it authenticates against the SAME secrets
+  # (GRAFANA_CANARY_URL / GRAFANA_CANARY_TOKEN) and the SAME read-only
+  # service account, per the #309 maintainer decision to reuse rather than
+  # mint a second credential.
+  GCX_CONTEXT: graph2otel-render-baseline
+  GCX_VERSION: "0.6.0"
+  # sha256 of gcx_0.6.0_linux_amd64.tar.gz — the SAME pinned version and
+  # digest as .github/workflows/grafana-canary.yml, so there is exactly one
+  # thing to bump when gcx is upgraded. Cross-checked against the upstream
+  # gcx_0.6.0_checksums.txt release asset and a local download (2026-07-27)
+  # before pinning here; verified fail-closed against a same-request-fetched
+  # checksums file, which would prove nothing about a compromised release.
+  GCX_SHA256: "5e76c064f14d9ec360cc48c46251b06a47762ab0dc755e4275e14ce2f67e8dbe"
+
+jobs:
+  render-baseline:
+    name: read-only render baseline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      # Same install path as grafana-canary.yml: gcx ships no first-party
+      # GitHub Action and its own README/install.sh are not reproducible, so
+      # this downloads one pinned release tag's linux_amd64 archive and
+      # verifies it against the sha256 pinned in this file's env block
+      # above (not a same-request checksums.txt), so a compromised or
+      # reissued release asset fails closed instead of silently installing.
+      - name: Install gcx (pinned release, checksum verified)
+        run: |
+          set -euo pipefail
+          archive="gcx_${GCX_VERSION}_linux_amd64.tar.gz"
+          url="https://github.com/grafana/gcx/releases/download/v${GCX_VERSION}/${archive}"
+          curl -fsSL -o "${RUNNER_TEMP}/${archive}" "$url"
+          echo "${GCX_SHA256}  ${RUNNER_TEMP}/${archive}" | sha256sum -c -
+          mkdir -p "${RUNNER_TEMP}/gcx-bin"
+          tar -xzf "${RUNNER_TEMP}/${archive}" -C "${RUNNER_TEMP}/gcx-bin" gcx
+          chmod +x "${RUNNER_TEMP}/gcx-bin/gcx"
+          echo "${RUNNER_TEMP}/gcx-bin" >> "$GITHUB_PATH"
+
+      - name: Verify gcx
+        run: gcx --version
+
+      # Non-interactive login, reusing #308's read-only service account
+      # secrets verbatim. Never echo the secrets and never `set -x` in this
+      # or any later step — GitHub masks secrets.* values in logs, but this
+      # step still must not print them itself.
+      - name: Authenticate gcx (read-only service account, reused from #308)
+        env:
+          GRAFANA_CANARY_URL: ${{ secrets.GRAFANA_CANARY_URL }}
+          GRAFANA_CANARY_TOKEN: ${{ secrets.GRAFANA_CANARY_TOKEN }}
+        run: |
+          gcx login --yes "$GCX_CONTEXT" --server "$GRAFANA_CANARY_URL" --token "$GRAFANA_CANARY_TOKEN"
+
+      # grafana/performance_baseline.py exits 0 (pass — including "dashboard
+      # absent" and "no budget configured", neither of which is a failure),
+      # 1 (a configured latency budget was breached — unreachable today
+      # since no budget is configured below), or 2 (operational error: gcx,
+      # auth, transport, or response-shape failure before any measurement
+      # completed). The JSON receipt is printed on stdout in every case
+      # (captured to a file here); this step never fails itself so the
+      # receipt is always uploaded before the outcome is evaluated below.
+      - name: Run render baseline
+        id: baseline
+        run: |
+          set +e
+          make grafana-performance-render \
+            GRAFANA_CONTEXT="$GCX_CONTEXT" \
+            > render-baseline-receipt.json 2> render-baseline-stderr.log
+          code=$?
+          echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
+          echo "--- receipt (stdout) ---"
+          cat render-baseline-receipt.json || true
+          if [ -s render-baseline-stderr.log ]; then
+            echo "--- diagnostics (stderr) ---"
+            cat render-baseline-stderr.log
+          fi
+          exit 0
+
+      - name: Upload render baseline receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: grafana-render-baseline-receipt
+          path: |
+            render-baseline-receipt.json
+            render-baseline-stderr.log
+          # Longer than grafana-canary.yml's 30 days on purpose: this lane
+          # exists to build a LATENCY DISTRIBUTION over many runs before a
+          # budget can be chosen, so its history needs to outlive a single
+          # incident-response window.
+          retention-days: 90
+          if-no-files-found: error
+
+      # The three exit codes are NOT the same signal: 1 means a maintainer
+      # HAS set a budget and this run breached it, 2 means the lane itself
+      # could not run (never reached a measurement, or never even reached
+      # the "is the dashboard there" check). The job summary distinguishes
+      # them, and separately states the "no budget configured" / "dashboard
+      # absent" outcomes so neither is mistaken for either kind of failure.
+      - name: Evaluate render baseline outcome
+        env:
+          BASELINE_EXIT_CODE: ${{ steps.baseline.outputs.exit_code }}
+        run: |
+          set -euo pipefail
+          case "$BASELINE_EXIT_CODE" in
+            0)
+              {
+                echo "### Grafana render baseline: PASSED"
+                echo "See the \`grafana-render-baseline-receipt\` artifact for the measured elapsed/PNG-bytes distribution, or for a \`skipped_absent\` status if the dashboard was not yet published, or \`not_configured\` if no latency budget has been set yet (#309's deliberate default)."
+              } >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            1)
+              {
+                echo "### Grafana render baseline: BUDGET BREACH"
+                echo "gcx reached the backend and rendered the dashboard, but a maintainer-configured render-latency budget was exceeded. See the \`grafana-render-baseline-receipt\` artifact's \`live.budget\` field for which attempt(s) breached it."
+              } >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            2)
+              {
+                echo "### Grafana render baseline: OPERATIONAL ERROR"
+                echo "gcx, authentication, transport, or the render itself failed before a measurement completed. This is NOT evidence of a render-latency regression — see the \`grafana-render-baseline-receipt\` artifact's stderr diagnostics."
+              } >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *)
+              echo "### Grafana render baseline: UNKNOWN EXIT CODE (${BASELINE_EXIT_CODE})" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+          esac
+          if [ "$BASELINE_EXIT_CODE" != "0" ]; then
+            exit 1
+          fi

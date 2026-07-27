@@ -312,6 +312,89 @@ credentials, and failure routing remain #309 decisions after #302 freezes the
 dashboard topology. Offline tests run under `make grafana-check`; the narrow
 lane is `make grafana-performance-check`.
 
+## Scheduled render baseline
+
+[`.github/workflows/grafana-render-baseline.yml`](https://github.com/rknightion/graph2otel/blob/main/.github/workflows/grafana-render-baseline.yml)
+runs the live half of the #309 baseline daily (07:07 UTC) and on manual
+dispatch, authenticating with the **same** least-privilege
+`graph2otel-semantic-canary` service account (Viewer role, id 36) `gcx login`
+already uses for [the semantic canary](#read-only-semantic-canary) above — no
+second credential is provisioned. It renders the single v2 `graph2otel`
+dashboard through `gcx dashboards snapshot` and uploads the JSON receipt as a
+workflow artifact (`grafana-render-baseline-receipt`, 90-day retention —
+longer than the canary's 30, because this lane exists to build a **latency
+distribution across many runs**, not to answer pass/fail on one). The run
+failing **is** the notification surface; this repository ships no external
+notifier, webhook, or contact point here either.
+
+```bash
+make grafana-performance-render GRAFANA_CONTEXT=<gcx-context>
+```
+
+Render parameters are fixed so runs are comparable over time: 6h range,
+1920x1080, dark theme, UTC, serial (`--concurrency 1`), `datasource` and
+`loki_datasource` set to the portable Grafana Cloud defaults
+(`grafanacloud-prom` / `grafanacloud-logs`), and `tenant` set to Grafana's
+own template-variable "All" token (`$__all`) to match the `tenant` variable's
+`multi` + `includeAll` declaration in `grafana/builder.py`.
+
+### Per-tab measurement is NOT possible today — what this lane measures instead
+
+The v2 estate is one dashboard with 7 top-level tabs and 60 leaf tabs, reached
+by the `dtab` / `<Domain-Slug>-dtab` URL query parameters described under
+[Deep links](#deep-links) above. `gcx dashboards snapshot --help` was checked
+directly (`gcx version v0.6.0`) for a way to pass them through: its only
+parameterisation hooks are `--var` ("Dashboard template variable overrides",
+e.g. `--var cluster=prod`) and `--panel <id>` (render one panel by numeric id
+instead of the full dashboard). `dtab` is a plain URL navigation parameter,
+**not** a dashboard template variable, so `--var` cannot set it, and there is
+no flag that accepts an arbitrary query string. So this lane measures the one
+thing the command can actually measure: a whole-dashboard render, which is
+the default (first) top-level tab's cost end to end — not a per-leaf
+breakdown of all 60 tabs. If `gcx` later grows a way to pass `dtab` through
+(or an equivalent per-tab render mode), that is the point to revisit this
+limitation; it is not expected to change on its own.
+
+### A snapshot of a missing dashboard does NOT fail — read this before trusting an exit code
+
+Live-measured 2026-07-27 against `grafana.m7kni.com`: `gcx dashboards get
+<name>` correctly 404s for a dashboard that does not exist
+(`{"error":{"summary":"404 NotFound", ...}}`, exit 1), but `gcx dashboards
+snapshot <name>` of that same missing name **exits 0** and silently renders
+Grafana's own "Dashboard not found" page as a PNG — indistinguishable from a
+real render by exit code or file presence alone. For that reason
+`grafana/performance_baseline.py` always checks existence with `gcx
+dashboards get` **before** attempting a snapshot, and reports a distinct
+`skipped_absent` status (with the dashboard's name and a human-readable
+message) rather than either measuring the error page as if it were real
+content or reporting a performance failure. `skipped_absent` is one of the
+outcomes bucketed under exit `0` below.
+
+### Exit codes and the deliberately unset latency budget
+
+`grafana/performance_baseline.py` exits `0` (pass), `1` (a configured latency
+budget was breached), or `2` (operational error — gcx, authentication,
+transport, or a render failed before any measurement completed). Exit `0`
+covers **three** distinct outcomes, all equally "not a failure": a
+successfully measured render, `skipped_absent` (the dashboard is not yet
+published), and `not_configured` (no budget has been set — see below). These
+are recorded in the receipt's `live.budget.status` field so a reader can tell
+them apart without re-deriving which one fired.
+
+**No numeric render-latency budget is configured, on purpose.** #309 exists
+specifically to avoid picking a threshold from a single measurement. The
+plumbing for one already exists — `performance_baseline.py --budget-seconds`
+and `make grafana-performance-render`'s
+`GRAFANA_PERFORMANCE_BUDGET_SECONDS` — and compares every measured attempt's
+`elapsed_seconds` against it, but both default to unset, and this workflow
+does not pass a value. Once this workflow's own artifact history gives a
+maintainer a real distribution to choose from, setting
+`GRAFANA_PERFORMANCE_BUDGET_SECONDS` in the workflow (or passing
+`--budget-seconds` by hand) is the whole activation step; no other code
+change is expected.
+
+Offline tests for this half also run under `make grafana-performance-check`.
+
 ## If GitSync is adopted later
 
 This repo has no GitSync (git-to-Grafana) flow today; the `gcx` commands above

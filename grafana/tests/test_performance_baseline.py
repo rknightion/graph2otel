@@ -239,5 +239,175 @@ class TestLiveSnapshot(unittest.TestCase):
         self.assertNotIn("private-tenant", str(caught.exception))
 
 
+# Real gcx 404 shape for an absent dashboard, live-measured 2026-07-27 against
+# grafana.m7kni.com via `gcx dashboards get <nonexistent-name> --context
+# grafana.m7kni.com -o json` (read-only; no dashboard was created, updated, or
+# deleted). Also live-verified the same day: `gcx dashboards snapshot
+# <nonexistent-name>` does NOT fail — it exits 0 and silently renders
+# Grafana's own "Dashboard not found" page as a PNG, which is why absence must
+# be checked with `dashboards get` BEFORE snapshotting rather than inferred
+# from the snapshot command's own exit code or output.
+GCX_404_STDOUT = (
+    '{"type":"gcx.error","schema_version":"1","error":{"summary":"404 NotFound",'
+    '"details":"dashboards.dashboard.grafana.app \\"graph2otel\\" not found"}}'
+)
+
+
+class TestDashboardExists(unittest.TestCase):
+    def test_present_dashboard_returns_true(self):
+        completed = mock.Mock(returncode=0, stdout="{}", stderr="")
+        with mock.patch.object(
+            performance_baseline.subprocess, "run", return_value=completed
+        ) as run:
+            self.assertTrue(
+                performance_baseline.dashboard_exists("graph2otel", "m7kni")
+            )
+        args = run.call_args.args[0]
+        self.assertEqual(
+            args,
+            ["gcx", "dashboards", "get", "graph2otel", "--context", "m7kni",
+             "-o", "json"],
+        )
+
+    def test_absent_dashboard_returns_false_not_a_failure(self):
+        completed = mock.Mock(returncode=1, stdout=GCX_404_STDOUT, stderr="")
+        with mock.patch.object(
+            performance_baseline.subprocess, "run", return_value=completed
+        ):
+            self.assertFalse(
+                performance_baseline.dashboard_exists("graph2otel", "m7kni")
+            )
+
+    def test_non_404_failure_raises_operational_error(self):
+        completed = mock.Mock(
+            returncode=1,
+            stdout=(
+                '{"type":"gcx.error","schema_version":"1","error":'
+                '{"summary":"Unauthorized","details":"token rejected"}}'
+            ),
+            stderr="",
+        )
+        with mock.patch.object(
+            performance_baseline.subprocess, "run", return_value=completed
+        ):
+            with self.assertRaises(performance_baseline.OperationalError):
+                performance_baseline.dashboard_exists("graph2otel", "m7kni")
+
+    def test_cannot_execute_gcx_raises_operational_error(self):
+        with mock.patch.object(
+            performance_baseline.subprocess, "run",
+            side_effect=OSError("no such file"),
+        ):
+            with self.assertRaises(performance_baseline.OperationalError):
+                performance_baseline.dashboard_exists("graph2otel", "m7kni")
+
+
+class TestLiveBaselineSkipsAbsentDashboard(unittest.TestCase):
+    def _receipt(self):
+        return {
+            "dashboards": [{"name": "graph2otel", "source": "graph2otel.json"}],
+        }
+
+    def test_absent_dashboard_is_skipped_cleanly_not_measured_as_a_failure(self):
+        with (
+            mock.patch.object(
+                performance_baseline, "dashboard_exists", return_value=False
+            ),
+            mock.patch.object(
+                performance_baseline, "snapshot_once"
+            ) as snapshot_once,
+        ):
+            receipt = performance_baseline.add_live_baseline(
+                self._receipt(), "m7kni", {}, repeat=1, since="6h",
+                width=1920, height=1080, theme="dark", timezone="UTC",
+            )
+        snapshot_once.assert_not_called()
+        entry = receipt["live"]["dashboards"][0]
+        self.assertEqual(entry["status"], "skipped_absent")
+        self.assertEqual(entry["name"], "graph2otel")
+        self.assertIn("not present", entry["message"])
+        self.assertNotIn("attempts", entry)
+
+    def test_present_dashboard_is_measured_normally(self):
+        attempt = {"status": "measured", "elapsed_seconds": 1.0, "png_bytes": 10,
+                   "variable_names": []}
+        with (
+            mock.patch.object(
+                performance_baseline, "dashboard_exists", return_value=True
+            ),
+            mock.patch.object(
+                performance_baseline, "snapshot_once", return_value=attempt
+            ) as snapshot_once,
+        ):
+            receipt = performance_baseline.add_live_baseline(
+                self._receipt(), "m7kni", {}, repeat=2, since="6h",
+                width=1920, height=1080, theme="dark", timezone="UTC",
+            )
+        self.assertEqual(snapshot_once.call_count, 2)
+        entry = receipt["live"]["dashboards"][0]
+        self.assertEqual(entry["status"], "measured")
+        self.assertEqual(len(entry["attempts"]), 2)
+
+
+class TestEvaluateBudget(unittest.TestCase):
+    def _measured_receipt(self, elapsed_values):
+        return {
+            "live": {
+                "dashboards": [{
+                    "name": "graph2otel",
+                    "status": "measured",
+                    "attempts": [
+                        {"elapsed_seconds": v} for v in elapsed_values
+                    ],
+                }],
+            },
+        }
+
+    def _absent_receipt(self):
+        return {
+            "live": {
+                "dashboards": [{
+                    "name": "graph2otel",
+                    "status": "skipped_absent",
+                    "message": "dashboard 'graph2otel' is not present",
+                }],
+            },
+        }
+
+    def test_no_live_lane_is_not_applicable(self):
+        result = performance_baseline.evaluate_budget({}, None)
+        self.assertEqual(result["status"], "not_applicable")
+
+    def test_no_budget_configured_is_a_clean_pass(self):
+        # #309's whole point: never guess this number from n=1. Unset must
+        # never read as a failure of any kind.
+        receipt = self._measured_receipt([5.0])
+        result = performance_baseline.evaluate_budget(receipt, None)
+        self.assertEqual(result["status"], "not_configured")
+        self.assertIsNone(result["budget_seconds"])
+
+    def test_within_budget(self):
+        receipt = self._measured_receipt([1.0, 2.0])
+        result = performance_baseline.evaluate_budget(receipt, 5.0)
+        self.assertEqual(result["status"], "within_budget")
+        self.assertEqual(result["breaches"], [])
+
+    def test_breach_is_detected_and_named(self):
+        receipt = self._measured_receipt([1.0, 9.0])
+        result = performance_baseline.evaluate_budget(receipt, 5.0)
+        self.assertEqual(result["status"], "breached")
+        self.assertEqual(len(result["breaches"]), 1)
+        self.assertEqual(result["breaches"][0]["name"], "graph2otel")
+        self.assertEqual(result["breaches"][0]["elapsed_seconds"], 9.0)
+
+    def test_no_measurements_is_not_a_failure_even_with_a_budget_set(self):
+        # An absent dashboard produces zero attempts. A budget breach check
+        # over zero attempts must not silently read as "within budget" —
+        # that would claim a measurement that never happened.
+        receipt = self._absent_receipt()
+        result = performance_baseline.evaluate_budget(receipt, 5.0)
+        self.assertEqual(result["status"], "no_measurements")
+
+
 if __name__ == "__main__":
     unittest.main()
