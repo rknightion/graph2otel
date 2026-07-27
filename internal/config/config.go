@@ -40,6 +40,8 @@ import (
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
 	"github.com/knadh/koanf/v2"
+
+	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
 // EnvPrefix is the prefix for every configuration environment variable.
@@ -859,12 +861,18 @@ func isUpperCurrencyCode(value string) bool {
 // its in-window records accepted while the two out-of-window ones were refused —
 // so one over-old record cannot poison a batch of good ones.
 //
-// It is deliberately a warning threshold and NOT a clamp. graph2otel cannot know
-// every backend's retention policy: a self-hosted Loki may be configured wider,
-// and a non-Loki OTLP sink has entirely different rules. Clamping would silently
-// break a correctly-configured deployment, which is the same class of mistake as
-// the failure it guards against. So the value takes effect as written and the
-// operator is told what to expect.
+// It is a warning threshold rather than a hard cap for a reason that still
+// holds: graph2otel cannot know every backend's retention policy. A self-hosted
+// Loki may be configured wider and a non-Loki OTLP sink has entirely different
+// rules, so refusing to start on a value the operator's own backend accepts would
+// be the same class of mistake as the failure it guards against.
+//
+// What CHANGED (2026-07-27, #401): the value is now clamped at
+// telemetry.EventHorizon for the actual poll, while the configured value is still
+// reported. Reaching further back than the backend accepts is not a longer
+// recovery, it is a slower one that ends in per-entry rejections — so the clamp
+// removes wasted work rather than capability. An operator whose sink accepts more
+// raises the horizon explicitly; see EffectiveInitialLookback.
 const backendAcceptWindow = 7 * 24 * time.Hour
 
 // Warnings returns non-fatal configuration advisories: settings that are valid,
@@ -878,15 +886,24 @@ func (c *Config) Warnings() []string {
 	// recovery: the gateway explicitly rejects each over-age entry. Keep the
 	// accepted-but-late indexing path separate — an in-window backdated record may
 	// take minutes to become queryable even though the gateway accepted it.
-	if c.Backfill.InitialLookback > backendAcceptWindow {
+	// ONE warning, not two. Before #401 this advised that the value was NOT
+	// clamped; it now is, so keeping the old text alongside the new would leave two
+	// live statements that contradict each other — worse than either being absent,
+	// because a reader has to guess which one is true.
+	if c.Backfill.InitialLookback > telemetry.EventHorizon {
 		out = append(out, fmt.Sprintf(
-			"backfill.initial_lookback is %v, beyond the 7 days measured on Grafana Cloud's Loki "+
-				"(live-measured 2026-07-22, #226). Its strict per-entry rejection is explicit: the gateway returns "+
-				"HTTP 400 through the OTel error handler for each over-age entry while accepting in-window entries in "+
-				"the same batch. Accepted in-window backdated records can be indexed later, so an immediately empty "+
-				"query is not evidence of rejection. This value is not clamped because a self-hosted Loki or non-Loki "+
-				"OTLP sink may accept more; if yours does, ignore this warning. Otherwise reduce it to %v or less",
-			c.Backfill.InitialLookback, backendAcceptWindow))
+			"backfill.initial_lookback is %v and is CLAMPED to %v for the actual poll (#401). "+
+				"Grafana Cloud's Loki accepts log samples for 7 days (%v, live-measured 2026-07-22, "+
+				"#226). Its rejection is explicit and per-entry: the gateway returns HTTP 400 through "+
+				"the OTel error handler for each over-age entry while accepting in-window entries in "+
+				"the same batch, so reaching further back is not a longer recovery — it is the same "+
+				"recovery plus rejected requests. The clamp keeps a %v margin because a rejection "+
+				"observed in production on 2026-07-27 was only about an hour past the limit. A "+
+				"self-hosted Loki or non-Loki OTLP sink may accept more; raise the emit horizon "+
+				"deliberately if yours does. Accepted in-window backdated records can still be indexed "+
+				"later, so an immediately empty query is not evidence of rejection.",
+			c.Backfill.InitialLookback, telemetry.EventHorizon, backendAcceptWindow,
+			backendAcceptWindow-telemetry.EventHorizon))
 	}
 
 	return out

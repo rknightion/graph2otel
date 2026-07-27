@@ -296,8 +296,10 @@ cost:
 # strictly rejects entries older than 7 days. Rejection is explicit and per-entry
 # (HTTP 400 through the OTel error handler); in-window entries in the same batch
 # remain accepted. Accepted in-window backdated records can be indexed later, so
-# an immediately empty query is not evidence of rejection. This value is not clamped
-# because a self-hosted Loki or non-Loki OTLP sink may accept more.
+# an immediately empty query is not evidence of rejection. The poll is clamped to 165h
+# (#401) — 3h inside the window, because a rejection seen in production was only about
+# an hour past it. Reaching further back is not a longer recovery, just rejected
+# requests. Raise the emit horizon deliberately if your sink accepts more.
 # Env: G2O_BACKFILL__INITIAL_LOOKBACK.
 backfill:
   initial_lookback: 0s # cold-start backfill window; 0 = each collector's own built-in lookback

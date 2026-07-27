@@ -31877,6 +31877,96 @@
         "kind": "Panel",
         "spec": {
           "id": 398,
+          "title": "Records dropped as older than the backend accept window",
+          "description": "Any nonzero value is data loss, and it is EXPECTED on a blob-derived stream: those replay historical records, so a record can age past the backend's 7-day accept window before it is ever read (#401). graph2otel drops it rather than sending a record the gateway rejects per-entry, because the loss is identical either way and only this way is it countable. Pair with 'Source-event lag at emission' above: a rising p95 there is the leading indicator of this counter starting to move. Note that record_outcomes counts these as emitted, so this counter \u2014 not that one \u2014 is the authoritative statement that they did not land.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "sum by (tenant_id, collector, ingest_transport) (increase(graph2otel_event_over_horizon_total{tenant_id=~\"$tenant\", collector=~\"$collector\"}[$__rate_interval]))",
+                        "editorMode": "code",
+                        "range": true,
+                        "instant": false,
+                        "legendFormat": "{{tenant_id}} {{collector}} {{ingest_transport}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": true
+                  },
+                  "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-400": {
+        "kind": "Panel",
+        "spec": {
+          "id": 400,
           "title": "Blob categories",
           "description": "Azure diagnostic-settings categories on the aadiam provider, by census state: consumed / enabled_unread (billed but read by no collector) / mapped_but_disabled (a collector polls a container that is never written) / disabled.",
           "links": [],
@@ -31963,10 +32053,10 @@
           }
         }
       },
-      "panel-399": {
+      "panel-401": {
         "kind": "Panel",
         "spec": {
-          "id": 399,
+          "id": 401,
           "title": "Blob endpoint paths",
           "description": "Distinct normalized Graph endpoint paths seen by this collector \u2014 headroom against the path cap (#185).",
           "links": [],
@@ -32053,10 +32143,10 @@
           }
         }
       },
-      "panel-400": {
+      "panel-402": {
         "kind": "Panel",
         "spec": {
-          "id": 400,
+          "id": 402,
           "title": "Blob event age",
           "description": "Freshest blob event age this tick \u2014 the metric propagation floor (#128).",
           "links": [],
@@ -32143,10 +32233,10 @@
           }
         }
       },
-      "panel-401": {
+      "panel-403": {
         "kind": "Panel",
         "spec": {
-          "id": 401,
+          "id": 403,
           "title": "Blob records dropped rate",
           "description": "Blob records dropped because they had no parseable event time (#275).",
           "links": [],
@@ -32233,10 +32323,10 @@
           }
         }
       },
-      "panel-402": {
+      "panel-404": {
         "kind": "Panel",
         "spec": {
-          "id": 402,
+          "id": 404,
           "title": "Blob self excluded rate",
           "description": "Blob records dropped by exclude_self because their appId matched the poller's proved authenticated application ID (#154).",
           "links": [],
@@ -32323,10 +32413,10 @@
           }
         }
       },
-      "panel-403": {
+      "panel-405": {
         "kind": "Panel",
         "spec": {
-          "id": 403,
+          "id": 405,
           "title": "Blob record rate: emitted as metrics vs gated",
           "description": "",
           "links": [],
@@ -32440,10 +32530,10 @@
           }
         }
       },
-      "panel-404": {
+      "panel-406": {
         "kind": "Panel",
         "spec": {
-          "id": 404,
+          "id": 406,
           "title": "Logpipeline self excluded rate",
           "description": "Graph-polled records dropped by exclude_self because their appId matched the poller's proved authenticated application ID (#176).",
           "links": [],
@@ -32530,10 +32620,10 @@
           }
         }
       },
-      "panel-406": {
+      "panel-408": {
         "kind": "Panel",
         "spec": {
-          "id": 406,
+          "id": 408,
           "title": "Annotation degraded",
           "description": "Whether the most recent Grafana annotation write failed and has not been recovered by a later success.",
           "links": [],
@@ -32612,10 +32702,10 @@
           }
         }
       },
-      "panel-407": {
+      "panel-409": {
         "kind": "Panel",
         "spec": {
-          "id": 407,
+          "id": 409,
           "title": "Annotation outcome rate: published vs dropped",
           "description": "",
           "links": [],
@@ -32729,10 +32819,10 @@
           }
         }
       },
-      "panel-409": {
+      "panel-411": {
         "kind": "Panel",
         "spec": {
-          "id": 409,
+          "id": 411,
           "title": "Blob diagnostic categories \u2014 which container, mapped or not",
           "description": "One record per diagnostic category found in the storage account, saying whether graph2otel has a mapper for it. An unmapped category is data arriving that nothing reads.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -32802,10 +32892,10 @@
           }
         }
       },
-      "panel-410": {
+      "panel-412": {
         "kind": "Panel",
         "spec": {
-          "id": 410,
+          "id": 412,
           "title": "Starts, versions and configuration fingerprints",
           "description": "One record per configured tenant on every process start, carrying the version, the Go runtime version and a one-way configuration fingerprint. This is the detail behind the deploy annotations on every time axis. A configuration change is two consecutive records whose config.fingerprint differs \u2014 the fingerprint is a hash, so it says THAT the configuration changed and never what it changed to. It is deliberately over-sensitive: it covers the whole configuration, so a change that does not alter behaviour can still move it. A rotated credential does not, because credentials are redacted by type before hashing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -32875,10 +32965,10 @@
           }
         }
       },
-      "panel-412": {
+      "panel-414": {
         "kind": "Panel",
         "spec": {
-          "id": 412,
+          "id": 414,
           "title": "Signal availability",
           "description": "Current collector state from graph2otel.collector.availability. Intentional absence is disabled (transport_not_configured, experimental_not_enabled, high_volume_not_enabled, disabled_by_config) or covered (covered_by_alternative). healthy_empty/empty is a successful zero-row source response. limited/partial_license is non-failure; blocked/license_unavailable identifies a missing entitlement, while blocked/permission_denied requires access. degraded and failed (including source_error) describe completed runtime outcomes; startup_failed describes initialization failure. An empty table is unknown, never evidence of disabled.",
           "links": [],
@@ -33103,10 +33193,10 @@
           }
         }
       },
-      "panel-413": {
+      "panel-415": {
         "kind": "Panel",
         "spec": {
-          "id": 413,
+          "id": 415,
           "title": "Read this before writing your own query",
           "description": "",
           "links": [],
@@ -33131,10 +33221,10 @@
           }
         }
       },
-      "panel-414": {
+      "panel-416": {
         "kind": "Panel",
         "spec": {
-          "id": 414,
+          "id": 416,
           "title": "Investigate one entity",
           "description": "",
           "links": [],
@@ -33159,10 +33249,10 @@
           }
         }
       },
-      "panel-415": {
+      "panel-417": {
         "kind": "Panel",
         "spec": {
-          "id": 415,
+          "id": 417,
           "title": "Which signals name this device",
           "description": "**Which of graph2otel's log signals name it, and how often.** This device's compliance, configuration, certificate, encryption, startup, logon and vulnerability records.\n\n**Identifier:** the device the record is ABOUT \u2014 the managed or onboarded device the source system names, never the device that observed the event.\n\n**Queried keys:** `device_id` (41 log events), `device_name` (36 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `aad_device_id`, `serial_number`, `device_serial_number`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\n**Read this first:** `device_id` is source-scoped. On `intune.*` it is Intune's managed-device id; on `defender.*` it is Defender's machine id. They are different id namespaces for the same physical machine and graph2otel does not map between them, so pivoting on an Intune id will not reach Defender rows. `device_name` is usually what bridges the two, and is usually what an alert quotes.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -33277,10 +33367,10 @@
           }
         }
       },
-      "panel-416": {
+      "panel-418": {
         "kind": "Panel",
         "spec": {
-          "id": 416,
+          "id": 418,
           "title": "Every record naming this device",
           "description": "**Every record that names it, newest first.** This device's compliance, configuration, certificate, encryption, startup, logon and vulnerability records.\n\n**Identifier:** the device the record is ABOUT \u2014 the managed or onboarded device the source system names, never the device that observed the event.\n\n**Queried keys:** `device_id` (41 log events), `device_name` (36 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `aad_device_id`, `serial_number`, `device_serial_number`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\n**Read this first:** `device_id` is source-scoped. On `intune.*` it is Intune's managed-device id; on `defender.*` it is Defender's machine id. They are different id namespaces for the same physical machine and graph2otel does not map between them, so pivoting on an Intune id will not reach Defender rows. `device_name` is usually what bridges the two, and is usually what an alert quotes.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -33375,10 +33465,10 @@
           }
         }
       },
-      "panel-417": {
+      "panel-419": {
         "kind": "Panel",
         "spec": {
-          "id": 417,
+          "id": 419,
           "title": "Which signals name this application or service principal",
           "description": "**Which of graph2otel's log signals name it, and how often.** This app's sign-ins, credential and federated-credential state, consent and permission grants, risk detections and graph activity.\n\n**Identifier:** the application the record is about. `app_id` is the Entra application (client) id, `service_principal_id` the directory object id of its service principal, and `application_id` the same app as other products name it. One app registration has all three and they are different values.\n\n**Queried keys:** `app_id` (12 log events), `service_principal_id` (5 log events), `application_id` (4 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `app_display_name`, `app_object_id`, `oauth_app_id`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -33519,10 +33609,10 @@
           }
         }
       },
-      "panel-418": {
+      "panel-420": {
         "kind": "Panel",
         "spec": {
-          "id": 418,
+          "id": 420,
           "title": "Every record naming this application or service principal",
           "description": "**Every record that names it, newest first.** This app's sign-ins, credential and federated-credential state, consent and permission grants, risk detections and graph activity.\n\n**Identifier:** the application the record is about. `app_id` is the Entra application (client) id, `service_principal_id` the directory object id of its service principal, and `application_id` the same app as other products name it. One app registration has all three and they are different values.\n\n**Queried keys:** `app_id` (12 log events), `service_principal_id` (5 log events), `application_id` (4 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `app_display_name`, `app_object_id`, `oauth_app_id`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -33642,10 +33732,10 @@
           }
         }
       },
-      "panel-419": {
+      "panel-421": {
         "kind": "Panel",
         "spec": {
-          "id": 419,
+          "id": 421,
           "title": "Which signals name this account",
           "description": "**Which of graph2otel's log signals name it, and how often.** This account's sign-ins, risk detections, registration state, privilege elevations, certificates and mailbox records.\n\n**Identifier:** the account named on the record, as a user principal name. Three attribute names carry the same UPN value \u2014 Entra writes `user_principal_name`, Intune writes `upn`, Defender writes `account_upn` \u2014 so all three are queried and one input covers them.\n\n**Queried keys:** `user_principal_name` (11 log events), `upn` (12 log events), `account_upn` (5 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `user_id`, `account_object_id`, `account_name`, `user_display_name`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\n**Read this first:** Object-id keys are a different value shape from a UPN, so they are not folded into this input: pasting a UPN into an object-id filter would match nothing and the empty result would look like a verdict.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -33786,10 +33876,10 @@
           }
         }
       },
-      "panel-420": {
+      "panel-422": {
         "kind": "Panel",
         "spec": {
-          "id": 420,
+          "id": 422,
           "title": "Every record naming this account",
           "description": "**Every record that names it, newest first.** This account's sign-ins, risk detections, registration state, privilege elevations, certificates and mailbox records.\n\n**Identifier:** the account named on the record, as a user principal name. Three attribute names carry the same UPN value \u2014 Entra writes `user_principal_name`, Intune writes `upn`, Defender writes `account_upn` \u2014 so all three are queried and one input covers them.\n\n**Queried keys:** `user_principal_name` (11 log events), `upn` (12 log events), `account_upn` (5 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `user_id`, `account_object_id`, `account_name`, `user_display_name`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\n**Read this first:** Object-id keys are a different value shape from a UPN, so they are not folded into this input: pasting a UPN into an object-id filter would match nothing and the empty result would look like a verdict.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -33909,10 +33999,10 @@
           }
         }
       },
-      "panel-421": {
+      "panel-423": {
         "kind": "Panel",
         "spec": {
-          "id": 421,
+          "id": 423,
           "title": "Which signals name this email message",
           "description": "**Which of graph2otel's log signals name it, and how often.** This message's delivery verdict, attachments, urls and clicks, quarantine state and transport trace.\n\n**Identifier:** the message the record is about. `network_message_id` is Microsoft's per-tenant id used across the Defender for Office 365 tables; `internet_message_id` is the RFC 5322 Message-ID from the header \u2014 the one an end user or an external system can quote.\n\n**Queried keys:** `network_message_id` (7 log events), `internet_message_id` (4 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `message_trace_id`, `email_cluster_id`, `message_id`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -34027,10 +34117,10 @@
           }
         }
       },
-      "panel-422": {
+      "panel-424": {
         "kind": "Panel",
         "spec": {
-          "id": 422,
+          "id": 424,
           "title": "Every record naming this email message",
           "description": "**Every record that names it, newest first.** This message's delivery verdict, attachments, urls and clicks, quarantine state and transport trace.\n\n**Identifier:** the message the record is about. `network_message_id` is Microsoft's per-tenant id used across the Defender for Office 365 tables; `internet_message_id` is the RFC 5322 Message-ID from the header \u2014 the one an end user or an external system can quote.\n\n**Queried keys:** `network_message_id` (7 log events), `internet_message_id` (4 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `message_trace_id`, `email_cluster_id`, `message_id`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -34125,10 +34215,10 @@
           }
         }
       },
-      "panel-423": {
+      "panel-425": {
         "kind": "Panel",
         "spec": {
-          "id": 423,
+          "id": 425,
           "title": "Which signals name this security alert",
           "description": "**Which of graph2otel's log signals name it, and how often.** This alert's evidence rows and the graph security-alert record that reports it.\n\n**Identifier:** the alert the record is about. `alert_id` is the source product's own alert id \u2014 Defender XDR's on the advanced-hunting alert tables, PIM's on its own alerts, which are different namespaces \u2014 and `provider_alert_id` is the originating provider's id carried on the Graph security alert.\n\n**Queried keys:** `alert_id` (3 log events), `provider_alert_id` (1 log events). An input matching any one of them matches; an empty input matches nothing.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [
@@ -34249,10 +34339,10 @@
           }
         }
       },
-      "panel-424": {
+      "panel-426": {
         "kind": "Panel",
         "spec": {
-          "id": 424,
+          "id": 426,
           "title": "Every record naming this security alert",
           "description": "**Every record that names it, newest first.** This alert's evidence rows and the graph security-alert record that reports it.\n\n**Identifier:** the alert the record is about. `alert_id` is the source product's own alert id \u2014 Defender XDR's on the advanced-hunting alert tables, PIM's on its own alerts, which are different namespaces \u2014 and `provider_alert_id` is the originating provider's id carried on the Graph security alert.\n\n**Queried keys:** `alert_id` (3 log events), `provider_alert_id` (1 log events). An input matching any one of them matches; an empty input matches nothing.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [
@@ -34353,10 +34443,10 @@
           }
         }
       },
-      "panel-425": {
+      "panel-427": {
         "kind": "Panel",
         "spec": {
-          "id": 425,
+          "id": 427,
           "title": "Which signals name this security incident",
           "description": "**Which of graph2otel's log signals name it, and how often.** Every alert graph2otel has recorded under this incident.\n\n**Identifier:** the incident that groups one or more alerts, as Microsoft's Graph security API reports it on each alert it contains.\n\n**Queried keys:** `incident_id` (1 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Read this first:** Exactly one cataloged log signal carries `incident_id` today (`entra.security_alert`), so this pivot lists the alerts in the incident and nothing else. Pivot from each alert id for its evidence.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -34445,10 +34535,10 @@
           }
         }
       },
-      "panel-426": {
+      "panel-428": {
         "kind": "Panel",
         "spec": {
-          "id": 426,
+          "id": 428,
           "title": "Every record naming this security incident",
           "description": "**Every record that names it, newest first.** Every alert graph2otel has recorded under this incident.\n\n**Identifier:** the incident that groups one or more alerts, as Microsoft's Graph security API reports it on each alert it contains.\n\n**Queried keys:** `incident_id` (1 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Read this first:** Exactly one cataloged log signal carries `incident_id` today (`entra.security_alert`), so this pivot lists the alerts in the incident and nothing else. Pivot from each alert id for its evidence.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -34549,7 +34639,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-412"
+                                    "name": "panel-414"
                                   }
                                 }
                               },
@@ -34562,7 +34652,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-413"
+                                    "name": "panel-415"
                                   }
                                 }
                               },
@@ -34575,7 +34665,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-414"
+                                    "name": "panel-416"
                                   }
                                 }
                               }
@@ -34589,46 +34679,6 @@
                       "kind": "RowsLayoutRow",
                       "spec": {
                         "title": "Investigate a device",
-                        "collapse": true,
-                        "layout": {
-                          "kind": "GridLayout",
-                          "spec": {
-                            "items": [
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 0,
-                                  "y": 0,
-                                  "width": 8,
-                                  "height": 10,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-415"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 8,
-                                  "y": 0,
-                                  "width": 16,
-                                  "height": 10,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-416"
-                                  }
-                                }
-                              }
-                            ]
-                          }
-                        }
-                      }
-                    },
-                    {
-                      "kind": "RowsLayoutRow",
-                      "spec": {
-                        "title": "Investigate an application or service principal",
                         "collapse": true,
                         "layout": {
                           "kind": "GridLayout",
@@ -34668,7 +34718,7 @@
                     {
                       "kind": "RowsLayoutRow",
                       "spec": {
-                        "title": "Investigate an account",
+                        "title": "Investigate an application or service principal",
                         "collapse": true,
                         "layout": {
                           "kind": "GridLayout",
@@ -34708,7 +34758,7 @@
                     {
                       "kind": "RowsLayoutRow",
                       "spec": {
-                        "title": "Investigate an email message",
+                        "title": "Investigate an account",
                         "collapse": true,
                         "layout": {
                           "kind": "GridLayout",
@@ -34748,7 +34798,7 @@
                     {
                       "kind": "RowsLayoutRow",
                       "spec": {
-                        "title": "Investigate a security alert",
+                        "title": "Investigate an email message",
                         "collapse": true,
                         "layout": {
                           "kind": "GridLayout",
@@ -34788,7 +34838,7 @@
                     {
                       "kind": "RowsLayoutRow",
                       "spec": {
-                        "title": "Investigate a security incident",
+                        "title": "Investigate a security alert",
                         "collapse": true,
                         "layout": {
                           "kind": "GridLayout",
@@ -34817,6 +34867,46 @@
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-426"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "title": "Investigate a security incident",
+                        "collapse": true,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 0,
+                                  "width": 8,
+                                  "height": 10,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-427"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 8,
+                                  "y": 0,
+                                  "width": 16,
+                                  "height": 10,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-428"
                                   }
                                 }
                               }
@@ -41034,7 +41124,7 @@
                     {
                       "kind": "TabsLayoutTab",
                       "spec": {
-                        "title": "Blob ingest health",
+                        "title": "Backend accept window (#401)",
                         "layout": {
                           "kind": "RowsLayout",
                           "spec": {
@@ -41060,25 +41150,40 @@
                                               "name": "panel-398"
                                             }
                                           }
-                                        },
-                                        {
-                                          "kind": "GridLayoutItem",
-                                          "spec": {
-                                            "x": 12,
-                                            "y": 0,
-                                            "width": 12,
-                                            "height": 8,
-                                            "element": {
-                                              "kind": "ElementReference",
-                                              "name": "panel-399"
-                                            }
-                                          }
-                                        },
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "hideHeader": true
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "kind": "TabsLayoutTab",
+                      "spec": {
+                        "title": "Blob ingest health",
+                        "layout": {
+                          "kind": "RowsLayout",
+                          "spec": {
+                            "rows": [
+                              {
+                                "kind": "RowsLayoutRow",
+                                "spec": {
+                                  "title": "",
+                                  "collapse": false,
+                                  "layout": {
+                                    "kind": "GridLayout",
+                                    "spec": {
+                                      "items": [
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
                                             "x": 0,
-                                            "y": 8,
+                                            "y": 0,
                                             "width": 12,
                                             "height": 8,
                                             "element": {
@@ -41091,7 +41196,7 @@
                                           "kind": "GridLayoutItem",
                                           "spec": {
                                             "x": 12,
-                                            "y": 8,
+                                            "y": 0,
                                             "width": 12,
                                             "height": 8,
                                             "element": {
@@ -41104,7 +41209,7 @@
                                           "kind": "GridLayoutItem",
                                           "spec": {
                                             "x": 0,
-                                            "y": 16,
+                                            "y": 8,
                                             "width": 12,
                                             "height": 8,
                                             "element": {
@@ -41117,7 +41222,7 @@
                                           "kind": "GridLayoutItem",
                                           "spec": {
                                             "x": 12,
-                                            "y": 16,
+                                            "y": 8,
                                             "width": 12,
                                             "height": 8,
                                             "element": {
@@ -41130,12 +41235,38 @@
                                           "kind": "GridLayoutItem",
                                           "spec": {
                                             "x": 0,
-                                            "y": 24,
+                                            "y": 16,
                                             "width": 12,
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
                                               "name": "panel-404"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
+                                            "x": 12,
+                                            "y": 16,
+                                            "width": 12,
+                                            "height": 8,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-405"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
+                                            "x": 0,
+                                            "y": 24,
+                                            "width": 12,
+                                            "height": 8,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-406"
                                             }
                                           }
                                         }
@@ -41176,7 +41307,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-406"
+                                              "name": "panel-408"
                                             }
                                           }
                                         },
@@ -41189,7 +41320,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-407"
+                                              "name": "panel-409"
                                             }
                                           }
                                         }
@@ -41230,7 +41361,7 @@
                                             "height": 10,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-409"
+                                              "name": "panel-411"
                                             }
                                           }
                                         },
@@ -41243,7 +41374,7 @@
                                             "height": 10,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-410"
+                                              "name": "panel-412"
                                             }
                                           }
                                         }

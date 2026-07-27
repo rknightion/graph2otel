@@ -302,8 +302,10 @@ config:
     # 2026-07-22 (#226): rejection is explicit and per-entry (HTTP 400 through
     # the OTel error handler), while in-window entries in the same batch remain
     # accepted. Accepted in-window backdated records can be indexed later, so an
-    # immediately empty query is not evidence of rejection. This value is not clamped
-    # because other OTLP backends may accept more.
+    # immediately empty query is not evidence of rejection. The poll is clamped to 165h
+    # (#401) — 3h inside the window, because a rejection seen in production was only
+    # about an hour past it. Reaching further back is not a longer recovery, just
+    # rejected requests. Raise the emit horizon deliberately if your sink accepts more.
     initial_lookback: 0s
 
   # --- Grafana annotation writer (opt-in, #400) ---

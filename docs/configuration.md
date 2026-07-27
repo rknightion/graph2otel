@@ -419,9 +419,12 @@ is no checkpoint to resume from.
 > immediately empty query is therefore not evidence of rejection; the explicit gateway
 > response is. See [Backdated log records](signals.md#backdated-log-records-accepted-to-7-days-but-not-queryable-immediately).
 >
-> This value is **not clamped**. A self-hosted Loki may be configured wider, and a
-> non-Loki OTLP sink has its own rules, so graph2otel does not generalize Grafana Cloud's
-> measured ceiling to every backend. If yours accepts more, ignore the warning.
+> The value still loads and validates as written, but the **poll is clamped to 165h**
+> (#401) — deliberately 3h inside the 7-day window, because a rejection observed in
+> production on 2026-07-27 was only about an hour past the limit. Reaching further back is
+> not a longer recovery; it is the same recovery plus per-entry rejections. A self-hosted
+> Loki may be configured wider and a non-Loki OTLP sink has its own rules, so raise the
+> emit horizon deliberately if yours accepts more.
 
 ### `grafana_annotations`
 

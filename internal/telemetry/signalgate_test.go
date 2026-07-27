@@ -87,6 +87,23 @@ func TestSignalGolden(t *testing.T) {
 		Timestamp: time.Unix(99, 0),
 	})
 
+	// Capture the over-horizon drop counter (#401) so it reaches the signal
+	// catalog and therefore the coverage gate. Nothing else emits it: it only
+	// fires on a record the backend would reject, which no collector test
+	// produces, so without this the one metric that reports silent data loss
+	// would itself be invisible to the dashboard gate.
+	telemetry.WithEventHorizon(
+		telemetry.WithTenant(metricOnlyEmitter{Emitter: selfObs.Emitter()}, "tenant-capture"),
+		telemetry.EventHorizon,
+		"entra.capture",
+		"tenant-capture",
+		telemetry.TransportGraph,
+		func() time.Time { return time.Unix(100, 0).Add(telemetry.EventHorizon + time.Hour) },
+	).LogEvent(telemetry.Event{
+		Name:      "entra.capture",
+		Timestamp: time.Unix(100, 0),
+	})
+
 	if err := signalcapture.GoldenAt(
 		filepath.Join("testdata", "signals.json"),
 		*updateSignalGolden,

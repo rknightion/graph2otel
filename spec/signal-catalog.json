@@ -1787,6 +1787,23 @@
       ]
     },
     {
+      "name": "graph2otel.event.over_horizon",
+      "prometheus_name": "graph2otel_event_over_horizon_total",
+      "unit": "{record}",
+      "kind": "sum",
+      "description": "Log records dropped because their event time was older than the backend's accept window, so sending them would have been rejected per-entry and lost anyway.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector",
+        "ingest_transport",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/telemetry"
+      ]
+    },
+    {
       "name": "graph2otel.exo.http.client.request.duration",
       "prometheus_name": "graph2otel_exo_http_client_request_duration_seconds",
       "unit": "s",

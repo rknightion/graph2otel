@@ -856,11 +856,27 @@ func checkRegistryConflicts(reg *collector.Registry) error {
 // re-deciding the same precedence — and one that forgot would silently ignore the
 // key. The factories keep declaring the value they were tuned with; the override
 // happens once, here, at registration.
+//
+// The result is CLAMPED to telemetry.EventHorizon (#401). Reaching further back
+// than the backend accepts is not a longer recovery: every record beyond the
+// window is rejected per-entry and lost, so the extra reach buys API calls,
+// throttling and rejection noise rather than data. Config.Warnings() tells the
+// operator when a configured value is being clamped — a silent clamp would leave
+// someone believing they had a 30-day recovery while getting 165h of it.
+//
+// A collector's own built-in lookback is clamped too, not just the override. The
+// widest today is 24h, so this is a guard against a future factory rather than a
+// live correction; leaving it unclamped would mean the protection depended on
+// which of two code paths supplied the value.
 func initialLookback(cfg *config.Config, rw collectors.RegisteredWindow) time.Duration {
+	lookback := rw.InitialLookback
 	if cfg.Backfill.InitialLookback > 0 {
-		return cfg.Backfill.InitialLookback
+		lookback = cfg.Backfill.InitialLookback
 	}
-	return rw.InitialLookback
+	if lookback > telemetry.EventHorizon {
+		return telemetry.EventHorizon
+	}
+	return lookback
 }
 
 // registerBlobCollectors wires the tenant's blob-sourced collectors, if it has

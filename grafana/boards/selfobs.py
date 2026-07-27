@@ -66,6 +66,7 @@ SCRAPE_ERRORS = SELF_OBS["graph2otel.scrape.errors"].prom
 SCRAPE_OUTCOMES = SELF_OBS["graph2otel.scrape.outcomes"].prom
 RECORD_OUTCOMES = SELF_OBS["graph2otel.record.outcomes"].prom
 EVENT_LAG = SELF_OBS["graph2otel.event.lag"].prom
+OVER_HORIZON = SELF_OBS["graph2otel.event.over_horizon"].prom
 TYPE_MISMATCHES = SELF_OBS["graph2otel.payload.type_mismatches"].prom
 CHECKPOINT_ERRORS = SELF_OBS["graph2otel.checkpoint.persist.errors"].prom
 BUILD_INFO = SELF_OBS["graph2otel.build_info"].prom
@@ -581,6 +582,23 @@ def extra(b):
         h=8,
         desc="Report-only wire values outside a collector's mapped assumptions. "
              "Unexpected values do not drop records.",
+    )
+
+    b.row("Backend accept window (#401)")
+    b.raw(
+        "Records dropped as older than the backend accept window",
+        [f"sum by (tenant_id, collector, ingest_transport) "
+         f"(increase({OVER_HORIZON}{_SEL}[{RATE}]))"],
+        legends=["{{tenant_id}} {{collector}} {{ingest_transport}}"],
+        desc="Any nonzero value is data loss, and it is EXPECTED on a blob-derived "
+             "stream: those replay historical records, so a record can age past the "
+             "backend's 7-day accept window before it is ever read (#401). graph2otel "
+             "drops it rather than sending a record the gateway rejects per-entry, "
+             "because the loss is identical either way and only this way is it "
+             "countable. Pair with 'Source-event lag at emission' above: a rising p95 "
+             "there is the leading indicator of this counter starting to move. Note "
+             "that record_outcomes counts these as emitted, so this counter — not "
+             "that one — is the authoritative statement that they did not land.",
     )
 
     for summary, target in [

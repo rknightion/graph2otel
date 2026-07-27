@@ -12,6 +12,17 @@
       ]
     },
     {
+      "Name": "graph2otel.event.over_horizon",
+      "Unit": "{record}",
+      "Kind": "sum",
+      "Description": "Log records dropped because their event time was older than the backend's accept window, so sending them would have been rejected per-entry and lost anyway.",
+      "AttrKeys": [
+        "collector",
+        "ingest_transport",
+        "tenant_id"
+      ]
+    },
+    {
       "Name": "graph2otel.ingest.cost.projected",
       "Unit": "{microunit}",
       "Kind": "gauge",

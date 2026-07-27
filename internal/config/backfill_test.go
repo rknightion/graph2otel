@@ -78,8 +78,12 @@ func TestBackfillWarnsBeyondBackendAcceptWindow(t *testing.T) {
 		{name: "unset", lookback: 0, wantWarn: false},
 		{name: "a day", lookback: 24 * time.Hour, wantWarn: false},
 		{name: "just inside the ceiling", lookback: 6 * 24 * time.Hour, wantWarn: false},
-		{name: "at the ceiling", lookback: 7 * 24 * time.Hour, wantWarn: false},
-		{name: "beyond the ceiling", lookback: 8 * 24 * time.Hour, wantWarn: true},
+		// The warning threshold is the EMIT HORIZON (165h), not the backend's 168h
+		// accept window: #401 clamps the poll at the horizon, so 168h is already
+		// over-configured and the operator should be told.
+		{name: "at the emit horizon", lookback: 165 * time.Hour, wantWarn: false},
+		{name: "at the accept window", lookback: 7 * 24 * time.Hour, wantWarn: true},
+		{name: "beyond the accept window", lookback: 8 * 24 * time.Hour, wantWarn: true},
 		{name: "thirty days", lookback: 30 * 24 * time.Hour, wantWarn: true},
 	}
 	for _, tt := range tests {
@@ -102,11 +106,17 @@ func TestBackfillWarnsBeyondBackendAcceptWindow(t *testing.T) {
 	}
 }
 
-// TestBackfillCeilingIsAWarningNotAClamp pins the deliberate design choice from
-// #118's comment: graph2otel must not pretend to know every backend's retention
-// policy. A self-hosted Loki with a wider reject_old_samples_max_age (or a
-// non-Loki OTLP sink) may legitimately accept more, so an over-ceiling value must
-// still LOAD, still VALIDATE, and still take effect — it only warns.
+// TestBackfillCeilingIsAWarningNotAClamp pins what survives of #118's design
+// choice: graph2otel must not pretend to know every backend's retention policy, so
+// an over-ceiling value must still LOAD and still VALIDATE rather than refusing to
+// start.
+//
+// What CHANGED in #401: the configured value no longer takes effect verbatim — the
+// POLL is clamped to telemetry.EventHorizon, because emitting a record the backend
+// will reject per-entry is a guaranteed loss rather than a longer recovery. The
+// config surface is unchanged and the operator is told; see
+// TestAnOverHorizonLookbackIsActuallyClamped in cmd/graph2otel for the clamp
+// itself.
 func TestBackfillCeilingIsAWarningNotAClamp(t *testing.T) {
 	path := writeTemp(t, `
 otlp:
@@ -182,7 +192,10 @@ func TestBackfillGuidanceMatchesMeasuredGrafanaCloudContract(t *testing.T) {
 		"per-entry",
 		"explicit",
 		"indexed later",
-		"not clamped",
+		// #401 replaced "not clamped" with the truth: the poll IS clamped, at the
+		// emit horizon. The old phrase is now in the STALE list below, so a surface
+		// cannot quietly drift back to claiming a clamp that exists does not.
+		"clamped to 165h",
 	}
 	for name, surface := range surfaces {
 		normalized := strings.ToLower(strings.Join(strings.Fields(surface), " "))
@@ -192,7 +205,8 @@ func TestBackfillGuidanceMatchesMeasuredGrafanaCloudContract(t *testing.T) {
 			}
 		}
 
-		for _, stale := range []string{"13d", "13 days", "silent drop", "silently reject", "no error"} {
+		for _, stale := range []string{"13d", "13 days", "silent drop", "silently reject", "no error",
+			"not clamped", "is not clamped"} {
 			if strings.Contains(normalized, stale) {
 				t.Errorf("%s retains stale claim %q:\n%s", name, stale, surface)
 			}

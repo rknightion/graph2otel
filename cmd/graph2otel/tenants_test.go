@@ -78,9 +78,14 @@ func (c capacityWiringCollector) Collect(
 	outcomes *recordoutcome.Recorder,
 ) error {
 	e.Gauge("entra.capacity.wiring", "{record}", "", 1, nil)
+	// The timestamp must stay RECENT, not a fixed epoch. The scheduler wraps every
+	// collector emitter in the #401 horizon guard, which drops a log record older
+	// than the backend's accept window — so a fixture dated 2023 is dropped, and
+	// this test then measures the guard rather than capacity accounting. Using a
+	// fixed old constant here previously made exactly that mistake.
 	e.LogEvent(telemetry.Event{
 		Name:      "entra.capacity.wiring",
-		Timestamp: time.Unix(1_700_000_000, 0),
+		Timestamp: time.Now().Add(-time.Minute),
 	})
 	outcomes.Add(recordoutcome.OutcomeFetched, 2)
 	outcomes.Add(recordoutcome.OutcomeMapped, 2)

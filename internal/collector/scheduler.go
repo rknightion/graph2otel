@@ -452,8 +452,19 @@ func (s *Scheduler) runEmitter(attribution telemetry.Attribution) telemetry.Emit
 	if s.emitterFactory != nil {
 		e = s.emitterFactory(attribution)
 	}
+	// The horizon guard sits INSIDE the lag histogram, so an over-age record is
+	// still measured as lag before being dropped: otherwise the one signal that
+	// explains why records are disappearing would go quiet at exactly the moment
+	// it matters.
 	return telemetry.WithEventLag(
-		e,
+		telemetry.WithEventHorizon(
+			e,
+			telemetry.EventHorizon,
+			attribution.Collector,
+			attribution.TenantID,
+			attribution.Transport,
+			s.now,
+		),
 		attribution.Collector,
 		attribution.TenantID,
 		attribution.Transport,
