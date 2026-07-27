@@ -241,7 +241,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Verify dashboards, alert rules, recording rules and generated docs
+      - name: Verify dashboards, alert rules and generated docs
         run: make grafana-check
 
   # Test coverage -> Codacy. Deliberately NOT in ci-success's `needs`: coverage reporting is

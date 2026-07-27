@@ -1,15 +1,14 @@
 # Deploying the observability assets
 
-graph2otel ships three kinds of Grafana asset, each in its own top-level
+graph2otel ships two kinds of Grafana asset, each in its own top-level
 directory. The generated inventory is drift-gated at
-**1 dashboard, 14 alert rules, 2 recording rules, and 5 paused detection examples**:
+**1 dashboard, 14 alert rules, and 5 paused detection examples**:
 
 | Directory | Assets | Format | Target Grafana Cloud folder |
 | --- | --- | --- | --- |
 | `dashboards/` | 1 dashboard (**generated**) | Grafana **v2 dynamic dashboard** resource (`dashboard.grafana.app/v2`) | folder of your choice |
 | `alerts/` | 14 alert rules (**generated**) | Grafana **file-provisioning** YAML (`apiVersion: 1` + `groups:`) | `graph2otel` |
 | `alerts/` | 5 detection examples (**generated**, all **paused**) | same file-provisioning YAML, separate group | `graph2otel detections` |
-| `recording-rules/` | 2 recording rules (**generated**) | Grafana-managed rule objects (provisioning API JSON) | `graph2otel derived metrics` |
 
 The `gcx` CLI is the reproducible deploy path documented here. There is **no
 GitSync flow in this repo today** — if one is later adopted, document its repo
@@ -152,7 +151,7 @@ a public repository cannot make on your behalf, because a Grafana stack has
 exactly one notification-policy tree and provisioning one takes ownership of
 it (#293). A repository-content gate
 (`grafana/tests/test_build_rules.py::TestNoRoutingAssetsShipped`) rejects any
-future YAML/JSON committed under `alerts/` or `recording-rules/` that looks
+future YAML/JSON committed under `alerts/` that looks
 like one — a top-level `contactPoints`, `policies`, `notification_policies`,
 `receiver`, `routes`, or `route` key — so this cannot silently regress.
 
@@ -187,39 +186,17 @@ a route keyed on them never silently stops matching. `component` is present
 on two rules only; do not key a route on it without a fallback receiver for
 the other twelve.
 
-## Recording rules
+## Recording rules: none, deliberately
 
-`recording-rules/*.json` are individual Grafana-managed rule objects, applied
-through the same provisioning API and landing in the folder
-**`graph2otel derived metrics`**, rule group `blob-derived` at a 1h evaluation
-interval:
+graph2otel ships **no recording rules**. The two it used to ship are retired
+(#297) because a 1h event-time query window can never overlap a blob-derived
+source whose records are days old — measured at 3.3-7.0 days of lag, they
+recorded nothing for 30+ days while reporting `health: ok`. A LogQL `count by`
+over the log twin answers the same question at query time, for free. See
+[Derived metrics](derived-metrics.md#why-the-recording-rules-were-retired).
 
-The two JSON files are generated from the `RECORDING` list in
-`grafana/build_rules.py`; do not hand-edit them. Change the builder, run
-`make rules`, then run `make grafana-check`.
-
-```bash
-# 1. Create the folder once; put its uid into each rule's folderUID.
-gcx api /api/folders -X POST -d '{"title":"graph2otel derived metrics"}'
-
-# 2. Create each rule (a repeat POST without a fixed uid creates a DUPLICATE —
-#    check `gcx alert rules list` afterwards).
-gcx api /api/v1/provisioning/alert-rules -X POST -d @recording-rules/intune-compliance-alert-count.json
-gcx api /api/v1/provisioning/alert-rules -X POST -d @recording-rules/intune-enrollment-failure-count.json
-
-# 3. Set the group interval to match the [1h] range in the query.
-gcx api /api/v1/provisioning/folder/<folderUID>/rule-groups/blob-derived \
-  -X PUT -d '{"title":"blob-derived","interval":3600}'
-```
-
-**Datasource UID substitution:** each rule JSON pins `datasourceUid`
-(`grafanacloud-logs`, the Loki source it queries) and `targetDatasourceUid`
-(`grafanacloud-prom`, the Prometheus sink it writes to), plus a `folderUID`.
-All three are stack-specific — substitute your local Loki/Prometheus datasource
-UIDs and the folder UID from step 1.
-
-See [`recording-rules/README.md`](https://github.com/rknightion/graph2otel/blob/main/recording-rules/README.md) for the metric
-↔ log-twin mapping and verification queries.
+`grafana/build_rules.py` fails the build if a recording rule reappears in any
+committed asset, so this is a gate rather than a convention.
 
 ## Read-only semantic canary
 
@@ -253,10 +230,13 @@ Exit `0` means every semantic probe passed, exit `1` means the backend answered
 but a semantic assertion failed, and exit `2` means the manifest, `gcx`,
 authentication, transport, or response shape failed operationally.
 
-Only collector availability is required to return data. Optional log,
-histogram, and recording signals may be healthy-empty. In particular, the
-recording probe does not claim completeness for late-queryable records; see
-[#297](https://github.com/rknightion/graph2otel/issues/297).
+Only collector availability is required to return data. Optional log and
+histogram signals may be healthy-empty. The log-twin probe looks back **7
+days** rather than one hour, because the blob-derived stream it queries was
+measured at 3.3-7.0 days of event-time lag — a 1h lookback would pass green
+while being structurally incapable of matching a row, which is precisely how
+the retired recording rules went unnoticed for a month
+([#297](https://github.com/rknightion/graph2otel/issues/297)).
 
 ### Scheduled execution
 
@@ -399,6 +379,5 @@ Offline tests for this half also run under `make grafana-performance-check`.
 
 This repo has no GitSync (git-to-Grafana) flow today; the `gcx` commands above
 are the deploy path. If a GitSync repo is later adopted for these assets,
-document its repository and the target paths for the dashboards / alert rules /
-recording rules here, so the production deploy stays reproducible from this
-file alone.
+document its repository and the target paths for the dashboards and alert rules
+here, so the production deploy stays reproducible from this file alone.

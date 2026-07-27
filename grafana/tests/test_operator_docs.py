@@ -50,13 +50,11 @@ class TestOperatorObservabilityInventory(unittest.TestCase):
         # "dashboards" would force the docs to say "1 dashboards".
         dashboard_count = 1
         alert_count = len(build_rules.RULES)
-        recording_count = len(build_rules.RECORDING)
         noun = "dashboard" if dashboard_count == 1 else "dashboards"
         detection_count = len(build_rules.DETECTIONS)
         expected = (
             f"{dashboard_count} {noun}, "
-            f"{alert_count} alert rules, "
-            f"{recording_count} recording rules, and "
+            f"{alert_count} alert rules, and "
             f"{detection_count} paused detection examples"
         )
         self.assertIn(expected, docs)
@@ -79,10 +77,13 @@ class TestOperatorObservabilityInventory(unittest.TestCase):
             f"| `alerts/` | {alert_count} alert rules (**generated**)",
             docs,
         )
-        self.assertIn(
-            f"| `recording-rules/` | {recording_count} recording rules (**generated**)",
-            docs,
-        )
+        # #297 retired both recording rules. The reference may explain the
+        # retirement (it does, and should), but must not advertise a directory
+        # that no longer exists or carry a count that can drift.
+        self.assertNotIn("`recording-rules/`", docs)
+        self.assertNotIn("recording-rules/intune", docs)
+        self.assertNotIn("recording rules (**generated**)", docs)
+        self.assertIn("ships **no recording rules**", docs)
 
 
 if __name__ == "__main__":

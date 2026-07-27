@@ -1,11 +1,17 @@
-# Derived metrics: emit natively, or recording rule over the log twin?
+# Derived metrics: emit natively, or query the log twin?
 
 Every blob-sourced signal already has a log twin (see [Signals](signals.md)). Some of
 those signals also get a **natively-emitted graph2otel counter** derived from the same
 event stream — `entra.graph_activity.requests` (#128), `entra.signin.count` (#187). Most
 do not, and should not. This page documents the heuristic that decides which side of that
-line a candidate signal falls on, and gives the recording-rule pattern for the ones that
-don't clear the bar.
+line a candidate signal falls on.
+
+> **graph2otel ships no recording rules (#297).** Both of the ones it used to ship are
+> **retired**, on measurement rather than preference — see
+> [Why the recording rules were retired](#why-the-recording-rules-were-retired) at the end
+> of this page before proposing another one. The answer for a signal that does not clear
+> the native-emission bar is a LogQL `count by` over the log twin, which costs nothing and
+> cannot go quietly stale.
 
 This only applies to blob-sourced signals with no Graph poll route. A signal with a Graph
 route gets its metric from the poll, fresh, with no recency gate needed — #128 and this
@@ -31,22 +37,21 @@ clears the bar that makes a permanent series cheaper than a LogQL query.
 - Both `entra.graph_activity.requests` (#128) and `entra.signin.count` (#187) clear this
   bar: high volume, and both feed alert rules.
 
-**Use a Loki recording rule over the log twin when the signal is low-volume and the use
-case is retention/dashboard convenience, not latency-critical alerting:**
+**Query the log twin directly when the signal is low-volume and the use case is
+retention/dashboard convenience, not latency-critical alerting:**
 
 - `intune.compliance_alert` is the reference case: ~0.6 events/hour (#128 §4.3). A LogQL
   `count by` over that volume is free at any evaluation cadence — there is no query-cost
   argument for a permanent counter.
 - Other candidates in this category: directory audits, provisioning events. Neither is
   high-volume enough on a typical tenant to justify graph2otel owning a permanent series
-  for it; a recording rule gives the same materialized-series convenience (fast
-  dashboards, longer retention than the raw logs) without graph2otel paying the
-  active-series cost.
-- A recording rule is a **scheduled LogQL query, remote-written to Mimir** by the Loki
-  ruler. Zero graph2otel emission — graph2otel never sees this metric exist. The
-  materialized series lives entirely in the Loki/Mimir stack, and its cost is the
-  operator's to opt into per rule, not a standing cost graph2otel bakes into every
-  collector.
+  for it, and a dashboard panel running the LogQL `count by` answers the same question at
+  query time.
+- **A recording rule looks like the obvious middle ground and is not.** It materializes
+  the same aggregate on Grafana's evaluation schedule, at the operator's cost rather than
+  graph2otel's — but it introduces a second, invisible correctness surface: the rule's
+  query window has to overlap its source's *event times*, and for a blob-derived stream it
+  does not. That is not a tuning problem; see the retirement note below.
 
 **The trade-off, stated flat:** every natively-emitted counter is permanent active-series
 cost graph2otel owns forever, on every tenant, whether or not it is ever queried. It only
@@ -93,60 +98,24 @@ A `{event_name="intune.compliance_alert"}` stream selector would match zero rows
 silently — the label-filter-after-selector form above is required, exactly as documented
 for every other graph2otel log query.
 
-### Recording rule definition (Grafana-managed)
+### The panel query, not a recording rule
 
-Use a **Grafana-managed recording rule** — created through the Grafana Alerting provisioning
-API (`POST /api/v1/provisioning/alert-rules`, with a `record` block) — **not** a Loki/Mimir
-*data-source-managed* ruler rule. The distinction matters: a Grafana-managed recording rule
-runs a query against *any* datasource (here the Loki logs datasource) on Grafana's own
-evaluation schedule and writes the result into the Prometheus datasource, so one rule type
-covers every graph2otel derived metric regardless of which datasource the twin lives in. A
-Loki-ruler rule would be confined to Loki-side evaluation and remote-write config that
-graph2otel does not own.
-
-The manifests are shipped as code in [`recording-rules/`](../recording-rules/) and applied with
-`gcx`:
-
-```sh
-gcx api /api/v1/provisioning/alert-rules -X POST -d @recording-rules/intune-compliance-alert-count.json
-```
-
-Key fields (see the JSON for the full shape):
-
-- `record.metric` — the output Prometheus metric (`intune_compliance_alert_count`). It is named
-  in Prometheus recording-rule convention (`<domain>_<name>_count`), **not** graph2otel's OTLP
-  dot-notation, because the series never passes through graph2otel or OTLP — it is materialized
-  entirely inside Grafana, so the OTLP→Prometheus normalization rules
-  ([Signals](signals.md#otlp-prometheus-name-normalization)) do not apply.
-- `record.targetDatasourceUid` — the Prometheus datasource the result is written to
-  (`grafanacloud-prom`); `data[0].datasourceUid` is the Loki datasource the LogQL runs against
-  (`grafanacloud-logs`).
-- The **rule-group interval** (set to `3600`s, matching the `[1h]` range) is what paces
-  evaluation — evaluate no more often than the window you count over, or overlapping windows
-  double-count. Set it with
-  `PUT /api/v1/provisioning/folder/<folderUID>/rule-groups/blob-derived`.
-- `tenant_id` is included in every output grouping. Identical events from different
-  configured tenants remain separate materialized series.
-- `noDataState: OK` — a healthy tenant emits zero of these events (the twin is empty), so an
-  empty query result records nothing and stays green rather than firing a no-data error. This
-  is the expected steady state; the rule exists to capture the metric *when* an event occurs.
-
-Once materialized the recorded series queries and dashboards exactly like a native metric,
-with none of the active-series cost graph2otel would have paid to emit it natively.
-
-The current schedule counts the immediately preceding one-hour query window. Loki can accept
-a backdated record before that evaluation but make it queryable only after its nominal window
-has passed. That record is then absent from the materialized metric. Issue #297 tracks the
-measurement and bounded offset/backfill decision; the shipped rules make no completeness
-claim for late-queryable records.
+Put that LogQL straight on a dashboard panel or an ad-hoc Explore query. There is nothing to
+provision, nothing to keep in sync with the catalog, and nothing that can silently stop
+producing data.
 
 Deduplication: the underlying log twin is at-least-once (~2.7-4% duplicate rate,
 [Signals](signals.md#deduplicating-blob-sourced-records-azure-delivers-at-least-once)).
-A raw `count_over_time` over the stream inherits that over-count exactly as a manual
-LogQL count would. For a low-volume alerting signal this is immaterial (the same
-reasoning #128 applies to the native counters' at-least-once behavior); if a use case
-ever needs exact counts, dedupe on the twin's identity key before counting rather than
-building that into the recording rule.
+A raw `count_over_time` over the stream inherits that over-count. For a low-volume signal
+this is immaterial (the same reasoning #128 applies to the native counters' at-least-once
+behavior); if a use case ever needs exact counts, dedupe on the twin's identity key before
+counting.
+
+**Choose the range from the source's event-time lag, not from habit.** A blob-derived
+stream replays historical records, so "recent by event time" and "recently ingested" differ
+by days. `intune.compliance_alert` was measured at 3.3-7.0 days of event-time lag (median
+5.97, n=223, `live-measured 2026-07-27, #297`), so a `[1h]` range over it returns nothing
+at all — see the retirement note below, where exactly that mistake was shipped.
 
 ## Worked example: `intune.enrollment_event`
 
@@ -154,9 +123,9 @@ building that into the recording rule.
 `WindowCollector` over `GET /deviceManagement/troubleshootingEvents`, not a blob signal). It
 therefore cannot take the blob `Derive` seam at all, and per [#131] Graph WindowCollectors
 emit zero metrics — so a natively-emitted `intune.enrollment_event.count` is not available
-by construction (this is why #189 could not be built as a `Derive` wiring job). A recording
-rule over its log twin is the way to get an enrollment-failure-rate metric without touching
-the collector engine. Same Grafana-managed shape as the compliance rule above; the LogQL is:
+by construction (this is why #189 could not be built as a `Derive` wiring job). A LogQL query
+over its log twin is how you get an enrollment-failure rate without touching the collector
+engine:
 
 ```logql
 sum by (tenant_id, enrollment_type, operating_system, failure_category) (
@@ -168,26 +137,55 @@ sum by (tenant_id, enrollment_type, operating_system, failure_category) (
 )
 ```
 
-Shipped as [`recording-rules/intune-enrollment-failure-count.json`](../recording-rules/intune-enrollment-failure-count.json)
-(metric `intune_enrollment_failure_count`).
-
 The twin emits one record **per failed enrollment** (it is failures-only — there is no
 success record), so the count is already an enrollment-failure count; `enrollment_type`,
 `operating_system`, and `failure_category` are bounded structured-metadata attributes on it.
-Enrollment-failure-rate alerts read straight off the recorded series. The at-least-once and
-`interval`-matching caveats above apply unchanged.
+Widen the range to the tenant's observed lag before reading anything into an empty result.
 
-## Shipped as manifests, generated (#219)
+This signal also had a recording rule (#189) and it is retired: on the m7kni tenant
+`intune.enrollment_event` produced no rows at all over a 7-day window, so the rule had no
+source to record from. See below.
 
-Resolved: the recording-rule manifests are shipped in-repo as rules-as-code in
-[`recording-rules/`](https://github.com/rknightion/graph2otel/tree/main/recording-rules) (Grafana-managed provisioning payloads), alongside the
-[dashboards](https://github.com/rknightion/graph2otel/tree/main/dashboards), and applied with
-`gcx api`. See [`recording-rules/README.md`](https://github.com/rknightion/graph2otel/blob/main/recording-rules/README.md) for the apply/verify
-commands.
+## Why the recording rules were retired
 
-Both files are **generated** by `grafana/build_rules.py`'s `RECORDING` list — do not hand-edit the
-JSON. A new candidate (directory audits, provisioning) is a copy-edit of one `RECORDING` entry in
-that file: change the `event_name` passed to `cat.log(...)` (validated against
-`spec/signal-catalog.json` at build time — a misspelled event name is a `KeyError`, not a silently
-broken rule), the `by (...)` labels, and the `record.metric` name, then run `make rules` and
-`make grafana-check`.
+graph2otel used to ship two Grafana-managed Loki recording rules —
+`intune_compliance_alert_count` and `intune_enrollment_failure_count`, created by #188/#189.
+Both are **retired** (#297, 2026-07-27) and no recording rule ships in this repository in
+any form. `grafana/build_rules.py` gates their return: a committed YAML or JSON file
+carrying a top-level Grafana `record` block fails the build, whatever it is called.
+
+**They recorded nothing for 30+ days while reporting `health: ok`.** Measured, read-only, on
+a live tenant:
+
+```
+count(count_over_time(intune_compliance_alert_count[30d]))   -> EMPTY
+count(count_over_time(intune_enrollment_failure_count[30d])) -> EMPTY
+```
+
+Both evaluated hourly, in 0.4s, with no error, and wrote no series ever.
+
+**The cause is structural, not a bug to fix.** `relativeTimeRange: {from: 3600, to: 0}` with
+`count_over_time(...[1h])` selects the last hour of **event time**. Blob-ingested Intune
+compliance alerts do not have event times in the last hour — across 223 sampled records the
+newest was 3.31 days old, the median 5.97 days, the oldest 6.95 days, and **zero** fell
+within either the rule's 1h window or even 24h. The rule was not missing late stragglers; it
+was incapable of seeing its data source at all. `intune.enrollment_event` returned nothing
+over 7 days on that tenant, so the second rule had no source either.
+
+Widening the window to `[7d]` would "work" by recomputing a 7-day range every hour over data
+that never changes, re-recording identical counts, with duplicate and cost semantics that
+would then have to be measured — cost with no consumer. Keying the derivation on ingestion
+time instead would contradict the standing rule that a record's timestamp is its event time
+and never its arrival time.
+
+**Nothing consumed their output.** The central cardinality limiter (#235) plus the per-entity
+log twins already answer "how many" via a LogQL `count by`, free, with no materialized
+series. So retirement lost no capability.
+
+**The generalisable lesson, which is the reason this note is this long:** a green tick is not
+evidence of data. Both rules were healthy, fast, error-free and useless, and no count gate
+could have revealed it — the live and repository inventories agreed on two rules and
+disagreed on nothing. Only querying for the metric they were supposed to write found it.
+Before adding any derived-metric mechanism, check that its window can actually overlap its
+source's event times.
+

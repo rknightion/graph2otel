@@ -65,7 +65,7 @@ container-smoke:
 # The green bar — run this before every commit; CI runs the same steps. The
 # generated-doc drift gate (docs/env-vars.md vs config.example.yaml) rides the
 # `test` target as an ordinary `go test` (TestEnvReferenceDocInSync), while the
-# dashboard, alert, recording-rule, and observability-doc gates ride
+# dashboard, alert-rule, and observability-doc gates ride
 # `grafana-check`.
 check: vet test lint govulncheck tidy-check tools-check forks-check grafana-check
 	$(GO) build ./...
@@ -138,7 +138,7 @@ regen:
 dashboard:
 	cd grafana && python3 build_dashboard.py
 
-# Regenerate alerts/graph2otel-alerts.yaml + recording-rules/*.json from
+# Regenerate alerts/graph2otel-alerts.yaml + alerts/graph2otel-detections.yaml from
 # grafana/build_rules.py's RULES/RECORDING lists (#219). Same pure-stdlib
 # python3, no PyYAML, no setup-python step — see build_rules.py's docstring.
 rules:
@@ -154,7 +154,7 @@ rules:
 #                PromQL metric token in every rule resolves to a real catalog
 #                Prometheus name — no waiver concept, an unresolvable
 #                name is just a failure) plus its own regen-staleness check on
-#                alerts/graph2otel-alerts.yaml and recording-rules/*.json.
+#                alerts/graph2otel-alerts.yaml and alerts/graph2otel-detections.yaml.
 #   3. unittest  staleness — TestStructure.test_committed_dashboards_are_not_stale
 #                (dashboards) and TestStaleness (rules) compare each committed
 #                generated file against what its builder produces right now —

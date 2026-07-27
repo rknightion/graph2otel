@@ -27,7 +27,7 @@ label set (`pipeline`/`severity`/`source`/`category`, plus an optional
 against it — see
 [Operator-owned routing](../docs/deploying-observability.md#operator-owned-routing)
 for the label reference and a worked example route. A repository-content gate
-rejects any future committed file under `alerts/` or `recording-rules/` that
+rejects any future committed file under `alerts/` that
 looks like a contact point, policy, or route.
 
 Fourteen rule objects across six alert categories, matching the four bullets in

@@ -599,11 +599,10 @@ class TestOTLPDeliveryPanels(unittest.TestCase):
                 )
                 self.assertIn("by (signal)", expr)
 
-    def test_no_delivery_alert_or_recording_rule_is_added(self):
-        rendered = json.dumps({
-            "alerts": build_rules.RULES,
-            "recording": build_rules.RECORDING,
-        })
+    def test_no_delivery_alert_is_added(self):
+        # Recording rules were retired entirely by #297, so RULES is the whole
+        # generated rule surface this has to stay out of.
+        rendered = json.dumps({"alerts": build_rules.RULES})
         self.assertNotIn("graph2otel_otlp_delivery_", rendered)
 
     def test_docs_define_the_callback_boundary_and_local_fallbacks(self):
@@ -698,11 +697,8 @@ class TestCapacityAndCostPanels(unittest.TestCase):
         self.assertIn('attribution="estimated"', panel["targets"][0]["expr"])
         self.assertNotIn("budget", panel["targets"][0]["expr"].lower())
 
-    def test_capacity_and_cost_add_no_alert_or_recording_rule(self):
-        rendered = json.dumps({
-            "alerts": build_rules.RULES,
-            "recording": build_rules.RECORDING,
-        })
+    def test_capacity_and_cost_add_no_alert_rule(self):
+        rendered = json.dumps({"alerts": build_rules.RULES})
         for metric in [
             "graph2otel_ingest_source_records",
             "graph2otel_ingest_emitted_points",

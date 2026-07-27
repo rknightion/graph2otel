@@ -36,18 +36,8 @@
       "required_labels": [
         "tenant_id"
       ],
-      "since": "1h",
-      "step": "5m"
-    },
-    {
-      "id": "compliance-alert-recording",
-      "kind": "promql",
-      "datasource": "prometheus",
-      "query": "intune_compliance_alert_count",
-      "empty": "empty_allowed",
-      "required_labels": [
-        "tenant_id"
-      ]
+      "since": "7d",
+      "step": "1h"
     },
     {
       "id": "collector-staleness-query",

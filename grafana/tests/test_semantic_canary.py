@@ -313,21 +313,27 @@ class TestCommittedManifest(unittest.TestCase):
 
     def test_committed_manifest_is_valid(self):
         manifest = self._manifest()
-        self.assertGreaterEqual(len(manifest["probes"]), 6)
+        # 5 since #297 retired the intune_compliance_alert_count recording
+        # rule and its probe with it. The LogQL probe over the same log twin
+        # stays — the stream is real; only the materialized metric is gone.
+        self.assertGreaterEqual(len(manifest["probes"]), 5)
 
-    def test_recording_probes_match_generated_source(self):
-        probes = {probe["id"]: probe for probe in self._manifest()["probes"]}
-        compliance = dict(build_rules.RECORDING)[
-            "intune-compliance-alert-count.json"
-        ]
-        self.assertEqual(
-            probes["compliance-alert-log"]["query"],
-            compliance["data"][0]["model"]["expr"],
-        )
-        self.assertEqual(
-            probes["compliance-alert-recording"]["query"],
-            compliance["record"]["metric"],
-        )
+    def test_no_probe_targets_a_retired_recording_rule(self):
+        """#297 retired both recording rules. A probe for a metric no rule
+        writes would report a permanent, meaningless failure."""
+        for probe in self._manifest()["probes"]:
+            self.assertNotIn("recording", probe["id"])
+            self.assertNotEqual(probe.get("query"), "intune_compliance_alert_count")
+            self.assertNotEqual(probe.get("query"), "intune_enrollment_failure_count")
+
+    def test_the_log_twin_probe_looks_back_far_enough_to_match_a_row(self):
+        """#297 measured this blob-derived stream at 3.3-7.0 days of event-time
+        lag (median 5.97, n=223) — the exact reason its recording rule recorded
+        nothing for 30+ days while reporting healthy. A probe with a 1h lookback
+        would repeat that mistake: green because it can never see data."""
+        probe = next(p for p in self._manifest()["probes"]
+                     if p["id"] == "compliance-alert-log")
+        self.assertEqual(probe["since"], "7d")
 
     def test_alert_query_and_uid_match_generated_source(self):
         probes = {probe["id"]: probe for probe in self._manifest()["probes"]}

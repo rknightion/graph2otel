@@ -1,4 +1,4 @@
-"""Structural tests for the alert + recording rule builder and its gates (#219).
+"""Structural tests for the alert rule builder and its gates (#219).
 
 Standard-library ``unittest`` only, matching the repo's no-third-party-
 assertion rule on the Go side (and ``test_build_dashboard.py``'s own
@@ -64,9 +64,8 @@ class TestRuleIdentity(unittest.TestCase):
         actual = {r["uid"]: r["isPaused"] for r in build_rules.RULES}
         self.assertEqual(actual, EXPECTED_PAUSED)
 
-    def test_fourteen_alert_rules_two_recording_rules(self):
+    def test_fourteen_alert_rules_and_no_recording_rules(self):
         self.assertEqual(len(build_rules.RULES), 14)
-        self.assertEqual(len(build_rules.RECORDING), 2)
 
 
 class TestPipelineShape(unittest.TestCase):
@@ -82,12 +81,6 @@ class TestPipelineShape(unittest.TestCase):
             self.assertEqual(c["model"]["type"], "threshold", r["uid"])
             self.assertEqual(c["model"]["expression"], "B", r["uid"])
 
-    def test_every_recording_rule_records_from_a_single_query_node(self):
-        for fname, r in build_rules.RECORDING:
-            self.assertEqual(r["condition"], "A", fname)
-            self.assertEqual([n["refId"] for n in r["data"]], ["A"], fname)
-            self.assertEqual(r["record"]["from"], "A", fname)
-            self.assertEqual(r["data"][0]["model"]["datasource"]["type"], "loki", fname)
 
 
 class TestEvaluatorErrorState(unittest.TestCase):
@@ -141,7 +134,7 @@ class TestCollectorStalenessIsIntervalAware(unittest.TestCase):
     """#299: replace the fixed 3600s placeholder with a per-collector ratio
     against the scheduler's own effective interval, at the maintainer-approved
     3x multiplier. Modifies the EXISTING g2o-collector-staleness rule in place
-    (TestRuleIdentity.test_fourteen_alert_rules_two_recording_rules already
+    (TestRuleIdentity.test_fourteen_alert_rules_and_no_recording_rules already
     pins the rule count at 14 — this must not add a 15th)."""
 
     def _rule(self):
@@ -294,92 +287,13 @@ class TestReverseValidation(unittest.TestCase):
         self.assertIn("increase(graph2otel_record_outcomes_total", expr)
         self.assertIn("tenant_id, collector, ingest_transport", expr)
 
-    def test_every_recording_rule_event_name_resolves(self):
-        # _record() already calls cat.log() at build time (KeyError on a typo);
-        # this re-asserts the event names it validated are real, current ones.
-        for fname, r in build_rules.RECORDING:
-            event = r["data"][0]["model"]["expr"]
-            # event_name is backtick-quoted in the LogQL; every RECORDING event
-            # used here is a literal we control, so just confirm it is cataloged.
-            found = [e for e in CAT.logs if f"`{e}`" in event]
-            self.assertEqual(len(found), 1, f"{fname}: {event}")
-            self.assertIn(found[0], CAT.logs, fname)
-
-    def test_recording_rules_keep_two_tenants_as_distinct_series(self):
-        fixture = [
-            {"tenant_id": "11111111-1111-1111-1111-111111111111",
-             "alert_type": "noncompliant"},
-            {"tenant_id": "22222222-2222-2222-2222-222222222222",
-             "alert_type": "noncompliant"},
-        ]
-
-        for fname, rule in build_rules.RECORDING:
-            expr = rule["data"][0]["model"]["expr"]
-            match = re.match(r"sum by \(([^)]+)\)", expr)
-            self.assertIsNotNone(match, fname)
-            group_labels = [label.strip() for label in match.group(1).split(",")]
-            grouped_series = {
-                tuple(row.get(label) for label in group_labels)
-                for row in fixture
-            }
-            self.assertIn("tenant_id", group_labels, fname)
-            self.assertEqual(len(grouped_series), 2, fname)
-
-    def test_recording_expression_adds_tenant_once(self):
-        expr = build_rules._recording_expr(
-            "intune.compliance_alert",
-            ["tenant_id", "tenant_id", "alert_type"],
-        )
-        self.assertTrue(expr.startswith("sum by (tenant_id, alert_type)"))
-
-
-class TestNoRecordingMetricCollision(unittest.TestCase):
-    def test_recording_rule_metric_does_not_collide_with_a_catalog_metric(self):
-        catalog_proms = {m.prom for m in CAT.metrics.values()}
-        for fname, r in build_rules.RECORDING:
-            self.assertNotIn(r["record"]["metric"], catalog_proms, fname)
-
 
 class TestStaleness(unittest.TestCase):
-    def test_orphan_recording_rule_is_reported(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            alerts_path = os.path.join(tmp, "alerts.yaml")
-            recording_dir = os.path.join(tmp, "recording-rules")
-            os.mkdir(recording_dir)
-            with open(alerts_path, "wb") as f:
-                f.write(build_rules.render_alerts(build_rules.RULES))
-            for fname, data in build_rules.render_recording(
-                    build_rules.RECORDING).items():
-                with open(os.path.join(recording_dir, fname), "wb") as f:
-                    f.write(data)
-            with open(os.path.join(recording_dir, "obsolete.json"), "w") as f:
-                f.write("{}\n")
-
-            stderr = io.StringIO()
-            with (
-                mock.patch.object(build_rules, "ALERTS_PATH", alerts_path),
-                mock.patch.object(build_rules, "RECORDING_DIR", recording_dir),
-                mock.patch.object(sys, "argv", ["build_rules.py", "--check"]),
-                contextlib.redirect_stderr(stderr),
-            ):
-                result = build_rules.main()
-
-        self.assertEqual(result, 1)
-        self.assertIn("recording-rules/obsolete.json", stderr.getvalue())
-
     def test_committed_alerts_yaml_is_not_stale(self):
         with open(build_rules.ALERTS_PATH, "rb") as f:
             committed = f.read()
         self.assertEqual(committed, build_rules.render_alerts(build_rules.RULES),
                          "alerts/graph2otel-alerts.yaml is stale — run `make rules`")
-
-    def test_committed_recording_rules_are_not_stale(self):
-        rendered = build_rules.render_recording(build_rules.RECORDING)
-        for fname, data in rendered.items():
-            path = os.path.join(build_rules.RECORDING_DIR, fname)
-            with open(path, "rb") as f:
-                committed = f.read()
-            self.assertEqual(committed, data, f"{fname} is stale — run `make rules`")
 
     def test_output_is_deterministic(self):
         self.assertEqual(build_rules.render_alerts(build_rules.RULES),
@@ -401,18 +315,6 @@ class TestYamlRoundTrips(unittest.TestCase):
         self.assertEqual(len(rules), 14)
         uids = {r["uid"] for r in rules}
         self.assertEqual(uids, set(EXPECTED_PAUSED))
-
-
-class TestRecordingRulesAreValidJson(unittest.TestCase):
-    def test_every_recording_rule_file_is_valid_json_with_expected_shape(self):
-        for fname, _ in build_rules.RECORDING:
-            path = os.path.join(build_rules.RECORDING_DIR, fname)
-            with open(path) as f:
-                d = json.load(f)
-            self.assertIn("record", d)
-            self.assertTrue(d["title"])
-            self.assertEqual(d["folderUID"], "efskohpc18lj4b")
-            self.assertEqual(d["ruleGroup"], "blob-derived")
 
 
 class TestRoutableLabelContract(unittest.TestCase):
@@ -506,13 +408,12 @@ class TestRoutableLabelContract(unittest.TestCase):
 
 class TestNoRoutingAssetsShipped(unittest.TestCase):
     """#293/#296: no contact point, notification policy, or route ships in
-    this repository, in any form, under alerts/ or recording-rules/. A real
-    content check on committed YAML/JSON top-level keys, not a filename
-    convention."""
+    this repository, in any form, under alerts/. A real content check on
+    committed YAML/JSON top-level keys, not a filename convention."""
 
-    def test_committed_alerts_and_recording_rule_files_carry_no_routing_keys(self):
+    def test_committed_alert_files_carry_no_routing_keys(self):
         violations = build_rules.routing_asset_violations(
-            [build_rules.ALERTS_DIR, build_rules.RECORDING_DIR])
+            [build_rules.ALERTS_DIR])
         self.assertEqual(violations, [])
 
     def test_alerts_directory_contains_exactly_the_expected_files(self):
@@ -547,7 +448,7 @@ class TestNoRoutingAssetsShipped(unittest.TestCase):
         self.assertIn("contactPoints", violations[0])
         self.assertIn("policies", violations[0])
 
-    def test_a_clean_recording_rule_json_passes(self):
+    def test_a_clean_alert_rule_json_passes(self):
         with tempfile.TemporaryDirectory() as tmp:
             clean = os.path.join(tmp, "clean.json")
             with open(clean, "w", encoding="utf-8") as f:
@@ -642,6 +543,59 @@ class TestDetectionExamples(unittest.TestCase):
             self.assertEqual(
                 f.read(), build_rules.render_detections(build_rules.DETECTIONS))
 
+
+class TestRecordingRulesAreRetired(unittest.TestCase):
+    """#297: both Loki recording rules are retired, on measured evidence.
+
+    They recorded no series for 30+ days while reporting health=ok, because a
+    1h *event-time* window can never overlap a blob-derived source whose
+    records are 3.3-7.0 days old (median 5.97, n=223). Nothing consumed their
+    output; a LogQL `count by` over the log twin answers the same question with
+    no materialized series. See docs/derived-metrics.md for the full reasoning.
+
+    These assertions exist so the retirement cannot be undone by accident. A
+    deliberate reintroduction has to delete this class, which is the point.
+    """
+
+    def test_no_recording_rule_directory_is_committed(self):
+        self.assertFalse(
+            os.path.isdir(os.path.join(build_rules.REPO, "recording-rules")),
+            "recording-rules/ is retired (#297) — a recording rule over a "
+            "blob-derived stream is structurally incapable of matching its "
+            "own data",
+        )
+
+    def test_the_builder_declares_no_recording_rules(self):
+        for gone in ("RECORDING", "RECORDING_DIR", "render_recording",
+                     "_record", "_recording_expr", "recording_rule_orphans"):
+            self.assertFalse(
+                hasattr(build_rules, gone),
+                f"build_rules.{gone} survived the #297 retirement",
+            )
+
+    def test_no_committed_asset_declares_a_recording_rule(self):
+        """A gate on the outcome, not on a precondition: any committed YAML or
+        JSON carrying a top-level Grafana `record` block would be a recording
+        rule under a different name."""
+        offenders = []
+        for dirpath, dirnames, fnames in os.walk(build_rules.REPO):
+            dirnames[:] = [d for d in dirnames
+                           if d not in {".git", "__pycache__", "node_modules",
+                                        "third_party", ".superpowers", "testdata"}]
+            for fname in fnames:
+                if not fname.endswith((".yaml", ".yml", ".json")):
+                    continue
+                path = os.path.join(dirpath, fname)
+                if "record" in build_rules._top_level_keys(path):
+                    offenders.append(os.path.relpath(path, build_rules.REPO))
+        self.assertEqual(offenders, [])
+
+    def test_the_retirement_reason_is_documented_where_a_reader_will_look(self):
+        path = os.path.join(build_rules.REPO, "docs", "derived-metrics.md")
+        with open(path, encoding="utf-8") as f:
+            doc = f.read()
+        self.assertIn("#297", doc)
+        self.assertIn("retired", doc.lower())
 
 
 if __name__ == "__main__":
