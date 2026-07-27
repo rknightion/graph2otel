@@ -1,0 +1,15 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "graph2otel.startup",
+      "AttrKeys": [
+        "config.fingerprint",
+        "config.tenant_count",
+        "go.version",
+        "tenant_id",
+        "version"
+      ]
+    }
+  ]
+}

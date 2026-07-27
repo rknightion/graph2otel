@@ -405,8 +405,40 @@ def sentinel(name: str, query: str) -> dict:
 # manifest
 # ---------------------------------------------------------------------------
 
+def annotation(name: str, expr: str, *, color: str, group: str = "loki",
+               datasource: str = "${loki_datasource}") -> dict:
+    """One v2 ``AnnotationQuery``.
+
+    The shape is taken from a live v2 dashboard on a real stack rather than from
+    documentation, for the same reason ``sort: "alphabetical"`` had to be: the
+    dashboards API rejects a wrong enum member with a 422 that no local test
+    sees, and every field here is inside that closed schema.
+
+    ``builtIn`` is false — the built-in "Annotations & Alerts" query is Grafana's
+    own dashboard-annotation store, and this is a query over emitted telemetry.
+    """
+    return {
+        "kind": "AnnotationQuery",
+        "spec": {
+            "builtIn": False,
+            "enable": True,
+            "hide": False,
+            "iconColor": color,
+            "name": name,
+            "query": {
+                "kind": "DataQuery",
+                "version": "v0",
+                "group": group,
+                "datasource": {"name": datasource},
+                "spec": {"expr": expr, "queryType": "range"},
+            },
+        },
+    }
+
+
 def manifest(*, name: str, title: str, description: str, tags: list,
-             variables: list, elements: dict, tabs: list) -> dict:
+             variables: list, elements: dict, tabs: list,
+             annotations: list = None) -> dict:
     """Assemble the v2 dashboard resource.
 
     ``metadata.name`` is the v2 identity — there is no top-level ``uid`` — and
@@ -435,7 +467,7 @@ def manifest(*, name: str, title: str, description: str, tags: list,
                 "hideTimepicker": False,
             },
             "links": [],
-            "annotations": [],
+            "annotations": list(annotations or []),
             "variables": variables,
             "elements": elements,
             "layout": {"kind": "TabsLayout", "spec": {"tabs": tabs}},

@@ -18,6 +18,31 @@ const (
 	AttrClipMode = "mode"
 )
 
+// Process-identity attribute keys, carried by graph2otel.build_info (a constant-1
+// gauge) and by the graph2otel.startup marker (a log record, #310). Both signals
+// read AttrVersion from internal/version.String and AttrGoVersion from
+// runtime.Version — one source each, so a deploy marker and the build_info gauge
+// can never disagree about which build is running.
+const (
+	// AttrGoVersion is the Go runtime version the binary was built with, e.g.
+	// "go1.25.1". Bounded: one value per build.
+	AttrGoVersion = "go.version"
+	// AttrConfigFingerprint is the one-way, secret-free fingerprint of the
+	// effective configuration (internal/startupevent.Fingerprint): 16 lowercase
+	// hex characters. It is PROCESS-WIDE — it covers every configured tenant's
+	// settings — so it says "this process's configuration changed", never "your
+	// tenant's configuration changed".
+	//
+	// Log-only. It changes on every meaningful configuration edit, so as a metric
+	// label it would mint a new series per configuration and never stop paying
+	// for the old ones.
+	AttrConfigFingerprint = "config.fingerprint"
+	// AttrConfigTenantCount is how many tenants the process is configured with.
+	// A count, never an identity: it makes a single startup record legible
+	// ("one of six tenants") without a correlation query.
+	AttrConfigTenantCount = "config.tenant_count"
+)
+
 // Collector self-observability attribute keys, used by internal/collector's
 // Scheduler to label its graph2otel.scrape.* and graph2otel.checkpoint.* metrics.
 const (

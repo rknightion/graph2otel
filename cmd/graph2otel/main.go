@@ -23,6 +23,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/config"
 	"github.com/rknightion/graph2otel/internal/profiling"
+	"github.com/rknightion/graph2otel/internal/startupevent"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/version"
 )
@@ -40,6 +41,18 @@ func otelErrorHandler(logger *slog.Logger) otel.ErrorHandler {
 // PeriodicReader's default export interval (60s) so each report covers exactly
 // one export window's distinct series.
 const selfObsReportInterval = 60 * time.Second
+
+// processStart is when this process began, captured at package init — the
+// earliest moment in-process code runs, and therefore the most truthful event
+// time available for the graph2otel.startup marker (#310).
+//
+// It is a package var rather than a time.Now() at the emit site on purpose: the
+// marker's whole job is to line a dashboard annotation up against the moment the
+// deployment changed, and taking the clock after config load, provider
+// construction and a checkpoint-directory probe would date it several hundred
+// milliseconds late — silently, and in the direction that makes a marker appear
+// AFTER the metric change it is supposed to explain.
+var processStart = time.Now()
 
 func reportAvailability(
 	ctx context.Context,
@@ -228,6 +241,17 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	// dashboard still renders is exactly the failure nobody notices.
 	provider.Limiter().SetLogger(logger)
 	collector.EmitBuildInfo(provider.Emitter())
+
+	// The deploy/version/config-change marker the dashboards annotate from
+	// (#310): one log record per configured tenant, carrying the same version
+	// build_info reports plus a one-way, secret-free config fingerprint, stamped
+	// with the process start time above. A failure here means the marker was NOT
+	// emitted (never emitted wrong), so it is logged loudly and is not fatal —
+	// the exporter's core job is unaffected and an operator losing a dashboard
+	// annotation is not a reason to refuse to collect telemetry.
+	if err := startupevent.Emit(provider.Emitter(), cfg, processStart); err != nil {
+		logger.Error("startup marker not emitted", "error", err)
+	}
 
 	// Continuous profiling is opt-in (default off). Start also applies the
 	// runtime mutex/block sampling rates. A failure to reach Pyroscope is

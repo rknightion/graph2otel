@@ -589,7 +589,10 @@ facet — two facts follow that a dashboard author must know.
 **Every tenant-domain signal and tenant-scoped self-observability signal carries a
 `tenant_id` attribute** (#143). Filtering or grouping those panels by `tenant_id` works.
 Process-wide facts are the deliberate exception: build identity, cardinality policy and
-OTLP delivery health describe one graph2otel process and carry no tenant selector.
+OTLP delivery health describe one graph2otel process and carry no tenant selector. The one
+process-wide signal that *does* carry `tenant_id` is the
+[`graph2otel.startup` marker](#graph2otelstartup-deploy-version-and-configuration-markers),
+because a marker filtered out of every tenant-scoped view is a marker nobody sees.
 
 graph2otel runs one Scheduler per configured tenant, and `telemetry.WithTenant` stamps the
 tenant at the emitter boundary, so it reaches every logical collector across every
@@ -611,6 +614,85 @@ interleaved — a multi-tenant deploy got a meaningless number rather than a coa
 Why this does not violate the cardinality rule: `tenant_id` grows with the number of tenants
 an operator **deliberately configured**, not with tenant size. The [cardinality
 rule](#cardinality-shape) forbids the latter.
+
+## `graph2otel.startup` — deploy, version and configuration markers
+
+One **log record per process start**, per configured tenant. It is what a dashboard
+annotates from to answer "what changed at 14:00" when a metric moves with no other
+explanation (#310).
+
+| Field | Type | Value |
+| --- | --- | --- |
+| event name | — | `graph2otel.startup` |
+| severity | — | `INFO` |
+| body | string | `graph2otel <version> started; config fingerprint <fp>` |
+| record timestamp | — | **process start**, captured at package init in `cmd/graph2otel` |
+| `version` | string | the build version — `internal/version.String()`, the ldflags target, the same source `graph2otel.build_info` reads |
+| `go.version` | string | the Go runtime version the binary was built with |
+| `config.fingerprint` | string | 16 lowercase hex characters; see below |
+| `config.tenant_count` | int | how many tenants this process is configured with |
+| `tenant_id` | string | stamped by `telemetry.WithTenant`; **absent** when no tenant is configured |
+
+It is a **log, not a metric**. Build identity already has a metric —
+`graph2otel.build_info`, a constant-1 gauge carrying the same `version` and `go.version` —
+and a fingerprint that changes with the configuration would mint a new metric series per
+configuration and then pay for it forever.
+
+It carries **no `ingest_transport`**, and that is not an omission. `ingest_transport` names
+the transport that *ingested* a record; nothing ingested this one, so any value would be a
+lie and a new "internal" transport value would pollute the attribute for every consumer
+grouping by it. This is the one log record with no transport.
+
+### Querying it
+
+```logql
+# every startup marker for one tenant, newest first
+{service_name="graph2otel"} | event_name="graph2otel.startup" | tenant_id="<guid>"
+
+# just the version and fingerprint, for an annotation or a version timeline
+{service_name="graph2otel"} | event_name="graph2otel.startup"
+  | tenant_id="<guid>" | line_format "{{.version}} / {{.config_fingerprint}}"
+```
+
+Attributes are Loki **structured metadata**, not stream labels — `{event_name="…"}` matches
+zero rows silently. See [Querying the logs in Loki](#querying-the-logs-in-loki-attributes-are-structured-metadata-not-stream-labels).
+
+### The configuration fingerprint
+
+`config.fingerprint` is `SHA-256("graph2otel/config-fingerprint/v1\0" || json(effective
+config))`, truncated to 16 hex characters (64 bits).
+
+- **What it covers:** the *whole* effective configuration, as a deny-list. Every key
+  participates, including keys added after this was written — an allow-list would silently
+  stop covering new keys, and a fingerprint that under-reports is worse than none.
+- **What it excludes:** credentials. Every credential on the config surface is typed
+  `config.Secret`, which renders as `REDACTED` under JSON, so secret **bytes** cannot reach
+  the hash input — by the type, not by a list anyone maintains. Tenant auth material
+  (`AZURE_CLIENT_SECRET`, certificates) is not on the config surface at all.
+- **Consequences of that:** rotating a credential does **not** move the fingerprint; a
+  credential going from unset to set **does** (that is a behavior change).
+- **It is one-way.** SHA-256 truncated to 64 bits, over an input containing no credential.
+  There is nothing secret to recover even by brute force, and the truncation discards 192
+  further bits.
+- **It is process-wide.** It covers every configured tenant's settings, so it means "this
+  process's configuration changed", never "your tenant's configuration changed". Changing
+  tenant B's collectors moves the fingerprint on tenant A's marker too. That over-reporting
+  is deliberate: a per-tenant fingerprint over the tenant's own subtree would **miss** a
+  change to the global `collectors:` map that does alter what that tenant collects, and a
+  marker that silently fails to fire is worse than one that fires for a neighbor's change.
+- **`/v1` is the scheme version.** Changing what the fingerprint covers bumps it, and every
+  fingerprint moves once — the honest signal that the definition, not the config, changed.
+
+### Two things it deliberately does not say
+
+- **Why the process started.** A restart after a crash, a rollout, and a config reload are
+  indistinguishable from inside the process, so the marker does not guess at a reason.
+- **That anything changed.** It is emitted on every start. "Changed" is a comparison between
+  two consecutive markers' fingerprints, made by whoever reads them.
+
+There is **no configuration key** gating this event, matching `graph2otel.build_info`. The
+volume is one record per tenant per process start; a toggle's only real effect would be a
+deployment whose deploy and config markers silently stop appearing.
 
 ## OTLP delivery health: exporter callbacks, not backend retention
 

@@ -437,3 +437,29 @@ is no checkpoint to resume from.
   don't commit a filled-in config that contains anything beyond tenant/client IDs.
 
 See [Security](security.md) for the full rationale.
+
+## The configuration fingerprint on the startup marker
+
+Every process start emits a `graph2otel.startup` log record carrying a
+**`config.fingerprint`** — 16 hex characters derived from the effective configuration, so a
+dashboard can annotate "the configuration changed here" without publishing the
+configuration. Two consecutive markers with different fingerprints mean something in this
+file (or its environment overrides) changed between the restarts.
+
+What matters for this file:
+
+- **No configuration value is ever emitted, only the hash**, and the hash cannot be reversed
+  into the configuration.
+- **Credentials never enter the hash input at all.** Every credential key here is a
+  redacting type, so `otlp.grafana_cloud.token` and
+  `profiling.pyroscope.basic_auth_password` contribute the literal `REDACTED`. Tenant auth
+  material is not on this surface in the first place.
+- **Rotating a credential does not change the fingerprint.** Setting one that was previously
+  unset does — that is a behavior change, not a secret.
+- **Every key participates**, including keys added in later releases, so a cosmetic edit
+  moves the fingerprint too. It over-reports rather than under-reports on purpose.
+- **It is process-wide, not per-tenant.** Editing one tenant's block moves the fingerprint on
+  every tenant's marker.
+- **There is no key to turn it off**, by design — see
+  [Signals](signals.md#graph2otelstartup-deploy-version-and-configuration-markers) for the
+  full field set and the reasoning.

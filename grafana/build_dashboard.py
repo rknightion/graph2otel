@@ -143,6 +143,18 @@ def overview(b: Builder) -> dict:
         {"w": 24, "h": 10, "spec": guide},
     ])])
     b.sentinel(CENSUS_SENTINEL)
+    # Deploy / configuration markers on every time axis in the estate (#310).
+    # graph2otel.startup fires once per configured tenant on every process start
+    # and carries the version and a one-way configuration fingerprint, so a
+    # metric that moves at 14:00 can be lined up against a restart that also
+    # happened at 14:00.
+    #
+    # "Configuration changed" is a COMPARISON, not a field: the marker fires on
+    # every start, so a config change is two consecutive markers with different
+    # config.fingerprint values, and an upgrade is two with different version
+    # values. The annotation deliberately does not claim otherwise.
+    b.annotation("graph2otel starts, versions and config changes",
+                 "graph2otel.startup", color="rgba(255, 152, 0, 1)")
     return leaf
 
 

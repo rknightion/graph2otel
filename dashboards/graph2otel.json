@@ -32,7 +32,30 @@
       "hideTimepicker": false
     },
     "links": [],
-    "annotations": [],
+    "annotations": [
+      {
+        "kind": "AnnotationQuery",
+        "spec": {
+          "builtIn": false,
+          "enable": true,
+          "hide": false,
+          "iconColor": "rgba(255, 152, 0, 1)",
+          "name": "graph2otel starts, versions and config changes",
+          "query": {
+            "kind": "DataQuery",
+            "version": "v0",
+            "group": "loki",
+            "datasource": {
+              "name": "${loki_datasource}"
+            },
+            "spec": {
+              "expr": "{service_name=\"graph2otel\"} | event_name=`graph2otel.startup` | tenant_id=~\"$tenant\"",
+              "queryType": "range"
+            }
+          }
+        }
+      }
+    ],
     "variables": [
       {
         "kind": "DatasourceVariable",
@@ -32386,10 +32409,83 @@
           }
         }
       },
-      "panel-408": {
+      "panel-407": {
         "kind": "Panel",
         "spec": {
-          "id": 408,
+          "id": 407,
+          "title": "Starts, versions and configuration fingerprints",
+          "description": "One record per configured tenant on every process start, carrying the version, the Go runtime version and a one-way configuration fingerprint. This is the detail behind the deploy annotations on every time axis. A configuration change is two consecutive records whose config.fingerprint differs \u2014 the fingerprint is a hash, so it says THAT the configuration changed and never what it changed to. It is deliberately over-sensitive: it covers the whole configuration, so a change that does not alter behaviour can still move it. A rotated credential does not, because credentials are redacted by type before hashing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`graph2otel.startup` | tenant_id=~\"$tenant\"",
+                        "editorMode": "code",
+                        "queryType": "range"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "logs",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showTime": true,
+                "wrapLogMessage": true,
+                "sortOrder": "Descending",
+                "enableLogDetails": true,
+                "dedupStrategy": "none",
+                "prettifyLogMessage": false
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "No rows. Either no Loki datasource is selected above, or nothing matched. Log attributes are structured metadata: filter with | attr=\u2026 after {service_name=\"graph2otel\"}, never {attr=\"\u2026\"}.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-409": {
+        "kind": "Panel",
+        "spec": {
+          "id": 409,
           "title": "Signal availability",
           "description": "Current collector state from graph2otel.collector.availability. Intentional absence is disabled (transport_not_configured, experimental_not_enabled, high_volume_not_enabled, disabled_by_config) or covered (covered_by_alternative). healthy_empty/empty is a successful zero-row source response. limited/partial_license is non-failure; blocked/license_unavailable identifies a missing entitlement, while blocked/permission_denied requires access. degraded and failed (including source_error) describe completed runtime outcomes; startup_failed describes initialization failure. An empty table is unknown, never evidence of disabled.",
           "links": [],
@@ -32614,10 +32710,10 @@
           }
         }
       },
-      "panel-409": {
+      "panel-410": {
         "kind": "Panel",
         "spec": {
-          "id": 409,
+          "id": 410,
           "title": "Read this before writing your own query",
           "description": "",
           "links": [],
@@ -32673,7 +32769,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-408"
+                                    "name": "panel-409"
                                   }
                                 }
                               },
@@ -32686,7 +32782,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-409"
+                                    "name": "panel-410"
                                   }
                                 }
                               }
@@ -39048,6 +39144,19 @@
                                             "element": {
                                               "kind": "ElementReference",
                                               "name": "panel-406"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
+                                            "x": 0,
+                                            "y": 10,
+                                            "width": 24,
+                                            "height": 10,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-407"
                                             }
                                           }
                                         }

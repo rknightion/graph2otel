@@ -592,4 +592,17 @@ LOGS = [
              "whether graph2otel has a mapper for it. An unmapped category is data "
              "arriving that nothing reads.",
      "w": 24, "h": 10},
+    {"kind": "logs", "event": "graph2otel.startup",
+     "title": "Starts, versions and configuration fingerprints",
+     "desc": "One record per configured tenant on every process start, carrying the "
+             "version, the Go runtime version and a one-way configuration "
+             "fingerprint. This is the detail behind the deploy annotations on every "
+             "time axis. A configuration change is two consecutive records whose "
+             "config.fingerprint differs — the fingerprint is a hash, so it says "
+             "THAT the configuration changed and never what it changed to. It is "
+             "deliberately over-sensitive: it covers the whole configuration, so a "
+             "change that does not alter behaviour can still move it. A rotated "
+             "credential does not, because credentials are redacted by type before "
+             "hashing.",
+     "w": 24, "h": 10},
 ]

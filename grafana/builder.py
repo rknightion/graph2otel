@@ -271,6 +271,7 @@ class Builder:
         self.violations = []       # accumulated build-time rule breaches
         self.extra_vars = []       # board-declared template variables
         self._sentinels = {}       # sentinel name -> query, declaration order
+        self._annotations = []     # dashboard-level annotation queries
 
     @property
     def covered(self) -> set:
@@ -707,6 +708,22 @@ class Builder:
         self._sentinels[name] = query
         return name
 
+    def annotation(self, name: str, event: str, *, color: str,
+                   filters: list = None):
+        """Mark every occurrence of a log event on every time axis (#310).
+
+        The query goes through :meth:`_selector`, so the event name and every
+        filter key are validated against the catalog exactly like a log panel's
+        (#306). That is what makes an annotation catalog-gated rather than a
+        hand-typed LogQL string nobody checks: a misspelled attribute here would
+        otherwise be a valid pipeline stage that silently marks nothing, and an
+        annotation that never appears is indistinguishable from a deployment that
+        never happened.
+        """
+        expr = self._selector(event, filters)
+        self._loki_exprs.append(expr)
+        self._annotations.append(v2.annotation(name, expr, color=color))
+
     def elements(self) -> dict:
         """Every panel as a named v2 element, in declaration order."""
         out = {}
@@ -727,6 +744,7 @@ class Builder:
             variables=self.variables(),
             elements=self.elements(),
             tabs=tabs,
+            annotations=self._annotations,
         )
 
 

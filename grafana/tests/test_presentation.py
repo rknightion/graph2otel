@@ -280,3 +280,61 @@ class TestMutation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDeployAnnotations(unittest.TestCase):
+    """The #310 deploy/config markers, asserted on the shipped manifest.
+
+    An annotation that never appears is indistinguishable from a deployment that
+    never happened, so the failure mode here is silence — which is why the query
+    goes through the same catalog validation as a log panel rather than being a
+    hand-typed LogQL string.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.man = build_dashboard.render(CAT)
+        cls.annos = cls.man["spec"]["annotations"]
+
+    def test_the_estate_ships_a_deploy_annotation(self):
+        self.assertEqual(len(self.annos), 1, self.annos)
+
+    def test_it_queries_the_startup_event_over_loki(self):
+        spec = self.annos[0]["spec"]
+        self.assertEqual(spec["query"]["group"], "loki")
+        self.assertIn("graph2otel.startup", spec["query"]["spec"]["expr"])
+
+    def test_it_uses_the_only_correct_stream_selector(self):
+        """{event_name=...} matches zero rows silently: every graph2otel log
+        attribute is structured metadata and service_name is the sole stream
+        label (#90). An annotation gets this wrong just as easily as a panel."""
+        expr = self.annos[0]["spec"]["query"]["spec"]["expr"]
+        self.assertTrue(expr.startswith('{service_name="graph2otel"}'), expr)
+        self.assertIn("| event_name=", expr)
+
+    def test_it_is_tenant_scoped(self):
+        """The record is tenant-stamped precisely so the marker follows the
+        tenant dropdown; an unstamped marker would appear on every tenant's
+        axes."""
+        self.assertIn("tenant_id", self.annos[0]["spec"]["query"]["spec"]["expr"])
+
+    def test_it_is_enabled_and_not_the_builtin_grafana_store(self):
+        spec = self.annos[0]["spec"]
+        self.assertTrue(spec["enable"])
+        self.assertFalse(spec["builtIn"])
+        self.assertFalse(spec["hide"])
+
+    def test_a_misspelled_annotation_event_fails_the_build(self):
+        from builder import Builder  # noqa: PLC0415
+        b = Builder(name="g", title="t", description="d", tags=[], catalog=CAT)
+        with self.assertRaises(KeyError):
+            b.annotation("bad", "graph2otel.startupp", color="red")
+
+    def test_a_misspelled_annotation_filter_key_fails_the_build(self):
+        from builder import Builder  # noqa: PLC0415
+        from logquery import f  # noqa: PLC0415
+        b = Builder(name="g", title="t", description="d", tags=[], catalog=CAT)
+        b.annotation("bad", "graph2otel.startup", color="red",
+                     filters=[f("config_fingerprnt", "ne", "")])
+        self.assertTrue(any("config_fingerprnt" in v for v in b.violations),
+                        b.violations)

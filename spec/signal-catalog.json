@@ -1,5 +1,5 @@
 {
-  "package_count": 152,
+  "package_count": 153,
   "domains": [
     "defender",
     "entra",
@@ -6822,6 +6822,20 @@
       ],
       "packages": [
         "internal/collectors/selfobs/blobcategories"
+      ]
+    },
+    {
+      "event_name": "graph2otel.startup",
+      "domain": "graph2otel",
+      "attr_keys": [
+        "config.fingerprint",
+        "config.tenant_count",
+        "go.version",
+        "tenant_id",
+        "version"
+      ],
+      "packages": [
+        "internal/startupevent"
       ]
     },
     {
