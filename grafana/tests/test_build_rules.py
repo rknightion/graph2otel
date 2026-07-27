@@ -516,8 +516,13 @@ class TestNoRoutingAssetsShipped(unittest.TestCase):
         self.assertEqual(violations, [])
 
     def test_alerts_directory_contains_exactly_the_expected_files(self):
+        # An allowlist, not a convention: a new file under alerts/ has to be
+        # added here deliberately, which is how a stray contact-point or policy
+        # bundle gets noticed. graph2otel-detections.yaml is the paused portable
+        # detection pack (#300), kept separate from the health rules on purpose.
         actual = set(os.listdir(build_rules.ALERTS_DIR))
-        self.assertEqual(actual, {"graph2otel-alerts.yaml", "README.md"})
+        self.assertEqual(actual, {"graph2otel-alerts.yaml",
+                                  "graph2otel-detections.yaml", "README.md"})
 
     def test_the_gate_actually_rejects_a_synthetic_offending_document(self):
         """A gate nobody has seen fail is a hope, not a gate (same framing as
@@ -549,6 +554,94 @@ class TestNoRoutingAssetsShipped(unittest.TestCase):
                 json.dump({"title": "x", "record": {"metric": "y"}}, f)
             violations = build_rules.routing_asset_violations([tmp])
         self.assertEqual(violations, [])
+
+
+class TestDetectionExamples(unittest.TestCase):
+    """The portable detection pack (#300).
+
+    These are adapted from detections running on a real tenant. Two properties
+    make them safe to ship publicly and they are both enforced here rather than
+    trusted: nothing tenant-specific is in them, and every one is paused.
+    """
+
+    def test_every_detection_is_paused(self):
+        """#375's binding rule: unmeasured detections ship paused.
+
+        None of these thresholds has been measured on more than one tenant. A
+        detection that fires on correct data is worse than no detection, because
+        it teaches responders to ignore the channel.
+        """
+        for rule in build_rules.DETECTIONS:
+            self.assertTrue(rule["isPaused"], rule["uid"])
+
+    def test_every_detection_names_the_measurement_it_needs(self):
+        """A paused rule with no stated unblock condition is a rule nobody can
+        ever safely enable — the same failure as a waiver with no reason."""
+        for rule in build_rules.DETECTIONS:
+            tuning = rule["annotations"].get("tuning_required", "")
+            self.assertTrue(tuning.strip(), rule["uid"])
+
+    def test_a_detection_without_a_tuning_note_is_refused_at_construction(self):
+        with self.assertRaises(ValueError):
+            build_rules._loki_alert(
+                "x", "t", "sum(count_over_time({service_name=\"graph2otel\"} [5m]))",
+                "gt", [0],
+                {"severity": "critical", "source": "entra",
+                 "category": "identity-threat"},
+                "s", "d", tuning="   ")
+
+    def test_every_field_a_detection_filters_on_exists_in_the_catalog(self):
+        """A LogQL filter on an attribute graph2otel does not emit matches zero
+        rows silently, forever (#90). For a detection that is the worst possible
+        failure: it looks installed and healthy while unable to ever fire."""
+        self.assertEqual(build_rules.validate_detection_fields(build_rules.CAT), [])
+
+    def test_every_detection_query_uses_the_only_correct_stream_selector(self):
+        """service_name is the sole stream label. An attribute in the stream
+        selector is the #90 trap."""
+        checked = 0
+        for rule in build_rules.DETECTIONS:
+            expr = rule["data"][0]["model"]["expr"]
+            self.assertNotIn("{event_name=", expr, rule["uid"])
+            self.assertIn('{service_name="graph2otel"}', expr, rule["uid"])
+            checked += 1
+        self.assertGreater(checked, 0)
+
+    def test_detections_carry_the_frozen_routable_label_contract(self):
+        self.assertEqual(build_rules.validate_labels(build_rules.DETECTIONS), [])
+
+    def test_no_detection_carries_a_tenant_specific_identifier(self):
+        """The three per-service-principal rules on the source tenant hardcode
+        application GUIDs and private network addresses. They are deliberately
+        not ported. This asserts none of that shape leaked into the ones that
+        were: a GUID, a dotted IPv4 literal, or an IPv6 prefix.
+        """
+        guid = re.compile(
+            r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.I)
+        ipv4 = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b")
+        ipv6 = re.compile(r"\b[0-9a-f]{1,4}:[0-9a-f:]{2,}::?/\d{1,3}")
+        for rule in build_rules.DETECTIONS:
+            blob = json.dumps(rule)
+            self.assertIsNone(guid.search(blob), f"{rule['uid']} carries a GUID")
+            self.assertIsNone(ipv4.search(blob), f"{rule['uid']} carries an IPv4")
+            self.assertIsNone(ipv6.search(blob), f"{rule['uid']} carries an IPv6")
+
+    def test_detections_ship_separately_from_the_health_rules(self):
+        """Different file, group and folder. graph2otel-alerts.yaml means
+        'is graph2otel working'; mixing tenant-security detections into it would
+        blur what an operator agrees to when they provision it."""
+        doc = build_rules.render_detections(build_rules.DETECTIONS).decode()
+        self.assertIn("graph2otel-detections", doc)
+        self.assertIn("graph2otel detections", doc)
+        health = build_rules.render_alerts(build_rules.RULES).decode()
+        for rule in build_rules.DETECTIONS:
+            self.assertNotIn(rule["uid"], health)
+
+    def test_the_detections_file_on_disk_is_current(self):
+        with open(build_rules.DETECTIONS_PATH, "rb") as f:
+            self.assertEqual(
+                f.read(), build_rules.render_detections(build_rules.DETECTIONS))
+
 
 
 if __name__ == "__main__":

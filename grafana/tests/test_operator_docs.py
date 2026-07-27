@@ -52,10 +52,12 @@ class TestOperatorObservabilityInventory(unittest.TestCase):
         alert_count = len(build_rules.RULES)
         recording_count = len(build_rules.RECORDING)
         noun = "dashboard" if dashboard_count == 1 else "dashboards"
+        detection_count = len(build_rules.DETECTIONS)
         expected = (
             f"{dashboard_count} {noun}, "
-            f"{alert_count} alert rules, and "
-            f"{recording_count} recording rules"
+            f"{alert_count} alert rules, "
+            f"{recording_count} recording rules, and "
+            f"{detection_count} paused detection examples"
         )
         self.assertIn(expected, docs)
         self.assertIn(expected, readme)

@@ -350,6 +350,60 @@ tenant, collector, and ingest transport. The companion appears only where a
 collector has an explicit type expectation and observes a mismatch. Neither
 metric contains source record identifiers or values.
 
+## Detection examples — `graph2otel-detections.yaml` (all paused)
+
+A second, separate file ships five **portable security detections** built on graph2otel's log
+signals. They are not graph2otel health monitoring — everything above this section is. They live in
+their own file, rule group and Grafana folder so the two are never confused, and so provisioning one
+is not implicitly agreeing to the other.
+
+**Every rule in that file is paused, and the generator refuses to ship one that is not.** None of
+these thresholds has been measured on more than one tenant. Each carries a `tuning_required`
+annotation naming the measurement it needs on *your* tenant before it is safe to enable. A detection
+that fires on correct data is worse than no detection: it teaches responders to ignore the channel.
+
+| uid | what it catches |
+| --- | --- |
+| `g2o-detect-privileged-directory-change` | app credential or secret added, admin consent, app-role or delegated-permission grant, new application or service principal, directory-role member added, owner added, Conditional Access policy changed |
+| `g2o-detect-security-alert-unresolved` | an unresolved medium/high alert from **any** Microsoft source on the security API — Defender for Endpoint, Defender for Cloud Apps and Entra ID Protection all arrive on one stream |
+| `g2o-detect-security-incident-active` | an active medium/high **incident**, the correlation layer above alerts — deliberately overlapping with the row above |
+| `g2o-detect-graph-403-burst` | one application taking more than 10 Graph authorization denials in 5 minutes |
+| `g2o-detect-interactive-signin-anomaly` | a real user sign-in that Conditional Access blocked, or that Entra ID Protection scored `atRisk`/`confirmedCompromised` |
+
+The activity list in the first rule is the genuinely valuable, tenant-independent part: reconstructing
+"which directory activities mean someone is establishing persistence" is the hard half of that
+detection, and it is the same list on every tenant.
+
+Nothing in the file carries a tenant id, application id, network address or geography, and a test
+asserts that. Where a per-tenant value would improve a rule — an expected sign-in country, for
+instance — the description says so rather than shipping a placeholder that looks like a real value.
+
+### The pattern that is documented but not shipped: single-source workload identities
+
+One detection shape is worth knowing and cannot be shipped, because it is specific by nature: a
+**workload identity that legitimately signs in from exactly one place**.
+
+Automation service principals — a CI runner, a scheduled sync job, a self-hosted integration — usually
+authenticate from one network and nowhere else. Any sign-in for that application that is failed, or
+from an unexpected source address, is therefore anomalous in a way that needs no baseline and no
+machine learning:
+
+```logql
+{service_name="graph2otel"} | event_name=`entra.signin` | app_id=`<the application id>` | status_error_code!=`0`
+```
+
+plus an equivalent term for source address, ORed together and alerted above zero.
+
+The reason to detect rather than prevent is a licensing one worth stating plainly: **Conditional
+Access IP-locking for workload identities requires Microsoft Entra Workload ID**, a separate paid
+add-on. Without it there is no way to *stop* a leaked service-principal credential being used from
+anywhere in the world — but graph2otel's sign-in stream lets you *notice* within one evaluation
+interval, at no extra licence cost. That is a materially better position than nothing, and it is the
+main reason this pattern is documented here.
+
+Build one rule per such application. Each is a few lines, and each is unavoidably specific to your
+tenant, which is exactly why they are yours to write and not ours to ship.
+
 ## Validating
 
 ```bash

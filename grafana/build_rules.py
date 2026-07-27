@@ -53,6 +53,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 ALERTS_DIR = os.path.join(REPO, "alerts")
 ALERTS_PATH = os.path.join(ALERTS_DIR, "graph2otel-alerts.yaml")
+DETECTIONS_PATH = os.path.join(ALERTS_DIR, "graph2otel-detections.yaml")
 RECORDING_DIR = os.path.join(REPO, "recording-rules")
 
 PROM_UID = "grafanacloud-prom"
@@ -88,6 +89,10 @@ SOURCE_VALUES = {
 CATEGORY_VALUES = {
     "credential-expiry", "compliance", "self-observability",
     "record-integrity", "throttle", "mdca-discovery",
+    # Identity-threat detections (#300). Deliberately distinct from
+    # "compliance": these are security signals an operator routes to a security
+    # responder, not posture drift routed to the owning team.
+    "identity-threat",
 }
 
 # Optional fifth label. Only g2o-intune-apple-token-expiry-critical and
@@ -578,6 +583,262 @@ def _record(metric: str, event: str, by_labels: list) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Detection examples (#300) — portable, PAUSED, and deliberately separate
+#
+# Adapted from detections running on a real tenant. They ship here because they
+# are the "how do you actually use this data" worked examples the collector docs
+# do not provide, and because three of them encode non-obvious knowledge about
+# the SHAPE of the Microsoft data rather than about any one tenant.
+#
+# Why a separate file and group rather than graph2otel-alerts.yaml: that file is
+# the operational graph2otel-health rule set and its drift gate should keep
+# meaning exactly that. Mixing tenant-security detections into it would blur what
+# an operator agrees to when they provision it.
+#
+# EVERY RULE HERE IS PAUSED, and that is a hard rule rather than a default. None
+# of these thresholds has been measured on more than one tenant, and #375's
+# binding decision is that unmeasured detections ship paused or as hunting
+# queries. Each carries a mandatory tuning_required annotation naming the
+# measurement it needs. Enabling one without that measurement is how a team
+# learns to ignore an alert channel.
+#
+# Deliberately NOT here: any tenant identifier, application GUID, network
+# address, or geography. Three further detections on that tenant pin a specific
+# service principal to its expected source addresses; those are private
+# infrastructure by definition. Their PATTERN is portable and is documented in
+# alerts/README.md instead.
+# ---------------------------------------------------------------------------
+
+
+def _loki_alert(uid: str, title: str, expr: str, op: str, params: list,
+                labels: dict, summary: str, description: str,
+                tuning: str) -> dict:
+    """A Loki-backed detection. Always paused; ``tuning`` is mandatory.
+
+    Same A -> B -> C pipeline as the metric alerts, so it round-trips through the
+    Grafana UI and API identically. Only the A node's datasource differs.
+    """
+    if not tuning.strip():
+        raise ValueError(
+            f"{uid}: a paused detection must name the measurement its threshold "
+            "needs, or nobody can tell what would make it safe to enable"
+        )
+    full_labels = dict(labels)
+    full_labels["pipeline"] = PIPELINE
+    return {
+        "uid": uid,
+        "title": title,
+        "condition": "C",
+        "data": [
+            {
+                "refId": "A",
+                "datasourceUid": LOKI_UID,
+                "queryType": "range",
+                "relativeTimeRange": {"from": 3600, "to": 0},
+                "model": {
+                    "refId": "A",
+                    "datasource": {"type": "loki", "uid": LOKI_UID},
+                    "expr": expr,
+                    "queryType": "range",
+                    "editorMode": "code",
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                },
+            },
+            _reduce_node(),
+            _threshold_node(op, params),
+        ],
+        # No data is the steady state for every one of these on a healthy tenant,
+        # so it must not read as a fault.
+        "noDataState": "OK",
+        "execErrState": "Error",
+        "for": "0s",
+        "labels": full_labels,
+        "annotations": {
+            "summary": summary,
+            "description": description,
+            "tuning_required": tuning,
+        },
+        "isPaused": True,
+    }
+
+
+def _sel(event: str, *filters: str) -> str:
+    """Build the ONLY correct LogQL shape, exactly as the dashboards do (#90).
+
+    ``service_name`` is the sole stream label; everything else is structured
+    metadata and must be filtered after the pipe. Every attribute named by these
+    detections is checked against the catalog by ``validate_detection_fields``.
+    """
+    parts = ['{service_name="graph2otel"}', f"| event_name=`{event}`"]
+    parts.extend(f"| {f}" for f in filters)
+    return " ".join(parts)
+
+
+def _count(event: str, *filters: str, by: str = "") -> str:
+    grouping = f" by ({by})" if by else ""
+    return f"sum{grouping} (count_over_time({_sel(event, *filters)} [5m]))"
+
+
+# event name -> the attributes the detections below filter or group on. Checked
+# against spec/signal-catalog.json by validate_detection_fields(), so a filter on
+# an attribute graph2otel does not emit fails the build instead of matching zero
+# rows forever (#90).
+DETECTION_FIELDS = {
+    "entra.directory_audit": ["activity_display_name"],
+    "entra.security_alert": ["severity", "status"],
+    "entra.security_incident": ["severity", "status"],
+    "entra.graph_activity": ["response_status_code", "app_id"],
+    "entra.signin": ["sign_in_event_types", "conditional_access_status",
+                     "risk_state"],
+}
+
+DETECTIONS = [
+    _loki_alert(
+        "g2o-detect-privileged-directory-change",
+        "Privileged directory change (app credential, role, consent, CA or owner)",
+        _count(
+            "entra.directory_audit",
+            "activity_display_name=~`(?i)(consent to application|"
+            "add app role assignment.*|add delegated permission grant|"
+            "add service principal.*|add application.*|"
+            ".*certificates and secrets management.*|add member to role.*|"
+            "add owner to .*|.*conditional access polic.*)`",
+        ),
+        "gt", [0],
+        {"severity": "critical", "source": "entra", "category": "identity-threat"},
+        "A high-risk Entra directory change was recorded",
+        "An entra.directory_audit activity matched the high-risk set: application "
+        "credential or secret added, admin consent granted, app role or delegated "
+        "permission granted, service principal or application created, directory "
+        "role member added, owner added, or a Conditional Access policy changed. "
+        "Each is a step an attacker takes to establish persistence, and each is "
+        "also ordinary administrative work, so this fires on legitimate changes "
+        "too by design. Inspect initiated_by and target_resources on the record. "
+        "The activity list is the valuable part of this rule: it is tenant "
+        "independent and tedious to reconstruct.",
+        "Fires on your own admin work. Run the query over 30 days to learn your "
+        "tenant's normal change rate, then decide whether to route it to a review "
+        "queue rather than a pager, or to exclude specific initiators.",
+    ),
+    _loki_alert(
+        "g2o-detect-security-alert-unresolved",
+        "Security alert, medium or high, still unresolved",
+        _count("entra.security_alert",
+               "severity=~`(?i)(high|medium)`", "status=~`(?i)(new|inProgress)`"),
+        "gt", [0],
+        {"severity": "critical", "source": "entra", "category": "identity-threat"},
+        "An unresolved medium/high security alert is open",
+        "The entra.security_alert stream carries alerts from ALL Microsoft "
+        "sources that surface through the security API: Defender for Endpoint, "
+        "Defender for Cloud Apps and Entra ID Protection all arrive here, so one "
+        "rule covers products that are separate consoles in the portal. Inspect "
+        "title, category and service_source to see which product raised it.",
+        "Volume depends entirely on your Defender licensing and tenant size. "
+        "Measure the alert rate over 30 days before enabling; on a noisy tenant "
+        "raise the threshold or narrow to severity=high.",
+    ),
+    _loki_alert(
+        "g2o-detect-security-incident-active",
+        "Security incident, medium or high, active",
+        _count("entra.security_incident",
+               "severity=~`(?i)(high|medium)`", "status=~`(?i)(active|inProgress)`"),
+        "gt", [0],
+        {"severity": "warning", "source": "entra", "category": "identity-threat"},
+        "An active medium/high security incident is open",
+        "Incidents are the CORRELATION layer above individual alerts: one "
+        "incident groups related alerts Microsoft believes are the same attack. "
+        "This therefore OVERLAPS with the unresolved-alert detection above, and a "
+        "single security event will usually match both. That is deliberate, since "
+        "the incident carries the correlation and the alert carries the detail, "
+        "but decide which one you want to page on rather than enabling both and "
+        "being paged twice for one event.",
+        "Enable this or the alert rule, not both, until you have watched a real "
+        "incident arrive and seen which gives your responders the better entry "
+        "point.",
+    ),
+    _loki_alert(
+        "g2o-detect-graph-403-burst",
+        "Graph API authorization-denial burst from a single application",
+        _count("entra.graph_activity", "response_status_code=`403`", by="app_id"),
+        "gt", [10],
+        {"severity": "critical", "source": "entra", "category": "identity-threat"},
+        "One application received more than 10 Graph 403s in 5 minutes",
+        "A burst of authorization denials from a single caller can indicate "
+        "permission probing or a compromised identity exploring what it can "
+        "reach. It is equally often an application that lost a consent grant, "
+        "which is worth knowing either way. Check app_id and the denied paths.",
+        "Needs entra.graph_activity, which arrives over blob ingest. The "
+        "threshold of 10 in 5 minutes is a starting point from one small tenant; "
+        "a tenant with more automation will need a higher one. Measure your own "
+        "per-app 403 baseline before enabling.",
+    ),
+    _loki_alert(
+        "g2o-detect-interactive-signin-anomaly",
+        "Interactive sign-in blocked by Conditional Access or flagged at risk",
+        "("
+        + _count("entra.signin", "sign_in_event_types=`interactiveUser`",
+                 "conditional_access_status=`failure`")
+        + ") + ("
+        + _count("entra.signin", "sign_in_event_types=`interactiveUser`",
+                 "risk_state=~`atRisk|confirmedCompromised`")
+        + ")",
+        "gt", [0],
+        {"severity": "critical", "source": "entra", "category": "identity-threat"},
+        "An interactive sign-in was CA-blocked or risk-flagged",
+        "A real user sign-in that Conditional Access blocked, or that Entra ID "
+        "Protection scored atRisk or confirmedCompromised. Check "
+        "user_principal_name, app_display_name and ip_address on the record. The "
+        "tenant this came from adds a third clause for sign-ins outside its "
+        "expected country; that is a per-tenant policy statement rather than a "
+        "portable default, so it is not shipped. Add another OR term filtering "
+        "location_country_or_region against your own country code if you want it.",
+        "Conditional Access failures include ordinary events such as a user "
+        "declining an MFA prompt, so on most tenants this needs either a "
+        "threshold above zero or a narrowing to risk_state alone. Measure your CA "
+        "failure rate over 30 days first. Risk states require Entra ID P2.",
+    ),
+]
+
+
+def validate_detection_fields(cat) -> list:
+    """Every event and attribute a detection names must exist in the catalog.
+
+    A LogQL filter on an attribute graph2otel does not emit is not an error at
+    query time — it simply matches nothing, silently, forever (#90). For a
+    detection that is the worst possible failure: it looks installed and healthy
+    while never being able to fire.
+    """
+    violations = []
+    for event, attrs in DETECTION_FIELDS.items():
+        try:
+            log = cat.log(event)
+        except KeyError:
+            violations.append(f"detections filter on {event!r}, which is not a "
+                              "cataloged log event")
+            continue
+        for attr in attrs:
+            if attr not in log.keys:
+                violations.append(
+                    f"detections filter {event}.{attr!r}, which the event does "
+                    "not carry; the query would match zero rows silently"
+                )
+    # A field declared here but named by no detection is a stale claim, and the
+    # check above would then be validating something nobody queries.
+    exprs = " ".join(rule["data"][0]["model"]["expr"] for rule in DETECTIONS)
+    for event, attrs in DETECTION_FIELDS.items():
+        if f"event_name=`{event}`" not in exprs:
+            violations.append(f"DETECTION_FIELDS declares {event!r}, which no "
+                              "detection queries")
+        for attr in attrs:
+            if attr not in exprs:
+                violations.append(f"DETECTION_FIELDS declares {event}.{attr!r}, "
+                                  "which no detection filters or groups on")
+    return violations
+
+
+
 RECORDING = [
     ("intune-compliance-alert-count.json",
      _record("intune_compliance_alert_count", "intune.compliance_alert",
@@ -625,6 +886,48 @@ def render_alerts(rules: list) -> bytes:
         }],
     }
     return (ALERTS_BANNER + yamlify(doc) + "\n").encode()
+
+
+DETECTIONS_BANNER = """\
+# GENERATED by grafana/build_rules.py — do not edit by hand.
+# Edit the DETECTIONS list there, then run `make rules`.
+#
+# PORTABLE DETECTION EXAMPLES — EVERY RULE HERE IS PAUSED ON PURPOSE.
+#
+# These are worked examples of querying graph2otel's log signals for security
+# outcomes, adapted from detections running on a real tenant. They are NOT
+# graph2otel health monitoring; that is alerts/graph2otel-alerts.yaml, which is a
+# separate file and folder precisely so the two are never confused.
+#
+# None of these thresholds has been measured on more than one tenant. Each rule
+# carries a `tuning_required` annotation naming the measurement it needs before
+# it is safe to enable. Un-pause a rule only after you have made that
+# measurement on YOUR tenant — an alert that fires on correct data is worse than
+# no alert, because it teaches responders to ignore the channel.
+#
+# They contain no tenant identifier, application id, network address or
+# geography. Substituting your own is expected for some of them; the
+# descriptions say where.
+#
+# Log attributes are Loki STRUCTURED METADATA, not stream labels. Only
+# service_name is a stream label, which is why every query below starts
+# {service_name="graph2otel"} and filters after the pipe. A stream selector on
+# an attribute matches zero rows silently — see docs/signals.md.
+"""
+
+
+def render_detections(detections: list) -> bytes:
+    doc = {
+        "apiVersion": 1,
+        "groups": [{
+            "orgId": 1,
+            "name": "graph2otel-detections",
+            "folder": "graph2otel detections",
+            "interval": "5m",
+            "rules": detections,
+        }],
+    }
+    return (DETECTIONS_BANNER + yamlify(doc) + "\n").encode()
 
 
 def render_recording(recording: list) -> dict:
@@ -863,7 +1166,29 @@ def main() -> int:
             print(f"  - {v}", file=sys.stderr)
         return 1
 
-    label_violations = validate_labels(RULES)
+    field_violations = validate_detection_fields(CAT)
+    if field_violations:
+        print(f"DETECTION QUERIES A SIGNAL graph2otel DOES NOT EMIT "
+              f"({len(field_violations)}) — the query would match zero rows "
+              f"silently (#90):", file=sys.stderr)
+        for v in field_violations:
+            print(f"  - {v}", file=sys.stderr)
+        return 1
+
+    # #375's binding rule: unmeasured detections ship paused or as hunting
+    # queries. Enforce it here rather than trusting the DETECTIONS list, so
+    # un-pausing one is a deliberate change to this gate and not a one-character
+    # edit nobody reviews.
+    enabled = [rule["uid"] for rule in DETECTIONS if not rule["isPaused"]]
+    if enabled:
+        print(f"DETECTION IS NOT PAUSED ({len(enabled)}) — every shipped "
+              f"detection must be paused until measured on the operator's own "
+              f"tenant:", file=sys.stderr)
+        for uid in enabled:
+            print(f"  - {uid}", file=sys.stderr)
+        return 1
+
+    label_violations = validate_labels(RULES) + validate_labels(DETECTIONS)
     if label_violations:
         print(f"RULE LABELS VIOLATE THE FROZEN ROUTABLE CONTRACT ({len(label_violations)}):",
               file=sys.stderr)
@@ -881,11 +1206,14 @@ def main() -> int:
         return 1
 
     alerts_bytes = render_alerts(RULES)
+    detections_bytes = render_detections(DETECTIONS)
     recording_bytes = render_recording(RECORDING)
 
     if not args.check:
         with open(ALERTS_PATH, "wb") as f:
             f.write(alerts_bytes)
+        with open(DETECTIONS_PATH, "wb") as f:
+            f.write(detections_bytes)
         os.makedirs(RECORDING_DIR, exist_ok=True)
         for fname, data in recording_bytes.items():
             with open(os.path.join(RECORDING_DIR, fname), "wb") as f:
@@ -895,6 +1223,9 @@ def main() -> int:
     with open(ALERTS_PATH, "rb") as f:
         if f.read() != alerts_bytes:
             stale.append("alerts/graph2otel-alerts.yaml")
+    with open(DETECTIONS_PATH, "rb") as f:
+        if f.read() != detections_bytes:
+            stale.append("alerts/graph2otel-detections.yaml")
     for fname, data in recording_bytes.items():
         path = os.path.join(RECORDING_DIR, fname)
         with open(path, "rb") as f:
@@ -910,7 +1241,8 @@ def main() -> int:
 
     print(f"rules: {len(RULES)} alert rules ({sum(1 for r in RULES if not r['isPaused'])} "
           f"enabled, {sum(1 for r in RULES if r['isPaused'])} paused), "
-          f"{len(RECORDING)} recording rules", file=sys.stderr)
+          f"{len(RECORDING)} recording rules, "
+          f"{len(DETECTIONS)} detection examples (all paused)", file=sys.stderr)
 
     if stale:
         print(f"\nSTALE GENERATED FILES ({len(stale)}) — run `make rules`:", file=sys.stderr)
