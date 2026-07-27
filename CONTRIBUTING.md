@@ -30,11 +30,11 @@ make test           # go test -race ./...
 make lint           # golangci-lint run
 make fmt            # golangci-lint fmt (gofmt + goimports)
 make docker         # build the container image locally
-make dashboard      # regenerate dashboards/*.json from grafana/boards/*.py
+make dashboard      # regenerate dashboards/graph2otel.json from grafana/boards/*.py
 make grafana-check  # dashboard metric coverage + log coverage + freshness (a CI leg)
 ```
 
-`dashboards/*.json` is **generated** — edit `grafana/boards/*.py`, not the JSON. A new
+`dashboards/graph2otel.json` is **generated** — edit `grafana/boards/*.py`, not the JSON. A new
 collector's metrics must reach a panel (or a documented waiver) or `make grafana-check`
 fails; see [`grafana/AUTHORING.md`](grafana/AUTHORING.md). It needs only `python3` —
 no packages to install.

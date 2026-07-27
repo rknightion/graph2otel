@@ -46,6 +46,8 @@ Measured during the same spike, and therefore generator-side gates:
 
 from __future__ import annotations
 
+import re
+
 # The v2 schema with TabsLayout and conditionalRendering needs Grafana 13+.
 # Asserted by a test rather than documented in prose, which is the one place this
 # implementation deliberately does more than the reference.
@@ -59,6 +61,13 @@ KIND = "Dashboard"
 VIZ_VERSION = "v11.5.0"
 
 GRID_COLUMNS = 24
+
+# `sort` is a closed enum on the server side and the bare value "alphabetical" is
+# NOT a member — a manifest carrying it is rejected 422 by the dashboards API even
+# though it looks obviously right. Caught only by server-side validation, so both
+# members used here are named rather than spelled at call sites.
+SORT_ALPHABETICAL = "alphabeticalAsc"
+SORT_NONE = "disabled"
 
 # v2 routes a query by its plugin group rather than by a datasource ref on the
 # panel, so the group is derived from the v1 target's datasource type. A log
@@ -336,7 +345,7 @@ def datasource_variable(name: str, label: str, plugin_id: str, *,
 def query_variable(name: str, query: str, *, label: str = "",
                    multi: bool = False, include_all: bool = False,
                    description: str = "", hide: str = "dontHide",
-                   skip_url_sync: bool = False, sort: str = "alphabetical") -> dict:
+                   skip_url_sync: bool = False, sort: str = SORT_ALPHABETICAL) -> dict:
     """A Prometheus-backed ``QueryVariable``.
 
     Note for anyone adding a Loki-backed variable later: the Loki **variable**
@@ -389,7 +398,7 @@ def sentinel(name: str, query: str) -> dict:
             "presence from graph2otel_collector_availability instead"
         )
     return query_variable(name, query, hide="hideVariable", skip_url_sync=True,
-                          sort="disabled")
+                          sort=SORT_NONE)
 
 
 # ---------------------------------------------------------------------------
@@ -465,6 +474,52 @@ def _conditional_groups(tabs: list):
                     row["spec"]["conditionalRendering"]
 
 
+VIEW_PANEL_RE = re.compile(r"[?&]viewPanel=(\d+)")
+DTAB_RE = re.compile(r"[?&](?:[\w-]+-)?dtab=")
+
+
+def _panel_links(elements: dict):
+    """Yield ``(element_name, url)`` for every panel data link in the manifest."""
+    for name, element in elements.items():
+        viz = element["spec"]["vizConfig"]["spec"]
+        defaults = viz.get("fieldConfig", {}).get("defaults", {})
+        for link in defaults.get("links") or []:
+            yield name, link.get("url", "")
+        for link in element["spec"].get("links") or []:
+            yield name, link.get("url", "")
+
+
+def _conditional_element_names(man: dict) -> set:
+    """Elements whose containing tab or row can be conditioned away.
+
+    A ``viewPanel`` link into one of these is the spike's only silent-blank path:
+    when the ancestor tab is hidden, the deep link renders a **completely empty
+    body** — no message, no tab bar, nothing.
+    """
+    names = set()
+
+    def walk(tabs: list, hidden: bool):
+        for tab in tabs:
+            spec = tab["spec"]
+            tab_hidden = hidden or "conditionalRendering" in spec
+            layout = spec.get("layout", {})
+            if layout.get("kind") == "TabsLayout":
+                walk(layout["spec"]["tabs"], tab_hidden)
+                continue
+            for row in _rows_of(spec):
+                row_hidden = tab_hidden or "conditionalRendering" in row["spec"]
+                if not row_hidden:
+                    continue
+                grid = row["spec"].get("layout", {})
+                if grid.get("kind") != "GridLayout":
+                    continue
+                for item in grid["spec"]["items"]:
+                    names.add(item["spec"]["element"]["name"])
+
+    walk(man["spec"]["layout"]["spec"]["tabs"], False)
+    return names
+
+
 def placed_element_names(man: dict) -> set:
     """Every element name the layout actually references.
 
@@ -526,6 +581,32 @@ def manifest_violations(man: dict) -> list:
                     "declared variable; an undeclared variable evaluates TRUE, so "
                     "rendering cannot catch this"
                 )
+
+    ids = {element["spec"]["id"] for element in elements.values()}
+    by_id = {element["spec"]["id"]: name for name, element in elements.items()}
+    conditional = _conditional_element_names(man)
+    for owner, url in _panel_links(elements):
+        match = VIEW_PANEL_RE.search(url)
+        if not match:
+            continue
+        target = int(match.group(1))
+        if target not in ids:
+            violations.append(
+                f"{owner} links to viewPanel={target}, which is not a panel id; "
+                "the drilldown would render 'Panel not found'"
+            )
+            continue
+        # Measured: a viewPanel link whose ancestor tab is conditioned away renders
+        # a completely blank body with no message. A ?dtab= overrides the hiding,
+        # so a link carrying one is safe; otherwise the target must be
+        # unconditional.
+        if by_id[target] in conditional and not DTAB_RE.search(url):
+            violations.append(
+                f"{owner} links to viewPanel={target} ({by_id[target]}), which sits "
+                "under a conditional tab or row: if it is hidden the drilldown "
+                "renders a blank page with no message. Add the owning tab's dtab "
+                "to the link, or point it at unconditional content"
+            )
 
     for _, siblings in _walk_tabs(tabs):
         titles = [tab["spec"]["title"] for tab in siblings]

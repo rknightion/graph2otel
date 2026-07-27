@@ -497,6 +497,64 @@ class TestManifestGates(unittest.TestCase):
         violations = v2.manifest_violations(man)
         self.assertTrue(any("Same" in v for v in violations), violations)
 
+    def _linked(self, pid: int, url: str) -> dict:
+        panel = _panel(pid)
+        panel["fieldConfig"]["defaults"]["links"] = [{"title": "t", "url": url}]
+        return panel
+
+    def test_a_drilldown_to_a_nonexistent_panel_id_is_a_violation(self):
+        """The eight shipped drilldowns are built from ``panel["id"]``, and panel
+        ids are non-contiguous because row markers consume them. A hand-written or
+        stale id renders "Panel not found"."""
+        src = self._linked(1, "/d/graph2otel?viewPanel=999")
+        n1, e1 = v2.panel_element(src, 12, 8)
+        tabs = [v2.leaf("L", [v2.rowspec("", [{"w": 12, "h": 8, "spec": src}])])]
+        man = self._manifest({n1: e1}, tabs)
+        violations = v2.manifest_violations(man)
+        self.assertTrue(any("999" in v for v in violations), violations)
+
+    def test_a_drilldown_into_conditional_content_without_a_dtab_is_a_violation(self):
+        """The spike's only silent-blank path: a ``viewPanel`` whose ancestor tab
+        is conditioned away renders an empty body with no message at all. A
+        ``?dtab=`` overrides hiding, so carrying one is the escape."""
+        src = self._linked(1, "/d/graph2otel?viewPanel=2")
+        target = _panel(2)
+        n1, e1 = v2.panel_element(src, 12, 8)
+        n2, e2 = v2.panel_element(target, 12, 8)
+        leaf = v2.leaf("L", [v2.rowspec("", [
+            {"w": 12, "h": 8, "spec": src}, {"w": 12, "h": 8, "spec": target}])])
+        tabs = [v2.domain("D", [leaf], present="has_d", census="census_present")]
+        man = self._manifest({n1: e1, n2: e2}, tabs, [
+            v2.sentinel("has_d", "label_values(m, collector)"),
+            v2.sentinel("census_present", "label_values(m, collector)"),
+        ])
+        violations = v2.manifest_violations(man)
+        self.assertTrue(any("blank page" in v for v in violations), violations)
+
+    def test_the_same_drilldown_is_accepted_when_it_carries_a_dtab(self):
+        src = self._linked(1, "/d/graph2otel?dtab=D&viewPanel=2")
+        target = _panel(2)
+        n1, e1 = v2.panel_element(src, 12, 8)
+        n2, e2 = v2.panel_element(target, 12, 8)
+        leaf = v2.leaf("L", [v2.rowspec("", [
+            {"w": 12, "h": 8, "spec": src}, {"w": 12, "h": 8, "spec": target}])])
+        tabs = [v2.domain("D", [leaf], present="has_d", census="census_present")]
+        man = self._manifest({n1: e1, n2: e2}, tabs, [
+            v2.sentinel("has_d", "label_values(m, collector)"),
+            v2.sentinel("census_present", "label_values(m, collector)"),
+        ])
+        self.assertEqual(v2.manifest_violations(man), [])
+
+    def test_a_drilldown_into_unconditional_content_is_accepted(self):
+        src = self._linked(1, "/d/graph2otel?viewPanel=2")
+        target = _panel(2)
+        n1, e1 = v2.panel_element(src, 12, 8)
+        n2, e2 = v2.panel_element(target, 12, 8)
+        tabs = [v2.leaf("L", [v2.rowspec("", [
+            {"w": 12, "h": 8, "spec": src}, {"w": 12, "h": 8, "spec": target}])])]
+        man = self._manifest({n1: e1, n2: e2}, tabs)
+        self.assertEqual(v2.manifest_violations(man), [])
+
     def test_the_gate_reports_how_many_panels_it_inspected(self):
         """C7: two existing gates degrade to vacuous rather than failing when the
         datasource moves into each query. Anything that walks panels must be able
@@ -522,13 +580,16 @@ class TestTranslatesTheRealEstate(unittest.TestCase):
         import build_dashboard  # noqa: PLC0415
         import catalog as catalog_mod  # noqa: PLC0415
 
-        cls.boards = dict(build_dashboard.build_all(catalog_mod.load())[0])
+        builder, domain_tabs, _ = build_dashboard.build_all(catalog_mod.load())
+        cls.builder = builder
+        cls.tabs = domain_tabs
+        cls.manifest = builder.render(
+            [build_dashboard.overview(builder), *domain_tabs])
 
     def _items(self):
-        for name, board in self.boards.items():
-            for item in board._panels:
-                if not item.get("row"):
-                    yield name, item
+        for item in self.builder._panels:
+            if not item.get("row"):
+                yield item["spec"].get("title", ""), item
 
     def test_every_real_panel_translates_without_error(self):
         seen = 0
@@ -567,18 +628,45 @@ class TestTranslatesTheRealEstate(unittest.TestCase):
             _, el = v2.panel_element(item["spec"], item["w"], item["h"])
             self.assertEqual(el["spec"]["id"], item["spec"]["id"], board_name)
 
-    def test_a_real_board_packs_into_a_grid_and_places_every_panel(self):
-        """End-to-end over one real board: translate, place, gate. Purview is the
-        pilot domain for the same reason it is smallest."""
-        board = self.boards["purview-compliance-overview.json"]
-        items = [i for i in board._panels if not i.get("row")]
-        elements = dict(v2.panel_element(i["spec"], i["w"], i["h"]) for i in items)
-        man = v2.manifest(
-            name="graph2otel", title="t", description="d", tags=[],
-            variables=[], elements=elements,
-            tabs=[v2.leaf("Purview", [v2.rowspec("", items)])])
-        self.assertEqual(v2.manifest_violations(man), [])
-        self.assertEqual(v2.placed_element_names(man), set(elements))
+    def test_the_real_estate_manifest_has_no_violations(self):
+        """Every gate in this module, run against the manifest actually shipped.
+
+        This is the one that would fail if a board module drifted into an
+        unplaced panel, an undeclared sentinel, a duplicate tab title, an `and`
+        condition, or a drilldown into hideable content.
+        """
+        self.assertEqual(v2.manifest_violations(self.manifest), [])
+
+    def test_every_element_in_the_real_estate_is_placed(self):
+        placed = v2.placed_element_names(self.manifest)
+        self.assertEqual(placed, set(self.manifest["spec"]["elements"]))
+        self.assertGreater(len(placed), 300)
+
+    def test_the_real_estate_has_the_seven_expected_top_level_tabs(self):
+        titles = [t["spec"]["title"]
+                  for t in self.manifest["spec"]["layout"]["spec"]["tabs"]]
+        self.assertEqual(titles, ["Overview", "Entra", "Intune", "Defender",
+                                  "M365", "Purview", "Self-obs"])
+
+    def test_overview_is_never_conditional(self):
+        """It is the one surface that must render when the census is missing —
+        that is exactly the state an operator needs explained, not hidden."""
+        overview = self.manifest["spec"]["layout"]["spec"]["tabs"][0]
+        self.assertNotIn("conditionalRendering", overview["spec"])
+
+    def test_every_conditional_domain_tab_uses_the_fail_visible_or_encoding(self):
+        seen = 0
+        for tab in self.manifest["spec"]["layout"]["spec"]["tabs"]:
+            cond = tab["spec"].get("conditionalRendering")
+            if cond is None:
+                continue
+            seen += 1
+            self.assertEqual(cond["spec"]["condition"], "or",
+                             tab["spec"]["title"])
+            operators = [i["spec"]["operator"] for i in cond["spec"]["items"]]
+            self.assertIn("notMatches", operators, tab["spec"]["title"])
+        # Five Microsoft domains are conditional; Overview and Self-obs are not.
+        self.assertEqual(seen, 5)
 
 
 if __name__ == "__main__":

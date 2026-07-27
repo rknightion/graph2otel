@@ -12,9 +12,8 @@ GRAFANA = os.path.dirname(HERE)
 REPO = os.path.dirname(GRAFANA)
 sys.path.insert(0, GRAFANA)
 
-import build_dashboard  # noqa: E402
 import build_rules  # noqa: E402
-import catalog as catalog_mod  # noqa: E402
+import v2  # noqa: E402
 
 
 class TestOperatorObservabilityInventory(unittest.TestCase):
@@ -46,21 +45,34 @@ class TestOperatorObservabilityInventory(unittest.TestCase):
         with open(os.path.join(REPO, "README.md"), encoding="utf-8") as f:
             readme = f.read()
 
-        dashboards, _, _ = build_dashboard.build_all(catalog_mod.load())
-        dashboard_count = len(dashboards)
+        # One v2 dashboard covers the whole estate (#399), so this count is 1 and
+        # the sentence has to read "1 dashboard" — an f-string that always says
+        # "dashboards" would force the docs to say "1 dashboards".
+        dashboard_count = 1
         alert_count = len(build_rules.RULES)
         recording_count = len(build_rules.RECORDING)
+        noun = "dashboard" if dashboard_count == 1 else "dashboards"
         expected = (
-            f"{dashboard_count} dashboards, "
+            f"{dashboard_count} {noun}, "
             f"{alert_count} alert rules, and "
             f"{recording_count} recording rules"
         )
         self.assertIn(expected, docs)
         self.assertIn(expected, readme)
         self.assertIn(
-            f"| `dashboards/` | {dashboard_count} dashboards (**generated**)",
+            f"| `dashboards/` | {dashboard_count} {noun} (**generated**)",
             docs,
         )
+        # The generator really does emit exactly that many files, so the prose
+        # cannot drift from the build.
+        self.assertEqual(
+            sorted(os.listdir(os.path.join(REPO, "dashboards"))),
+            ["graph2otel.json"],
+        )
+        # v2 needs Grafana 13+, and the docs must say so rather than leaving an
+        # operator to discover it from a broken import.
+        self.assertIn(v2.MIN_GRAFANA_VERSION, docs)
+        self.assertIn(v2.MIN_GRAFANA_VERSION, readme)
         self.assertIn(
             f"| `alerts/` | {alert_count} alert rules (**generated**)",
             docs,

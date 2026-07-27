@@ -32,9 +32,24 @@ from __future__ import annotations
 
 import json
 
+import v2
 from catalog import TENANT_SCOPE
 
-SCHEMA_VERSION = 39
+# The tenant dropdown is backed by the availability census for the whole estate
+# rather than by a per-domain metric. The census is emitted for every collector
+# regardless of state — including disabled ones — so the dropdown populates even
+# when a domain is switched off, which a domain metric like intune_devices_count
+# does not.
+TENANT_SOURCE_METRIC = "graph2otel.collector.availability"
+
+# The whole estate is one v2 dashboard, and ``metadata.name`` is its identity —
+# there is no top-level uid. The six per-domain uids are retired (#399).
+DASHBOARD_NAME = "graph2otel"
+
+# The census sentinel every conditional element escapes on. An entirely absent
+# census means *unknown*, never *disabled* (#303), so its emptiness must make
+# content visible rather than hide it.
+CENSUS_SENTINEL = "census_present"
 
 # Every panel query filters on the tenant template variable. tenant_id is on
 # every signal, metric and log alike (#143).
@@ -218,33 +233,27 @@ class Builder:
     """Accumulates panels for one dashboard and renders the Grafana JSON.
 
     Panels are appended in construction order; rows are opened with ``row()``.
-    Layout is a 24-column shelf pack computed at render time, so no board module
-    ever writes an x/y coordinate.
+    Each row becomes one leaf tab, and its panels are packed into a 24-column
+    grid by :func:`v2.grid`, so no board module ever writes an x/y coordinate.
     """
 
-    def __init__(self, uid: str, title: str, description: str, tags: list,
-                 tenant_metric: str, catalog, needs_loki: bool = True):
-        self.uid = uid
+    def __init__(self, name: str, title: str, description: str, tags: list,
+                 catalog, needs_loki: bool = True):
+        self.name = name
         self.title = title
         self.description = description
         self.tags = tags
         self.cat = catalog
         self.needs_loki = needs_loki
         # label_values() needs a metric that actually exists for the tenant
-        # dropdown to populate; each board names one of its own.
-        tenant_source = next(
-            (metric for metric in catalog.metrics.values()
-             if metric.prom == tenant_metric),
-            None,
-        )
-        if tenant_source is None:
-            raise KeyError(f"tenant dropdown metric {tenant_metric!r} is not cataloged")
-        if tenant_source.scope != "tenant":
+        # dropdown to populate. One estate, one census-backed dropdown.
+        tenant_source = catalog.metric(TENANT_SOURCE_METRIC)
+        if tenant_source.scope != TENANT_SCOPE:
             raise ValueError(
-                f"tenant dropdown metric {tenant_metric!r} is process-scoped "
-                "and has no tenant_id label"
+                f"tenant dropdown metric {TENANT_SOURCE_METRIC!r} is "
+                "process-scoped and has no tenant_id label"
             )
-        self.tenant_metric = tenant_metric
+        self.tenant_metric = tenant_source.prom
 
         self._id = 0
         self._panels = []          # list of (kind, spec) in declaration order
@@ -253,6 +262,7 @@ class Builder:
         self._covered = set()      # catalog metric names a query really names
         self.violations = []       # accumulated build-time rule breaches
         self.extra_vars = []       # board-declared template variables
+        self._sentinels = {}       # sentinel name -> query, declaration order
 
     # ----- ids and raw panel construction ---------------------------------
 
@@ -535,85 +545,93 @@ class Builder:
 
     # ----- rendering -------------------------------------------------------
 
-    def _layout(self) -> list:
-        """24-column shelf pack. Rows are full-width separators that reset x."""
-        out, x, y, row_h = [], 0, 0, 0
+    def variables(self) -> list:
+        """Every declared variable, as typed v2 objects, in picker order."""
+        out = [v2.datasource_variable(
+            "datasource", "Prometheus datasource", "prometheus",
+            default=PROM_DATASOURCE_DEFAULT,
+            regex=PROM_DATASOURCE_EXCLUDE_REGEX,
+            description="Where graph2otel's OTLP metrics land after normalization. "
+                        f"Defaults to Grafana Cloud's {PROM_DATASOURCE_DEFAULT}; pick "
+                        "another Prometheus datasource for a different stack.",
+        )]
+        if self.needs_loki:
+            out.append(v2.datasource_variable(
+                "loki_datasource", "Loki datasource", "loki",
+                default=LOKI_DATASOURCE_DEFAULT,
+                regex=LOKI_DATASOURCE_EXCLUDE_REGEX,
+                description="Required by the log panels. Defaults to Grafana Cloud's "
+                            f"{LOKI_DATASOURCE_DEFAULT}. Leave unset and they say so "
+                            "rather than looking broken.",
+            ))
+        out.append(v2.query_variable(
+            "tenant", f"label_values({self.tenant_metric}, tenant_id)",
+            label="Tenant", multi=True, include_all=True,
+            description="tenant_id is on every signal (#143). A single-tenant deployment "
+                        "with no tenant id configured stamps no label; select All.",
+        ))
+        out.extend(self.extra_vars)
+        out.extend(v2.sentinel(name, query)
+                   for name, query in self._sentinels.items())
+        return out
+
+    def variable(self, name: str, query: str, *, label: str = "",
+                 multi: bool = False, include_all: bool = False):
+        """Declare an extra visible query variable (board modules only)."""
+        self.extra_vars.append(v2.query_variable(
+            name, query, label=label or name, multi=multi, include_all=include_all))
+
+    def sentinel(self, name: str, collector_pattern: str = "") -> str:
+        """Declare a hidden presence sentinel and return its name.
+
+        Idempotent, so a domain and one of its leaves can share one. With no
+        pattern this is the estate-wide census sentinel, whose *emptiness* is the
+        fail-visible escape every conditional element carries.
+
+        The selector deliberately excludes only ``disabled`` and ``covered`` —
+        the two states that mean intentional absence. ``starting``,
+        ``healthy_empty``, ``limited``, ``blocked``, ``degraded``, ``failed`` and
+        ``startup_failed`` all keep their content **visible**: a failure an
+        operator cannot see is worse than an empty panel, and healthy-empty is a
+        correct steady state for several collectors.
+        """
+        metric = self.cat.metric(TENANT_SOURCE_METRIC).prom
+        if collector_pattern:
+            selector = (f'{{{TENANT_SEL},collector=~"{collector_pattern}",'
+                        'state!~"disabled|covered"}')
+        else:
+            selector = f"{{{TENANT_SEL}}}"
+        query = f"label_values({metric}{selector}, collector)"
+        existing = self._sentinels.get(name)
+        if existing is not None and existing != query:
+            raise ValueError(
+                f"sentinel {name!r} already declared with a different query: "
+                f"{existing!r} vs {query!r}"
+            )
+        self._sentinels[name] = query
+        return name
+
+    def elements(self) -> dict:
+        """Every panel as a named v2 element, in declaration order."""
+        out = {}
         for item in self._panels:
             if item.get("row"):
-                if x:
-                    y += row_h
-                    x, row_h = 0, 0
-                out.append({"id": item["id"], "type": "row", "title": item["title"],
-                            "collapsed": False, "panels": [],
-                            "gridPos": {"h": 1, "w": 24, "x": 0, "y": y}})
-                y += 1
                 continue
-            w, h = item["w"], item["h"]
-            if x + w > 24:
-                x, y, row_h = 0, y + row_h, 0
-            item["spec"]["gridPos"] = {"h": h, "w": w, "x": x, "y": y}
-            out.append(item["spec"])
-            x += w
-            row_h = max(row_h, h)
+            name, element = v2.panel_element(item["spec"], item["w"], item["h"])
+            out[name] = element
         return out
 
-    def variables(self) -> list:
-        out = [{
-            "name": "datasource", "label": "Prometheus datasource", "type": "datasource",
-            "query": "prometheus",
-            "current": {"text": PROM_DATASOURCE_DEFAULT, "value": PROM_DATASOURCE_DEFAULT},
-            "regex": PROM_DATASOURCE_EXCLUDE_REGEX,
-            "hide": 0, "refresh": 1,
-            "description": "Where graph2otel's OTLP metrics land after normalization. "
-                           f"Defaults to Grafana Cloud's {PROM_DATASOURCE_DEFAULT}; pick "
-                           "another Prometheus datasource for a different stack.",
-        }]
-        if self.needs_loki:
-            out.append({
-                "name": "loki_datasource", "label": "Loki datasource", "type": "datasource",
-                "query": "loki",
-                "current": {"text": LOKI_DATASOURCE_DEFAULT, "value": LOKI_DATASOURCE_DEFAULT},
-                "regex": LOKI_DATASOURCE_EXCLUDE_REGEX,
-                "hide": 0, "refresh": 1,
-                "description": "Required by the log panels. Defaults to Grafana Cloud's "
-                               f"{LOKI_DATASOURCE_DEFAULT}. Leave unset and they say so "
-                               "rather than looking broken.",
-            })
-        out.append({
-            "name": "tenant", "label": "Tenant", "type": "query",
-            "datasource": PROM_DS, "refresh": 2, "includeAll": True, "multi": True,
-            "current": {}, "options": [], "hide": 0, "sort": 1,
-            "query": {"qryType": 1, "query": f"label_values({self.tenant_metric}, tenant_id)",
-                      "refId": "tenant"},
-            "definition": f"label_values({self.tenant_metric}, tenant_id)",
-            "description": "tenant_id is on every signal (#143). A single-tenant deployment "
-                           "with no tenant id configured stamps no label; select All.",
-        })
-        out.extend(self.extra_vars)
-        return out
-
-    def variable(self, spec: dict):
-        """Declare an extra template variable (board modules only)."""
-        self.extra_vars.append(spec)
-
-    def render(self) -> dict:
-        panels = self._layout()
-        return {
-            "uid": self.uid,
-            "title": self.title,
-            "description": self.description,
-            "tags": self.tags,
-            "editable": True,
-            "graphTooltip": 1,
-            "schemaVersion": SCHEMA_VERSION,
-            "version": 1,
-            "refresh": "5m",
-            "timezone": "",
-            "time": {"from": "now-24h", "to": "now"},
-            "annotations": {"list": []},
-            "templating": {"list": self.variables()},
-            "panels": panels,
-        }
+    def render(self, tabs: list) -> dict:
+        """Assemble the single v2 dashboard manifest from the given tab layout."""
+        return v2.manifest(
+            name=self.name,
+            title=self.title,
+            description=self.description,
+            tags=self.tags,
+            variables=self.variables(),
+            elements=self.elements(),
+            tabs=tabs,
+        )
 
 
 def _loki_note() -> str:

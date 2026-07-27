@@ -6,6 +6,26 @@ rule on the Go side. Run from grafana/:
     python3 -m unittest discover -s tests -t .
 
 ``make grafana-check`` runs them, so CI does too.
+
+# The v2 single-dashboard shape (#399)
+
+graph2otel moved from six Grafana v1 dashboards (one per domain, each its own
+``Builder``) to ONE v2 "dynamic dashboard": one shared ``Builder`` accumulates
+every domain's panels, ``build_dashboard.build_all`` returns
+``(builder, domain_tabs, log_domains)``, and ``domain_tabs`` become nested
+``TabsLayout`` tabs — Entra, Intune, Defender, M365, Purview, Self-obs — under
+one ``TabsLayout`` root alongside the unconditional Overview tab.
+
+Per-board access (``next(b for name, b in BUILT if name == "...")``) no longer
+exists: there is one ``BUILDER`` and one assembled ``MANIFEST``. The helpers
+below (``_domain_panel_ids`` / ``_domain_panels`` / ``_domain_prom_exprs`` /
+``_domain_loki_exprs``) recover the old "this domain's panels/queries" scoping
+by walking the v2 layout for one domain tab's placed elements and mapping them
+back to the pre-translation v1 panel spec kept in ``PANEL_BY_ID`` — the shape
+every assertion below still wants to inspect (``panel["targets"][0]["expr"]``,
+``panel["fieldConfig"]``, etc.), since the v1 shape remains the generator's
+internal intermediate representation (see ``v2.py``'s module docstring, #399
+C3) and only the final translation step changes it.
 """
 
 from __future__ import annotations
@@ -23,12 +43,15 @@ sys.path.insert(0, GRAFANA)
 
 import build_dashboard  # noqa: E402
 import build_rules  # noqa: E402
+import builder as builder_mod  # noqa: E402
 import catalog as catalog_mod  # noqa: E402
+import v2  # noqa: E402
 from boards import common  # noqa: E402
 from builder import (  # noqa: E402
     AVAILABILITY_REASONS,
     AVAILABILITY_STATES,
     Builder,
+    DASHBOARD_NAME,
     LOKI_DATASOURCE_DEFAULT,
     LOKI_DATASOURCE_EXCLUDE_REGEX,
     PROM_DATASOURCE_DEFAULT,
@@ -44,8 +67,93 @@ SELF_OBS = {
     name: metric for name, metric in CAT.metrics.items()
     if metric.domain == catalog_mod.SELF_OBS_DOMAIN
 }
-BUILT, COVERED, LOG_DOMAINS = build_dashboard.build_all(CAT)
+
+# Assembled exactly the way build_dashboard.main() assembles it: build the
+# estate, add the unconditional Overview tab, then render the one manifest.
+BUILDER, DOMAIN_TABS, LOG_DOMAINS = build_dashboard.build_all(CAT)
+COVERED = BUILDER._covered
 WAIVERS = build_dashboard.load_waivers()
+OVERVIEW_LEAF = build_dashboard.overview(BUILDER)
+MANIFEST = BUILDER.render([OVERVIEW_LEAF, *DOMAIN_TABS])
+
+# Every non-row panel's pre-translation v1 spec, by its numeric id — ids are
+# unique across the whole estate (one shared Builder), so this is a safe map.
+PANEL_BY_ID = {
+    item["spec"]["id"]: item["spec"]
+    for item in BUILDER._panels
+    if not item.get("row")
+}
+DOMAIN_TAB_BY_TITLE = {tab["spec"]["title"]: tab for tab in DOMAIN_TABS}
+
+
+def _domain_panel_ids(tab: dict) -> set:
+    """Every panel id actually placed under one domain tab's layout.
+
+    Wraps the one tab in a throwaway single-tab manifest shell so
+    ``v2.placed_element_names`` — the same walk the real coverage gate uses —
+    can be reused here instead of a second hand-rolled layout walk.
+    """
+    shell = {"spec": {"layout": {"kind": "TabsLayout", "spec": {"tabs": [tab]}}}}
+    return {int(name.removeprefix("panel-"))
+            for name in v2.placed_element_names(shell)}
+
+
+def _domain_panel_list(tab: dict) -> list:
+    """Every placed panel's v1 spec under one domain tab, id order.
+
+    A list, not a dict-by-title: some assertions below need to count how many
+    panels share a title (a real duplicate would be a bug), and a dict would
+    silently collapse duplicates and hide exactly that bug.
+    """
+    return [PANEL_BY_ID[i] for i in sorted(_domain_panel_ids(tab)) if i in PANEL_BY_ID]
+
+
+def _domain_panels(tab: dict) -> dict:
+    """One domain's panels keyed by title, for the (already-unique) direct
+    ``panels["Some Title"]`` lookups most assertions want."""
+    return {panel["title"]: panel for panel in _domain_panel_list(tab)}
+
+
+def _domain_prom_exprs(tab: dict) -> list:
+    """Every PromQL expression among one domain's placed panels.
+
+    Mirrors the old per-board ``Builder._exprs`` (Prometheus-only, never
+    LogQL) now that all domains share one builder and one ``_exprs`` list.
+    """
+    return [
+        target["expr"]
+        for panel in _domain_panel_list(tab)
+        for target in panel.get("targets", [])
+        if target.get("datasource", {}).get("type") == "prometheus"
+    ]
+
+
+def _domain_loki_exprs(tab: dict) -> list:
+    """Every LogQL expression among one domain's placed panels."""
+    return [
+        target["expr"]
+        for panel in _domain_panel_list(tab)
+        for target in panel.get("targets", [])
+        if target.get("datasource", {}).get("type") == "loki"
+    ]
+
+
+def _all_grid_items(tabs: list):
+    """Every ``GridLayoutItem`` anywhere under a list of tabs, depth-first.
+
+    A tab's layout is either a nested ``TabsLayout`` (a domain tab holding
+    leaves) or a ``RowsLayout`` (a leaf tab holding rows of a grid) — this
+    walks either shape down to the grid items themselves.
+    """
+    for tab in tabs:
+        layout = tab["spec"].get("layout", {})
+        if layout.get("kind") == "TabsLayout":
+            yield from _all_grid_items(layout["spec"]["tabs"])
+        elif layout.get("kind") == "RowsLayout":
+            for row in layout["spec"]["rows"]:
+                grid = row["spec"].get("layout", {})
+                if grid.get("kind") == "GridLayout":
+                    yield from grid["spec"]["items"]
 
 
 class TestPromName(unittest.TestCase):
@@ -109,8 +217,7 @@ class TestCoverageGate(unittest.TestCase):
 
 class TestSelfObservabilityScopeGate(unittest.TestCase):
     def setUp(self):
-        self.board = next(b for name, b in BUILT
-                          if name == "graph2otel-self-observability.json")
+        self.tab = DOMAIN_TAB_BY_TITLE["Self-obs"]
 
     def test_every_generated_self_observability_metric_has_an_explicit_scope(self):
         self.assertEqual(
@@ -127,7 +234,7 @@ class TestSelfObservabilityScopeGate(unittest.TestCase):
         to copy.
         """
         referenced = set()
-        for expr in self.board._exprs:
+        for expr in _domain_prom_exprs(self.tab):
             for name in CAT.metrics_referenced_by(expr):
                 metric = SELF_OBS.get(name)
                 if metric is None:
@@ -142,9 +249,8 @@ class TestSelfObservabilityScopeGate(unittest.TestCase):
 
     def test_process_total_is_declared_and_panelled_without_tenant_filter(self):
         metric = SELF_OBS["graph2otel.series.total"]
-        self.assertEqual(metric.scope, catalog_mod.PROCESS_SCOPE)
         exprs = [
-            expr for expr in self.board._exprs
+            expr for expr in _domain_prom_exprs(self.tab)
             if metric.name in CAT.metrics_referenced_by(expr)
         ]
         self.assertEqual(len(exprs), 1)
@@ -158,12 +264,14 @@ class TestTenantPreservingQueries(unittest.TestCase):
     )
 
     def _builder(self):
+        # uid/tenant_metric are gone from Builder.__init__ (#399): the tenant
+        # dropdown is now derived from the one estate-wide
+        # Builder.TENANT_SOURCE_METRIC, not passed in per instance.
         return Builder(
-            uid="tenant-test",
+            name="tenant-test",
             title="tenant test",
             description="",
             tags=[],
-            tenant_metric=CAT.metric("intune.devices.count").prom,
             catalog=CAT,
         )
 
@@ -285,12 +393,9 @@ class TestTenantPreservingQueries(unittest.TestCase):
                 by=["alert_type"],
             ),
         ]
-        selfobs = next(board for name, board in BUILT if name == "graph2otel-self-observability.json")
-        raw_panel = next(
-            item["spec"]
-            for item in selfobs._panels
-            if item.get("spec", {}).get("title") == "Scrape error rate by error type"
-        )
+        raw_panel = _domain_panels(DOMAIN_TAB_BY_TITLE["Self-obs"])[
+            "Scrape error rate by error type"
+        ]
         panels.append(raw_panel)
 
         fixtures = [
@@ -316,50 +421,56 @@ class TestTenantPreservingQueries(unittest.TestCase):
 
     def test_every_generated_tenant_aggregation_keeps_tenant_id(self):
         violations = []
-        for filename, board in BUILT:
-            for item in board._panels:
-                panel = item.get("spec")
-                if panel is None:
+        checked = 0
+        for item in BUILDER._panels:
+            panel = item.get("spec")
+            if panel is None:
+                continue
+            for target in panel.get("targets", []):
+                expr = target.get("expr", "")
+                names = CAT.metrics_referenced_by(expr)
+                scopes = {CAT.metric(name).scope for name in names}
+                if catalog_mod.TENANT_SCOPE not in scopes:
                     continue
-                for target in panel.get("targets", []):
-                    expr = target.get("expr", "")
-                    names = CAT.metrics_referenced_by(expr)
-                    scopes = {CAT.metric(name).scope for name in names}
-                    if catalog_mod.TENANT_SCOPE not in scopes:
-                        continue
-                    if catalog_mod.PROCESS_SCOPE in scopes:
-                        violations.append(
-                            f"{filename}/{panel['title']}: mixes process and tenant metrics"
-                        )
-                        continue
-                    for group in self._groups(expr):
-                        if "tenant_id" not in group:
-                            violations.append(
-                                f"{filename}/{panel['title']}: {expr}"
-                            )
+                checked += 1
+                if catalog_mod.PROCESS_SCOPE in scopes:
+                    violations.append(
+                        f"{panel['title']}: mixes process and tenant metrics"
+                    )
+                    continue
+                for group in self._groups(expr):
+                    if "tenant_id" not in group:
+                        violations.append(f"{panel['title']}: {expr}")
+        # A gate that skips everything it should have inspected passes for
+        # free (#399 C7) — prove the walk actually reached tenant-scoped
+        # queries across the whole estate, not zero of them.
+        self.assertGreater(checked, 100,
+                            "expected many tenant-scoped queries across the estate")
         self.assertEqual(violations, [], "\n".join(violations[:20]))
 
     def test_every_generated_tenant_series_has_an_explicit_tenant_legend(self):
         violations = []
-        for filename, board in BUILT:
-            for item in board._panels:
-                panel = item.get("spec")
-                if panel is None or panel["type"] not in {
-                    "timeseries", "stat", "bargauge"
-                }:
+        checked = 0
+        for item in BUILDER._panels:
+            panel = item.get("spec")
+            if panel is None or panel["type"] not in {
+                "timeseries", "stat", "bargauge"
+            }:
+                continue
+            for target in panel.get("targets", []):
+                names = CAT.metrics_referenced_by(target.get("expr", ""))
+                if not any(
+                    CAT.metric(name).scope == catalog_mod.TENANT_SCOPE
+                    for name in names
+                ):
                     continue
-                for target in panel.get("targets", []):
-                    names = CAT.metrics_referenced_by(target.get("expr", ""))
-                    if not any(
-                        CAT.metric(name).scope == catalog_mod.TENANT_SCOPE
-                        for name in names
-                    ):
-                        continue
-                    if "{{tenant_id}}" not in target.get("legendFormat", ""):
-                        violations.append(
-                            f"{filename}/{panel['title']}: "
-                            f"{target.get('expr', '')}"
-                        )
+                checked += 1
+                if "{{tenant_id}}" not in target.get("legendFormat", ""):
+                    violations.append(
+                        f"{panel['title']}: {target.get('expr', '')}"
+                    )
+        self.assertGreater(checked, 50,
+                            "expected many tenant-scoped series-carrying panels")
         self.assertEqual(violations, [], "\n".join(violations[:20]))
 
     def test_process_scoped_query_does_not_gain_tenant_identity(self):
@@ -371,13 +482,8 @@ class TestTenantPreservingQueries(unittest.TestCase):
 
 class TestOutcomeAccountingPanels(unittest.TestCase):
     def setUp(self):
-        board = next(b for name, b in BUILT
-                     if name == "graph2otel-self-observability.json")
-        self.panels = {
-            item["spec"]["title"]: item["spec"]
-            for item in board._panels
-            if item.get("spec")
-        }
+        self.tab = DOMAIN_TAB_BY_TITLE["Self-obs"]
+        self.panels = _domain_panels(self.tab)
 
     def test_record_outcomes_do_not_stack_overlapping_lifecycle_stages(self):
         panel = self.panels["Source-record rate by outcome"]
@@ -438,17 +544,12 @@ class TestOTLPDeliveryPanels(unittest.TestCase):
     }
 
     def setUp(self):
-        self.board = next(b for name, b in BUILT
-                          if name == "graph2otel-self-observability.json")
-        self.panels = {
-            item["spec"]["title"]: item["spec"]
-            for item in self.board._panels
-            if item.get("spec")
-        }
+        self.tab = DOMAIN_TAB_BY_TITLE["Self-obs"]
+        self.panels = _domain_panels(self.tab)
 
     def test_all_six_delivery_metrics_are_process_wide_and_panelled(self):
         referenced = set()
-        for expr in self.board._exprs:
+        for expr in _domain_prom_exprs(self.tab):
             names = CAT.metrics_referenced_by(expr) & self.METRICS
             if not names:
                 continue
@@ -523,13 +624,8 @@ class TestOTLPDeliveryPanels(unittest.TestCase):
 
 class TestCapacityAndCostPanels(unittest.TestCase):
     def setUp(self):
-        self.board = next(b for name, b in BUILT
-                          if name == "graph2otel-self-observability.json")
-        self.panels = {
-            item["spec"]["title"]: item["spec"]
-            for item in self.board._panels
-            if item.get("spec")
-        }
+        self.tab = DOMAIN_TAB_BY_TITLE["Self-obs"]
+        self.panels = _domain_panels(self.tab)
 
     def test_exact_collector_volume_preserves_bounded_attribution(self):
         source = self.panels[
@@ -620,21 +716,19 @@ class TestCapacityAndCostPanels(unittest.TestCase):
 
 class TestCollectorAvailabilityPanels(unittest.TestCase):
     def setUp(self):
-        board = next(b for name, b in BUILT
-                     if name == "graph2otel-self-observability.json")
-        self.board = board
-        self.panels = {
-            item["spec"]["title"]: item["spec"]
-            for item in board._panels
-            if item.get("spec")
-        }
+        self.tab = DOMAIN_TAB_BY_TITLE["Self-obs"]
+        self.panels = _domain_panels(self.tab)
         self.availability = SELF_OBS["graph2otel.collector.availability"].prom
 
     def test_availability_backs_tenant_and_collector_variables(self):
-        self.assertEqual(self.board.tenant_metric, self.availability)
-        collector = next(v for v in self.board.variables() if v["name"] == "collector")
+        # One estate-wide tenant dropdown now (Builder.TENANT_SOURCE_METRIC),
+        # not a per-board tenant_metric.
+        self.assertEqual(BUILDER.tenant_metric, self.availability)
+        collector = next(
+            v for v in BUILDER.variables() if v["spec"]["name"] == "collector"
+        )
         self.assertEqual(
-            collector["definition"],
+            collector["spec"]["query"]["spec"]["query"],
             f'label_values({self.availability}{{tenant_id=~"$tenant"}}, collector)',
         )
 
@@ -670,7 +764,7 @@ class TestCollectorAvailabilityPanels(unittest.TestCase):
 
     def test_availability_never_uses_record_ingest_transport_or_an_alert(self):
         availability_exprs = [
-            expr for expr in self.board._exprs
+            expr for expr in _domain_prom_exprs(self.tab)
             if self.availability in expr
         ]
         self.assertTrue(availability_exprs)
@@ -695,26 +789,22 @@ class TestExecutiveHealthSummary(unittest.TestCase):
     }
 
     def setUp(self):
-        self.board = next(
-            board for filename, board in BUILT
-            if filename == "graph2otel-self-observability.json"
-        )
-        self.rendered = self.board.render()
-        self.panels = {
-            panel["title"]: panel
-            for panel in self.rendered["panels"]
-            if panel["type"] != "row"
-        }
+        self.tab = DOMAIN_TAB_BY_TITLE["Self-obs"]
+        self.panels = _domain_panels(self.tab)
 
-    def test_summary_is_the_first_query_row(self):
-        panels = self.rendered["panels"]
-        first_row = next(panel for panel in panels if panel["type"] == "row")
-        self.assertEqual(first_row["title"], "Executive health and data-loss summary")
+    def test_summary_is_the_first_leaf_tab(self):
+        """The executive summary is Self-obs's first LEAF TAB now, not the
+        first "row" panel in a single scrolling page (#399: one b.row() call
+        becomes one leaf tab). Panel declaration order — which the numeric
+        ids encode — still proves the summary panels are built, and placed,
+        before the detail panels they drill down into.
+        """
+        leaves = self.tab["spec"]["layout"]["spec"]["tabs"]
+        self.assertEqual(leaves[0]["spec"]["title"],
+                         "Executive health and data-loss summary")
         self.assertLess(
-            next(i for i, panel in enumerate(panels)
-                 if panel.get("title") == "Current source collection failures"),
-            next(i for i, panel in enumerate(panels)
-                 if panel.get("title") == "Current exporter degradation by signal"),
+            self.panels["Current source collection failures"]["id"],
+            self.panels["Current exporter degradation by signal"]["id"],
         )
 
     def test_summary_keeps_failure_dimensions_separate(self):
@@ -805,19 +895,18 @@ class TestExecutiveHealthSummary(unittest.TestCase):
                 self.assertIn(phrase, boundary)
 
     def test_every_verdict_has_a_resolving_same_dashboard_drilldown(self):
-        by_id = {panel["id"]: panel for panel in self.rendered["panels"]}
         for title, expected_target in self.EXPECTED_DRILLDOWNS.items():
             with self.subTest(panel=title):
                 links = self.panels[title]["fieldConfig"]["defaults"]["links"]
                 self.assertEqual(len(links), 1)
                 url = links[0]["url"]
-                self.assertTrue(url.startswith(f"/d/{self.board.uid}?viewPanel="))
+                self.assertTrue(url.startswith(f"/d/{DASHBOARD_NAME}?viewPanel="))
                 self.assertIn("from=${__from}", url)
                 self.assertIn("to=${__to}", url)
                 self.assertIn("${__all_variables}", url)
                 target_id = int(re.search(r"viewPanel=(\d+)", url).group(1))
-                self.assertIn(target_id, by_id)
-                self.assertEqual(by_id[target_id]["title"], expected_target)
+                self.assertIn(target_id, PANEL_BY_ID)
+                self.assertEqual(PANEL_BY_ID[target_id]["title"], expected_target)
 
     def test_summary_no_data_is_neutral_not_green(self):
         for title in self.EXPECTED_DRILLDOWNS:
@@ -830,43 +919,33 @@ class TestExecutiveHealthSummary(unittest.TestCase):
 
 class TestDomainAvailabilityPresentation(unittest.TestCase):
     DOMAIN_PATTERNS = {
-        "intune-fleet-overview.json": r"intune\..+",
-        "entra-compliance-overview.json": r"entra\..+",
-        "m365-services-overview.json": r"m365\..+",
-        "defender-security-overview.json": r"(?:defender|mdca)\..+",
-        "purview-compliance-overview.json": r"purview\..+",
+        "Intune": r"intune\..+",
+        "Entra": r"entra\..+",
+        "M365": r"m365\..+",
+        "Defender": r"(?:defender|mdca)\..+",
+        "Purview": r"purview\..+",
     }
-
-    def _panels(self, board):
-        return [
-            item["spec"]
-            for item in board._panels
-            if item.get("spec")
-        ]
 
     def test_new_board_must_declare_availability_ownership(self):
         module = SimpleNamespace(
             __name__="boards.test_missing_availability",
-            UID="test",
-            TITLE="test",
+            DOMAIN="Test",
             DESCRIPTION="",
-            TAGS=[],
-            TENANT_METRIC="entra_users_total",
             SECTIONS=[],
             LOGS=[],
         )
+        builder = Builder("test", "test", "", [], CAT)
         with self.assertRaisesRegex(ValueError, "AVAILABILITY_PATTERN"):
-            common.build(module, CAT)
+            common.add(builder, module)
 
     def test_each_domain_board_has_one_truthful_availability_table(self):
         availability = SELF_OBS["graph2otel.collector.availability"].prom
-        for filename, board in BUILT:
-            if filename not in self.DOMAIN_PATTERNS:
-                continue
-            with self.subTest(board=filename):
+        for domain_name, pattern in self.DOMAIN_PATTERNS.items():
+            tab = DOMAIN_TAB_BY_TITLE[domain_name]
+            with self.subTest(board=domain_name):
                 panels = [
-                    panel for panel in self._panels(board)
-                    if panel["title"] == "Signal availability"
+                    p for p in _domain_panel_list(tab)
+                    if p["title"] == "Signal availability"
                 ]
                 self.assertEqual(len(panels), 1)
                 panel = panels[0]
@@ -879,7 +958,7 @@ class TestDomainAvailabilityPresentation(unittest.TestCase):
                 self.assertIn(availability, panel["targets"][0]["expr"])
                 self.assertIn(TENANT_SEL, panel["targets"][0]["expr"])
                 self.assertIn(
-                    f'collector=~"{self.DOMAIN_PATTERNS[filename]}"',
+                    f'collector=~"{pattern}"',
                     panel["targets"][0]["expr"],
                 )
                 no_value = panel["fieldConfig"]["defaults"]["noValue"].lower()
@@ -899,12 +978,11 @@ class TestDomainAvailabilityPresentation(unittest.TestCase):
             "failed",
             "startup_failed",
         }
-        for filename, board in BUILT:
-            if filename not in self.DOMAIN_PATTERNS:
-                continue
+        for domain_name in self.DOMAIN_PATTERNS:
+            tab = DOMAIN_TAB_BY_TITLE[domain_name]
             panel = next(
-                panel for panel in self._panels(board)
-                if panel["title"] == "Signal availability"
+                p for p in _domain_panel_list(tab)
+                if p["title"] == "Signal availability"
             )
             override = next(
                 item for item in panel["fieldConfig"]["overrides"]
@@ -915,7 +993,7 @@ class TestDomainAvailabilityPresentation(unittest.TestCase):
                 for prop in override["properties"]
                 if prop["id"] == "mappings"
             )
-            self.assertEqual(set(mapping), expected, filename)
+            self.assertEqual(set(mapping), expected, domain_name)
             self.assertTrue(all("color" not in value for value in mapping.values()))
 
     def test_mappings_cover_the_generated_go_contract(self):
@@ -947,35 +1025,37 @@ class TestDomainAvailabilityPresentation(unittest.TestCase):
             "source_error",
             "startup_failed",
         }
-        for filename, board in BUILT:
-            if filename not in self.DOMAIN_PATTERNS:
-                continue
+        for domain_name in self.DOMAIN_PATTERNS:
+            tab = DOMAIN_TAB_BY_TITLE[domain_name]
             panel = next(
-                panel for panel in self._panels(board)
-                if panel["title"] == "Signal availability"
+                p for p in _domain_panel_list(tab)
+                if p["title"] == "Signal availability"
             )
             text = panel["description"] + json.dumps(
                 panel["fieldConfig"]["overrides"]
             )
             for reason in required:
-                with self.subTest(board=filename, reason=reason):
+                with self.subTest(board=domain_name, reason=reason):
                     self.assertIn(reason, text)
 
     def test_metric_empty_state_is_neutral_and_never_green(self):
-        for filename, board in BUILT:
-            if filename not in self.DOMAIN_PATTERNS:
-                continue
-            for panel in self._panels(board):
+        checked = 0
+        for domain_name in self.DOMAIN_PATTERNS:
+            tab = DOMAIN_TAB_BY_TITLE[domain_name]
+            for panel in _domain_panel_list(tab):
                 if panel.get("datasource", {}).get("type") != "prometheus":
                     continue
                 if panel["title"] == "Signal availability":
                     continue
-                with self.subTest(board=filename, panel=panel["title"]):
+                checked += 1
+                with self.subTest(board=domain_name, panel=panel["title"]):
                     no_value = panel["fieldConfig"]["defaults"]["noValue"].lower()
                     self.assertIn("check signal availability", no_value)
                     self.assertIn("not evidence", no_value)
                     if panel["type"] == "stat":
                         self.assertEqual(panel["options"]["colorMode"], "none")
+        self.assertGreater(checked, 50,
+                            "expected many prometheus metric panels across domains")
 
 
 class TestLogPanels(unittest.TestCase):
@@ -985,13 +1065,15 @@ class TestLogPanels(unittest.TestCase):
     def test_no_stream_selector_on_an_attribute(self):
         """#90: {event_name="…"} matches zero rows, silently. Never ship one."""
         selector = re.compile(r"\{([^}]*)\}")
-        for name, b in BUILT:
-            for expr in b._loki_exprs:
-                for inner in selector.findall(expr):
-                    labels = re.findall(r"([a-z_][a-z0-9_]*)\s*[=!~]", inner)
-                    self.assertEqual(
-                        set(labels), {"service_name"},
-                        f"{name}: LogQL stream selector on a non-stream label: {expr}")
+        checked = 0
+        for expr in BUILDER._loki_exprs:
+            for inner in selector.findall(expr):
+                checked += 1
+                labels = re.findall(r"([a-z_][a-z0-9_]*)\s*[=!~]", inner)
+                self.assertEqual(
+                    set(labels), {"service_name"},
+                    f"LogQL stream selector on a non-stream label: {expr}")
+        self.assertGreater(checked, 0, "expected at least one LogQL selector")
 
     def test_logql_never_reaches_the_metric_coverage_corpus(self):
         """The two corpora must stay disjoint.
@@ -1000,29 +1082,32 @@ class TestLogPanels(unittest.TestCase):
         would credit a metric that has no metric panel at all — the coverage
         gate would then report coverage it does not have.
         """
-        for name, b in BUILT:
-            for expr in b._exprs:
-                self.assertNotIn("service_name=", expr,
-                                 f"{name}: LogQL leaked into the PromQL corpus: {expr}")
-            self.assertEqual(set(b._exprs) & set(b._loki_exprs), set(), name)
+        for expr in BUILDER._exprs:
+            self.assertNotIn("service_name=", expr,
+                             f"LogQL leaked into the PromQL corpus: {expr}")
+        self.assertEqual(set(BUILDER._exprs) & set(BUILDER._loki_exprs), set())
 
-    def test_a_board_declaring_log_panels_gets_a_loki_datasource_variable(self):
-        for name, b in BUILT:
-            if not b._loki_exprs:
-                continue
-            names = {v["name"] for v in b.variables()}
-            self.assertIn("loki_datasource", names, name)
+    def test_the_estate_declares_a_loki_datasource_variable_when_it_has_log_panels(self):
+        # There is one shared Builder for the whole estate now, not one per
+        # board (#399), so "a board declaring log panels gets a loki
+        # variable" collapses to one estate-wide check: the estate does have
+        # LogQL panels, so it must declare the loki_datasource variable.
+        self.assertTrue(BUILDER._loki_exprs, "expected LogQL panels in the estate")
+        names = {v["spec"]["name"] for v in BUILDER.variables()}
+        self.assertIn("loki_datasource", names)
 
     def test_log_panels_declare_a_loki_datasource_and_degrade_honestly(self):
-        for name, b in BUILT:
-            for item in b._panels:
-                spec = item.get("spec")
-                if not spec or spec.get("datasource", {}).get("type") != "loki":
-                    continue
-                self.assertIn("Loki", spec.get("description", ""), f"{name}: {spec['title']}")
-                self.assertIn("noValue", spec["fieldConfig"]["defaults"],
-                              f"{name}: {spec['title']} shows 'No data' instead of an "
-                              f"explanation when Loki is unset")
+        checked = 0
+        for item in BUILDER._panels:
+            spec = item.get("spec")
+            if not spec or spec.get("datasource", {}).get("type") != "loki":
+                continue
+            checked += 1
+            self.assertIn("Loki", spec.get("description", ""), spec["title"])
+            self.assertIn("noValue", spec["fieldConfig"]["defaults"],
+                          f"{spec['title']} shows 'No data' instead of an "
+                          f"explanation when Loki is unset")
+        self.assertGreater(checked, 0, "expected at least one Loki panel")
 
 
 class TestDatasourceVariableDefaults(unittest.TestCase):
@@ -1035,53 +1120,45 @@ class TestDatasourceVariableDefaults(unittest.TestCase):
     Fix: save a portable Grafana Cloud default as `current` (maintainer
     decision, issue comment 2026-07-27) while keeping the variables
     selectable `type: datasource` dropdowns for other stacks.
+
+    One shared Builder for the whole estate now (#399), so this is one
+    dashboard-wide check rather than a loop over per-board variable sets.
     """
 
-    def test_every_board_pins_the_prometheus_datasource_default(self):
-        for name, b in BUILT:
-            with self.subTest(board=name):
-                variables = {v["name"]: v for v in b.variables()}
-                var = variables["datasource"]
-                self.assertEqual(var["type"], "datasource")
-                self.assertEqual(var["hide"], 0)
-                self.assertEqual(
-                    var["current"],
-                    {"text": PROM_DATASOURCE_DEFAULT, "value": PROM_DATASOURCE_DEFAULT},
-                )
+    def _variables(self):
+        return {v["spec"]["name"]: v for v in BUILDER.variables()}
 
-    def test_every_board_with_a_loki_variable_pins_the_loki_datasource_default(self):
-        # Only boards that actually declare a Loki variable — same condition
-        # TestLogPanels uses to establish which boards have one at all.
-        for name, b in BUILT:
-            if not b._loki_exprs:
-                continue
-            with self.subTest(board=name):
-                variables = {v["name"]: v for v in b.variables()}
-                var = variables["loki_datasource"]
-                self.assertEqual(var["type"], "datasource")
-                self.assertEqual(var["hide"], 0)
-                self.assertEqual(
-                    var["current"],
-                    {"text": LOKI_DATASOURCE_DEFAULT, "value": LOKI_DATASOURCE_DEFAULT},
-                )
+    def test_the_dashboard_pins_the_prometheus_datasource_default(self):
+        var = self._variables()["datasource"]
+        self.assertEqual(var["kind"], "DatasourceVariable")
+        self.assertEqual(var["spec"]["pluginId"], "prometheus")
+        self.assertEqual(var["spec"]["hide"], "dontHide")
+        self.assertEqual(
+            var["spec"]["current"],
+            {"text": PROM_DATASOURCE_DEFAULT, "value": PROM_DATASOURCE_DEFAULT},
+        )
 
-    def test_every_board_declares_the_prometheus_exclusion_regex(self):
-        for name, b in BUILT:
-            with self.subTest(board=name):
-                variables = {v["name"]: v for v in b.variables()}
-                self.assertEqual(
-                    variables["datasource"]["regex"], PROM_DATASOURCE_EXCLUDE_REGEX,
-                )
+    def test_the_dashboard_pins_the_loki_datasource_default(self):
+        var = self._variables()["loki_datasource"]
+        self.assertEqual(var["kind"], "DatasourceVariable")
+        self.assertEqual(var["spec"]["pluginId"], "loki")
+        self.assertEqual(var["spec"]["hide"], "dontHide")
+        self.assertEqual(
+            var["spec"]["current"],
+            {"text": LOKI_DATASOURCE_DEFAULT, "value": LOKI_DATASOURCE_DEFAULT},
+        )
 
-    def test_every_loki_variable_declares_the_loki_exclusion_regex(self):
-        for name, b in BUILT:
-            if not b._loki_exprs:
-                continue
-            with self.subTest(board=name):
-                variables = {v["name"]: v for v in b.variables()}
-                self.assertEqual(
-                    variables["loki_datasource"]["regex"], LOKI_DATASOURCE_EXCLUDE_REGEX,
-                )
+    def test_the_datasource_variable_declares_the_prometheus_exclusion_regex(self):
+        self.assertEqual(
+            self._variables()["datasource"]["spec"]["regex"],
+            PROM_DATASOURCE_EXCLUDE_REGEX,
+        )
+
+    def test_the_loki_variable_declares_the_loki_exclusion_regex(self):
+        self.assertEqual(
+            self._variables()["loki_datasource"]["spec"]["regex"],
+            LOKI_DATASOURCE_EXCLUDE_REGEX,
+        )
 
     def test_prometheus_exclusion_regex_hides_the_ml_and_usage_datasources(self):
         """Live-verified 2026-07-27 against the m7kni Grafana Cloud stack
@@ -1118,65 +1195,79 @@ class TestDatasourceVariableDefaults(unittest.TestCase):
 
 
 class TestStructure(unittest.TestCase):
-    def test_every_tenant_dropdown_metric_resolves_to_the_catalog(self):
+    def test_the_tenant_dropdown_metric_resolves_to_the_catalog_and_is_tenant_scoped(self):
+        # One estate-wide tenant dropdown now (#399), not one per board, so
+        # this folds the old per-board "resolves to the catalog" check and
+        # the old "a process metric cannot back it" constructor-raises check
+        # into a single assertion against the one dropdown metric: it must
+        # resolve to a real, tenant-scoped catalog entry.
         known = {metric.prom: metric for metric in CAT.metrics.values()}
-        for out_name, board in BUILT:
-            self.assertIn(
-                board.tenant_metric,
-                known,
-                f"{out_name} tenant dropdown queries an uncataloged metric",
-            )
-            self.assertEqual(
-                known[board.tenant_metric].scope,
-                catalog_mod.TENANT_SCOPE,
-                f"{out_name} tenant dropdown queries a process-scoped metric",
-            )
+        self.assertIn(BUILDER.tenant_metric, known)
+        self.assertEqual(known[BUILDER.tenant_metric].scope, catalog_mod.TENANT_SCOPE)
 
-    def test_process_metric_cannot_back_a_tenant_dropdown(self):
-        metric = SELF_OBS["graph2otel.build_info"]
-        with self.assertRaisesRegex(ValueError, "process-scoped"):
-            Builder("test", "test", "", [], metric.prom, CAT)
+    def test_a_process_scoped_metric_cannot_back_the_tenant_dropdown(self):
+        # The test above asserts the current metric is tenant-scoped; this one
+        # asserts the GUARD still exists. Without it, someone could repoint
+        # TENANT_SOURCE_METRIC at a process-scoped metric and the dropdown would
+        # silently never populate — label_values on a metric with no tenant_id
+        # label returns nothing, which looks identical to "no tenants yet".
+        process_metric = next(
+            (name for name, metric in CAT.metrics.items()
+             if metric.scope != catalog_mod.TENANT_SCOPE),
+            None,
+        )
+        self.assertIsNotNone(process_metric, "catalog has no process-scoped metric")
+        original = builder_mod.TENANT_SOURCE_METRIC
+        builder_mod.TENANT_SOURCE_METRIC = process_metric
+        try:
+            with self.assertRaises(ValueError):
+                Builder(name="x", title="t", description="d", tags=[], catalog=CAT)
+        finally:
+            builder_mod.TENANT_SOURCE_METRIC = original
 
-    def test_panel_ids_are_unique_within_a_dashboard(self):
-        for name, b in BUILT:
-            ids = [p["id"] for p in b.render()["panels"]]
-            self.assertEqual(len(ids), len(set(ids)), name)
+    def test_panel_ids_are_unique_within_the_dashboard(self):
+        ids = [item["spec"]["id"] for item in BUILDER._panels if not item.get("row")]
+        self.assertEqual(len(ids), len(set(ids)))
 
     def test_panels_fit_the_24_column_grid(self):
-        for name, b in BUILT:
-            for p in b.render()["panels"]:
-                g = p["gridPos"]
-                self.assertLessEqual(g["x"] + g["w"], 24, f"{name}: {p.get('title')}")
+        items = list(_all_grid_items(MANIFEST["spec"]["layout"]["spec"]["tabs"]))
+        self.assertGreater(len(items), 0)
+        for item in items:
+            spec = item["spec"]
+            self.assertLessEqual(spec["x"] + spec["width"], 24, spec)
 
-    def test_dashboard_uids_are_unique(self):
-        uids = [b.uid for _, b in BUILT]
-        self.assertEqual(len(uids), len(set(uids)))
+    def test_dashboard_name_is_graph2otel(self):
+        # metadata.name is the v2 identity; there is no top-level uid and no
+        # per-domain uid to check for uniqueness against (#399).
+        self.assertEqual(MANIFEST["metadata"]["name"], "graph2otel")
 
     def test_output_is_deterministic(self):
-        again, _, _ = build_dashboard.build_all(CAT)
-        for (n1, b1), (n2, b2) in zip(BUILT, again):
-            self.assertEqual(n1, n2)
-            self.assertEqual(dumps(b1.render()), dumps(b2.render()), n1)
+        builder2, tabs2, _ = build_dashboard.build_all(CAT)
+        manifest2 = builder2.render([build_dashboard.overview(builder2), *tabs2])
+        self.assertEqual(dumps(MANIFEST), dumps(manifest2))
 
-    def test_committed_dashboards_are_not_stale(self):
-        for out_name, b in BUILT:
-            path = os.path.join(build_dashboard.OUT_DIR, out_name)
-            with open(path) as f:
-                self.assertEqual(f.read(), dumps(b.render()),
-                                 f"{out_name} is stale — run `make dashboard`")
+    def test_committed_dashboard_is_not_stale(self):
+        path = os.path.join(build_dashboard.OUT_DIR, build_dashboard.OUT_FILE)
+        with open(path) as f:
+            self.assertEqual(f.read(), dumps(MANIFEST),
+                             f"{build_dashboard.OUT_FILE} is stale — run "
+                             "`python3 build_dashboard.py`")
 
-    def test_every_generated_file_is_valid_grafana_json(self):
-        for out_name, _ in BUILT:
-            with open(os.path.join(build_dashboard.OUT_DIR, out_name)) as f:
-                d = json.load(f)
-            self.assertTrue(d["uid"] and d["title"] and d["panels"])
-            self.assertEqual(d["schemaVersion"], 39)
+    def test_the_generated_file_is_valid_v2_dashboard_json(self):
+        path = os.path.join(build_dashboard.OUT_DIR, build_dashboard.OUT_FILE)
+        with open(path) as f:
+            d = json.load(f)
+        self.assertEqual(d["apiVersion"], v2.API_VERSION)
+        self.assertEqual(d["kind"], v2.KIND)
+        self.assertTrue(d["metadata"]["name"])
+        self.assertTrue(d["spec"]["title"])
+        self.assertTrue(d["spec"]["elements"])
 
     def test_no_orphan_dashboard_files(self):
-        """A renamed board must not leave its old JSON behind, unowned and stale."""
-        expected = {out for _, out in build_dashboard.BOARDS}
+        """One dashboard file now, not six — a leftover old-named file would
+        be an orphan, unowned and stale."""
         present = {f for f in os.listdir(build_dashboard.OUT_DIR) if f.endswith(".json")}
-        self.assertEqual(present, expected)
+        self.assertEqual(present, {build_dashboard.OUT_FILE})
 
     def test_group_keys_drops_an_id_that_has_a_name_twin(self):
         self.assertEqual(group_keys(["policy_id", "policy_name", "state"]),

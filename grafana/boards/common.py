@@ -1,8 +1,26 @@
-"""Turns a board module's declarative SECTIONS/LOGS into a built Builder."""
+"""Turns a board module's declarative SECTIONS/LOGS into one domain tab.
+
+# The mapping rule (#399 C8)
+
+**One ``b.row()`` call becomes one leaf tab.** The rule partitions the panels a
+board appended at their row markers, rather than mapping from ``SECTIONS``.
+
+That matters because ``SECTIONS`` is not the only source of rows: the availability
+row, every row a board's ``extra()`` emits (self-obs alone has twelve), and the
+``LOGS`` row all reach the layout through the same ``b.row()`` call. A rule keyed
+on ``SECTIONS`` would have had to special-case each of those; partitioning the
+built stream covers them all by construction, and preserves self-obs's deliberate
+``AVAILABILITY_PATTERN = None`` by simply emitting no availability leaf.
+
+It also keeps the generator's existing habit of deriving rather than declaring —
+titles come from ``titleize()``, coverage comes from reading expressions — instead
+of adding a second layout declaration for a name to drift out of.
+"""
 
 from __future__ import annotations
 
-from builder import Builder, titleize
+import v2
+from builder import CENSUS_SENTINEL, Builder, titleize
 
 # The paragraph every dashboard carries, because the doc paragraph has not been
 # enough: the shipped alert rules AND 74 dashboard queries were both built on a
@@ -55,18 +73,20 @@ def _entry(b: Builder, item):
     b.metrics(names, title=title, **opts)
 
 
-def build(mod, cat) -> Builder:
-    """Build the dashboard a board module describes."""
-    b = Builder(
-        uid=mod.UID,
-        title=mod.TITLE,
-        description=mod.DESCRIPTION,
-        tags=list(mod.TAGS),
-        tenant_metric=mod.TENANT_METRIC,
-        catalog=cat,
-        needs_loki=bool(getattr(mod, "LOGS", ())),
-    )
-    b.text(PREAMBLE, title="Read this before writing your own query", h=12)
+def add(b: Builder, mod) -> dict:
+    """Append one board module's content to the estate builder as a domain tab.
+
+    Returns the ``TabsLayoutTab`` for the domain. Panels go into the shared
+    builder, so panel ids are unique across the whole estate and the drilldown
+    links — which are derived from ``panel["id"]`` at build time — follow
+    automatically.
+    """
+    # The domain's own prose, kept as one compact panel rather than the 12-row
+    # shared preamble that used to be repeated on all six boards (#311). It is
+    # injected into the first leaf below, whichever row opens it.
+    about = b.text(mod.DESCRIPTION, title=f"About {mod.DOMAIN}", h=4)
+    start = len(b._panels)
+
     if not hasattr(mod, "AVAILABILITY_PATTERN"):
         raise ValueError(
             f"{mod.__name__} must declare AVAILABILITY_PATTERN; use None only "
@@ -74,7 +94,7 @@ def build(mod, cat) -> Builder:
         )
     availability_pattern = mod.AVAILABILITY_PATTERN
     if availability_pattern:
-        b.row("Collector availability")
+        b.row("Signal availability")
         b.availability(availability_pattern)
     # Boards may add hand-authored presentation for cataloged signals that need
     # richer PromQL than the standard section renderer can express.
@@ -93,7 +113,64 @@ def build(mod, cat) -> Builder:
         b.row("Logs — which one, not how many (#162)")
         for spec in logs:
             _log_entry(b, spec)
-    return b
+
+    leaves = _leaves(b, b._panels[start:])
+    if not leaves:
+        raise ValueError(f"{mod.__name__} produced no rows, so it has no leaf tabs")
+    _prepend(leaves[0], {"w": 24, "h": 4, "spec": about})
+    # A domain whose collectors are all intentionally absent hides, but only on
+    # positive evidence from a healthy census. Self-obs declares no pattern: the
+    # exporter's own health must stay reachable in every state, including the one
+    # where the census itself is missing.
+    present = None
+    if availability_pattern:
+        slug = mod.DOMAIN.lower().replace("-", "_")
+        present = b.sentinel(f"has_{slug}", availability_pattern)
+        b.sentinel(CENSUS_SENTINEL)
+    return v2.domain(mod.DOMAIN, leaves, present=present,
+                     census=CENSUS_SENTINEL if present else None)
+
+
+def _prepend(leaf: dict, item: dict):
+    """Put one panel first in a leaf's opening row, re-packing that row."""
+    rows = leaf["spec"]["layout"]["spec"]["rows"]
+    grid = rows[0]["spec"]["layout"]["spec"]["items"]
+    existing = [{"w": i["spec"]["width"], "h": i["spec"]["height"],
+                 "spec": {"id": _id_of(i)}} for i in grid]
+    rows[0]["spec"]["layout"] = v2.grid([item, *existing])
+
+
+def _id_of(grid_item: dict) -> int:
+    return int(grid_item["spec"]["element"]["name"].removeprefix("panel-"))
+
+
+def _leaves(b: Builder, items: list) -> list:
+    """Partition a board's panel stream at row markers into leaf tabs.
+
+    Panels appended before the first row would be unreachable, so they are a
+    build error rather than silently dropped: the estate's shared preamble now
+    lives on the Overview tab, and nothing else should precede a row.
+    """
+    leaves, title, panels = [], None, []
+
+    def flush():
+        if title is not None:
+            leaves.append(v2.leaf(title, [v2.rowspec("", panels)]))
+
+    for item in items:
+        if item.get("row"):
+            flush()
+            title, panels = item["title"], []
+            continue
+        if title is None:
+            b.violations.append(
+                f"panel {item['spec']['id']} ({item['spec'].get('title')!r}) "
+                "precedes the first row and would land in no leaf tab"
+            )
+            continue
+        panels.append(item)
+    flush()
+    return leaves
 
 
 def _log_entry(b: Builder, spec: dict):

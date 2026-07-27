@@ -2,11 +2,11 @@
 
 graph2otel ships three kinds of Grafana asset, each in its own top-level
 directory. The generated inventory is drift-gated at
-**6 dashboards, 14 alert rules, and 2 recording rules**:
+**1 dashboard, 14 alert rules, and 2 recording rules**:
 
 | Directory | Assets | Format | Target Grafana Cloud folder |
 | --- | --- | --- | --- |
-| `dashboards/` | 6 dashboards (**generated**) | raw Grafana dashboard JSON (top-level `uid`) | folder of your choice |
+| `dashboards/` | 1 dashboard (**generated**) | Grafana **v2 dynamic dashboard** resource (`dashboard.grafana.app/v2`) | folder of your choice |
 | `alerts/` | 14 alert rules (**generated**) | Grafana **file-provisioning** YAML (`apiVersion: 1` + `groups:`) | `graph2otel` |
 | `recording-rules/` | 2 recording rules (**generated**) | Grafana-managed rule objects (provisioning API JSON) | `graph2otel derived metrics` |
 
@@ -18,41 +18,65 @@ and path in this file so a successor can reproduce the production deploy.
 > first (`gcx config` / `gcx context`); the m7kni reference deploy uses the
 > `m7kni` context. All the commands below are stack-scoped by that context.
 
-## Dashboards
+## The dashboard
 
-The dashboards are plain Grafana dashboard JSON — each has a stable
-top-level `uid` that is also its slug:
+**Requires Grafana 13.0.0 or newer.** `dashboards/graph2otel.json` is a Grafana
+**v2 dynamic dashboard** (`apiVersion: dashboard.grafana.app/v2`), which uses tab
+layouts and conditional rendering. Those do not exist in earlier Grafana, and the
+minimum version is asserted by a test rather than only stated here.
 
-| File | UID / slug | Title |
+One dashboard covers the whole estate. `metadata.name` is its identity — a v2
+resource has no top-level `uid`:
+
+| File | `metadata.name` | Top-level tabs |
 | --- | --- | --- |
-| `dashboards/intune-fleet-overview.json` | `intune-fleet-overview` | Intune Fleet Overview |
-| `dashboards/entra-compliance-overview.json` | `graph2otel-entra-compliance` | graph2otel: Entra ID compliance overview |
-| `dashboards/m365-services-overview.json` | `graph2otel-m365-services` | graph2otel: Microsoft 365 services overview |
-| `dashboards/defender-security-overview.json` | `graph2otel-defender-security` | graph2otel: Defender security posture |
-| `dashboards/purview-compliance-overview.json` | `graph2otel-purview-compliance` | graph2otel: Purview data governance |
-| `dashboards/graph2otel-self-observability.json` | `graph2otel-self-obs` | graph2otel / Self-Observability |
+| `dashboards/graph2otel.json` | `graph2otel` | Overview · Entra · Intune · Defender · M365 · Purview · Self-obs |
 
-Push each with `gcx dashboards` (the UID is the update key):
+Each domain tab holds nested leaf tabs, one per section, so the estate is 60 leaf
+tabs rather than six separate dashboards to keep in sync.
+
+Push it with `gcx dashboards` (`metadata.name` is the update key):
 
 ```bash
 # First time — create by file:
-for f in dashboards/*.json; do gcx dashboards create -f "$f"; done
+gcx dashboards create -f dashboards/graph2otel.json
 
-# Subsequent updates — update by UID:
-gcx dashboards update intune-fleet-overview          -f dashboards/intune-fleet-overview.json
-gcx dashboards update graph2otel-entra-compliance    -f dashboards/entra-compliance-overview.json
-gcx dashboards update graph2otel-m365-services       -f dashboards/m365-services-overview.json
-gcx dashboards update graph2otel-defender-security   -f dashboards/defender-security-overview.json
-gcx dashboards update graph2otel-purview-compliance  -f dashboards/purview-compliance-overview.json
-gcx dashboards update graph2otel-self-obs            -f dashboards/graph2otel-self-observability.json
+# Subsequent updates — update by name:
+gcx dashboards update graph2otel -f dashboards/graph2otel.json
 ```
 
-You can also import any of them in the Grafana UI: **Dashboards → New →
-Import**, upload the JSON.
+You can also import it in the Grafana UI: **Dashboards → New → Import**, upload
+the JSON.
+
+### Deep links
+
+Both URL forms are stable and measured against Grafana 13:
+
+- A single panel: `/d/graph2otel?viewPanel=<numeric panel id>`. The parameter
+  keys on the panel's numeric `id`, **not** on its element name.
+- A tab: `/d/graph2otel?dtab=<Tab-Slug>`, and a leaf tab as
+  `?dtab=<Domain-Slug>&<Domain-Slug>-dtab=<Leaf-Slug>`. A slug is the tab title
+  with spaces replaced by hyphens.
+
+`from`/`to` and `var-*` are preserved alongside either form.
+
+### Tabs hide only on positive evidence of absence
+
+A domain tab is hidden when the availability census positively reports every one
+of its collectors as `disabled` or `covered` — the two states that mean
+intentional absence. A collector that is `starting`, `healthy_empty`, `limited`,
+`blocked`, `degraded`, `failed` or `startup_failed` keeps its tab **visible**: a
+failure you cannot see is worse than an empty panel.
+
+If the census is missing **entirely** — wrong Prometheus datasource, no tenant
+selected, exporter not running — every tab stays visible instead of hiding. An
+absent census means *unknown*, never *disabled*, so the dashboard must not render
+blank without explanation. The `Overview` tab is never conditional for the same
+reason.
 
 ### They are GENERATED — do not hand-edit them
 
-`dashboards/*.json` is built by `grafana/build_dashboard.py` from
+`dashboards/graph2otel.json` is built by `grafana/build_dashboard.py` from
 `grafana/boards/*.py` and `spec/signal-catalog.json`, and `make grafana-check`
 (a required CI leg) fails on a hand-edited file. To change a panel, edit the
 board module and run `make dashboard`. See
@@ -65,7 +89,7 @@ step between a new collector and the gate noticing it.
 
 ### Log panels need a Loki datasource
 
-Every dashboard carries a **Logs** row (#162) built on
+Every domain tab carries a **Logs** leaf tab (#162) built on
 `{service_name="graph2otel"} | event_name=…`, which needs a **Loki** datasource
 selected in the `Loki datasource` dropdown. Without one those panels say so
 rather than looking broken; the metric panels are unaffected.

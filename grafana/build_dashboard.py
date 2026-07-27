@@ -40,24 +40,40 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import catalog as catalog_mod  # noqa: E402
+import v2  # noqa: E402
 from boards import common  # noqa: E402
-from builder import dumps  # noqa: E402
+from builder import (  # noqa: E402
+    CENSUS_SENTINEL,
+    DASHBOARD_NAME,
+    Builder,
+    dumps,
+)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 OUT_DIR = os.path.join(REPO, "dashboards")
+OUT_FILE = f"{DASHBOARD_NAME}.json"
 WAIVERS = os.path.join(HERE, "waivers.json")
 
-# Board module -> output filename. Order is the order coverage is accumulated in
-# and has no other effect.
+# One dashboard, one tab per board module, in tab order (#399). Self-obs last:
+# it is the exporter's own health, not a Microsoft domain.
 BOARDS = [
-    ("boards.intune_fleet", "intune-fleet-overview.json"),
-    ("boards.entra_compliance", "entra-compliance-overview.json"),
-    ("boards.m365_services", "m365-services-overview.json"),
-    ("boards.defender_security", "defender-security-overview.json"),
-    ("boards.purview_compliance", "purview-compliance-overview.json"),
-    ("boards.selfobs", "graph2otel-self-observability.json"),
+    "boards.entra_compliance",
+    "boards.intune_fleet",
+    "boards.defender_security",
+    "boards.m365_services",
+    "boards.purview_compliance",
+    "boards.selfobs",
 ]
+
+TITLE = "graph2otel"
+DESCRIPTION = (
+    "Microsoft Graph telemetry — Entra ID, Intune, Defender, Microsoft 365 and "
+    "Purview — plus graph2otel's own health. Generated from "
+    "grafana/boards/*.py against spec/signal-catalog.json; edit those, not this "
+    "JSON."
+)
+TAGS = ["graph2otel", "generated"]
 
 
 def load_waivers() -> dict:
@@ -67,20 +83,48 @@ def load_waivers() -> dict:
 
 
 def build_all(cat):
-    """Build every board. Returns (built, covered, log_domains)."""
+    """Build the estate. Returns (builder, domain_tabs, log_domains).
+
+    Every board appends into ONE builder, so panel ids are unique across the
+    whole dashboard and the self-obs drilldown links — derived from
+    ``panel["id"]`` at build time — stay correct with no coordination.
+    """
     import importlib
 
-    built = []
-    covered = set()
+    b = Builder(
+        name=DASHBOARD_NAME,
+        title=TITLE,
+        description=DESCRIPTION,
+        tags=list(TAGS),
+        catalog=cat,
+    )
+    tabs = []
     log_domains = set()
-    for mod_name, out_name in BOARDS:
+    for mod_name in BOARDS:
         mod = importlib.import_module(mod_name)
-        b = common.build(mod, cat)
-        built.append((out_name, b))
-        covered |= b._covered
+        tabs.append(common.add(b, mod))
         for spec in getattr(mod, "LOGS", ()):
             log_domains.add(cat.log(spec["event"]).domain)
-    return built, covered, log_domains
+    return b, tabs, log_domains
+
+
+def overview(b: Builder) -> dict:
+    """The landing tab: exporter failure vs domain posture, then the links (#311).
+
+    Never conditional. It is the one surface that must render when the census is
+    missing entirely, because that is exactly the state an operator needs
+    explained rather than hidden.
+    """
+    b.row("Overview")
+    census = b.availability(".+")
+    guide = b.text(common.PREAMBLE, title="Read this before writing your own query",
+                   h=10)
+    leaf = v2.leaf("Overview", [v2.rowspec("", [
+        {"w": 24, "h": 8, "spec": census},
+        {"w": 24, "h": 10, "spec": guide},
+    ])])
+    b.sentinel(CENSUS_SENTINEL)
+    return leaf
 
 
 def coverage(cat, covered: set, waivers: dict) -> tuple:
@@ -112,20 +156,13 @@ def main() -> int:
 
     cat = catalog_mod.load()
     waivers = load_waivers()
-    built, covered, log_domains = build_all(cat)
+    b, domain_tabs, log_domains = build_all(cat)
+    covered = b._covered
+    manifest = b.render([overview(b), *domain_tabs])
 
     # Structural gates first: they mean the build itself is wrong, so nothing
     # should be written on the back of them.
-    violations = []
-    for out_name, b in built:
-        violations.extend(f"{out_name}: {v}" for v in b.violations)
-    uids = {}
-    for out_name, b in built:
-        if b.uid in uids:
-            violations.append(f"{out_name}: duplicate dashboard uid {b.uid!r} "
-                              f"(also {uids[b.uid]}) — Grafana would overwrite one with "
-                              f"the other on import")
-        uids[b.uid] = out_name
+    violations = list(b.violations) + v2.manifest_violations(manifest)
     if violations:
         print("dashboard build violations:", file=sys.stderr)
         for v in violations:
@@ -134,17 +171,20 @@ def main() -> int:
 
     if not args.check:
         os.makedirs(OUT_DIR, exist_ok=True)
-        for out_name, b in built:
-            with open(os.path.join(OUT_DIR, out_name), "w") as f:
-                f.write(dumps(b.render()))
+        with open(os.path.join(OUT_DIR, OUT_FILE), "w") as f:
+            f.write(dumps(manifest))
 
     missing, stale, reasonless = coverage(cat, covered, waivers)
     domains_without_logs = log_coverage(cat, log_domains)
 
     total = len(cat.metrics)
-    panels = sum(len(b._panels) for _, b in built)
+    placed = v2.placed_element_names(manifest)
+    leaves = sum(len(t["spec"]["layout"]["spec"]["tabs"])
+                 if t["spec"]["layout"]["kind"] == "TabsLayout" else 1
+                 for t in manifest["spec"]["layout"]["spec"]["tabs"])
     print(f"coverage: {len(covered)}/{total} catalog metrics on a panel "
-          f"({len(waivers)} waived, {panels} panels across {len(built)} dashboards, "
+          f"({len(waivers)} waived, {len(placed)} panels placed across "
+          f"{len(manifest['spec']['layout']['spec']['tabs'])} tabs and {leaves} leaves, "
           f"{len(cat.logs)} log events over {len(log_domains)} log-panelled domains)",
           file=sys.stderr)
 

@@ -20,6 +20,8 @@ class OperationalError(RuntimeError):
 
 COUNT_FIELDS = (
     "panels",
+    "tabs",
+    "leaves",
     "rows",
     "collapsed_rows",
     "expanded_rows",
@@ -32,17 +34,72 @@ COUNT_FIELDS = (
 )
 
 
-def _walk_panels(panels: list):
-    for panel in panels:
-        yield panel
-        nested = panel.get("panels")
-        if isinstance(nested, list):
-            yield from _walk_panels(nested)
+def _require_v2(doc: dict) -> None:
+    """Reject a v1-shaped document loudly instead of measuring it as zeros.
+
+    graph2otel moved from six v1 dashboards to one v2 manifest (#399). The v1
+    keys this module used to read (``panels``, ``uid``, ``title``, ``time``,
+    ``refresh``, per-panel ``targets``) do not exist in v2 — a v1-shaped
+    document has none of them, so the old code silently reported
+    ``panels: 0, targets: 0, uid: null`` instead of failing. That is exactly
+    the bug this check exists to make impossible: a harness that measures
+    nothing must error, not report a healthy-looking zero.
+    """
+    if doc.get("apiVersion") != "dashboard.grafana.app/v2" or doc.get("kind") != "Dashboard":
+        raise OperationalError(
+            "expected a dashboard.grafana.app/v2 Dashboard manifest, got "
+            f"apiVersion={doc.get('apiVersion')!r} kind={doc.get('kind')!r} — "
+            "this looks like a v1-shaped dashboard (#399 migrated the estate "
+            "to v2; see grafana/v2.py). A v1 document has no spec.elements/"
+            "spec.layout and must be rejected, not measured as all zeros."
+        )
+    spec = doc.get("spec")
+    if not isinstance(spec, dict) or "elements" not in spec or "layout" not in spec:
+        raise OperationalError(
+            "v2 manifest is missing spec.elements or spec.layout — cannot "
+            "measure a manifest with no panels or layout"
+        )
+    if "name" not in doc.get("metadata", {}):
+        raise OperationalError("v2 manifest is missing metadata.name (the v2 identity)")
+
+
+def _walk_v2_tabs(tabs: list):
+    """Yield every ``TabsLayoutTab`` spec, depth-first (mirrors v2._walk_tabs).
+
+    Written locally rather than imported from ``v2`` because that walker is a
+    private (underscore-prefixed) helper not meant for outside callers; this
+    module only needs read-only traversal, not v2's build-time invariants.
+    """
+    for tab in tabs:
+        spec = tab["spec"]
+        yield spec
+        layout = spec.get("layout", {})
+        if layout.get("kind") == "TabsLayout":
+            yield from _walk_v2_tabs(layout["spec"]["tabs"])
+
+
+def _rows_of(tab_spec: dict) -> list:
+    layout = tab_spec.get("layout", {})
+    if layout.get("kind") == "RowsLayout":
+        return layout["spec"]["rows"]
+    return []
 
 
 def _analyze_dashboard(doc: dict, source: str) -> tuple:
-    panels = list(_walk_panels(doc.get("panels", [])))
-    rows = [panel for panel in panels if panel.get("type") == "row"]
+    _require_v2(doc)
+    spec = doc["spec"]
+    elements = spec.get("elements", {})
+    panels = list(elements.values())
+
+    top_tabs = spec["layout"]["spec"]["tabs"]
+    all_tab_specs = list(_walk_v2_tabs(top_tabs))
+    # A "leaf" is a tab whose own content is rows of panels (v2.leaf()), as
+    # opposed to a domain tab whose content is a nested TabsLayout of leaves
+    # (v2.domain()). Topology (tabs/leaves) is a new, real dimension of the
+    # estate's size that the old flat v1 panel list had no notion of.
+    leaf_specs = [t for t in all_tab_specs if t.get("layout", {}).get("kind") == "RowsLayout"]
+    rows = [row for leaf in leaf_specs for row in _rows_of(leaf)]
+
     query_panels = []
     expressions = []
     range_targets = 0
@@ -51,7 +108,12 @@ def _analyze_dashboard(doc: dict, source: str) -> tuple:
 
     for panel in panels:
         panel_targets = []
-        for target in panel.get("targets", []):
+        queries = panel.get("spec", {}).get("data", {}).get("spec", {}).get("queries", [])
+        for query in queries:
+            # The v1 target dict survives, minus its "datasource" key, at
+            # query.spec.query.spec (see v2.panel_element/_query) — so the
+            # same range/instant/queryType fields are read from there.
+            target = query.get("spec", {}).get("query", {}).get("spec", {})
             expr = target.get("expr")
             if not isinstance(expr, str) or not expr:
                 continue
@@ -71,16 +133,23 @@ def _analyze_dashboard(doc: dict, source: str) -> tuple:
         expr: count for expr, count in sorted(counts.items())
         if count > 1
     }
+    time_settings = spec.get("timeSettings", {})
     result = {
         "source": source,
-        "uid": doc.get("uid"),
-        "title": doc.get("title"),
-        "default_time": doc.get("time", {}),
-        "refresh": doc.get("refresh"),
+        # v2 has no top-level uid; metadata.name is the identity (#399).
+        "name": doc["metadata"]["name"],
+        "title": spec.get("title"),
+        "default_time": {
+            "from": time_settings.get("from"),
+            "to": time_settings.get("to"),
+        },
+        "auto_refresh": time_settings.get("autoRefresh"),
         "panels": len(panels),
+        "tabs": len(top_tabs),
+        "leaves": len(leaf_specs),
         "rows": len(rows),
-        "collapsed_rows": sum(bool(row.get("collapsed")) for row in rows),
-        "expanded_rows": sum(not bool(row.get("collapsed")) for row in rows),
+        "collapsed_rows": sum(bool(row["spec"].get("collapse")) for row in rows),
+        "expanded_rows": sum(not bool(row["spec"].get("collapse")) for row in rows),
         "query_panels": len(query_panels),
         "targets": len(expressions),
         "range_targets": range_targets,
@@ -141,13 +210,15 @@ def _redact(text: str, values) -> str:
     return text
 
 
-def snapshot_once(uid: str, context: str, variables: dict,
+def snapshot_once(dashboard_name: str, context: str, variables: dict,
                   *, since: str = "6h", width: int = 1920,
                   height: int = 1080, theme: str = "dark",
                   timezone: str = "UTC") -> dict:
+    # gcx addresses a dashboard by its v2 metadata.name; there is no v1 uid
+    # any more (#399).
     with tempfile.TemporaryDirectory(prefix="graph2otel-render-") as output_dir:
         args = [
-            "gcx", "dashboards", "snapshot", uid,
+            "gcx", "dashboards", "snapshot", dashboard_name,
             "--context", context,
             "--output-dir", output_dir,
             "--since", since,
@@ -178,13 +249,13 @@ def snapshot_once(uid: str, context: str, variables: dict,
             detail = completed.stderr.strip() or completed.stdout.strip()
             detail = _redact(detail, variables.values())
             raise OperationalError(
-                f"gcx snapshot failed for {uid}: {detail or 'no diagnostic'}"
+                f"gcx snapshot failed for {dashboard_name}: {detail or 'no diagnostic'}"
             )
         try:
             json.loads(completed.stdout)
         except json.JSONDecodeError as exc:
             raise OperationalError(
-                f"gcx snapshot returned invalid JSON for {uid}"
+                f"gcx snapshot returned invalid JSON for {dashboard_name}"
             ) from exc
 
         png_bytes = sum(
@@ -194,7 +265,7 @@ def snapshot_once(uid: str, context: str, variables: dict,
             if filename.lower().endswith(".png")
         )
         if png_bytes == 0:
-            raise OperationalError(f"gcx snapshot produced no PNG for {uid}")
+            raise OperationalError(f"gcx snapshot produced no PNG for {dashboard_name}")
         return {
             "status": "measured",
             "elapsed_seconds": round(elapsed, 6),
@@ -223,9 +294,11 @@ def add_live_baseline(receipt: dict, context: str, variables: dict,
         "dashboards": [],
     }
     for dashboard in receipt["dashboards"]:
+        # gcx addresses a dashboard by its v2 identity, metadata.name — there is
+        # no v1 "uid" any more (#399).
         attempts = [
             snapshot_once(
-                dashboard["uid"],
+                dashboard["name"],
                 context,
                 variables,
                 since=since,
@@ -237,7 +310,7 @@ def add_live_baseline(receipt: dict, context: str, variables: dict,
             for _ in range(repeat)
         ]
         receipt["live"]["dashboards"].append({
-            "uid": dashboard["uid"],
+            "name": dashboard["name"],
             "attempts": attempts,
         })
     return receipt

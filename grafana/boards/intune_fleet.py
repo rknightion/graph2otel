@@ -1,7 +1,6 @@
 """Intune fleet overview — devices, compliance, config, apps, updates, UXA."""
 
-UID = "intune-fleet-overview"
-TITLE = "Intune Fleet Overview"
+DOMAIN = "Intune"
 DESCRIPTION = (
     "Managed-device inventory, compliance, configuration, apps, Autopilot, updates, "
     "endpoint analytics, malware, certificates, EPM and remediations — plus the log "
@@ -9,8 +8,6 @@ DESCRIPTION = (
     "grafana/build_dashboard.py from spec/signal-catalog.json — edit "
     "grafana/boards/intune_fleet.py, not this JSON."
 )
-TAGS = ["graph2otel", "intune", "fleet", "generated"]
-TENANT_METRIC = "intune_devices_count"
 AVAILABILITY_PATTERN = r"intune\..+"
 
 SECTIONS = [

@@ -128,7 +128,7 @@ graphdrift-update: tools-graphdrift
 regen:
 	./scripts/regen-generated.sh
 
-# Regenerate dashboards/*.json from grafana/boards/*.py (#218). The builder is
+# Regenerate dashboards/graph2otel.json from grafana/boards/*.py (#218). The builder is
 # pure-stdlib python3 — nothing to install, which is why the CI job needs no
 # setup-python step.
 #

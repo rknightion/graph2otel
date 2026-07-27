@@ -1,10 +1,16 @@
 # Authoring graph2otel's dashboards
 
-`dashboards/*.json` is **generated**. Do not edit it — `make grafana-check` fails on a
-hand-edited file. Edit `grafana/boards/*.py` and run `make dashboard`.
+`dashboards/graph2otel.json` is **generated**. Do not edit it — `make grafana-check`
+fails on a hand-edited file. Edit `grafana/boards/*.py` and run `make dashboard`.
+
+The whole estate is ONE Grafana **v2 dynamic dashboard** (`dashboard.grafana.app/v2`,
+Grafana 13+): a root `TabsLayout` of seven tabs, each domain tab a nested `TabsLayout`
+of leaf tabs. You do not author any of that shape. **One `b.row()` call becomes one leaf
+tab**, and its panels are packed into a 24-column grid — so a board module still just
+declares rows of panels and never writes a coordinate, a tab, or a layout kind.
 
 ```sh
-make dashboard       # regenerate dashboards/*.json
+make dashboard       # regenerate dashboards/graph2otel.json
 make grafana-check   # the gate: coverage + log coverage + freshness + structure
 ```
 
@@ -135,11 +141,13 @@ urgent; a gate with an *undocumented* escape hatch is not a gate.
 You almost never need one — see the `_readme` in that file for the two classes that look
 like they belong there and do not.
 
-## Adding a dashboard
+## Adding a domain tab
 
-Write `boards/<name>.py` with `UID`, `TITLE`, `DESCRIPTION`, `TAGS`, `TENANT_METRIC`
-(a Prometheus name that exists, for the tenant dropdown's `label_values`),
-`AVAILABILITY_PATTERN`, `SECTIONS`, and optionally `LOGS` and `extra(b)`. The
+Write `boards/<name>.py` with `DOMAIN` (the short tab title, which is also its URL
+slug), `DESCRIPTION`, `AVAILABILITY_PATTERN`, `SECTIONS`, and optionally `LOGS` and
+`extra(b)`. There is no per-board `UID` or `TENANT_METRIC`: the estate has one
+`metadata.name` and one tenant dropdown, backed by the availability census so it
+populates even when a domain is switched off. The
 availability pattern selects the logical collector IDs shown in the generated
 **Signal availability** table; declare it explicitly rather than inferring a collector
 ID from a signal-catalog package path. Use `None` only when the dashboard owns an
@@ -150,9 +158,42 @@ table. Stat panels default to no color so an empty or unmapped value cannot inhe
 Grafana's green base threshold; evidence-backed colors belong in an explicit panel
 mapping or threshold.
 
-Then add `("boards.<name>", "<file>.json")` to `BOARDS` in
-`build_dashboard.py`. `test_no_orphan_dashboard_files` fails if a renamed board leaves
-its old JSON behind.
+Then add `"boards.<name>"` to `BOARDS` in `build_dashboard.py`, in the order you want
+the tabs to appear.
+
+### The presence contract — get this wrong and the dashboard renders blank
+
+A domain tab hides only on **positive evidence of intentional absence**: every one of
+its collectors reported `disabled` or `covered` by the availability census. Everything
+else — `starting`, `healthy_empty`, `limited`, `blocked`, `degraded`, `failed`,
+`startup_failed` — stays visible, because a failure an operator cannot see is worse than
+an empty panel, and healthy-empty is a correct steady state for several collectors.
+
+Two hard rules the generator enforces so you cannot get this wrong by hand:
+
+- **Never write a presence sentinel as a value threshold.** `Builder.sentinel()` refuses
+  a `query_result(... > 0)` query. A `> 0` sentinel hides a live-but-idle collector by
+  conflating *absent* with *present but zero*.
+- **Every conditional element carries the census escape**, and its group condition is
+  always `or`. If the census is missing entirely, everything stays visible. `condition()`
+  refuses to build a presence condition without the escape, and the build gate re-checks
+  both properties on the assembled manifest — a hand-built `and` group is false in the
+  normal healthy state and would hide every tab silently.
+
+## Adding a panel-construction feature
+
+Panel constructors return **v1-shaped dicts**, which `grafana/v2.py` translates into v2
+elements at render time. That is deliberate: it keeps ~45 board-module sites that mutate
+`panel["fieldConfig"]` working, and keeps v2 layout knowledge out of every board module.
+So a new panel type is written in the v1 shape like its neighbours, and only
+`v2.panel_element` knows about `vizConfig`.
+
+Two translation traps, both of which validate clean server-side and fail only at render
+time, so `v2.py` handles them and its tests pin them:
+
+- A **transformation** is `{kind, group, spec:{options}}` in v2, not v1's `{id, options}`.
+- The **datasource moves into each query**, so nothing should read a panel-level
+  `datasource` after translation.
 
 ## Self-observability uses the same catalog
 
