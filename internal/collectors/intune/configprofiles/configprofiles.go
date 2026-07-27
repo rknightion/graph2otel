@@ -88,6 +88,7 @@ var odataTypeBuckets = map[string]string{
 	"#microsoft.graph.windowsWifiConfiguration":                             "windows_wifi",
 	"#microsoft.graph.windowsVpnConfiguration":                              "windows_vpn",
 	"#microsoft.graph.iosGeneralDeviceConfiguration":                        "ios_general",
+	"#microsoft.graph.iosDeviceFeaturesConfiguration":                       "ios_device_features",
 	"#microsoft.graph.iosCustomConfiguration":                               "ios_custom",
 	"#microsoft.graph.iosWiFiConfiguration":                                 "ios_wifi",
 	"#microsoft.graph.iosVpnConfiguration":                                  "ios_vpn",

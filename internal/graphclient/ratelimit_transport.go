@@ -64,7 +64,7 @@ func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error
 		return resp, err
 	}
 
-	t.observeThrottle(resp, wl)
+	observeThrottleResponse(t.emitter, t.tenantID, resp, wl)
 
 	if parseRetryAfter(resp.Header.Get(headerRetryAfter)) <= 0 {
 		b := t.backoff
@@ -83,22 +83,22 @@ func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error
 	return resp, err
 }
 
-// observeThrottle records the bounded throttle self-obs signals for a 429
-// response: a monotonic count, the server-reported limit-percentage gauge
-// (when present), and a debug log of the scope/information hints. attrs are
-// intentionally just workload + tenant_id — never per-request data.
-func (t *rateLimitTransport) observeThrottle(resp *http.Response, wl Workload) {
+// observeThrottleResponse records the bounded throttle self-obs signals for
+// both conventional 429s and Microsoft's query-broker throttle disguised as a
+// 500. attrs are intentionally just workload + tenant_id — never per-request
+// data.
+func observeThrottleResponse(emitter telemetry.Emitter, tenantID string, resp *http.Response, wl Workload) {
 	attrs := telemetry.Attrs{
 		attrWorkload: string(wl),
-		attrTenantID: t.tenantID,
+		attrTenantID: tenantID,
 	}
 
-	if t.emitter != nil {
-		t.emitter.Counter(metricThrottleCount, "1", "Count of 429 throttle responses observed from Microsoft Graph.", 1, attrs)
+	if emitter != nil {
+		emitter.Counter(metricThrottleCount, "1", "Count of throttle responses observed from Microsoft Graph.", 1, attrs)
 
 		if pct := resp.Header.Get(headerThrottleLimitPercentage); pct != "" {
 			if v, err := strconv.ParseFloat(pct, 64); err == nil {
-				t.emitter.Gauge(metricThrottleLimitPercentage, "%",
+				emitter.Gauge(metricThrottleLimitPercentage, "%",
 					"Graph-reported throttle budget consumption at the time of a 429 (x-ms-throttle-limit-percentage).",
 					v, attrs)
 			}
@@ -108,7 +108,7 @@ func (t *rateLimitTransport) observeThrottle(resp *http.Response, wl Workload) {
 	if scope, info := resp.Header.Get(headerThrottleScope), resp.Header.Get(headerThrottleInformation); scope != "" || info != "" {
 		slog.Debug("graph throttle response",
 			"workload", string(wl),
-			"tenant_id", t.tenantID,
+			"tenant_id", tenantID,
 			"scope", scope,
 			"information", info,
 		)

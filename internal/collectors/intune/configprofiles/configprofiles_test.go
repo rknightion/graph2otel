@@ -87,8 +87,8 @@ func emptyEndpoints() map[string]string {
 //   - "iOS Google Account" (id db167a8b…, iosCustomConfiguration): its `payload`
 //     embeds a personal email address.
 //
-// iosDeviceFeaturesConfiguration is NOT in odataTypeBuckets, so it buckets to
-// "other"; iosCustomConfiguration buckets to "ios_custom". The kept iOS
+// iosDeviceFeaturesConfiguration buckets to "ios_device_features";
+// iosCustomConfiguration buckets to "ios_custom". The kept iOS
 // Tailscale VPN element retains its real `payload` (a VPN mobileconfig with no
 // plaintext credential) so the iosCustomConfiguration wire shape stays honest.
 const liveDeviceConfigurations = `{
@@ -240,7 +240,8 @@ func TestCollectExcludesWindowsUpdateForBusinessConfiguration(t *testing.T) {
 // hand-written docs-derived JSON. It replaces the docs-fixture version-gauge and
 // status-overview happy-path tests; the synthetic bucket, exclusion, resilience,
 // forbidden, and version-bump tests stay, since the live capture cannot exercise
-// those branches (only "other" and "ios_custom" buckets appear on the wire).
+// those branches (only "ios_device_features" and "ios_custom" buckets appear
+// on the wire).
 func TestCollectEmitsLiveSnapshotEndToEnd(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{
 		profilesURL:                        liveDeviceConfigurations,
@@ -253,13 +254,13 @@ func TestCollectEmitsLiveSnapshotEndToEnd(t *testing.T) {
 		t.Fatalf("Collect: %v", err)
 	}
 
-	// Count by odata_type: iosDeviceFeaturesConfiguration -> "other" (not in the
-	// bucket map), iosCustomConfiguration -> "ios_custom".
+	// Count by odata_type: iosDeviceFeaturesConfiguration ->
+	// "ios_device_features", iosCustomConfiguration -> "ios_custom".
 	counts := map[string]float64{}
 	for _, p := range rec.MetricPoints(countMetricName) {
 		counts[p.Attrs["odata_type"]] = p.Value
 	}
-	wantCounts := map[string]float64{"other": 1, "ios_custom": 1}
+	wantCounts := map[string]float64{"ios_device_features": 1, "ios_custom": 1}
 	if len(counts) != len(wantCounts) {
 		t.Fatalf("got %d odata_type series, want %d: %v", len(counts), len(wantCounts), counts)
 	}
@@ -520,13 +521,10 @@ func TestExcludedGroupBTypeNeverReportsAsUnexpected(t *testing.T) {
 	}
 }
 
-// TestLiveCaptureReportsTheKnownODataTypeGap pins the live capture's actual
-// behavior: iosDeviceFeaturesConfiguration is a real Microsoft subtype absent
-// from odataTypeBuckets (buckets to "other" - see the fixture doc comment
-// above), so the watchdog correctly fires once for it. This is the honest
-// live state, not a synthetic surprise - a watchdog that stayed silent here
-// would be lying about a genuine, standing coverage gap in the map.
-func TestLiveCaptureReportsTheKnownODataTypeGap(t *testing.T) {
+// TestLiveCaptureRecognizesKnownODataTypes pins that every subtype in the
+// verbatim live response has a bounded bucket and is present in the derived
+// wirecheck Enum.
+func TestLiveCaptureRecognizesKnownODataTypes(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{
 		profilesURL:                        liveDeviceConfigurations,
 		statusOverviewURL(firstProfileID):  liveDeviceStatusOverview,
@@ -538,10 +536,8 @@ func TestLiveCaptureReportsTheKnownODataTypeGap(t *testing.T) {
 		t.Fatalf("Collect: %v", err)
 	}
 
-	got := findings(rec)
-	key := wirecheck.KindUnmappedValue + "/" + semconv.AttrOdataType
-	if got[key] != 1 {
-		t.Errorf("findings[%s] = %v, want 1 (iosDeviceFeaturesConfiguration); all=%v", key, got[key], got)
+	if got := findings(rec); len(got) != 0 {
+		t.Errorf("live capture produced unexpected findings %v, want none", got)
 	}
 }
 

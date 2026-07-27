@@ -50,6 +50,7 @@ var (
 		"staleAppCreds", "applicationCredentialExpiry", "servicePrincipalKeyExpiry", "adminMFAV2",
 		"blockLegacyAuthentication", "integratedApps", "mfaRegistrationV2", "pwagePolicyNew", "passwordHashSync",
 		"oneAdmin", "roleOverlap", "selfServicePasswordReset", "signinRiskPolicy", "userRiskPolicy",
+		"insiderRiskPolicy",
 		"verifyAppPublisher", "privateLinkForAAD", "appRoleAssignmentsGroups", "appRoleAssignmentsUsers",
 		"managedIdentity", "overprivilegedApps", "longLivedCredentials", "aadConnectDeprecated",
 		"adalToMsalMigration", "ownerlessApps", "inactiveGuests", "aadGraphDeprecationApplication",

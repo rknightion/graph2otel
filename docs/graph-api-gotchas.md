@@ -116,6 +116,12 @@ Independent ceilings, none of which reliably send `Retry-After` — client-side 
 | Intune reports-export | 48 req/min per app |
 | directory `keyCredentials` select | ~150 req/min per tenant |
 
+## Entra recommendations
+
+- **`recommendationType` includes `insiderRiskPolicy`**
+  `[live-measured 2026-07-27, #398]`. It is a bounded recommendation type, not an
+  unexpected tenant-defined value; preserve it as its own metric label.
+
 ## Sign-in logs
 
 - **Four separate sign-in pollers are required** `[live, M3]`: interactive,
@@ -264,6 +270,10 @@ path is Exchange's own segment, **not** a Graph beta surface, so the
   deliverable (a bounded count cannot replace them; also `managedDeviceOverview`'s OS
   summary sums to 9 on a real fleet of 10 — no Linux bucket). #132 tracks the one
   possible retirement route (blob inventory categories).
+- **`deviceConfigurations` includes
+  `#microsoft.graph.iosDeviceFeaturesConfiguration`**
+  `[live-measured 2026-07-27, #398]`. Bucket it as `ios_device_features`; folding it
+  into `other` loses a real bounded profile type.
 - **A 400/404 "not found for segment" is a WRONG-URL bug, not "feature not provisioned"**
   `[live-measured 2026-07-18, #179]`. This corrects an earlier M4 reading. A valid Intune
   segment returns 200 (with `insufficientData` / empty on an immature tenant), never a
@@ -315,6 +325,11 @@ path is Exchange's own segment, **not** a Graph beta surface, so the
 - **`troubleshootingEvents` and `autopilotEvents` reject a time `$filter`** `[live, M5]`
   — use `EndpointConfig.NoServerFilter` (client-side window bounding; heavier but
   correct). `auditEvents` DOES support the filter.
+- **The Intune query broker reports throttling as HTTP 500, not 429**
+  `[live-measured 2026-07-27, #398, n=2]`. The exact message is `Rate limit reached
+  because of too many requests to query broker. Please retry after sometime.` Kiota
+  does not retry 500, so graph2otel retries only that exact signature through its
+  normal instrumented, workload-limited transport. Generic Intune 500s remain errors.
 
 ### Intune reports-export API
 
@@ -329,12 +344,19 @@ path is Exchange's own segment, **not** a Graph beta surface, so the
 - **Export CSVs are not RFC-4180-strict** `[live, M5]`: leading UTF-8 BOM + bare quotes
   in unquoted fields. The `exportjob` parser strips the BOM, sets `LazyQuotes`,
   `FieldsPerRecord=-1`. Always send an explicit `select`.
+- **`status=completed` does not guarantee the SAS `url` is populated**
+  `[live-measured 2026-07-27, #398, n=5]`. The same five job IDs first returned
+  completed with an empty URL immediately after a process restart, then returned a
+  non-empty `url` on a later poll. Treat completed-without-URL as non-terminal and
+  continue the existing poll backoff; do not create a replacement job.
 - **Enum columns return NUMERIC CODES, not names** `[live 2026-07-16, #142]`:
   `Platform` → `'1','2','3','5'`, etc. Microsoft returns a localized `<Col>_loc` sibling
   anyway (already fetched, currently discarded) — but a **bitmask** field
   (`ProductStatus`) has NO `_loc` sibling and a name-keyed lookup can never hit. Never
   test enum columns against hand-written names (`"platform": "windows"` has never been on
-  the wire). `AllDeviceCertificates` is UNVERIFIED (zero certs on m7kni). #142 owns the fix.
+  the wire). `AllDeviceCertificates.CertificateStatus` has returned title-case
+  `Issued`, which maps to `healthy` `[live-measured 2026-07-27, #398]`; the rest of
+  that value set remains unverified and stays behind the report-only wirecheck.
 
 ## Purview / labels
 

@@ -38,7 +38,7 @@
       "Name": "graph2otel.throttle.count",
       "Unit": "1",
       "Kind": "sum",
-      "Description": "Count of 429 throttle responses observed from Microsoft Graph.",
+      "Description": "Count of throttle responses observed from Microsoft Graph.",
       "AttrKeys": [
         "tenant_id",
         "workload"

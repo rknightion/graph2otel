@@ -317,6 +317,9 @@ func TestCollectEmitsStatusPriorityAndImpactedCounts(t *testing.T) {
 	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
+	if got := len(rec.MetricPoints(wirecheck.MetricUnexpected)); got != 0 {
+		t.Errorf("unexpected wirecheck points = %d, want 0 for the live fixture", got)
+	}
 
 	// status x priority counts
 	counts := map[string]float64{}

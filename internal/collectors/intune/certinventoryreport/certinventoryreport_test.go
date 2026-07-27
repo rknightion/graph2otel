@@ -45,20 +45,20 @@ func newTestCollector(r exportjob.Runner) *Collector {
 // live-verified column NAMES, plus fixed non-cardinality-relevant per-cert
 // detail so the log-event tests have something to assert on.
 //
-// WARNING - the column names here are live-verified; the `status` VALUES the
-// tests pass ("issued", "revoked", ...) are NOT. They are the assumed
-// certificateIssuanceState vocabulary (see the package doc's collapse caveat).
-// m7kni has zero device certificates (AllDeviceCertificates returned a header
-// row and 0 data rows, live-checked 2026-07-17 — #165, #142), so no real status
-// value has ever been seen on this report, and #142 could not settle it.
+// WARNING - the column names here are live-verified. Title-case `Issued` is
+// also live-observed (#398); the other `status` values tests pass ("issued",
+// "revoked", ...) remain the assumed certificateIssuanceState vocabulary (see
+// the package doc's collapse caveat). m7kni has zero device certificates
+// (AllDeviceCertificates returned a header row and 0 data rows, live-checked
+// 2026-07-17 — #165, #142), so that probe could not settle the rest of the enum.
 //
 // Do not read a passing test in this file as evidence that the export sends
 // these strings. That inference is precisely what shipped #142: the sibling
 // appinstallreport asserted "platform": "windows" against its own fixture and
-// stayed green for months while production emitted platform="2". These tests
-// pin the COLLAPSE LOGIC given a vocabulary; they cannot pin the vocabulary.
-// See TestUnmappedCertificateStatusIsAnnounced for how the real values are
-// meant to arrive.
+// stayed green for months while production emitted platform="2". Except for
+// the live `Issued` test below, these tests pin COLLAPSE LOGIC given a
+// vocabulary; they cannot pin the vocabulary. See
+// TestUnmappedCertificateStatusIsAnnounced for how remaining values arrive.
 func row(issuer, status string, validTo *time.Time) exportjob.Row {
 	r := exportjob.Row{
 		"IssuerName":        issuer,
@@ -359,9 +359,9 @@ func TestCollectorMetadata(t *testing.T) {
 //
 // What is LIVE-MEASURED (2026-07-17, probed as graph2otel-poller):
 //   - AllDeviceCertificates returns a header row and ZERO data rows on m7kni,
-//     which has no device certificates. So the real CertificateStatus values
-//     remain UNOBSERVED and this collector's certificateStatusBuckets
-//     vocabulary is still an assumption, exactly as its package doc says.
+//     which has no device certificates. That probe left the value set
+//     unobserved; production later established title-case `Issued` (#398), but
+//     the remaining certificateStatusBuckets vocabulary is still an assumption.
 //   - CertificateStatus gets NO CertificateStatus_loc sibling at any
 //     localizationType, including an explicit LocalizedValuesAsAdditionalColumn.
 //     AppInstallStatusAggregate's Platform DOES get one under the same probe.
@@ -369,10 +369,10 @@ func TestCollectorMetadata(t *testing.T) {
 //     sibling Microsoft already sends - is NOT available here, whatever the
 //     values turn out to be.
 //
-// What is therefore still UNKNOWN: whether CertificateStatus returns numeric
-// codes (like Platform/ProductStatus) or the camelCase names this collector
-// assumes. "No _loc sibling" is equally consistent with both, so it settles
-// nothing on its own, and #142 explicitly forbids guessing.
+// What is therefore still UNKNOWN: whether the remaining CertificateStatus
+// values return numeric codes (like Platform/ProductStatus) or title-/camel-
+// case strings. "No _loc sibling" is equally consistent with both, so it
+// settles nothing on its own.
 //
 // This test pins the response to that: rather than change the mapping on a
 // hunch, an unmapped value now ANNOUNCES itself. The moment any tenant with
@@ -434,6 +434,43 @@ func TestMappedCertificateStatusIsNotAnnounced(t *testing.T) {
 	}
 	if got := len(rec.MetricPoints(wirecheck.MetricUnexpected)); got != 0 {
 		t.Errorf("a mapped status produced %d wirecheck findings, want 0", got)
+	}
+}
+
+// TestLiveIssuedCertificateStatusIsHealthyAndMapped pins the title-case value
+// observed from AllDeviceCertificates in production (#398). It must retain
+// the healthy aggregate and log twin without raising a wirecheck finding.
+func TestLiveIssuedCertificateStatusIsHealthyAndMapped(t *testing.T) {
+	rows := []exportjob.Row{row("Contoso Issuing CA", "Issued", daysFromNow(30))}
+	rec := telemetrytest.New()
+	c := newTestCollector(&fakeRunner{rows: rows})
+	if err := c.Collect(context.Background(), rec.Emitter(), nil); err != nil {
+		t.Fatalf("Collect returned error: %v", err)
+	}
+
+	points := rec.MetricPoints(stateMetricName)
+	if len(points) != 1 {
+		t.Fatalf("got %d state points, want 1: %+v", len(points), points)
+	}
+	if got := points[0].Attrs["state"]; got != "healthy" {
+		t.Errorf("state = %q, want healthy", got)
+	}
+	if got := points[0].Value; got != 1 {
+		t.Errorf("healthy state value = %v, want 1", got)
+	}
+
+	logs := rec.LogRecords()
+	if len(logs) != 1 {
+		t.Fatalf("got %d log records, want 1", len(logs))
+	}
+	if got := logs[0].Attrs["certificate_status"]; got != "Issued" {
+		t.Errorf("certificate_status = %q, want raw live value Issued", got)
+	}
+	if got := logs[0].Attrs["state_bucket"]; got != "healthy" {
+		t.Errorf("state_bucket = %q, want healthy", got)
+	}
+	if got := len(rec.MetricPoints(wirecheck.MetricUnexpected)); got != 0 {
+		t.Errorf("live Issued value produced %d wirecheck findings, want 0", got)
 	}
 }
 

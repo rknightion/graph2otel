@@ -2543,7 +2543,7 @@
       "prometheus_name": "graph2otel_throttle_count_total",
       "unit": "1",
       "kind": "sum",
-      "description": "Count of 429 throttle responses observed from Microsoft Graph.",
+      "description": "Count of throttle responses observed from Microsoft Graph.",
       "additive": true,
       "domain": "graph2otel",
       "attr_keys": [

@@ -480,17 +480,21 @@ func (c *Client) poll(ctx context.Context, reportName, id string) (exportJobResp
 
 		switch jr.Status {
 		case "completed":
-			return jr, pollCount, nil
+			if jr.URL != "" {
+				return jr, pollCount, nil
+			}
+			// Intune can publish status=completed before the pre-signed URL is
+			// readable. The same job gains its URL on a later poll (#398), so this
+			// is not terminal yet.
 		case "failed":
 			return exportJobResponse{}, pollCount, fmt.Errorf("exportjob: %s: %w", reportName, ErrJobFailed)
-		default:
-			if err := c.opts.Sleep(ctx, delay); err != nil {
-				return exportJobResponse{}, pollCount, err
-			}
-			delay *= 2
-			if delay > c.opts.PollMax {
-				delay = c.opts.PollMax
-			}
+		}
+		if err := c.opts.Sleep(ctx, delay); err != nil {
+			return exportJobResponse{}, pollCount, err
+		}
+		delay *= 2
+		if delay > c.opts.PollMax {
+			delay = c.opts.PollMax
 		}
 	}
 }

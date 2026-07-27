@@ -166,6 +166,68 @@ func TestExportSlowCompletionBackoffAndDownload(t *testing.T) {
 	}
 }
 
+func TestExportPollsAgainWhenCompletedResponseHasNoURL(t *testing.T) {
+	base := time.Date(2026, 7, 27, 7, 59, 0, 0, time.UTC)
+	var delays []time.Duration
+
+	getCalls := 0
+	poster := &fakePoster{
+		post: func(_ context.Context, _ string, _ []byte, _ map[string]string) ([]byte, error) {
+			return []byte(`{"id":"job1","status":"notStarted"}`), nil
+		},
+		get: func(_ context.Context, _ string, _ map[string]string) ([]byte, error) {
+			getCalls++
+			expiry := base.Add(6 * time.Hour).Format(time.RFC3339)
+			if getCalls == 1 {
+				// Live Intune export responses can publish completed before the
+				// pre-signed download URL is readable (#398).
+				return []byte(fmt.Sprintf(
+					`{"id":"job1","status":"completed","url":"","expirationDateTime":%q}`,
+					expiry,
+				)), nil
+			}
+			return []byte(fmt.Sprintf(
+				`{"id":"job1","status":"completed","url":"https://blob.example/sas","expirationDateTime":%q}`,
+				expiry,
+			)), nil
+		},
+	}
+
+	zipBytes := buildZip(t, "export.csv", []byte("name\ndevice1\n"))
+	downloadCalls := 0
+	dl := &fakeDownloader{download: func(_ context.Context, sasURL string) ([]byte, error) {
+		downloadCalls++
+		if sasURL != "https://blob.example/sas" {
+			t.Fatalf("download url = %q, want populated URL from second poll", sasURL)
+		}
+		return zipBytes, nil
+	}}
+
+	c := New(poster, dl, Options{
+		PollInitial: time.Millisecond,
+		PollMax:     4 * time.Millisecond,
+		Now:         func() time.Time { return base },
+		Sleep:       noSleep(&delays),
+	})
+
+	rows, err := c.Export(context.Background(), Request{ReportName: "DeviceStatusesByConfigurationProfile"}, telemetrytest.New().Emitter())
+	if err != nil {
+		t.Fatalf("Export: %v", err)
+	}
+	if getCalls != 2 {
+		t.Errorf("poll calls = %d, want 2", getCalls)
+	}
+	if downloadCalls != 1 {
+		t.Errorf("download calls = %d, want 1", downloadCalls)
+	}
+	if len(delays) != 1 || delays[0] != time.Millisecond {
+		t.Errorf("poll delays = %v, want [1ms]", delays)
+	}
+	if len(rows) != 1 || rows[0]["name"] != "device1" {
+		t.Errorf("rows = %+v, want downloaded row", rows)
+	}
+}
+
 func TestExportFailedJobNoDownload(t *testing.T) {
 	poster := &fakePoster{
 		post: func(_ context.Context, _ string, _ []byte, _ map[string]string) ([]byte, error) {

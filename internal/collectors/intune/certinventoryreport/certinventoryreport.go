@@ -38,21 +38,20 @@
 // pattern as the sibling certificates package's cert-profile-name cap) plus
 // a fixed expiry/status bucket.
 //
-// CertificateStatus collapse caveat: the report's actual CertificateStatus
-// values have STILL not been observed (#142). certificateStatusBuckets below
-// reuses the same ~20-value vocabulary as the per-device beta resource's
-// certificateIssuanceState field, since both describe the same underlying
-// Intune certificate-profile issuance status — a reasonable starting
-// assumption, not a confirmed mapping. Any value outside that assumed
-// vocabulary (including a genuinely different real enum) safely falls into
-// "other" via certificateStatusBucketFor rather than growing the "state"
-// dimension or panicking, and is announced (see Collect).
+// CertificateStatus collapse caveat: production has observed title-case
+// "Issued" (#398), but the report's full enum remains unmeasured. Apart from
+// that value, certificateStatusBuckets below starts with the same ~20-value
+// vocabulary as the per-device beta resource's certificateIssuanceState field,
+// since both describe the same underlying Intune certificate-profile issuance
+// status. Any value outside the map safely falls into "other" via
+// certificateStatusBucketFor rather than growing the "state" dimension or
+// panicking, and is announced (see Collect).
 //
 // What #142 measured live (2026-07-17, probed as graph2otel-poller), so the
 // next reader does not re-run it:
-//   - AllDeviceCertificates returns a header row and ZERO data rows on m7kni,
-//     which holds no device certificates. The value set remains unobserved;
-//     confirming it needs a tenant that actually has certificates.
+//   - AllDeviceCertificates returned a header row and ZERO data rows on m7kni,
+//     which holds no device certificates. That probe did not establish the
+//     value set; production later observed title-case "Issued" (#398).
 //   - The column gets NO CertificateStatus_loc sibling at ANY localizationType
 //     — including an explicit LocalizedValuesAsAdditionalColumn. The sibling
 //     export reports' Platform and DeviceState columns DO get one under the
@@ -61,11 +60,10 @@
 //     values turn out to be.
 //
 // What that does NOT establish, and what must not be asserted without
-// evidence: whether this column returns numeric codes (as Platform and
-// ProductStatus do) or the camelCase names assumed below. "No _loc sibling" is
-// equally consistent with "numeric enum, unlocalizable" and "already a plain
-// string, nothing to localize", so it settles nothing on its own. #142
-// deliberately left this collector's mapping untouched for that reason. If the
+// evidence: whether the remaining values return numeric codes (as Platform and
+// ProductStatus do) or title-/camel-case strings. "No _loc sibling" is equally
+// consistent with "numeric enum, unlocalizable" and "already a plain string,
+// nothing to localize", so it settles nothing on its own. If the
 // unmapped-value warning in Collect ever fires, THAT log is the evidence —
 // read it, then fix this map against it.
 package certinventoryreport
@@ -128,13 +126,14 @@ var certInventorySelect = []string{
 
 // certificateStatusBuckets collapses CertificateStatus values down to a
 // bounded set of four named buckets, per #41's spec. See the package doc's
-// CertificateStatus collapse caveat: this assumes the same vocabulary as the
-// per-device beta resource's certificateIssuanceState field, NOT an
-// independently live-verified enum for this report's column. Anything
-// absent from this map falls into "other" via certificateStatusBucketFor,
-// so the "state" dimension can never grow regardless of whether that
-// assumption holds. Mapping rationale:
-//   - healthy: the cert is live and usable (issued, enrollmentSucceeded,
+// CertificateStatus collapse caveat: title-case "Issued" is live-observed for
+// this report (#398); the remaining values begin as the per-device beta
+// resource's certificateIssuanceState vocabulary. Anything absent from this
+// map falls into "other" via certificateStatusBucketFor, so the "state"
+// dimension can never grow regardless of whether that assumption holds.
+// Mapping rationale:
+//   - healthy: the cert is live and usable (Issued, issued,
+//     enrollmentSucceeded,
 //     enrollmentNotNeeded, renewVerified, installed).
 //   - pending: issuance is in flight, awaiting a later terminal state
 //     (challengeIssued, challengeValidationSucceeded, issuePending,
@@ -151,6 +150,7 @@ var certificateStatusBuckets = map[string]string{
 	"challengeValidationFailed":    "failed",
 	"issueFailed":                  "failed",
 	"issuePending":                 "pending",
+	"Issued":                       "healthy",
 	"issued":                       "healthy",
 	"responseProcessingFailed":     "failed",
 	"responsePending":              "pending",
@@ -324,7 +324,7 @@ func (c *Collector) DefaultInterval() time.Duration { return 6 * time.Hour }
 // Experimental marks this collector as beta/opt-in: it depends on the
 // export-job subsystem, which needs a WRITE-level Graph scope just to
 // create the export job (see RequiredPermissions), and its CertificateStatus
-// collapse map is an unverified assumption (see the package doc).
+// collapse map is only partially live-measured (see the package doc).
 func (c *Collector) Experimental() bool { return true }
 
 // RequiredPermissions declares the least-privilege Graph application scope.
@@ -385,12 +385,12 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *
 		c.watch.Value(e, semconv.AttrCertificateStatus, row["CertificateStatus"], knownCertificateStatuses)
 		stateBucket := certificateStatusBucketFor(row["CertificateStatus"])
 		// Announce a value the vocabulary does not cover, naming the raw
-		// string. This collector's CertificateStatus mapping is still an
-		// ASSUMPTION (see the package doc): m7kni has zero device
-		// certificates, so no real value has ever been observed, and #142
-		// established that - unlike Platform and DeviceState on the sibling
-		// export reports - this column gets no _loc sibling to decode against
-		// at any localizationType.
+		// string. This collector's CertificateStatus mapping is only partially
+		// measured (see the package doc): #398 observed title-case "Issued",
+		// while m7kni has zero device certificates and #142 established that -
+		// unlike Platform and DeviceState on the sibling export reports - this
+		// column gets no _loc sibling to decode against at any
+		// localizationType.
 		//
 		// So rather than guess, make the gap self-closing: the first tenant
 		// with certificates that runs this collector logs the real values, and

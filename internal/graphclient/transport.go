@@ -145,10 +145,12 @@ func buildMiddlewares(opts Options) []nethttplibrary.Middleware {
 // test exercises directly.
 //
 // When opts.Limiter is set, the per-workload rate limiter (#5) is spliced in
-// as the innermost RoundTripper, so the chain (outermost to innermost) is:
-// Kiota default middlewares -> instrumentedTransport -> rateLimitTransport ->
-// opts.baseTransport (or http.DefaultTransport). opts.Limiter == nil skips
-// the splice entirely, leaving this function's behavior identical to before #5.
+// as the innermost RoundTripper. The exact query-broker 500 retry (#398) wraps
+// the complete Kiota pipeline so Kiota's own retries cannot reset its attempt
+// cap. Every retry still traverses instrumentation and rate limiting. The chain
+// (outermost to innermost) is: queryBrokerRetryTransport -> Kiota default
+// middlewares -> instrumentedTransport -> rateLimitTransport ->
+// opts.baseTransport.
 func newGraphHTTPClient(opts Options) *http.Client {
 	base := opts.baseTransport
 	if base == nil {
@@ -164,9 +166,16 @@ func newGraphHTTPClient(opts Options) *http.Client {
 		}
 	}
 	instrumented := &instrumentedTransport{next: base, emitter: opts.Emitter, tenantID: opts.TenantID}
-	transport := nethttplibrary.NewCustomTransportWithParentTransport(instrumented, buildMiddlewares(opts)...)
+	kiotaTransport := nethttplibrary.NewCustomTransportWithParentTransport(instrumented, buildMiddlewares(opts)...)
+	queryBrokerRetry := &queryBrokerRetryTransport{
+		next:              kiotaTransport,
+		maxRetries:        opts.MaxRetries,
+		retryDelaySeconds: opts.RetryDelaySeconds,
+		emitter:           opts.Emitter,
+		tenantID:          opts.TenantID,
+	}
 	return &http.Client{
-		Transport: transport,
+		Transport: queryBrokerRetry,
 		// Let the Kiota RedirectHandler middleware own redirect behavior rather
 		// than net/http's default follower (mirrors the SDK's default client).
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
