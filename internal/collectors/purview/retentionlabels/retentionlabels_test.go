@@ -311,11 +311,15 @@ func TestRetentionDataInsightsForbiddenIsSkipped(t *testing.T) {
 		eventTypesURL: errors.New("graphclient: GET " + eventTypesURL + ": " + dataInsightsForbidden),
 	}}
 	rec := telemetrytest.New()
-	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
+	outcomes := recordoutcome.NewRecorder()
+	if err := NewRetention(g, nil).Collect(context.Background(), rec.Emitter(), outcomes); err != nil {
 		t.Fatalf("Collect on DataInsights Forbidden 500 should skip gracefully, got: %v", err)
 	}
 	if len(rec.LogRecords()) != 0 {
 		t.Error("expected no log twin records when both endpoints are DataInsights-Forbidden")
+	}
+	if got := outcomes.Snapshot().Summarize(nil, false); got.Result != recordoutcome.ResultFailure || got.Cause != recordoutcome.CausePermissionDenied {
+		t.Errorf("outcome = %+v, want failure/%s", got, recordoutcome.CausePermissionDenied)
 	}
 }
 

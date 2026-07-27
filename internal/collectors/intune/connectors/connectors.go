@@ -284,7 +284,14 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *
 // points plus the heartbeat-age point (nil if no instance has a non-zero
 // lastSyncDateTime).
 func (c *Collector) exchangeSnapshot(ctx context.Context, now time.Time) ([]telemetry.GaugePoint, *telemetry.GaugePoint, error) {
-	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceManagement/exchangeConnectors", nil, c.outcomes)
+	raw, err := collectors.GetAllValuesRecordedClassified(
+		ctx,
+		c.g,
+		c.baseURL+"/deviceManagement/exchangeConnectors",
+		nil,
+		c.outcomes,
+		classifyCollectionError,
+	)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -325,7 +332,14 @@ func (c *Collector) exchangeSnapshot(ctx context.Context, now time.Time) ([]tele
 // MTD partner configured gets no mtd_platform series at all rather than a
 // spurious all-zero one.
 func (c *Collector) mtdSnapshot(ctx context.Context, now time.Time) ([]telemetry.GaugePoint, *telemetry.GaugePoint, []telemetry.GaugePoint, error) {
-	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/deviceManagement/mobileThreatDefenseConnectors", nil, c.outcomes)
+	raw, err := collectors.GetAllValuesRecordedClassified(
+		ctx,
+		c.g,
+		c.baseURL+"/deviceManagement/mobileThreatDefenseConnectors",
+		nil,
+		c.outcomes,
+		classifyCollectionError,
+	)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -383,7 +397,14 @@ func (c *Collector) mtdSnapshot(ctx context.Context, now time.Time) ([]telemetry
 // 403/404) for Collect to classify; this function has no opinion on whether a
 // given error is "unavailable" vs. real.
 func (c *Collector) ndesSnapshot(ctx context.Context, now time.Time) ([]telemetry.GaugePoint, *telemetry.GaugePoint, error) {
-	raw, err := collectors.GetAllValuesRecorded(ctx, c.g, c.betaURL+"/deviceManagement/ndesConnectors", nil, c.outcomes)
+	raw, err := collectors.GetAllValuesRecordedClassified(
+		ctx,
+		c.g,
+		c.betaURL+"/deviceManagement/ndesConnectors",
+		nil,
+		c.outcomes,
+		classifyCollectionError,
+	)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -530,6 +551,13 @@ func agePointOrNil(connectorType string, age float64, have bool) *telemetry.Gaug
 func isUnavailable(err error) bool {
 	s := err.Error()
 	return strings.Contains(s, "status 403") || strings.Contains(s, "status 404") || strings.Contains(s, "status 501")
+}
+
+func classifyCollectionError(err error) recordoutcome.Cause {
+	if isUnavailable(err) {
+		return recordoutcome.CauseNone
+	}
+	return recordoutcome.CauseForError(err)
 }
 
 // orUnknown maps an empty enum string to "unknown" so a missing/nullable

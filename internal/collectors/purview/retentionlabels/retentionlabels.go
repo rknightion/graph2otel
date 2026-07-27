@@ -149,8 +149,16 @@ func isRetentionUnavailable(err error) bool {
 	return strings.Contains(s, "DataInsightsRequestError") && strings.Contains(s, "Forbidden")
 }
 
-func isRetentionForbidden(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "status 403")
+func classifyRetentionCollectionError(err error) recordoutcome.Cause {
+	s := err.Error()
+	if strings.Contains(s, "status 403") ||
+		(strings.Contains(s, "DataInsightsRequestError") && strings.Contains(s, "Forbidden")) {
+		return recordoutcome.CausePermissionDenied
+	}
+	if strings.Contains(s, "status 404") {
+		return recordoutcome.CauseNone
+	}
+	return recordoutcome.CauseForError(err)
 }
 
 // retentionLabel mirrors the retentionLabel fields this package uses: the
@@ -260,12 +268,16 @@ func (c *RetentionCollector) Collect(ctx context.Context, e telemetry.Emitter, o
 // 403/404/DataInsights-Forbidden (endpoint unavailable) is skipped-and-logged
 // before either the metric or the log twin emits anything.
 func (c *RetentionCollector) collectLabels(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
-	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/security/labels/retentionLabels", nil, outcomes)
+	raws, err := collectors.GetAllValuesRecordedClassified(
+		ctx,
+		c.g,
+		c.baseURL+"/security/labels/retentionLabels",
+		nil,
+		outcomes,
+		classifyRetentionCollectionError,
+	)
 	if err != nil {
 		if isRetentionUnavailable(err) {
-			if isRetentionForbidden(err) {
-				outcomes.Cause(recordoutcome.CausePermissionDenied)
-			}
 			c.logger.Info("retention labels endpoint unavailable on this tenant; skipping",
 				"collector", retentionName, "error", err)
 			return nil
@@ -336,12 +348,16 @@ func (c *RetentionCollector) collectLabels(ctx context.Context, e telemetry.Emit
 // count — never a per-event-type series; the id/name/description detail goes
 // entirely into the log twin instead.
 func (c *RetentionCollector) collectEventTypes(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
-	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+"/security/triggerTypes/retentionEventTypes", nil, outcomes)
+	raws, err := collectors.GetAllValuesRecordedClassified(
+		ctx,
+		c.g,
+		c.baseURL+"/security/triggerTypes/retentionEventTypes",
+		nil,
+		outcomes,
+		classifyRetentionCollectionError,
+	)
 	if err != nil {
 		if isRetentionUnavailable(err) {
-			if isRetentionForbidden(err) {
-				outcomes.Cause(recordoutcome.CausePermissionDenied)
-			}
 			c.logger.Info("retention event types endpoint unavailable on this tenant; skipping",
 				"collector", retentionName, "error", err)
 			return nil

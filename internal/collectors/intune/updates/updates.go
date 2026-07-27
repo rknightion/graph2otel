@@ -132,33 +132,14 @@ func (o deviceStatusOverview) points(ringName string) []telemetry.GaugePoint {
 	}
 }
 
-// graphDate unmarshals a Microsoft Graph Edm.Date scalar ("YYYY-MM-DD", no
-// time component) - windowsFeatureUpdateProfile.endOfSupportDate uses this
-// type rather than a full dateTimeOffset, so time.Time's own RFC3339
-// unmarshaling can't be used directly.
-type graphDate struct {
-	time.Time
-}
-
-func (d *graphDate) UnmarshalJSON(b []byte) error {
-	s := strings.Trim(string(b), `"`)
-	if s == "" || s == "null" {
-		return nil
-	}
-	t, err := time.Parse("2006-01-02", s)
-	if err != nil {
-		return fmt.Errorf("updates: parse graph date %q: %w", s, err)
-	}
-	d.Time = t
-	return nil
-}
-
 // featureUpdateProfile is the subset of the windowsFeatureUpdateProfile
-// (beta) resource this collector reads.
+// (beta) resource this collector reads. endOfSupportDate is an
+// Edm.DateTimeOffset in the committed beta CSDL and on the live wire
+// [live-measured 2026-07-27, #397].
 type featureUpdateProfile struct {
 	DisplayName          string    `json:"displayName"`
 	FeatureUpdateVersion string    `json:"featureUpdateVersion"`
-	EndOfSupportDate     graphDate `json:"endOfSupportDate"`
+	EndOfSupportDate     time.Time `json:"endOfSupportDate"`
 }
 
 // driverUpdateProfile is the subset of the windowsDriverUpdateProfile (beta)

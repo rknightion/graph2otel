@@ -321,15 +321,16 @@ func TestCollectSkipsExchangeGracefullyOn501AndStillEmitsMTDAndNDES(t *testing.T
 		bodies: map[string]string{
 			mtdURL:  `{"value":[{"partnerState":"enabled","lastHeartbeatDateTime":"2026-07-15T11:00:00Z","androidEnabled":true,"iosEnabled":true,"windowsEnabled":true}]}`,
 			ndesURL: `{"value":[{"state":"active","lastConnectionDateTime":"2026-07-15T11:00:00Z"}]}`,
+			amsURL:  liveAndroidManagedStore,
 		},
 		errs: map[string]error{
 			exchangeURL: errors.New(`graphclient: GET https://graph.microsoft.com/v1.0/deviceManagement/exchangeConnectors: status 501: {"error":{"code":"NotSupported","message":"..."}}`),
-			amsURL:      amsUnavailableErr(),
 		},
 	}
 	rec := telemetrytest.New()
+	outcomes := recordoutcome.NewRecorder()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), outcomes); err != nil {
 		t.Fatalf("Collect: %v, want nil (501/NotSupported on exchangeConnectors is a graceful skip, not a failure)", err)
 	}
 
@@ -342,6 +343,12 @@ func TestCollectSkipsExchangeGracefullyOn501AndStillEmitsMTDAndNDES(t *testing.T
 	}
 	if p, ok := findPoint(states, map[string]string{"connector_type": "ndes", "state": "active"}); !ok || p.Value != 1 {
 		t.Errorf("ndes state missing/wrong when exchange 501s: %+v, ok=%v", p, ok)
+	}
+	if p, ok := findPoint(states, map[string]string{"connector_type": "android_managed_store", "state": "boundAndValidated"}); !ok || p.Value != 1 {
+		t.Errorf("android managed-store state missing/wrong when exchange 501s: %+v, ok=%v", p, ok)
+	}
+	if got := outcomes.Snapshot().Summarize(nil, false); got.Result != recordoutcome.ResultSuccess || got.Cause != recordoutcome.CauseNone {
+		t.Errorf("outcome = %+v, want success with no cause", got)
 	}
 }
 

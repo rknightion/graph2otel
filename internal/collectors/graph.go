@@ -144,6 +144,25 @@ func GetAllValuesRecorded(
 	headers map[string]string,
 	outcomes *recordoutcome.Recorder,
 ) ([]json.RawMessage, error) {
+	return GetAllValuesRecordedClassified(ctx, g, url, headers, outcomes, nil)
+}
+
+// CollectionErrorClassifier maps a first-page request failure to a bounded
+// outcome cause. Returning CauseNone leaves an expected zero-row failure clean.
+type CollectionErrorClassifier func(error) recordoutcome.Cause
+
+// GetAllValuesRecordedClassified is GetAllValuesRecorded with caller
+// classification for an immediate request failure before any page is decoded.
+// Later-page failures retain the helper's source/decode classification and
+// account every buffered row as fetched+errored.
+func GetAllValuesRecordedClassified(
+	ctx context.Context,
+	g GraphClient,
+	url string,
+	headers map[string]string,
+	outcomes *recordoutcome.Recorder,
+	classify CollectionErrorClassifier,
+) ([]json.RawMessage, error) {
 	// Ask Graph for its largest page size on every request (the nextLink
 	// carries its own $skiptoken, but re-sending Prefer is harmless and keeps
 	// the header uniform across pages). Merged once, before the loop.
@@ -158,7 +177,11 @@ func GetAllValuesRecorded(
 		}
 		body, err := g.RawGetWithHeaders(ctx, next, reqHeaders)
 		if err != nil {
-			recordPartialPageFailure(outcomes, uint64(len(out)), recordoutcome.CauseForError(err))
+			cause := recordoutcome.CauseForError(err)
+			if pages == 0 && len(out) == 0 && classify != nil {
+				cause = classify(err)
+			}
+			recordPartialPageFailure(outcomes, uint64(len(out)), cause)
 			return nil, err
 		}
 		var page odataPage

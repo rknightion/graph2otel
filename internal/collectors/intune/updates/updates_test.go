@@ -185,10 +185,11 @@ const (
 //     windowsUpdateForBusinessConfiguration @odata.type (only iOS config
 //     subtypes), so there is no live ring to capture — the synthetic ring is
 //     the only way to exercise the pause/expiry/rollback/status gauges.
-//   - windowsFeatureUpdateProfiles and windowsQualityUpdateProfiles are
-//     docs-derived, endpoint empty on tenant 2026-07-17 (#165): both return
-//     @odata.count 0 live, so a single synthetic element is kept to exercise
-//     the feature-EOL gauge and the quality-profile count.
+//   - windowsFeatureUpdateProfiles uses the two-row selected-field wire shape
+//     observed on 2026-07-27 (#397), including its RFC3339 endOfSupportDate.
+//     windowsQualityUpdateProfiles remains docs-derived: the endpoint was
+//     empty on tenant 2026-07-17 (#165), so one synthetic element is kept to
+//     exercise the quality-profile count.
 func fullFixtureBodies() map[string]string {
 	return map[string]string{
 		// Synthetic ring (no live windowsUpdateForBusinessConfiguration exists).
@@ -197,13 +198,21 @@ func fullFixtureBodies() map[string]string {
 			otherConfig("other-1", "Some Restriction Policy"),
 		),
 		statusOverviewURL("ring-1"): statusOverview(1, 2, 3, 4, 5),
-		// docs-derived, endpoint empty on tenant 2026-07-17 (#165).
-		featureProfilesURL(): page(map[string]any{
-			"id":                   "feat-1",
-			"displayName":          "21H2 Feature Profile",
-			"featureUpdateVersion": "21H2",
-			"endOfSupportDate":     "2026-10-14",
-		}),
+		// Live selected-field shape from two rows observed on 2026-07-27 (#397).
+		featureProfilesURL(): page(
+			map[string]any{
+				"id":                   "feat-1",
+				"displayName":          "Windows 11 24H2",
+				"featureUpdateVersion": "Windows 11, version 24H2",
+				"endOfSupportDate":     "2028-10-10T00:00:00Z",
+			},
+			map[string]any{
+				"id":                   "feat-2",
+				"displayName":          "Windows 11 24H2 - Autopatch",
+				"featureUpdateVersion": "Windows 11, version 24H2",
+				"endOfSupportDate":     "2028-10-10T00:00:00Z",
+			},
+		),
 		// docs-derived, endpoint empty on tenant 2026-07-17 (#165).
 		qualityProfilesURL(): page(map[string]any{
 			"id":          "qp-1",
@@ -341,21 +350,28 @@ func TestCollectRecordsRingStatusOverviewFailure(t *testing.T) {
 func TestCollectEmitsFeatureUpdateProfileEOLTarget(t *testing.T) {
 	g := &fakeGraph{bodies: fullFixtureBodies()}
 	rec := telemetrytest.New()
+	outcomes := recordoutcome.NewRecorder()
 
-	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), nil); err != nil {
+	if err := newTestCollector(g).Collect(context.Background(), rec.Emitter(), outcomes); err != nil {
 		t.Fatalf("Collect: %v", err)
 	}
 
 	pts := rec.MetricPoints(featureEOLMetric)
-	if len(pts) != 1 {
-		t.Fatalf("got %d eol_target points, want 1: %+v", len(pts), pts)
+	if len(pts) != 2 {
+		t.Fatalf("got %d eol_target points, want 2: %+v", len(pts), pts)
 	}
-	if pts[0].Attrs["profile_name"] != "21H2 Feature Profile" {
-		t.Errorf("profile_name = %q, want %q", pts[0].Attrs["profile_name"], "21H2 Feature Profile")
+	const wantSeconds = 70_632_000 // 2028-10-10T00:00:00Z minus fixedNow.
+	want := map[string]float64{
+		"Windows 11 24H2/Windows 11, version 24H2":             wantSeconds,
+		"Windows 11 24H2 - Autopatch/Windows 11, version 24H2": wantSeconds,
 	}
-	wantSeconds := time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC).Sub(fixedNow).Seconds()
-	if pts[0].Value != wantSeconds {
-		t.Errorf("eol_target = %v, want %v", pts[0].Value, wantSeconds)
+	assertPoints(t, rec, featureEOLMetric, want, func(a map[string]string) string {
+		return a["profile_name"] + "/" + a["feature_update_version"]
+	})
+
+	summary := outcomes.Snapshot().Summarize(nil, false)
+	if summary.Result != recordoutcome.ResultSuccess || summary.Cause != recordoutcome.CauseNone {
+		t.Errorf("outcome = %+v, want success/%s", summary, recordoutcome.CauseNone)
 	}
 }
 

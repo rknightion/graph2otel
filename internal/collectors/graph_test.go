@@ -150,6 +150,105 @@ func TestGetAllValuesRecordedAccountsBufferedRowsOnLaterPageFailure(t *testing.T
 	}
 }
 
+func TestGetAllValuesRecordedClassifiedLeavesExpectedFirstPageFailureClean(t *testing.T) {
+	const url = "https://graph.microsoft.com/v1.0/deviceManagement/exchangeConnectors"
+	g := &fakeGraph{
+		errs: map[string]error{url: errors.New("status 501: NotSupported")},
+	}
+	outcomes := recordoutcome.NewRecorder()
+
+	values, err := GetAllValuesRecordedClassified(
+		context.Background(),
+		g,
+		url,
+		nil,
+		outcomes,
+		func(error) recordoutcome.Cause { return recordoutcome.CauseNone },
+	)
+	if err == nil {
+		t.Fatal("GetAllValuesRecordedClassified error = nil, want the request error returned to the caller")
+	}
+	if values != nil {
+		t.Fatalf("values = %v, want nil on first-page failure", values)
+	}
+	got := outcomes.Snapshot()
+	if got.Counts != (recordoutcome.Counts{}) {
+		t.Fatalf("counts = %+v, want no rows accounted before the first page", got.Counts)
+	}
+	if len(got.Causes) != 0 {
+		t.Fatalf("causes = %v, want none for a caller-classified expected failure", got.Causes)
+	}
+}
+
+func TestGetAllValuesRecordedClassifiedDoesNotReclassifyLaterPageFailure(t *testing.T) {
+	const page1 = "https://graph.microsoft.com/v1.0/deviceManagement/exchangeConnectors"
+	const page2 = "https://graph.microsoft.com/v1.0/deviceManagement/exchangeConnectors?$skiptoken=next"
+	g := &fakeGraph{
+		bodies: map[string]string{
+			page1: `{"value":[{"id":"a"},{"id":"b"}],"@odata.nextLink":"` + page2 + `"}`,
+		},
+		errs: map[string]error{page2: errors.New("status 501: NotSupported")},
+	}
+	outcomes := recordoutcome.NewRecorder()
+
+	values, err := GetAllValuesRecordedClassified(
+		context.Background(),
+		g,
+		page1,
+		nil,
+		outcomes,
+		func(error) recordoutcome.Cause { return recordoutcome.CauseNone },
+	)
+	if err == nil {
+		t.Fatal("GetAllValuesRecordedClassified error = nil, want later-page failure")
+	}
+	if values != nil {
+		t.Fatalf("values = %v, want nil so an incomplete collection cannot be consumed", values)
+	}
+	got := outcomes.Snapshot()
+	want := recordoutcome.Counts{Fetched: 2, Errored: 2}
+	if got.Counts != want {
+		t.Fatalf("counts = %+v, want %+v", got.Counts, want)
+	}
+	if len(got.Causes) != 1 || got.Causes[0] != recordoutcome.CauseSourceError {
+		t.Fatalf("causes = %v, want [%q]", got.Causes, recordoutcome.CauseSourceError)
+	}
+	if err := got.Validate(); err != nil {
+		t.Fatalf("later-page failure did not reconcile: %v", err)
+	}
+}
+
+func TestGetAllValuesRecordedClassifiedDoesNotReclassifyEmptyLaterPageFailure(t *testing.T) {
+	const page1 = "https://graph.microsoft.com/v1.0/deviceManagement/exchangeConnectors"
+	const page2 = "https://graph.microsoft.com/v1.0/deviceManagement/exchangeConnectors?$skiptoken=next"
+	g := &fakeGraph{
+		bodies: map[string]string{
+			page1: `{"value":[],"@odata.nextLink":"` + page2 + `"}`,
+		},
+		errs: map[string]error{page2: errors.New("status 501: NotSupported")},
+	}
+	outcomes := recordoutcome.NewRecorder()
+
+	_, err := GetAllValuesRecordedClassified(
+		context.Background(),
+		g,
+		page1,
+		nil,
+		outcomes,
+		func(error) recordoutcome.Cause { return recordoutcome.CauseNone },
+	)
+	if err == nil {
+		t.Fatal("GetAllValuesRecordedClassified error = nil, want later-page failure")
+	}
+	got := outcomes.Snapshot()
+	if got.Counts != (recordoutcome.Counts{}) {
+		t.Fatalf("counts = %+v, want zero buffered rows accounted", got.Counts)
+	}
+	if len(got.Causes) != 1 || got.Causes[0] != recordoutcome.CauseSourceError {
+		t.Fatalf("causes = %v, want [%q] even when the earlier page was empty", got.Causes, recordoutcome.CauseSourceError)
+	}
+}
+
 func TestGetAllValuesRecordedRejectsMissingCollectionOnLaterPage(t *testing.T) {
 	const page1 = "https://graph.microsoft.com/v1.0/users"
 	const page2 = "https://graph.microsoft.com/v1.0/users?$skiptoken=next"
