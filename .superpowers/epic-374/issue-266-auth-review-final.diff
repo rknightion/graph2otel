@@ -1,0 +1,282 @@
+# Review package: f7339e805e40d2cc2b992a5ff4110c5995329fd6..d814a8edcc1bac0c9af9b1f630a56de583e90d4c
+
+ internal/auth/auth.go      |  52 +++++++++++++
+ internal/auth/auth_test.go | 182 +++++++++++++++++++++++++++++++++++++++++++--
+ 2 files changed, 228 insertions(+), 6 deletions(-)
+
+## Diff
+diff --git a/internal/auth/auth.go b/internal/auth/auth.go
+index 85245bc..2c8a372 100644
+--- a/internal/auth/auth.go
++++ b/internal/auth/auth.go
+@@ -50,7 +50,11 @@ package auth
+ 
+ import (
+ 	"context"
++	"encoding/base64"
++	"encoding/json"
++	"errors"
+ 	"fmt"
++	"strings"
+ 
+ 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+ 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+@@ -126,3 +130,51 @@ func (a *TenantAuth) SmokeToken(ctx context.Context) error {
+ 	}
+ 	return nil
+ }
++
++// AuthenticatedApplicationID requests a Graph access token and returns the
++// non-empty appid claim identifying the application that actually
++// authenticated. The payload is decoded without signature verification
++// because graph2otel is inspecting a token returned by its own tenant-pinned
++// TokenCredential, not authenticating a token supplied by another party.
++func (a *TenantAuth) AuthenticatedApplicationID(ctx context.Context) (string, error) {
++	tok, err := a.Cred.GetToken(ctx, policy.TokenRequestOptions{Scopes: []string{GraphDefaultScope}})
++	if err != nil {
++		return "", fmt.Errorf("auth: tenant %q: requesting Graph token for authenticated application identity: %w", a.TenantID, err)
++	}
++
++	appID, err := decodeAuthenticatedApplicationID(tok.Token)
++	if err != nil {
++		return "", fmt.Errorf("auth: tenant %q: %w", a.TenantID, err)
++	}
++	return appID, nil
++}
++
++func decodeAuthenticatedApplicationID(token string) (string, error) {
++	parts := strings.Split(token, ".")
++	if len(parts) != 3 {
++		return "", fmt.Errorf("malformed Graph access token: expected 3 JWT segments, got %d", len(parts))
++	}
++
++	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
++	if err != nil {
++		return "", fmt.Errorf("malformed Graph access token: decode JWT payload: %w", err)
++	}
++
++	var claims map[string]json.RawMessage
++	if err := json.Unmarshal(payload, &claims); err != nil {
++		return "", fmt.Errorf("malformed Graph access token: parse JWT payload: %w", err)
++	}
++
++	rawAppID, ok := claims["appid"]
++	if !ok {
++		return "", errors.New("graph access token has no appid claim")
++	}
++	var appID string
++	if err := json.Unmarshal(rawAppID, &appID); err != nil {
++		return "", errors.New("graph access token appid claim is not a string")
++	}
++	if appID == "" {
++		return "", errors.New("graph access token appid claim is empty")
++	}
++	return appID, nil
++}
+diff --git a/internal/auth/auth_test.go b/internal/auth/auth_test.go
+index 8fed0d6..fd9e30b 100644
+--- a/internal/auth/auth_test.go
++++ b/internal/auth/auth_test.go
+@@ -2,6 +2,8 @@ package auth_test
+ 
+ import (
+ 	"context"
++	"encoding/base64"
++	"encoding/json"
+ 	"errors"
+ 	"strings"
+ 	"testing"
+@@ -71,19 +73,187 @@ func TestBuildAll(t *testing.T) {
+ 	}
+ }
+ 
+-// fakeCredential is a minimal azcore.TokenCredential that always returns a
+-// sentinel error, so SmokeToken's error-wrapping can be tested without
+-// reaching a live tenant.
++// fakeCredential is a minimal azcore.TokenCredential for exercising token
++// consumers without reaching a live tenant.
+ type fakeCredential struct {
+-	err error
++	token string
++	err   error
+ }
+ 
+-func (f *fakeCredential) GetToken(_ context.Context, _ policy.TokenRequestOptions) (azcore.AccessToken, error) {
+-	return azcore.AccessToken{}, f.err
++func (f *fakeCredential) GetToken(_ context.Context, opts policy.TokenRequestOptions) (azcore.AccessToken, error) {
++	if len(opts.Scopes) != 1 || opts.Scopes[0] != auth.GraphDefaultScope {
++		return azcore.AccessToken{}, errors.New("unexpected token scope")
++	}
++	return azcore.AccessToken{Token: f.token}, f.err
+ }
+ 
+ var errSentinelGetToken = errors.New("AADSTS700016: application not found in directory")
+ 
++func fakeJWT(t *testing.T, claims map[string]any) (token, payload string) {
++	t.Helper()
++
++	payloadBytes, err := json.Marshal(claims)
++	if err != nil {
++		t.Fatalf("marshal JWT claims: %v", err)
++	}
++	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`))
++	payload = string(payloadBytes)
++	return header + "." + base64.RawURLEncoding.EncodeToString(payloadBytes) + ".signature", payload
++}
++
++func fakeJWTWithRawPayload(payload string) string {
++	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`))
++	return header + "." + base64.RawURLEncoding.EncodeToString([]byte(payload)) + ".signature"
++}
++
++// TestAuthenticatedApplicationIDProvesTokenAppID guards against using either
++// configured or ambient client IDs as proof of the application that actually
++// authenticated.
++func TestAuthenticatedApplicationIDProvesTokenAppID(t *testing.T) {
++	t.Setenv("AZURE_CLIENT_ID", "ambient-client-id")
++
++	ta, err := auth.NewTenantAuth(config.TenantConfig{
++		TenantID: "tenant-a",
++		ClientID: "configured-client-id",
++	})
++	if err != nil {
++		t.Fatalf("NewTenantAuth: %v", err)
++	}
++	token, _ := fakeJWT(t, map[string]any{"appid": "authenticated-client-id"})
++	ta.Cred = &fakeCredential{token: token}
++
++	got, err := ta.AuthenticatedApplicationID(context.Background())
++	if err != nil {
++		t.Fatalf("AuthenticatedApplicationID() error = %v", err)
++	}
++	if got != "authenticated-client-id" {
++		t.Errorf("AuthenticatedApplicationID() = %q, want %q", got, "authenticated-client-id")
++	}
++}
++
++func TestAuthenticatedApplicationIDRejectsMalformedJWTWithoutLeakingToken(t *testing.T) {
++	const (
++		paddedPayload    = `{"marker":"secret-padded"}`
++		malformedPayload = `{"marker":"secret-json"`
++		nonObjectPayload = `null`
++	)
++	paddedToken := fakeJWTWithRawPayload(paddedPayload)
++	paddedToken = strings.Replace(paddedToken, ".signature", "=.signature", 1)
++
++	tests := []struct {
++		name    string
++		token   string
++		payload string
++	}{
++		{
++			name:    "wrong segment count",
++			token:   "sensitive-not-a-three-segment-jwt",
++			payload: "sensitive",
++		},
++		{
++			name:    "invalid base64url",
++			token:   "header.sensitive%%%payload.signature",
++			payload: "sensitive%%%payload",
++		},
++		{
++			name:    "padded payload",
++			token:   paddedToken,
++			payload: paddedPayload,
++		},
++		{
++			name:    "malformed JSON",
++			token:   fakeJWTWithRawPayload(malformedPayload),
++			payload: malformedPayload,
++		},
++		{
++			name:    "non-object JSON",
++			token:   fakeJWTWithRawPayload(nonObjectPayload),
++			payload: nonObjectPayload,
++		},
++	}
++
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			ta := &auth.TenantAuth{
++				TenantID: "tenant-a",
++				Cred:     &fakeCredential{token: tt.token},
++			}
++
++			_, err := ta.AuthenticatedApplicationID(context.Background())
++			if err == nil {
++				t.Fatal("AuthenticatedApplicationID() error = nil, want malformed-token error")
++			}
++			if !strings.Contains(err.Error(), "tenant-a") {
++				t.Errorf("error %q should mention the tenant id", err.Error())
++			}
++			for _, secret := range []string{tt.token, tt.payload} {
++				if strings.Contains(err.Error(), secret) {
++					t.Errorf("error %q exposes token material %q", err.Error(), secret)
++				}
++			}
++		})
++	}
++}
++
++func TestAuthenticatedApplicationIDRejectsInvalidAppIDWithoutLeakingPayload(t *testing.T) {
++	tests := []struct {
++		name   string
++		claims map[string]any
++	}{
++		{name: "absent", claims: map[string]any{"marker": "secret-absent"}},
++		{name: "empty", claims: map[string]any{"appid": "", "marker": "secret-empty"}},
++		{name: "non-string", claims: map[string]any{"appid": 42, "marker": "secret-non-string"}},
++	}
++
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			token, payload := fakeJWT(t, tt.claims)
++			ta := &auth.TenantAuth{
++				TenantID: "tenant-a",
++				Cred:     &fakeCredential{token: token},
++			}
++
++			_, err := ta.AuthenticatedApplicationID(context.Background())
++			if err == nil {
++				t.Fatal("AuthenticatedApplicationID() error = nil, want invalid-appid error")
++			}
++			if !strings.Contains(err.Error(), "tenant-a") {
++				t.Errorf("error %q should mention the tenant id", err.Error())
++			}
++			for _, secret := range []string{token, payload, "secret-"} {
++				if strings.Contains(err.Error(), secret) {
++					t.Errorf("error %q exposes token material %q", err.Error(), secret)
++				}
++			}
++		})
++	}
++}
++
++func TestAuthenticatedApplicationIDWrapsTokenRequestErrorWithoutLeakingToken(t *testing.T) {
++	const token = "sensitive-token-returned-with-error"
++	ta := &auth.TenantAuth{
++		TenantID: "tenant-a",
++		Cred: &fakeCredential{
++			token: token,
++			err:   errSentinelGetToken,
++		},
++	}
++
++	_, err := ta.AuthenticatedApplicationID(context.Background())
++	if err == nil {
++		t.Fatal("AuthenticatedApplicationID() error = nil, want token-request error")
++	}
++	if !strings.Contains(err.Error(), "tenant-a") {
++		t.Errorf("error %q should mention the tenant id", err.Error())
++	}
++	if !errors.Is(err, errSentinelGetToken) {
++		t.Errorf("error should wrap the token request cause: %v", err)
++	}
++	if strings.Contains(err.Error(), token) {
++		t.Errorf("error %q exposes access token", err.Error())
++	}
++}
++
+ // TestSmokeTokenWrapsError asserts SmokeToken wraps an underlying credential
+ // error into a message that identifies the tenant and preserves the cause.
+ func TestSmokeTokenWrapsError(t *testing.T) {

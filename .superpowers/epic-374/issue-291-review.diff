@@ -1,0 +1,1261 @@
+# Review package: HEAD..b3d4fd78290b0568d51a1bccdb025cb2b9fb2e22
+
+## Commits
+b3d4fd7 Issue 291 review snapshot
+
+## Files changed
+ docs/scale-validation.md                         |  30 ++--
+ internal/logpipeline/collector_test.go           | 156 +++++++++++++++++
+ internal/logpipeline/graphclient_adapter_test.go |  10 +-
+ internal/logpipeline/logpipeline.go              | 209 ++++++++++++++---------
+ internal/logpipeline/logpipeline_test.go         |  68 +++++++-
+ internal/logpipeline/outcomes_test.go            | 119 +++++++++++--
+ internal/logpipeline/scale_test.go               | 123 ++++++++++++-
+ 7 files changed, 596 insertions(+), 119 deletions(-)
+
+## Diff
+diff --git a/docs/scale-validation.md b/docs/scale-validation.md
+index 2fa8a4a..1c4c4d3 100644
+--- a/docs/scale-validation.md
++++ b/docs/scale-validation.md
+@@ -54,50 +54,58 @@ Confirmed:
+   restart on disk.
+ - **New events still flow.**
+ 
+ This is the failure mode the feasibility study flagged as the real risk (not raw
+ throughput): a naive high-water mark with no safety lag silently drops
+ out-of-order events. The safety-lag + overlap + id-dedupe model is what prevents
+ it, and this test is its regression guard.
+ 
+ ## Memory behavior on large paginated walks
+ 
+-`internal/logpipeline/scale_test.go` — `BenchmarkPollWindowMemory` and
++`internal/logpipeline/scale_test.go` —
++`TestScaleOrderedPollDoesNotRetainPriorPagePayloads`,
++`BenchmarkPollOrderedPageMemory`, `BenchmarkPollWindowMemory`, and
+ `TestScalePollMemoryBoundedByWindowNotBacklog`:
+ 
+-`Poll` drains the whole window into an in-memory slice before emitting, because
+-client-side ordering (`OrderByReliable=false`) can't sort a stream. Consequences:
++Client-side ordering (`OrderByReliable=false`) requires `Poll` to drain the
++whole window into an in-memory slice before sorting and emitting. Consequences:
+ 
+ - **Per-poll memory scales with the window's record count, not the total
+   backlog.** Each collector caps a single poll at its `MaxWindow` (e.g. 24h), so a
+   cold-start backfill of a 30-day (or 2-year Intune audit) retention window walks
+   in `MaxWindow`-sized chunks — memory stays flat across the backfill rather than
+   growing with the backlog. The disjoint-windows test confirms window N's records
+   are released before window N+1 (no cross-poll accumulation / leak).
+ - **The bound is `MaxWindow × event-rate`.** For a very large tenant this can
+   still be large: a 24h window on a 10M-sign-ins/day stream holds ~10M records in
+   memory during that poll. The tuning knob is `MaxWindow` — large tenants should
+   set a smaller window (e.g. 1–4h) so each poll drains a proportionally smaller
+   slice.
+ 
+-### Known limitation / post-v1 follow-up
++### Ordered vs client-sorted delivery contract
+ 
+-For endpoints where server order **is** reliable (`OrderByReliable=true`), `Poll`
+-could stream-emit page-by-page instead of buffering the whole window, removing the
+-`MaxWindow × event-rate` memory bound entirely. It doesn't today — buffering is
+-unconditional. This is a documented enhancement, not a correctness bug (the bound
+-is real and tunable via `MaxWindow`); it belongs against the logpipeline engine
+-(#13) as a post-v1 optimization.
++`OrderByReliable=true` streams successful pages immediately. Decoded raw-record
++memory is bounded by a page, while durable overlap `SeenIDs` remains bounded by
++the overlap window. The checkpoint commits only after the terminal page, so a
++later fetch failure replays the already-emitted prefix on retry (bounded
++at-least-once) and never skips the un-emitted suffix. The ordered scale test
++guards page-bounded retention; the collector restart test guards prefix replay
++and terminal checkpoint persistence.
++
++`OrderByReliable=false` still buffers and client-sorts a complete window. It
++emits nothing and advances no checkpoint when pagination fails. The repeated
++next-link, page-cap, and unreliable partial-page outcome tests guard this
++all-or-nothing boundary.
+ 
+ ## Practically-confirmed envelope
+ 
+ | Property | Theoretical (feasibility study) | Practically confirmed here |
+ |---|---|---|
+ | Reporting throttle (5/10s, no Retry-After) | fits at 50k users | limiter enforces the ceiling under burst + isolates per tenant |
+ | Identity Protection (1/s) | fits | budget pinned + enforced |
+ | Watermark under out-of-order arrival + restart | flagged as the real risk | no data loss / bounded dupes across an induced mid-cycle restart |
+-| Memory on backfill | not analyzed | flat across a backfill; per-poll bound is `MaxWindow × event-rate`, tunable |
++| Memory on backfill | not analyzed | ordered raw records are page-bounded; client-sorted polls remain `MaxWindow × event-rate`; both stay flat across a backfill |
+ 
+ Not tested: a live run against a real ~50k-user / ~10M-events-day tenant (not
+ available/authorized). The component-level guarantees above are what such a run
+ would exercise; a confirmatory live pass at whatever scale is authorized can be
+ layered on later without changing these conclusions.
+diff --git a/internal/logpipeline/collector_test.go b/internal/logpipeline/collector_test.go
+index 56391f5..3c55d94 100644
+--- a/internal/logpipeline/collector_test.go
++++ b/internal/logpipeline/collector_test.go
+@@ -1,14 +1,16 @@
+ package logpipeline
+ 
+ import (
+ 	"context"
++	"errors"
++	"maps"
+ 	"net/url"
+ 	"strings"
+ 	"testing"
+ 	"time"
+ 
+ 	"github.com/rknightion/graph2otel/internal/checkpoint"
+ 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+ )
+ 
+ // TestLogCollectorPersistsAndResumesAcrossRestart drives LogCollector
+@@ -77,20 +79,174 @@ func TestLogCollectorPersistsAndResumesAcrossRestart(t *testing.T) {
+ 	}
+ 
+ 	// "a" was already recorded in cycle 1's checkpoint and must be deduped
+ 	// on cycle 2, not re-emitted.
+ 	logs := rec.LogRecords()
+ 	if len(logs) != 1 {
+ 		t.Fatalf("expected 'a' emitted exactly once across the restart, got %d: %+v", len(logs), logs)
+ 	}
+ }
+ 
++// TestLogCollectorReliableFailureRetriesOnlyEmittedPrefix exercises the real
++// Load -> Poll -> Save boundary across fresh Store instances. A failed ordered
++// walk may emit its successful prefix, but that prefix remains absent from the
++// durable checkpoint and is therefore replayed once on the successful retry.
++func TestLogCollectorReliableFailureRetriesOnlyEmittedPrefix(t *testing.T) {
++	dir := t.TempDir()
++	base := time.Date(2026, 7, 26, 10, 0, 0, 0, time.UTC)
++	cfg := EndpointConfig{
++		Path:            "/auditLogs/signIns",
++		TimeField:       "createdDateTime",
++		Flavor:          FlavorGeLe,
++		OrderByReliable: true,
++		SafetyLag:       5 * time.Minute,
++		Overlap:         30 * time.Minute,
++		Map:             mapByID,
++	}
++
++	initialStore := checkpoint.NewStore(dir)
++	initial := newCheckpoint("tenant1", cfg.Path)
++	initial.Watermark = base.Add(-10 * time.Minute)
++	initial.OverlapWindow = cfg.Overlap
++	initial.SeenIDs.Add("durable-before", base.Add(-5*time.Minute))
++	if err := initialStore.Save(initial); err != nil {
++		t.Fatalf("seed checkpoint: %v", err)
++	}
++	wantSeen := maps.Clone(initial.SeenIDs)
++
++	firstCalls := 0
++	firstFetcher := pageFetcherFunc(func(_ context.Context, _ string) ([]map[string]any, string, error) {
++		firstCalls++
++		if firstCalls == 1 {
++			return []map[string]any{
++				{"id": "a", "createdDateTime": base.Add(time.Minute).Format(time.RFC3339)},
++				{"id": "b", "createdDateTime": base.Add(2 * time.Minute).Format(time.RFC3339)},
++			}, "page-2", nil
++		}
++		return nil, "", errors.New("page two failed")
++	})
++	firstRecorder := telemetrytest.New()
++	first := NewLogCollector(
++		"sign_ins",
++		time.Minute,
++		cfg.SafetyLag,
++		"tenant1",
++		cfg,
++		firstFetcher,
++		checkpoint.NewStore(dir),
++	)
++	if _, err := first.CollectWindow(
++		context.Background(),
++		base,
++		base.Add(time.Hour),
++		firstRecorder.Emitter(),
++		nil,
++	); err == nil {
++		t.Fatal("first CollectWindow error = nil, want later-page failure")
++	}
++
++	durableAfterFailure, err := checkpoint.NewStore(dir).Load("tenant1", cfg.Path)
++	if err != nil {
++		t.Fatalf("load checkpoint after failure: %v", err)
++	}
++	if !durableAfterFailure.Watermark.Equal(initial.Watermark) ||
++		durableAfterFailure.OverlapWindow != initial.OverlapWindow ||
++		!maps.Equal(durableAfterFailure.SeenIDs, wantSeen) {
++		t.Fatalf(
++			"durable checkpoint after failure = {watermark:%v overlap:%v seen:%v}, want unchanged {%v %v %v}",
++			durableAfterFailure.Watermark,
++			durableAfterFailure.OverlapWindow,
++			durableAfterFailure.SeenIDs,
++			initial.Watermark,
++			initial.OverlapWindow,
++			wantSeen,
++		)
++	}
++	if got := emittedIDSet(firstRecorder); !sameSet(got, []string{"a", "b"}) {
++		t.Fatalf("first attempt emitted = %v, want successful prefix [a b]", got)
++	}
++
++	secondCalls := 0
++	secondFetcher := pageFetcherFunc(func(_ context.Context, _ string) ([]map[string]any, string, error) {
++		secondCalls++
++		if secondCalls == 1 {
++			return []map[string]any{
++				{"id": "a", "createdDateTime": base.Add(time.Minute).Format(time.RFC3339)},
++				{"id": "b", "createdDateTime": base.Add(2 * time.Minute).Format(time.RFC3339)},
++			}, "page-2", nil
++		}
++		return []map[string]any{{
++			"id":              "c",
++			"createdDateTime": base.Add(3 * time.Minute).Format(time.RFC3339),
++		}}, "", nil
++	})
++	secondRecorder := telemetrytest.New()
++	second := NewLogCollector(
++		"sign_ins",
++		time.Minute,
++		cfg.SafetyLag,
++		"tenant1",
++		cfg,
++		secondFetcher,
++		checkpoint.NewStore(dir),
++	)
++	if _, err := second.CollectWindow(
++		context.Background(),
++		base,
++		base.Add(time.Hour),
++		secondRecorder.Emitter(),
++		nil,
++	); err != nil {
++		t.Fatalf("second CollectWindow: %v", err)
++	}
++	if got := emittedIDSet(secondRecorder); !sameSet(got, []string{"a", "b", "c"}) {
++		t.Fatalf("retry emitted = %v, want replayed prefix plus suffix [a b c]", got)
++	}
++
++	durableAfterSuccess, err := checkpoint.NewStore(dir).Load("tenant1", cfg.Path)
++	if err != nil {
++		t.Fatalf("load checkpoint after success: %v", err)
++	}
++	for _, id := range []string{"a", "b", "c", "durable-before"} {
++		if !durableAfterSuccess.SeenIDs.Has(id) {
++			t.Fatalf("durable checkpoint after success missing %q: %v", id, durableAfterSuccess.SeenIDs)
++		}
++	}
++
++	thirdRecorder := telemetrytest.New()
++	third := NewLogCollector(
++		"sign_ins",
++		time.Minute,
++		cfg.SafetyLag,
++		"tenant1",
++		cfg,
++		onePageFetcher([]map[string]any{
++			{"id": "a", "createdDateTime": base.Add(time.Minute).Format(time.RFC3339)},
++			{"id": "b", "createdDateTime": base.Add(2 * time.Minute).Format(time.RFC3339)},
++			{"id": "c", "createdDateTime": base.Add(3 * time.Minute).Format(time.RFC3339)},
++		}),
++		checkpoint.NewStore(dir),
++	)
++	if _, err := third.CollectWindow(
++		context.Background(),
++		base,
++		base.Add(time.Hour),
++		thirdRecorder.Emitter(),
++		nil,
++	); err != nil {
++		t.Fatalf("third CollectWindow: %v", err)
++	}
++	if got := emittedIDSet(thirdRecorder); len(got) != 0 {
++		t.Fatalf("third attempt emitted = %v, want zero after durable success", got)
++	}
++}
++
+ // TestLogCollectorCheckpointKeyIsolatesSharedPath verifies that two
+ // collectors polling the SAME Graph path ("/auditLogs/signIns" — as the four
+ // sign-in event-type streams do) but declaring distinct CheckpointKeys keep
+ // independent checkpoint namespaces: a record seen by one must NOT be deduped
+ // away for the other. Without CheckpointKey they would collide on Path and
+ // silently drop each other's events.
+ func TestLogCollectorCheckpointKeyIsolatesSharedPath(t *testing.T) {
+ 	dir := t.TempDir()
+ 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+ 
+diff --git a/internal/logpipeline/graphclient_adapter_test.go b/internal/logpipeline/graphclient_adapter_test.go
+index e1019e4..82ed1c4 100644
+--- a/internal/logpipeline/graphclient_adapter_test.go
++++ b/internal/logpipeline/graphclient_adapter_test.go
+@@ -85,21 +85,25 @@ func TestGraphPageFetcherDecodesValueAndNextLink(t *testing.T) {
+ 	}
+ 	if next != "https://graph.microsoft.com/v1.0/auditLogs/signIns?$skiptoken=abc" {
+ 		t.Fatalf("nextLink = %q", next)
+ 	}
+ }
+ 
+ // TestPollRejectsForeignNextLinkWithoutSideEffects exercises the complete
+ // Poll -> graphPageFetcher -> graphclient.RawGet boundary. If raw host
+ // validation is weakened, the routing transport below delivers the foreign
+ // next-link request to foreignSrv and this test observes the leak.
+-func TestPollRejectsForeignNextLinkWithoutSideEffects(t *testing.T) {
++// TestPollRejectsForeignNextLinkAfterReliablePrefix preserves the adapter's
++// SSRF boundary under ordered streaming. The successful first page is visible,
++// while the rejected foreign suffix cannot be fetched and the caller
++// checkpoint remains unchanged so retry replays that prefix.
++func TestPollRejectsForeignNextLinkAfterReliablePrefix(t *testing.T) {
+ 	var foreignRequests atomic.Int32
+ 	foreignSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+ 		foreignRequests.Add(1)
+ 		w.Header().Set("Content-Type", "application/json")
+ 		_, _ = w.Write([]byte(`{"value":[]}`))
+ 	}))
+ 	defer foreignSrv.Close()
+ 
+ 	firstSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+ 		w.Header().Set("Content-Type", "application/json")
+@@ -171,20 +175,20 @@ func TestPollRejectsForeignNextLinkWithoutSideEffects(t *testing.T) {
+ 	highWater, err := Poll(context.Background(), cfg, cp, from, to, NewGraphPageFetcher(client), recorder.Emitter(), nil)
+ 	if err == nil {
+ 		t.Fatal("expected Poll to reject a foreign @odata.nextLink")
+ 	}
+ 	if !strings.Contains(err.Error(), "foreign.example") {
+ 		t.Errorf("Poll error = %v, want foreign hostname context", err)
+ 	}
+ 	if got := foreignRequests.Load(); got != 0 {
+ 		t.Errorf("foreign server requests = %d, want 0", got)
+ 	}
+-	if logs := recorder.LogRecords(); len(logs) != 0 {
+-		t.Errorf("emitted logs = %d, want 0", len(logs))
++	if got := emittedIDSet(recorder); len(got) != 1 || got[0] != "first-page-record" {
++		t.Errorf("emitted ids = %v, want reliable first-page prefix [first-page-record]", got)
+ 	}
+ 	if !highWater.Equal(wantCheckpoint.Watermark) {
+ 		t.Errorf("returned high water = %s, want unchanged %s", highWater, wantCheckpoint.Watermark)
+ 	}
+ 	if !reflect.DeepEqual(cp, wantCheckpoint) {
+ 		t.Errorf("checkpoint changed after rejected next link:\n got: %+v\nwant: %+v", cp, wantCheckpoint)
+ 	}
+ }
+diff --git a/internal/logpipeline/logpipeline.go b/internal/logpipeline/logpipeline.go
+index 4a17e93..c13f22a 100644
+--- a/internal/logpipeline/logpipeline.go
++++ b/internal/logpipeline/logpipeline.go
+@@ -9,20 +9,21 @@
+ // the watermark. An M3/M5 collector becomes a thin EndpointConfig plus a
+ // Map function; it does not re-implement pagination, dedupe, or watermark
+ // math.
+ package logpipeline
+ 
+ import (
+ 	"context"
+ 	"encoding/json"
+ 	"errors"
+ 	"fmt"
++	"maps"
+ 	"net/url"
+ 	"sort"
+ 	"strconv"
+ 	"time"
+ 
+ 	"github.com/rknightion/graph2otel/internal/checkpoint"
+ 	"github.com/rknightion/graph2otel/internal/recordoutcome"
+ 	"github.com/rknightion/graph2otel/internal/semconv"
+ 	"github.com/rknightion/graph2otel/internal/telemetry"
+ 	"github.com/rknightion/graph2otel/internal/wirecheck"
+@@ -40,22 +41,23 @@ const metricSelfExcluded = "graph2otel.logpipeline.self_excluded"
+ const (
+ 	// DefaultSafetyLag trails the poll window's upper bound so the watermark
+ 	// never advances into a range where a record could still be landing.
+ 	DefaultSafetyLag = 15 * time.Minute
+ 	// DefaultOverlap is how far behind the watermark a restart re-queries,
+ 	// to catch events that were still arriving out of order at last poll.
+ 	DefaultOverlap = 2 * time.Hour
+ 	// DefaultPageSize is the $top page size requested per Graph page.
+ 	DefaultPageSize = 1000
+ 	// maxPages bounds an opaque next-link walk. Reaching it means the window
+-	// was not fully drained, so Poll fails without emitting or advancing its
+-	// checkpoint rather than treating a partial read as success.
++	// was not fully drained, so Poll fails without advancing its checkpoint.
++	// Reliable ordered pages already emitted remain visible and retryable;
++	// client-sorted endpoints retain their zero-partial-emission boundary.
+ 	maxPages = 1000
+ )
+ 
+ // FilterFlavor selects the pair of OData comparison operators Poll builds
+ // for an endpoint's time-window $filter.
+ type FilterFlavor int
+ 
+ const (
+ 	// FlavorGeLe builds inclusive `ge`/`le` bounds. Use for endpoints where
+ 	// $orderby asc on the time field is reliable (signIns createdDateTime,
+@@ -198,216 +200,261 @@ func (cfg EndpointConfig) checkpointKey() string {
+ // the GET + JSON decode of the "{"value": [...], "@odata.nextLink": "..."}"
+ // shape so Poll is unit-testable against a fake or an httptest server
+ // without a live Graph client. See graphclient_adapter.go for the real
+ // adapter over *graphclient.Client.
+ type PageFetcher interface {
+ 	// FetchPage GETs pageURL and returns its records plus the opaque
+ 	// @odata.nextLink to follow next (empty when this was the last page).
+ 	FetchPage(ctx context.Context, pageURL string) (records []map[string]any, nextLink string, err error)
+ }
+ 
++func cloneCheckpoint(cp *checkpoint.Checkpoint) checkpoint.Checkpoint {
++	next := *cp
++	next.SeenIDs = maps.Clone(cp.SeenIDs)
++	return next
++}
++
+ // Poll drains every record in [from, to] for cfg from fetcher, deduping
+ // against cp.SeenIDs, emitting each newly-seen record as an OTLP log through
+-// e, and returning the new high-water mark. It mutates cp in place
+-// (Watermark, OverlapWindow, SeenIDs via EvictStale) but does NOT persist
+-// it — the caller owns persistence (checkpoint.Store.Save), so Poll stays
+-// testable without a filesystem. LogCollector.CollectWindow (collector.go)
+-// is the convenience that Loads, Polls, and Saves for a WindowCollector.
++// e, and returning the new high-water mark. It commits Watermark,
++// OverlapWindow, and SeenIDs to cp only after the terminal page succeeds, and
++// does NOT persist them — the caller owns persistence (checkpoint.Store.Save),
++// so Poll stays testable without a filesystem. Reliable ordered pages stream
++// before that commit and may therefore replay after a later-page failure.
++// LogCollector.CollectWindow (collector.go) is the convenience that Loads,
++// Polls, and Saves for a WindowCollector.
+ func Poll(
+ 	ctx context.Context,
+ 	cfg EndpointConfig,
+ 	cp *checkpoint.Checkpoint,
+ 	from, to time.Time,
+ 	fetcher PageFetcher,
+ 	e telemetry.Emitter,
+ 	outcomes *recordoutcome.Recorder,
+ ) (highWater time.Time, err error) {
+ 	cfg = cfg.withDefaults()
++	working := cloneCheckpoint(cp)
+ 
+ 	// Name the transport once per cycle rather than per record: every record
+ 	// drained below is a direct Graph poll by construction (#141).
+ 	e = telemetry.WithTransport(e, telemetry.TransportGraph)
+ 
+ 	type drainedRecord struct {
+ 		id string
+ 		ev telemetry.Event
+ 		t  time.Time
+ 	}
+ 
+ 	var rawRecords []map[string]any
+ 	var all []drainedRecord
+ 	selfExcluded := 0
+ 	undated := 0
++	newest := working.Watermark
++	sawAny := false
+ 	var fetched uint64
+-	pageURL := buildFirstURL(cfg, from, to)
+-	seenURLs := make(map[string]struct{})
+-	pages := 0
+-	for pageURL != "" {
+-		if _, seen := seenURLs[pageURL]; seen {
+-			failFetchedRecords(outcomes, fetched, recordoutcome.CauseSourceError)
+-			return cp.Watermark, fmt.Errorf("logpipeline: %s: repeated pagination URL %q", cfg.Path, pageURL)
++
++	emitDrained := func(d drainedRecord) {
++		if d.id == "" {
++			// A record with no dedupe id cannot be deduplicated (#262). Emit it —
++			// undedupeable is degraded, but dropping a log record is worse — and
++			// never store "" in SeenIDs, which would silently dedupe away every
++			// later empty-id record in this window. Surface the condition on the
++			// watchdog rather than recover from it silently. It still counts as a
++			// seen record for watermark advancement.
++			wirecheck.Shared(cfg.CollectorName).MissingField(e, semconv.AttrId)
++			e.LogEvent(d.ev)
++			outcomes.Add(recordoutcome.OutcomeEmitted, 1)
++			if !sawAny || d.t.After(newest) {
++				newest = d.t
++			}
++			sawAny = true
++			return
+ 		}
+-		seenURLs[pageURL] = struct{}{}
+-		if pages >= maxPages {
+-			failFetchedRecords(outcomes, fetched, recordoutcome.CauseSourceError)
+-			return cp.Watermark, fmt.Errorf("logpipeline: %s: pagination exceeded %d pages at %q", cfg.Path, maxPages, pageURL)
++		if working.SeenIDs.Has(d.id) {
++			outcomes.Add(recordoutcome.OutcomeDeduped, 1)
++			return
+ 		}
+-		pages++
+-
+-		records, next, ferr := fetcher.FetchPage(ctx, pageURL)
+-		n := uint64(len(records))
+-		fetched += n
+-		outcomes.Add(recordoutcome.OutcomeFetched, n)
+-		if ferr != nil {
+-			failFetchedRecords(outcomes, fetched, fetchFailureCause(ferr))
+-			return cp.Watermark, fmt.Errorf("logpipeline: %s: fetch page: %w", cfg.Path, ferr)
++		e.LogEvent(d.ev)
++		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
++		working.SeenIDs.Add(d.id, d.t)
++		if !sawAny || d.t.After(newest) {
++			newest = d.t
+ 		}
+-		rawRecords = append(rawRecords, records...)
+-		pageURL = next
++		sawAny = true
+ 	}
+ 
+-	// Map only after the complete page walk succeeds. The engine deliberately
+-	// buffers before emission/checkpoint mutation; deferring mapping to the same
+-	// commit point means a later-page failure classifies every fetched row as
+-	// errored instead of claiming mapped work that is intentionally retried.
+-	for _, rec := range rawRecords {
++	processRecord := func(rec map[string]any, stream bool) {
+ 		if cfg.ExcludeSelf && cfg.SelfAppID != nil && cfg.SelfClientID != "" && cfg.SelfAppID(rec) == cfg.SelfClientID {
+ 			selfExcluded++
+ 			outcomes.Add(recordoutcome.OutcomeFiltered, 1)
+-			continue
++			return
+ 		}
+ 		id, ev, mapped := mapRecord(cfg.Map, rec)
+ 		if !mapped {
+ 			outcomes.Add(recordoutcome.OutcomeErrored, 1)
+ 			outcomes.Cause(recordoutcome.CauseMappingError)
+-			continue
++			return
+ 		}
+ 		t, ok := recordTime(rec, cfg.TimeField)
+ 		if !ok {
+ 			t = ev.Timestamp
+ 		}
+ 		if ev.Timestamp.IsZero() {
+ 			ev.Timestamp = t
+ 		}
+ 		if t.IsZero() {
+ 			// A zero event time would become arrival time at the OTEL boundary,
+ 			// silently inventing when this event happened (#275). The raw wire
+ 			// field and mapper fallback have both failed, so drop before it can
+ 			// affect emission, dedupe, or the watermark.
+ 			undated++
+ 			outcomes.Add(recordoutcome.OutcomeDropped, 1)
+ 			outcomes.Cause(recordoutcome.CauseMissingEventTime)
+-			continue
++			return
+ 		}
+ 		// With no server-side $filter, the endpoint returns its whole
+ 		// collection, so bound the window client-side: drop records outside
+ 		// [from, to]. This keeps newest <= to (watermark invariant) and
+ 		// stops events inside the SafetyLag tail from emitting early.
+ 		if cfg.NoServerFilter && (t.Before(from) || t.After(to)) {
+ 			outcomes.Add(recordoutcome.OutcomeFiltered, 1)
+-			continue
++			return
+ 		}
+ 		outcomes.Add(recordoutcome.OutcomeMapped, 1)
+-		all = append(all, drainedRecord{id: id, ev: ev, t: t})
++		d := drainedRecord{id: id, ev: ev, t: t}
++		if stream {
++			emitDrained(d)
++			return
++		}
++		all = append(all, d)
++	}
++
++	pageURL := buildFirstURL(cfg, from, to)
++	seenURLs := make(map[string]struct{})
++	pages := 0
++	for pageURL != "" {
++		if _, seen := seenURLs[pageURL]; seen {
++			if cfg.OrderByReliable {
++				outcomes.Cause(recordoutcome.CauseSourceError)
++			} else {
++				failFetchedRecords(outcomes, fetched, recordoutcome.CauseSourceError)
++			}
++			return cp.Watermark, fmt.Errorf("logpipeline: %s: repeated pagination URL %q", cfg.Path, pageURL)
++		}
++		seenURLs[pageURL] = struct{}{}
++		if pages >= maxPages {
++			if cfg.OrderByReliable {
++				outcomes.Cause(recordoutcome.CauseSourceError)
++			} else {
++				failFetchedRecords(outcomes, fetched, recordoutcome.CauseSourceError)
++			}
++			return cp.Watermark, fmt.Errorf("logpipeline: %s: pagination exceeded %d pages at %q", cfg.Path, maxPages, pageURL)
++		}
++		pages++
++
++		records, next, ferr := fetcher.FetchPage(ctx, pageURL)
++		n := uint64(len(records))
++		fetched += n
++		outcomes.Add(recordoutcome.OutcomeFetched, n)
++		if ferr != nil {
++			cause := fetchFailureCause(ferr)
++			if cfg.OrderByReliable {
++				outcomes.Add(recordoutcome.OutcomeErrored, n)
++				outcomes.Cause(cause)
++			} else {
++				failFetchedRecords(outcomes, fetched, cause)
++			}
++			return cp.Watermark, fmt.Errorf("logpipeline: %s: fetch page: %w", cfg.Path, ferr)
++		}
++		if cfg.OrderByReliable {
++			for _, rec := range records {
++				processRecord(rec, true)
++			}
++		} else {
++			rawRecords = append(rawRecords, records...)
++		}
++		pageURL = next
+ 	}
+ 
+-	// $orderby is not honored (or not trusted) server-side for this
+-	// endpoint: sort the fully-drained window client-side before emitting,
+-	// so "newest" below reflects real event time, not arrival order.
+ 	if !cfg.OrderByReliable {
++		// Map only after the complete page walk succeeds. Client-sorted
++		// endpoints deliberately buffer before emission/checkpoint mutation;
++		// deferring mapping to the same commit point means a later-page failure
++		// classifies every fetched row as errored instead of claiming mapped
++		// work that is intentionally retried.
++		for _, rec := range rawRecords {
++			processRecord(rec, false)
++		}
++
++		// $orderby is not honored (or not trusted) server-side for this
++		// endpoint: sort the fully-drained window client-side before emitting,
++		// so "newest" below reflects real event time, not arrival order.
+ 		sort.Slice(all, func(i, j int) bool { return all[i].t.Before(all[j].t) })
++		for _, d := range all {
++			emitDrained(d)
++		}
+ 	}
+ 	if selfExcluded > 0 {
+ 		e.Counter(metricSelfExcluded, "{record}",
+ 			"Graph-polled records dropped by exclude_self because their appId matched this tenant's own poller client_id (#176).",
+ 			float64(selfExcluded), telemetry.Attrs{semconv.AttrCollector: cfg.CollectorName})
+ 	}
+ 	for range undated {
+ 		wirecheck.Shared(cfg.CollectorName).MissingField(e, "event_time")
+ 	}
+ 
+-	newest := cp.Watermark
+-	sawAny := false
+-	for _, d := range all {
+-		if d.id == "" {
+-			// A record with no dedupe id cannot be deduplicated (#262). Emit it —
+-			// undedupeable is degraded, but dropping a log record is worse — and
+-			// never store "" in SeenIDs, which would silently dedupe away every
+-			// later empty-id record in this window. Surface the condition on the
+-			// watchdog rather than recover from it silently. It still counts as a
+-			// seen record for watermark advancement.
+-			wirecheck.Shared(cfg.CollectorName).MissingField(e, semconv.AttrId)
+-			e.LogEvent(d.ev)
+-			outcomes.Add(recordoutcome.OutcomeEmitted, 1)
+-			if !sawAny || d.t.After(newest) {
+-				newest = d.t
+-			}
+-			sawAny = true
+-			continue
+-		}
+-		if cp.SeenIDs.Has(d.id) {
+-			outcomes.Add(recordoutcome.OutcomeDeduped, 1)
+-			continue
+-		}
+-		e.LogEvent(d.ev)
+-		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
+-		cp.SeenIDs.Add(d.id, d.t)
+-		if !sawAny || d.t.After(newest) {
+-			newest = d.t
+-		}
+-		sawAny = true
+-	}
+-
+ 	// The watermark always advances at least to `to - SafetyLag` once this
+ 	// window has been fully drained, even when it drained zero NEW records:
+ 	// the window up to `to` has been confirmed empty (or fully deduped), so
+ 	// there is no reason to re-scan it forever. When records were seen,
+ 	// newest <= to by construction (every record matched the [from, to]
+ 	// $filter bound), so newest - SafetyLag can never exceed to -
+ 	// SafetyLag: the "never advance past now - lag" invariant holds without
+ 	// an extra clamp.
+ 	candidate := to
+ 	if sawAny {
+ 		candidate = newest
+ 	}
+ 	hw := candidate.Add(-cfg.SafetyLag)
+-	highWater = cp.Watermark
++	highWater = working.Watermark
+ 	if hw.After(highWater) {
+ 		highWater = hw
+ 	}
+ 
+-	cp.Watermark = highWater
+-	cp.OverlapWindow = cfg.Overlap
+-	cp.EvictStale()
++	working.Watermark = highWater
++	working.OverlapWindow = cfg.Overlap
++	working.EvictStale()
++	*cp = working
+ 
+ 	return highWater, nil
+ }
+ 
+ // mapRecord contains a mapper panic to the source record that caused it. A
+ // malformed row may be unusable while its siblings are valid; converting that
+ // one panic to a bounded mapping_error preserves partial progress without
+ // leaking the panic text or record contents into telemetry.
+ func mapRecord(mapper func(map[string]any) (string, telemetry.Event), record map[string]any) (id string, ev telemetry.Event, ok bool) {
+ 	defer func() {
+ 		if recover() != nil {
+ 			id = ""
+ 			ev = telemetry.Event{}
+ 			ok = false
+ 		}
+ 	}()
+ 	id, ev = mapper(record)
+ 	return id, ev, true
+ }
+ 
+-// failFetchedRecords closes the reconciliation equation when a page walk
+-// aborts before its buffered records can be committed. Every row returned in
+-// this attempt remains retryable and is therefore errored, never mapped.
++// failFetchedRecords closes the reconciliation equation when a client-sorted
++// page walk aborts before its buffered records can be committed. Every row
++// returned in this attempt remains retryable and is therefore errored, never
++// mapped.
+ func failFetchedRecords(outcomes *recordoutcome.Recorder, fetched uint64, cause recordoutcome.Cause) {
+ 	outcomes.Add(recordoutcome.OutcomeErrored, fetched)
+ 	outcomes.Cause(cause)
+ }
+ 
+ // fetchFailureCause reduces fetch/decode errors to the frozen bounded causes.
+ // Raw error strings remain in the returned Poll error for operator logs only;
+ // they never become a metric dimension.
+ func fetchFailureCause(err error) recordoutcome.Cause {
+ 	var syntaxErr *json.SyntaxError
+diff --git a/internal/logpipeline/logpipeline_test.go b/internal/logpipeline/logpipeline_test.go
+index 901e731..b5ace74 100644
+--- a/internal/logpipeline/logpipeline_test.go
++++ b/internal/logpipeline/logpipeline_test.go
+@@ -32,20 +32,70 @@ func mapByID(record map[string]any) (string, telemetry.Event) {
+ 		Name:  "test.event",
+ 		Body:  id,
+ 		Attrs: telemetry.Attrs{"id": id},
+ 	}
+ }
+ 
+ func newCheckpoint(tenantID, endpoint string) *checkpoint.Checkpoint {
+ 	return &checkpoint.Checkpoint{TenantID: tenantID, Endpoint: endpoint, SeenIDs: checkpoint.NewSeenIDs()}
+ }
+ 
++// TestPollStreamsReliablePageBeforeFetchingNext catches a reliable ordered
++// walk regressing to whole-window buffering. Once page one succeeds, its
++// record must reach the emitter before Poll asks the source for page two.
++func TestPollStreamsReliablePageBeforeFetchingNext(t *testing.T) {
++	rec := telemetrytest.New()
++	from := time.Date(2026, 7, 26, 10, 0, 0, 0, time.UTC)
++	cfg := EndpointConfig{
++		Path:            "/auditLogs/signIns",
++		CollectorName:   "entra.test.streaming",
++		TimeField:       "createdDateTime",
++		Flavor:          FlavorGeLe,
++		OrderByReliable: true,
++		Map:             mapByID,
++	}
++
++	calls := 0
++	fetcher := pageFetcherFunc(func(_ context.Context, _ string) ([]map[string]any, string, error) {
++		calls++
++		if calls == 1 {
++			return []map[string]any{{
++				"id":              "a",
++				"createdDateTime": from.Add(time.Minute).Format(time.RFC3339),
++			}}, "page-2", nil
++		}
++		if got := emittedIDSet(rec); !sameSet(got, []string{"a"}) {
++			t.Fatalf("before second fetch emitted = %v, want [a]", got)
++		}
++		return []map[string]any{{
++			"id":              "b",
++			"createdDateTime": from.Add(2 * time.Minute).Format(time.RFC3339),
++		}}, "", nil
++	})
++
++	if _, err := Poll(
++		context.Background(),
++		cfg,
++		newCheckpoint("t1", cfg.Path),
++		from,
++		from.Add(time.Hour),
++		fetcher,
++		rec.Emitter(),
++		nil,
++	); err != nil {
++		t.Fatalf("Poll: %v", err)
++	}
++	if got := emittedIDSet(rec); !sameSet(got, []string{"a", "b"}) {
++		t.Fatalf("emitted = %v, want [a b]", got)
++	}
++}
++
+ // TestPollDropsUndatedRecords keeps #275's boundary at the ingest engine: an
+ // event with neither a parseable wire time nor a mapper fallback is not allowed
+ // to reach the emitter, where a zero timestamp would otherwise become arrival
+ // time. A valid wire time and an intentional mapper fallback remain valid, and
+ // dropping the bad row must not stall checkpoint advancement.
+ func TestPollDropsUndatedRecords(t *testing.T) {
+ 	rec := telemetrytest.New()
+ 	from := time.Date(2026, 7, 25, 10, 0, 0, 0, time.UTC)
+ 	to := from.Add(time.Hour)
+ 	fallback := from.Add(20 * time.Minute)
+@@ -186,30 +236,30 @@ func TestPollDrainsAllPagesViaNextLink(t *testing.T) {
+ 	if calls != 2 {
+ 		t.Fatalf("expected 2 page fetches (initial + one nextLink follow), got %d", calls)
+ 	}
+ 	logs := rec.LogRecords()
+ 	if len(logs) != 3 {
+ 		t.Fatalf("expected 3 emitted logs across both pages, got %d: %+v", len(logs), logs)
+ 	}
+ }
+ 
+ // TestPollRejectsRepeatedNextLinkBeforeEmission makes a self-referential
+-// nextLink fail when Poll observes the initial URL for a second time. The
+-// first page must remain uncommitted: no log event may be emitted and the
+-// checkpoint must be left exactly as it was for the retry.
++// nextLink fail when a client-sorted Poll observes the initial URL for a second
++// time. The first page must remain uncommitted: no log event may be emitted and
++// the checkpoint must be left exactly as it was for the retry.
+ func TestPollRejectsRepeatedNextLinkBeforeEmission(t *testing.T) {
+ 	rec := telemetrytest.New()
+ 	cfg := EndpointConfig{
+ 		Path:            "/auditLogs/signIns",
+ 		TimeField:       "createdDateTime",
+ 		Flavor:          FlavorGeLe,
+-		OrderByReliable: true,
++		OrderByReliable: false,
+ 		ExcludeSelf:     true,
+ 		SelfClientID:    "graph2otel-poller",
+ 		SelfAppID: func(record map[string]any) string {
+ 			appID, _ := record["appId"].(string)
+ 			return appID
+ 		},
+ 		CollectorName: "entra.test",
+ 		Map:           mapByID,
+ 	}
+ 	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+@@ -245,31 +295,31 @@ func TestPollRejectsRepeatedNextLinkBeforeEmission(t *testing.T) {
+ 		t.Fatalf("emitted %d self-exclusion metric points, want 0 when pagination does not drain", len(points))
+ 	}
+ 	if !cp.Watermark.Equal(from.Add(-time.Hour)) {
+ 		t.Errorf("checkpoint watermark = %v, want unchanged %v", cp.Watermark, from.Add(-time.Hour))
+ 	}
+ 	if len(cp.SeenIDs) != 1 || !cp.SeenIDs.Has("already-seen") {
+ 		t.Errorf("checkpoint SeenIDs = %v, want unchanged existing id only", cp.SeenIDs)
+ 	}
+ }
+ 
+-// TestPollRejectsPaginationPastOneThousandPagesBeforeEmission makes the
+-// 1001st distinct page URL fail before FetchPage. A cap is a failed drain, not
+-// a partial success: buffered records must not emit and the checkpoint must
+-// remain retryable.
++// TestPollRejectsPaginationPastOneThousandPagesBeforeEmission makes the 1001st
++// distinct page URL fail before FetchPage. For a client-sorted endpoint a cap
++// is a failed drain, not a partial success: buffered records must not emit and
++// the checkpoint must remain retryable.
+ func TestPollRejectsPaginationPastOneThousandPagesBeforeEmission(t *testing.T) {
+ 	rec := telemetrytest.New()
+ 	cfg := EndpointConfig{
+ 		Path:            "/auditLogs/signIns",
+ 		TimeField:       "createdDateTime",
+ 		Flavor:          FlavorGeLe,
+-		OrderByReliable: true,
++		OrderByReliable: false,
+ 		ExcludeSelf:     true,
+ 		SelfClientID:    "graph2otel-poller",
+ 		SelfAppID: func(record map[string]any) string {
+ 			appID, _ := record["appId"].(string)
+ 			return appID
+ 		},
+ 		CollectorName: "entra.test",
+ 		Map:           mapByID,
+ 	}
+ 	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+diff --git a/internal/logpipeline/outcomes_test.go b/internal/logpipeline/outcomes_test.go
+index 2b3290b..bb077fe 100644
+--- a/internal/logpipeline/outcomes_test.go
++++ b/internal/logpipeline/outcomes_test.go
+@@ -1,17 +1,18 @@
+ package logpipeline
+ 
+ import (
+ 	"context"
+ 	"encoding/json"
+ 	"errors"
+ 	"fmt"
++	"maps"
+ 	"testing"
+ 	"time"
+ 
+ 	"github.com/rknightion/graph2otel/internal/checkpoint"
+ 	"github.com/rknightion/graph2otel/internal/recordoutcome"
+ 	"github.com/rknightion/graph2otel/internal/telemetry"
+ 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+ )
+ 
+ // TestPollRecordOutcomesEmpty distinguishes a genuinely empty source response
+@@ -128,77 +129,167 @@ func TestPollRecordOutcomesMappingPanicIsPartialSuccess(t *testing.T) {
+ 		emitted: 2,
+ 		errored: 1,
+ 	})
+ 	assertOutcomeCauses(t, outcomes, recordoutcome.CauseMappingError)
+ 	assertOutcomeSummary(t, outcomes, nil, recordoutcome.ResultPartial, recordoutcome.CauseMappingError)
+ 	if got := len(recorder.LogRecords()); got != 2 {
+ 		t.Fatalf("emitted logs = %d, want 2 usable siblings", got)
+ 	}
+ }
+ 
+-// TestPollRecordOutcomesPartialPageFailureAccountsBufferedRows verifies that a
+-// page walk which fails after returning data remains retry-safe. No buffered
+-// record is emitted or checkpointed; every fetched record is classified as
+-// errored so reconciliation remains exact rather than claiming mapped work.
+-func TestPollRecordOutcomesPartialPageFailureAccountsBufferedRows(t *testing.T) {
++// TestPollRecordOutcomesReliablePartialPageFailureKeepsEmittedPrefix catches
++// an ordered walk retroactively reclassifying already-emitted prefix records
++// as errored. Only rows returned with the failed page remain unprocessed.
++func TestPollRecordOutcomesReliablePartialPageFailureKeepsEmittedPrefix(t *testing.T) {
+ 	outcomes := recordoutcome.NewRecorder()
+ 	recorder := telemetrytest.New()
+ 	cfg, cp, from, to := outcomeTestSetup()
+ 	cp.Watermark = from.Add(-time.Hour)
++	cp.OverlapWindow = 45 * time.Minute
++	cp.SeenIDs.Add("durable-before", from.Add(-30*time.Minute))
++	wantSeen := maps.Clone(cp.SeenIDs)
+ 
+ 	calls := 0
+ 	fetcher := pageFetcherFunc(func(_ context.Context, _ string) ([]map[string]any, string, error) {
+ 		calls++
+ 		if calls == 1 {
+ 			return []map[string]any{
+ 				{"id": "a", "createdDateTime": from.Add(5 * time.Minute).Format(time.RFC3339)},
+ 				{"id": "b", "createdDateTime": from.Add(10 * time.Minute).Format(time.RFC3339)},
+ 			}, "https://graph.microsoft.com/v1.0/auditLogs/signIns?$skiptoken=2", nil
+ 		}
+-		return nil, "", errors.New("upstream page failed")
++		return []map[string]any{{
++			"id":              "c",
++			"createdDateTime": from.Add(15 * time.Minute).Format(time.RFC3339),
++		}}, "", errors.New("upstream page failed")
+ 	})
+ 
+ 	_, pollErr := Poll(
+ 		context.Background(),
+ 		cfg,
+ 		cp,
+ 		from,
+ 		to,
+ 		fetcher,
+ 		recorder.Emitter(),
+ 		outcomes,
+ 	)
+ 	if pollErr == nil {
+ 		t.Fatal("Poll error = nil, want second-page failure")
+ 	}
+ 
+ 	assertOutcomeCounts(t, outcomes, outcomeCounts{
+-		fetched: 2,
+-		errored: 2,
++		fetched: 3,
++		mapped:  2,
++		emitted: 2,
++		errored: 1,
++	})
++	assertOutcomeCauses(t, outcomes, recordoutcome.CauseSourceError)
++	if err := outcomes.Snapshot().Validate(); err != nil {
++		t.Fatalf("outcome snapshot validation: %v", err)
++	}
++	assertOutcomeSummary(t, outcomes, pollErr, recordoutcome.ResultPartial, recordoutcome.CauseSourceError)
++	if got := emittedIDSet(recorder); !sameSet(got, []string{"a", "b"}) {
++		t.Fatalf("emitted logs = %v, want successful prefix [a b]", got)
++	}
++	if !cp.Watermark.Equal(from.Add(-time.Hour)) ||
++		cp.OverlapWindow != 45*time.Minute ||
++		!maps.Equal(cp.SeenIDs, wantSeen) {
++		t.Fatalf(
++			"caller checkpoint = {watermark:%v overlap:%v seen:%v}, want unchanged {%v %v %v}",
++			cp.Watermark,
++			cp.OverlapWindow,
++			cp.SeenIDs,
++			from.Add(-time.Hour),
++			45*time.Minute,
++			wantSeen,
++		)
++	}
++}
++
++// TestPollRecordOutcomesUnreliablePartialPageFailureEmitsNothing preserves the
++// all-or-nothing boundary for client-sorted endpoints. Every fetched record is
++// errored because no row can be mapped or emitted before the full walk drains.
++func TestPollRecordOutcomesUnreliablePartialPageFailureEmitsNothing(t *testing.T) {
++	outcomes := recordoutcome.NewRecorder()
++	recorder := telemetrytest.New()
++	cfg, cp, from, to := outcomeTestSetup()
++	cfg.OrderByReliable = false
++	cp.Watermark = from.Add(-time.Hour)
++	cp.OverlapWindow = 45 * time.Minute
++	cp.SeenIDs.Add("durable-before", from.Add(-30*time.Minute))
++	wantSeen := maps.Clone(cp.SeenIDs)
++
++	calls := 0
++	fetcher := pageFetcherFunc(func(_ context.Context, _ string) ([]map[string]any, string, error) {
++		calls++
++		if calls == 1 {
++			return []map[string]any{
++				{"id": "a", "createdDateTime": from.Add(5 * time.Minute).Format(time.RFC3339)},
++				{"id": "b", "createdDateTime": from.Add(10 * time.Minute).Format(time.RFC3339)},
++			}, "https://graph.microsoft.com/v1.0/auditLogs/signIns?$skiptoken=2", nil
++		}
++		return []map[string]any{{
++			"id":              "c",
++			"createdDateTime": from.Add(15 * time.Minute).Format(time.RFC3339),
++		}}, "", errors.New("upstream page failed")
++	})
++
++	_, pollErr := Poll(
++		context.Background(),
++		cfg,
++		cp,
++		from,
++		to,
++		fetcher,
++		recorder.Emitter(),
++		outcomes,
++	)
++	if pollErr == nil {
++		t.Fatal("Poll error = nil, want second-page failure")
++	}
++
++	assertOutcomeCounts(t, outcomes, outcomeCounts{
++		fetched: 3,
++		errored: 3,
+ 	})
+ 	assertOutcomeCauses(t, outcomes, recordoutcome.CauseSourceError)
++	if err := outcomes.Snapshot().Validate(); err != nil {
++		t.Fatalf("outcome snapshot validation: %v", err)
++	}
+ 	assertOutcomeSummary(t, outcomes, pollErr, recordoutcome.ResultFailure, recordoutcome.CauseSourceError)
+-	if got := len(recorder.LogRecords()); got != 0 {
+-		t.Fatalf("emitted logs = %d, want 0 from an incomplete buffered walk", got)
++	if got := emittedIDSet(recorder); len(got) != 0 {
++		t.Fatalf("emitted logs = %v, want none from incomplete client-sorted walk", got)
+ 	}
+-	if !cp.Watermark.Equal(from.Add(-time.Hour)) {
+-		t.Fatalf("checkpoint watermark = %v, want unchanged %v", cp.Watermark, from.Add(-time.Hour))
++	if !cp.Watermark.Equal(from.Add(-time.Hour)) ||
++		cp.OverlapWindow != 45*time.Minute ||
++		!maps.Equal(cp.SeenIDs, wantSeen) {
++		t.Fatalf(
++			"caller checkpoint = {watermark:%v overlap:%v seen:%v}, want unchanged {%v %v %v}",
++			cp.Watermark,
++			cp.OverlapWindow,
++			cp.SeenIDs,
++			from.Add(-time.Hour),
++			45*time.Minute,
++			wantSeen,
++		)
+ 	}
+ }
+ 
+ // TestPollRecordOutcomesDecodeFailureUsesBoundedCause verifies decoder details
+ // stay out of metric labels while the bounded decode_error cause remains
+-// observable. Rows fetched before the malformed page are retryable, not
+-// incorrectly reported as mapped.
++// observable. On a client-sorted walk, rows fetched before the malformed page
++// are retryable, not incorrectly reported as mapped.
+ func TestPollRecordOutcomesDecodeFailureUsesBoundedCause(t *testing.T) {
+ 	outcomes := recordoutcome.NewRecorder()
+ 	cfg, cp, from, to := outcomeTestSetup()
++	cfg.OrderByReliable = false
+ 
+ 	calls := 0
+ 	fetcher := pageFetcherFunc(func(_ context.Context, _ string) ([]map[string]any, string, error) {
+ 		calls++
+ 		if calls == 1 {
+ 			return []map[string]any{{
+ 				"id":              "buffered",
+ 				"createdDateTime": from.Add(5 * time.Minute).Format(time.RFC3339),
+ 			}}, "https://graph.microsoft.com/v1.0/auditLogs/signIns?$skiptoken=2", nil
+ 		}
+diff --git a/internal/logpipeline/scale_test.go b/internal/logpipeline/scale_test.go
+index 6fa1321..79747ec 100644
+--- a/internal/logpipeline/scale_test.go
++++ b/internal/logpipeline/scale_test.go
+@@ -1,16 +1,17 @@
+ package logpipeline
+ 
+ import (
+ 	"context"
+ 	"fmt"
+ 	"runtime"
++	"strings"
+ 	"testing"
+ 	"time"
+ 
+ 	"github.com/rknightion/graph2otel/internal/checkpoint"
+ 	"github.com/rknightion/graph2otel/internal/telemetry"
+ 	"github.com/rknightion/graph2otel/internal/telemetrytest"
+ )
+ 
+ // TestScaleWatermarkDurableAcrossRestart is the #32 soak-validation guard for
+ // the one failure mode paper analysis can't catch: a process restart mid-stream
+@@ -87,20 +88,110 @@ func TestScaleWatermarkDurableAcrossRestart(t *testing.T) {
+ 			t.Errorf("already-seen event %q re-emitted after restart (dedup failed); poll 2 emitted %v", seen, got2)
+ 		}
+ 	}
+ 	// New event f still flows.
+ 	if !contains(got2, "f") {
+ 		t.Errorf("new event f not emitted; poll 2 emitted %v", got2)
+ 	}
+ 	_ = hw1
+ }
+ 
++// TestScaleOrderedPollDoesNotRetainPriorPagePayloads catches reliable ordered
++// polling regressing to whole-window raw-record retention. The sentinel fetch
++// measures live heap only after 64 unique 1 MiB pages have been processed.
++func TestScaleOrderedPollDoesNotRetainPriorPagePayloads(t *testing.T) {
++	base := time.Date(2026, 7, 26, 10, 0, 0, 0, time.UTC)
++	cfg := EndpointConfig{
++		Path:            "/auditLogs/signIns",
++		TimeField:       "createdDateTime",
++		Flavor:          FlavorGeLe,
++		OrderByReliable: true,
++		Map:             mapByID,
++	}
++
++	runtime.GC()
++	var before runtime.MemStats
++	runtime.ReadMemStats(&before)
++
++	const (
++		pageCount   = 64
++		payloadSize = 1 << 20
++		retainLimit = 16 << 20
++	)
++	sentinelRan := false
++	var retained int64
++	fetcher := orderedPayloadPageFetcher(base, pageCount, payloadSize, func() {
++		sentinelRan = true
++		runtime.GC()
++		var atSentinel runtime.MemStats
++		runtime.ReadMemStats(&atSentinel)
++		retained = int64(atSentinel.HeapAlloc) - int64(before.HeapAlloc)
++	})
++
++	if _, err := Poll(
++		context.Background(),
++		cfg,
++		newCheckpoint("t1", cfg.Path),
++		base,
++		base.Add(time.Hour),
++		fetcher,
++		discardEmitter{},
++		nil,
++	); err != nil {
++		t.Fatalf("Poll: %v", err)
++	}
++	if !sentinelRan {
++		t.Fatal("sentinel fetch did not run")
++	}
++	if retained >= retainLimit {
++		t.Fatalf("retained heap at sentinel = %d B, want less than %d B (prior page payloads must be released)", retained, retainLimit)
++	}
++}
++
++// BenchmarkPollOrderedPageMemory characterizes the reliable ordered path:
++// allocations still scale with bytes decoded, but live raw-record retention is
++// page-bounded because each page is processed before the next fetch.
++func BenchmarkPollOrderedPageMemory(b *testing.B) {
++	base := time.Date(2026, 7, 26, 10, 0, 0, 0, time.UTC)
++	cfg := EndpointConfig{
++		Path:            "/auditLogs/signIns",
++		TimeField:       "createdDateTime",
++		Flavor:          FlavorGeLe,
++		OrderByReliable: true,
++		Map:             mapByID,
++	}
++	const (
++		pageCount   = 64
++		payloadSize = 1 << 20
++	)
++
++	b.ReportAllocs()
++	b.SetBytes(pageCount * payloadSize)
++	b.ResetTimer()
++	for range b.N {
++		cp := newCheckpoint("t1", cfg.Path)
++		fetcher := orderedPayloadPageFetcher(base, pageCount, payloadSize, nil)
++		if _, err := Poll(
++			context.Background(),
++			cfg,
++			cp,
++			base,
++			base.Add(time.Hour),
++			fetcher,
++			discardEmitter{},
++			nil,
++		); err != nil {
++			b.Fatal(err)
++		}
++	}
++}
++
+ // BenchmarkPollWindowMemory characterizes the #32 memory finding: Poll drains the
+ // whole window into an in-memory slice before emitting (required for client-side
+ // ordering when OrderByReliable is false). Run with `-benchmem` to see that
+ // allocations scale with the number of records in the window — i.e. per-poll
+ // memory is bounded by MaxWindow * event-rate, NOT by total backlog (cold-start
+ // backfill walks in MaxWindow-sized chunks). Documented, not a leak.
+ func BenchmarkPollWindowMemory(b *testing.B) {
+ 	base := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+ 	cfg := EndpointConfig{
+ 		Path: "/auditLogs/signIns", TimeField: "createdDateTime",
+@@ -207,11 +298,41 @@ func sameSet(got, want []string) bool {
+ 
+ func contains(s []string, v string) bool {
+ 	for _, x := range s {
+ 		if x == v {
+ 			return true
+ 		}
+ 	}
+ 	return false
+ }
+ 
+-var _ = telemetry.Event{}
++func orderedPayloadPageFetcher(base time.Time, pageCount, payloadSize int, sentinel func()) PageFetcher {
++	page := 0
++	return pageFetcherFunc(func(_ context.Context, _ string) ([]map[string]any, string, error) {
++		page++
++		if page > pageCount {
++			if sentinel != nil {
++				sentinel()
++			}
++			return nil, "", nil
++		}
++		payload := fmt.Sprintf("%06d%s", page, strings.Repeat("x", payloadSize-6))
++		return []map[string]any{{
++			"id":              fmt.Sprintf("evt-%d", page),
++			"createdDateTime": base.Add(time.Duration(page) * time.Second).Format(time.RFC3339),
++			"unused_payload":  payload,
++		}}, fmt.Sprintf("page-%d", page+1), nil
++	})
++}
++
++type discardEmitter struct{}
++
++func (discardEmitter) Counter(string, string, string, float64, telemetry.Attrs) {}
++func (discardEmitter) Gauge(string, string, string, float64, telemetry.Attrs)   {}
++func (discardEmitter) GaugeSnapshot(string, string, string, []telemetry.GaugePoint) {
++}
++func (discardEmitter) UpDownCounter(string, string, string, float64, telemetry.Attrs) {}
++func (discardEmitter) Histogram(string, string, string, float64, []float64, telemetry.Attrs) {
++}
++func (discardEmitter) HistogramCtx(context.Context, string, string, string, float64, []float64, telemetry.Attrs) {
++}
++func (discardEmitter) LogEvent(telemetry.Event) {}

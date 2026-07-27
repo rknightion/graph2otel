@@ -40,6 +40,20 @@ const (
 	groupB = "22222222-2222-2222-2222-222222222222"
 )
 
+// TestMemberCountURLCountsTransitiveMembership pins the wire path literally
+// rather than through the helper, because every other test in this file builds
+// its fake's keys FROM memberCountURL and would therefore stay green through a
+// change of endpoint. A direct /members/$count misses a member nested inside
+// another group, which for a privileged group is a false negative on a
+// security signal (#337).
+func TestMemberCountURLCountsTransitiveMembership(t *testing.T) {
+	got := memberCountURL(base, groupA)
+	want := base + "/groups/" + groupA + "/transitiveMembers/$count"
+	if got != want {
+		t.Fatalf("memberCountURL = %q, want %q", got, want)
+	}
+}
+
 func TestCollectEmitsMemberCountAndAccessibleForEachConfiguredGroup(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{
 		memberCountURL(base, groupA): "7",

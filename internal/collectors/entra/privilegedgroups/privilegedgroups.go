@@ -20,9 +20,9 @@
 // Two gauges are emitted per cycle from a per-group $count fetch:
 //
 //   - entra.privileged_groups.members.total — one point per group that was
-//     SUCCESSFULLY read this cycle, value = the raw member count (0 is a
-//     legitimate, measured value here — the group exists, was read, and is
-//     empty).
+//     SUCCESSFULLY read this cycle, value = the TRANSITIVE member count (0 is
+//     a legitimate, measured value here — the group exists, was read, and is
+//     empty). See memberCountURL for why membership is counted transitively.
 //   - entra.privileged_groups.accessible — one point for EVERY configured
 //     group, EVERY cycle, value 1 (read succeeded) or 0 (it did not). This is
 //     the explicit "could graph2otel look" signal, decoupled from the count.
@@ -42,8 +42,7 @@
 // members: the issue this collector implements is a COUNT gauge, not a
 // membership listing, and per-member identity inside one of these groups is
 // exactly the unbounded-entity-label shape the allowlist exists to avoid
-// reaching for. See the package's design note in #337 for the open question on
-// direct vs transitive membership.
+// reaching for.
 package privilegedgroups
 
 import (
@@ -85,18 +84,22 @@ const eventPrivilegedGroup = "entra.privileged_group"
 // defaultBaseURL is the Graph v1.0 root.
 const defaultBaseURL = "https://graph.microsoft.com/v1.0"
 
-// memberCountURL builds a /groups/{id}/members/$count URL.
+// memberCountURL builds a /groups/{id}/transitiveMembers/$count URL.
 //
-// DIRECT membership ($count on /members), not transitive. Chosen as the
-// default because it mirrors the cheap, direct-$count idiom every other
-// bounded population slice in entra/groups already uses, and because a
-// transitive count silently changes meaning the moment someone nests a group
-// inside an allowlisted one. This is flagged as an open decision in #337 for
-// confirmation — the wire call is transitiveMembers/$count instead should a
-// nested-group blast-radius view turn out to be what's wanted; the switch is
-// this one function.
+// TRANSITIVE membership, decided on #337 after both shapes were live-verified
+// to work identically (same ConsistencyLevel + Accept headers, same response
+// shape). Direct /members/$count was the initial default on cost grounds, but
+// it undercounts: a principal nested inside another group is a full member of
+// the privileged group for every authorization decision Entra makes, and
+// omitting it makes this a security signal that reads LOW precisely when
+// someone has expanded the blast radius by nesting. An over-count is a
+// question; an under-count is a missed escalation.
+//
+// The count is therefore a TOTAL, not a floor — it includes members reached
+// through any depth of nesting, and it counts every transitive member type
+// (users, groups and service principals alike), not users only.
 func memberCountURL(baseURL, groupID string) string {
-	return baseURL + "/groups/" + url.PathEscape(groupID) + "/members/$count"
+	return baseURL + "/groups/" + url.PathEscape(groupID) + "/transitiveMembers/$count"
 }
 
 // var _ pins Collector to collector.SnapshotCollector at compile time — the
