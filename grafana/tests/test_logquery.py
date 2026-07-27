@@ -95,11 +95,20 @@ class TestFrameworkOverlay(unittest.TestCase):
     def test_ingest_transport_is_permitted(self):
         self.assertIn("ingest_transport", logquery.permitted_keys(CAT, EVENT))
 
-    def test_the_overlay_is_exactly_those_two_keys(self):
+    def test_event_name_is_permitted(self):
+        """#305: it is the OTEL LogRecord EventName, stamped on every emitted
+        record, and every query this package builds already filters on it. Its
+        absence from the overlay meant the one grouping that makes a cross-event
+        query readable — ``by=["event_name"]`` — was reported as an attribute the
+        event does not carry."""
+        self.assertNotIn("event_name", CAT.log(EVENT).keys)
+        self.assertEqual(logquery.violations(CAT, EVENT, by=["event_name"]), [])
+
+    def test_the_overlay_is_exactly_the_emitter_boundary_keys(self):
         """It is an overlay for emitter-boundary attributes, not a general
         escape from catalog validation."""
         self.assertEqual(set(logquery.FRAMEWORK_KEYS),
-                         {"tenant_id", "ingest_transport"})
+                         {"tenant_id", "ingest_transport", "event_name"})
 
 
 class TestValidationAgainstTheCatalog(unittest.TestCase):

@@ -41,6 +41,17 @@ SECTIONS = [
          {"viz": "timeseries"}),
         "graph2otel.logpipeline.self_excluded",
     ]),
+    # Grafana annotation publishing (#310's writer, panelled here because every
+    # graph2otel.* metric must reach a panel or carry a waiver and this is the
+    # self-obs board). Presentation is deliberately neutral: "duplicate" is the
+    # steady state on a state-shaped source, so colouring dropped annotations
+    # would claim an operational verdict nobody measured.
+    ("Grafana annotation publishing", [
+        "graph2otel.annotation.degraded",
+        ("Annotation outcome rate: published vs dropped",
+         ["graph2otel.annotation.published", "graph2otel.annotation.dropped"],
+         {"viz": "timeseries"}),
+    ]),
 ]
 
 # Prometheus names are read from the generated catalog rather than typed here.

@@ -810,7 +810,7 @@ func tenantSchedulerOptions(
 	logger *slog.Logger,
 ) []collector.SchedulerOption {
 	return []collector.SchedulerOption{
-		collector.WithEmitterFactory(provider.CollectorEmitter),
+		collector.WithEmitterFactory(annotatedCollectorEmitter(provider)),
 		collector.WithSourceRecordRecorder(provider.RecordSourceRecords),
 		collector.WithTenant(tenantID),
 		collector.WithStatusTracker(status),

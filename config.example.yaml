@@ -313,3 +313,47 @@ backfill:
 # which sets G2O_CHECKPOINT_DIR=/var/lib/graph2otel against a bind mount owned by
 # uid 65532; the Helm chart sets it to /var/lib/graph2otel/checkpoints).
 checkpoint_dir: "./checkpoints" # root dir for the file-based CheckpointStore
+
+# grafana_annotations turns on the OPT-IN Grafana annotation writer (#400):
+# graph2otel publishing a curated, closed set of Microsoft domain events into a
+# Grafana organization as annotations, so a dashboard can explain "what changed at
+# 14:00" without any external automation.
+#
+# It is the ONE authorized second egress path. graph2otel is otherwise
+# OTLP-push-only; #310 narrowly amended that invariant for annotations and nothing
+# else, and the narrowness is carried by the token's scope. The service-account
+# token needs exactly one Grafana action — `annotations:create` on
+# `annotations:type:organization` (role `fixed:annotations:writer`, "Annotations
+# writer" in the UI) — and graph2otel requires, requests and uses nothing else.
+#
+# Setting `url` is the whole opt-in: unset (the default) registers no writer,
+# opens no client and logs nothing. Once url IS set, the process FAILS TO START
+# unless the token can actually write an annotation — discovering that on the
+# first real event means the annotations an operator relies on for incident
+# context simply are not there when they look.
+#
+# The token is a credential: supply it via G2O_GRAFANA_ANNOTATIONS__TOKEN or
+# token_file (a k8s/Docker secret mount), never in committed YAML.
+grafana_annotations:
+  url: "" # Grafana base URL, e.g. https://grafana.example.com; setting it IS the opt-in (empty = feature off)
+  token: "" # Grafana service-account token; env/file only, never commit it (needs annotations:create only)
+  token_file: "" # path to a file holding the token; value XOR file, never both
+  dashboard_uid: "" # optional: confine annotations to one dashboard; empty = organization annotations (visible to every board)
+  timeout: 10s # per-request timeout for POST /api/annotations
+  max_per_minute: 60 # token-bucket ceiling on annotations written per process; overage is dropped and counted, never blocking
+  queue_size: 512 # hand-off buffer; a full queue drops and counts rather than blocking collection
+  rollup_interval: 5m # bucket width for rolled-up categories: one annotation per interval per category per tenant
+  dedupe_retention: 48h # how long a published annotation's dedupe key is remembered, so a restart cannot re-publish it
+  categories:
+    config_posture:
+      enabled: true # CA policy changes, Intune compliance/config policy changes, admin consent, app credential added
+      rollup: true # highest-volume of the four; rolled up by default so dashboards stay readable
+    security_incident:
+      enabled: true # medium/high security alerts and incidents becoming active
+      rollup: false # naturally low volume, and a count would lose WHICH incident
+    service_health:
+      enabled: true # Microsoft 365 service-health incidents opening and closing
+      rollup: false # naturally low volume, and the single most useful annotation when a dashboard is red
+    license:
+      enabled: true # subscribed-SKU set changes and license exhaustion
+      rollup: true # a tenant-wide license change moves many SKUs at once

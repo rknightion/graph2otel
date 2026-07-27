@@ -202,6 +202,23 @@ running two.
 | config.cost.rates.transmitted_payload_byte_microunits | integer\|null | `nil` | Microunits per post-compression transmitted OTLP payload byte; explicit nonnegative integer required when enabled. |
 | config.cost.source | string | `""` | Operator rate source/provenance; required and nonblank when enabled. |
 | config.cost.version | string | `""` | Operator rate-schedule version; required and nonblank when enabled. |
+| config.grafana_annotations.categories.config_posture.enabled | bool | `true` | CA policy changes, Intune compliance/configuration policy changes, admin consent grants, app credential additions. |
+| config.grafana_annotations.categories.config_posture.rollup | bool | `true` | Highest-volume of the four; rolled up so dashboards stay readable. |
+| config.grafana_annotations.categories.license.enabled | bool | `true` | Subscribed-SKU set changes and license exhaustion. |
+| config.grafana_annotations.categories.license.rollup | bool | `true` | A tenant-wide license change moves many SKUs at once. |
+| config.grafana_annotations.categories.security_incident.enabled | bool | `true` | Medium/high security alerts and incidents becoming active. |
+| config.grafana_annotations.categories.security_incident.rollup | bool | `false` | Individually annotated: a count would lose WHICH incident. |
+| config.grafana_annotations.categories.service_health.enabled | bool | `true` | Microsoft 365 service-health incidents opening and closing. |
+| config.grafana_annotations.categories.service_health.rollup | bool | `false` | Individually annotated; naturally low volume. |
+| config.grafana_annotations.dashboard_uid | string | `""` | Optional: confine annotations to one dashboard UID. Empty publishes organization annotations, which is what makes them visible on every board. |
+| config.grafana_annotations.dedupe_retention | string | `"48h"` | How long a published annotation's dedupe key is remembered, so a restart or an overlapping poll window cannot re-publish it. |
+| config.grafana_annotations.max_per_minute | int | `60` | Token-bucket ceiling on annotations written per process. Overage is dropped and counted; it never blocks or fails collection. |
+| config.grafana_annotations.queue_size | int | `512` | Hand-off buffer size. A full queue drops and counts rather than blocking a collector on Grafana being slow or down. |
+| config.grafana_annotations.rollup_interval | string | `"5m"` | Bucket width for rolled-up categories: one annotation per interval per category per tenant, carrying a count and a bounded summary. |
+| config.grafana_annotations.timeout | string | `"10s"` | Per-request timeout for POST /api/annotations. |
+| config.grafana_annotations.token | string | `""` | Grafana service-account token. Leave empty here and supply it via environment or token_file — a token in values.yaml ends up in the release. |
+| config.grafana_annotations.token_file | string | `""` | Path to a mounted file holding the token. value XOR file, never both. |
+| config.grafana_annotations.url | string | `""` | Grafana base URL, e.g. https://grafana.example.com. Setting it IS the opt-in; empty means no annotation writer at all. Once set, the process fails to start unless the token can actually write an annotation. |
 | config.log_level | string | `"info"` | Log verbosity: debug | info | warn | error. |
 | config.otlp.endpoint | string | `"https://otlp-gateway-prod-us-central-0.grafana.net/otlp"` | OTLP endpoint base URL. For Grafana Cloud use the otlp-gateway URL for YOUR region. |
 | config.otlp.grafana_cloud.instance_id | string | `""` | Grafana Cloud OTLP instance ID. NOT a secret by itself, but set alongside the token below; kept out of values.yaml defaults on purpose so an empty chart install doesn't silently point at nothing. |

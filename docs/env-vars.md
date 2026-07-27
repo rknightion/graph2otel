@@ -70,6 +70,23 @@ never in committed YAML.
 | `G2O_COST__BUDGET_MICROUNITS` | `0` | nonnegative projection-period budget; 0 disables comparison |
 | `G2O_BACKFILL__INITIAL_LOOKBACK` | `0s` | cold-start backfill window; 0 = each collector's own built-in lookback |
 | `G2O_CHECKPOINT_DIR` | `./checkpoints` | root dir for the file-based CheckpointStore |
+| `G2O_GRAFANA_ANNOTATIONS__URL` | `""` | Grafana base URL, e.g. https://grafana.example.com; setting it IS the opt-in (empty = feature off) |
+| `G2O_GRAFANA_ANNOTATIONS__TOKEN` | `""` | Grafana service-account token; env/file only, never commit it (needs annotations:create only) |
+| `G2O_GRAFANA_ANNOTATIONS__TOKEN_FILE` | `""` | path to a file holding the token; value XOR file, never both |
+| `G2O_GRAFANA_ANNOTATIONS__DASHBOARD_UID` | `""` | optional: confine annotations to one dashboard; empty = organization annotations (visible to every board) |
+| `G2O_GRAFANA_ANNOTATIONS__TIMEOUT` | `10s` | per-request timeout for POST /api/annotations |
+| `G2O_GRAFANA_ANNOTATIONS__MAX_PER_MINUTE` | `60` | token-bucket ceiling on annotations written per process; overage is dropped and counted, never blocking |
+| `G2O_GRAFANA_ANNOTATIONS__QUEUE_SIZE` | `512` | hand-off buffer; a full queue drops and counts rather than blocking collection |
+| `G2O_GRAFANA_ANNOTATIONS__ROLLUP_INTERVAL` | `5m` | bucket width for rolled-up categories: one annotation per interval per category per tenant |
+| `G2O_GRAFANA_ANNOTATIONS__DEDUPE_RETENTION` | `48h` | how long a published annotation's dedupe key is remembered, so a restart cannot re-publish it |
+| `G2O_GRAFANA_ANNOTATIONS__CATEGORIES__CONFIG_POSTURE__ENABLED` | `true` | CA policy changes, Intune compliance/config policy changes, admin consent, app credential added |
+| `G2O_GRAFANA_ANNOTATIONS__CATEGORIES__CONFIG_POSTURE__ROLLUP` | `true` | highest-volume of the four; rolled up by default so dashboards stay readable |
+| `G2O_GRAFANA_ANNOTATIONS__CATEGORIES__SECURITY_INCIDENT__ENABLED` | `true` | medium/high security alerts and incidents becoming active |
+| `G2O_GRAFANA_ANNOTATIONS__CATEGORIES__SECURITY_INCIDENT__ROLLUP` | `false` | naturally low volume, and a count would lose WHICH incident |
+| `G2O_GRAFANA_ANNOTATIONS__CATEGORIES__SERVICE_HEALTH__ENABLED` | `true` | Microsoft 365 service-health incidents opening and closing |
+| `G2O_GRAFANA_ANNOTATIONS__CATEGORIES__SERVICE_HEALTH__ROLLUP` | `false` | naturally low volume, and the single most useful annotation when a dashboard is red |
+| `G2O_GRAFANA_ANNOTATIONS__CATEGORIES__LICENSE__ENABLED` | `true` | subscribed-SKU set changes and license exhaustion |
+| `G2O_GRAFANA_ANNOTATIONS__CATEGORIES__LICENSE__ROLLUP` | `true` | a tenant-wide license change moves many SKUs at once |
 
 **File-only** — these take structured values (a map or a list of objects) and must be set in the YAML config, not via an environment variable: `tenants`, `collectors`, `profiling.pyroscope.tags`.
 

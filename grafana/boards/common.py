@@ -19,6 +19,7 @@ of adding a second layout declaration for a name to drift out of.
 
 from __future__ import annotations
 
+import pivots
 import v2
 from builder import CENSUS_SENTINEL, Builder, titleize
 
@@ -177,10 +178,34 @@ def _log_entry(b: Builder, spec: dict):
     kind = spec.get("kind", "logs")
     args = {k: v for k, v in spec.items() if k != "kind"}
     if kind == "logs":
-        b.logs(**args)
+        panel = b.logs(**args)
     elif kind == "rate":
-        b.log_rate(**args)
+        panel = b.log_rate(**args)
     elif kind == "table":
-        b.log_table(**args)
+        panel = b.log_table(**args)
     else:  # pragma: no cover - guarded by test_boards_declare_known_log_kinds
         raise ValueError(f"unknown log panel kind {kind!r}")
+    _pivot_links(b, panel, spec["event"])
+
+
+def _pivot_links(b: Builder, panel: dict, event: str):
+    """Put an entity pivot in the panel's header menu for each entity it names.
+
+    Derived from the event's own attribute keys, so a log panel cannot advertise a
+    pivot its records cannot feed and a new event carrying an identifier gets the
+    link with no human step. The links are **panel** links rather than data links:
+    a panel link carries no clicked-row value, and the alternative — a per-field
+    data link that interpolates the identifier automatically — depends on Grafana
+    rendering data links inside the log-detail view, which this lane cannot
+    measure. The link therefore carries the tenant and the time range, and the
+    analyst pastes the identifier they are already looking at.
+    """
+    keys = set(b.cat.log(event).keys)
+    links = [
+        {"title": entity.link_title(), "url": pivots.PIVOT_URL,
+         "targetBlank": False}
+        for entity in pivots.ENTITIES
+        if keys & set(entity.keys)
+    ]
+    if links:
+        panel["links"] = links

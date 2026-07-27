@@ -1,0 +1,32 @@
+{
+  "Metrics": [
+    {
+      "Name": "graph2otel.annotation.degraded",
+      "Unit": "1",
+      "Kind": "gauge",
+      "Description": "Whether the most recent Grafana annotation write failed and has not been recovered by a later success.",
+      "AttrKeys": []
+    },
+    {
+      "Name": "graph2otel.annotation.dropped",
+      "Unit": "{annotation}",
+      "Kind": "sum",
+      "Description": "Annotations that did not reach Grafana since process start, by bounded reason (duplicate is the steady state on a state-shaped source, not a fault).",
+      "AttrKeys": [
+        "reason",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.annotation.published",
+      "Unit": "{annotation}",
+      "Kind": "sum",
+      "Description": "Annotations accepted by the Grafana annotations API since process start.",
+      "AttrKeys": [
+        "category",
+        "tenant_id"
+      ]
+    }
+  ],
+  "Logs": null
+}

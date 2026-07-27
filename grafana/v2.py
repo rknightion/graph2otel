@@ -378,6 +378,33 @@ def query_variable(name: str, query: str, *, label: str = "",
     return {"kind": "QueryVariable", "spec": spec}
 
 
+def text_variable(name: str, label: str, *, description: str = "",
+                  default: str = "") -> dict:
+    """A free-text input variable (``TextVariable``), for the entity pivots (#305).
+
+    The field list is taken from Grafana's own ``TextVariableSpec`` in the
+    dashboard app's schema — ``name``, ``current``, ``query``, ``label``,
+    ``hide``, ``skipUrlSync``, ``description`` — rather than from a hand-written
+    guess, for the same reason ``sort: "alphabetical"`` had to be: every field
+    here sits inside a closed schema and the dashboards API rejects a wrong member
+    with a 422 that no local test sees.
+
+    ``skipUrlSync`` is deliberately **false**: the whole point of a pivot input is
+    that it survives a shared link, so ``?var-pivot_device=…`` has to work.
+    """
+    spec = {
+        "name": name,
+        "label": label or name,
+        "hide": "dontHide",
+        "current": {"text": default, "value": default},
+        "query": default,
+        "skipUrlSync": False,
+    }
+    if description:
+        spec["description"] = description
+    return {"kind": "TextVariable", "spec": spec}
+
+
 def sentinel(name: str, query: str) -> dict:
     """A hidden presence variable driving conditional rendering.
 

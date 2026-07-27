@@ -74,6 +74,10 @@ type Config struct {
 	// Backfill tunes how much history a cold-started window collector recovers
 	// (#118).
 	Backfill BackfillConfig `yaml:"backfill"`
+	// GrafanaAnnotations configures the opt-in Grafana annotation writer (#400)
+	// — the ONE authorized second egress path (see the package doc on
+	// internal/annotations). Off unless url is set.
+	GrafanaAnnotations GrafanaAnnotationsConfig `yaml:"grafana_annotations"`
 	// CheckpointDir is the root directory for the file-based CheckpointStore
 	// (#7); each (tenant, endpoint) window poller persists its watermark there.
 	CheckpointDir string `yaml:"checkpoint_dir"`
@@ -594,7 +598,8 @@ func Default() *Config {
 		Cost: CostConfig{
 			Period: 30 * 24 * time.Hour,
 		},
-		CheckpointDir: "./checkpoints",
+		GrafanaAnnotations: defaultGrafanaAnnotations(),
+		CheckpointDir:      "./checkpoints",
 	}
 }
 
@@ -820,6 +825,10 @@ func (c *Config) Validate() error {
 	if c.Backfill.InitialLookback < 0 {
 		return fmt.Errorf("backfill.initial_lookback %v invalid: must be >= 0 (0 means use each collector's built-in lookback)",
 			c.Backfill.InitialLookback)
+	}
+
+	if err := c.GrafanaAnnotations.validate(); err != nil {
+		return fmt.Errorf("grafana_annotations.%w", err)
 	}
 
 	return nil

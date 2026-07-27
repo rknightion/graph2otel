@@ -39,6 +39,16 @@ func (c *Config) resolveSecretFiles() error {
 	); err != nil {
 		return err
 	}
+	// The Grafana annotation writer's service-account token (#400). Same
+	// value-XOR-file rule; it is the third of graph2otel's own egress
+	// credentials, and the only one that is not OTLP.
+	if err := resolveSecretFile(
+		"grafana_annotations.token",
+		&c.GrafanaAnnotations.Token,
+		c.GrafanaAnnotations.TokenFile,
+	); err != nil {
+		return err
+	}
 	return nil
 }
 

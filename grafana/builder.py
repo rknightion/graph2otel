@@ -46,6 +46,7 @@ attribute filters and never writes a stream selector at all.
 from __future__ import annotations
 
 import json
+import re
 
 import logquery
 import presentation
@@ -583,24 +584,96 @@ class Builder:
                      for rendered in logquery.render_filters(filters))
         return " ".join(parts)
 
+    def _pivot_selector(self, events: list, key: str, value_var: str,
+                        by: list = None) -> str:
+        """The selector for one entity pivot: many events, one identifier (#305).
+
+        Two typed filters, not one. In LogQL an absent structured-metadata key
+        compares equal to the empty string, so ``| device_id=`$pivot_device` ``
+        with an unset variable matches every record that has **no** device_id —
+        the pivot would dump the whole estate rather than show nothing. Requiring
+        the key to be non-empty as well makes an empty input match nothing by
+        construction, and both keys are validated against the catalog like any
+        other filter key.
+
+        Event names are regex-escaped: an unescaped ``.`` matches any character,
+        so ``entra.signin`` would also select ``entraXsignin`` — harmless today
+        and exactly the kind of thing that stops being harmless once someone adds
+        an event name that collides.
+        """
+        filters = [logquery.f(key, "re", ".+"),
+                   logquery.f(key, "eq", f"${value_var}")]
+        for event in events:
+            self.cat.log(event)  # fails the build on a stale event name
+            self.violations.extend(
+                logquery.violations(self.cat, event, filters=filters, by=by))
+        alternation = "|".join(re.escape(event) for event in events)
+        parts = ['{service_name="graph2otel"}',
+                 f"| event_name=~`^({alternation})$`",
+                 f'| tenant_id=~"$tenant"']
+        parts.extend(f"| {rendered}"
+                     for rendered in logquery.render_filters(filters))
+        return " ".join(parts)
+
+    def pivot_table(self, keyed_events: list, value_var: str, title: str,
+                    desc: str = "", no_value: str = "", topk: int = 20,
+                    w: int = 8, h: int = 10):
+        """Which log signals name one entity, and how often (#305).
+
+        One query target per identifier key, so an analyst pasting either an id or
+        a name into the same input gets whichever matches — with no target able to
+        reference an attribute its own events do not carry.
+        """
+        targets = []
+        for i, (key, events) in enumerate(keyed_events):
+            sel = self._pivot_selector(events, key, value_var, by=["event_name"])
+            keys = _tenant_group_keys(["event_name"])
+            expr = (f"topk({topk}, sum by ({', '.join(keys)}) "
+                    f"(count_over_time({sel} [$__auto])))")
+            targets.append(self._loki_query(expr, ref=chr(65 + i),
+                                            legend=_label_legend(keys)))
+        panel = self._viz_panel("table", title, [], "short",
+                                desc + _loki_note(), w, h)
+        panel["datasource"] = LOKI_DS
+        panel["targets"] = targets
+        panel["fieldConfig"]["defaults"]["noValue"] = no_value or NO_LOKI
+        panel["transformations"] = [
+            {"id": "reduce", "options": {"reducers": ["sum"], "mode": "seriesToRows"}}
+        ]
+        return panel
+
+    def pivot_logs(self, keyed_events: list, value_var: str, title: str,
+                   desc: str = "", no_value: str = "", w: int = 16, h: int = 10):
+        """Every record naming one entity, across every event that can name it."""
+        targets = [
+            self._loki_query(self._pivot_selector(events, key, value_var),
+                             ref=chr(65 + i))
+            for i, (key, events) in enumerate(keyed_events)
+        ]
+        return self._logs_panel(title, desc, targets, no_value or NO_LOKI, w, h)
+
     def logs(self, event: str, title: str, filters: list = None, desc: str = "",
              w: int = 24, h: int = 10):
         """Raw log lines for one event."""
         expr = self._selector(event, filters)
-        q = self._loki_query(expr)
+        return self._logs_panel(title, desc, [self._loki_query(expr)],
+                                NO_LOKI, w, h)
+
+    def _logs_panel(self, title: str, desc: str, targets: list, no_value: str,
+                    w: int, h: int):
         return self._add({
             "id": self._next_id(), "type": "logs", "title": title,
             "description": desc + _loki_note(), "gridPos": {}, "datasource": LOKI_DS,
             # Neutral thresholds even on a logs panel: the gate has no exemption
             # list, because an exemption list is a second thing to audit and the
             # first collector to land in it would never come back out.
-            "fieldConfig": {"defaults": {"noValue": NO_LOKI,
+            "fieldConfig": {"defaults": {"noValue": no_value,
                                          "thresholds": presentation.neutral_thresholds()},
                             "overrides": []},
             "options": {"showTime": True, "wrapLogMessage": True,
                         "sortOrder": "Descending", "enableLogDetails": True,
                         "dedupStrategy": "none", "prettifyLogMessage": False},
-            "targets": [q],
+            "targets": targets,
         }, w, h)
 
     def log_rate(self, event: str, title: str, by: list = None, filters: list = None,
@@ -677,6 +750,17 @@ class Builder:
         """Declare an extra visible query variable (board modules only)."""
         self.extra_vars.append(v2.query_variable(
             name, query, label=label or name, multi=multi, include_all=include_all))
+
+    def text_variable(self, name: str, label: str, *, description: str = ""):
+        """Declare a free-text input variable (the entity pivots, #305).
+
+        A pivot identifier cannot come from a query variable: ``label_values()``
+        reads metric labels, and per-entity identifiers are deliberately not
+        metric labels (#112). A device id is something the analyst is holding, so
+        the only honest input is a text box.
+        """
+        self.extra_vars.append(v2.text_variable(name, label,
+                                               description=description))
 
     def sentinel(self, name: str, collector_pattern: str = "") -> str:
         """Declare a hidden presence sentinel and return its name.

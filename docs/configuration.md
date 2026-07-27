@@ -423,6 +423,41 @@ is no checkpoint to resume from.
 > non-Loki OTLP sink has its own rules, so graph2otel does not generalize Grafana Cloud's
 > measured ceiling to every backend. If yours accepts more, ignore the warning.
 
+### `grafana_annotations`
+
+The **opt-in Grafana annotation writer** — graph2otel's one non-OTLP egress path. Off unless
+`url` is set. Full reference: [Grafana annotations](grafana-annotations.md).
+
+```yaml
+grafana_annotations:
+  url: "" # Grafana base URL; setting it IS the opt-in
+  token: "" # service-account token — env or token_file only, never here
+  token_file: "" # path to a mounted token file; value XOR file
+  dashboard_uid: "" # empty = organization annotations, visible to every board
+  timeout: 10s
+  max_per_minute: 60 # hard ceiling on writes; overage is dropped and counted
+  queue_size: 512
+  rollup_interval: 5m
+  dedupe_retention: 48h
+  categories:
+    config_posture: { enabled: true, rollup: true }
+    security_incident: { enabled: true, rollup: false }
+    service_health: { enabled: true, rollup: false }
+    license: { enabled: true, rollup: true }
+```
+
+The token needs exactly one Grafana action — `annotations:create` on
+`annotations:type:organization`, i.e. the **Annotations writer** role
+(`fixed:annotations:writer`) — and graph2otel uses no other Grafana permission.
+
+Once `url` is set, **the process refuses to start** if the token cannot write an annotation.
+That is deliberate: discovering it at the first real event means the annotations an operator
+relies on for incident context are absent exactly when they look for them.
+
+The persisted dedupe key set lives in `checkpoint_dir`, so it needs the same persistent
+volume — without one, every restart republishes everything inside the source collectors'
+overlap windows.
+
 ## Secrets — what never belongs in this file
 
 - Tenant credentials (client secret, certificate path, or workload/managed identity)
@@ -433,6 +468,8 @@ is no checkpoint to resume from.
   application ID, but it cannot choose the credential.
 - `otlp.grafana_cloud.token` is a credential and belongs in
   `G2O_OTLP__GRAFANA_CLOUD__TOKEN`, never in YAML.
+- `grafana_annotations.token` is a credential and belongs in
+  `G2O_GRAFANA_ANNOTATIONS__TOKEN` or `grafana_annotations.token_file`, never in YAML.
 - `config.local.yaml` and `.env` are gitignored in this repo for exactly this reason —
   don't commit a filled-in config that contains anything beyond tenant/client IDs.
 
@@ -451,8 +488,9 @@ What matters for this file:
 - **No configuration value is ever emitted, only the hash**, and the hash cannot be reversed
   into the configuration.
 - **Credentials never enter the hash input at all.** Every credential key here is a
-  redacting type, so `otlp.grafana_cloud.token` and
-  `profiling.pyroscope.basic_auth_password` contribute the literal `REDACTED`. Tenant auth
+  redacting type, so `otlp.grafana_cloud.token`,
+  `profiling.pyroscope.basic_auth_password` and `grafana_annotations.token` contribute the
+  literal `REDACTED`. Tenant auth
   material is not on this surface in the first place.
 - **Rotating a credential does not change the fingerprint.** Setting one that was previously
   unset does — that is a behavior change, not a secret.

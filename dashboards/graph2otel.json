@@ -165,6 +165,96 @@
         }
       },
       {
+        "kind": "TextVariable",
+        "spec": {
+          "name": "pivot_device",
+          "label": "Device (id or name)",
+          "hide": "dontHide",
+          "current": {
+            "text": "",
+            "value": ""
+          },
+          "query": "",
+          "skipUrlSync": false,
+          "description": "the device the record is ABOUT \u2014 the managed or onboarded device the source system names, never the device that observed the event."
+        }
+      },
+      {
+        "kind": "TextVariable",
+        "spec": {
+          "name": "pivot_app",
+          "label": "Application (app id, SP object id)",
+          "hide": "dontHide",
+          "current": {
+            "text": "",
+            "value": ""
+          },
+          "query": "",
+          "skipUrlSync": false,
+          "description": "the application the record is about. `app_id` is the Entra application (client) id, `service_principal_id` the directory object id of its service principal, and `application_id` the same app as other products name it. One app registration has all three and they are different values."
+        }
+      },
+      {
+        "kind": "TextVariable",
+        "spec": {
+          "name": "pivot_account",
+          "label": "Account (UPN)",
+          "hide": "dontHide",
+          "current": {
+            "text": "",
+            "value": ""
+          },
+          "query": "",
+          "skipUrlSync": false,
+          "description": "the account named on the record, as a user principal name. Three attribute names carry the same UPN value \u2014 Entra writes `user_principal_name`, Intune writes `upn`, Defender writes `account_upn` \u2014 so all three are queried and one input covers them."
+        }
+      },
+      {
+        "kind": "TextVariable",
+        "spec": {
+          "name": "pivot_message",
+          "label": "Email message (network or internet message id)",
+          "hide": "dontHide",
+          "current": {
+            "text": "",
+            "value": ""
+          },
+          "query": "",
+          "skipUrlSync": false,
+          "description": "the message the record is about. `network_message_id` is Microsoft's per-tenant id used across the Defender for Office 365 tables; `internet_message_id` is the RFC 5322 Message-ID from the header \u2014 the one an end user or an external system can quote."
+        }
+      },
+      {
+        "kind": "TextVariable",
+        "spec": {
+          "name": "pivot_alert",
+          "label": "Security alert id",
+          "hide": "dontHide",
+          "current": {
+            "text": "",
+            "value": ""
+          },
+          "query": "",
+          "skipUrlSync": false,
+          "description": "the alert the record is about. `alert_id` is the source product's own alert id \u2014 Defender XDR's on the advanced-hunting alert tables, PIM's on its own alerts, which are different namespaces \u2014 and `provider_alert_id` is the originating provider's id carried on the Graph security alert."
+        }
+      },
+      {
+        "kind": "TextVariable",
+        "spec": {
+          "name": "pivot_incident",
+          "label": "Security incident id",
+          "hide": "dontHide",
+          "current": {
+            "text": "",
+            "value": ""
+          },
+          "query": "",
+          "skipUrlSync": false,
+          "description": "the incident that groups one or more alerts, as Microsoft's Graph security API reports it on each alert it contains."
+        }
+      },
+      {
         "kind": "QueryVariable",
         "spec": {
           "name": "has_entra",
@@ -7078,7 +7168,18 @@
           "id": 86,
           "title": "Failed sign-ins \u2014 which user, which IP, which error",
           "description": "The metric says how many sign-ins failed. This says whose. Error 53004 is the Tor/anonymous-IP case #129 used to prove risk detection fires.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
-          "links": [],
+          "links": [
+            {
+              "title": "Investigate this application or service principal \u2014 this app's sign-ins, credential and federated-credential state, consent and permission grants, risk detections and Graph activity",
+              "url": "/d/graph2otel?dtab=Overview&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            },
+            {
+              "title": "Investigate this account \u2014 this account's sign-ins, risk detections, registration state, privilege elevations, certificates and mailbox records",
+              "url": "/d/graph2otel?dtab=Overview&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -7151,7 +7252,18 @@
           "id": 87,
           "title": "Failed sign-in rate by error code",
           "description": "\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
-          "links": [],
+          "links": [
+            {
+              "title": "Investigate this application or service principal \u2014 this app's sign-ins, credential and federated-credential state, consent and permission grants, risk detections and Graph activity",
+              "url": "/d/graph2otel?dtab=Overview&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            },
+            {
+              "title": "Investigate this account \u2014 this account's sign-ins, risk detections, registration state, privilege elevations, certificates and mailbox records",
+              "url": "/d/graph2otel?dtab=Overview&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -7240,7 +7352,18 @@
           "id": 88,
           "title": "Top failing sign-in sources (country, client app)",
           "description": "\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
-          "links": [],
+          "links": [
+            {
+              "title": "Investigate this application or service principal \u2014 this app's sign-ins, credential and federated-credential state, consent and permission grants, risk detections and Graph activity",
+              "url": "/d/graph2otel?dtab=Overview&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            },
+            {
+              "title": "Investigate this account \u2014 this account's sign-ins, risk detections, registration state, privilege elevations, certificates and mailbox records",
+              "url": "/d/graph2otel?dtab=Overview&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -7332,7 +7455,13 @@
           "id": 89,
           "title": "Risk detections \u2014 MITRE ATT&CK technique, IP, user",
           "description": "mitre_techniques is on every risk detection (#153). Add `| mitre_techniques=~\"T1090.*\"` to this panel's query to filter to proxy/tunnelling techniques.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
-          "links": [],
+          "links": [
+            {
+              "title": "Investigate this account \u2014 this account's sign-ins, risk detections, registration state, privilege elevations, certificates and mailbox records",
+              "url": "/d/graph2otel?dtab=Overview&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -7405,7 +7534,13 @@
           "id": 90,
           "title": "Risk detections by event type and level",
           "description": "\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
-          "links": [],
+          "links": [
+            {
+              "title": "Investigate this account \u2014 this account's sign-ins, risk detections, registration state, privilege elevations, certificates and mailbox records",
+              "url": "/d/graph2otel?dtab=Overview&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -18752,7 +18887,18 @@
           "id": 227,
           "title": "Non-compliant devices \u2014 which one",
           "description": "The compliance metrics say how many devices are in each state. This says which serial, which user, which OS version.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
-          "links": [],
+          "links": [
+            {
+              "title": "Investigate this device \u2014 this device's compliance, configuration, certificate, encryption, startup, logon and vulnerability records",
+              "url": "/d/graph2otel?dtab=Overview&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            },
+            {
+              "title": "Investigate this account \u2014 this account's sign-ins, risk detections, registration state, privilege elevations, certificates and mailbox records",
+              "url": "/d/graph2otel?dtab=Overview&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -21331,7 +21477,13 @@
           "id": 263,
           "title": "Defender alerts \u2014 which alert, which source",
           "description": "\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
-          "links": [],
+          "links": [
+            {
+              "title": "Investigate this security alert \u2014 this alert's evidence rows and the Graph security-alert record that reports it",
+              "url": "/d/graph2otel?dtab=Overview&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -21404,7 +21556,13 @@
           "id": 264,
           "title": "Alerts by severity and detection source",
           "description": "\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
-          "links": [],
+          "links": [
+            {
+              "title": "Investigate this security alert \u2014 this alert's evidence rows and the Graph security-alert record that reports it",
+              "url": "/d/graph2otel?dtab=Overview&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -21496,7 +21654,13 @@
           "id": 265,
           "title": "Top vulnerable software (which CVE, which device)",
           "description": "\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
-          "links": [],
+          "links": [
+            {
+              "title": "Investigate this device \u2014 this device's compliance, configuration, certificate, encryption, startup, logon and vulnerability records",
+              "url": "/d/graph2otel?dtab=Overview&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -21588,7 +21752,13 @@
           "id": 266,
           "title": "Device logon rate by logon type",
           "description": "\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
-          "links": [],
+          "links": [
+            {
+              "title": "Investigate this device \u2014 this device's compliance, configuration, certificate, encryption, startup, logon and vulnerability records",
+              "url": "/d/graph2otel?dtab=Overview&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -24596,7 +24766,13 @@
           "id": 303,
           "title": "Unified audit \u2014 which user, which operation",
           "description": "user_key is the opaque classic UserKey; user_id is usually the UPN but carries sentinels too. Correlate the two M365 audit transports on user_id.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
-          "links": [],
+          "links": [
+            {
+              "title": "Investigate this email message \u2014 this message's delivery verdict, attachments, URLs and clicks, quarantine state and transport trace",
+              "url": "/d/graph2otel?dtab=Overview&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -24669,7 +24845,13 @@
           "id": 304,
           "title": "Top audited operations by workload",
           "description": "\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
-          "links": [],
+          "links": [
+            {
+              "title": "Investigate this email message \u2014 this message's delivery verdict, attachments, URLs and clicks, quarantine state and transport trace",
+              "url": "/d/graph2otel?dtab=Overview&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -24761,7 +24943,13 @@
           "id": 305,
           "title": "Audit record rate by result status",
           "description": "\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
-          "links": [],
+          "links": [
+            {
+              "title": "Investigate this email message \u2014 this message's delivery verdict, attachments, URLs and clicks, quarantine state and transport trace",
+              "url": "/d/graph2otel?dtab=Overview&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -24850,7 +25038,13 @@
           "id": 306,
           "title": "Message trace: top senders (HIGH VOLUME, opt-in)",
           "description": "One record per message per recipient \u2014 the rate scales with traffic, not tenant size. Empty unless the collector is explicitly enabled.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
-          "links": [],
+          "links": [
+            {
+              "title": "Investigate this email message \u2014 this message's delivery verdict, attachments, URLs and clicks, quarantine state and transport trace",
+              "url": "/d/graph2otel?dtab=Overview&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ],
           "data": {
             "kind": "QueryGroup",
             "spec": {
@@ -32340,6 +32534,205 @@
         "kind": "Panel",
         "spec": {
           "id": 406,
+          "title": "Annotation degraded",
+          "description": "Whether the most recent Grafana annotation write failed and has not been recovered by a later success.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "avg(graph2otel_annotation_degraded_ratio)",
+                        "editorMode": "code",
+                        "range": true,
+                        "instant": false
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "colorMode": "none",
+                "graphMode": "area",
+                "textMode": "auto",
+                "justifyMode": "auto",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {},
+                  "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-407": {
+        "kind": "Panel",
+        "spec": {
+          "id": 407,
+          "title": "Annotation outcome rate: published vs dropped",
+          "description": "",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "sum by (category, tenant_id) (rate(graph2otel_annotation_published_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+                        "editorMode": "code",
+                        "range": true,
+                        "instant": false,
+                        "legendFormat": "Annotation published {{category}} {{tenant_id}}"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "B",
+                        "expr": "sum by (reason, tenant_id) (rate(graph2otel_annotation_dropped_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+                        "editorMode": "code",
+                        "range": true,
+                        "instant": false,
+                        "legendFormat": "Annotation dropped {{reason}} {{tenant_id}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "cps",
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": true
+                  },
+                  "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-409": {
+        "kind": "Panel",
+        "spec": {
+          "id": 409,
           "title": "Blob diagnostic categories \u2014 which container, mapped or not",
           "description": "One record per diagnostic category found in the storage account, saying whether graph2otel has a mapper for it. An unmapped category is data arriving that nothing reads.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -32409,10 +32802,10 @@
           }
         }
       },
-      "panel-407": {
+      "panel-410": {
         "kind": "Panel",
         "spec": {
-          "id": 407,
+          "id": 410,
           "title": "Starts, versions and configuration fingerprints",
           "description": "One record per configured tenant on every process start, carrying the version, the Go runtime version and a one-way configuration fingerprint. This is the detail behind the deploy annotations on every time axis. A configuration change is two consecutive records whose config.fingerprint differs \u2014 the fingerprint is a hash, so it says THAT the configuration changed and never what it changed to. It is deliberately over-sensitive: it covers the whole configuration, so a change that does not alter behaviour can still move it. A rotated credential does not, because credentials are redacted by type before hashing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -32482,10 +32875,10 @@
           }
         }
       },
-      "panel-409": {
+      "panel-412": {
         "kind": "Panel",
         "spec": {
-          "id": 409,
+          "id": 412,
           "title": "Signal availability",
           "description": "Current collector state from graph2otel.collector.availability. Intentional absence is disabled (transport_not_configured, experimental_not_enabled, high_volume_not_enabled, disabled_by_config) or covered (covered_by_alternative). healthy_empty/empty is a successful zero-row source response. limited/partial_license is non-failure; blocked/license_unavailable identifies a missing entitlement, while blocked/permission_denied requires access. degraded and failed (including source_error) describe completed runtime outcomes; startup_failed describes initialization failure. An empty table is unknown, never evidence of disabled.",
           "links": [],
@@ -32710,10 +33103,10 @@
           }
         }
       },
-      "panel-410": {
+      "panel-413": {
         "kind": "Panel",
         "spec": {
-          "id": 410,
+          "id": 413,
           "title": "Read this before writing your own query",
           "description": "",
           "links": [],
@@ -32733,6 +33126,1393 @@
               "options": {
                 "mode": "markdown",
                 "content": "**Metrics answer \"how many\"; logs answer \"which one\".** graph2otel puts bounded,\ntenant-shaped aggregates on metrics and per-entity detail on the log twin (#112).\nIf a panel here cannot tell you *which* device or user, the Logs row at the bottom\ncan.\n\n**Metric names are the OTLP\u2192Prometheus normalized form** \u2014 dots become underscores\nand unit/type suffixes are appended (`_total` on counters, `_seconds`, `_ratio`,\n`_percent`). Every query on this dashboard is generated from\n`spec/signal-catalog.json`, which is itself generated from what the collectors\nactually emit, so a panel cannot name a metric that does not exist.\n\n**LogQL: attributes are structured metadata, not stream labels.** Only\n`service_name` is a stream label. `{event_name=\"entra.signin\"}` matches **zero rows,\nsilently** \u2014 it is not an error. Always:\n\n```logql\n{service_name=\"graph2otel\"} | event_name=`entra.signin` | status_error_code!=`0`\n```\n\n**Empty is often correct.** Several collectors are opt-in (blob ingest, beta Graph\nsurfaces, high-volume feeds) and several are empty on a healthy tenant. Check the\nSignal availability row before interpreting an empty metric panel: it distinguishes\ndisabled, covered, healthy-empty, limited, blocked and failed collectors. An empty\navailability table is unknown, not evidence that a collector is disabled.\n"
+              }
+            }
+          }
+        }
+      },
+      "panel-414": {
+        "kind": "Panel",
+        "spec": {
+          "id": 414,
+          "title": "Investigate one entity",
+          "description": "",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "text",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "mode": "markdown",
+                "content": "### Investigate one entity across every signal\n\nPaste an identifier into one of the inputs at the top of this dashboard \u2014 device,\napplication, account, email message, alert or incident \u2014 and expand the matching\nrow below. Each row lists which of graph2otel's log signals name that entity, and\nthen every record that names it, in the tenant and time range currently selected.\n\n**Metrics cannot answer this and never will.** Per-entity identifiers are\ndeliberately not metric labels (#112): a series keyed by UPN or device grows with\ntenant size and gets one sample ever. The log twin answers \"which one\" for free.\n\n**These are navigation aids, not joins.** Two records naming the same id are two\nrecords naming the same id. Some identifiers are also source-scoped \u2014 `device_id`\nis Intune's managed-device id on `intune.*` and Defender's machine id on\n`defender.*` \u2014 so a match proves a record names that id, never that two records\nare the same device.\n\nRows are collapsed on purpose: expanding all six would run every entity's queries\nfor the five you are not investigating.\n"
+              }
+            }
+          }
+        }
+      },
+      "panel-415": {
+        "kind": "Panel",
+        "spec": {
+          "id": 415,
+          "title": "Which signals name this device",
+          "description": "**Which of graph2otel's log signals name it, and how often.** This device's compliance, configuration, certificate, encryption, startup, logon and vulnerability records.\n\n**Identifier:** the device the record is ABOUT \u2014 the managed or onboarded device the source system names, never the device that observed the event.\n\n**Queried keys:** `device_id` (41 log events), `device_name` (36 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `aad_device_id`, `serial_number`, `device_serial_number`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\n**Read this first:** `device_id` is source-scoped. On `intune.*` it is Intune's managed-device id; on `defender.*` it is Defender's machine id. They are different id namespaces for the same physical machine and graph2otel does not map between them, so pivoting on an Intune id will not reach Defender rows. `device_name` is usually what bridges the two, and is usually what an alert quotes.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "topk(80, sum by (tenant_id, event_name) (count_over_time({service_name=\"graph2otel\"} | event_name=~`^(defender\\.device_event|defender\\.device_file|defender\\.device_file_certificate|defender\\.device_image_load|defender\\.device_info|defender\\.device_logon|defender\\.device_network|defender\\.device_network_info|defender\\.device_process|defender\\.device_registry|defender\\.secure_config|defender\\.software|defender\\.vulnerability|entra\\.deleted_item|intune\\.autopilot_deployment|intune\\.autopilot_deployment_apps|intune\\.autopilot_deployment_scripts|intune\\.autopilot_event|intune\\.cloud_pki_leaf_certificate|intune\\.compliance_alert|intune\\.config_assignment_status|intune\\.config_profile_device_status|intune\\.defender_agent|intune\\.device_app_health|intune\\.device_attestation|intune\\.device_battery_health|intune\\.device_boot_security|intune\\.device_certificate|intune\\.device_encryption|intune\\.device_hardware|intune\\.device_malware_state|intune\\.device_resource_performance|intune\\.device_startup|intune\\.device_startup_process|intune\\.devices_without_compliance_policy|intune\\.enrollment_event|intune\\.epm_denied|intune\\.epm_elevation_events|intune\\.firewall_status|intune\\.noncompliant_setting|intune\\.remediation_run_states)$` | tenant_id=~\"$tenant\" | device_id=~`.+` | device_id=`$pivot_device` [$__auto])))",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "legendFormat": "{{tenant_id}} {{event_name}}"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "B",
+                        "expr": "topk(80, sum by (tenant_id, event_name) (count_over_time({service_name=\"graph2otel\"} | event_name=~`^(defender\\.device_event|defender\\.device_file|defender\\.device_file_certificate|defender\\.device_image_load|defender\\.device_info|defender\\.device_logon|defender\\.device_network|defender\\.device_network_info|defender\\.device_process|defender\\.device_registry|defender\\.secure_config|defender\\.software|defender\\.vulnerability|intune\\.autopilot_deployment|intune\\.cloud_pki_leaf_certificate|intune\\.compliance_alert|intune\\.config_assignment_status|intune\\.config_profile_device_status|intune\\.defender_agent|intune\\.device_app_health|intune\\.device_attestation|intune\\.device_battery_health|intune\\.device_boot_security|intune\\.device_certificate|intune\\.device_encryption|intune\\.device_endpoint_analytics|intune\\.device_hardware|intune\\.device_resource_performance|intune\\.device_work_from_anywhere|intune\\.devices_without_compliance_policy|intune\\.epm_denied|intune\\.epm_elevation_events|intune\\.firewall_status|intune\\.managed_device|intune\\.noncompliant_setting|intune\\.remediation_run_states)$` | tenant_id=~\"$tenant\" | device_name=~`.+` | device_name=`$pivot_device` [$__auto])))",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "legendFormat": "{{tenant_id}} {{event_name}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "reduce",
+                  "spec": {
+                    "options": {
+                      "reducers": [
+                        "sum"
+                      ],
+                      "mode": "seriesToRows"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "fields": ""
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {},
+                  "noValue": "No rows. Paste a value into the \u201cDevice (id or name)\u201d input at the top of this dashboard, then check the tenant and the time range. An empty input matches nothing on purpose \u2014 an unset identifier filter would otherwise match every record that has no such attribute.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-416": {
+        "kind": "Panel",
+        "spec": {
+          "id": 416,
+          "title": "Every record naming this device",
+          "description": "**Every record that names it, newest first.** This device's compliance, configuration, certificate, encryption, startup, logon and vulnerability records.\n\n**Identifier:** the device the record is ABOUT \u2014 the managed or onboarded device the source system names, never the device that observed the event.\n\n**Queried keys:** `device_id` (41 log events), `device_name` (36 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `aad_device_id`, `serial_number`, `device_serial_number`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\n**Read this first:** `device_id` is source-scoped. On `intune.*` it is Intune's managed-device id; on `defender.*` it is Defender's machine id. They are different id namespaces for the same physical machine and graph2otel does not map between them, so pivoting on an Intune id will not reach Defender rows. `device_name` is usually what bridges the two, and is usually what an alert quotes.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=~`^(defender\\.device_event|defender\\.device_file|defender\\.device_file_certificate|defender\\.device_image_load|defender\\.device_info|defender\\.device_logon|defender\\.device_network|defender\\.device_network_info|defender\\.device_process|defender\\.device_registry|defender\\.secure_config|defender\\.software|defender\\.vulnerability|entra\\.deleted_item|intune\\.autopilot_deployment|intune\\.autopilot_deployment_apps|intune\\.autopilot_deployment_scripts|intune\\.autopilot_event|intune\\.cloud_pki_leaf_certificate|intune\\.compliance_alert|intune\\.config_assignment_status|intune\\.config_profile_device_status|intune\\.defender_agent|intune\\.device_app_health|intune\\.device_attestation|intune\\.device_battery_health|intune\\.device_boot_security|intune\\.device_certificate|intune\\.device_encryption|intune\\.device_hardware|intune\\.device_malware_state|intune\\.device_resource_performance|intune\\.device_startup|intune\\.device_startup_process|intune\\.devices_without_compliance_policy|intune\\.enrollment_event|intune\\.epm_denied|intune\\.epm_elevation_events|intune\\.firewall_status|intune\\.noncompliant_setting|intune\\.remediation_run_states)$` | tenant_id=~\"$tenant\" | device_id=~`.+` | device_id=`$pivot_device`",
+                        "editorMode": "code",
+                        "queryType": "range"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "B",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=~`^(defender\\.device_event|defender\\.device_file|defender\\.device_file_certificate|defender\\.device_image_load|defender\\.device_info|defender\\.device_logon|defender\\.device_network|defender\\.device_network_info|defender\\.device_process|defender\\.device_registry|defender\\.secure_config|defender\\.software|defender\\.vulnerability|intune\\.autopilot_deployment|intune\\.cloud_pki_leaf_certificate|intune\\.compliance_alert|intune\\.config_assignment_status|intune\\.config_profile_device_status|intune\\.defender_agent|intune\\.device_app_health|intune\\.device_attestation|intune\\.device_battery_health|intune\\.device_boot_security|intune\\.device_certificate|intune\\.device_encryption|intune\\.device_endpoint_analytics|intune\\.device_hardware|intune\\.device_resource_performance|intune\\.device_work_from_anywhere|intune\\.devices_without_compliance_policy|intune\\.epm_denied|intune\\.epm_elevation_events|intune\\.firewall_status|intune\\.managed_device|intune\\.noncompliant_setting|intune\\.remediation_run_states)$` | tenant_id=~\"$tenant\" | device_name=~`.+` | device_name=`$pivot_device`",
+                        "editorMode": "code",
+                        "queryType": "range"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "logs",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showTime": true,
+                "wrapLogMessage": true,
+                "sortOrder": "Descending",
+                "enableLogDetails": true,
+                "dedupStrategy": "none",
+                "prettifyLogMessage": false
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "No rows. Paste a value into the \u201cDevice (id or name)\u201d input at the top of this dashboard, then check the tenant and the time range. An empty input matches nothing on purpose \u2014 an unset identifier filter would otherwise match every record that has no such attribute.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-417": {
+        "kind": "Panel",
+        "spec": {
+          "id": 417,
+          "title": "Which signals name this application or service principal",
+          "description": "**Which of graph2otel's log signals name it, and how often.** This app's sign-ins, credential and federated-credential state, consent and permission grants, risk detections and graph activity.\n\n**Identifier:** the application the record is about. `app_id` is the Entra application (client) id, `service_principal_id` the directory object id of its service principal, and `application_id` the same app as other products name it. One app registration has all three and they are different values.\n\n**Queried keys:** `app_id` (12 log events), `service_principal_id` (5 log events), `application_id` (4 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `app_display_name`, `app_object_id`, `oauth_app_id`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "topk(80, sum by (tenant_id, event_name) (count_over_time({service_name=\"graph2otel\"} | event_name=~`^(entra\\.app_credential|entra\\.app_signin_activity|entra\\.application|entra\\.deleted_item|entra\\.federated_identity_credential|entra\\.graph_activity|entra\\.risky_service_principal|entra\\.service_principal|entra\\.service_principal_risk_detection|entra\\.signin|intune\\.app_install_status|m365\\.teams_app)$` | tenant_id=~\"$tenant\" | app_id=~`.+` | app_id=`$pivot_app` [$__auto])))",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "legendFormat": "{{tenant_id}} {{event_name}}"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "B",
+                        "expr": "topk(80, sum by (tenant_id, event_name) (count_over_time({service_name=\"graph2otel\"} | event_name=~`^(defender\\.oauth_app|entra\\.graph_activity|entra\\.provisioning|entra\\.service_principal_risk_detection|entra\\.signin)$` | tenant_id=~\"$tenant\" | service_principal_id=~`.+` | service_principal_id=`$pivot_app` [$__auto])))",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "legendFormat": "{{tenant_id}} {{event_name}}"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "C",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "C",
+                        "expr": "topk(80, sum by (tenant_id, event_name) (count_over_time({service_name=\"graph2otel\"} | event_name=~`^(defender\\.behavior_entity|defender\\.cloud_app_event|entra\\.graph_notifications|intune\\.autopilot_deployment_apps)$` | tenant_id=~\"$tenant\" | application_id=~`.+` | application_id=`$pivot_app` [$__auto])))",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "legendFormat": "{{tenant_id}} {{event_name}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "reduce",
+                  "spec": {
+                    "options": {
+                      "reducers": [
+                        "sum"
+                      ],
+                      "mode": "seriesToRows"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "fields": ""
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {},
+                  "noValue": "No rows. Paste a value into the \u201cApplication (app id, SP object id)\u201d input at the top of this dashboard, then check the tenant and the time range. An empty input matches nothing on purpose \u2014 an unset identifier filter would otherwise match every record that has no such attribute.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-418": {
+        "kind": "Panel",
+        "spec": {
+          "id": 418,
+          "title": "Every record naming this application or service principal",
+          "description": "**Every record that names it, newest first.** This app's sign-ins, credential and federated-credential state, consent and permission grants, risk detections and graph activity.\n\n**Identifier:** the application the record is about. `app_id` is the Entra application (client) id, `service_principal_id` the directory object id of its service principal, and `application_id` the same app as other products name it. One app registration has all three and they are different values.\n\n**Queried keys:** `app_id` (12 log events), `service_principal_id` (5 log events), `application_id` (4 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `app_display_name`, `app_object_id`, `oauth_app_id`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=~`^(entra\\.app_credential|entra\\.app_signin_activity|entra\\.application|entra\\.deleted_item|entra\\.federated_identity_credential|entra\\.graph_activity|entra\\.risky_service_principal|entra\\.service_principal|entra\\.service_principal_risk_detection|entra\\.signin|intune\\.app_install_status|m365\\.teams_app)$` | tenant_id=~\"$tenant\" | app_id=~`.+` | app_id=`$pivot_app`",
+                        "editorMode": "code",
+                        "queryType": "range"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "B",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=~`^(defender\\.oauth_app|entra\\.graph_activity|entra\\.provisioning|entra\\.service_principal_risk_detection|entra\\.signin)$` | tenant_id=~\"$tenant\" | service_principal_id=~`.+` | service_principal_id=`$pivot_app`",
+                        "editorMode": "code",
+                        "queryType": "range"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "C",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "C",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=~`^(defender\\.behavior_entity|defender\\.cloud_app_event|entra\\.graph_notifications|intune\\.autopilot_deployment_apps)$` | tenant_id=~\"$tenant\" | application_id=~`.+` | application_id=`$pivot_app`",
+                        "editorMode": "code",
+                        "queryType": "range"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "logs",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showTime": true,
+                "wrapLogMessage": true,
+                "sortOrder": "Descending",
+                "enableLogDetails": true,
+                "dedupStrategy": "none",
+                "prettifyLogMessage": false
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "No rows. Paste a value into the \u201cApplication (app id, SP object id)\u201d input at the top of this dashboard, then check the tenant and the time range. An empty input matches nothing on purpose \u2014 an unset identifier filter would otherwise match every record that has no such attribute.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-419": {
+        "kind": "Panel",
+        "spec": {
+          "id": 419,
+          "title": "Which signals name this account",
+          "description": "**Which of graph2otel's log signals name it, and how often.** This account's sign-ins, risk detections, registration state, privilege elevations, certificates and mailbox records.\n\n**Identifier:** the account named on the record, as a user principal name. Three attribute names carry the same UPN value \u2014 Entra writes `user_principal_name`, Intune writes `upn`, Defender writes `account_upn` \u2014 so all three are queried and one input covers them.\n\n**Queried keys:** `user_principal_name` (11 log events), `upn` (12 log events), `account_upn` (5 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `user_id`, `account_object_id`, `account_name`, `user_display_name`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\n**Read this first:** Object-id keys are a different value shape from a UPN, so they are not folded into this input: pasting a UPN into an object-id filter would match nothing and the empty result would look like a verdict.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "topk(80, sum by (tenant_id, event_name) (count_over_time({service_name=\"graph2otel\"} | event_name=~`^(entra\\.deleted_item|entra\\.directory_sync_error|entra\\.risk_detection|entra\\.risky_user|entra\\.signin|entra\\.user_registration|intune\\.cloud_pki_leaf_certificate|intune\\.device_certificate|intune\\.device_encryption|intune\\.managed_device|m365\\.exchange_mailbox)$` | tenant_id=~\"$tenant\" | user_principal_name=~`.+` | user_principal_name=`$pivot_account` [$__auto])))",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "legendFormat": "{{tenant_id}} {{event_name}}"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "B",
+                        "expr": "topk(80, sum by (tenant_id, event_name) (count_over_time({service_name=\"graph2otel\"} | event_name=~`^(intune\\.autopilot_deployment|intune\\.config_assignment_status|intune\\.config_profile_device_status|intune\\.defender_agent|intune\\.device_attestation|intune\\.device_boot_security|intune\\.device_certificate|intune\\.devices_without_compliance_policy|intune\\.epm_elevation_events|intune\\.epm_elevations_by_user|intune\\.firewall_status|intune\\.noncompliant_setting)$` | tenant_id=~\"$tenant\" | upn=~`.+` | upn=`$pivot_account` [$__auto])))",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "legendFormat": "{{tenant_id}} {{event_name}}"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "C",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "C",
+                        "expr": "topk(80, sum by (tenant_id, event_name) (count_over_time({service_name=\"graph2otel\"} | event_name=~`^(defender\\.behavior|defender\\.behavior_entity|defender\\.identity_info|defender\\.identity_logon|defender\\.url_click_event)$` | tenant_id=~\"$tenant\" | account_upn=~`.+` | account_upn=`$pivot_account` [$__auto])))",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "legendFormat": "{{tenant_id}} {{event_name}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "reduce",
+                  "spec": {
+                    "options": {
+                      "reducers": [
+                        "sum"
+                      ],
+                      "mode": "seriesToRows"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "fields": ""
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {},
+                  "noValue": "No rows. Paste a value into the \u201cAccount (UPN)\u201d input at the top of this dashboard, then check the tenant and the time range. An empty input matches nothing on purpose \u2014 an unset identifier filter would otherwise match every record that has no such attribute.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-420": {
+        "kind": "Panel",
+        "spec": {
+          "id": 420,
+          "title": "Every record naming this account",
+          "description": "**Every record that names it, newest first.** This account's sign-ins, risk detections, registration state, privilege elevations, certificates and mailbox records.\n\n**Identifier:** the account named on the record, as a user principal name. Three attribute names carry the same UPN value \u2014 Entra writes `user_principal_name`, Intune writes `upn`, Defender writes `account_upn` \u2014 so all three are queried and one input covers them.\n\n**Queried keys:** `user_principal_name` (11 log events), `upn` (12 log events), `account_upn` (5 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `user_id`, `account_object_id`, `account_name`, `user_display_name`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\n**Read this first:** Object-id keys are a different value shape from a UPN, so they are not folded into this input: pasting a UPN into an object-id filter would match nothing and the empty result would look like a verdict.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=~`^(entra\\.deleted_item|entra\\.directory_sync_error|entra\\.risk_detection|entra\\.risky_user|entra\\.signin|entra\\.user_registration|intune\\.cloud_pki_leaf_certificate|intune\\.device_certificate|intune\\.device_encryption|intune\\.managed_device|m365\\.exchange_mailbox)$` | tenant_id=~\"$tenant\" | user_principal_name=~`.+` | user_principal_name=`$pivot_account`",
+                        "editorMode": "code",
+                        "queryType": "range"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "B",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=~`^(intune\\.autopilot_deployment|intune\\.config_assignment_status|intune\\.config_profile_device_status|intune\\.defender_agent|intune\\.device_attestation|intune\\.device_boot_security|intune\\.device_certificate|intune\\.devices_without_compliance_policy|intune\\.epm_elevation_events|intune\\.epm_elevations_by_user|intune\\.firewall_status|intune\\.noncompliant_setting)$` | tenant_id=~\"$tenant\" | upn=~`.+` | upn=`$pivot_account`",
+                        "editorMode": "code",
+                        "queryType": "range"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "C",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "C",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=~`^(defender\\.behavior|defender\\.behavior_entity|defender\\.identity_info|defender\\.identity_logon|defender\\.url_click_event)$` | tenant_id=~\"$tenant\" | account_upn=~`.+` | account_upn=`$pivot_account`",
+                        "editorMode": "code",
+                        "queryType": "range"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "logs",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showTime": true,
+                "wrapLogMessage": true,
+                "sortOrder": "Descending",
+                "enableLogDetails": true,
+                "dedupStrategy": "none",
+                "prettifyLogMessage": false
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "No rows. Paste a value into the \u201cAccount (UPN)\u201d input at the top of this dashboard, then check the tenant and the time range. An empty input matches nothing on purpose \u2014 an unset identifier filter would otherwise match every record that has no such attribute.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-421": {
+        "kind": "Panel",
+        "spec": {
+          "id": 421,
+          "title": "Which signals name this email message",
+          "description": "**Which of graph2otel's log signals name it, and how often.** This message's delivery verdict, attachments, urls and clicks, quarantine state and transport trace.\n\n**Identifier:** the message the record is about. `network_message_id` is Microsoft's per-tenant id used across the Defender for Office 365 tables; `internet_message_id` is the RFC 5322 Message-ID from the header \u2014 the one an end user or an external system can quote.\n\n**Queried keys:** `network_message_id` (7 log events), `internet_message_id` (4 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `message_trace_id`, `email_cluster_id`, `message_id`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "topk(80, sum by (tenant_id, event_name) (count_over_time({service_name=\"graph2otel\"} | event_name=~`^(defender\\.email|defender\\.email_attachment|defender\\.email_post_delivery|defender\\.email_url|defender\\.quarantine|defender\\.url_click_event|m365\\.audit)$` | tenant_id=~\"$tenant\" | network_message_id=~`.+` | network_message_id=`$pivot_message` [$__auto])))",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "legendFormat": "{{tenant_id}} {{event_name}}"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "B",
+                        "expr": "topk(80, sum by (tenant_id, event_name) (count_over_time({service_name=\"graph2otel\"} | event_name=~`^(defender\\.email|defender\\.email_post_delivery|defender\\.quarantine|m365\\.message_trace)$` | tenant_id=~\"$tenant\" | internet_message_id=~`.+` | internet_message_id=`$pivot_message` [$__auto])))",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "legendFormat": "{{tenant_id}} {{event_name}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "reduce",
+                  "spec": {
+                    "options": {
+                      "reducers": [
+                        "sum"
+                      ],
+                      "mode": "seriesToRows"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "fields": ""
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {},
+                  "noValue": "No rows. Paste a value into the \u201cEmail message (network or internet message id)\u201d input at the top of this dashboard, then check the tenant and the time range. An empty input matches nothing on purpose \u2014 an unset identifier filter would otherwise match every record that has no such attribute.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-422": {
+        "kind": "Panel",
+        "spec": {
+          "id": 422,
+          "title": "Every record naming this email message",
+          "description": "**Every record that names it, newest first.** This message's delivery verdict, attachments, urls and clicks, quarantine state and transport trace.\n\n**Identifier:** the message the record is about. `network_message_id` is Microsoft's per-tenant id used across the Defender for Office 365 tables; `internet_message_id` is the RFC 5322 Message-ID from the header \u2014 the one an end user or an external system can quote.\n\n**Queried keys:** `network_message_id` (7 log events), `internet_message_id` (4 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `message_trace_id`, `email_cluster_id`, `message_id`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=~`^(defender\\.email|defender\\.email_attachment|defender\\.email_post_delivery|defender\\.email_url|defender\\.quarantine|defender\\.url_click_event|m365\\.audit)$` | tenant_id=~\"$tenant\" | network_message_id=~`.+` | network_message_id=`$pivot_message`",
+                        "editorMode": "code",
+                        "queryType": "range"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "B",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=~`^(defender\\.email|defender\\.email_post_delivery|defender\\.quarantine|m365\\.message_trace)$` | tenant_id=~\"$tenant\" | internet_message_id=~`.+` | internet_message_id=`$pivot_message`",
+                        "editorMode": "code",
+                        "queryType": "range"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "logs",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showTime": true,
+                "wrapLogMessage": true,
+                "sortOrder": "Descending",
+                "enableLogDetails": true,
+                "dedupStrategy": "none",
+                "prettifyLogMessage": false
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "No rows. Paste a value into the \u201cEmail message (network or internet message id)\u201d input at the top of this dashboard, then check the tenant and the time range. An empty input matches nothing on purpose \u2014 an unset identifier filter would otherwise match every record that has no such attribute.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-423": {
+        "kind": "Panel",
+        "spec": {
+          "id": 423,
+          "title": "Which signals name this security alert",
+          "description": "**Which of graph2otel's log signals name it, and how often.** This alert's evidence rows and the graph security-alert record that reports it.\n\n**Identifier:** the alert the record is about. `alert_id` is the source product's own alert id \u2014 Defender XDR's on the advanced-hunting alert tables, PIM's on its own alerts, which are different namespaces \u2014 and `provider_alert_id` is the originating provider's id carried on the Graph security alert.\n\n**Queried keys:** `alert_id` (3 log events), `provider_alert_id` (1 log events). An input matching any one of them matches; an empty input matches nothing.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [
+            {
+              "title": "Investigate this security incident \u2014 every alert graph2otel has recorded under this incident",
+              "url": "/d/graph2otel?dtab=Overview&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "topk(80, sum by (tenant_id, event_name) (count_over_time({service_name=\"graph2otel\"} | event_name=~`^(defender\\.alert_evidence|defender\\.alert_info|entra\\.pim_alert)$` | tenant_id=~\"$tenant\" | alert_id=~`.+` | alert_id=`$pivot_alert` [$__auto])))",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "legendFormat": "{{tenant_id}} {{event_name}}"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "B",
+                        "expr": "topk(80, sum by (tenant_id, event_name) (count_over_time({service_name=\"graph2otel\"} | event_name=~`^(entra\\.security_alert)$` | tenant_id=~\"$tenant\" | provider_alert_id=~`.+` | provider_alert_id=`$pivot_alert` [$__auto])))",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "legendFormat": "{{tenant_id}} {{event_name}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "reduce",
+                  "spec": {
+                    "options": {
+                      "reducers": [
+                        "sum"
+                      ],
+                      "mode": "seriesToRows"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "fields": ""
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {},
+                  "noValue": "No rows. Paste a value into the \u201cSecurity alert id\u201d input at the top of this dashboard, then check the tenant and the time range. An empty input matches nothing on purpose \u2014 an unset identifier filter would otherwise match every record that has no such attribute.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-424": {
+        "kind": "Panel",
+        "spec": {
+          "id": 424,
+          "title": "Every record naming this security alert",
+          "description": "**Every record that names it, newest first.** This alert's evidence rows and the graph security-alert record that reports it.\n\n**Identifier:** the alert the record is about. `alert_id` is the source product's own alert id \u2014 Defender XDR's on the advanced-hunting alert tables, PIM's on its own alerts, which are different namespaces \u2014 and `provider_alert_id` is the originating provider's id carried on the Graph security alert.\n\n**Queried keys:** `alert_id` (3 log events), `provider_alert_id` (1 log events). An input matching any one of them matches; an empty input matches nothing.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [
+            {
+              "title": "Investigate this security incident \u2014 every alert graph2otel has recorded under this incident",
+              "url": "/d/graph2otel?dtab=Overview&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=~`^(defender\\.alert_evidence|defender\\.alert_info|entra\\.pim_alert)$` | tenant_id=~\"$tenant\" | alert_id=~`.+` | alert_id=`$pivot_alert`",
+                        "editorMode": "code",
+                        "queryType": "range"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "B",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=~`^(entra\\.security_alert)$` | tenant_id=~\"$tenant\" | provider_alert_id=~`.+` | provider_alert_id=`$pivot_alert`",
+                        "editorMode": "code",
+                        "queryType": "range"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "logs",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showTime": true,
+                "wrapLogMessage": true,
+                "sortOrder": "Descending",
+                "enableLogDetails": true,
+                "dedupStrategy": "none",
+                "prettifyLogMessage": false
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "No rows. Paste a value into the \u201cSecurity alert id\u201d input at the top of this dashboard, then check the tenant and the time range. An empty input matches nothing on purpose \u2014 an unset identifier filter would otherwise match every record that has no such attribute.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-425": {
+        "kind": "Panel",
+        "spec": {
+          "id": 425,
+          "title": "Which signals name this security incident",
+          "description": "**Which of graph2otel's log signals name it, and how often.** Every alert graph2otel has recorded under this incident.\n\n**Identifier:** the incident that groups one or more alerts, as Microsoft's Graph security API reports it on each alert it contains.\n\n**Queried keys:** `incident_id` (1 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Read this first:** Exactly one cataloged log signal carries `incident_id` today (`entra.security_alert`), so this pivot lists the alerts in the incident and nothing else. Pivot from each alert id for its evidence.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "topk(80, sum by (tenant_id, event_name) (count_over_time({service_name=\"graph2otel\"} | event_name=~`^(entra\\.security_alert)$` | tenant_id=~\"$tenant\" | incident_id=~`.+` | incident_id=`$pivot_incident` [$__auto])))",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "legendFormat": "{{tenant_id}} {{event_name}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "reduce",
+                  "spec": {
+                    "options": {
+                      "reducers": [
+                        "sum"
+                      ],
+                      "mode": "seriesToRows"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "fields": ""
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {},
+                  "noValue": "No rows. Paste a value into the \u201cSecurity incident id\u201d input at the top of this dashboard, then check the tenant and the time range. An empty input matches nothing on purpose \u2014 an unset identifier filter would otherwise match every record that has no such attribute.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-426": {
+        "kind": "Panel",
+        "spec": {
+          "id": 426,
+          "title": "Every record naming this security incident",
+          "description": "**Every record that names it, newest first.** Every alert graph2otel has recorded under this incident.\n\n**Identifier:** the incident that groups one or more alerts, as Microsoft's Graph security API reports it on each alert it contains.\n\n**Queried keys:** `incident_id` (1 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Read this first:** Exactly one cataloged log signal carries `incident_id` today (`entra.security_alert`), so this pivot lists the alerts in the incident and nothing else. Pivot from each alert id for its evidence.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=~`^(entra\\.security_alert)$` | tenant_id=~\"$tenant\" | incident_id=~`.+` | incident_id=`$pivot_incident`",
+                        "editorMode": "code",
+                        "queryType": "range"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "logs",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showTime": true,
+                "wrapLogMessage": true,
+                "sortOrder": "Descending",
+                "enableLogDetails": true,
+                "dedupStrategy": "none",
+                "prettifyLogMessage": false
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "No rows. Paste a value into the \u201cSecurity incident id\u201d input at the top of this dashboard, then check the tenant and the time range. An empty input matches nothing on purpose \u2014 an unset identifier filter would otherwise match every record that has no such attribute.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
               }
             }
           }
@@ -32769,7 +34549,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-409"
+                                    "name": "panel-412"
                                   }
                                 }
                               },
@@ -32778,11 +34558,24 @@
                                 "spec": {
                                   "x": 0,
                                   "y": 8,
-                                  "width": 24,
+                                  "width": 12,
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-410"
+                                    "name": "panel-413"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 12,
+                                  "y": 8,
+                                  "width": 12,
+                                  "height": 10,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-414"
                                   }
                                 }
                               }
@@ -32790,6 +34583,246 @@
                           }
                         },
                         "hideHeader": true
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "title": "Investigate a device",
+                        "collapse": true,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 0,
+                                  "width": 8,
+                                  "height": 10,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-415"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 8,
+                                  "y": 0,
+                                  "width": 16,
+                                  "height": 10,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-416"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "title": "Investigate an application or service principal",
+                        "collapse": true,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 0,
+                                  "width": 8,
+                                  "height": 10,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-417"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 8,
+                                  "y": 0,
+                                  "width": 16,
+                                  "height": 10,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-418"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "title": "Investigate an account",
+                        "collapse": true,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 0,
+                                  "width": 8,
+                                  "height": 10,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-419"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 8,
+                                  "y": 0,
+                                  "width": 16,
+                                  "height": 10,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-420"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "title": "Investigate an email message",
+                        "collapse": true,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 0,
+                                  "width": 8,
+                                  "height": 10,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-421"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 8,
+                                  "y": 0,
+                                  "width": 16,
+                                  "height": 10,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-422"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "title": "Investigate a security alert",
+                        "collapse": true,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 0,
+                                  "width": 8,
+                                  "height": 10,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-423"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 8,
+                                  "y": 0,
+                                  "width": 16,
+                                  "height": 10,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-424"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "kind": "RowsLayoutRow",
+                      "spec": {
+                        "title": "Investigate a security incident",
+                        "collapse": true,
+                        "layout": {
+                          "kind": "GridLayout",
+                          "spec": {
+                            "items": [
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 0,
+                                  "width": 8,
+                                  "height": 10,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-425"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 8,
+                                  "y": 0,
+                                  "width": 16,
+                                  "height": 10,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-426"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
                       }
                     }
                   ]
@@ -39120,6 +41153,60 @@
                     {
                       "kind": "TabsLayoutTab",
                       "spec": {
+                        "title": "Grafana annotation publishing",
+                        "layout": {
+                          "kind": "RowsLayout",
+                          "spec": {
+                            "rows": [
+                              {
+                                "kind": "RowsLayoutRow",
+                                "spec": {
+                                  "title": "",
+                                  "collapse": false,
+                                  "layout": {
+                                    "kind": "GridLayout",
+                                    "spec": {
+                                      "items": [
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
+                                            "x": 0,
+                                            "y": 0,
+                                            "width": 12,
+                                            "height": 8,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-406"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
+                                            "x": 12,
+                                            "y": 0,
+                                            "width": 12,
+                                            "height": 8,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-407"
+                                            }
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "hideHeader": true
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "kind": "TabsLayoutTab",
+                      "spec": {
                         "title": "Logs \u2014 which one, not how many (#162)",
                         "layout": {
                           "kind": "RowsLayout",
@@ -39143,7 +41230,7 @@
                                             "height": 10,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-406"
+                                              "name": "panel-409"
                                             }
                                           }
                                         },
@@ -39156,7 +41243,7 @@
                                             "height": 10,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-407"
+                                              "name": "panel-410"
                                             }
                                           }
                                         }

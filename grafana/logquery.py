@@ -62,9 +62,18 @@ OPERATORS = {
 }
 
 # Stamped at the emitter boundary on every record (#143 tenant_id, #141
-# ingest_transport), so they are queryable on every event whether or not the
-# event's own catalog row lists them.
-FRAMEWORK_KEYS = frozenset({"tenant_id", "ingest_transport"})
+# ingest_transport, and the OTEL LogRecord EventName every emitted record
+# carries), so they are queryable on every event whether or not the event's own
+# catalog row lists them.
+#
+# ``event_name`` joined the overlay on #305. It was always guaranteed — every
+# query this package builds emits ``| event_name=…`` unconditionally — but
+# omitting it from the overlay meant the one grouping that makes a cross-event
+# query readable, ``by=["event_name"]``, was reported as an attribute the event
+# does not carry. That is the overlay's exact purpose: an attribute the framework
+# stamps rather than the collector. It is not a general escape from catalog
+# validation, and the three members are the whole list.
+FRAMEWORK_KEYS = frozenset({"tenant_id", "ingest_transport", "event_name"})
 
 
 class Filter:

@@ -14,7 +14,8 @@ nav = [
       { Architecture = "architecture.md" },
       { "Data-plane Registration" = "data-plane-registration.md" },
       { "Blob Ingest" = "blob-ingest.md" },
-      { "O365 Management Activity API" = "o365-management-api.md" }
+      { "O365 Management Activity API" = "o365-management-api.md" },
+      { "Grafana Annotations" = "grafana-annotations.md" }
     ] },
   { Reference = [
       { Collectors = "collectors.md" },

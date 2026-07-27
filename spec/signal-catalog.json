@@ -1,5 +1,5 @@
 {
-  "package_count": 153,
+  "package_count": 154,
   "domains": [
     "defender",
     "entra",
@@ -1491,6 +1491,51 @@
       ],
       "packages": [
         "internal/collectors/entra/users"
+      ]
+    },
+    {
+      "name": "graph2otel.annotation.degraded",
+      "prometheus_name": "graph2otel_annotation_degraded_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "description": "Whether the most recent Grafana annotation write failed and has not been recovered by a later success.",
+      "additive": false,
+      "domain": "graph2otel",
+      "attr_keys": [],
+      "packages": [
+        "internal/annotations"
+      ]
+    },
+    {
+      "name": "graph2otel.annotation.dropped",
+      "prometheus_name": "graph2otel_annotation_dropped_total",
+      "unit": "{annotation}",
+      "kind": "sum",
+      "description": "Annotations that did not reach Grafana since process start, by bounded reason (duplicate is the steady state on a state-shaped source, not a fault).",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "reason",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/annotations"
+      ]
+    },
+    {
+      "name": "graph2otel.annotation.published",
+      "prometheus_name": "graph2otel_annotation_published_total",
+      "unit": "{annotation}",
+      "kind": "sum",
+      "description": "Annotations accepted by the Grafana annotations API since process start.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "category",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/annotations"
       ]
     },
     {

@@ -40,6 +40,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import catalog as catalog_mod  # noqa: E402
+import pivots  # noqa: E402
 import presentation  # noqa: E402
 import v2  # noqa: E402
 from boards import common  # noqa: E402
@@ -133,15 +134,27 @@ def overview(b: Builder) -> dict:
     Never conditional. It is the one surface that must render when the census is
     missing entirely, because that is exactly the state an operator needs
     explained rather than hidden.
+
+    It also carries the entity investigation pivots (#305), one collapsed row per
+    entity kind. They live here rather than on a tab of their own for two reasons:
+    a pivot must never land somewhere the census can hide — a dtab into
+    conditioned-away content renders a completely blank body with no message
+    (measured, #399) — and this is the one tab that is unconditional by contract.
+    The seven-tab topology frozen by #399 is unchanged.
     """
     b.row("Overview")
     census = b.availability(".+")
     guide = b.text(common.PREAMBLE, title="Read this before writing your own query",
                    h=10)
-    leaf = v2.leaf("Overview", [v2.rowspec("", [
-        {"w": 24, "h": 8, "spec": census},
-        {"w": 24, "h": 10, "spec": guide},
-    ])])
+    how_to_pivot = b.text(pivots.PREAMBLE, title="Investigate one entity", h=10)
+    leaf = v2.leaf("Overview", [
+        v2.rowspec("", [
+            {"w": 24, "h": 8, "spec": census},
+            {"w": 12, "h": 10, "spec": guide},
+            {"w": 12, "h": 10, "spec": how_to_pivot},
+        ]),
+        *pivots.rows(b),
+    ])
     b.sentinel(CENSUS_SENTINEL)
     # Deploy / configuration markers on every time axis in the estate (#310).
     # graph2otel.startup fires once per configured tenant on every process start
@@ -158,14 +171,34 @@ def overview(b: Builder) -> dict:
     return leaf
 
 
-def render(cat) -> dict:
-    """Build the whole estate and return the manifest.
+def build(cat) -> tuple:
+    """Assemble the estate once. Returns ``(builder, manifest, log_domains)``.
 
     A single entry point so a gate cannot accidentally assert against a
     differently-assembled dashboard than the one that gets written.
     """
-    b, domain_tabs, _ = build_all(cat)
-    return b.render([overview(b), *domain_tabs])
+    b, domain_tabs, log_domains = build_all(cat)
+    return b, b.render([overview(b), *domain_tabs]), log_domains
+
+
+def render(cat) -> dict:
+    """The assembled manifest."""
+    return build(cat)[1]
+
+
+def gate_violations(cat, b: Builder, man: dict) -> list:
+    """Every structural rule breach in one assembled estate.
+
+    Structural gates run before anything is written: they mean the build itself
+    is wrong, so a manifest should not be shipped on the back of them.
+    """
+    return (list(b.violations)
+            + v2.manifest_violations(man)
+            + presentation.manifest_violations(man)
+            + presentation.violations(cat, b.covered)
+            + pivots.violations(cat)
+            + pivots.link_violations(cat, man)
+            + leaf_budget_violations(man, LEAF_WAIVERS))
 
 
 def leaf_panel_counts(man: dict) -> dict:
@@ -254,28 +287,25 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--check", action="store_true",
                     help="run every gate but write nothing (CI mode)")
+    ap.add_argument("--catalog", default=catalog_mod.CATALOGUE,
+                    help="signal catalog to build against; a non-default path "
+                         "never writes, so a sabotage run cannot ship its own "
+                         "mutation")
     args = ap.parse_args()
 
-    cat = catalog_mod.load()
+    cat = catalog_mod.load(args.catalog)
     waivers = load_waivers()
-    b, domain_tabs, log_domains = build_all(cat)
+    b, manifest, log_domains = build(cat)
     covered = b._covered
-    manifest = b.render([overview(b), *domain_tabs])
 
-    # Structural gates first: they mean the build itself is wrong, so nothing
-    # should be written on the back of them.
-    violations = (list(b.violations)
-                  + v2.manifest_violations(manifest)
-                  + presentation.manifest_violations(manifest)
-                  + presentation.violations(cat, covered)
-                  + leaf_budget_violations(manifest, LEAF_WAIVERS))
+    violations = gate_violations(cat, b, manifest)
     if violations:
         print("dashboard build violations:", file=sys.stderr)
         for v in violations:
             print(f"  - {v}", file=sys.stderr)
         return 1
 
-    if not args.check:
+    if not args.check and args.catalog == catalog_mod.CATALOGUE:
         os.makedirs(OUT_DIR, exist_ok=True)
         with open(os.path.join(OUT_DIR, OUT_FILE), "w") as f:
             f.write(dumps(manifest))

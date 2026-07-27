@@ -138,6 +138,10 @@ func TestSelfObservabilityScopeIsGeneratedAndProcessSetIsExact(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 	wantProcess := map[string]bool{
+		// One Grafana endpoint and one service-account token serve the whole
+		// process, so annotation delivery health has no tenant dimension — the
+		// same scope, for the same reason, as otlp.delivery.degraded below (#400).
+		"graph2otel.annotation.degraded":                true,
 		"graph2otel.build_info":                         true,
 		"graph2otel.otlp.delivery.degraded":             true,
 		"graph2otel.otlp.delivery.export_attempts":      true,

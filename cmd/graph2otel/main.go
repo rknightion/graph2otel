@@ -280,6 +280,29 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
+	// The opt-in Grafana annotation writer (#400) — graph2otel's one authorized
+	// second egress path, and a no-op unless grafana_annotations.url is set.
+	//
+	// Fatal on failure, unlike the startup marker above, and deliberately so: the
+	// marker's absence is a missing dashboard nicety, while a token that cannot
+	// write annotations means every annotation an operator later relies on for
+	// incident context is silently absent at exactly the moment they look for it.
+	// The maintainer's decision on #400 is explicit — fail fast and loudly at
+	// startup, not at the first event.
+	//
+	// After the checkpoint probe (the persisted dedupe set lives in that
+	// directory) and before startTenants (a collector that starts first emits
+	// records the rule set never sees).
+	if err := startAnnotator(ctx, cfg, provider, logger); err != nil {
+		logger.Error("refusing to start", "error", err)
+		return 1
+	}
+	defer func() {
+		if err := annotator.Close(context.Background()); err != nil {
+			logger.Warn("grafana annotation writer shutdown", "error", err)
+		}
+	}()
+
 	// Per-tenant Graph clients + collector schedulers. Each configured tenant
 	// gets its own client, license-gated collector set, and Scheduler goroutine
 	// bound to tenantCtx; startTenants returns the admin status sources and skip

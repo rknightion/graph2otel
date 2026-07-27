@@ -552,6 +552,133 @@ class TestDetectionExamples(unittest.TestCase):
                 self.assertEqual(f.read(), rendered[fname], fname)
 
 
+class TestSecondDetectionWave(unittest.TestCase):
+    """#313: six further portable detections, and the hunting-query library.
+
+    The five #300 detections cover privileged directory change, unresolved
+    security alert, active security incident, interactive sign-in anomaly and a
+    Graph 403 burst. Everything added here has to be genuinely DIFFERENT from
+    those — a near-duplicate of a shipped rule is worse than shipping fewer,
+    because it doubles the pages for one event while looking like coverage.
+
+    So the assertions below are about distinctness and about grounding, not about
+    prose: each new detection must key on an (event, attribute) pair no shipped
+    rule already keys on, and every hunt must name the paused detection whose
+    measurement it produces.
+    """
+
+    WAVE_TWO = {
+        "g2o-detect-exchange-inbox-rule-change",
+        "g2o-detect-mailbox-permission-grant",
+        "g2o-detect-identity-risk-detection",
+        "g2o-detect-workload-identity-risk",
+        "g2o-detect-legacy-auth-signin",
+        "g2o-detect-mail-remediation-failed",
+    }
+
+    def _detection(self, uid):
+        return next(r for r in build_rules.DETECTIONS if r["uid"] == uid)
+
+    def test_the_six_new_detections_ship(self):
+        uids = {r["uid"] for r in build_rules.DETECTIONS}
+        self.assertTrue(self.WAVE_TWO <= uids, sorted(self.WAVE_TWO - uids))
+        self.assertEqual(len(build_rules.DETECTIONS), 11)
+
+    def test_each_new_detection_queries_a_distinct_event_attribute_pair(self):
+        """The whole point of the wave: no new rule may re-ask a shipped rule's
+        question. Derived from the rendered query text, so it cannot disagree
+        with what the rule evaluates."""
+        pairs = {}
+        for rule in build_rules.DETECTIONS:
+            expr = rule["data"][0]["model"]["expr"]
+            events = set(re.findall(r"event_name=`([^`]+)`", expr))
+            attrs = set(re.findall(r"\|\s*([a-z_][a-z0-9_]*)\s*(?:=~|!~|=|!=)\s*`",
+                                   expr)) - {"event_name"}
+            pairs[rule["uid"]] = {(e, a) for e in events for a in attrs}
+        for uid in sorted(self.WAVE_TWO):
+            mine = pairs[uid]
+            self.assertTrue(mine, uid)
+            for other, theirs in pairs.items():
+                if other == uid or other in self.WAVE_TWO:
+                    continue
+                self.assertFalse(
+                    mine <= theirs,
+                    f"{uid} asks the same (event, attribute) question as {other}")
+
+    def test_the_new_detections_spread_across_more_than_one_source_domain(self):
+        sources = {self._detection(uid)["labels"]["source"]
+                   for uid in self.WAVE_TWO}
+        self.assertGreaterEqual(len(sources), 3, sources)
+
+    def test_the_mail_remediation_rule_requires_the_attribute_to_be_present(self):
+        """A negative label filter matches a record that lacks the label at all:
+        LogQL compares a missing structured-metadata key as the empty string, so
+        `action_result!~"success"` alone would fire on every record that simply
+        has no action_result. The presence term is what stops that."""
+        expr = self._detection(
+            "g2o-detect-mail-remediation-failed")["data"][0]["model"]["expr"]
+        self.assertIn("action_result=~`.+`", expr)
+        self.assertIn("action_result!~", expr)
+
+    def test_every_new_detection_regex_is_case_insensitive(self):
+        """Every value these rules match on is a Microsoft-documented spelling
+        that this project has NOT measured on the wire for that exact field. A
+        case-sensitive regex on an unverified spelling is a query that matches
+        zero rows silently — the #90 failure at value level rather than key
+        level."""
+        for uid in sorted(self.WAVE_TWO):
+            expr = self._detection(uid)["data"][0]["model"]["expr"]
+            for value in re.findall(r"[=!]~`([^`]+)`", expr):
+                if value == ".+":
+                    continue
+                self.assertTrue(value.startswith("(?i)"),
+                                f"{uid}: regex {value!r} is case-sensitive")
+
+    def test_every_hunt_validates_through_the_typed_filter_contract(self):
+        """The hunts are built by the same _sel() path as the detections, so a
+        misspelled filter or group key in a DOCUMENTED query fails CI too. A
+        hunting library nobody validates is a page of queries that quietly
+        return nothing."""
+        self.assertTrue(build_rules.HUNTS)
+        self.assertEqual(build_rules.validate_detection_fields(build_rules.CAT), [])
+
+    def test_every_hunt_query_is_the_only_correct_stream_selector(self):
+        for hunt in build_rules.HUNTS:
+            query = build_rules.hunt_query(hunt)
+            self.assertIn('{service_name="graph2otel"}', query, hunt["title"])
+            self.assertNotIn("{event_name=", query, hunt["title"])
+
+    def test_every_hunt_states_the_question_and_what_it_unblocks(self):
+        """A hunt with no stated purpose is a query, not a hunt. `unblocks` may
+        be empty only when the hunt answers a standalone question rather than
+        producing a paused rule's missing measurement."""
+        uids = {r["uid"] for r in build_rules.DETECTIONS}
+        for hunt in build_rules.HUNTS:
+            self.assertTrue(hunt["question"].strip(), hunt["title"])
+            self.assertTrue(hunt["look_for"].strip(), hunt["title"])
+            for uid in hunt["unblocks"]:
+                self.assertIn(uid, uids, hunt["title"])
+
+    def test_every_hunt_query_appears_verbatim_on_the_docs_page(self):
+        """The page is hand-written prose around generated queries. Asserting the
+        exact rendered string is what stops a hand-copied query drifting from the
+        validated one — a drifted copy is unvalidated, and looks identical."""
+        with open(build_rules.HUNTS_DOC, encoding="utf-8") as fh:
+            page = fh.read()
+        for hunt in build_rules.HUNTS:
+            self.assertIn(build_rules.hunt_query(hunt), page, hunt["title"])
+            self.assertIn(hunt["title"], page, hunt["title"])
+
+    def test_every_paused_detection_has_a_hunt_that_measures_it(self):
+        """The commitment this wave makes: every paused rule names a measurement
+        in tuning_required, and the hunting page carries the query that produces
+        it. A named measurement with no way to take it is a rule nobody can
+        enable."""
+        measured = {uid for hunt in build_rules.HUNTS for uid in hunt["unblocks"]}
+        for rule in build_rules.DETECTIONS:
+            self.assertIn(rule["uid"], measured, rule["uid"])
+
+
 class TestRecordingRulesAreRetired(unittest.TestCase):
     """#297: both Loki recording rules are retired, on measured evidence.
 

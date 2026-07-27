@@ -702,6 +702,97 @@
                         }
                     }
                 },
+                "grafana_annotations": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "url": {
+                            "type": "string"
+                        },
+                        "token": {
+                            "type": "string"
+                        },
+                        "token_file": {
+                            "type": "string"
+                        },
+                        "dashboard_uid": {
+                            "type": "string"
+                        },
+                        "timeout": {
+                            "type": "string"
+                        },
+                        "max_per_minute": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 9007199254740991
+                        },
+                        "queue_size": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 9007199254740991
+                        },
+                        "rollup_interval": {
+                            "type": "string"
+                        },
+                        "dedupe_retention": {
+                            "type": "string"
+                        },
+                        "categories": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                        "config_posture": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                                "enabled": {
+                                    "type": "boolean"
+                                },
+                                "rollup": {
+                                    "type": "boolean"
+                                }
+                            }
+                        },
+                        "security_incident": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                                "enabled": {
+                                    "type": "boolean"
+                                },
+                                "rollup": {
+                                    "type": "boolean"
+                                }
+                            }
+                        },
+                        "service_health": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                                "enabled": {
+                                    "type": "boolean"
+                                },
+                                "rollup": {
+                                    "type": "boolean"
+                                }
+                            }
+                        },
+                        "license": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                                "enabled": {
+                                    "type": "boolean"
+                                },
+                                "rollup": {
+                                    "type": "boolean"
+                                }
+                            }
+                        }
+                            }
+                        }
+                    }
+                },
                 "checkpoint_dir": {
                     "type": "string"
                 }

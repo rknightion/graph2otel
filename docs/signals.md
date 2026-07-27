@@ -157,6 +157,56 @@ resource attributes) are stream labels. This changes how you write LogQL:
   group) and any dashboard log panel must use — building a Grafana alert on
   `{event_name="…"}` is the single most common way to get a rule that silently never fires.
 
+### An unset identifier filter matches everything, not nothing
+
+An **absent** structured-metadata key compares equal to the empty string, so a filter built
+from an empty template variable is not a no-op:
+
+```logql
+{service_name="graph2otel"} | event_name=`intune.device_hardware` | device_id=``
+```
+
+matches every record that has **no** `device_id` — the opposite of the intended "show me
+nothing until an id is supplied". Require the key to be non-empty as well when the value is
+supplied at query time:
+
+```logql
+{service_name="graph2otel"} | event_name=~`^(intune\.device_hardware|defender\.device_logon)$`
+  | tenant_id=~"$tenant" | device_id=~`.+` | device_id=`$pivot_device`
+```
+
+The generated dashboard's entity pivots always emit both stages for this reason
+(`grafana/pivots.py`).
+
+## Investigating one entity across signals
+
+An analyst holding one identifier can reach every other signal that names the same entity
+from the generated dashboard's **Overview** tab: paste the value into the matching input
+(`Device`, `Application`, `Account`, `Email message`, `Security alert id`, `Security
+incident id`) and expand that entity's row. Every log panel in the estate also carries a
+header link into the pivot for each entity kind its own event can name, preserving the
+tenant selection and the time range.
+
+Three things it deliberately does not claim:
+
+- **It is not a join, and not a correlation verdict.** Records that name the same identifier
+  are records that name the same identifier.
+- **Several identifiers are source-scoped.** `device_id` is Intune's managed-device id on
+  `intune.*` and Defender's machine id on `defender.*` — different namespaces for the same
+  physical machine, and graph2otel does not map between them. `device_name` is usually what
+  bridges them.
+- **One UPN has three attribute names.** Entra writes `user_principal_name`, Intune writes
+  `upn`, Defender writes `account_upn`. All three are queried from the one input, which is
+  why a hand-written query on only one of them under-reports.
+
+Object-id keys (`user_id`, `account_object_id`, `app_object_id`, `aad_device_id`) are
+deliberately **not** folded into these inputs: a UPN pasted into an object-id filter matches
+nothing, and that empty result reads like a verdict. Query them directly when you have one.
+
+Per-entity identifiers are never metric labels (see [Cardinality shape](#cardinality-shape)),
+so this question has no metric answer and never will — which is exactly what the log twin is
+for.
+
 ## Backdated log records: accepted to 7 days, but NOT queryable immediately
 
 Two separate facts, and confusing them costs a day (#226 was filed on exactly that confusion,
