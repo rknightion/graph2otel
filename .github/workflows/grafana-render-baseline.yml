@@ -21,16 +21,28 @@ name: Grafana render baseline
 # docs/deploying-observability.md for the full investigation and the exact
 # `--help` evidence.
 #
-# NO LATENCY BUDGET IS SET HERE. #309 exists specifically to avoid picking a
-# numeric threshold from a single measurement. The exit-code plumbing for a
-# budget already exists in grafana/performance_baseline.py (`--budget-seconds`,
-# unset by default) and in `make grafana-performance-render`
-# (GRAFANA_PERFORMANCE_BUDGET_SECONDS, unset by default) — this workflow
-# deliberately does not pass a value, so every run's "budget" outcome is
-# "not_configured", which is always a clean pass. A maintainer sets the
-# budget later, once a real distribution exists from this workflow's own
-# artifact history, and only then does this workflow gain a fourth line
-# wiring GRAFANA_PERFORMANCE_BUDGET_SECONDS through.
+# THE BUDGET BELOW IS A BREAKAGE TRIPWIRE, NOT A TUNED PERFORMANCE THRESHOLD.
+# Read that before changing it, because the difference is the whole point.
+#
+# #309 was opened to avoid picking a latency threshold from n=1, and that still
+# holds: 30s is NOT a percentile, NOT derived from a distribution, and NOT a
+# statement about what good looks like. Measured renders sit near 6s (5.09-7.01s
+# across six v1 dashboards on 2026-07-26; 5.93s for the single v2 dashboard on
+# 2026-07-27), so 30s is roughly 5x the observed cost and will not fire on
+# ordinary variance, a slow morning, or a cold renderer.
+#
+# What it DOES catch is the failure this lane can actually have: a render that
+# has stopped working — a runaway query fan-out, a renderer that hangs, a
+# datasource timing out behind the dashboard. Those show up as tens of seconds,
+# not as a few hundred extra milliseconds.
+#
+# Maintainer decision 2026-07-27: ship the tripwire and close #309 rather than
+# hold the issue open waiting for a distribution. If a real percentile-based
+# budget is ever wanted, this workflow's artifact history is where it comes from
+# and this is the one line to change. Do not tighten it toward the observed
+# figure without that history — a threshold set just above the last measurement
+# is how a lane starts crying wolf, and #375's own rule is that an alert firing
+# on correct data is worse than none.
 #
 # Absent-dashboard handling: the render lane checks dashboard existence
 # with `gcx dashboards get` BEFORE attempting any render. Live-measured
@@ -121,8 +133,9 @@ jobs:
 
       # grafana/performance_baseline.py exits 0 (pass — including "dashboard
       # absent" and "no budget configured", neither of which is a failure),
-      # 1 (a configured latency budget was breached — unreachable today
-      # since no budget is configured below), or 2 (operational error: gcx,
+      # 1 (the 30s breakage tripwire was breached — see the header: this
+      # means the render has stopped working, not that it got slower), or
+      # 2 (operational error: gcx,
       # auth, transport, or response-shape failure before any measurement
       # completed). The JSON receipt is printed on stdout in every case
       # (captured to a file here); this step never fails itself so the
@@ -133,6 +146,7 @@ jobs:
           set +e
           make grafana-performance-render \
             GRAFANA_CONTEXT="$GCX_CONTEXT" \
+            GRAFANA_PERFORMANCE_BUDGET_SECONDS=30 \
             > render-baseline-receipt.json 2> render-baseline-stderr.log
           code=$?
           echo "exit_code=${code}" >> "$GITHUB_OUTPUT"

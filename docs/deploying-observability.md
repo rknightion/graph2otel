@@ -420,7 +420,7 @@ message) rather than either measuring the error page as if it were real
 content or reporting a performance failure. `skipped_absent` is one of the
 outcomes bucketed under exit `0` below.
 
-### Exit codes and the deliberately unset latency budget
+### Exit codes and the breakage tripwire
 
 `grafana/performance_baseline.py` exits `0` (pass), `1` (a configured latency
 budget was breached), or `2` (operational error — gcx, authentication,
@@ -431,17 +431,29 @@ published), and `not_configured` (no budget has been set — see below). These
 are recorded in the receipt's `live.budget.status` field so a reader can tell
 them apart without re-deriving which one fired.
 
-**No numeric render-latency budget is configured, on purpose.** #309 exists
-specifically to avoid picking a threshold from a single measurement. The
-plumbing for one already exists — `performance_baseline.py --budget-seconds`
-and `make grafana-performance-render`'s
-`GRAFANA_PERFORMANCE_BUDGET_SECONDS` — and compares every measured attempt's
-`elapsed_seconds` against it, but both default to unset, and this workflow
-does not pass a value. Once this workflow's own artifact history gives a
-maintainer a real distribution to choose from, setting
-`GRAFANA_PERFORMANCE_BUDGET_SECONDS` in the workflow (or passing
-`--budget-seconds` by hand) is the whole activation step; no other code
-change is expected.
+**The configured 30s budget is a breakage tripwire, not a tuned performance
+threshold**, and the difference matters. It is not a percentile, is not derived
+from a distribution, and says nothing about what good looks like. Measured
+renders sit near 6s (5.09–7.01s across the six v1 dashboards on 2026-07-26;
+5.93s for the single v2 dashboard on 2026-07-27), so 30s is about 5x the
+observed cost and will not fire on ordinary variance, a cold renderer, or a slow
+morning.
+
+What it catches is the failure this lane can actually have: a render that has
+stopped working — runaway query fan-out, a hanging renderer, a datasource timing
+out behind the dashboard. Those cost tens of seconds, not a few hundred extra
+milliseconds.
+
+If you want a real percentile-based budget, this workflow's artifact history is
+where it comes from, and `GRAFANA_PERFORMANCE_BUDGET_SECONDS` in the workflow
+(or `--budget-seconds` by hand) is the one thing to change. **Do not tighten it
+toward the observed figure without that history** — a threshold set just above
+the last measurement is how a lane starts crying wolf, and an alert that fires on
+correct data is worse than no alert.
+
+The **static** per-leaf ceiling remains the gate that catches the realistic
+regression, and it needs no credentials: `LEAF_PANEL_CEILING = 24`, enforced on
+every `make grafana-check`, with the largest leaf currently at 18.
 
 Offline tests for this half also run under `make grafana-performance-check`.
 
