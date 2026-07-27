@@ -669,5 +669,74 @@ class TestTranslatesTheRealEstate(unittest.TestCase):
         self.assertEqual(seen, 5)
 
 
+class TestLeafPanelBudget(unittest.TestCase):
+    """The per-leaf render budget (#309).
+
+    Under v1 all rows were expanded, so opening a dashboard queried every panel
+    on it and panel count *was* the cost. Under v2 only the active leaf tab
+    renders, so an operator opening Entra pays for one of twelve leaves, not for
+    348 panels. **The largest leaf is the unit of cost, not the estate**, which
+    is why an estate-wide total would be the wrong thing to gate.
+    """
+
+    def test_the_ceiling_leaves_deliberate_headroom_over_the_measured_maximum(self):
+        import build_dashboard  # noqa: PLC0415
+
+        self.assertGreater(build_dashboard.LEAF_PANEL_CEILING, 18,
+                           "ceiling must exceed the largest leaf measured at "
+                           "the time it was chosen, or it fails on arrival")
+
+    def test_a_leaf_over_the_ceiling_is_reported(self):
+        """A gate nobody has seen fail is a hope, not a gate."""
+        import build_dashboard  # noqa: PLC0415
+
+        over = build_dashboard.LEAF_PANEL_CEILING + 1
+        items = [{"w": 1, "h": 1, "spec": _panel(i + 1)} for i in range(over)]
+        tabs = [v2.domain("D", [v2.leaf("Fat", [v2.rowspec("", items)])])]
+        man = v2.manifest(name="g", title="t", description="d", tags=[],
+                          variables=[], elements={}, tabs=tabs)
+        violations = build_dashboard.leaf_budget_violations(man, {})
+        self.assertTrue(any("Fat" in v and str(over) in v for v in violations),
+                        violations)
+
+    def test_a_waiver_excuses_a_leaf_but_only_with_a_reason(self):
+        import build_dashboard  # noqa: PLC0415
+
+        over = build_dashboard.LEAF_PANEL_CEILING + 1
+        items = [{"w": 1, "h": 1, "spec": _panel(i + 1)} for i in range(over)]
+        tabs = [v2.domain("D", [v2.leaf("Fat", [v2.rowspec("", items)])])]
+        man = v2.manifest(name="g", title="t", description="d", tags=[],
+                          variables=[], elements={}, tabs=tabs)
+        self.assertEqual(
+            build_dashboard.leaf_budget_violations(man, {"Fat": "measured, fine"}),
+            [])
+        # A waiver with no reason is an undocumented escape hatch, which is not
+        # a gate — same rule as the metric coverage waivers.
+        self.assertTrue(build_dashboard.leaf_budget_violations(man, {"Fat": "  "}))
+
+    def test_a_waiver_for_a_leaf_that_is_now_within_budget_is_reported(self):
+        """A waiver that outlives its problem is a comment pretending to be a
+        decision, and it silently re-permits the regression it was written for."""
+        import build_dashboard  # noqa: PLC0415
+
+        tabs = [v2.domain("D", [v2.leaf("Thin", [v2.rowspec("", [_item(1)])])])]
+        man = v2.manifest(name="g", title="t", description="d", tags=[],
+                          variables=[], elements={}, tabs=tabs)
+        violations = build_dashboard.leaf_budget_violations(
+            man, {"Thin": "was fat once"})
+        self.assertTrue(any("Thin" in v for v in violations), violations)
+
+    def test_the_real_estate_is_within_budget(self):
+        import build_dashboard  # noqa: PLC0415
+        import catalog as catalog_mod  # noqa: PLC0415
+
+        builder, tabs, _ = build_dashboard.build_all(catalog_mod.load())
+        man = builder.render([build_dashboard.overview(builder), *tabs])
+        self.assertEqual(
+            build_dashboard.leaf_budget_violations(man, build_dashboard.LEAF_WAIVERS),
+            [])
+
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -66,6 +66,24 @@ BOARDS = [
     "boards.selfobs",
 ]
 
+# Per-leaf render budget (#309). Under v1 every row was expanded, so opening a
+# dashboard queried all of its panels and panel count WAS the cost. Under v2 only
+# the active leaf tab renders, so an operator opening Entra pays for one of twelve
+# leaves rather than for all 348 panels. The largest LEAF is therefore the unit of
+# cost, and an estate-wide total would gate the wrong thing.
+#
+# Measured 2026-07-27 on the post-#399 estate: 60 leaves, median 5 panels,
+# largest 18 ("Endpoint analytics (UXA)"). The ceiling is that maximum plus
+# deliberate headroom, so it catches the realistic regression — a board module
+# quietly adding thirty panels to one leaf — without firing on ordinary growth.
+LEAF_PANEL_CEILING = 24
+
+# leaf tab title -> reason. A leaf legitimately over the ceiling goes here WITH a
+# reason, on the same principle as the metric coverage waivers: a gate with no
+# escape hatch gets disabled the first time it blocks something urgent, and a
+# gate with an UNDOCUMENTED escape hatch is not a gate. Empty today.
+LEAF_WAIVERS: dict = {}
+
 TITLE = "graph2otel"
 DESCRIPTION = (
     "Microsoft Graph telemetry — Entra ID, Intune, Defender, Microsoft 365 and "
@@ -127,6 +145,67 @@ def overview(b: Builder) -> dict:
     return leaf
 
 
+def leaf_panel_counts(man: dict) -> dict:
+    """Leaf tab title -> how many panels it places.
+
+    A leaf is a tab whose own layout is a ``RowsLayout`` — the deepest tab level,
+    and the unit an operator actually renders.
+    """
+    counts = {}
+
+    def walk(tabs: list):
+        for tab in tabs:
+            layout = tab["spec"].get("layout", {})
+            if layout.get("kind") == "TabsLayout":
+                walk(layout["spec"]["tabs"])
+                continue
+            if layout.get("kind") != "RowsLayout":
+                continue
+            total = 0
+            for row in layout["spec"]["rows"]:
+                grid = row["spec"].get("layout", {})
+                if grid.get("kind") == "GridLayout":
+                    total += len(grid["spec"]["items"])
+            counts[tab["spec"]["title"]] = total
+
+    walk(man["spec"]["layout"]["spec"]["tabs"])
+    return counts
+
+
+def leaf_budget_violations(man: dict, waivers: dict) -> list:
+    """Leaves over ``LEAF_PANEL_CEILING``, plus waivers that no longer apply."""
+    violations = []
+    counts = leaf_panel_counts(man)
+    for title, count in sorted(counts.items()):
+        reason = waivers.get(title)
+        if count <= LEAF_PANEL_CEILING:
+            if reason is not None:
+                violations.append(
+                    f"leaf {title!r} is waived from the panel budget but holds "
+                    f"{count} panels, within the ceiling of {LEAF_PANEL_CEILING}: "
+                    "a waiver that outlives its problem silently re-permits the "
+                    "regression it was written for"
+                )
+            continue
+        if reason is None:
+            violations.append(
+                f"leaf {title!r} places {count} panels, over the per-leaf ceiling "
+                f"of {LEAF_PANEL_CEILING}: an operator opening that tab pays for "
+                "all of them at once. Split the section, or waive it in "
+                "LEAF_WAIVERS with a reason"
+            )
+        elif not str(reason).strip():
+            violations.append(
+                f"leaf {title!r} has a budget waiver with no reason, which is an "
+                "undocumented escape hatch rather than a decision"
+            )
+    for title in sorted(set(waivers) - set(counts)):
+        violations.append(
+            f"LEAF_WAIVERS names leaf {title!r}, which no longer exists"
+        )
+    return violations
+
+
 def coverage(cat, covered: set, waivers: dict) -> tuple:
     """Return (missing, stale_waivers, reasonless_waivers).
 
@@ -162,7 +241,9 @@ def main() -> int:
 
     # Structural gates first: they mean the build itself is wrong, so nothing
     # should be written on the back of them.
-    violations = list(b.violations) + v2.manifest_violations(manifest)
+    violations = (list(b.violations)
+                  + v2.manifest_violations(manifest)
+                  + leaf_budget_violations(manifest, LEAF_WAIVERS))
     if violations:
         print("dashboard build violations:", file=sys.stderr)
         for v in violations:
@@ -185,7 +266,9 @@ def main() -> int:
     print(f"coverage: {len(covered)}/{total} catalog metrics on a panel "
           f"({len(waivers)} waived, {len(placed)} panels placed across "
           f"{len(manifest['spec']['layout']['spec']['tabs'])} tabs and {leaves} leaves, "
-          f"{len(cat.logs)} log events over {len(log_domains)} log-panelled domains)",
+          f"{len(cat.logs)} log events over {len(log_domains)} log-panelled domains, "
+          f"largest leaf {max(leaf_panel_counts(manifest).values())}/"
+          f"{LEAF_PANEL_CEILING} panels)",
           file=sys.stderr)
 
     failed = False
