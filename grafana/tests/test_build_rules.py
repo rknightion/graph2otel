@@ -309,7 +309,11 @@ class TestYamlRoundTrips(unittest.TestCase):
         except ImportError:
             self.skipTest("PyYAML not installed — not a dependency of this repo")
         rendered = build_rules.render_app_platform()
-        self.assertEqual(len(rendered), 19)
+        # Derived, not a literal: the count moves whenever a rule or detection
+        # lands (14 + 5 at #300, 14 + 11 at #313), and a literal here fails on
+        # the count rather than on the property the test is about.
+        self.assertEqual(len(rendered),
+                         len(build_rules.RULES) + len(build_rules.DETECTIONS))
         uids = set()
         for fname, data in rendered.items():
             doc = yaml.safe_load(data)
@@ -640,7 +644,27 @@ class TestSecondDetectionWave(unittest.TestCase):
         hunting library nobody validates is a page of queries that quietly
         return nothing."""
         self.assertTrue(build_rules.HUNTS)
+        # Render first, deliberately: a hunt's keys reach the gate only when its
+        # query is built, so validating before rendering checks the detections
+        # and silently skips every documented query. The CLI has the same
+        # ordering requirement and the sabotage that found this wrote a broken
+        # query to disk as a clean regeneration.
+        build_rules.render_hunting_page()
         self.assertEqual(build_rules.validate_detection_fields(build_rules.CAT), [])
+
+    def test_a_misspelled_hunt_group_key_is_reported_once_rendered(self):
+        """The gate has to fail for a DOCUMENTED query as readily as for a
+        shipped rule. A hunting page whose queries nobody validates is worse than
+        no page: the reader concludes their tenant is clean."""
+        bad = build_rules._hunt(
+            "Sabotage", "entra.signin", by="client_app_usedd",
+            question="q", look_for="l")
+        before = len(build_rules.DETECTION_VIOLATIONS)
+        build_rules.hunt_query(bad)
+        found = build_rules.DETECTION_VIOLATIONS[before:]
+        del build_rules.DETECTION_VIOLATIONS[before:]
+        self.assertEqual(len(found), 1, found)
+        self.assertIn("client_app_usedd", found[0])
 
     def test_every_hunt_query_is_the_only_correct_stream_selector(self):
         for hunt in build_rules.HUNTS:
@@ -830,7 +854,8 @@ class TestAppPlatformProjection(unittest.TestCase):
         expected = {f"{r['uid']}.yaml" for r in build_rules.RULES}
         expected |= {f"{r['uid']}.yaml" for r in build_rules.DETECTIONS}
         self.assertEqual(set(rendered), expected)
-        self.assertEqual(len(rendered), 19)
+        self.assertEqual(len(rendered),
+                         len(build_rules.RULES) + len(build_rules.DETECTIONS))
 
     def test_committed_manifests_are_not_stale(self):
         for fname, data in build_rules.render_app_platform().items():

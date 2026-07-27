@@ -751,7 +751,479 @@ DETECTIONS = [
         "threshold above zero or a narrowing to risk_state alone. Measure your CA "
         "failure rate over 30 days first. Risk states require Entra ID P2.",
     ),
+    # --- Second wave (#313) --------------------------------------------------
+    #
+    # Six further concepts, chosen for being DISTINCT from the five above rather
+    # than for looking impressive. Each is expressed in terms of what graph2otel
+    # actually emits, with the Microsoft/Sentinel concept cited as provenance —
+    # not transliterated from KQL, because a KQL rule reasons over table columns
+    # this project does not ship and joins Loki cannot perform.
+    #
+    # Every value these six match on is a Microsoft spelling this project has not
+    # measured on the wire for that exact field, so every regex is
+    # case-insensitive and every tuning note names the hunt that confirms the
+    # spelling on the operator's own tenant before enabling. That is the value
+    # -level twin of the #90 key trap: a regex that never matches is
+    # indistinguishable from a quiet tenant.
+    _loki_alert(
+        "g2o-detect-exchange-inbox-rule-change",
+        "Exchange inbox rule created or modified",
+        _count("m365.audit", f("operation", "re", "(?i).*inboxrule.*")),
+        "gt", [0],
+        {"severity": "warning", "source": "m365", "category": "identity-threat"},
+        "An Exchange inbox rule was created or changed",
+        "A mailbox rule was created, modified or removed. Business email "
+        "compromise almost always leaves one behind: a rule that moves replies "
+        "from finance, or anything mentioning invoices, into a folder the owner "
+        "never opens, so the victim never sees the conversation happening in "
+        "their name. Microsoft classifies this as email hiding rules, MITRE "
+        "T1564.008, and it is the technique the Defender BEC playbook looks for "
+        "first. graph2otel carries it as an m365.audit record whose operation "
+        "names the rule cmdlet; inspect user_id, client_ip and "
+        "modified_property_names on the record to see who changed what.",
+        "Users create their own inbox rules constantly, so on most tenants this "
+        "is the noisiest rule in the pack and needs a per-actor exclusion or a "
+        "review queue rather than a pager. Run the audit-operation hunt over 30 "
+        "days first: it both gives you the rate and confirms your tenant spells "
+        "the operation the way this regex expects. Rule parameters are not on "
+        "the record, so the rule cannot tell a forwarding rule from a "
+        "housekeeping one.",
+    ),
+    _loki_alert(
+        "g2o-detect-mailbox-permission-grant",
+        "Mailbox, recipient or folder permission granted",
+        _count("m365.audit",
+               f("operation", "re",
+                 "(?i).*(mailboxpermission|recipientpermission|folderpermission).*")),
+        "gt", [0],
+        {"severity": "warning", "source": "m365", "category": "identity-threat"},
+        "A mailbox delegation or folder permission was granted",
+        "Delegate access to a mailbox is durable, survives the owner's password "
+        "reset, and is invisible to the owner, which is why granting it is a "
+        "standard persistence and collection step once an attacker holds an "
+        "administrative session. Microsoft tracks it as additional email "
+        "delegate permissions, MITRE T1098.002. It shares the m365.audit "
+        "operation field with the inbox-rule detection above and is a separate "
+        "rule on purpose: an inbox rule is usually the mailbox owner's own doing "
+        "and noisy, while a delegation grant is an administrative act, rarer, "
+        "and remediated differently. Combining them would force one threshold "
+        "onto two very different base rates.",
+        "Shared mailboxes, resource calendars and migration tooling all produce "
+        "legitimate grants in bursts. Run the audit-operation hunt for 30 days "
+        "to separate your routine grant sources from the rest, and to confirm "
+        "the operation spelling, before enabling.",
+    ),
+    _loki_alert(
+        "g2o-detect-identity-risk-detection",
+        "Entra ID Protection risk detection, medium or high",
+        _count("entra.risk_detection",
+               f("risk_event_type", "re",
+                 "(?i)(impossibletravel|mcasimpossibletravel|unfamiliarfeatures|"
+                 "anonymizedipaddress|maliciousipaddress|leakedcredentials|"
+                 "passwordspray|newcountry|suspiciousinboxmanipulation|"
+                 "adminconfirmedusercompromised)"),
+               f("risk_level", "re", "(?i)(high|medium)")),
+        "gt", [0],
+        {"severity": "critical", "source": "entra", "category": "identity-threat"},
+        "Entra ID Protection raised a medium or high risk detection",
+        "This is the detection-level evidence stream, and it answers a question "
+        "the sign-in stream cannot: WHY a sign-in was risky. entra.signin "
+        "carries risk_state, so a rule on it can say a session was at risk; "
+        "risk_event_type exists only here and names the detection — impossible "
+        "travel, an unfamiliar sign-in property, an anonymised or known-malicious "
+        "address, credentials found in a public dump, a password-spray victim. "
+        "Impossible travel in particular is a correlation Microsoft has already "
+        "computed: expressing it as a rule over raw sign-ins would need a join "
+        "across two records and a distance calculation, which Loki cannot do. "
+        "The record also carries mitre_techniques, ip_address and the location "
+        "fields for the investigation.",
+        "Requires Entra ID P2 — without it the endpoint answers with an empty "
+        "collection and the rule can never fire, which reads exactly like a "
+        "clean tenant. The event-type list is Microsoft's published set and has "
+        "not been measured field-by-field here, so run the risk-detection-type "
+        "hunt first: it tells you both which types your tenant actually produces "
+        "and whether leakedCredentials alone already exceeds a sane page rate.",
+    ),
+    _loki_alert(
+        "g2o-detect-workload-identity-risk",
+        "Workload identity flagged at risk or confirmed compromised",
+        _count("entra.service_principal_risk_detection",
+               f("risk_level", "re", "(?i)(high|medium)"),
+               f("risk_state", "re", "(?i)(atrisk|confirmedcompromised)")),
+        "gt", [0],
+        {"severity": "critical", "source": "entra", "category": "identity-threat"},
+        "A service principal was flagged at risk or confirmed compromised",
+        "The workload-identity half of Identity Protection: a service principal "
+        "whose credential leaked, or whose activity Microsoft scored anomalous. "
+        "This matters more than the user equivalent and gets watched less. A "
+        "service principal has no MFA to fall back on, its credential is often "
+        "in a pipeline variable rather than a vault, and nothing prompts a human "
+        "when it is used from somewhere new. Check service_principal_name, "
+        "app_id and risk_detail, then rotate the credential rather than only "
+        "dismissing the detection. This is the portable counterpart to pinning "
+        "each automation identity to its own expected source, which cannot ship "
+        "here because those values are tenant infrastructure.",
+        "The endpoint answers with real detections even on a tenant without "
+        "Workload Identities Premium, live-measured, so absence of data here is "
+        "genuinely absence of detections rather than a licence wall. It is "
+        "usually silent, which makes the threshold of zero plausible and "
+        "unmeasured at the same time: run the workload-identity risk hunt over "
+        "90 days, and if it returns nothing, keep the rule paused until you have "
+        "confirmed the stream works by synthesising one detection.",
+    ),
+    _loki_alert(
+        "g2o-detect-legacy-auth-signin",
+        "Sign-in over a legacy authentication protocol",
+        _count("entra.signin",
+               f("client_app_used", "re",
+                 "(?i)(imap4?|pop3?|authenticated smtp|exchange activesync|"
+                 "other clients|exchange web services|exchange online powershell|"
+                 "autodiscover|offline address book)")),
+        "gt", [0],
+        {"severity": "warning", "source": "entra", "category": "identity-threat"},
+        "A sign-in used a legacy authentication protocol",
+        "Legacy protocols cannot present an MFA challenge, so a sign-in that "
+        "succeeds over one has bypassed multi-factor authentication no matter "
+        "what the Conditional Access policy says. Password spraying targets them "
+        "for exactly that reason, and Microsoft's own secure-score guidance is "
+        "to block them outright. This is a protocol-level question and is "
+        "deliberately separate from the risk-and-Conditional-Access sign-in "
+        "detection: that rule asks whether a sign-in looked suspicious, this one "
+        "asks whether a channel exists that cannot be challenged, which is worth "
+        "knowing even when every sign-in on it is legitimate.",
+        "The values here are Microsoft's client-app names and have not been "
+        "measured on this project's wire, so run the sign-in client-app hunt "
+        "first to see which names your tenant emits and at what rate. Add "
+        "status_error_code=`0` to narrow to SUCCESSFUL legacy sign-ins, which is "
+        "the smaller and more urgent set; failed ones are mostly spray traffic "
+        "and better handled as a trend than a page. If your tenant still has "
+        "legitimate legacy clients this fires continuously and belongs on a "
+        "dashboard, not a pager, until they are migrated.",
+    ),
+    _loki_alert(
+        "g2o-detect-mail-remediation-failed",
+        "Post-delivery mail remediation did not succeed",
+        _count("defender.email_post_delivery",
+               f("action_result", "re", ".+"),
+               f("action_result", "nre", "(?i)success")),
+        "gt", [0],
+        {"severity": "warning", "source": "defender", "category": "identity-threat"},
+        "Defender tried to remove a delivered message and did not succeed",
+        "Zero-hour auto purge and manual remediation exist because a message can "
+        "be reclassified as malicious after it has already landed in a mailbox. "
+        "When that removal FAILS the message is still sitting in an inbox that "
+        "Microsoft has already decided is dangerous, and nothing else tells you "
+        "so — the alert says the threat was found, the remediation record says "
+        "whether it was actually removed. Read action_type, action_trigger and "
+        "recipient_email_address, then remove the message by hand.",
+        "The filter is two terms because a negative label filter also matches a "
+        "record that carries no action_result at all: LogQL treats a missing "
+        "structured-metadata key as the empty string, so the presence term "
+        "`action_result=~`.+`` is what keeps this from firing on every "
+        "remediation record. Run the post-delivery hunt to see which result "
+        "values your tenant emits and how often a non-success one is a transient "
+        "retry rather than a real miss. Needs the Defender advanced-hunting blob "
+        "ingest configured; without it the stream is absent, not clean.",
+    ),
 ]
+
+
+# ---------------------------------------------------------------------------
+# The hunting-query library (#313)
+#
+# A hunt is a query you RUN, not a rule that runs itself. Three kinds of concept
+# end up here rather than in DETECTIONS, and the boundary is deliberate:
+#
+#   1. The concept needs a correlation Loki cannot perform. Loki has no join, so
+#      "two sign-ins too far apart to be the same person" is not expressible as a
+#      rule over raw records — but it is a perfectly good question for a human
+#      with a grouped query, and where Microsoft has already computed the
+#      correlation (Identity Protection) the detection reads it back instead.
+#   2. The signal is an INVENTORY, not an event stream. A snapshot collector
+#      re-emits every existing row every poll, so `count_over_time(...) > 0` on
+#      one is true forever and says nothing. Grouped and read by a person, the
+#      same query is the most useful thing in the pack.
+#   3. It is the MEASUREMENT a paused detection is waiting for. Every rule in
+#      DETECTIONS names a measurement in `tuning_required`; a named measurement
+#      with no way to take it is a rule nobody can ever enable, so each one has a
+#      hunt here that produces it.
+#
+# The queries are built through the same `_sel()` path as the detections, so a
+# misspelled filter or group key in a DOCUMENTED query fails CI exactly as it
+# would in a shipped rule. A hunting page nobody validates is a page of queries
+# that silently return nothing, which is worse than no page: the reader concludes
+# their tenant is clean.
+# ---------------------------------------------------------------------------
+
+HUNTS_DOC = os.path.join(REPO, "docs", "hunting.md")
+
+
+def _hunt(title: str, event: str, *filters, by: str = "", window: str = "24h",
+          question: str, look_for: str, unblocks=()) -> dict:
+    return {
+        "title": title,
+        "event": event,
+        "filters": filters,
+        "by": by,
+        "window": window,
+        "question": question,
+        "look_for": look_for,
+        "unblocks": list(unblocks),
+    }
+
+
+def hunt_query(hunt: dict) -> str:
+    """The LogQL a reader pastes into Explore.
+
+    Grouped hunts aggregate; ungrouped ones return the raw log lines, because an
+    inventory question is answered by reading the records and a rate question is
+    answered by counting them.
+    """
+    selector = _sel(hunt["event"], *hunt["filters"], by=hunt["by"])
+    if not hunt["by"]:
+        return selector
+    return (f"sum by ({hunt['by']}) "
+            f"(count_over_time({selector} [{hunt['window']}]))")
+
+
+HUNTS = [
+    _hunt(
+        "Which audit operations does your tenant actually record",
+        "m365.audit", by="workload, operation", window="24h",
+        question="Which unified-audit operations occur on this tenant, on which "
+                 "workload, and how often?",
+        look_for="The operation spelling. Both mail detections match a regex "
+                 "against `operation`, and if your tenant names the cmdlet "
+                 "differently the rule matches nothing and looks healthy. Sort "
+                 "descending and read the top of the list: whatever dominates is "
+                 "your routine administrative traffic, and anything you do not "
+                 "recognise is worth one look.",
+        unblocks=("g2o-detect-exchange-inbox-rule-change",
+                  "g2o-detect-mailbox-permission-grant"),
+    ),
+    _hunt(
+        "Which client apps sign in, and how much legacy protocol is left",
+        "entra.signin", by="client_app_used, status_error_code", window="7d",
+        question="Which authentication client does each sign-in use, and does it "
+                 "succeed?",
+        look_for="Any client that is not a browser or a modern-auth client. Each "
+                 "one is a channel that cannot be challenged for MFA. Successful "
+                 "legacy sign-ins (`status_error_code` 0) are the urgent set; a "
+                 "wall of failures on a legacy protocol is usually spray traffic "
+                 "and is a trend, not an incident.",
+        unblocks=("g2o-detect-legacy-auth-signin",
+                  "g2o-detect-interactive-signin-anomaly"),
+    ),
+    _hunt(
+        "Where do your workload identities sign in from",
+        "entra.signin", f("service_principal_name", "re", ".+"),
+        by="service_principal_name, ip_address", window="7d",
+        question="Which source addresses does each service-principal sign-in "
+                 "come from?",
+        look_for="An automation identity with exactly one source address. That is "
+                 "the almost-zero-false-positive detection described in "
+                 "`alerts/README.md`, and this hunt is how you find which of your "
+                 "identities qualify and what their expected address is. Those "
+                 "values are yours and cannot ship here, which is why the rule "
+                 "does not.",
+        unblocks=("g2o-detect-workload-identity-risk",),
+    ),
+    _hunt(
+        "Which risk detection types does Identity Protection raise here",
+        "entra.risk_detection", by="risk_event_type, risk_level", window="30d",
+        question="Which risk detections does this tenant produce, at which level?",
+        look_for="Whether the tenant produces anything at all — an empty result "
+                 "on a tenant without Entra ID P2 is a licence wall, not a clean "
+                 "bill of health. Then the rate per type: `leakedCredentials` "
+                 "alone can exceed a sane page rate on a large tenant, and "
+                 "`impossibleTravel` is the correlation Loki could not compute "
+                 "for you.",
+        unblocks=("g2o-detect-identity-risk-detection",),
+    ),
+    _hunt(
+        "Which workload identities have risk detections",
+        "entra.service_principal_risk_detection",
+        by="risk_event_type, risk_state", window="30d",
+        question="Which service principals has Identity Protection flagged, and "
+                 "for what?",
+        look_for="Usually nothing, which is the problem: a rule that has never "
+                 "matched is indistinguishable from a rule that cannot match. If "
+                 "this returns nothing over 90 days, prove the stream works "
+                 "before trusting the silence.",
+        unblocks=("g2o-detect-workload-identity-risk",),
+    ),
+    _hunt(
+        "Which post-delivery mail remediations succeed",
+        "defender.email_post_delivery", by="action_type, action_result",
+        window="30d",
+        question="When Defender removes a message after delivery, does the "
+                 "removal succeed?",
+        look_for="The exact `action_result` values your tenant emits, and whether "
+                 "any record omits the field entirely — a missing structured-"
+                 "metadata key compares equal to the empty string, so it would "
+                 "match a bare negative filter. Anything that is not a success is "
+                 "a message still sitting in a mailbox Microsoft has already "
+                 "judged dangerous.",
+        unblocks=("g2o-detect-mail-remediation-failed",),
+    ),
+    _hunt(
+        "Which applications hold federated identity credentials",
+        "entra.federated_identity_credential", window="24h",
+        question="Which applications trust an external issuer to mint tokens for "
+                 "them, and which subject in that issuer?",
+        look_for="An issuer or subject you do not recognise. A federated identity "
+                 "credential is a keyless trust: whoever controls that subject at "
+                 "that issuer can obtain tokens for the application with no "
+                 "secret to leak or rotate, which makes adding one an attractive "
+                 "and quiet persistence step. This is an inventory rather than an "
+                 "event stream, so it is a hunt: the collector re-emits every "
+                 "existing credential every poll, and a rule counting them would "
+                 "fire forever. Read `issuer`, `subject` and `audiences` on each "
+                 "record.",
+        unblocks=("g2o-detect-privileged-directory-change",),
+    ),
+    _hunt(
+        "Which consent grants exist, and how privileged are they",
+        "entra.consent_grant", by="privilege, consent_type", window="24h",
+        question="What has been consented to in this tenant, at what privilege, "
+                 "and for the whole tenant or one user?",
+        look_for="High-privilege application-wide grants. `consent_type` "
+                 "separates a tenant-wide admin grant from one user's own, and "
+                 "the tenant-wide ones are the ones worth auditing line by line. "
+                 "Also an inventory rather than an event stream — the ACT of "
+                 "granting consent is already covered by the privileged-directory"
+                 "-change detection, so this hunt answers the different question "
+                 "of what is standing granted right now.",
+        unblocks=("g2o-detect-privileged-directory-change",),
+    ),
+    _hunt(
+        "Who holds privileged roles, permanently or eligibly",
+        "entra.role_member", by="role_name, assignment_type, permanent",
+        window="24h",
+        question="Which principals hold which directory roles, and is the "
+                 "assignment permanent or time-bound?",
+        look_for="Permanent assignments to the high-privilege roles, and any "
+                 "assignment held by a service principal rather than a person. "
+                 "Role ACTIVATION is an event and is already covered by the "
+                 "privileged-directory-change detection; standing membership is a "
+                 "posture question, which is why it is a hunt — a rule over an "
+                 "inventory would fire on your correct configuration forever.",
+        unblocks=("g2o-detect-privileged-directory-change",),
+    ),
+    _hunt(
+        "What operations do Intune administrators perform",
+        "intune.audit_event",
+        by="activity_operation_type, activity_result, category", window="30d",
+        question="Which Intune administrative operations happen, on which object "
+                 "category, and do they succeed?",
+        look_for="Deletions of compliance or configuration policies, and any "
+                 "operation type you did not expect. This project has only ever "
+                 "observed `Create` on the wire for `activity_operation_type`, "
+                 "which is exactly why a destructive-action rule is NOT shipped: "
+                 "a rule matching a value spelling nobody has seen is a rule that "
+                 "may never fire. Take this measurement, and if your tenant emits "
+                 "the deletion spelling, write the rule against what you "
+                 "measured.",
+        unblocks=("g2o-detect-security-incident-active",),
+    ),
+    _hunt(
+        "Which security alerts arrive, from which Microsoft product",
+        "entra.security_alert", by="severity, status, service_source",
+        window="30d",
+        question="What is the arrival rate of security alerts by severity, "
+                 "resolution status and originating product?",
+        look_for="The rate. Two shipped detections page on this stream and its "
+                 "incident sibling, and their volume is set by your Defender "
+                 "licensing rather than by the query. If medium severity "
+                 "dominates, narrow to high before enabling either.",
+        unblocks=("g2o-detect-security-alert-unresolved",
+                  "g2o-detect-security-incident-active"),
+    ),
+    _hunt(
+        "Which applications take Graph authorization denials",
+        "entra.graph_activity", f("response_status_code", "eq", "403"),
+        by="app_id", window="7d",
+        question="Which callers receive HTTP 403 from Microsoft Graph, and how "
+                 "many?",
+        look_for="Your own baseline. The shipped burst detection uses ten in five "
+                 "minutes, which came from one small tenant; a tenant with more "
+                 "automation will have a caller that routinely exceeds it because "
+                 "it probes for an optional permission. Find that caller first, "
+                 "then set the threshold above it.",
+        unblocks=("g2o-detect-graph-403-burst",),
+    ),
+]
+
+
+HUNTS_PAGE_HEADER = """\
+<!-- GENERATED by grafana/build_rules.py from its HUNTS list — do not edit by
+     hand. Edit the hunt there, then run `make rules`. Every query below is built
+     by the same typed-filter path as the shipped alert rules, so a misspelled
+     attribute fails CI instead of silently matching nothing. -->
+
+# Hunting queries
+
+A hunt is a query you **run**, not a rule that runs itself. This page is the
+measurement instrument for the [paused detections](runbooks.md): each one names
+the measurement it needs before it is safe to enable, and the query that produces
+that measurement is here.
+
+Three kinds of question live here rather than in a rule, and the boundary is
+deliberate:
+
+- **The correlation is one Loki cannot perform.** Loki has no join, so "two
+  sign-ins too far apart to be the same person" is not expressible as a rule over
+  raw records. It is a fine question for a person with a grouped query, and where
+  Microsoft has already computed the correlation the detection reads its verdict
+  back instead of pretending to recompute it.
+- **The signal is an inventory, not an event stream.** A snapshot collector
+  re-emits every existing row on every poll, so `count_over_time(...) > 0` over
+  one is true forever and tells you nothing. Grouped and read by a person, the
+  same query is the most useful thing here.
+- **It is a threshold you do not have yet.** Every number in the detection pack
+  came from one tenant or from nowhere at all. These queries are how you replace
+  it with your own.
+
+## How to run them
+
+Paste a query into **Explore**, pick your Loki datasource, and set the time range
+to at least the window in the query. Then read the result, do not alert on it.
+
+Two things about the query shape, both of which have bitten this project:
+
+- The stream selector is **always** `{service_name="graph2otel"}` and nothing
+  else. Every attribute is Loki structured metadata, so
+  `{event_name="entra.signin"}` matches **zero rows silently** — it is not an
+  error, it is an empty graph that looks like a clean tenant. See
+  [Signals](signals.md).
+- A **negative** filter also matches a record that lacks the attribute entirely,
+  because a missing structured-metadata key compares equal to the empty string.
+  Pair it with a presence term (`` attr=~`.+` ``) when that matters.
+
+Windows longer than a few days over a busy stream are slow. Narrow the window
+first, then widen it once you know the query returns what you expect.
+"""
+
+
+def render_hunting_page() -> bytes:
+    """The hunting library as a docs page, generated from HUNTS.
+
+    Generated rather than hand-written for one reason: a hand-copied query is an
+    unvalidated query, and it looks identical to a validated one. The prose lives
+    next to the query it describes in ``HUNTS`` so the two cannot drift apart.
+    """
+    parts = [HUNTS_PAGE_HEADER]
+    for hunt in HUNTS:
+        parts.append(f"## {hunt['title']}\n")
+        parts.append(f"**Question:** {hunt['question']}\n")
+        parts.append(f"```logql\n{hunt_query(hunt)}\n```\n")
+        parts.append(f"**What to look for:** {hunt['look_for']}\n")
+        if hunt["unblocks"]:
+            targets = ", ".join(f"[`{uid}`](runbooks.md#{uid})"
+                                for uid in hunt["unblocks"])
+            parts.append(f"**Measurement for:** {targets}\n")
+        parts.append("")
+    return ("\n".join(parts).rstrip() + "\n").encode()
 
 
 def validate_detection_fields(cat) -> list:
@@ -1290,6 +1762,19 @@ DASHBOARD_TARGETS = {
     "g2o-detect-graph-403-burst": ("Entra", "Graph activity requests rate"),
     "g2o-detect-interactive-signin-anomaly":
         ("Entra", "Failed sign-ins — which user, which IP, which error"),
+    # Second wave (#313).
+    "g2o-detect-exchange-inbox-rule-change":
+        ("M365", "Top audited operations by workload"),
+    "g2o-detect-mailbox-permission-grant":
+        ("M365", "Unified audit — which user, which operation"),
+    "g2o-detect-identity-risk-detection":
+        ("Entra", "Risk detections by event type and level"),
+    "g2o-detect-workload-identity-risk":
+        ("Entra", "Risky service principals total"),
+    "g2o-detect-legacy-auth-signin":
+        ("Entra", "Top failing sign-in sources (country, client app)"),
+    "g2o-detect-mail-remediation-failed":
+        ("Defender", "Quarantine held messages total"),
 }
 
 
@@ -1379,6 +1864,16 @@ SIGNAL_MATCH_WAIVERS = {
         "no panel plots entra.security_incident at all — incidents are the "
         "correlation layer above alerts, so the alert-severity panel is the "
         "closest context a responder can pivot to",
+    "g2o-detect-workload-identity-risk":
+        "no panel plots entra.service_principal_risk_detection; the "
+        "risky-service-principal gauge is the same subject one layer up — it "
+        "counts how many workload identities are risky right now, where this "
+        "rule fires on the detection that made one of them risky",
+    "g2o-detect-mail-remediation-failed":
+        "no panel plots defender.email_post_delivery; the quarantine gauge is "
+        "the nearest surface, because both are about messages Defender has "
+        "already judged malicious and acted on, and a failed post-delivery "
+        "removal is the case where that action did not land",
 }
 
 
@@ -1683,6 +2178,13 @@ def main() -> int:
                     help="run every gate but write nothing (CI mode)")
     args = ap.parse_args()
 
+    # Rendered FIRST, before the field gate below. A hunt's query is built
+    # lazily by hunt_query(), so its filter and group keys reach
+    # DETECTION_VIOLATIONS only once it has been rendered — validating before
+    # that point would check the detections and silently skip every documented
+    # query, then write the broken one to disk as a "regeneration".
+    hunting = render_hunting_page()
+
     violations = reverse_validate(CAT, RULES)
     if violations:
         print(f"RULE EXPR NAMES A METRIC graph2otel DOES NOT EMIT ({len(violations)}):",
@@ -1765,8 +2267,16 @@ def main() -> int:
         for fname, data in manifests.items():
             with open(os.path.join(RULES_DIR, fname), "wb") as f:
                 f.write(data)
+        with open(HUNTS_DOC, "wb") as f:
+            f.write(hunting)
 
     stale = []
+    if not os.path.exists(HUNTS_DOC):
+        stale.append("docs/hunting.md (missing)")
+    else:
+        with open(HUNTS_DOC, "rb") as f:
+            if f.read() != hunting:
+                stale.append("docs/hunting.md")
     for fname, data in manifests.items():
         path = os.path.join(RULES_DIR, fname)
         if not os.path.exists(path):
@@ -1784,7 +2294,8 @@ def main() -> int:
           f"enabled, {sum(1 for r in RULES if r['isPaused'])} paused), "
           f"0 recording rules (retired, #297), "
           f"{len(DETECTIONS)} detection examples (all paused), "
-          f"{len(manifests)} App Platform manifests", file=sys.stderr)
+          f"{len(manifests)} App Platform manifests, "
+          f"{len(HUNTS)} hunting queries", file=sys.stderr)
 
     if stale:
         print(f"\nSTALE GENERATED FILES ({len(stale)}) — run `make rules`:", file=sys.stderr)

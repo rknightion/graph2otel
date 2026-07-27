@@ -1,9 +1,8 @@
 # Alert runbooks
 
-One section per shipped rule. Every rule in
-[`alerts/graph2otel-alerts.yaml`](https://github.com/rknightion/graph2otel/blob/main/alerts/graph2otel-alerts.yaml)
-and
-[`alerts/graph2otel-detections.yaml`](https://github.com/rknightion/graph2otel/blob/main/alerts/graph2otel-detections.yaml)
+One section per shipped rule. Every rule under
+[`alerts/rules/`](https://github.com/rknightion/graph2otel/tree/main/alerts/rules)
+— health alerts and paused detections alike —
 carries a `runbook_url` annotation pointing at its section here, so the link in a
 notification lands on the guidance for that exact rule. Paused rules have
 runbooks too: a paused rule is the one you are about to enable, and this page is
@@ -367,11 +366,16 @@ named in the label, fix the exporting appliance's format, and watch
 
 ## Portable detections (all paused)
 
-These five ship in a separate file, folder and rule group from the health rules
+These eleven ship in a separate folder and rule group from the health rules
 above, and **every one of them is paused**. None of their thresholds has been
 measured on more than one tenant, and each carries a `tuning_required` annotation
 naming the measurement it needs. A detection that fires on correct data is worse
 than no detection: it teaches responders to ignore the channel.
+
+Every `tuning_required` note names a query on the
+[hunting library](hunting.md) that produces its missing measurement. A named
+measurement with no way to take it is a rule nobody can safely enable, so take
+the measurement first — that page is the instrument, this one is the response.
 
 They are all Loki-backed, so their no-data and error semantics are shared: no
 data is `OK` because no matching records is the healthy steady state, and an
@@ -478,6 +482,173 @@ clause for sign-ins outside its expected country; that is a per-tenant policy
 statement rather than a portable default, so it is not shipped — add an OR term
 filtering `location_country_or_region` against your own country code if you want
 it.
+
+### g2o-detect-exchange-inbox-rule-change
+
+An `m365.audit` record whose `operation` names an inbox-rule cmdlet: a mailbox
+rule was created, changed or removed. Business email compromise leaves one behind
+almost every time — a rule that files replies from finance, or anything
+mentioning invoices, into a folder the owner never opens, so the victim never
+sees the conversation running in their name. Microsoft calls the technique email
+hiding rules (MITRE T1564.008) and the Defender BEC playbook checks for it first.
+
+**No data:** `OK`.
+
+**Evaluator error:** `Error`.
+
+**False positives:** constantly. Users create their own inbox rules, so on most
+tenants this is the noisiest rule in the pack. The rule parameters are not on the
+audit record, so it cannot tell a forwarding rule from housekeeping.
+
+**Remediation:** read `user_id`, `client_ip` and `modified_property_names`, then
+look the rule up in the mailbox and confirm the owner made it. Panel:
+**M365 → Top audited operations by workload**. Before enabling, run
+[Which audit operations does your tenant actually record](hunting.md) — it gives
+you the rate and confirms your tenant spells the operation the way the regex
+expects.
+
+### g2o-detect-mailbox-permission-grant
+
+An `m365.audit` operation granting mailbox, recipient or folder permission.
+Delegate access is durable, survives the owner's password reset, and is invisible
+to the owner, which is why granting it is a standard persistence and collection
+step once an attacker holds an administrative session (MITRE T1098.002).
+
+**No data:** `OK`.
+
+**Evaluator error:** `Error`.
+
+**False positives:** shared mailboxes, resource calendars and migration tooling
+all produce legitimate grants, often in bursts.
+
+**Remediation:** identify the grantee and the mailbox from the record, then
+confirm with the mailbox owner rather than with whoever made the change. Panel:
+**M365 → Unified audit — which user, which operation**. This is a separate rule
+from the inbox-rule detection on purpose even though both key on `operation`: an
+inbox rule is usually the owner's own doing and noisy, a delegation grant is an
+administrative act and rarer, and one threshold cannot serve both base rates.
+
+### g2o-detect-identity-risk-detection
+
+An `entra.risk_detection` record at medium or high level whose `risk_event_type`
+is one of the detections worth waking up for. This stream answers the question
+the sign-in stream cannot: **why** a sign-in was risky. `entra.signin` carries
+`risk_state`, so a rule on it can say a session was at risk; `risk_event_type`
+exists only here and names the detection — impossible travel, an unfamiliar
+sign-in property, an anonymised or known-malicious address, credentials found in
+a public dump, a password-spray victim.
+
+Impossible travel is worth calling out: it is a correlation Microsoft has already
+computed. Expressing it over raw sign-ins would need a join between two records
+and a distance calculation, and **Loki cannot join** — so reading Microsoft's
+verdict is not a shortcut, it is the only correct way to have this detection at
+all.
+
+**No data:** `OK`. On a tenant without Entra ID P2 this is permanent: the
+endpoint answers with an empty collection, which reads exactly like a clean
+tenant.
+
+**Evaluator error:** `Error`.
+
+**False positives:** a corporate VPN or a mobile carrier NAT can produce
+travel-shaped and anonymised-address detections for an entirely ordinary user.
+`leakedCredentials` on a large tenant can arrive at a rate no responder can work.
+
+**Remediation:** read `mitre_techniques`, `ip_address`, the location fields and
+`user_principal_name`, then confirm with the user before forcing a reset. Panel:
+**Entra → Risk detections by event type and level**. Before enabling, run
+[Which risk detection types does Identity Protection raise here](hunting.md): the
+event-type list in the rule is Microsoft's published set, not one measured on this
+project's wire.
+
+### g2o-detect-workload-identity-risk
+
+An `entra.service_principal_risk_detection` at medium or high level whose
+`risk_state` is `atRisk` or `confirmedCompromised`. The workload-identity half of
+Identity Protection, and the half that gets watched least: a service principal
+has no MFA to fall back on, its credential usually lives in a pipeline variable
+rather than a vault, and nothing prompts a human when it is used from somewhere
+new.
+
+**No data:** `OK`, and normally permanent — this stream is silent on a healthy
+tenant, which makes a threshold of zero plausible and unmeasured at the same
+time. The endpoint returns real detections even without Workload Identities
+Premium (live-measured), so silence here is genuinely an absence of detections
+rather than a licence wall.
+
+**Evaluator error:** `Error`.
+
+**False positives:** a credential legitimately reused from a new build agent or a
+relocated runner can score anomalous.
+
+**Remediation:** read `service_principal_name`, `app_id` and `risk_detail`, then
+**rotate the credential** rather than only dismissing the detection — dismissing
+clears the flag and leaves the secret. Panel:
+**Entra → Risky service principals total** (the gauge one layer up: it counts how
+many identities are risky now, where this rule fires on the detection that made
+one of them risky). This is the portable counterpart to pinning each automation
+identity to its own expected source address, which cannot ship here because those
+values are tenant infrastructure — see the pattern at the end of this page.
+
+### g2o-detect-legacy-auth-signin
+
+An `entra.signin` whose `client_app_used` is a legacy protocol. Legacy protocols
+cannot present an MFA challenge, so a sign-in that succeeds over one has bypassed
+multi-factor authentication whatever the Conditional Access policy says. Password
+spraying targets them for exactly that reason.
+
+This is deliberately separate from `g2o-detect-interactive-signin-anomaly`: that
+rule asks whether a sign-in looked suspicious, this one asks whether a channel
+exists that cannot be challenged — worth knowing even when every sign-in on it is
+legitimate.
+
+**No data:** `OK`. On a tenant that already blocks legacy authentication, silence
+is the correct and permanent answer.
+
+**Evaluator error:** `Error`.
+
+**False positives:** a tenant with legitimate legacy clients still in migration
+fires this continuously. That is not a wrong measurement, but it belongs on a
+dashboard rather than a pager until the migration finishes.
+
+**Remediation:** identify the account and client, then block the protocol with a
+Conditional Access policy rather than chasing individual sign-ins. Panel:
+**Entra → Top failing sign-in sources (country, client app)**. Before enabling,
+run [Which client apps sign in, and how much legacy protocol is left](hunting.md)
+— the client names in the rule are Microsoft's spellings and have not been
+measured here. Add `status_error_code=`0`` to narrow to *successful* legacy
+sign-ins, which is the smaller and more urgent set.
+
+### g2o-detect-mail-remediation-failed
+
+A `defender.email_post_delivery` record whose `action_result` is present and is
+not a success: Defender tried to remove a message it had already delivered, and
+the removal did not land. Zero-hour auto purge exists because a message can be
+reclassified as malicious after delivery — when the purge fails, the message is
+still sitting in an inbox Microsoft has already decided is dangerous, and nothing
+else tells you so. The alert says the threat was found; this record says whether
+it was actually removed.
+
+**No data:** `OK`. Also the state when Defender advanced-hunting blob ingest is
+not configured, in which case the stream is absent rather than clean.
+
+**Evaluator error:** `Error`.
+
+**False positives:** a transient failure that a later retry resolves looks
+identical to a permanent one on a single record.
+
+**Remediation:** read `action_type`, `action_trigger` and
+`recipient_email_address`, then remove the message by hand and confirm it is gone.
+Panel: **Defender → Quarantine held messages total** — the nearest surface, since
+both are about messages Defender has already judged malicious and acted on.
+
+The filter has two terms for a reason worth remembering: a negative label filter
+also matches a record carrying no `action_result` at all, because LogQL treats a
+missing structured-metadata key as the empty string. The presence term
+``action_result=~`.+``` is what keeps this from firing on every remediation
+record. Run
+[Which post-delivery mail remediations succeed](hunting.md) to see which values
+your tenant emits before enabling.
 
 ## A pattern worth knowing that is not shipped
 

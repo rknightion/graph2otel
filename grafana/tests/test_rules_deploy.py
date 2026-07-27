@@ -165,7 +165,8 @@ class TestReadbackReceipt(unittest.TestCase):
         self.assertEqual(receipt["status"], "drifted")
         self.assertEqual(set(receipt["absent"]), missing)
         self.assertEqual(receipt["divergent"], {})
-        self.assertEqual(receipt["compared"], 19)
+        self.assertEqual(receipt["compared"],
+                         len(build_rules.RULES) + len(build_rules.DETECTIONS))
 
     def test_a_fully_matching_stack_is_reported_matched(self):
         def fake_fetch(context, names):
@@ -184,7 +185,8 @@ class TestReadbackReceipt(unittest.TestCase):
             receipt = rules_deploy.readback("ctx")
         self.assertEqual(receipt["status"], "matched")
         self.assertEqual(receipt["absent"], [])
-        self.assertEqual(len(receipt["matching"]), 19)
+        self.assertEqual(len(receipt["matching"]),
+                         len(build_rules.RULES) + len(build_rules.DETECTIONS))
 
 
 class TestFolderResolution(unittest.TestCase):
@@ -242,7 +244,7 @@ class TestPushRequiresTheMeasuredFlags(unittest.TestCase):
             result = rules_deploy.push(
                 "ctx", folders, build_rules.render_app_platform(), absent=set())
         self.assertIn("--omit-manager-fields", seen["args"])
-        self.assertEqual(result["pushed"], 19)
+        self.assertEqual(result["pushed"], 19)  # whatever the fake reported
 
     def test_a_new_rule_is_created_without_its_group_label(self):
         """Measured: `403 cannot set group when creating a new rule`. The create

@@ -1,14 +1,15 @@
 # graph2otel — example alert rules
 
 Example Grafana alert rules that complement the dashboards in `../dashboards/`.
-One file:
 
-- [the generated manifests](graph2otel-alerts.yaml) — Grafana-managed alert
-  rules (file provisioning: `apiVersion: 1` + `groups:`). **Generated** by
-  [`grafana/build_rules.py`](../grafana/build_rules.py) (#219) — do not
-  hand-edit it; `make grafana-check` fails on a hand-edited file. Edit the
-  `RULES` list in that script, then run `make rules`. This file (the prose
-  below) stays hand-authored: the generator never touches it.
+`rules/` holds one **Grafana App Platform** `AlertRule` manifest per rule
+(`rules.alerting.grafana.app/v0alpha1`), **generated** by
+[`grafana/build_rules.py`](../grafana/build_rules.py) — do not hand-edit them;
+`make grafana-check` fails on a hand-edited file. Edit the `RULES` or
+`DETECTIONS` list in that script, then run `make rules`. This file (the prose
+below) stays hand-authored: the generator never touches it. Deploy with
+`make rules-push`, documented in
+[Deploying observability](../docs/deploying-observability.md).
 
 **Per-rule runbooks live on the docs site:**
 [Alert runbooks](https://m7kni.io/graph2otel/runbooks/). Every rule carries a
@@ -360,17 +361,22 @@ tenant, collector, and ingest transport. The companion appears only where a
 collector has an explicit type expectation and observes a mismatch. Neither
 metric contains source record identifiers or values.
 
-## Detection examples — `graph2otel-detections.yaml` (all paused)
+## Detection examples — rule group `graph2otel-detections` (all paused)
 
-A second, separate file ships five **portable security detections** built on graph2otel's log
-signals. They are not graph2otel health monitoring — everything above this section is. They live in
-their own file, rule group and Grafana folder so the two are never confused, and so provisioning one
-is not implicitly agreeing to the other.
+Eleven **portable security detections** built on graph2otel's log signals, generated into
+`rules/` from the `DETECTIONS` list alongside the health rules but placed in their own rule group and
+Grafana folder (`graph2otel detections`). They are not graph2otel health monitoring — everything
+above this section is. The separation is so the two are never confused, and so provisioning one is
+not implicitly agreeing to the other.
 
-**Every rule in that file is paused, and the generator refuses to ship one that is not.** None of
-these thresholds has been measured on more than one tenant. Each carries a `tuning_required`
-annotation naming the measurement it needs on *your* tenant before it is safe to enable. A detection
-that fires on correct data is worse than no detection: it teaches responders to ignore the channel.
+**Every detection is paused, and the generator refuses to ship one that is not.** None of these
+thresholds has been measured on more than one tenant. Each carries a `tuning_required` annotation
+naming the measurement it needs on *your* tenant, and the query that produces that measurement is on
+the [hunting-queries page](../docs/hunting.md) — a named measurement with no way to take it is a rule
+nobody can safely enable. A detection that fires on correct data is worse than no detection: it
+teaches responders to ignore the channel.
+
+First wave (#300), adapted from detections running on a real tenant:
 
 | uid | what it catches |
 | --- | --- |
@@ -384,9 +390,52 @@ The activity list in the first rule is the genuinely valuable, tenant-independen
 "which directory activities mean someone is establishing persistence" is the hard half of that
 detection, and it is the same list on every tenant.
 
-Nothing in the file carries a tenant id, application id, network address or geography, and a test
-asserts that. Where a per-tenant value would improve a rule — an expected sign-in country, for
-instance — the description says so rather than shipping a placeholder that looks like a real value.
+Second wave (#313), each one keyed on an (event, attribute) pair no rule above already asks about:
+
+| uid | what it catches | provenance |
+| --- | --- | --- |
+| `g2o-detect-exchange-inbox-rule-change` | an inbox rule created, changed or removed — the rule that hides the replies is present in nearly every business email compromise | email hiding rules, MITRE T1564.008 |
+| `g2o-detect-mailbox-permission-grant` | mailbox, recipient or folder permission granted: durable access that survives the owner's password reset and is invisible to them | additional email delegate permissions, MITRE T1098.002 |
+| `g2o-detect-identity-risk-detection` | a medium/high Identity Protection detection, naming **why** — impossible travel, unfamiliar properties, anonymised or malicious address, leaked credentials, password spray | Entra ID Protection risk detection types |
+| `g2o-detect-workload-identity-risk` | a service principal flagged `atRisk` or `confirmedCompromised` — the workload-identity half of Identity Protection, and the half nobody watches | Entra Workload ID Protection |
+| `g2o-detect-legacy-auth-signin` | a sign-in over a protocol that cannot be challenged for MFA | Microsoft secure-score guidance to block legacy authentication |
+| `g2o-detect-mail-remediation-failed` | Defender tried to remove an already-delivered malicious message and the removal did not land | zero-hour auto purge / post-delivery remediation |
+
+Two things about the second wave worth stating rather than discovering:
+
+- **Every value they match on is a Microsoft spelling this project has not measured on the wire for
+  that exact field**, so every regex is case-insensitive and every tuning note names the hunt that
+  confirms the spelling first. A regex that never matches is indistinguishable from a quiet tenant —
+  the value-level twin of querying an attribute that does not exist.
+- **Two of them key on the same `m365.audit` operation field and are still separate rules.** An inbox
+  rule is usually the mailbox owner's own doing and is noisy; a delegation grant is an administrative
+  act, rarer, and remediated differently. One threshold cannot serve both base rates.
+
+All eleven carry `category=identity-threat`, which is deliberately not split further: the label's job
+is to route to a security responder, and a finer split would be a routing decision made on the
+operator's behalf.
+
+Nothing carries a tenant id, application id, network address or geography, and a test asserts that.
+Where a per-tenant value would improve a rule — an expected sign-in country, for instance — the
+description says so rather than shipping a placeholder that looks like a real value.
+
+### What was deliberately NOT shipped as a rule
+
+Four concepts were considered and are documented as [hunts](../docs/hunting.md) instead. The reason
+is the same each time: a rule that cannot fire, or fires forever, is worse than a query someone runs.
+
+- **Federated identity credential added**, **standing consent grants** and **privileged role
+  membership** are all **inventories**, not event streams. A snapshot collector re-emits every
+  existing row on every poll, so `count_over_time(...) > 0` over one is true forever. The *act* of
+  granting consent, adding a role member or adding an application credential is already covered by
+  `g2o-detect-privileged-directory-change`; what these three answer is the different question of what
+  is standing granted right now, which is a thing to read rather than page on.
+- **Destructive Intune administrative action.** This project has only ever observed `Create` for
+  `activity_operation_type` on the wire. A rule matching a deletion spelling nobody has seen might
+  never fire, so the hunt takes the measurement and you write the rule against what you measured.
+- **Impossible travel computed from raw sign-ins.** Loki cannot join, so correlating two sign-ins by
+  distance and time is not expressible. `g2o-detect-identity-risk-detection` reads Microsoft's own
+  `impossibleTravel` verdict instead — not a shortcut, the only correct way to have the detection.
 
 ### The pattern that is documented but not shipped: single-source workload identities
 
@@ -416,32 +465,26 @@ tenant, which is exactly why they are yours to write and not ours to ship.
 
 ## Validating
 
-```bash
-python3 -c "import yaml; yaml.safe_load(open('alerts/rules/*.yaml'))"
-```
+`make grafana-check` proves each manifest is well-formed, that every metric name
+resolves against the generated signal catalog, that every log filter names an
+attribute graph2otel really emits, and that no committed file has drifted from
+the generator. It cannot prove a rule EVALUATES — that needs a live Grafana, and
+`promtool` does not apply here since this is Grafana's own alert-rule schema
+rather than Prometheus ruler YAML.
 
-Parses as well-formed YAML matching Grafana's file-provisioning shape
-(`apiVersion: 1` + `groups:`, each rule the canonical `A` query → `B`
-reduce(last) → `C` threshold pipeline, `condition: C`). **Full validation
-needs a live Grafana** — `promtool` doesn't apply here since this is the
-Grafana-managed provisioning schema, not Prometheus ruler YAML. Import the
-file into a real Grafana Cloud instance (file provisioning path, or the HTTP
-provisioning API, `POST /api/v1/provisioning/alert-rules`) to confirm each
-rule evaluates and the seven default-enabled rules provably fire under a
-synthetic bad-state condition: credential expiry, compliance ratio, collector
-staleness, record integrity loss, throttle saturation, MDCA upload stoppage,
-and MDCA parse failure. That step is **not done here** and is called out as
-outstanding in issue #30's acceptance criteria.
+The outstanding live step is confirming that the default-enabled rules provably
+fire under a synthetic bad state: credential expiry, compliance ratio, collector
+staleness, record integrity loss, throttle saturation, MDCA upload stoppage, and
+MDCA parse failure. That is **not done here**.
 
 ## Loading
 
-- **File provisioning** (self-hosted Grafana / Grafana Agent config): drop
-  the file in `/etc/grafana/provisioning/alerting/` and restart Grafana. It
-  creates the `graph2otel` folder and the rule group.
-- **Grafana Cloud:** file-provisioning isn't importable via the UI directly;
-  use Terraform (`grafana_rule_group`) or
-  [Grizzly](https://grafana.github.io/grizzly/), which consume this same
-  file-provisioning model, or the HTTP provisioning API.
+`make rules-push GRAFANA_CONTEXT=<gcx-context>` deploys the health rules, and
+`INCLUDE_DETECTIONS=1` additionally deploys the paused detection pack into its own
+folder. `make rules-readback` compares the stack against the repository field by
+field. See
+[Deploying observability](../docs/deploying-observability.md) for the four
+non-guessable API requirements this wraps.
 
 graph2otel ships no contact point, notification policy, or route — that is an
 explicit operator decision this repository does not make for you (#293/#296).

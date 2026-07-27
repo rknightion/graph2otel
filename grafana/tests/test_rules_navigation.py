@@ -54,7 +54,11 @@ class TestRunbookReachability(unittest.TestCase):
     """Criterion 1: every rule has a reachable runbook URL."""
 
     def test_every_rule_including_paused_ones_has_a_runbook_url(self):
-        self.assertEqual(len(ALL_RULES), 19, "19 rules: 14 alerts + 5 detections")
+        # Derived from the generator, not a literal: the count moves whenever a
+        # rule or detection lands (14 + 5 at #300, 14 + 11 at #313), and a
+        # literal fails on arithmetic rather than on the property under test.
+        self.assertEqual(len(ALL_RULES),
+                         len(build_rules.RULES) + len(build_rules.DETECTIONS))
         for rule in ALL_RULES:
             with self.subTest(uid=rule["uid"]):
                 url = rule["annotations"].get("runbook_url", "")
@@ -71,7 +75,8 @@ class TestRunbookReachability(unittest.TestCase):
 
     def test_every_runbook_anchor_exists_in_the_runbook_source(self):
         anchors = build_rules.runbook_sections()
-        self.assertGreaterEqual(len(anchors), 19, "the runbook page has sections")
+        self.assertGreaterEqual(len(anchors), len(ALL_RULES),
+                                "the runbook page has a section per rule")
         checked = 0
         for rule in ALL_RULES:
             anchor = rule["annotations"]["runbook_url"].split("#", 1)[1]
@@ -124,7 +129,7 @@ class TestDashboardPanelContext(unittest.TestCase):
                                  build_rules.DASHBOARD_UID)
                 self.assertRegex(ann.get("__panelId__", ""), r"^\d+$")
                 checked += 1
-        self.assertEqual(checked, 19)
+        self.assertEqual(checked, len(ALL_RULES))
 
     def test_every_panel_id_is_a_real_panel_in_the_generated_manifest(self):
         ids = {el["spec"]["id"] for el in MANIFEST["spec"]["elements"].values()}
@@ -149,7 +154,7 @@ class TestDashboardPanelContext(unittest.TestCase):
             with self.subTest(uid=rule["uid"]):
                 self.assertIn(slug, slugs)
             checked += 1
-        self.assertEqual(checked, 19)
+        self.assertEqual(checked, len(ALL_RULES))
 
     def test_dashboard_path_and_panel_id_annotation_agree(self):
         for rule in ALL_RULES:
@@ -238,7 +243,7 @@ class TestTheLinkedPanelIsAboutTheRulesOwnSignal(unittest.TestCase):
                 self.assertTrue(
                     any(t in text or t.replace(".", "_") in text for t in wanted),
                     f"{rule['uid']}: panel plots none of {sorted(wanted)}")
-        self.assertEqual(checked, 19)
+        self.assertEqual(checked, len(ALL_RULES))
 
     def test_a_panel_about_another_signal_is_reported(self):
         """Sabotage in the shape the coordinator warned about: a link that still
