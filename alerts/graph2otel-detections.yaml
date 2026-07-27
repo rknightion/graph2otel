@@ -102,8 +102,8 @@ groups:
           tuning_required: "Fires on your own admin work. Run the query over 30 days to learn your tenant's normal change rate, then decide whether to route it to a review queue rather than a pager, or to exclude specific initiators."
           runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-detect-privileged-directory-change"
           __dashboardUid__: "graph2otel"
-          __panelId__: "90"
-          dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=90"
+          __panelId__: "91"
+          dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=91"
         isPaused: true
       - uid: "g2o-detect-security-alert-unresolved"
         title: "Security alert, medium or high, still unresolved"
@@ -178,8 +178,8 @@ groups:
           tuning_required: "Volume depends entirely on your Defender licensing and tenant size. Measure the alert rate over 30 days before enabling; on a noisy tenant raise the threshold or narrow to severity=high."
           runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-detect-security-alert-unresolved"
           __dashboardUid__: "graph2otel"
-          __panelId__: "262"
-          dashboard_path: "/d/graph2otel?dtab=Defender&viewPanel=262"
+          __panelId__: "263"
+          dashboard_path: "/d/graph2otel?dtab=Defender&viewPanel=263"
         isPaused: true
       - uid: "g2o-detect-security-incident-active"
         title: "Security incident, medium or high, active"
@@ -254,8 +254,8 @@ groups:
           tuning_required: "Enable this or the alert rule, not both, until you have watched a real incident arrive and seen which gives your responders the better entry point."
           runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-detect-security-incident-active"
           __dashboardUid__: "graph2otel"
-          __panelId__: "263"
-          dashboard_path: "/d/graph2otel?dtab=Defender&viewPanel=263"
+          __panelId__: "264"
+          dashboard_path: "/d/graph2otel?dtab=Defender&viewPanel=264"
         isPaused: true
       - uid: "g2o-detect-graph-403-burst"
         title: "Graph API authorization-denial burst from a single application"
@@ -330,8 +330,8 @@ groups:
           tuning_required: "Needs entra.graph_activity, which arrives over blob ingest. The threshold of 10 in 5 minutes is a starting point from one small tenant; a tenant with more automation will need a higher one. Measure your own per-app 403 baseline before enabling."
           runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-detect-graph-403-burst"
           __dashboardUid__: "graph2otel"
-          __panelId__: "80"
-          dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=80"
+          __panelId__: "81"
+          dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=81"
         isPaused: true
       - uid: "g2o-detect-interactive-signin-anomaly"
         title: "Interactive sign-in blocked by Conditional Access or flagged at risk"
@@ -406,6 +406,6 @@ groups:
           tuning_required: "Conditional Access failures include ordinary events such as a user declining an MFA prompt, so on most tenants this needs either a threshold above zero or a narrowing to risk_state alone. Measure your CA failure rate over 30 days first. Risk states require Entra ID P2."
           runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-detect-interactive-signin-anomaly"
           __dashboardUid__: "graph2otel"
-          __panelId__: "85"
-          dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=85"
+          __panelId__: "86"
+          dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=86"
         isPaused: true

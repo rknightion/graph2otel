@@ -53,7 +53,7 @@ seconds per second. A naive check would relabel every latency panel as a rate.
 
 # What this file deliberately does not do
 
-It thresholds **five** metrics out of 331 panels. That restraint is the point.
+It thresholds **four** metrics out of 331 panels. That restraint is the point.
 "How many ownerless Teams is too many" and "what EPSS probability is
 unacceptable" are policy judgements an operator makes, not facts this repository
 has evidence for, so they get neutral colouring and a log twin to query. A
@@ -209,11 +209,21 @@ class Presentation:
 # citation: it is generated from the Go source that writes the value, so it
 # cannot drift from the encoding without the catalog changing too.
 
-def _flag(off: str, on: str, metric: str) -> Mappings:
+def _flag(off: str, on: str) -> Mappings:
+    """A cited 0/1 switch mapping.
+
+    The citation deliberately does NOT name the metric. Several of these share
+    one panel, a panel-wide mapping carries exactly one citation, and the gate
+    that proves an entry reached a panel matches on the citation text — so a
+    per-metric citation made three of four entries look unapplied when they were
+    correctly sharing the fourth's. The panel already shows which metrics it
+    plots; the citation only has to say where the encoding comes from.
+    """
     return Mappings(
         {0: off, 1: on},
-        evidence=(f"0/1 encoding declared by the emitter's own description of "
-                  f"{metric}, which the wire-derived catalog carries verbatim."),
+        evidence=("0/1 encoding declared by the emitter's own description, which "
+                  "the wire-derived catalog carries verbatim from the Go source "
+                  "that writes the value."),
     )
 
 
@@ -275,15 +285,14 @@ ENTRIES: dict = {
 
     # --- 0/1 flags ----------------------------------------------------------
     "entra.auth_methods_policy.method.enabled": Presentation(
-        mappings=_flag("Disabled", "Enabled",
-                       "entra.auth_methods_policy.method.enabled")),
+        mappings=_flag("Disabled", "Enabled")),
     "entra.organization.on_premises_sync_enabled": Presentation(
         mappings=Mappings(
             {0: "Cloud-only", 1: "Synced from on-premises"},
             evidence=("the emitter's description states 1 means the tenant is "
                       "currently synced from an on-premises directory."))),
     "intune.autopilot.profile.setting": Presentation(
-        mappings=_flag("Disabled", "Enabled", "intune.autopilot.profile.setting")),
+        mappings=_flag("Disabled", "Enabled")),
     "intune.update_ring.pause_state": Presentation(
         mappings=Mappings(
             {0: "Not paused", 1: "Paused"},
@@ -294,19 +303,20 @@ ENTRIES: dict = {
             evidence=("the emitter's description states 1=active, "
                       "0=inactive."))),
     "m365.sharepoint.external_resharing_enabled": Presentation(
-        mappings=_flag("Disabled", "Enabled",
-                       "m365.sharepoint.external_resharing_enabled")),
+        mappings=_flag("Disabled", "Enabled")),
     "m365.sharepoint.idle_session_signout_enabled": Presentation(
-        mappings=_flag("Disabled", "Enabled",
-                       "m365.sharepoint.idle_session_signout_enabled")),
+        mappings=_flag("Disabled", "Enabled")),
     "m365.sharepoint.legacy_auth_enabled": Presentation(
-        mappings=_flag("Disabled", "Enabled",
-                       "m365.sharepoint.legacy_auth_enabled")),
+        mappings=_flag("Disabled", "Enabled")),
+    # Deliberately the same Disabled/Enabled wording as its three companions
+    # rather than "Unrestricted"/"Restricted to managed devices". They share one
+    # "SharePoint tenant switches" panel, and a panel-wide mapping only applies
+    # when every metric on it agrees — so bespoke wording here meant this entry,
+    # and its three neighbours', silently did nothing. What the switch restricts
+    # is carried by the citation and the panel description, which is where prose
+    # belongs; the axis label only needs to say which way the switch is thrown.
     "m365.sharepoint.unmanaged_sync_restricted": Presentation(
-        mappings=Mappings(
-            {0: "Unrestricted", 1: "Restricted to managed devices"},
-            evidence=("the emitter's description states 1 means the OneDrive sync "
-                      "app is restricted to managed or domain-joined devices."))),
+        mappings=_flag("Disabled", "Enabled")),
 
     # --- self-observability states ------------------------------------------
     "graph2otel.scrape.success": Presentation(
@@ -505,9 +515,39 @@ def panel_presentation(man: dict) -> list:
     return out
 
 
+def unapplied(man: dict) -> list:
+    """Registry entries whose mapping or threshold reaches no panel.
+
+    ``violations()`` only proves the metric is *panelled*; it cannot see whether
+    the panel was built in a way that picks the entry up. That gap was real: four
+    thresholds were cited and only one reached the manifest, because
+    ``b.raw()`` needs an explicit ``about=`` to know which metric a hand-written
+    expression is about, and three call sites did not pass it. Nothing failed —
+    the citation existed, the metric was covered, and the colour silently was
+    not there.
+
+    Detected through the citation marker, which is the only evidence in the
+    artifact that an entry was applied.
+    """
+    descriptions = " ".join(p["description"] for p in panel_presentation(man))
+    found = []
+    for name in sorted(ENTRIES):
+        entry = ENTRIES[name]
+        for kind, obj in (("mapping", entry.mappings), ("threshold", entry.thresholds)):
+            if obj is None or obj.evidence in descriptions:
+                continue
+            found.append(
+                f"presentation registry cites a {kind} for {name!r} that reaches no "
+                "panel. The entry does nothing: a metric() panel picks it up "
+                "automatically, but a hand-written raw() panel needs about="
+                f"{name!r} to say which metric it is about"
+            )
+    return found
+
+
 def manifest_violations(man: dict) -> list:
     """Every presentation dishonesty visible in the shipped manifest."""
-    found = []
+    found = list(unapplied(man))
     panels = panel_presentation(man)
     for p in panels:
         title = p["title"] or p["element"]

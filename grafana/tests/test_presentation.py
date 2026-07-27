@@ -100,6 +100,29 @@ class TestRegistryIsKeyedByTheCatalog(unittest.TestCase):
         builder, _, _ = build_dashboard.build_all(CAT)
         self.assertEqual(presentation.violations(CAT, builder.covered), [])
 
+    def test_every_cited_mapping_and_threshold_reaches_a_panel(self):
+        """Being panelled is not the same as being applied.
+
+        Four thresholds were cited and only one reached the manifest: a
+        hand-written raw() panel needs an explicit ``about=`` to know which
+        metric it is about, and three call sites did not pass it. Nothing
+        failed — the citation existed, the metric was covered, and the colour
+        simply was not there. Found by reading the published dashboard back off
+        a live stack, which is the only reason it was found at all.
+        """
+        self.assertEqual(presentation.unapplied(build_dashboard.render(CAT)), [])
+
+    def test_a_cited_entry_that_reaches_no_panel_is_reported(self):
+        man = build_dashboard.render(CAT)
+        for element in man["spec"]["elements"].values():
+            viz = element["spec"].get("vizConfig", {}).get("spec", {})
+            defaults = viz.get("fieldConfig", {}).get("defaults", {})
+            if (defaults.get("thresholds") or {}).get("steps", [{}]).__len__() > 1:
+                # Strip the citation the way a dropped about= would.
+                element["spec"]["description"] = ""
+        found = presentation.unapplied(man)
+        self.assertTrue(found, "unapplied entries went unreported")
+
 
 class TestRateHonesty(unittest.TestCase):
     def test_a_byte_counter_rate_is_formatted_as_bytes_per_second(self):

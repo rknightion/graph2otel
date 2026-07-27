@@ -179,7 +179,7 @@ def extra(b):
     delivery_degradation = _summary_panel(b.raw(
         "Current exporter callback degradation",
         [f"max by (signal) ({DELIVERY_DEGRADED})"],
-        viz="table", w=6, h=6,
+        viz="table", w=6, h=6, about="graph2otel.otlp.delivery.degraded",
         desc="Latest process-local callback state by signal. Success means the exporter "
              "accepted the callback; it is not backend retention and not exactly-once "
              "delivery evidence.",
@@ -234,7 +234,7 @@ def extra(b):
     delivery_detail = b.raw(
         "Current exporter degradation by signal",
         [f"max by (signal) ({DELIVERY_DEGRADED})"],
-        viz="table", w=24, h=6,
+        viz="table", w=24, h=6, about="graph2otel.otlp.delivery.degraded",
         desc="Current process-local exporter callback state for metrics and logs. "
              "1 means the latest failure has not been cleared by a later successful "
              "export; 0 means it has. This does not change liveness or readiness.",
@@ -342,6 +342,7 @@ def extra(b):
     b.row("Collector health (generated signal catalog)")
     b.raw("Scrape success by collector", [f"{SCRAPE_SUCCESS}{_SEL}"],
           legends=["{{tenant_id}} {{collector}}"],
+          about="graph2otel.scrape.success",
           desc="1 when the last reconciled run was empty or successful; 0 when it was "
                "partial or failed (including a recovered panic). A green tick is not "
                "evidence of data: several collectors succeed on an empty collection "
@@ -360,6 +361,7 @@ def extra(b):
           desc="Wall-clock age of the latest completed run, whether it succeeded or failed.")
     b.raw("Scrape budget (duration / interval)", [f"{SCRAPE_BUDGET}{_SEL}"],
           legends=["{{tenant_id}} {{collector}}"],
+          about="graph2otel.scrape.budget",
           desc="At or above 1 a scrape takes as long as its own poll interval — no "
                "headroom, risk of overrun.")
     b.raw("Effective expected poll interval per collector",

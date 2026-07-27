@@ -29,9 +29,12 @@ SECTIONS = [
          ["entra.domains.federated.total", "entra.organization.verified_domains.total"]),
         "entra.deleted_items.count",
         "entra.directory.sync.errors.total",
-        ("Directory sync freshness",
-         ["entra.directory.sync.last_sync_age_seconds",
-          "entra.organization.on_premises_sync_enabled"]),
+        "entra.directory.sync.last_sync_age_seconds",
+        # Its own panel rather than sharing the freshness axes: it is a 0/1 flag
+        # and the age is in seconds, so one value mapping cannot describe both
+        # without relabelling the seconds (#304).
+        ("Hybrid directory sync", ["entra.organization.on_premises_sync_enabled"],
+         {"viz": "table", "w": 12, "h": 6}),
         ("Tenant", ["entra.organization.info", "entra.organization.age_days"],
          {"viz": "table", "w": 24, "h": 6}),
     ]),
