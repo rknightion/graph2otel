@@ -1,6 +1,7 @@
 package annotations
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -894,20 +895,21 @@ func TestStartWritesTheLifecycleMarkerCarryingVersionAndFingerprint(t *testing.T
 // destination; it must return immediately whatever Grafana is doing.
 func TestPublishNeverBlocksACollectorGoroutine(t *testing.T) {
 	stall := make(chan struct{})
-	defer close(stall)
-	var preflightDone sync.Once
+	var preflightDone, stalledOnce sync.Once
 	preflight := make(chan struct{})
+	stalled := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		first := false
 		preflightDone.Do(func() { first = true; close(preflight) })
 		if !first {
 			// Every write after the startup probe hangs, so the publisher goroutine
 			// is parked inside an HTTP call for the rest of the test.
+			stalledOnce.Do(func() { close(stalled) })
 			<-stall
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 
 	cfg := testConfig()
 	cfg.URL = srv.URL
@@ -921,6 +923,26 @@ func TestPublishNeverBlocksACollectorGoroutine(t *testing.T) {
 	}
 	<-preflight
 	t.Cleanup(func() { _ = a.Close(t.Context()) })
+	// TEARDOWN ORDER IS LOAD-BEARING (#403). Cleanups run last-registered-first,
+	// so releasing the stalled handler happens BEFORE Close waits on the worker
+	// and before httptest's Close waits on its outstanding request. Registered
+	// the other way round — as a `defer close(stall)` above the server, which is
+	// what shipped — the test deadlocks for the full package timeout whenever
+	// the worker actually reached the handler before the body returned. That is
+	// a coin flip locally and near-certain under coverage on a loaded runner,
+	// which is exactly how it presented: one 600s hang, green on re-run.
+	t.Cleanup(func() { close(stall) })
+
+	// Park the publisher goroutine INSIDE the stalled handler before measuring
+	// anything. Without this the test raced its own worker: the loop below
+	// usually finished before the worker had dequeued a single annotation, so
+	// nothing was ever published against a stalled destination and the contract
+	// in this test's name went unexercised.
+	a.Publish(Annotation{
+		Category: CategoryConfigPosture, TenantID: testTenant,
+		RuleID: "r", Time: fixedNow, Text: "x", DedupeKey: "seed",
+	})
+	<-stalled
 
 	done := make(chan struct{})
 	go func() {
@@ -936,6 +958,71 @@ func TestPublishNeverBlocksACollectorGoroutine(t *testing.T) {
 	case <-done:
 	case <-time.After(10 * time.Second):
 		t.Fatal("Publish blocked; a collector goroutine can be stalled by Grafana")
+	}
+}
+
+// TestCloseDrainIsBoundedWhenGrafanaStalls pins the shutdown budget.
+//
+// main.go closes the annotator with context.Background(), so "the drain is
+// bounded by ctx" bought nothing: a stalled Grafana made shutdown cost one
+// request timeout PER QUEUED ANNOTATION, up to queue_size of them. Close owns
+// the bound itself now — one write's budget for the whole drain, whatever the
+// caller passes (#403).
+func TestCloseDrainIsBoundedWhenGrafanaStalls(t *testing.T) {
+	stall := make(chan struct{})
+	var preflightDone, stalledOnce sync.Once
+	preflight := make(chan struct{})
+	stalled := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		first := false
+		preflightDone.Do(func() { first = true; close(preflight) })
+		if !first {
+			stalledOnce.Do(func() { close(stalled) })
+			<-stall
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+	// Registered after the server's, so it runs first — see #403 above.
+	t.Cleanup(func() { close(stall) })
+
+	cfg := testConfig()
+	cfg.URL = srv.URL
+	cfg.Timeout = 200 * time.Millisecond
+	cfg.QueueSize = 20
+	a, err := Start(t.Context(), Options{
+		Config: cfg, CheckpointDir: t.TempDir(),
+		TenantIDs: []string{testTenant}, StartedAt: fixedNow,
+	})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	<-preflight
+
+	// Park the worker inside the stalled handler, then fill the queue behind it.
+	a.Publish(Annotation{
+		Category: CategoryConfigPosture, TenantID: testTenant,
+		RuleID: "r", Time: fixedNow, Text: "x", DedupeKey: "seed",
+	})
+	<-stalled
+	for i := range cfg.QueueSize {
+		a.Publish(Annotation{
+			Category: CategoryConfigPosture, TenantID: testTenant,
+			RuleID: "r", Time: fixedNow, Text: "x", DedupeKey: strconv.Itoa(i),
+		})
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		//nolint:usetesting // the point is the UNBOUNDED context main.go passes.
+		_ = a.Close(context.Background())
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close did not return within 2s; the drain is paying one request " +
+			"timeout per queued annotation instead of bounding the whole drain")
 	}
 }
 

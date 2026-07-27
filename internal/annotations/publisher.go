@@ -70,6 +70,12 @@ type Annotator struct {
 	limiter  *rateLimiter
 	now      func() time.Time
 
+	// drainBudget bounds Close's shutdown drain in TOTAL. It is one write's
+	// budget, not one per queued annotation: a Grafana that stalls must cost
+	// shutdown the same as a single slow write, and annotations lost at shutdown
+	// are exactly the "degraded" this feature is built to tolerate.
+	drainBudget time.Duration
+
 	queue chan Annotation
 	// degraded is read by the gauge report and written by the worker only.
 	degraded atomic.Bool
@@ -142,10 +148,11 @@ func Start(ctx context.Context, opts Options) (*Annotator, error) {
 			checkpoint.NewStore(opts.CheckpointDir),
 			opts.Config.DedupeRetention,
 		),
-		limiter:    newRateLimiter(opts.Config.MaxPerMinute, now),
-		now:        now,
-		queue:      make(chan Annotation, opts.Config.QueueSize),
-		workerDone: make(chan struct{}),
+		limiter:     newRateLimiter(opts.Config.MaxPerMinute, now),
+		now:         now,
+		drainBudget: opts.Config.Timeout,
+		queue:       make(chan Annotation, opts.Config.QueueSize),
+		workerDone:  make(chan struct{}),
 	}
 	a.recorder = NewRecorder(RecorderOptions{
 		Config: opts.Config,
@@ -339,9 +346,12 @@ func (a *Annotator) reportDegraded() {
 // Close stops the publisher, flushes the open rollup buckets, drains what is
 // already queued, and persists the dedupe set.
 //
-// The drain is bounded by ctx: a Grafana that is down must not hold up process
-// shutdown, and a lost annotation at shutdown is exactly the "degraded" this
-// feature is designed to tolerate.
+// CLOSE OWNS THE DRAIN'S DEADLINE, not the caller (#403). The composition root
+// closes with context.Background(), so deferring to the caller's ctx bounded
+// nothing: a stalled Grafana cost one request timeout for EVERY queued
+// annotation — up to queue_size (512 by default) × timeout, which is over an
+// hour of a shutdown that is supposed to be prompt. The whole drain now gets one
+// write's budget, and a caller ctx that expires sooner still wins.
 func (a *Annotator) Close(ctx context.Context) error {
 	if a == nil {
 		return nil
@@ -351,10 +361,12 @@ func (a *Annotator) Close(ctx context.Context) error {
 		a.cancel()
 		<-a.workerDone
 		a.recorder.FlushAll()
+		drainCtx, cancelDrain := context.WithTimeout(ctx, a.drainBudget)
+		defer cancelDrain()
 		for {
 			select {
 			case annotation := <-a.queue:
-				a.write(ctx, annotation)
+				a.write(drainCtx, annotation)
 				continue
 			default:
 			}
