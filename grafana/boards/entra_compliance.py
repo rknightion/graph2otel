@@ -1,5 +1,7 @@
 """Entra ID compliance overview — directory posture, identity risk, sign-ins."""
 
+from logquery import f
+
 DOMAIN = "Entra"
 DESCRIPTION = (
     "Entra ID directory, licensing, application, policy, role, secure-score, MFA and "
@@ -117,16 +119,16 @@ SECTIONS = [
 LOGS = [
     {"kind": "logs", "event": "entra.signin",
      "title": "Failed sign-ins — which user, which IP, which error",
-     "filters": ["status_error_code!=`0`"],
+     "filters": [f("status_error_code", "ne", "0")],
      "desc": "The metric says how many sign-ins failed. This says whose. Error 53004 is "
              "the Tor/anonymous-IP case #129 used to prove risk detection fires.",
      "w": 24, "h": 12},
     {"kind": "rate", "event": "entra.signin",
      "title": "Failed sign-in rate by error code",
-     "filters": ["status_error_code!=`0`"], "by": ["status_error_code"]},
+     "filters": [f("status_error_code", "ne", "0")], "by": ["status_error_code"]},
     {"kind": "table", "event": "entra.signin",
      "title": "Top failing sign-in sources (country, client app)",
-     "filters": ["status_error_code!=`0`"],
+     "filters": [f("status_error_code", "ne", "0")],
      "by": ["location_country_or_region", "client_app_used"]},
     {"kind": "logs", "event": "entra.risk_detection",
      "title": "Risk detections — MITRE ATT&CK technique, IP, user",

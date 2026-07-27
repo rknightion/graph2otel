@@ -25,6 +25,8 @@ Pure standard-library `python3`. Nothing to install, which is why the CI job has
 | `internal/signalcatalog/` | the Go package that generates it, by aggregating every `internal/**/testdata/signals.json` owned by a signal gate |
 | `grafana/catalog.py` | reads the catalog; `metrics_referenced_by()` is what the coverage gate counts with |
 | `grafana/builder.py` | `Builder` — panels, queries, layout, the LogQL selector, the two expression corpora |
+| `grafana/logquery.py` | typed LogQL filters and group keys, validated against the catalog (#306) |
+| `grafana/v2.py` | v1→v2 panel translation, layout primitives, and the manifest gates (#399) |
 | `grafana/boards/*.py` | one module per dashboard; **data, not code** |
 | `grafana/waivers.json` | metrics deliberately off every panel, with a reason each |
 | `grafana/build_dashboard.py` | orchestrator, CLI, and every gate |
@@ -95,11 +97,13 @@ credits exactly the metrics its text really names. Use it sparingly.
 ## Log panels (#162)
 
 ```python
+from logquery import f
+
 LOGS = [
     {"kind": "logs",  "event": "entra.signin", "title": "Failed sign-ins",
-     "filters": ["status_error_code!=`0`"], "w": 24, "h": 12},
+     "filters": [f("status_error_code", "ne", "0")], "w": 24, "h": 12},
     {"kind": "rate",  "event": "entra.signin", "title": "Failure rate by error code",
-     "by": ["status_error_code"], "filters": ["status_error_code!=`0`"]},
+     "by": ["status_error_code"], "filters": [f("status_error_code", "ne", "0")]},
     {"kind": "table", "event": "entra.risk_detection", "title": "Risk by type",
      "by": ["risk_event_type", "risk_level"]},
 ]
@@ -113,6 +117,35 @@ that silently never fires", and the doc paragraph has not been enough: the shipp
 rules and 74 dashboard queries were both built on a false belief about these labels
 (#143, #158, #160). So the shape is enforced in code and asserted by
 `test_no_stream_selector_on_an_attribute`.
+
+### Filters and group keys are typed and validated (#306)
+
+`f(key, op, value)` builds a filter; `op` is one of `eq` / `ne` / `re` / `nre`. **A bare string is
+refused.** Both filter keys and `by` group keys are checked against the event's real attribute set,
+overlaid with `tenant_id` and `ingest_transport`, which the emitter stamps on every record whether or
+not the event's catalog row lists them.
+
+This closes a real gap rather than adding ceremony. LogQL has no schema, so a misspelled attribute —
+`status_erorr_code` for `status_error_code` — was a perfectly valid pipeline stage that matched
+**nothing, silently, forever**. Same class of bug as #143, #158 and #160, and an earlier version of
+this file claimed build-time validation that only ever covered metric and event *names*. Mutation
+tests in `tests/test_logquery.py` prove a misspelled filter key and a misspelled group key each fail
+the build independently.
+
+When the typed model genuinely cannot express something — a regex alternation chain, `line_format`,
+`unwrap` — use the escape, which is deliberately expensive:
+
+```python
+from logquery import Raw
+
+Raw("line_format `{{.user_principal_name}}`",
+    keys=["user_principal_name"],           # validated exactly like a typed filter
+    reason="line_format has no typed equivalent")
+```
+
+It must declare every attribute it references and state why. The rejected alternative was a raw string
+plus a key extractor: that extractor becomes a partial LogQL parser, which either misses constructs and
+silently validates nothing, or rejects valid queries.
 
 Event names are validated against the catalog, and `kind: "table"` uses range + reduce
 rather than an instant `topk` — an instant query materializes one series per distinct

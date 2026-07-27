@@ -47,7 +47,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import catalog as catalog_mod  # noqa: E402
+import catalog as catalog_mod
+import logquery
+from logquery import f  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
@@ -664,35 +666,32 @@ def _loki_alert(uid: str, title: str, expr: str, op: str, params: list,
     }
 
 
-def _sel(event: str, *filters: str) -> str:
+# Accumulated by _sel() as the DETECTIONS list is constructed at import time, so
+# validation is derived from the filters actually used rather than from a
+# hand-maintained parallel declaration that could drift out of step with them.
+DETECTION_VIOLATIONS: list = []
+
+
+def _sel(event: str, *filters, by: str = "") -> str:
     """Build the ONLY correct LogQL shape, exactly as the dashboards do (#90).
 
     ``service_name`` is the sole stream label; everything else is structured
-    metadata and must be filtered after the pipe. Every attribute named by these
-    detections is checked against the catalog by ``validate_detection_fields``.
+    metadata and must be filtered after the pipe. Filters are typed
+    (``logquery.f``) and validated against the event's real attribute set by
+    ``validate_detection_fields`` — #306 covers alerts, not only dashboards.
     """
+    DETECTION_VIOLATIONS.extend(logquery.violations(
+        CAT, event, filters=filters,
+        by=[key.strip() for key in by.split(",") if key.strip()]))
     parts = ['{service_name="graph2otel"}', f"| event_name=`{event}`"]
-    parts.extend(f"| {f}" for f in filters)
+    parts.extend(f"| {rendered}" for rendered in logquery.render_filters(filters))
     return " ".join(parts)
 
 
-def _count(event: str, *filters: str, by: str = "") -> str:
+def _count(event: str, *filters, by: str = "") -> str:
     grouping = f" by ({by})" if by else ""
-    return f"sum{grouping} (count_over_time({_sel(event, *filters)} [5m]))"
+    return f"sum{grouping} (count_over_time({_sel(event, *filters, by=by)} [5m]))"
 
-
-# event name -> the attributes the detections below filter or group on. Checked
-# against spec/signal-catalog.json by validate_detection_fields(), so a filter on
-# an attribute graph2otel does not emit fails the build instead of matching zero
-# rows forever (#90).
-DETECTION_FIELDS = {
-    "entra.directory_audit": ["activity_display_name"],
-    "entra.security_alert": ["severity", "status"],
-    "entra.security_incident": ["severity", "status"],
-    "entra.graph_activity": ["response_status_code", "app_id"],
-    "entra.signin": ["sign_in_event_types", "conditional_access_status",
-                     "risk_state"],
-}
 
 DETECTIONS = [
     _loki_alert(
@@ -700,11 +699,12 @@ DETECTIONS = [
         "Privileged directory change (app credential, role, consent, CA or owner)",
         _count(
             "entra.directory_audit",
-            "activity_display_name=~`(?i)(consent to application|"
-            "add app role assignment.*|add delegated permission grant|"
-            "add service principal.*|add application.*|"
-            ".*certificates and secrets management.*|add member to role.*|"
-            "add owner to .*|.*conditional access polic.*)`",
+            f("activity_display_name", "re",
+              "(?i)(consent to application|add app role assignment.*|"
+              "add delegated permission grant|add service principal.*|"
+              "add application.*|.*certificates and secrets management.*|"
+              "add member to role.*|add owner to .*|"
+              ".*conditional access polic.*)"),
         ),
         "gt", [0],
         {"severity": "critical", "source": "entra", "category": "identity-threat"},
@@ -726,7 +726,8 @@ DETECTIONS = [
         "g2o-detect-security-alert-unresolved",
         "Security alert, medium or high, still unresolved",
         _count("entra.security_alert",
-               "severity=~`(?i)(high|medium)`", "status=~`(?i)(new|inProgress)`"),
+               f("severity", "re", "(?i)(high|medium)"),
+               f("status", "re", "(?i)(new|inProgress)")),
         "gt", [0],
         {"severity": "critical", "source": "entra", "category": "identity-threat"},
         "An unresolved medium/high security alert is open",
@@ -743,7 +744,8 @@ DETECTIONS = [
         "g2o-detect-security-incident-active",
         "Security incident, medium or high, active",
         _count("entra.security_incident",
-               "severity=~`(?i)(high|medium)`", "status=~`(?i)(active|inProgress)`"),
+               f("severity", "re", "(?i)(high|medium)"),
+               f("status", "re", "(?i)(active|inProgress)")),
         "gt", [0],
         {"severity": "warning", "source": "entra", "category": "identity-threat"},
         "An active medium/high security incident is open",
@@ -761,7 +763,8 @@ DETECTIONS = [
     _loki_alert(
         "g2o-detect-graph-403-burst",
         "Graph API authorization-denial burst from a single application",
-        _count("entra.graph_activity", "response_status_code=`403`", by="app_id"),
+        _count("entra.graph_activity", f("response_status_code", "eq", "403"),
+               by="app_id"),
         "gt", [10],
         {"severity": "critical", "source": "entra", "category": "identity-threat"},
         "One application received more than 10 Graph 403s in 5 minutes",
@@ -778,11 +781,11 @@ DETECTIONS = [
         "g2o-detect-interactive-signin-anomaly",
         "Interactive sign-in blocked by Conditional Access or flagged at risk",
         "("
-        + _count("entra.signin", "sign_in_event_types=`interactiveUser`",
-                 "conditional_access_status=`failure`")
+        + _count("entra.signin", f("sign_in_event_types", "eq", "interactiveUser"),
+                 f("conditional_access_status", "eq", "failure"))
         + ") + ("
-        + _count("entra.signin", "sign_in_event_types=`interactiveUser`",
-                 "risk_state=~`atRisk|confirmedCompromised`")
+        + _count("entra.signin", f("sign_in_event_types", "eq", "interactiveUser"),
+                 f("risk_state", "re", "atRisk|confirmedCompromised"))
         + ")",
         "gt", [0],
         {"severity": "critical", "source": "entra", "category": "identity-threat"},
@@ -808,34 +811,13 @@ def validate_detection_fields(cat) -> list:
     A LogQL filter on an attribute graph2otel does not emit is not an error at
     query time — it simply matches nothing, silently, forever (#90). For a
     detection that is the worst possible failure: it looks installed and healthy
-    while never being able to fire.
+    while being unable to ever fire.
+
+    Derived from the typed filters themselves (#306), accumulated as the
+    DETECTIONS list is built, so there is no parallel declaration to drift.
     """
-    violations = []
-    for event, attrs in DETECTION_FIELDS.items():
-        try:
-            log = cat.log(event)
-        except KeyError:
-            violations.append(f"detections filter on {event!r}, which is not a "
-                              "cataloged log event")
-            continue
-        for attr in attrs:
-            if attr not in log.keys:
-                violations.append(
-                    f"detections filter {event}.{attr!r}, which the event does "
-                    "not carry; the query would match zero rows silently"
-                )
-    # A field declared here but named by no detection is a stale claim, and the
-    # check above would then be validating something nobody queries.
-    exprs = " ".join(rule["data"][0]["model"]["expr"] for rule in DETECTIONS)
-    for event, attrs in DETECTION_FIELDS.items():
-        if f"event_name=`{event}`" not in exprs:
-            violations.append(f"DETECTION_FIELDS declares {event!r}, which no "
-                              "detection queries")
-        for attr in attrs:
-            if attr not in exprs:
-                violations.append(f"DETECTION_FIELDS declares {event}.{attr!r}, "
-                                  "which no detection filters or groups on")
-    return violations
+    del cat  # validated against the module-level CAT at construction time
+    return list(DETECTION_VIOLATIONS)
 
 
 

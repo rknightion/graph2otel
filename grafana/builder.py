@@ -13,6 +13,14 @@ normalized name, the aggregation its unit permits, and the label set it really
 carries. A typo is a KeyError at build time rather than an empty panel someone
 notices in six months.
 
+This covers metric names, event names, **and** — since #306 — the attribute keys
+inside a log query. It did not always: log filters were raw strings, so a
+misspelled attribute was a valid LogQL stage matching nothing, silently, forever.
+An earlier version of this docstring claimed otherwise, which was the exact
+overstatement #306 was opened to correct. Log filters are now typed
+(``logquery.f``) with a declared escape (``logquery.Raw``) and both are validated
+against the event's real attribute set.
+
 **2. LogQL never satisfies the metric coverage gate.** PromQL and LogQL are
 accumulated into two separate corpora (``_exprs`` / ``_loki_exprs``). They are
 separate on purpose: a metric name appearing inside a LogQL label filter would
@@ -32,6 +40,7 @@ from __future__ import annotations
 
 import json
 
+import logquery
 import v2
 from catalog import TENANT_SCOPE
 
@@ -476,19 +485,27 @@ class Builder:
 
     # ----- Loki panels (#162) ---------------------------------------------
 
-    def _selector(self, event: str, filters: list = None) -> str:
+    def _selector(self, event: str, filters: list = None,
+                  by: list = None) -> str:
         """Build the ONLY correct LogQL shape for a graph2otel log record.
 
-        ``service_name`` is the sole stream label; ``event_name`` and every
-        other attribute is structured metadata and must be filtered after the
-        pipe (#90). This method is the reason a board module cannot get that
-        wrong: it never accepts a stream selector from the caller.
+        ``service_name`` is the sole stream label; ``event_name`` and every other
+        attribute is structured metadata and must be filtered after the pipe
+        (#90). This method is the reason a board module cannot get that wrong: it
+        never accepts a stream selector from the caller.
+
+        Filters are typed (``logquery.f`` / ``logquery.Raw``) and their keys —
+        along with any ``by`` group keys — are validated against the event's real
+        attribute set (#306). A bare string is refused. Before that, a misspelled
+        attribute was a valid LogQL stage matching nothing, silently, forever.
         """
         self.cat.log(event)  # fails the build on a misspelled event name
+        self.violations.extend(
+            logquery.violations(self.cat, event, filters=filters, by=by))
         parts = ['{service_name="graph2otel"}', f"| event_name=`{event}`",
                  f'| tenant_id=~"$tenant"']
-        for f in filters or []:
-            parts.append(f"| {f}")
+        parts.extend(f"| {rendered}"
+                     for rendered in logquery.render_filters(filters))
         return " ".join(parts)
 
     def logs(self, event: str, title: str, filters: list = None, desc: str = "",
@@ -509,7 +526,7 @@ class Builder:
     def log_rate(self, event: str, title: str, by: list = None, filters: list = None,
                  desc: str = "", w: int = 12, h: int = 8):
         """count_over_time for one event, optionally split by structured metadata."""
-        sel = self._selector(event, filters)
+        sel = self._selector(event, filters, by=by)
         keys = _tenant_group_keys(by)
         expr = f"sum by ({', '.join(keys)}) (count_over_time({sel} [$__auto]))"
         q = self._loki_query(expr, legend=_label_legend(keys))
@@ -527,7 +544,7 @@ class Builder:
         materializes one series per distinct value before topk runs, which walks
         straight into Loki's series cap on any wide time range.
         """
-        sel = self._selector(event, filters)
+        sel = self._selector(event, filters, by=by)
         keys = _tenant_group_keys(by)
         expr = (
             f"topk({topk}, sum by ({', '.join(keys)}) "

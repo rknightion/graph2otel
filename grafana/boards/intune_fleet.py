@@ -1,5 +1,7 @@
 """Intune fleet overview — devices, compliance, config, apps, updates, UXA."""
 
+from logquery import f
+
 DOMAIN = "Intune"
 DESCRIPTION = (
     "Managed-device inventory, compliance, configuration, apps, Autopilot, updates, "
@@ -186,7 +188,7 @@ LOGS = [
      "by": ["category", "activity_result"]},
     {"kind": "logs", "event": "intune.managed_device",
      "title": "Non-compliant devices — which one",
-     "filters": ["compliance_state!=`compliant`"],
+     "filters": [f("compliance_state", "ne", "compliant")],
      "desc": "The compliance metrics say how many devices are in each state. This says "
              "which serial, which user, which OS version.",
      "w": 24, "h": 12},
