@@ -36,7 +36,7 @@ SECTIONS = [
         "graph2otel.blob.event_age",
         "graph2otel.blob.records_dropped",
         "graph2otel.blob.self_excluded",
-        ("Blob records: emitted as metrics vs gated",
+        ("Blob record rate: emitted as metrics vs gated",
          ["graph2otel.blob.metric_emitted", "graph2otel.blob.metric_gated"],
          {"viz": "timeseries"}),
         "graph2otel.logpipeline.self_excluded",
@@ -382,7 +382,7 @@ def extra(b):
                "next tick still advances; the window is only re-polled after a restart.")
 
     b.row("Record outcome accounting")
-    b.raw("Collector runs by reconciled result",
+    b.raw("Collector run rate by reconciled result",
           [f"sum by (tenant_id, collector, ingest_transport, result) "
            f"(rate({SCRAPE_OUTCOMES}{_SEL}[{RATE}]))"],
           legends=["{{tenant_id}} {{collector}} {{ingest_transport}} {{result}}"],
@@ -398,7 +398,7 @@ def extra(b):
              "not the number of OTEL metric points or log records.",
     )
     record_loss_detail = b.raw(
-        "Dropped / errored source records",
+        "Dropped / errored source-record rate",
         [f"sum by (tenant_id, collector, ingest_transport, outcome) "
          f"(rate({RECORD_OUTCOMES}"
          f'{{{TENANT_SEL}, collector=~"$collector", outcome=~"dropped|errored"}}'
@@ -424,7 +424,7 @@ def extra(b):
              "acceptance or OTLP delivery latency.",
     )
     b.raw(
-        "Payload type mismatches",
+        "Payload type-mismatch rate",
         [f"sum by (tenant_id, collector, ingest_transport, field, expected_type, "
          f"actual_type) "
          f"(rate({TYPE_MISMATCHES}{_SEL}[{RATE}]))"],
@@ -486,7 +486,7 @@ def extra(b):
     b.raw("Detected license tier by tenant", [f"{LICENSE_TIER}{_T}"], viz="table", w=12, h=6)
 
     b.row("Export jobs (Intune report exports, M365 audit query)")
-    b.raw("Export jobs by result",
+    b.raw("Export job rate by result",
           [f"sum by (tenant_id, report_name, result) "
            f"(rate({EXPORT_JOBS}{_T}[{RATE}]))"],
           legends=["{{tenant_id}} {{report_name}} {{result}}"], w=8)
@@ -550,7 +550,7 @@ def extra(b):
               [f"histogram_quantile(0.95, sum by (le, tenant_id) "
                f"(rate({duration}_bucket{_T}[{RATE}])))"],
               legends=["{{tenant_id}}"], unit="s", w=12, h=7)
-        b.raw(f"{title} errors and throttling",
+        b.raw(f"{title} error and throttle rate",
               [f"sum by (tenant_id) (rate({errors4}{_T}[{RATE}]))",
                f"sum by (tenant_id) (rate({errors5}{_T}[{RATE}]))",
                f"sum by (tenant_id) (rate({throttle}{_T}[{RATE}]))"],
@@ -563,7 +563,7 @@ def extra(b):
     b.row("Microsoft API drift")
     api_detail = b.metric(
         "graph2otel.api.unexpected",
-        title="Microsoft API drift — a response no longer matches what a collector expects",
+        title="Microsoft API drift rate — a response no longer matches what a collector expects",
         w=24,
         h=8,
         desc="Report-only wire values outside a collector's mapped assumptions. "

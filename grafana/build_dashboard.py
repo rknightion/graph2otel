@@ -40,6 +40,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import catalog as catalog_mod  # noqa: E402
+import presentation  # noqa: E402
 import v2  # noqa: E402
 from boards import common  # noqa: E402
 from builder import (  # noqa: E402
@@ -145,6 +146,16 @@ def overview(b: Builder) -> dict:
     return leaf
 
 
+def render(cat) -> dict:
+    """Build the whole estate and return the manifest.
+
+    A single entry point so a gate cannot accidentally assert against a
+    differently-assembled dashboard than the one that gets written.
+    """
+    b, domain_tabs, _ = build_all(cat)
+    return b.render([overview(b), *domain_tabs])
+
+
 def leaf_panel_counts(man: dict) -> dict:
     """Leaf tab title -> how many panels it places.
 
@@ -243,6 +254,8 @@ def main() -> int:
     # should be written on the back of them.
     violations = (list(b.violations)
                   + v2.manifest_violations(manifest)
+                  + presentation.manifest_violations(manifest)
+                  + presentation.violations(cat, covered)
                   + leaf_budget_violations(manifest, LEAF_WAIVERS))
     if violations:
         print("dashboard build violations:", file=sys.stderr)

@@ -21,6 +21,13 @@ overstatement #306 was opened to correct. Log filters are now typed
 (``logquery.f``) with a declared escape (``logquery.Raw``) and both are validated
 against the event's real attribute set.
 
+Since #304 the same rule covers **presentation**: the unit a panel formats with,
+the title it claims, and any value mapping or threshold it colours with come from
+``presentation.py``, an audited registry keyed by catalog metric. A hand-typed
+unit was a second place for a fact to drift, and it had drifted — every
+hand-written rate panel in self-observability formatted a per-second series as a
+bare count.
+
 **2. LogQL never satisfies the metric coverage gate.** PromQL and LogQL are
 accumulated into two separate corpora (``_exprs`` / ``_loki_exprs``). They are
 separate on purpose: a metric name appearing inside a LogQL label filter would
@@ -41,6 +48,7 @@ from __future__ import annotations
 import json
 
 import logquery
+import presentation
 import v2
 from catalog import TENANT_SCOPE
 
@@ -155,19 +163,10 @@ AVAILABILITY_REASONS = {
     "graph_client_initialization_failed": {"text": "Graph client initialization failed"},
 }
 
-# UCUM unit -> Grafana field unit id. An annotation unit ("{device}") is a count
-# of a thing, which Grafana renders as "short".
-GRAFANA_UNITS = {
-    "s": "s",
-    "ms": "ms",
-    "min": "m",
-    "h": "h",
-    "d": "d",
-    "By": "bytes",
-    "MB": "decmbytes",
-    "%": "percent",
-    "1": "short",
-}
+# Units, value mappings and thresholds are owned by ``presentation`` (#304), a
+# separate audited registry keyed by catalog metric. They are deliberately NOT
+# restated here: a second copy would drift, and the honesty gate would then have
+# two places to audit instead of one.
 
 # Words that must not be title-cased into gibberish when a panel title is
 # derived from a metric name.
@@ -273,6 +272,11 @@ class Builder:
         self.extra_vars = []       # board-declared template variables
         self._sentinels = {}       # sentinel name -> query, declaration order
 
+    @property
+    def covered(self) -> set:
+        """Catalog metric names some panel query really names."""
+        return set(self._covered)
+
     # ----- ids and raw panel construction ---------------------------------
 
     def _next_id(self) -> int:
@@ -332,12 +336,20 @@ class Builder:
         panel cannot group by a label the metric does not carry.
         """
         return self.metrics([name], title=title or titleize(name), by=by, viz=viz,
-                            desc=desc, w=w, h=h, quantile=quantile)
+                            desc=desc, w=w, h=h, quantile=quantile,
+                            derive_rate_title=title is None)
 
     def metrics(self, names: list, title: str, by: list = None, viz: str = None,
                 desc: str = "", w: int = 12, h: int = 8, quantile: float = 0.95,
-                legends: list = None):
-        """Panel several related metrics together on one set of axes."""
+                legends: list = None, derive_rate_title: bool = False):
+        """Panel several related metrics together on one set of axes.
+
+        Units, value mappings and thresholds come from the presentation registry
+        (#304) whenever every metric on the panel agrees about them. A panel
+        carrying four boolean tenant switches therefore shares their one cited
+        0/1 mapping, while a panel mixing a flag with a count agrees on nothing
+        and gets the neutral default.
+        """
         queries = []
         units = set()
         any_hist = False
@@ -355,7 +367,10 @@ class Builder:
             elif len(names) > 1 and not keys:
                 legend = titleize(name)
             queries.append(self._prom_query(expr, ref=chr(65 + i), legend=legend))
-            units.add(GRAFANA_UNITS.get(m.unit, "short"))
+            # A sum instrument is always displayed through rate(), so its unit is
+            # the unit of that rate — not the counter's own unit (#304).
+            units.add(presentation.rate_unit(m.unit) if m.kind == "sum"
+                      else presentation.gauge_unit(m.unit))
             any_hist = any_hist or m.kind == "histogram"
 
         if viz is None:
@@ -364,21 +379,66 @@ class Builder:
             viz = "stat" if (not has_keys and not any_hist and len(names) <= 3) else "timeseries"
         unit = units.pop() if len(units) == 1 else "short"
         if any_hist:
-            unit = GRAFANA_UNITS.get(self.cat.metric(names[0]).unit, "short")
-        return self._viz_panel(viz, title, queries, unit, desc, w, h)
+            # A histogram_quantile result is in the bucket's unit, not per second.
+            unit = presentation.gauge_unit(self.cat.metric(names[0]).unit)
+        entry = presentation.agreed(names)
+        if entry is not None and entry.unit and not any_hist:
+            unit = entry.unit
+        if not desc and len(names) == 1:
+            # The catalog carries the emitter's own description, captured from
+            # the Go source that writes the metric. Using it costs nothing and
+            # cannot drift; leaving it unused was #304's "limiting generated
+            # context" finding.
+            desc = self.cat.metric(names[0]).description or ""
+        if derive_rate_title and any(
+                self.cat.metric(n).kind == "sum" for n in names) and not any_hist:
+            title = presentation.rate_title(title)
+        return self._viz_panel(viz, title, queries, unit, desc, w, h, entry=entry)
 
-    def raw(self, title: str, exprs: list, viz: str = "timeseries", unit: str = "short",
-            desc: str = "", w: int = 12, h: int = 8, legends: list = None):
+    def raw(self, title: str, exprs: list, viz: str = "timeseries", unit: str = None,
+            desc: str = "", w: int = 12, h: int = 8, legends: list = None,
+            about: str = ""):
         """Panel a hand-written PromQL expression.
 
         Coverage still comes from reading the expression, not from a claim, so a
         raw panel credits exactly the metrics its text really names.
+
+        The unit is DERIVED from those same metrics unless one is passed, for the
+        same reason the query is derived: a hand-typed unit is a second place for
+        a fact to drift, and it drifted — every hand-written rate panel in
+        self-observability was formatted as a bare count (#304).
+
+        ``about`` names the cataloged metric the panel is *about*, so a
+        hand-written expression still takes its cited mapping and threshold from
+        the presentation registry instead of declaring them locally.
         """
         queries = []
         for i, e in enumerate(exprs):
             legend = legends[i] if legends and i < len(legends) else None
             queries.append(self._prom_query(e, ref=chr(65 + i), legend=legend))
-        return self._viz_panel(viz, title, queries, unit, desc, w, h)
+        entry = presentation.agreed([about]) if about else None
+        if unit is None:
+            unit = (entry.unit if entry and entry.unit
+                    else self._derived_unit(exprs))
+        return self._viz_panel(viz, title, queries, unit, desc, w, h, entry=entry)
+
+    def _derived_unit(self, exprs: list) -> str:
+        """The unit a hand-written expression really produces.
+
+        Rate-shaped when the expression rates a counter, and the counter's own
+        unit otherwise. ``histogram_quantile`` is deliberately not a rate: its
+        result is in the bucket's unit (#304).
+        """
+        names = set()
+        for e in exprs:
+            names |= self.cat.metrics_referenced_by(e)
+        if not names:
+            return "short"
+        rated = any(presentation.plots_a_rate(e) for e in exprs)
+        units = {presentation.rate_unit(self.cat.metric(n).unit) if rated
+                 else presentation.gauge_unit(self.cat.metric(n).unit)
+                 for n in names}
+        return units.pop() if len(units) == 1 else ("cps" if rated else "short")
 
     def _expr(self, m, keys: list, quantile: float) -> str:
         sel = "" if m.scope == "process" else f"{{{TENANT_SEL}}}"
@@ -397,11 +457,20 @@ class Builder:
         return f"{agg}({inner})"
 
     def _viz_panel(self, viz: str, title: str, queries: list, unit: str,
-                   desc: str, w: int, h: int):
+                   desc: str, w: int, h: int, entry=None):
+        # Thresholds are ALWAYS written. Omitting them is not neutral: Grafana
+        # substitutes a green base with a red step at 80, which is how a neutral
+        # inventory count of 95 devices rendered as an alarm (#304).
+        thresholds = (entry.thresholds.field_config() if entry and entry.thresholds
+                      else presentation.neutral_thresholds())
         field_config = {
-            "defaults": {"unit": unit, "custom": {}, "noValue": NO_METRIC},
+            "defaults": {"unit": unit, "custom": {}, "noValue": NO_METRIC,
+                         "thresholds": thresholds},
             "overrides": [],
         }
+        if entry is not None and entry.mappings is not None:
+            field_config["defaults"]["mappings"] = entry.mappings.field_config()
+        desc = presentation.cite(desc, entry)
         options = {}
         if viz == "timeseries":
             field_config["defaults"]["custom"] = {
@@ -414,9 +483,14 @@ class Builder:
                 "tooltip": {"mode": "multi", "sort": "desc"},
             }
         elif viz == "stat":
+            # No colour unless a cited threshold says what the colour means, so
+            # an empty or unmapped value cannot inherit a green "healthy" that
+            # nobody measured.
+            colored = bool(entry and entry.thresholds)
             options = {
                 "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
-                "colorMode": "none", "graphMode": "area", "textMode": "auto",
+                "colorMode": "value" if colored else "none",
+                "graphMode": "area", "textMode": "auto",
                 "justifyMode": "auto", "orientation": "auto",
             }
         elif viz == "table":
@@ -516,7 +590,12 @@ class Builder:
         return self._add({
             "id": self._next_id(), "type": "logs", "title": title,
             "description": desc + _loki_note(), "gridPos": {}, "datasource": LOKI_DS,
-            "fieldConfig": {"defaults": {"noValue": NO_LOKI}, "overrides": []},
+            # Neutral thresholds even on a logs panel: the gate has no exemption
+            # list, because an exemption list is a second thing to audit and the
+            # first collector to land in it would never come back out.
+            "fieldConfig": {"defaults": {"noValue": NO_LOKI,
+                                         "thresholds": presentation.neutral_thresholds()},
+                            "overrides": []},
             "options": {"showTime": True, "wrapLogMessage": True,
                         "sortOrder": "Descending", "enableLogDetails": True,
                         "dedupStrategy": "none", "prettifyLogMessage": False},

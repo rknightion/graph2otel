@@ -26,6 +26,7 @@ Pure standard-library `python3`. Nothing to install, which is why the CI job has
 | `grafana/catalog.py` | reads the catalog; `metrics_referenced_by()` is what the coverage gate counts with |
 | `grafana/builder.py` | `Builder` — panels, queries, layout, the LogQL selector, the two expression corpora |
 | `grafana/logquery.py` | typed LogQL filters and group keys, validated against the catalog (#306) |
+| `grafana/presentation.py` | the audited presentation registry: units, value mappings, thresholds, keyed by catalog metric (#304) |
 | `grafana/v2.py` | v1→v2 panel translation, layout primitives, and the manifest gates (#399) |
 | `grafana/boards/*.py` | one module per dashboard; **data, not code** |
 | `grafana/waivers.json` | metrics deliberately off every panel, with a reason each |
@@ -74,7 +75,10 @@ else comes from the catalog:
   them into one series;
 - **counters** get `rate(...[$__rate_interval])`, **histograms** get
   `histogram_quantile(0.95, sum by (le, …) (rate(…_bucket[…])))`;
-- **the title** — derived from the metric name unless you pass one.
+- **the title** — derived from the metric name unless you pass one;
+- **the unit** — the UCUM unit's Grafana equivalent, made per-second for a
+  counter, and taken from the presentation registry where that registry has an
+  opinion (see below).
 
 A misspelled metric name is a `KeyError` at build time, not an empty panel someone
 notices in six months.
@@ -93,6 +97,59 @@ is noise.
 `b.raw(title, [expr, ...])` exists for expressions the catalog cannot express.
 Coverage still comes from **reading the expression**, not from a claim, so a raw panel
 credits exactly the metrics its text really names. Use it sparingly.
+
+## Units, mappings and thresholds live in one audited registry (#304)
+
+`grafana/presentation.py` owns them, keyed by catalog metric. A board module
+names *which metric a panel is about* and never states how it is coloured. Two
+alternatives were rejected by maintainer decision: `spec/signal-catalog.json`
+stays wire-derived and takes no presentation opinion (it is generated from Go
+goldens, so a colour written there is overwritten or forces the Go generator to
+own colour choices it has no evidence for), and per-board overrides would let the
+same metric drift between boards with nothing to audit.
+
+**An uncited threshold cannot be constructed.** `Thresholds` and `Mappings`
+refuse an empty `evidence`, and the evidence is appended to the panel description
+behind `Colour meaning:` — so the operator looking at the red panel can read why
+it is red, and the build gate can prove on the shipped manifest that no coloured
+panel is uncited. Adding a colour by hand somewhere else fails
+`presentation.manifest_violations`.
+
+**Absence of a threshold is not neutrality.** Every panel previously omitted
+`fieldConfig.defaults.thresholds`, and Grafana then supplies its own — a green
+base with red at 80 — so an inventory count of 95 devices rendered red. Neutral
+has to be written down, and it now is, on every panel including log panels. The
+gate has no exemption list on purpose: an exemption list is a second thing to
+audit, and the first entry never comes back out.
+
+The registry thresholds **five** metrics out of 331 panels, and that restraint is
+the deliverable. "How many ownerless Teams is too many" and "what EPSS
+probability is unacceptable" are policy judgements an operator makes, not facts
+this repository has evidence for — they get neutral colouring and a log twin. A
+threshold belongs here only where the *source* defines the operational state: a
+scrape consuming its whole poll interval, an exporter failure that has not
+recovered, a level Microsoft itself calls degradation.
+
+### Counters say and format a rate
+
+Every `sum` instrument is plotted through `rate()`, so both a count unit and a
+count-shaped title describe a quantity the panel is not showing.
+`m365.message_trace.bytes` was the worst case: bytes/sec formatted as `bytes`.
+Derived titles are fixed automatically by `rate_title()`; a hand-passed title
+that describes a count fails the build, because auto-rewriting prose produces
+gibberish (`"Microsoft API drift — a response no longer matches what a collector
+expects rate"`).
+
+`b.raw()` derives its unit from the metrics its expression names, for the same
+reason its coverage is read from the expression: a hand-typed unit is a second
+place for a fact to drift, and it had drifted on every hand-written rate panel in
+self-observability. Pass `unit=` only to override, and `about="<metric>"` to pull
+that metric's cited mapping and threshold.
+
+The one trap, and why `plots_a_rate()` is not a substring test:
+`histogram_quantile(0.95, sum by (le) (rate(x_bucket[…])))` contains `rate(` but
+its result is in the **bucket's** unit — seconds, not seconds per second. A naive
+check relabels every latency panel in the estate.
 
 ## Log panels (#162)
 
@@ -188,8 +245,8 @@ equivalent availability presentation, as the self-observability board does.
 
 Every Prometheus query panel gets a neutral `noValue` explanation that points to that
 table. Stat panels default to no color so an empty or unmapped value cannot inherit
-Grafana's green base threshold; evidence-backed colors belong in an explicit panel
-mapping or threshold.
+Grafana's green base threshold; evidence-backed colors come from the presentation
+registry and nowhere else.
 
 Then add `"boards.<name>"` to `BOARDS` in `build_dashboard.py`, in the order you want
 the tabs to appear.

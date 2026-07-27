@@ -497,13 +497,13 @@ class TestOutcomeAccountingPanels(unittest.TestCase):
 
     def test_outcome_panels_preserve_tenant_identity(self):
         expected_groupings = {
-            "Collector runs by reconciled result":
+            "Collector run rate by reconciled result":
                 "sum by (tenant_id, collector, ingest_transport, result)",
             "Source-record rate by outcome":
                 "sum by (tenant_id, collector, ingest_transport, outcome)",
-            "Dropped / errored source records":
+            "Dropped / errored source-record rate":
                 "sum by (tenant_id, collector, ingest_transport, outcome)",
-            "Payload type mismatches":
+            "Payload type-mismatch rate":
                 "sum by (tenant_id, collector, ingest_transport, field, "
                 "expected_type, actual_type)",
         }
@@ -529,8 +529,8 @@ class TestOutcomeAccountingPanels(unittest.TestCase):
         ))
 
     def test_loss_and_payload_drift_are_visible(self):
-        self.assertIn("Dropped / errored source records", self.panels)
-        self.assertIn("Payload type mismatches", self.panels)
+        self.assertIn("Dropped / errored source-record rate", self.panels)
+        self.assertIn("Payload type-mismatch rate", self.panels)
 
 
 class TestOTLPDeliveryPanels(unittest.TestCase):
@@ -776,14 +776,14 @@ class TestCollectorAvailabilityPanels(unittest.TestCase):
 class TestExecutiveHealthSummary(unittest.TestCase):
     EXPECTED_DRILLDOWNS = {
         "Current source collection failures": "Collector availability failures",
-        "Known source-to-emitter record loss": "Dropped / errored source records",
+        "Known source-to-emitter record loss": "Dropped / errored source-record rate",
         "Current exporter callback degradation":
             "Current exporter degradation by signal",
         "Checkpoint persistence failures": "Checkpoint persist error rate",
         "Source-event emission lag": "Source-event lag at emission",
         "Series clipped last interval": "Series clipped, by mode (process-wide)",
         "Microsoft API assumption violations":
-            "Microsoft API drift — a response no longer matches what a collector expects",
+            "Microsoft API drift rate — a response no longer matches what a collector expects",
         "Maximum reported throttle consumption":
             "Graph-reported throttle budget consumed",
     }
