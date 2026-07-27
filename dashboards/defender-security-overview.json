@@ -29,20 +29,28 @@
         "label": "Prometheus datasource",
         "type": "datasource",
         "query": "prometheus",
-        "current": {},
+        "current": {
+          "text": "grafanacloud-prom",
+          "value": "grafanacloud-prom"
+        },
+        "regex": "(?!grafanacloud-usage|grafanacloud-ml-metrics).+",
         "hide": 0,
         "refresh": 1,
-        "description": "Where graph2otel's OTLP metrics land after normalization."
+        "description": "Where graph2otel's OTLP metrics land after normalization. Defaults to Grafana Cloud's grafanacloud-prom; pick another Prometheus datasource for a different stack."
       },
       {
         "name": "loki_datasource",
         "label": "Loki datasource",
         "type": "datasource",
         "query": "loki",
-        "current": {},
+        "current": {
+          "text": "grafanacloud-logs",
+          "value": "grafanacloud-logs"
+        },
+        "regex": "(?!grafanacloud.+usage-insights|grafanacloud.+alert-state-history).+",
         "hide": 0,
         "refresh": 1,
-        "description": "Required by the log panels. Leave unset and they say so rather than looking broken."
+        "description": "Required by the log panels. Defaults to Grafana Cloud's grafanacloud-logs. Leave unset and they say so rather than looking broken."
       },
       {
         "name": "tenant",

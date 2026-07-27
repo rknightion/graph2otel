@@ -44,6 +44,33 @@ RATE = "$__rate_interval"
 PROM_DS = {"type": "prometheus", "uid": "${datasource}"}
 LOKI_DS = {"type": "loki", "uid": "${loki_datasource}"}
 
+# Portable Grafana Cloud defaults (#295). Every Grafana Cloud stack provisions
+# its built-in Prometheus/Loki datasources under these fixed UIDs regardless of
+# account name — the live m7kni stack has uid=grafanacloud-prom with display
+# name grafanacloud-robknight-prom, confirming the UID is the stable, portable
+# identifier and the display name is not. Saving these as the variables' saved
+# `current` value is the maintainer-approved fix (issue #295, decision recorded
+# 2026-07-27): a default-live render then opens on the intended backend instead
+# of an empty stack default, while the dropdown stays selectable for a
+# self-hosted or differently-named stack.
+PROM_DATASOURCE_DEFAULT = "grafanacloud-prom"
+LOKI_DATASOURCE_DEFAULT = "grafanacloud-logs"
+
+# Exclusion regexes so a same-typed near-miss datasource is never offered as
+# the resolved default (#295's second acceptance criterion: "a deployment with
+# competing compatible datasources is covered"). Live-verified 2026-07-27
+# against the m7kni Grafana Cloud stack (`gcx datasources list --context
+# cloud`): grafanacloud-ml-metrics (the ML forecast proxy) and grafanacloud-usage
+# (billing/usage metrics) are both type=prometheus; grafanacloud-alert-state-history
+# and grafanacloud-usage-insights are both type=loki. These are the exact
+# patterns Grafana's own Cloud Connections plugin already ships on live
+# Alloy-mixin dashboards on that same stack for the same purpose — not a
+# guessed regex.
+PROM_DATASOURCE_EXCLUDE_REGEX = r"(?!grafanacloud-usage|grafanacloud-ml-metrics).+"
+LOKI_DATASOURCE_EXCLUDE_REGEX = (
+    r"(?!grafanacloud.+usage-insights|grafanacloud.+alert-state-history).+"
+)
+
 # Shown by every log panel when the Loki datasource is unset or empty, so an
 # operator with no Loki sees an explanation instead of a broken-looking panel
 # (#162's third acceptance criterion).
@@ -533,14 +560,23 @@ class Builder:
     def variables(self) -> list:
         out = [{
             "name": "datasource", "label": "Prometheus datasource", "type": "datasource",
-            "query": "prometheus", "current": {}, "hide": 0, "refresh": 1,
-            "description": "Where graph2otel's OTLP metrics land after normalization.",
+            "query": "prometheus",
+            "current": {"text": PROM_DATASOURCE_DEFAULT, "value": PROM_DATASOURCE_DEFAULT},
+            "regex": PROM_DATASOURCE_EXCLUDE_REGEX,
+            "hide": 0, "refresh": 1,
+            "description": "Where graph2otel's OTLP metrics land after normalization. "
+                           f"Defaults to Grafana Cloud's {PROM_DATASOURCE_DEFAULT}; pick "
+                           "another Prometheus datasource for a different stack.",
         }]
         if self.needs_loki:
             out.append({
                 "name": "loki_datasource", "label": "Loki datasource", "type": "datasource",
-                "query": "loki", "current": {}, "hide": 0, "refresh": 1,
-                "description": "Required by the log panels. Leave unset and they say so "
+                "query": "loki",
+                "current": {"text": LOKI_DATASOURCE_DEFAULT, "value": LOKI_DATASOURCE_DEFAULT},
+                "regex": LOKI_DATASOURCE_EXCLUDE_REGEX,
+                "hide": 0, "refresh": 1,
+                "description": "Required by the log panels. Defaults to Grafana Cloud's "
+                               f"{LOKI_DATASOURCE_DEFAULT}. Leave unset and they say so "
                                "rather than looking broken.",
             })
         out.append({

@@ -29,6 +29,10 @@ from builder import (  # noqa: E402
     AVAILABILITY_REASONS,
     AVAILABILITY_STATES,
     Builder,
+    LOKI_DATASOURCE_DEFAULT,
+    LOKI_DATASOURCE_EXCLUDE_REGEX,
+    PROM_DATASOURCE_DEFAULT,
+    PROM_DATASOURCE_EXCLUDE_REGEX,
     TENANT_SEL,
     dumps,
     group_keys,
@@ -1019,6 +1023,98 @@ class TestLogPanels(unittest.TestCase):
                 self.assertIn("noValue", spec["fieldConfig"]["defaults"],
                               f"{name}: {spec['title']} shows 'No data' instead of an "
                               f"explanation when Loki is unset")
+
+
+class TestDatasourceVariableDefaults(unittest.TestCase):
+    """#295: a first render on a Grafana Cloud stack must land on
+    graph2otel's actual Mimir/Loki datasources, not whatever the stack's
+    own default happens to resolve to. On m7kni that default is the ML
+    Prometheus forecast proxy and the alert-state-history Loki datasource —
+    both empty for graph2otel, so every dashboard opened blank.
+
+    Fix: save a portable Grafana Cloud default as `current` (maintainer
+    decision, issue comment 2026-07-27) while keeping the variables
+    selectable `type: datasource` dropdowns for other stacks.
+    """
+
+    def test_every_board_pins_the_prometheus_datasource_default(self):
+        for name, b in BUILT:
+            with self.subTest(board=name):
+                variables = {v["name"]: v for v in b.variables()}
+                var = variables["datasource"]
+                self.assertEqual(var["type"], "datasource")
+                self.assertEqual(var["hide"], 0)
+                self.assertEqual(
+                    var["current"],
+                    {"text": PROM_DATASOURCE_DEFAULT, "value": PROM_DATASOURCE_DEFAULT},
+                )
+
+    def test_every_board_with_a_loki_variable_pins_the_loki_datasource_default(self):
+        # Only boards that actually declare a Loki variable — same condition
+        # TestLogPanels uses to establish which boards have one at all.
+        for name, b in BUILT:
+            if not b._loki_exprs:
+                continue
+            with self.subTest(board=name):
+                variables = {v["name"]: v for v in b.variables()}
+                var = variables["loki_datasource"]
+                self.assertEqual(var["type"], "datasource")
+                self.assertEqual(var["hide"], 0)
+                self.assertEqual(
+                    var["current"],
+                    {"text": LOKI_DATASOURCE_DEFAULT, "value": LOKI_DATASOURCE_DEFAULT},
+                )
+
+    def test_every_board_declares_the_prometheus_exclusion_regex(self):
+        for name, b in BUILT:
+            with self.subTest(board=name):
+                variables = {v["name"]: v for v in b.variables()}
+                self.assertEqual(
+                    variables["datasource"]["regex"], PROM_DATASOURCE_EXCLUDE_REGEX,
+                )
+
+    def test_every_loki_variable_declares_the_loki_exclusion_regex(self):
+        for name, b in BUILT:
+            if not b._loki_exprs:
+                continue
+            with self.subTest(board=name):
+                variables = {v["name"]: v for v in b.variables()}
+                self.assertEqual(
+                    variables["loki_datasource"]["regex"], LOKI_DATASOURCE_EXCLUDE_REGEX,
+                )
+
+    def test_prometheus_exclusion_regex_hides_the_ml_and_usage_datasources(self):
+        """Live-verified 2026-07-27 against the m7kni Grafana Cloud stack
+        (`gcx datasources list --context cloud`): `grafanacloud-ml-metrics`
+        (the ML forecast Prometheus proxy) and `grafanacloud-usage` (Grafana
+        Cloud billing/usage metrics) are both ``type: prometheus`` near-misses
+        that must never be the resolved default. This is the exact pattern
+        Grafana's own Cloud Connections plugin already ships on live
+        Alloy-mixin dashboards on that same stack for the same purpose.
+        """
+        self.assertIsNone(re.match(PROM_DATASOURCE_EXCLUDE_REGEX, "grafanacloud-ml-metrics"))
+        self.assertIsNone(re.match(PROM_DATASOURCE_EXCLUDE_REGEX, "grafanacloud-usage"))
+        self.assertIsNotNone(re.match(PROM_DATASOURCE_EXCLUDE_REGEX, "grafanacloud-prom"))
+        self.assertIsNotNone(
+            re.match(PROM_DATASOURCE_EXCLUDE_REGEX, "grafanacloud-robknight-prom"))
+
+    def test_loki_exclusion_regex_hides_alert_history_and_usage_insights(self):
+        """Live-verified 2026-07-27 against the m7kni Grafana Cloud stack:
+        `grafanacloud-alert-state-history` and `grafanacloud-usage-insights`
+        (uids) — whose display names are
+        `grafanacloud-robknight-alert-state-history` /
+        `grafanacloud-robknight-usage-insights` — are both ``type: loki``
+        near-misses that must never be the resolved default.
+        """
+        self.assertIsNone(
+            re.match(LOKI_DATASOURCE_EXCLUDE_REGEX, "grafanacloud-alert-state-history"))
+        self.assertIsNone(
+            re.match(LOKI_DATASOURCE_EXCLUDE_REGEX, "grafanacloud-usage-insights"))
+        self.assertIsNone(re.match(
+            LOKI_DATASOURCE_EXCLUDE_REGEX, "grafanacloud-robknight-alert-state-history"))
+        self.assertIsNone(re.match(
+            LOKI_DATASOURCE_EXCLUDE_REGEX, "grafanacloud-robknight-usage-insights"))
+        self.assertIsNotNone(re.match(LOKI_DATASOURCE_EXCLUDE_REGEX, "grafanacloud-logs"))
 
 
 class TestStructure(unittest.TestCase):
