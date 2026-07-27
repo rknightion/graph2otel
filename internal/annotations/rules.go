@@ -85,18 +85,25 @@ type Rule struct {
 //     between v1.0 and beta on other enums.
 //   - m365.service_health_issue is_resolved: derived from the boolean the
 //     collector already emits, so it cannot drift from the mapped value.
-//   - intune.audit_event category: `n=1` — "DeviceConfiguration" is the value in
-//     the collector's live-derived fixture; "Compliance" and
-//     "DeviceCompliancePolicy" are `docs-only`. All three are matched, and an
-//     unrecognized category is simply not annotated.
-//   - entra.directory_audit Conditional Access: `docs-only`. Entra logs a CA
-//     policy change as a Policy-category audit whose activityDisplayName names
-//     conditional access ("Add/Update/Delete conditional access policy"), and
-//     there is no CA-specific attribute on the record to key on — the
-//     conditionalaccess collector is metrics-only and deliberately leaves policy
-//     CHANGES to this audit stream. The predicate is therefore a
-//     case-insensitive substring, which is the honest shape of the available
-//     evidence.
+//   - intune.audit_event category: "DeviceConfiguration" is
+//     `live-measured (2026-07-27, #400)` — 543 records over 30d on m7kni, every
+//     one with activity_result "Success" (capital S; the comparison is
+//     case-insensitive and needs to stay that way). "Compliance" and
+//     "DeviceCompliancePolicy" remain `docs-only`: neither occurred in that
+//     window, which is absence of evidence, not evidence of absence. All three
+//     are matched, and an unrecognized category is simply not annotated.
+//     Read-shaped verbs within a matched category are excluded — see
+//     readOnlyActivityVerbs.
+//   - entra.directory_audit Conditional Access:
+//     `live-measured (2026-07-27, #400)`, and the previous note here was WRONG.
+//     It said there is no CA-specific attribute to key on. There is:
+//     `logged_by_service` is literally "Conditional Access" on every record from
+//     that surface (69 over 30d on m7kni). The substring-only predicate that
+//     belief produced missed "Update named location" — a real CA posture change,
+//     because named locations are CA conditions, so a policy's meaning changes
+//     without its own record moving. Both predicates are now matched as a union.
+//     The conditionalaccess collector is still metrics-only and still leaves
+//     policy CHANGES to this audit stream.
 //   - entra.consent_grant consent_type: `docs-only`. "AllPrincipals" is
 //     tenant-wide admin consent on an oauth2PermissionGrant; "Principal" is one
 //     user consenting for themselves, which is not a posture change worth a
@@ -114,13 +121,19 @@ func Rules() []Rule {
 				if !strings.EqualFold(attrString(a, "result"), "success") {
 					return false
 				}
+				// The service attribute is the primary predicate; the activity
+				// substring is kept as a union so a CA change logged by another
+				// service still lands. Either alone is sufficient.
+				if strings.EqualFold(attrString(a, "logged_by_service"), "Conditional Access") {
+					return true
+				}
 				return strings.Contains(
 					strings.ToLower(attrString(a, "activity_display_name")),
 					"conditional access",
 				)
 			},
 			Identity:     []string{"id"},
-			Detail:       []string{"activity_display_name", "initiator_app_display_name", "target_display_names", "modified_property_names"},
+			Detail:       []string{"activity_display_name", "logged_by_service", "initiator_app_display_name", "target_display_names", "modified_property_names"},
 			Title:        func(a telemetry.Attrs) string { return attrString(a, "activity_display_name") },
 			SeverityAttr: "",
 		},
@@ -135,7 +148,7 @@ func Rules() []Rule {
 				}
 				switch strings.ToLower(attrString(a, "category")) {
 				case "deviceconfiguration", "compliance", "devicecompliancepolicy":
-					return true
+					return !isReadOnlyActivity(attrString(a, "activity_type"))
 				default:
 					return false
 				}
@@ -303,6 +316,37 @@ func activeAlertStatus(status string) bool {
 	default:
 		return false
 	}
+}
+
+// readOnlyActivityVerbs are the Intune audit verbs that CHANGE NOTHING. Intune
+// audits reads into the same categories it audits changes into, so without this
+// a "what changed at 14:00" marker lands for someone merely looking: `Search
+// CloudCertificationAuthorityLeafCertificate`, `Search CloudCertificationAuthority`
+// and `Get CloudCertificationAuthority` were 38 of 543 DeviceConfiguration
+// records over 30 days on m7kni (live-measured 2026-07-27, #400).
+//
+// It is a DENY list on purpose. Intune's verb vocabulary is open — the same 30
+// days carried `assignDeviceManagementScript`, `patchDeviceCustomAttributeShellScript`
+// and `createDeviceShellScript` — so an allow list would silently stop
+// annotating real changes the first time Microsoft adds a verb. An unrecognized
+// verb therefore still annotates: a spare marker is recoverable, a missing one
+// is the failure this feature exists to prevent.
+var readOnlyActivityVerbs = map[string]bool{
+	"search": true,
+	"get":    true,
+	"list":   true,
+	"export": true,
+	"read":   true,
+}
+
+// isReadOnlyActivity reports whether an Intune `activity_type` names a read.
+// The wire form is verb-first with the entity after a space ("Patch
+// DeviceConfiguration", "Search CloudCertificationAuthority"), and the verb's
+// casing varies between Pascal and camel on the same tenant, so only the leading
+// word is compared and it is compared case-insensitively.
+func isReadOnlyActivity(activityType string) bool {
+	verb, _, _ := strings.Cut(strings.TrimSpace(activityType), " ")
+	return readOnlyActivityVerbs[strings.ToLower(verb)]
 }
 
 // attrString renders one attribute value as a string for matching and for text.

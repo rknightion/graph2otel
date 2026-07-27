@@ -212,10 +212,12 @@ func (a *Annotator) preflight(ctx context.Context, opts Options) error {
 		if err := a.client.Publish(ctx, marker); err != nil {
 			return fmt.Errorf("grafana annotation writer refusing to start: %w\n"+
 				"The service-account token must hold the Grafana action "+
-				"`annotations:create` on scope `annotations:type:organization` "+
-				"(fixed role `fixed:annotations:writer`). graph2otel needs no other "+
-				"Grafana permission. Unset grafana_annotations.url to run without "+
-				"annotations", err)
+				"`annotations:create` on scope `annotations:type:organization`, and "+
+				"graph2otel needs no other Grafana permission. A custom role granting "+
+				"exactly that pair is the documented minimum; the fixed role "+
+				"`fixed:annotations:writer` also works but additionally grants "+
+				"annotations:write and annotations:delete, which graph2otel never uses. "+
+				"Unset grafana_annotations.url to run without annotations", err)
 		}
 		a.recordPublished(marker)
 	}

@@ -86,6 +86,7 @@ func directoryAudit(id, activity string) telemetry.Event {
 			"activity_display_name":       activity,
 			"category":                    "Policy",
 			"initiator_app_display_name":  "Azure Portal",
+			"logged_by_service":           "Core Directory",
 			"modified_property_names":     []string{"ConditionalAccessPolicy"},
 			"target_display_names":        []string{"Require MFA for admins"},
 			"initiator_service_principal": "sp",
@@ -130,6 +131,136 @@ func TestANonConditionalAccessAuditIsNotAnnotated(t *testing.T) {
 	rec, sink := newTestRecorder(t, testConfig(), t.TempDir())
 	run := rec.BeginRun(testTenant, "entra.directory_audits")
 	rec.ObserveEvent(run, directoryAudit("audit-2", "Reset password"))
+	if got := sink.all(); len(got) != 0 {
+		t.Fatalf("published %+v, want nothing", got)
+	}
+}
+
+// TestAConditionalAccessServiceAuditIsAnnotatedWithoutTheActivityNamingCA pins
+// the live-measured widening of this predicate.
+//
+// Entra DOES carry a CA-specific attribute — `logged_by_service` is literally
+// "Conditional Access" on every record from that surface (live-measured
+// 2026-07-27, 69 records over 30d on m7kni, #400). Matching only the
+// activityDisplayName substring missed "Update named location", which is a real
+// CA posture change: named locations are CA conditions, so a policy can change
+// meaning without its own record moving.
+func TestAConditionalAccessServiceAuditIsAnnotatedWithoutTheActivityNamingCA(t *testing.T) {
+	rec, sink := newTestRecorder(t, testConfig(), t.TempDir())
+	run := rec.BeginRun(testTenant, "entra.directory_audits")
+
+	ev := directoryAudit("audit-named-location", "Update named location")
+	ev.Attrs["logged_by_service"] = "Conditional Access"
+	rec.ObserveEvent(run, ev)
+
+	got := sink.all()
+	if len(got) != 1 {
+		t.Fatalf("published %d annotations, want 1 for a Conditional Access service audit: %+v", len(got), got)
+	}
+	if got[0].RuleID != "entra.conditional_access_policy_changed" {
+		t.Errorf("rule = %q", got[0].RuleID)
+	}
+}
+
+// TestAnAuditFromAnotherServiceIsNotAnnotated keeps the widening narrow: the
+// service attribute must not turn the directory-audit firehose on.
+func TestAnAuditFromAnotherServiceIsNotAnnotated(t *testing.T) {
+	rec, sink := newTestRecorder(t, testConfig(), t.TempDir())
+	run := rec.BeginRun(testTenant, "entra.directory_audits")
+	ev := directoryAudit("audit-core", "Update group")
+	ev.Attrs["logged_by_service"] = "Core Directory"
+	rec.ObserveEvent(run, ev)
+	if got := sink.all(); len(got) != 0 {
+		t.Fatalf("published %+v, want nothing", got)
+	}
+}
+
+// intuneAudit builds an Intune audit event in the shape the wire actually
+// carries (live-measured 2026-07-27, #400): `activity_result` is "Success" with
+// a capital S, and `activity_type` is a verb-first string such as
+// "Patch DeviceConfiguration" or "Search CloudCertificationAuthority".
+func intuneAudit(id, category, activityType string) telemetry.Event {
+	return telemetry.Event{
+		Name:      "intune.audit_event",
+		Timestamp: fixedNow,
+		Attrs: telemetry.Attrs{
+			"id":                             id,
+			"activity_result":                "Success",
+			"category":                       category,
+			"activity_type":                  activityType,
+			"display_name":                   "Baseline",
+			"actor_user_principal_name":      "admin@example.com",
+			"actor_application_display_name": "Intune Portal",
+		},
+	}
+}
+
+// TestAnIntunePolicyChangeIsAnnotated is the base case, and pins the wire's
+// capital-S "Success" against a case-sensitive comparison creeping in.
+func TestAnIntunePolicyChangeIsAnnotated(t *testing.T) {
+	rec, sink := newTestRecorder(t, testConfig(), t.TempDir())
+	run := rec.BeginRun(testTenant, "intune.audit_events")
+	rec.ObserveEvent(run, intuneAudit("i-1", "DeviceConfiguration", "Patch DeviceConfiguration"))
+
+	got := sink.all()
+	if len(got) != 1 {
+		t.Fatalf("published %d annotations, want 1: %+v", len(got), got)
+	}
+	if got[0].RuleID != "intune.policy_changed" {
+		t.Errorf("rule = %q", got[0].RuleID)
+	}
+}
+
+// TestAReadOnlyIntuneAuditIsNotAnnotated is the live-measured correction.
+//
+// Intune audits READS into the same DeviceConfiguration category it audits
+// changes into: "Search CloudCertificationAuthorityLeafCertificate",
+// "Search CloudCertificationAuthority" and "Get CloudCertificationAuthority"
+// were 38 of 543 DeviceConfiguration records over 30d on m7kni (live-measured
+// 2026-07-27, #400). Annotating those puts a "config changed at 14:00" marker on
+// a dashboard for an operation that changed nothing, which is worse than a
+// missing marker: it sends someone looking for a change that never happened.
+func TestAReadOnlyIntuneAuditIsNotAnnotated(t *testing.T) {
+	for _, activityType := range []string{
+		"Search CloudCertificationAuthorityLeafCertificate",
+		"Search CloudCertificationAuthority",
+		"Get CloudCertificationAuthority",
+		"List DeviceConfiguration",
+	} {
+		t.Run(activityType, func(t *testing.T) {
+			rec, sink := newTestRecorder(t, testConfig(), t.TempDir())
+			run := rec.BeginRun(testTenant, "intune.audit_events")
+			rec.ObserveEvent(run, intuneAudit("i-read", "DeviceConfiguration", activityType))
+			if got := sink.all(); len(got) != 0 {
+				t.Fatalf("published %+v for a read-only operation, want nothing", got)
+			}
+		})
+	}
+}
+
+// TestAnUnrecognizedIntuneVerbIsStillAnnotated keeps the read filter an explicit
+// DENY list rather than an allow list. Intune's verb vocabulary is open —
+// "assignDeviceManagementScript", "patchDeviceCustomAttributeShellScript" and
+// "createDeviceShellScript" are all live — so an allow list would silently stop
+// annotating real changes the day Microsoft adds a verb. The failure mode is
+// chosen deliberately: an unknown verb produces a spare marker, never a missing
+// one.
+func TestAnUnrecognizedIntuneVerbIsStillAnnotated(t *testing.T) {
+	rec, sink := newTestRecorder(t, testConfig(), t.TempDir())
+	run := rec.BeginRun(testTenant, "intune.audit_events")
+	rec.ObserveEvent(run, intuneAudit("i-2", "DeviceConfiguration", "quarantineDeviceHealthScript DeviceHealthScript"))
+	if got := sink.all(); len(got) != 1 {
+		t.Fatalf("published %+v, want 1 for an unrecognized verb", got)
+	}
+}
+
+// TestAnIntuneAuditInAnotherCategoryIsNotAnnotated: Device and Application
+// categories are the bulk of the stream (300 of 500 sampled) and are not policy
+// changes.
+func TestAnIntuneAuditInAnotherCategoryIsNotAnnotated(t *testing.T) {
+	rec, sink := newTestRecorder(t, testConfig(), t.TempDir())
+	run := rec.BeginRun(testTenant, "intune.audit_events")
+	rec.ObserveEvent(run, intuneAudit("i-3", "Device", "syncDevice ManagedDevice"))
 	if got := sink.all(); len(got) != 0 {
 		t.Fatalf("published %+v, want nothing", got)
 	}

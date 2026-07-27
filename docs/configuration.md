@@ -450,8 +450,11 @@ grafana_annotations:
 ```
 
 The token needs exactly one Grafana action — `annotations:create` on
-`annotations:type:organization`, i.e. the **Annotations writer** role
-(`fixed:annotations:writer`) — and graph2otel uses no other Grafana permission.
+`annotations:type:organization` — and graph2otel uses no other Grafana permission. The built-in
+**Annotations writer** role (`fixed:annotations:writer`) grants that plus `write` and `delete`,
+which graph2otel never uses; the documented minimum is a custom role scoped to `create` alone.
+See [The required Grafana permission](grafana-annotations.md#the-required-grafana-permission)
+for the measured detail and how to create it.
 
 Once `url` is set, **the process refuses to start** if the token cannot write an annotation.
 That is deliberate: discovering it at the first real event means the annotations an operator

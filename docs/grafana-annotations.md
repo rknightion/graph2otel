@@ -42,21 +42,64 @@ Every key and its default is in [Environment Variables](env-vars.md) under
 
 ### The required Grafana permission
 
-Create a Grafana **service account** whose only role is **Annotations writer**
-(`fixed:annotations:writer`) and issue it a token. The underlying action/scope pair the API
-checks is:
+graph2otel needs exactly one action/scope pair:
 
 | action | scope |
 | --- | --- |
 | `annotations:create` | `annotations:type:organization` (or `annotations:type:dashboard` when `dashboard_uid` is set) |
 
-graph2otel requires, requests and uses **no other Grafana permission** — no dashboard read, no
-alert-rule access, no folder management. A deployment that hands over a broader token still
-works, but the documented minimum is annotation write, and keeping it there is what keeps
-"annotations only" from quietly becoming "arbitrary Grafana write".
+No dashboard read, no alert-rule access, no folder management — graph2otel requires, requests
+and uses no other Grafana permission.
 
-> Evidence class: the action/scope pair is **docs-only** (Grafana RBAC reference). The role
-> name is the maintainer's specification.
+**The documented minimum is a custom role granting only `annotations:create`.** Create it and
+assign it to the service account:
+
+```sh
+# Create the role
+curl -s -X POST "$GRAFANA_URL/api/access-control/roles" \
+  -H "Authorization: Bearer $GRAFANA_ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{
+    "version": 1,
+    "name": "custom:graph2otel:annotations:creator",
+    "displayName": "graph2otel annotation creator",
+    "description": "Write-only organization annotations for graph2otel",
+    "global": false,
+    "permissions": [
+      {"action": "annotations:create", "scope": "annotations:type:organization"}
+    ]
+  }'
+
+# Assign it to the service account
+curl -s -X POST "$GRAFANA_URL/api/access-control/users/$SERVICE_ACCOUNT_ID/roles" \
+  -H "Authorization: Bearer $GRAFANA_ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"roleUid": "<uid returned by the create call>"}'
+```
+
+**The easy option is the built-in fixed role, `fixed:annotations:writer`.** It works, but it is
+broader than graph2otel needs: it grants three actions on `annotations:type:organization` —
+`annotations:create`, `annotations:write`, `annotations:delete` — and graph2otel only ever
+issues `POST /api/annotations`, so `write` and `delete` are granted and never used. Reach for it
+when standing up a custom role isn't worth the extra step; reach for the custom role above when
+the token needs to be as narrow as the feature.
+
+> **Live-measured (2026-07-27, #400)** against `https://grafana.m7kni.com`. A service account
+> holding only `annotations:create` on `annotations:type:organization` wrote an annotation
+> successfully (`POST /api/annotations` → HTTP 200, `{"id":716,"message":"Annotation added"}`).
+> Grafana's own effective-permissions report for that token was exactly
+> `{"annotations:create":["annotations:type:organization"],"folders:read":["folders:uid:sharedwithme"]}`
+> — the `folders:read` on `sharedwithme` is Grafana's own unavoidable baseline, not something
+> graph2otel asks for or uses. Narrowness was also proven live with the same token:
+> `GET /api/annotations` → 403 "Permissions needed: annotations:read"; `DELETE
+> /api/annotations/716` → 403 "Permissions needed: annotations:delete"; `POST /api/folders` →
+> 403 "Permissions needed: folders:create"; `GET /api/search` → 200 with an empty list, because
+> Grafana filters search results by permission and the token can enumerate nothing.
+> `fixed:annotations:writer`'s three-action grant, and `fixed:annotations.all:writer`'s further
+> grant of all three actions on `folders:*`, were also measured directly. The live deployment
+> runs on the custom role, `custom:graph2otel:annotations:creator`, created with `"global": false`.
+>
+> One line above is **not** covered by that measurement: the `annotations:type:dashboard` scope
+> for a `dashboard_uid` deployment is still **docs-only**. Nothing here was tested with
+> `dashboard_uid` set.
 
 ### It fails fast, on purpose
 
@@ -64,6 +107,12 @@ If `url` is set and the token cannot actually write an annotation, **the process
 start** and names the missing permission. The startup check is not a synthetic probe — it is
 the real process-start annotation (see [Lifecycle marker](#lifecycle-marker)), so proving the
 permission leaves no junk behind and needs no `annotations:delete`.
+
+**Live-measured (2026-07-27, #400):** a token with no annotation permission gets
+`POST /api/annotations` → 403 with body `{"message":"You'll need additional permissions to
+perform this action. Permissions needed: annotations:create","title":"Access denied"}`, and the
+real graph2otel binary refuses to start on it — non-zero exit, `level=ERROR msg="refusing to
+start"`, echoing Grafana's body plus the actionable permission line.
 
 Discovering a dead token at the first real event would mean the annotations an operator is
 relying on for incident context are simply absent at the moment they look, with nothing in the
