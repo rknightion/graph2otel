@@ -233,9 +233,18 @@ histogram, and recording signals may be healthy-empty. In particular, the
 recording probe does not claim completeness for late-queryable records; see
 [#297](https://github.com/rknightion/graph2otel/issues/297).
 
-The repository does not schedule this command or carry a live credential.
-Selecting a target, provisioning a least-privilege read-only credential,
-choosing receipt retention, and owning failure routing are deployment decisions.
+### Scheduled execution
+
+[`.github/workflows/grafana-canary.yml`](https://github.com/rknightion/graph2otel/blob/main/.github/workflows/grafana-canary.yml)
+runs this daily (05:12 UTC) and on manual dispatch, authenticating as the
+least-privilege `graph2otel-semantic-canary` service account (Viewer role) via
+`gcx login`. The JSON receipt is uploaded as a workflow artifact
+(`grafana-semantic-canary-receipt`, 30-day retention) on every run, and the
+job summary states which of the three exit codes fired. The run failing **is**
+the notification surface — this repository ships no external notifier,
+webhook, or contact point for this canary either (same #293/#296 decision as
+[Operator-owned routing](#operator-owned-routing) above).
+
 Offline manifest/runner tests are already part of `make grafana-check`; run the
 narrow lane with `make grafana-canary-check`.
 

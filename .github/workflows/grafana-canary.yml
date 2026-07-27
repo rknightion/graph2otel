@@ -1,0 +1,151 @@
+name: Grafana semantic canary
+
+# Scheduled, maintainer-owned execution of #308's read-only Grafana semantic
+# canary (grafana/semantic_canary.py via `make grafana-canary`). It logs into
+# the production stack as the least-privilege `graph2otel-semantic-canary`
+# service account (Viewer role, id 36), runs the versioned probe manifest
+# (spec/grafana-semantic-canary.json), and uploads the JSON receipt as a
+# workflow artifact. It creates, updates, and deletes nothing in Grafana.
+#
+# Daily cadence: the probe surface (generated PromQL/LogQL vocabulary + one
+# stable alert UID) only changes on a release cadence, and a backend
+# regression (auth, transport, datasource drift, alert evaluator health) is
+# still caught same-day at this frequency. 05:12 UTC is offset from this
+# repo's other scheduled canary (graph-beta-drift.yml, 06:23 UTC) and off the
+# top of the hour, away from the shared GitHub Actions scheduler's peak load.
+#
+# Failure routing: the run failing IS the notification surface (#293/#296 —
+# this repository ships no contact point, webhook, or external notifier).
+on:
+  schedule:
+    - cron: "12 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: grafana-semantic-canary
+  cancel-in-progress: false
+
+env:
+  GCX_CONTEXT: graph2otel-semantic-canary
+  GCX_VERSION: "0.6.0"
+  # sha256 of gcx_0.6.0_linux_amd64.tar.gz, cross-checked against the
+  # upstream gcx_0.6.0_checksums.txt release asset and against a local
+  # download (2026-07-27) before pinning here.
+  GCX_SHA256: "5e76c064f14d9ec360cc48c46251b06a47762ab0dc755e4275e14ce2f67e8dbe"
+
+jobs:
+  semantic-canary:
+    name: read-only semantic canary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      # gcx (https://github.com/grafana/gcx) ships no first-party GitHub
+      # Action. Its own README CI example resolves "latest" unpinned; instead
+      # this downloads one pinned release tag's linux_amd64 archive over
+      # HTTPS from github.com and verifies it against the sha256 pinned in
+      # this file's env block above (not against a same-request-fetched
+      # checksums.txt), so a compromised or reissued release asset fails
+      # closed rather than silently installing.
+      - name: Install gcx (pinned release, checksum verified)
+        run: |
+          set -euo pipefail
+          archive="gcx_${GCX_VERSION}_linux_amd64.tar.gz"
+          url="https://github.com/grafana/gcx/releases/download/v${GCX_VERSION}/${archive}"
+          curl -fsSL -o "${RUNNER_TEMP}/${archive}" "$url"
+          echo "${GCX_SHA256}  ${RUNNER_TEMP}/${archive}" | sha256sum -c -
+          mkdir -p "${RUNNER_TEMP}/gcx-bin"
+          tar -xzf "${RUNNER_TEMP}/${archive}" -C "${RUNNER_TEMP}/gcx-bin" gcx
+          chmod +x "${RUNNER_TEMP}/gcx-bin/gcx"
+          echo "${RUNNER_TEMP}/gcx-bin" >> "$GITHUB_PATH"
+
+      - name: Verify gcx
+        run: gcx --version
+
+      # Non-interactive login. Never echo the secrets and never `set -x` in
+      # this or any later step — GitHub masks secrets.* values in logs, but
+      # this step still must not print them itself.
+      - name: Authenticate gcx (read-only service account)
+        env:
+          GRAFANA_CANARY_URL: ${{ secrets.GRAFANA_CANARY_URL }}
+          GRAFANA_CANARY_TOKEN: ${{ secrets.GRAFANA_CANARY_TOKEN }}
+        run: |
+          gcx login --yes "$GCX_CONTEXT" --server "$GRAFANA_CANARY_URL" --token "$GRAFANA_CANARY_TOKEN"
+
+      # grafana/semantic_canary.py exits 0 (passed), 1 (a probe reached the
+      # backend and failed a semantic assertion), or 2 (manifest/gcx/auth/
+      # transport/response-shape failure before any assertion ran). The JSON
+      # receipt is printed on stdout in every case (captured to a file here);
+      # this step never fails itself so the receipt is always uploaded before
+      # the outcome is evaluated and surfaced below.
+      - name: Run semantic canary
+        id: canary
+        run: |
+          set +e
+          make grafana-canary \
+            GRAFANA_CONTEXT="$GCX_CONTEXT" \
+            GRAFANA_PROMETHEUS_DATASOURCE=grafanacloud-prom \
+            GRAFANA_LOKI_DATASOURCE=grafanacloud-logs \
+            > canary-receipt.json 2> canary-stderr.log
+          code=$?
+          echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
+          echo "--- receipt (stdout) ---"
+          cat canary-receipt.json || true
+          if [ -s canary-stderr.log ]; then
+            echo "--- diagnostics (stderr) ---"
+            cat canary-stderr.log
+          fi
+          exit 0
+
+      - name: Upload canary receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: grafana-semantic-canary-receipt
+          path: |
+            canary-receipt.json
+            canary-stderr.log
+          retention-days: 30
+          if-no-files-found: error
+
+      # The three exit codes are NOT the same signal: 1 means the backend is
+      # reachable but a monitored datasource/alert is unhealthy, 2 means the
+      # canary itself could not run (never reached a semantic assertion). The
+      # job summary distinguishes them for anyone glancing at the Actions run
+      # without opening the receipt artifact.
+      - name: Evaluate canary outcome
+        env:
+          CANARY_EXIT_CODE: ${{ steps.canary.outputs.exit_code }}
+        run: |
+          set -euo pipefail
+          case "$CANARY_EXIT_CODE" in
+            0)
+              {
+                echo "### Grafana semantic canary: PASSED"
+                echo "All read-only probes passed against the configured datasources and the g2o-collector-staleness alert evaluator."
+              } >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            1)
+              {
+                echo "### Grafana semantic canary: SEMANTIC FAILURE"
+                echo "gcx reached the backend, but one or more probes failed a semantic assertion (unexpected empty result, missing required label, wrong datasource, or an unhealthy/never-evaluated alert rule). See the \`grafana-semantic-canary-receipt\` artifact for which probe(s) failed."
+              } >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            2)
+              {
+                echo "### Grafana semantic canary: OPERATIONAL ERROR"
+                echo "The manifest, gcx, authentication, transport, or response shape failed before any semantic assertion ran. This is NOT evidence that a monitored datasource or alert is unhealthy — see the \`grafana-semantic-canary-receipt\` artifact's stderr diagnostics."
+              } >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *)
+              echo "### Grafana semantic canary: UNKNOWN EXIT CODE (${CANARY_EXIT_CODE})" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+          esac
+          if [ "$CANARY_EXIT_CODE" != "0" ]; then
+            exit 1
+          fi
