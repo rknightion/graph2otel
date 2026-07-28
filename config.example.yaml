@@ -146,6 +146,23 @@ tenants:
     # hunting:
     #   enabled: true
 
+    # exo_per_mailbox gates the Exchange Online collectors that fan out one
+    # cmdlet PER MAILBOX (#355 mailbox delegation, #363 inbox rules). It needs
+    # exchange_online above; it adds no credential and no new scope of its own.
+    # Off by default because the cost is linear in mailbox count and there is no
+    # batch form on this transport — live-measured ~1.45 s/mailbox for delegation
+    # and ~1.0 s/mailbox for inbox rules, so 5,000 mailboxes is ~2 hours and
+    # ~83 minutes per cycle respectively.
+    # This is NOT the HighVolume flag: HighVolume means rate scales with TRAFFIC,
+    # whereas this scales with TENANT SIZE — an idle 5,000-mailbox tenant still
+    # pays full price.
+    # max_mailboxes caps one cycle (default 250, ~6 min for delegation). Mailboxes
+    # beyond the cap are NOT silently skipped: the collectors emit covered and
+    # total gauges, so alert on covered < total rather than assuming full coverage.
+    # exo_per_mailbox:
+    #   enabled: true
+    #   max_mailboxes: 250
+
 otlp:
   protocol: http # grpc | http | stdout (stdout = print signals to the console for local debug, no backend)
   endpoint: "https://otlp-gateway-prod-us-central-0.grafana.net/otlp" # OTLP base URL (the exporter appends /v1/metrics and /v1/logs itself)

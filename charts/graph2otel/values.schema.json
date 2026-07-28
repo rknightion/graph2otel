@@ -451,6 +451,19 @@
                                     }
                                 }
                             },
+                            "exo_per_mailbox": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                    "enabled": {
+                                        "type": "boolean"
+                                    },
+                                    "max_mailboxes": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                    }
+                                }
+                            },
                             "hunting": {
                                 "type": "object",
                                 "additionalProperties": false,

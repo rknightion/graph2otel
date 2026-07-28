@@ -305,6 +305,11 @@ type TenantConfig struct {
 	// member-count gauge (#337). Off unless privileged_groups.group_ids is
 	// non-empty. See PrivilegedGroupsConfig.
 	PrivilegedGroups PrivilegedGroupsConfig `yaml:"privileged_groups"`
+	// ExoPerMailbox gates every Exchange Online collector that fans out one
+	// cmdlet per mailbox (#355, #363). Off unless exo_per_mailbox.enabled is
+	// true, because the cycle cost is linear in mailbox count. See
+	// ExoPerMailboxConfig.
+	ExoPerMailbox ExoPerMailboxConfig `yaml:"exo_per_mailbox"`
 }
 
 // ExchangeOnlineConfig enables the Exchange Online admin API collectors for a
@@ -760,6 +765,10 @@ func (c *Config) Validate() error {
 
 		if err := t.PrivilegedGroups.validate(); err != nil {
 			return fmt.Errorf("tenants[%d].privileged_groups.%w", i, err)
+		}
+
+		if err := t.ExoPerMailbox.validate(); err != nil {
+			return fmt.Errorf("tenants[%d].exo_per_mailbox.%w", i, err)
 		}
 	}
 
