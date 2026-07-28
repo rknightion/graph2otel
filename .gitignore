@@ -1,5 +1,9 @@
 # Scratch plans/specs/research — never committed (see operating model)
 docs/superpowers/
+# Superpowers agent scratch — plans, lane reports and reviews. Working notes, never
+# a deliverable. Accidentally committed once in 099ba59 by a git add -A; published
+# history is not rewritten, so this line is what stops it recurring.
+.superpowers/
 
 # Go
 /graph2otel
