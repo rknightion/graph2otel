@@ -1205,13 +1205,33 @@ func registerEXOCollectors(
 		return availability.ReasonTransportInitializationFailed
 	}
 
-	edeps := collectors.EXODeps{Client: client, TenantID: ta.TenantID, Logger: tlog}
+	perMailbox := tenantExoPerMailboxConfig(cfg, ta.TenantID)
+	edeps := collectors.EXODeps{
+		Client:   client,
+		TenantID: ta.TenantID,
+		Logger:   tlog,
+		// The per-mailbox fan-out gate (#355, #363). Cap() is already defaulted,
+		// so a collector uses it verbatim and never re-applies a default.
+		PerMailboxEnabled: perMailbox.Configured(),
+		PerMailboxCap:     perMailbox.Cap(),
+	}
 	for _, ef := range exoFactories {
 		expected := newAvailabilityCandidate(
 			ef(collectors.EXODeps{}),
 			availabilityFamilyEXO,
 		)
 		c := ef(edeps)
+		// A per-mailbox collector costs one cmdlet per mailbox with no batch
+		// form, so it is never on by default even when exchange_online is
+		// configured. Skipped with an explicit reason rather than silently
+		// omitted — an operator who expected the data must be able to see WHY
+		// it is absent, which is the same contract an unset blob_ingest
+		// account_url gets.
+		if collectors.IsPerMailbox(c) && !perMailbox.Configured() {
+			skips[admin.SkipKey{TenantID: ta.TenantID, Collector: c.Name()}] =
+				"exo_per_mailbox.enabled is not set (per-mailbox fan-out is opt-in: cost is linear in mailbox count)"
+			continue
+		}
 		if !runtimeCollectorReady(c, expected, inventory, failures, tlog) {
 			continue
 		}
@@ -1231,6 +1251,20 @@ func tenantEXOConfig(cfg *config.Config, tenantID string) config.ExchangeOnlineC
 		}
 	}
 	return config.ExchangeOnlineConfig{}
+}
+
+// tenantExoPerMailboxConfig returns the tenant's per-mailbox fan-out block, or
+// the zero block (opt-out) when the tenant is not found. Same shape as
+// tenantEXOConfig — the two gates are independent: exchange_online turns the
+// transport on, exo_per_mailbox additionally allows the collectors whose cost
+// is linear in mailbox count.
+func tenantExoPerMailboxConfig(cfg *config.Config, tenantID string) config.ExoPerMailboxConfig {
+	for _, t := range cfg.Tenants {
+		if t.TenantID == tenantID {
+			return t.ExoPerMailbox
+		}
+	}
+	return config.ExoPerMailboxConfig{}
 }
 
 // registerHuntCollectors wires the tenant's advanced-hunting collectors (#249),

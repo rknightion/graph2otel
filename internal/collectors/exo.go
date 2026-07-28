@@ -63,6 +63,45 @@ type EXODeps struct {
 	TenantID string
 	// Logger is the process logger, for per-collector diagnostics.
 	Logger *slog.Logger
+	// PerMailboxEnabled mirrors the tenant's exo_per_mailbox.enabled (#355,
+	// #363): the opt-in for EXO collectors that call one cmdlet PER MAILBOX.
+	// False (the default) means such a collector is not constructed for this
+	// tenant at all — their cost is linear in mailbox count with no batch form,
+	// so they are never on by default. Collectors that run one tenant-wide
+	// cmdlet ignore this field entirely.
+	//
+	// It is a plain bool rather than a config type for the same reason
+	// BlobDeps.ExcludeSelf is: internal/collectors deliberately does not import
+	// internal/config, so the composition root translates the block into these
+	// two fields.
+	PerMailboxEnabled bool
+	// PerMailboxCap is how many mailboxes one cycle may poll, ALREADY defaulted
+	// by config.ExoPerMailboxConfig.Cap() — so a per-mailbox collector uses it
+	// verbatim and never re-applies a default of its own. Values <= 0 mean
+	// unlimited (see exofanout.Enumerate); config validation rejects negatives.
+	PerMailboxCap int
+}
+
+// PerMailboxCollector marks an EXO collector that fans out one cmdlet PER
+// MAILBOX (#355, #363) rather than running a single tenant-wide cmdlet.
+//
+// The composition root uses it to decide which collectors the
+// exo_per_mailbox.enabled gate applies to, so the gate stays self-maintaining:
+// a future per-mailbox collector is covered the moment it implements this,
+// with no hand-kept name list in the composition root to fall out of date. A
+// list is exactly how a cost gate silently stops covering a new collector.
+//
+// Implement it as a method on the collector returning true. Collectors that run
+// one tenant-wide cmdlet simply do not implement it.
+type PerMailboxCollector interface {
+	// PerMailbox reports that this collector's cost is linear in mailbox count.
+	PerMailbox() bool
+}
+
+// IsPerMailbox reports whether c is gated by exo_per_mailbox.enabled.
+func IsPerMailbox(c collector.SnapshotCollector) bool {
+	pm, ok := c.(PerMailboxCollector)
+	return ok && pm.PerMailbox()
 }
 
 // EXOFactory constructs one Exchange Online collector for a tenant. Registered

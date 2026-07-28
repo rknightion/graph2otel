@@ -19,8 +19,34 @@ import (
 // postType), description.content is HTML, both postType values ("regular"
 // and "quick") appear on the tenant. posts carries the args so each test can
 // vary the post set without duplicating the issue scaffolding.
+// recentPlaceholder is substituted with a timestamp relative to NOW at fixture
+// build time. It exists because an ABSOLUTE date in these fixtures is a time
+// bomb: this collector gates on a watermark and the backend rejects records
+// beyond a 7-day horizon, so a hard-coded date silently crosses that boundary
+// on a CALENDAR DATE rather than on a code change, and the suite starts failing
+// with nothing having been edited. That is exactly what happened on 2026-07-28,
+// when the 2026-07-18 issue scaffolding aged past the horizon and four tests
+// went red on a tree that had been green hours earlier.
+//
+// Timestamps that are meant to be ANCIENT (the February posts modeling the
+// endpoint's full-history re-serve) stay absolute on purpose — "older than any
+// watermark" does not rot.
+const recentPlaceholder = "__RECENT__"
+
+// recentTimestamp is evaluated ONCE for the whole test binary, not per call.
+// Per-call evaluation would be flaky: the fixture and any assertion comparing
+// against it call fresh separately, and two time.Now() readings that straddle a
+// second boundary would differ by one second after truncation.
+var recentTimestamp = time.Now().UTC().Add(-time.Hour).Format("2006-01-02T15:04:05Z")
+
+// fresh substitutes recentPlaceholder for a timestamp one hour ago, comfortably
+// inside both the watermark and the horizon whatever day the suite runs.
+func fresh(s string) string {
+	return strings.ReplaceAll(s, recentPlaceholder, recentTimestamp)
+}
+
 func postsFixture(posts string) string {
-	return `{"value":[
+	return fresh(`{"value":[
 	  {
 	    "id": "Exchange",
 	    "service": "Exchange Online",
@@ -30,13 +56,13 @@ func postsFixture(posts string) string {
 	        "id": "EX123", "title": "Mailbox access degraded",
 	        "classification": "incident", "status": "serviceDegradation",
 	        "service": "Exchange Online", "isResolved": false,
-	        "startDateTime": "2026-07-18T09:00:00Z", "endDateTime": null,
-	        "lastModifiedDateTime": "2026-07-18T14:00:00Z",
+	        "startDateTime": "__RECENT__", "endDateTime": null,
+	        "lastModifiedDateTime": "__RECENT__",
 	        "posts": [` + posts + `]
 	      }
 	    ]
 	  }
-	]}`
+	]}`)
 }
 
 func newPostsCollector(t *testing.T, g *fakeGraph, store *checkpoint.Store, tenantID string) *Collector {
@@ -113,7 +139,7 @@ func TestNewPostAfterPrimingEmitsPromptly(t *testing.T) {
 	newBody := postsFixture(`
 	  {"createdDateTime": "2026-02-01T10:00:00Z", "postType": "regular",
 	   "description": {"content": "<p>Old post.</p>", "contentType": "html"}},
-	  {"createdDateTime": "2026-07-27T08:30:00Z", "postType": "regular",
+	  {"createdDateTime": "__RECENT__", "postType": "regular",
 	   "description": {"content": "<p>Brand new update.</p>", "contentType": "html"}}
 	`)
 	g2 := &fakeGraph{bodies: map[string]string{overviewsURL: newBody}}
@@ -135,7 +161,13 @@ func TestNewPostAfterPrimingEmitsPromptly(t *testing.T) {
 	if l.Attrs[semconv.AttrPostType] != "regular" {
 		t.Errorf("post_type = %q, want regular", l.Attrs[semconv.AttrPostType])
 	}
-	want := time.Date(2026, 7, 27, 8, 30, 0, 0, time.UTC)
+	// Parsed back from the same substituted placeholder the fixture carried, so
+	// this still pins "the post's own createdDateTime, never arrival time"
+	// without re-introducing a rotting absolute date.
+	want, err := time.Parse(time.RFC3339, strings.Trim(fresh(`"`+recentPlaceholder+`"`), `"`))
+	if err != nil {
+		t.Fatalf("parsing the substituted fixture timestamp: %v", err)
+	}
 	if !l.Timestamp.Equal(want) {
 		t.Errorf("timestamp = %v, want %v (the post's own createdDateTime, never arrival time)", l.Timestamp, want)
 	}
@@ -149,7 +181,7 @@ func TestSamePostNeverReemitsAcrossRestarts(t *testing.T) {
 	body := postsFixture(`
 	  {"createdDateTime": "2026-02-01T10:00:00Z", "postType": "regular",
 	   "description": {"content": "<p>Old post.</p>", "contentType": "html"}},
-	  {"createdDateTime": "2026-07-27T08:30:00Z", "postType": "regular",
+	  {"createdDateTime": "__RECENT__", "postType": "regular",
 	   "description": {"content": "<p>Brand new update.</p>", "contentType": "html"}}
 	`)
 	g := &fakeGraph{bodies: map[string]string{overviewsURL: body}}
@@ -189,7 +221,7 @@ func TestPostWithUnparseableCreatedDateTimeIsDroppedAndCounted(t *testing.T) {
 	body := postsFixture(`
 	  {"createdDateTime": "", "postType": "regular",
 	   "description": {"content": "<p>No timestamp.</p>", "contentType": "html"}},
-	  {"createdDateTime": "2026-07-27T08:30:00Z", "postType": "regular",
+	  {"createdDateTime": "__RECENT__", "postType": "regular",
 	   "description": {"content": "<p>Valid post.</p>", "contentType": "html"}}
 	`)
 	g := &fakeGraph{bodies: map[string]string{overviewsURL: body}}
@@ -231,7 +263,7 @@ func TestPostBodyWithinCapIsCarriedRawAndUntruncated(t *testing.T) {
 
 	const rawHTML = `<p>Engineers have <strong>identified</strong> the root cause &amp; are deploying a fix.</p>`
 	body := postsFixture(`
-	  {"createdDateTime": "2026-07-27T08:30:00Z", "postType": "regular",
+	  {"createdDateTime": "__RECENT__", "postType": "regular",
 	   "description": {"content": ` + `"` + rawHTML + `"` + `, "contentType": "html"}}
 	`)
 	g := &fakeGraph{bodies: map[string]string{overviewsURL: body}}
@@ -272,7 +304,7 @@ func TestPostBodyExceedingCapIsTruncatedNotDropped(t *testing.T) {
 
 	oversized := strings.Repeat("x", postBodyCapBytes+2000)
 	body := postsFixture(`
-	  {"createdDateTime": "2026-07-27T08:30:00Z", "postType": "regular",
+	  {"createdDateTime": "__RECENT__", "postType": "regular",
 	   "description": {"content": "` + oversized + `", "contentType": "html"}}
 	`)
 	g := &fakeGraph{bodies: map[string]string{overviewsURL: body}}
@@ -312,9 +344,9 @@ func TestPostDedupeKeyIncludesPostType(t *testing.T) {
 	}
 
 	body := postsFixture(`
-	  {"createdDateTime": "2026-07-27T08:30:00Z", "postType": "regular",
+	  {"createdDateTime": "__RECENT__", "postType": "regular",
 	   "description": {"content": "<p>Regular update.</p>", "contentType": "html"}},
-	  {"createdDateTime": "2026-07-27T08:30:00Z", "postType": "quick",
+	  {"createdDateTime": "__RECENT__", "postType": "quick",
 	   "description": {"content": "<p>Quick update.</p>", "contentType": "html"}}
 	`)
 	g := &fakeGraph{bodies: map[string]string{overviewsURL: body}}
@@ -335,7 +367,7 @@ func TestPostDedupeKeyIncludesPostType(t *testing.T) {
 // unchecked. The existing gauge/twin behavior is unaffected.
 func TestNoCheckpointStoreSkipsPostProcessing(t *testing.T) {
 	body := postsFixture(`
-	  {"createdDateTime": "2026-07-27T08:30:00Z", "postType": "regular",
+	  {"createdDateTime": "__RECENT__", "postType": "regular",
 	   "description": {"content": "<p>Update.</p>", "contentType": "html"}}
 	`)
 	g := &fakeGraph{bodies: map[string]string{overviewsURL: body}}

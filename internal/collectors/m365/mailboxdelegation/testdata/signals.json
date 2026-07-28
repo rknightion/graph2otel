@@ -1,0 +1,45 @@
+{
+  "Metrics": [
+    {
+      "Name": "m365.mailbox.delegation.assignments",
+      "Unit": "{assignment}",
+      "Kind": "gauge",
+      "Description": "Standing FullAccess/SendAs mailbox delegation assignments this poll examined, bucketed by kind (full_access|send_as), trustee_kind (self|delegated) and is_inherited (true|false|unknown). trustee_kind=self is the implicit NT AUTHORITY\\SELF permission present on every mailbox, counted here but never given a log twin — see the package doc. Mailbox and trustee identity are never labels (#112); see the m365.mailbox_delegation log twin for those.",
+      "AttrKeys": [
+        "is_inherited",
+        "kind",
+        "trustee_kind"
+      ]
+    },
+    {
+      "Name": "m365.mailbox.delegation.mailboxes_covered",
+      "Unit": "{mailbox}",
+      "Kind": "gauge",
+      "Description": "Mailboxes this cycle actually polled for delegation, bounded by exo_per_mailbox's cap. See m365.mailbox.delegation.mailboxes_total.",
+      "AttrKeys": []
+    },
+    {
+      "Name": "m365.mailbox.delegation.mailboxes_total",
+      "Unit": "{mailbox}",
+      "Kind": "gauge",
+      "Description": "Mailboxes the tenant actually has, per Get-Mailbox. Compare against m365.mailbox.delegation.mailboxes_covered: covered \u003c total means this cycle's assignment gauge and twins are a PARTIAL view, not a complete one.",
+      "AttrKeys": []
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.mailbox_delegation",
+      "AttrKeys": [
+        "access_control_type",
+        "deny",
+        "ingest_transport",
+        "kind",
+        "mailbox",
+        "rights",
+        "trustee",
+        "trustee_kind",
+        "trustee_sid"
+      ]
+    }
+  ]
+}

@@ -43,6 +43,22 @@ SECTIONS = [
         ("Mailbox quota status", ["m365.mailbox_usage.quota_status.mailboxes"],
          {"viz": "timeseries"}),
         "m365.mailbox_usage.storage_used_bytes",
+        # Per-mailbox fan-out collectors (#355, #363). Coverage sits next to the
+        # finding on purpose: both are capped by exo_per_mailbox, so a reader
+        # who sees a delegation or rule count must be able to see in the same
+        # glance whether it was measured over the whole tenant or a slice of it.
+        ("Mailbox delegation (FullAccess / SendAs)",
+         ["m365.mailbox.delegation.assignments"], {"viz": "timeseries"}),
+        ("Delegation scan coverage (covered < total means a PARTIAL view)",
+         ["m365.mailbox.delegation.mailboxes_covered",
+          "m365.mailbox.delegation.mailboxes_total"],
+         {"viz": "timeseries"}),
+        ("Inbox rules (forwarding rules are a persistence mechanism)",
+         ["m365.inbox_rules.rules"], {"viz": "timeseries"}),
+        ("Inbox-rule scan coverage (covered < total means a PARTIAL view)",
+         ["m365.inbox_rules.mailboxes_covered",
+          "m365.inbox_rules.mailboxes_total"],
+         {"viz": "timeseries"}),
     ]),
     ("SharePoint and OneDrive", [
         ("SharePoint tenant sharing posture", ["m365.sharepoint.sharing"],

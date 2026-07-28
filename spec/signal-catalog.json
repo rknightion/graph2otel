@@ -1,5 +1,5 @@
 {
-  "package_count": 160,
+  "package_count": 162,
   "domains": [
     "defender",
     "entra",
@@ -4852,6 +4852,92 @@
       ]
     },
     {
+      "name": "m365.inbox_rules.mailboxes_covered",
+      "prometheus_name": "m365_inbox_rules_mailboxes_covered",
+      "unit": "{mailbox}",
+      "kind": "gauge",
+      "description": "Mailboxes this cycle actually polled for inbox rules. Compare against m365.inbox_rules.mailboxes_total: covered \u003c total means the exo_per_mailbox cap left part of the tenant unpolled this cycle, not that the tenant is small.",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/m365/inboxrules"
+      ]
+    },
+    {
+      "name": "m365.inbox_rules.mailboxes_total",
+      "prometheus_name": "m365_inbox_rules_mailboxes_total",
+      "unit": "{mailbox}",
+      "kind": "gauge",
+      "description": "Total mailboxes this tenant has, per Get-Mailbox. Always emitted alongside mailboxes_covered so partial coverage is never indistinguishable from a genuinely small tenant.",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/m365/inboxrules"
+      ]
+    },
+    {
+      "name": "m365.inbox_rules.rules",
+      "prometheus_name": "m365_inbox_rules_rules",
+      "unit": "{rule}",
+      "kind": "gauge",
+      "description": "Inbox rules across every polled mailbox (Get-InboxRule -IncludeHidden), counted by enabled, has_forwarding (any of ForwardTo/ForwardAsAttachmentTo/RedirectTo non-empty) and deletes (DeleteMessage=true). Never labeled by mailbox or rule identity (#112) — see the m365.inbox_rule log twin for per-rule detail.",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "delete_message",
+        "enabled",
+        "has_forwarding"
+      ],
+      "packages": [
+        "internal/collectors/m365/inboxrules"
+      ]
+    },
+    {
+      "name": "m365.mailbox.delegation.assignments",
+      "prometheus_name": "m365_mailbox_delegation_assignments",
+      "unit": "{assignment}",
+      "kind": "gauge",
+      "description": "Standing FullAccess/SendAs mailbox delegation assignments this poll examined, bucketed by kind (full_access|send_as), trustee_kind (self|delegated) and is_inherited (true|false|unknown). trustee_kind=self is the implicit NT AUTHORITY\\SELF permission present on every mailbox, counted here but never given a log twin — see the package doc. Mailbox and trustee identity are never labels (#112); see the m365.mailbox_delegation log twin for those.",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "is_inherited",
+        "kind",
+        "trustee_kind"
+      ],
+      "packages": [
+        "internal/collectors/m365/mailboxdelegation"
+      ]
+    },
+    {
+      "name": "m365.mailbox.delegation.mailboxes_covered",
+      "prometheus_name": "m365_mailbox_delegation_mailboxes_covered",
+      "unit": "{mailbox}",
+      "kind": "gauge",
+      "description": "Mailboxes this cycle actually polled for delegation, bounded by exo_per_mailbox's cap. See m365.mailbox.delegation.mailboxes_total.",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/m365/mailboxdelegation"
+      ]
+    },
+    {
+      "name": "m365.mailbox.delegation.mailboxes_total",
+      "prometheus_name": "m365_mailbox_delegation_mailboxes_total",
+      "unit": "{mailbox}",
+      "kind": "gauge",
+      "description": "Mailboxes the tenant actually has, per Get-Mailbox. Compare against m365.mailbox.delegation.mailboxes_covered: covered \u003c total means this cycle's assignment gauge and twins are a PARTIAL view, not a complete one.",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/m365/mailboxdelegation"
+      ]
+    },
+    {
       "name": "m365.mailbox_usage.quota_status.mailboxes",
       "prometheus_name": "m365_mailbox_usage_quota_status_mailboxes",
       "unit": "{mailbox}",
@@ -8588,6 +8674,49 @@
       ],
       "packages": [
         "internal/collectors/m365/exchangetransportrules"
+      ]
+    },
+    {
+      "event_name": "m365.inbox_rule",
+      "domain": "m365",
+      "attr_keys": [
+        "description",
+        "enabled",
+        "error_type",
+        "forward_to",
+        "forward_to_display_names",
+        "identity",
+        "ingest_transport",
+        "is_valid",
+        "mailbox_owner_id",
+        "name",
+        "object_state",
+        "primary_smtp_address",
+        "priority",
+        "rule_identity",
+        "subject_contains_words",
+        "supported_by_task"
+      ],
+      "packages": [
+        "internal/collectors/m365/inboxrules"
+      ]
+    },
+    {
+      "event_name": "m365.mailbox_delegation",
+      "domain": "m365",
+      "attr_keys": [
+        "access_control_type",
+        "deny",
+        "ingest_transport",
+        "kind",
+        "mailbox",
+        "rights",
+        "trustee",
+        "trustee_kind",
+        "trustee_sid"
+      ],
+      "packages": [
+        "internal/collectors/m365/mailboxdelegation"
       ]
     },
     {

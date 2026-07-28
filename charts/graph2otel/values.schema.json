@@ -145,6 +145,8 @@
                 "m365.exchange_outbound_spam",
                 "m365.exchange_remote_domains",
                 "m365.exchange_transport_rules",
+                "m365.inbox_rules",
+                "m365.mailbox_delegation",
                 "m365.mailbox_usage",
                 "m365.message_trace",
                 "m365.servicehealth",

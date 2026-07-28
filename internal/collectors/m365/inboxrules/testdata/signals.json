@@ -1,0 +1,52 @@
+{
+  "Metrics": [
+    {
+      "Name": "m365.inbox_rules.mailboxes_covered",
+      "Unit": "{mailbox}",
+      "Kind": "gauge",
+      "Description": "Mailboxes this cycle actually polled for inbox rules. Compare against m365.inbox_rules.mailboxes_total: covered \u003c total means the exo_per_mailbox cap left part of the tenant unpolled this cycle, not that the tenant is small.",
+      "AttrKeys": []
+    },
+    {
+      "Name": "m365.inbox_rules.mailboxes_total",
+      "Unit": "{mailbox}",
+      "Kind": "gauge",
+      "Description": "Total mailboxes this tenant has, per Get-Mailbox. Always emitted alongside mailboxes_covered so partial coverage is never indistinguishable from a genuinely small tenant.",
+      "AttrKeys": []
+    },
+    {
+      "Name": "m365.inbox_rules.rules",
+      "Unit": "{rule}",
+      "Kind": "gauge",
+      "Description": "Inbox rules across every polled mailbox (Get-InboxRule -IncludeHidden), counted by enabled, has_forwarding (any of ForwardTo/ForwardAsAttachmentTo/RedirectTo non-empty) and deletes (DeleteMessage=true). Never labeled by mailbox or rule identity (#112) — see the m365.inbox_rule log twin for per-rule detail.",
+      "AttrKeys": [
+        "delete_message",
+        "enabled",
+        "has_forwarding"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.inbox_rule",
+      "AttrKeys": [
+        "description",
+        "enabled",
+        "error_type",
+        "forward_to",
+        "forward_to_display_names",
+        "identity",
+        "ingest_transport",
+        "is_valid",
+        "mailbox_owner_id",
+        "name",
+        "object_state",
+        "primary_smtp_address",
+        "priority",
+        "rule_identity",
+        "subject_contains_words",
+        "supported_by_task"
+      ]
+    }
+  ]
+}

@@ -136,6 +136,8 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/exchangeoutboundspam"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/exchangeremotedomains"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/exchangetransportrules"
+	_ "github.com/rknightion/graph2otel/internal/collectors/m365/inboxrules"
+	_ "github.com/rknightion/graph2otel/internal/collectors/m365/mailboxdelegation"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/mailboxusage"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/messagetrace"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/servicehealth"
