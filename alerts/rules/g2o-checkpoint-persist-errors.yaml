@@ -32,8 +32,8 @@ spec:
     description: "Companion to g2o-collector-staleness: a WindowCollector's high-water mark isn't reaching disk, so a restart re-polls (or drops, depending on store) an already-processed window. Even one increment is worth knowing about, so the rule fires on the first failed persist with no `for` delay. Paused by default — enable once you've picked a notification channel for it."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-checkpoint-persist-errors"
     __dashboardUid__: "graph2otel"
-    __panelId__: "360"
-    dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=360"
+    __panelId__: "363"
+    dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=363"
   expressions:
     A:
       model:

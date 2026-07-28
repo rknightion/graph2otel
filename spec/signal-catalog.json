@@ -1,5 +1,5 @@
 {
-  "package_count": 156,
+  "package_count": 158,
   "domains": [
     "defender",
     "entra",
@@ -4598,6 +4598,32 @@
       ]
     },
     {
+      "name": "m365.exchange.audit_bypass.enabled_count",
+      "prometheus_name": "m365_exchange_audit_bypass_enabled_count",
+      "unit": "{association}",
+      "kind": "gauge",
+      "description": "Exchange Online mailbox audit-bypass associations with AuditBypassEnabled=true — mailboxes producing NO mailbox audit records. The healthy steady state is zero. Per-mailbox identity is never a label here (#112); see the m365.exchange_audit_bypass log twin, emitted only for associations counted in this gauge.",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/m365/exchangeauditbypass"
+      ]
+    },
+    {
+      "name": "m365.exchange.audit_bypass.examined",
+      "prometheus_name": "m365_exchange_audit_bypass_examined",
+      "unit": "{association}",
+      "kind": "gauge",
+      "description": "Exchange Online mailbox audit-bypass associations this poll classified true/false. Excludes rows where AuditBypassEnabled was absent from the wire (indeterminate, counted in neither gauge). Compare against m365.exchange.audit_bypass.enabled_count: a healthy tenant reads examined\u003e0, enabled_count=0 — examined=0 means the source call returned nothing, not that the tenant is clean.",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/m365/exchangeauditbypass"
+      ]
+    },
+    {
       "name": "m365.exchange.audit_config.enabled",
       "prometheus_name": "m365_exchange_audit_config_enabled",
       "unit": "{setting}",
@@ -4750,6 +4776,34 @@
       ],
       "packages": [
         "internal/collectors/m365/exchangetransportrules"
+      ]
+    },
+    {
+      "name": "m365.mailbox_usage.quota_status.mailboxes",
+      "prometheus_name": "m365_mailbox_usage_quota_status_mailboxes",
+      "unit": "{mailbox}",
+      "kind": "gauge",
+      "description": "Count of mailboxes per Exchange quota-status bucket (Microsoft's own under_limit/warning_issued/send_prohibited/send_receive_prohibited/indeterminate vocabulary).",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "quota_state"
+      ],
+      "packages": [
+        "internal/collectors/m365/mailboxusage"
+      ]
+    },
+    {
+      "name": "m365.mailbox_usage.storage_used_bytes",
+      "prometheus_name": "m365_mailbox_usage_storage_used_bytes",
+      "unit": "By",
+      "kind": "gauge",
+      "description": "Tenant-wide Exchange mailbox storage used, in bytes.",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/m365/mailboxusage"
       ]
     },
     {
@@ -6342,6 +6396,86 @@
       ]
     },
     {
+      "event_name": "entra.auth_method_configuration",
+      "domain": "entra",
+      "attr_keys": [
+        "default_passkey_profile_id",
+        "exclude_target_count",
+        "exclude_target_ids",
+        "exclude_targets_truncated",
+        "id",
+        "include_target_count",
+        "include_target_ids",
+        "include_targets_truncated",
+        "is_attestation_enforced",
+        "is_office_phone_allowed",
+        "is_self_service_registration_allowed",
+        "is_software_oath_enabled",
+        "key_restriction_aaguids",
+        "key_restriction_aaguids_truncated",
+        "key_restriction_enforced",
+        "key_restriction_enforcement_type",
+        "method",
+        "odata_type",
+        "passkey_profile_ids",
+        "passkey_profile_ids_truncated",
+        "pin_length",
+        "standard_qr_code_lifetime_in_days",
+        "state"
+      ],
+      "packages": [
+        "internal/collectors/entra/authmethodspolicy"
+      ]
+    },
+    {
+      "event_name": "entra.auth_methods_policy",
+      "domain": "entra",
+      "attr_keys": [
+        "description",
+        "display_name",
+        "id",
+        "include_target_count",
+        "include_target_ids",
+        "include_targets_truncated",
+        "last_modified_date_time",
+        "policy_version",
+        "snooze_duration_in_days",
+        "state"
+      ],
+      "packages": [
+        "internal/collectors/entra/authmethodspolicy"
+      ]
+    },
+    {
+      "event_name": "entra.conditional_access_policy",
+      "domain": "entra",
+      "attr_keys": [
+        "authentication_strength_display_name",
+        "built_in_controls",
+        "client_app_types",
+        "created_date_time",
+        "display_name",
+        "exclude_groups",
+        "exclude_locations",
+        "exclude_roles",
+        "exclude_users",
+        "grant_controls_operator",
+        "has_grant_controls",
+        "has_session_controls",
+        "id",
+        "include_locations",
+        "include_roles",
+        "include_users",
+        "last_modified_date_time",
+        "sign_in_risk_levels",
+        "state",
+        "template_id"
+      ],
+      "packages": [
+        "internal/collectors/entra/conditionalaccess"
+      ]
+    },
+    {
       "event_name": "entra.consent_grant",
       "domain": "entra",
       "attr_keys": [
@@ -6548,6 +6682,26 @@
       ],
       "packages": [
         "internal/collectors/entra/licensing"
+      ]
+    },
+    {
+      "event_name": "entra.named_location",
+      "domain": "entra",
+      "attr_keys": [
+        "countries",
+        "country_lookup_method",
+        "created_date_time",
+        "display_name",
+        "id",
+        "include_unknown_countries_and_regions",
+        "ipv4_cidr_ranges",
+        "ipv6_cidr_ranges",
+        "is_trusted",
+        "last_modified_date_time",
+        "type"
+      ],
+      "packages": [
+        "internal/collectors/entra/conditionalaccess"
       ]
     },
     {
@@ -8064,6 +8218,26 @@
       ]
     },
     {
+      "event_name": "m365.exchange_audit_bypass",
+      "domain": "m365",
+      "attr_keys": [
+        "distinguished_name",
+        "exchange_object_id",
+        "guid",
+        "id",
+        "identity",
+        "ingest_transport",
+        "is_valid",
+        "name",
+        "object_class",
+        "organization_id",
+        "when_changed_utc"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangeauditbypass"
+      ]
+    },
+    {
       "event_name": "m365.exchange_audit_config",
       "domain": "m365",
       "attr_keys": [
@@ -8280,6 +8454,31 @@
       ],
       "packages": [
         "internal/collectors/m365/exchangetransportrules"
+      ]
+    },
+    {
+      "event_name": "m365.mailbox_usage",
+      "domain": "m365",
+      "attr_keys": [
+        "created_date",
+        "days_inactive",
+        "deleted_item_count",
+        "deleted_item_quota_bytes",
+        "deleted_item_size_bytes",
+        "display_name",
+        "has_archive",
+        "is_deleted",
+        "issue_warning_quota",
+        "item_count",
+        "last_activity_date",
+        "names_concealed",
+        "prohibit_send_quota",
+        "prohibit_send_receive_quota",
+        "storage_used_bytes",
+        "user_principal_name"
+      ],
+      "packages": [
+        "internal/collectors/m365/mailboxusage"
       ]
     },
     {

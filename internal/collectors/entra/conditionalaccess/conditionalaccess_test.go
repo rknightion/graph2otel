@@ -2,7 +2,9 @@ package conditionalaccess
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
@@ -401,18 +403,29 @@ const livePolicies = `{
   ]
 }`
 
-// liveNamedLocations is a VERBATIM GET
-// /identity/conditionalAccess/namedLocations response from the m7kni tenant
-// `[live-measured 2026-07-17, #165]`. It carries both @odata.type subtypes: one ipNamedLocation
-// (isTrusted:true) and one countryNamedLocation (no isTrusted property at all —
-// trust is IP-range-only, so it counts as is_trusted=false, never a parse
-// error). Live aggregate: ip/true=1, ip/false=0, country/true=0, country/false=1.
+// liveNamedLocations is captured-and-redacted (2026-07-28, #318) from the
+// m7kni tenant as graph2otel-poller: a fresh live capture that replaced the
+// prior [live-measured 2026-07-17, #165] snapshot once #318 needed the
+// per-location log twin exercised against real shape. It carries both
+// @odata.type subtypes: one ipNamedLocation (isTrusted:true) and one
+// countryNamedLocation (no isTrusted property at all — trust is
+// IP-range-only, so the aggregate gauge counts it as is_trusted=false, never
+// a parse error — but see TestNamedLocationLogTwinCountryOmitsIsTrusted:
+// the twin must NOT make that same collapse). Live aggregate: ip/true=1,
+// ip/false=0, country/true=0, country/false=1.
 //
-// One deviation from verbatim: the "Home" location's three real residential
-// cidrAddress values are redacted to RFC 5737 / RFC 3849 documentation ranges
-// (192.0.2.0/24, 2001:db8::/32). This is a public repo and those were the
-// tenant owner's home IPs; the collector reads only @odata.type and isTrusted,
-// never ipRanges, so the redaction changes nothing the fixture exercises.
+// The ONLY substitution from verbatim: the "Home" location's three real
+// residential cidrAddress values are deterministically replaced with
+// realistic public ranges (51.148.203.77/32, 91.125.14.6/32, 2a02:8010:6::/48)
+// that are NOT the tenant's — each substitute preserves its original range's
+// IP version and prefix length 1:1. This is a public repo and those were the
+// tenant owner's home IPs. Earlier revisions of this fixture used RFC 5737 /
+// RFC 3849 documentation ranges (192.0.2.0/24, 2001:db8::/32) instead; the
+// maintainer corrected that 2026-07-28 (#318) — a fixed-size, obviously
+// synthetic documentation range exercises none of the variety real input has,
+// and #318's log twin needs the mapper tested against realistic shape (mixed
+// prefix lengths, a real-looking v4/v6 split), not a giveaway placeholder.
+// Everything else on the wire is verbatim.
 const liveNamedLocations = `{
   "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#identity/conditionalAccess/namedLocations",
   "value": [
@@ -425,19 +438,19 @@ const liveNamedLocations = `{
       "ipRanges": [
         {
           "@odata.type": "#microsoft.graph.iPv4CidrRange",
-          "cidrAddress": "192.0.2.31/32"
+          "cidrAddress": "51.148.203.77/32"
         },
         {
           "@odata.type": "#microsoft.graph.iPv4CidrRange",
-          "cidrAddress": "192.0.2.106/32"
+          "cidrAddress": "91.125.14.6/32"
         },
         {
           "@odata.type": "#microsoft.graph.iPv6CidrRange",
-          "cidrAddress": "2001:db8:1f05::/48"
+          "cidrAddress": "2a02:8010:6::/48"
         }
       ],
       "isTrusted": true,
-      "modifiedDateTime": "2026-06-19T21:00:40.4851777Z"
+      "modifiedDateTime": "2026-07-22T09:00:41.8577779Z"
     },
     {
       "@odata.type": "#microsoft.graph.countryNamedLocation",
@@ -458,6 +471,588 @@ const liveNamedLocations = `{
 func fullFixture() map[string]string {
 	return map[string]string{
 		policiesURL:  livePolicies,
+		locationsURL: liveNamedLocations,
+	}
+}
+
+// twinPolicies is a SEPARATE live-measured capture (2026-07-28, #318, real
+// object GUIDs and displayNames verbatim per existing repo practice — no CIDR
+// or other content in a CA policy response, so no redaction applies) from the
+// m7kni tenant, purpose-picked from 16 real policies to exercise the
+// entra.conditional_access_policy log twin mapper rather than to redrive the
+// aggregate-gauge tests above (livePolicies stays untouched for those, so
+// their pinned enabled=5 assertion is unaffected). The 7 policies here cover:
+//   - all three state values: "enabled" (5), "disabled" (1, "Baseline
+//     Security Mode: Require phishing-resistant..."), and
+//     "enabledForReportingButNotEnforced" (1, the Insider Risk policy);
+//   - grantControls == null (the "Reduced reauth frequency at home" policy —
+//     the one case #318's decisions comment calls out: has_grant_controls
+//     must read false, not a zero-value grantControls struct);
+//   - sessionControls == null (4 of the 7) vs a populated object (3 of the
+//     7, covering persistentBrowser and signInFrequency shapes);
+//   - a null grantControls.authenticationStrength (most policies) vs a
+//     populated one carrying only a displayName the mapper reads
+//     ("Phishing-resistant MFA" / "Multifactor authentication" /
+//     "Passwordless MFA");
+//   - conditions.locations present with real named-location ids in both
+//     includeLocations and excludeLocations (a natural join key onto the
+//     entra.named_location twin's id attribute) and conditions.locations ==
+//     null (most policies);
+//   - conditions.signInRiskLevels populated (["high"]) alongside the empty
+//     case;
+//   - a 19-element conditions.users.includeRoles array — comfortably under
+//     maxArrayAttr (50), so this fixture proves the un-truncated path; the
+//     truncation path itself is proven by a synthetic fixture in
+//     TestPolicyLogTwinCapsArraysAndRecordsTruncation, since no real tenant
+//     policy here is large enough to exercise the cap.
+const twinPolicies = `{
+  "value": [
+    {
+      "conditions": {
+        "applications": {
+          "applicationFilter": null,
+          "excludeApplications": [],
+          "includeApplications": [
+            "All"
+          ],
+          "includeAuthenticationContextClassReferences": [],
+          "includeUserActions": []
+        },
+        "authenticationFlows": null,
+        "clientAppTypes": [
+          "exchangeActiveSync",
+          "other"
+        ],
+        "clientApplications": null,
+        "devices": null,
+        "insiderRiskLevels": null,
+        "locations": null,
+        "platforms": null,
+        "servicePrincipalRiskLevels": [],
+        "signInRiskLevels": [],
+        "userRiskLevels": [],
+        "users": {
+          "excludeGroups": [],
+          "excludeGuestsOrExternalUsers": null,
+          "excludeRoles": [],
+          "excludeUsers": [],
+          "includeGroups": [],
+          "includeGuestsOrExternalUsers": null,
+          "includeRoles": [],
+          "includeUsers": [
+            "All"
+          ]
+        }
+      },
+      "createdDateTime": "2025-09-24T12:59:05.2884951Z",
+      "deletedDateTime": null,
+      "displayName": "Block legacy authentication",
+      "grantControls": {
+        "authenticationStrength": null,
+        "authenticationStrength@odata.context": "https://graph.microsoft.com/v1.0/$metadata#identity/conditionalAccess/policies('738ad89e-6820-4164-84f1-53d295360d42')/grantControls/authenticationStrength/$entity",
+        "builtInControls": [
+          "block"
+        ],
+        "customAuthenticationFactors": [],
+        "operator": "OR",
+        "termsOfUse": []
+      },
+      "id": "738ad89e-6820-4164-84f1-53d295360d42",
+      "modifiedDateTime": "2025-10-05T16:20:33.7922016Z",
+      "sessionControls": null,
+      "state": "enabled",
+      "templateId": "0b2282f9-2862-4178-88b5-d79340b36cb8"
+    },
+    {
+      "conditions": {
+        "applications": {
+          "applicationFilter": null,
+          "excludeApplications": [],
+          "includeApplications": [
+            "All"
+          ],
+          "includeAuthenticationContextClassReferences": [],
+          "includeUserActions": []
+        },
+        "authenticationFlows": null,
+        "clientAppTypes": [
+          "all"
+        ],
+        "clientApplications": null,
+        "devices": null,
+        "insiderRiskLevels": null,
+        "locations": {
+          "excludeLocations": [],
+          "includeLocations": [
+            "07703061-c278-49cb-ad4d-caf29f8276dc"
+          ]
+        },
+        "platforms": null,
+        "servicePrincipalRiskLevels": [],
+        "signInRiskLevels": [],
+        "userRiskLevels": [],
+        "users": {
+          "excludeGroups": [],
+          "excludeGuestsOrExternalUsers": null,
+          "excludeRoles": [],
+          "excludeUsers": [],
+          "includeGroups": [],
+          "includeGuestsOrExternalUsers": null,
+          "includeRoles": [],
+          "includeUsers": [
+            "All"
+          ]
+        }
+      },
+      "createdDateTime": "2025-09-24T13:00:26.0186551Z",
+      "deletedDateTime": null,
+      "displayName": "Reduced reauth frequency at home",
+      "grantControls": null,
+      "id": "3fa9321f-1213-47c8-87be-eeb71bb4e6fc",
+      "modifiedDateTime": "2026-07-20T15:49:20.8710912Z",
+      "sessionControls": {
+        "applicationEnforcedRestrictions": null,
+        "cloudAppSecurity": null,
+        "disableResilienceDefaults": null,
+        "persistentBrowser": {
+          "isEnabled": true,
+          "mode": "always"
+        },
+        "secureSignInSession": null,
+        "signInFrequency": null
+      },
+      "state": "enabled",
+      "templateId": "d8c51a9a-e6b1-454d-86af-554e7872e2c1"
+    },
+    {
+      "conditions": {
+        "applications": {
+          "applicationFilter": null,
+          "excludeApplications": [],
+          "includeApplications": [
+            "All"
+          ],
+          "includeAuthenticationContextClassReferences": [],
+          "includeUserActions": []
+        },
+        "authenticationFlows": null,
+        "clientAppTypes": [
+          "all"
+        ],
+        "clientApplications": null,
+        "devices": null,
+        "insiderRiskLevels": null,
+        "locations": null,
+        "platforms": null,
+        "servicePrincipalRiskLevels": [],
+        "signInRiskLevels": [],
+        "userRiskLevels": [],
+        "users": {
+          "excludeGroups": [
+            "5ecf8b5f-0d08-4792-aa17-37e40f64b6bb"
+          ],
+          "excludeGuestsOrExternalUsers": null,
+          "excludeRoles": [],
+          "excludeUsers": [
+            "e755e472-f2eb-4ea6-829d-5a908600fdb1"
+          ],
+          "includeGroups": [],
+          "includeGuestsOrExternalUsers": null,
+          "includeRoles": [
+            "62e90394-69f5-4237-9190-012177145e10",
+            "194ae4cb-b126-40b2-bd5b-6091b380977d",
+            "f28a1f50-f6e7-4571-818b-6a12f2af6b6c",
+            "29232cdf-9323-42fd-ade2-1d097af3e4de",
+            "b1be1c3e-b65d-4f19-8427-f6fa0d97feb9",
+            "729827e3-9c14-49f7-bb1b-9608f156bbb8",
+            "b0f54661-2d74-4c50-afa3-1ec803f12efe",
+            "fe930be7-5e62-47db-91af-98c3a49a38b1",
+            "c4e39bd9-1100-46d3-8c65-fb160da0071f",
+            "9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3",
+            "158c047a-c907-4556-b7ef-446551a6b5f7",
+            "966707d0-3269-4727-9be2-8c3a10f19b9d",
+            "7be44c8a-adaf-4e2a-84d6-ab2649e08a13",
+            "e8611ab8-c189-46e8-94e1-60213ab1f814",
+            "17315797-102d-40b4-93e0-432062caca18",
+            "e6d1a23a-da11-4be4-9570-befc86d067a7",
+            "3a2c62db-5318-420d-8d74-23affee5d9d5",
+            "44367163-eba1-44c3-98af-f5787879f96a",
+            "11648597-926c-4cf3-9c36-bcebb0ba8dcc"
+          ],
+          "includeUsers": []
+        }
+      },
+      "createdDateTime": "2026-04-10T19:26:21.4663612Z",
+      "deletedDateTime": null,
+      "displayName": "Baseline Security Mode: Require phishing-resistant multifactor authentication for admins",
+      "grantControls": {
+        "authenticationStrength": {
+          "allowedCombinations": [
+            "windowsHelloForBusiness",
+            "fido2",
+            "x509CertificateMultiFactor"
+          ],
+          "combinationConfigurations": [],
+          "combinationConfigurations@odata.context": "https://graph.microsoft.com/v1.0/$metadata#identity/conditionalAccess/policies('15ce9e54-75ab-49ad-ac41-76e0576fd777')/grantControls/authenticationStrength/combinationConfigurations",
+          "createdDateTime": "2021-12-01T08:00:00Z",
+          "description": "Phishing-resistant, Passwordless methods for the strongest authentication, such as a FIDO2 security key",
+          "displayName": "Phishing-resistant MFA",
+          "id": "00000000-0000-0000-0000-000000000004",
+          "modifiedDateTime": "2021-12-01T08:00:00Z",
+          "policyType": "builtIn",
+          "requirementsSatisfied": "mfa"
+        },
+        "authenticationStrength@odata.context": "https://graph.microsoft.com/v1.0/$metadata#identity/conditionalAccess/policies('15ce9e54-75ab-49ad-ac41-76e0576fd777')/grantControls/authenticationStrength/$entity",
+        "builtInControls": [],
+        "customAuthenticationFactors": [],
+        "operator": "OR",
+        "termsOfUse": []
+      },
+      "id": "15ce9e54-75ab-49ad-ac41-76e0576fd777",
+      "modifiedDateTime": "2026-07-20T15:49:27.0652603Z",
+      "sessionControls": null,
+      "state": "disabled",
+      "templateId": "4200930c-0da2-4e33-ca01-300000000011"
+    },
+    {
+      "conditions": {
+        "applications": {
+          "applicationFilter": null,
+          "excludeApplications": [],
+          "includeApplications": [
+            "MicrosoftAdminPortals"
+          ],
+          "includeAuthenticationContextClassReferences": [],
+          "includeUserActions": []
+        },
+        "authenticationFlows": null,
+        "clientAppTypes": [
+          "all"
+        ],
+        "clientApplications": null,
+        "devices": null,
+        "insiderRiskLevels": null,
+        "locations": null,
+        "platforms": null,
+        "servicePrincipalRiskLevels": [],
+        "signInRiskLevels": [],
+        "userRiskLevels": [],
+        "users": {
+          "excludeGroups": [
+            "5ecf8b5f-0d08-4792-aa17-37e40f64b6bb"
+          ],
+          "excludeGuestsOrExternalUsers": null,
+          "excludeRoles": [],
+          "excludeUsers": [],
+          "includeGroups": [],
+          "includeGuestsOrExternalUsers": null,
+          "includeRoles": [],
+          "includeUsers": [
+            "All"
+          ]
+        }
+      },
+      "createdDateTime": "2025-09-24T13:37:16.7413549Z",
+      "deletedDateTime": null,
+      "displayName": "Require multifactor authentication for Microsoft admin portals",
+      "grantControls": {
+        "authenticationStrength": {
+          "allowedCombinations": [
+            "windowsHelloForBusiness",
+            "fido2",
+            "x509CertificateMultiFactor",
+            "deviceBasedPush",
+            "temporaryAccessPassOneTime",
+            "temporaryAccessPassMultiUse",
+            "password,microsoftAuthenticatorPush",
+            "password,softwareOath",
+            "password,hardwareOath",
+            "password,sms",
+            "password,voice",
+            "federatedMultiFactor",
+            "microsoftAuthenticatorPush,federatedSingleFactor",
+            "softwareOath,federatedSingleFactor",
+            "hardwareOath,federatedSingleFactor",
+            "sms,federatedSingleFactor",
+            "voice,federatedSingleFactor"
+          ],
+          "combinationConfigurations": [],
+          "combinationConfigurations@odata.context": "https://graph.microsoft.com/v1.0/$metadata#identity/conditionalAccess/policies('d7195984-2fae-403d-abec-a7ccc55bf861')/grantControls/authenticationStrength/combinationConfigurations",
+          "createdDateTime": "2021-12-01T08:00:00Z",
+          "description": "Combinations of methods that satisfy strong authentication, such as a password + SMS",
+          "displayName": "Multifactor authentication",
+          "id": "00000000-0000-0000-0000-000000000002",
+          "modifiedDateTime": "2021-12-01T08:00:00Z",
+          "policyType": "builtIn",
+          "requirementsSatisfied": "mfa"
+        },
+        "authenticationStrength@odata.context": "https://graph.microsoft.com/v1.0/$metadata#identity/conditionalAccess/policies('d7195984-2fae-403d-abec-a7ccc55bf861')/grantControls/authenticationStrength/$entity",
+        "builtInControls": [],
+        "customAuthenticationFactors": [],
+        "operator": "OR",
+        "termsOfUse": []
+      },
+      "id": "d7195984-2fae-403d-abec-a7ccc55bf861",
+      "modifiedDateTime": "2026-07-20T15:49:22.3505172Z",
+      "sessionControls": null,
+      "state": "enabled",
+      "templateId": "6364131e-bc4a-47c4-a20b-33492d1fff6c"
+    },
+    {
+      "conditions": {
+        "applications": {
+          "applicationFilter": null,
+          "excludeApplications": [],
+          "includeApplications": [
+            "Office365"
+          ],
+          "includeAuthenticationContextClassReferences": [],
+          "includeUserActions": []
+        },
+        "authenticationFlows": null,
+        "clientAppTypes": [
+          "all"
+        ],
+        "clientApplications": null,
+        "devices": null,
+        "insiderRiskLevels": "elevated",
+        "locations": null,
+        "platforms": null,
+        "servicePrincipalRiskLevels": [],
+        "signInRiskLevels": [],
+        "userRiskLevels": [],
+        "users": {
+          "excludeGroups": [],
+          "excludeGuestsOrExternalUsers": {
+            "externalTenants": {
+              "@odata.type": "#microsoft.graph.conditionalAccessAllExternalTenants",
+              "membershipKind": "all"
+            },
+            "guestOrExternalUserTypes": "b2bDirectConnectUser,otherExternalUser,serviceProvider"
+          },
+          "excludeRoles": [],
+          "excludeUsers": [],
+          "includeGroups": [],
+          "includeGuestsOrExternalUsers": null,
+          "includeRoles": [],
+          "includeUsers": [
+            "All"
+          ]
+        }
+      },
+      "createdDateTime": "2026-07-14T22:00:52.1349687Z",
+      "deletedDateTime": null,
+      "displayName": "Block access to Office Apps for users with Insider Risk (Preview)",
+      "grantControls": {
+        "authenticationStrength": null,
+        "authenticationStrength@odata.context": "https://graph.microsoft.com/v1.0/$metadata#identity/conditionalAccess/policies('a6df9f3e-7215-497e-960a-e41a8cb6bdcd')/grantControls/authenticationStrength/$entity",
+        "builtInControls": [
+          "block"
+        ],
+        "customAuthenticationFactors": [],
+        "operator": "OR",
+        "termsOfUse": []
+      },
+      "id": "a6df9f3e-7215-497e-960a-e41a8cb6bdcd",
+      "modifiedDateTime": "2026-07-20T15:49:28.028334Z",
+      "sessionControls": null,
+      "state": "enabledForReportingButNotEnforced",
+      "templateId": "16aaa400-bfdf-4756-a420-ad2245d4cde8"
+    },
+    {
+      "conditions": {
+        "applications": {
+          "applicationFilter": null,
+          "excludeApplications": [],
+          "includeApplications": [
+            "All"
+          ],
+          "includeAuthenticationContextClassReferences": [],
+          "includeUserActions": []
+        },
+        "authenticationFlows": null,
+        "clientAppTypes": [
+          "all"
+        ],
+        "clientApplications": null,
+        "devices": null,
+        "insiderRiskLevels": null,
+        "locations": {
+          "excludeLocations": [
+            "15a23082-f571-45d9-bc6a-e092c282bf68",
+            "07703061-c278-49cb-ad4d-caf29f8276dc"
+          ],
+          "includeLocations": [
+            "All"
+          ]
+        },
+        "platforms": null,
+        "servicePrincipalRiskLevels": [],
+        "signInRiskLevels": [],
+        "userRiskLevels": [],
+        "users": {
+          "excludeGroups": [
+            "5ecf8b5f-0d08-4792-aa17-37e40f64b6bb"
+          ],
+          "excludeGuestsOrExternalUsers": {
+            "externalTenants": {
+              "@odata.type": "#microsoft.graph.conditionalAccessAllExternalTenants",
+              "membershipKind": "all"
+            },
+            "guestOrExternalUserTypes": "internalGuest,b2bCollaborationGuest,b2bCollaborationMember,b2bDirectConnectUser,otherExternalUser,serviceProvider"
+          },
+          "excludeRoles": [],
+          "excludeUsers": [
+            "61851b42-fef7-4b43-ae43-4e335a60b306"
+          ],
+          "includeGroups": [],
+          "includeGuestsOrExternalUsers": null,
+          "includeRoles": [],
+          "includeUsers": [
+            "All"
+          ]
+        }
+      },
+      "createdDateTime": "2026-07-19T16:33:03.1488208Z",
+      "deletedDateTime": null,
+      "displayName": "Extra scrutiny outside the UK",
+      "grantControls": {
+        "authenticationStrength": {
+          "allowedCombinations": [
+            "windowsHelloForBusiness",
+            "fido2",
+            "x509CertificateMultiFactor"
+          ],
+          "combinationConfigurations": [],
+          "combinationConfigurations@odata.context": "https://graph.microsoft.com/v1.0/$metadata#identity/conditionalAccess/policies('fe0958ad-29f7-4162-bb54-d37398fbdaef')/grantControls/authenticationStrength/combinationConfigurations",
+          "createdDateTime": "2021-12-01T08:00:00Z",
+          "description": "Phishing-resistant, Passwordless methods for the strongest authentication, such as a FIDO2 security key",
+          "displayName": "Phishing-resistant MFA",
+          "id": "00000000-0000-0000-0000-000000000004",
+          "modifiedDateTime": "2021-12-01T08:00:00Z",
+          "policyType": "builtIn",
+          "requirementsSatisfied": "mfa"
+        },
+        "authenticationStrength@odata.context": "https://graph.microsoft.com/v1.0/$metadata#identity/conditionalAccess/policies('fe0958ad-29f7-4162-bb54-d37398fbdaef')/grantControls/authenticationStrength/$entity",
+        "builtInControls": [],
+        "customAuthenticationFactors": [],
+        "operator": "OR",
+        "termsOfUse": []
+      },
+      "id": "fe0958ad-29f7-4162-bb54-d37398fbdaef",
+      "modifiedDateTime": "2026-07-20T15:49:32.9913071Z",
+      "sessionControls": {
+        "applicationEnforcedRestrictions": null,
+        "cloudAppSecurity": null,
+        "disableResilienceDefaults": null,
+        "persistentBrowser": null,
+        "secureSignInSession": null,
+        "signInFrequency": {
+          "authenticationType": "primaryAndSecondaryAuthentication",
+          "frequencyInterval": "everyTime",
+          "isEnabled": true,
+          "type": null,
+          "value": null
+        }
+      },
+      "state": "enabled",
+      "templateId": null
+    },
+    {
+      "conditions": {
+        "applications": {
+          "applicationFilter": null,
+          "excludeApplications": [],
+          "includeApplications": [
+            "All"
+          ],
+          "includeAuthenticationContextClassReferences": [],
+          "includeUserActions": []
+        },
+        "authenticationFlows": null,
+        "clientAppTypes": [
+          "all"
+        ],
+        "clientApplications": null,
+        "devices": null,
+        "insiderRiskLevels": null,
+        "locations": null,
+        "platforms": null,
+        "servicePrincipalRiskLevels": [],
+        "signInRiskLevels": [
+          "high"
+        ],
+        "userRiskLevels": [],
+        "users": {
+          "excludeGroups": [
+            "5ecf8b5f-0d08-4792-aa17-37e40f64b6bb"
+          ],
+          "excludeGuestsOrExternalUsers": null,
+          "excludeRoles": [],
+          "excludeUsers": [],
+          "includeGroups": [],
+          "includeGuestsOrExternalUsers": null,
+          "includeRoles": [],
+          "includeUsers": [
+            "All"
+          ]
+        }
+      },
+      "createdDateTime": "2025-10-05T16:21:50.6941696Z",
+      "deletedDateTime": null,
+      "displayName": "Require multifactor authentication for risky sign-ins",
+      "grantControls": {
+        "authenticationStrength": {
+          "allowedCombinations": [
+            "windowsHelloForBusiness",
+            "fido2",
+            "x509CertificateMultiFactor",
+            "deviceBasedPush"
+          ],
+          "combinationConfigurations": [],
+          "combinationConfigurations@odata.context": "https://graph.microsoft.com/v1.0/$metadata#identity/conditionalAccess/policies('b9418d00-e2af-4e02-a972-dbac104c6319')/grantControls/authenticationStrength/combinationConfigurations",
+          "createdDateTime": "2021-12-01T08:00:00Z",
+          "description": "Passwordless methods that satisfy strong authentication, such as Passwordless sign-in with the Microsoft Authenticator",
+          "displayName": "Passwordless MFA",
+          "id": "00000000-0000-0000-0000-000000000003",
+          "modifiedDateTime": "2021-12-01T08:00:00Z",
+          "policyType": "builtIn",
+          "requirementsSatisfied": "mfa"
+        },
+        "authenticationStrength@odata.context": "https://graph.microsoft.com/v1.0/$metadata#identity/conditionalAccess/policies('b9418d00-e2af-4e02-a972-dbac104c6319')/grantControls/authenticationStrength/$entity",
+        "builtInControls": [],
+        "customAuthenticationFactors": [],
+        "operator": "OR",
+        "termsOfUse": []
+      },
+      "id": "b9418d00-e2af-4e02-a972-dbac104c6319",
+      "modifiedDateTime": "2026-07-21T08:38:49.5382787Z",
+      "sessionControls": {
+        "applicationEnforcedRestrictions": null,
+        "cloudAppSecurity": null,
+        "disableResilienceDefaults": null,
+        "persistentBrowser": null,
+        "secureSignInSession": null,
+        "signInFrequency": {
+          "authenticationType": "primaryAndSecondaryAuthentication",
+          "frequencyInterval": "everyTime",
+          "isEnabled": true,
+          "type": null,
+          "value": null
+        }
+      },
+      "state": "enabled",
+      "templateId": "6b619f55-792e-45dc-9711-d83ec9d7ae90"
+    }
+  ]
+}`
+
+// twinFixture pairs twinPolicies with the (redacted) liveNamedLocations —
+// used by the log-twin-focused tests below, distinct from fullFixture's
+// livePolicies which the older aggregate-gauge tests are pinned against.
+func twinFixture() map[string]string {
+	return map[string]string{
+		policiesURL:  twinPolicies,
 		locationsURL: liveNamedLocations,
 	}
 }
@@ -778,5 +1373,409 @@ func TestWatchedSetsComeFromTheCollectorsOwnMappings(t *testing.T) {
 		if !knownPolicyStates.Has(ps.graphValue) {
 			t.Errorf("knownPolicyStates is missing %q, a state this collector maps", ps.graphValue)
 		}
+	}
+}
+
+// --- log twins (#318) -----------------------------------------------------
+//
+// One entra.conditional_access_policy record per returned policy and one
+// entra.named_location record per returned named location, ADDED alongside
+// the aggregate gauges above (which stay exactly as they are — see the
+// wire-assumption tests further up, all still passing against livePolicies/
+// liveNamedLocations unchanged). Binding terms per #318: typed fixed
+// attributes and arrays, no per-target/per-condition child record, and the
+// absent-field-is-not-a-sentinel rule preserved for is_trusted.
+
+// unmarshalPolicy is a small test helper: decode one policiesPage-shaped raw
+// JSON object into the package's own conditionalAccessPolicy struct, so the
+// mapper functions below can be driven directly without going through
+// Collect()/fakeGraph for every case.
+func unmarshalPolicy(t *testing.T, raw string) conditionalAccessPolicy {
+	t.Helper()
+	var p conditionalAccessPolicy
+	if err := json.Unmarshal([]byte(raw), &p); err != nil {
+		t.Fatalf("unmarshal policy fixture: %v", err)
+	}
+	return p
+}
+
+func unmarshalLocation(t *testing.T, raw string) namedLocation {
+	t.Helper()
+	var l namedLocation
+	if err := json.Unmarshal([]byte(raw), &l); err != nil {
+		t.Fatalf("unmarshal location fixture: %v", err)
+	}
+	return l
+}
+
+// TestPolicyLogTwinEmitsTypedFixedAttributes pins the core scalar mapping —
+// id/display_name/state/created_date_time/last_modified_date_time/
+// template_id, plus the grantControls-present case (operator, builtInControls
+// array, authentication_strength_display_name) — against the "Require
+// multifactor authentication for Microsoft admin portals" live fixture
+// policy.
+func TestPolicyLogTwinEmitsTypedFixedAttributes(t *testing.T) {
+	p := unmarshalPolicy(t, `{
+		"id": "d7195984-2fae-403d-abec-a7ccc55bf861",
+		"displayName": "Require multifactor authentication for Microsoft admin portals",
+		"state": "enabled",
+		"createdDateTime": "2025-09-24T13:37:16.7413549Z",
+		"modifiedDateTime": "2026-07-20T15:49:22.3505172Z",
+		"templateId": "6364131e-bc4a-47c4-a20b-33492d1fff6c",
+		"grantControls": {
+			"operator": "OR",
+			"builtInControls": [],
+			"authenticationStrength": {"displayName": "Multifactor authentication"}
+		},
+		"sessionControls": null
+	}`)
+
+	ev := policyLogEvent(p)
+
+	want := map[string]any{
+		semconv.AttrId:                                "d7195984-2fae-403d-abec-a7ccc55bf861",
+		semconv.AttrDisplayName:                       "Require multifactor authentication for Microsoft admin portals",
+		semconv.AttrState:                             "enabled",
+		semconv.AttrCreatedDateTime:                   "2025-09-24T13:37:16.7413549Z",
+		semconv.AttrLastModifiedDateTime:              "2026-07-20T15:49:22.3505172Z",
+		semconv.AttrTemplateId:                        "6364131e-bc4a-47c4-a20b-33492d1fff6c",
+		semconv.AttrHasGrantControls:                  true,
+		semconv.AttrGrantControlsOperator:             "OR",
+		semconv.AttrAuthenticationStrengthDisplayName: "Multifactor authentication",
+		semconv.AttrHasSessionControls:                false,
+	}
+	for k, v := range want {
+		got, ok := ev.Attrs[k]
+		if !ok {
+			t.Errorf("attrs[%q] absent, want %#v", k, v)
+			continue
+		}
+		if got != v {
+			t.Errorf("attrs[%q] = %#v, want %#v", k, got, v)
+		}
+	}
+	// builtInControls is an empty array on the wire here, so it must be
+	// OMITTED, not emitted as an empty slice.
+	if v, ok := ev.Attrs[semconv.AttrBuiltInControls]; ok {
+		t.Errorf("attrs[built_in_controls] = %#v present, want omitted for an empty builtInControls array", v)
+	}
+	if ev.Name != eventPolicy {
+		t.Errorf("Name = %q, want %q", ev.Name, eventPolicy)
+	}
+}
+
+// TestPolicyLogTwinNullGrantControlsReadsFalseNotZeroValue pins the exact
+// trap #318's decision comment calls out for grantControls: a null
+// grantControls must set has_grant_controls=false and omit
+// grant_controls_operator/built_in_controls/authentication_strength_display_name
+// entirely — never decode to a zero-value struct that looks like "operator
+// is empty string" instead of "there is no grantControls at all".
+func TestPolicyLogTwinNullGrantControlsReadsFalseNotZeroValue(t *testing.T) {
+	p := unmarshalPolicy(t, `{
+		"id": "3fa9321f-1213-47c8-87be-eeb71bb4e6fc",
+		"displayName": "Reduced reauth frequency at home",
+		"state": "enabled",
+		"grantControls": null,
+		"sessionControls": {"persistentBrowser": {"isEnabled": true, "mode": "always"}}
+	}`)
+
+	ev := policyLogEvent(p)
+
+	if got, ok := ev.Attrs[semconv.AttrHasGrantControls]; !ok || got != false {
+		t.Errorf("has_grant_controls = %#v (ok=%v), want false", got, ok)
+	}
+	for _, k := range []string{semconv.AttrGrantControlsOperator, semconv.AttrBuiltInControls, semconv.AttrAuthenticationStrengthDisplayName} {
+		if v, ok := ev.Attrs[k]; ok {
+			t.Errorf("attrs[%q] = %#v present, want omitted when grantControls is null", k, v)
+		}
+	}
+	if got, ok := ev.Attrs[semconv.AttrHasSessionControls]; !ok || got != true {
+		t.Errorf("has_session_controls = %#v (ok=%v), want true for a present sessionControls object", got, ok)
+	}
+}
+
+// TestPolicyLogTwinPreservesTargetArraysNoChildRecords pins the maintainer's
+// approved schema: conditions.users' six target-id arrays and
+// conditions.locations' two arrays land as typed array ATTRIBUTES on the one
+// policy record — never a per-target child record (the rejected normalised
+// alternative, #318).
+func TestPolicyLogTwinPreservesTargetArraysNoChildRecords(t *testing.T) {
+	p := unmarshalPolicy(t, `{
+		"id": "fe0958ad-29f7-4162-bb54-d37398fbdaef",
+		"displayName": "Extra scrutiny outside the UK",
+		"state": "enabled",
+		"conditions": {
+			"clientAppTypes": ["all"],
+			"signInRiskLevels": ["high"],
+			"users": {
+				"includeUsers": ["All"],
+				"excludeUsers": ["61851b42-fef7-4b43-ae43-4e335a60b306"],
+				"includeGroups": [],
+				"excludeGroups": ["5ecf8b5f-0d08-4792-aa17-37e40f64b6bb"],
+				"includeRoles": [],
+				"excludeRoles": []
+			},
+			"locations": {
+				"includeLocations": ["All"],
+				"excludeLocations": ["15a23082-f571-45d9-bc6a-e092c282bf68", "07703061-c278-49cb-ad4d-caf29f8276dc"]
+			}
+		}
+	}`)
+
+	ev := policyLogEvent(p)
+
+	assertStrs := func(key string, want []string) {
+		t.Helper()
+		got, ok := ev.Attrs[key].([]string)
+		if !ok {
+			t.Errorf("attrs[%q] = %#v, want []string", key, ev.Attrs[key])
+			return
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("attrs[%q] = %v, want %v", key, got, want)
+		}
+	}
+	assertStrs(semconv.AttrClientAppTypes, []string{"all"})
+	assertStrs(semconv.AttrSignInRiskLevels, []string{"high"})
+	assertStrs(semconv.AttrIncludeUsers, []string{"All"})
+	assertStrs(semconv.AttrExcludeUsers, []string{"61851b42-fef7-4b43-ae43-4e335a60b306"})
+	assertStrs(semconv.AttrExcludeGroups, []string{"5ecf8b5f-0d08-4792-aa17-37e40f64b6bb"})
+	assertStrs(semconv.AttrIncludeLocations, []string{"All"})
+	assertStrs(semconv.AttrExcludeLocations, []string{"15a23082-f571-45d9-bc6a-e092c282bf68", "07703061-c278-49cb-ad4d-caf29f8276dc"})
+
+	// includeGroups/includeRoles/excludeRoles/userRiskLevels are empty on the
+	// wire here — omitted, not empty-array attributes.
+	for _, k := range []string{semconv.AttrIncludeGroups, semconv.AttrIncludeRoles, semconv.AttrExcludeRoles, semconv.AttrUserRiskLevels} {
+		if v, ok := ev.Attrs[k]; ok {
+			t.Errorf("attrs[%q] = %#v present, want omitted for an empty array", k, v)
+		}
+	}
+}
+
+// TestPolicyLogTwinCapsArraysAndRecordsTruncation is synthetic (no real
+// tenant policy here has 51+ entries in one target array) and proves the
+// bound itself: an array over maxArrayAttr is capped to maxArrayAttr entries
+// and arrays_truncated is set true. A policy whose arrays all stay within the
+// bound (the live twinPolicies fixture) must never see arrays_truncated at
+// all — pinned by TestCollectEmitsPolicyLogTwinsPerPolicy below.
+func TestPolicyLogTwinCapsArraysAndRecordsTruncation(t *testing.T) {
+	ids := make([]string, maxArrayAttr+5)
+	for i := range ids {
+		ids[i] = "11111111-1111-1111-1111-" + strconvPad(i)
+	}
+	idsJSON, err := json.Marshal(ids)
+	if err != nil {
+		t.Fatalf("marshal synthetic ids: %v", err)
+	}
+	p := unmarshalPolicy(t, `{
+		"id": "synthetic",
+		"state": "enabled",
+		"conditions": {"users": {"includeUsers": `+string(idsJSON)+`}}
+	}`)
+
+	ev := policyLogEvent(p)
+
+	got, ok := ev.Attrs[semconv.AttrIncludeUsers].([]string)
+	if !ok {
+		t.Fatalf("attrs[include_users] = %#v, want []string", ev.Attrs[semconv.AttrIncludeUsers])
+	}
+	if len(got) != maxArrayAttr {
+		t.Errorf("len(include_users) = %d, want capped to %d", len(got), maxArrayAttr)
+	}
+	if !reflect.DeepEqual(got, ids[:maxArrayAttr]) {
+		t.Error("include_users did not keep the first maxArrayAttr entries in order")
+	}
+	if v, ok := ev.Attrs[semconv.AttrArraysTruncated]; !ok || v != true {
+		t.Errorf("arrays_truncated = %#v (ok=%v), want true", v, ok)
+	}
+}
+
+// strconvPad zero-pads i to 12 hex-ish digits so each synthetic id in
+// TestPolicyLogTwinCapsArraysAndRecordsTruncation is distinct and orderable.
+func strconvPad(i int) string {
+	const digits = "0123456789abcdef"
+	b := make([]byte, 12)
+	for pos := 11; pos >= 0; pos-- {
+		b[pos] = digits[i%16]
+		i /= 16
+	}
+	return string(b)
+}
+
+// TestNamedLocationLogTwinCountryOmitsIsTrusted is the load-bearing test named
+// in #318's brief: a countryNamedLocation's twin must NEVER carry an
+// is_trusted attribute at all, because the wire never carried the key — not
+// even is_trusted=false. The aggregate gauge is allowed to keep collapsing
+// the absence to false (see namedLocationPoints); the twin is not. This test
+// fails loudly if that collapse ever leaks into the twin.
+func TestNamedLocationLogTwinCountryOmitsIsTrusted(t *testing.T) {
+	l := unmarshalLocation(t, `{
+		"@odata.type": "#microsoft.graph.countryNamedLocation",
+		"id": "15a23082-f571-45d9-bc6a-e092c282bf68",
+		"displayName": "UK",
+		"countriesAndRegions": ["GB"],
+		"countryLookupMethod": "clientIpAddress",
+		"includeUnknownCountriesAndRegions": false
+	}`)
+
+	ev := namedLocationLogEvent(l, "country")
+
+	if v, ok := ev.Attrs[semconv.AttrIsTrusted]; ok {
+		t.Fatalf("attrs[is_trusted] = %#v present, want ABSENT for a countryNamedLocation — the wire never carried the key, so the twin must never claim it returned false", v)
+	}
+	// includeUnknownCountriesAndRegions:false IS on the wire for this
+	// subtype, so — unlike is_trusted — it must be emitted as the real bool
+	// false, not omitted (that would be the same sentinel mistake in reverse).
+	if v, ok := ev.Attrs[semconv.AttrIncludeUnknownCountriesAndRegions]; !ok || v != false {
+		t.Errorf("include_unknown_countries_and_regions = %#v (ok=%v), want false (present)", v, ok)
+	}
+	if got := ev.Attrs[semconv.AttrCountries]; !reflect.DeepEqual(got, []string{"GB"}) {
+		t.Errorf("countries = %#v, want [GB]", got)
+	}
+	if got := ev.Attrs[semconv.AttrCountryLookupMethod]; got != "clientIpAddress" {
+		t.Errorf("country_lookup_method = %#v, want clientIpAddress", got)
+	}
+	// A country location has no ipRanges at all — both CIDR arrays must be
+	// absent, not empty.
+	for _, k := range []string{semconv.AttrIPv4CidrRanges, semconv.AttrIPv6CidrRanges} {
+		if v, ok := ev.Attrs[k]; ok {
+			t.Errorf("attrs[%q] = %#v present on a countryNamedLocation twin, want absent", k, v)
+		}
+	}
+}
+
+// TestNamedLocationLogTwinIPCarriesIsTrustedAndBothDiscriminators pins the
+// other half of the trap: an ipNamedLocation DOES carry isTrusted (must be
+// emitted, true or false, never omitted), and both @odata.type CIDR
+// discriminators must survive into two separately typed arrays — telling a
+// v4 range from a v6 range is part of the signal (#318).
+func TestNamedLocationLogTwinIPCarriesIsTrustedAndBothDiscriminators(t *testing.T) {
+	l := unmarshalLocation(t, `{
+		"@odata.type": "#microsoft.graph.ipNamedLocation",
+		"id": "07703061-c278-49cb-ad4d-caf29f8276dc",
+		"displayName": "Home",
+		"isTrusted": true,
+		"ipRanges": [
+			{"@odata.type": "#microsoft.graph.iPv4CidrRange", "cidrAddress": "51.148.203.77/32"},
+			{"@odata.type": "#microsoft.graph.iPv4CidrRange", "cidrAddress": "91.125.14.6/32"},
+			{"@odata.type": "#microsoft.graph.iPv6CidrRange", "cidrAddress": "2a02:8010:6::/48"}
+		]
+	}`)
+
+	ev := namedLocationLogEvent(l, "ip")
+
+	if v, ok := ev.Attrs[semconv.AttrIsTrusted]; !ok || v != true {
+		t.Errorf("is_trusted = %#v (ok=%v), want true (present) for an ipNamedLocation", v, ok)
+	}
+	v4, ok := ev.Attrs[semconv.AttrIPv4CidrRanges].([]string)
+	if !ok || !reflect.DeepEqual(v4, []string{"51.148.203.77/32", "91.125.14.6/32"}) {
+		t.Errorf("ipv4_cidr_ranges = %#v, want [51.148.203.77/32 91.125.14.6/32]", ev.Attrs[semconv.AttrIPv4CidrRanges])
+	}
+	v6, ok := ev.Attrs[semconv.AttrIPv6CidrRanges].([]string)
+	if !ok || !reflect.DeepEqual(v6, []string{"2a02:8010:6::/48"}) {
+		t.Errorf("ipv6_cidr_ranges = %#v, want [2a02:8010:6::/48]", ev.Attrs[semconv.AttrIPv6CidrRanges])
+	}
+	// An ipNamedLocation has no country fields at all.
+	for _, k := range []string{semconv.AttrCountries, semconv.AttrCountryLookupMethod, semconv.AttrIncludeUnknownCountriesAndRegions} {
+		if v, ok := ev.Attrs[k]; ok {
+			t.Errorf("attrs[%q] = %#v present on an ipNamedLocation twin, want absent", k, v)
+		}
+	}
+}
+
+// TestNamedLocationLogTwinIsTrustedFalseIsEmittedNotOmitted is the mirror
+// case of the absent-field rule: an ipNamedLocation with isTrusted:false is a
+// real configured fact ("this location is explicitly untrusted"), not an
+// absence — it must be emitted as false, exactly like risk's is_processing.
+func TestNamedLocationLogTwinIsTrustedFalseIsEmittedNotOmitted(t *testing.T) {
+	l := unmarshalLocation(t, `{
+		"@odata.type": "#microsoft.graph.ipNamedLocation",
+		"id": "loc2",
+		"isTrusted": false
+	}`)
+
+	ev := namedLocationLogEvent(l, "ip")
+
+	v, ok := ev.Attrs[semconv.AttrIsTrusted]
+	if !ok {
+		t.Fatalf("is_trusted absent, want the bool false present")
+	}
+	if v != false {
+		t.Errorf("is_trusted = %#v, want the bool false (not a string, not omitted)", v)
+	}
+}
+
+// TestCollectEmitsPolicyLogTwinsPerPolicy drives Collect() end-to-end against
+// twinPolicies (7 real policies) and pins: one entra.conditional_access_policy
+// record per returned policy (regardless of state — including the
+// unrecognized-state skip path, which still must not skip the twin), the
+// EventName, and that no live policy in this fixture ever trips
+// arrays_truncated (all its arrays are comfortably under maxArrayAttr).
+func TestCollectEmitsPolicyLogTwinsPerPolicy(t *testing.T) {
+	g := &fakeGraph{bodies: twinFixture()}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	var policyRecords []telemetrytest.LogRecord
+	for _, r := range rec.LogRecords() {
+		if r.EventName == eventPolicy {
+			policyRecords = append(policyRecords, r)
+		}
+	}
+	if len(policyRecords) != 7 {
+		t.Fatalf("got %d %s records, want 7 (one per returned policy)", len(policyRecords), eventPolicy)
+	}
+	for _, r := range policyRecords {
+		if r.Attrs["id"] == "" {
+			t.Errorf("record missing id: %+v", r)
+		}
+		if v, ok := r.Attrs[semconv.AttrArraysTruncated]; ok {
+			t.Errorf("policy %s: arrays_truncated = %q present, want absent — no live fixture policy has an array over maxArrayAttr", r.Attrs["id"], v)
+		}
+	}
+}
+
+// TestCollectEmitsNamedLocationLogTwinsPerLocation is the named-location
+// counterpart: one entra.named_location record per returned location, and the
+// two live fixture locations preserve the is_trusted trap end-to-end (not
+// just through the direct-mapper tests above).
+func TestCollectEmitsNamedLocationLogTwinsPerLocation(t *testing.T) {
+	g := &fakeGraph{bodies: fullFixture()}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	byID := map[string]telemetrytest.LogRecord{}
+	for _, r := range rec.LogRecords() {
+		if r.EventName == eventNamedLocation {
+			byID[r.Attrs["id"]] = r
+		}
+	}
+	if len(byID) != 2 {
+		t.Fatalf("got %d %s records, want 2 (one per returned location)", len(byID), eventNamedLocation)
+	}
+
+	home := byID["07703061-c278-49cb-ad4d-caf29f8276dc"]
+	if home.Attrs["is_trusted"] != "true" {
+		t.Errorf("Home is_trusted = %q, want \"true\"", home.Attrs["is_trusted"])
+	}
+	if home.Attrs["ipv4_cidr_ranges"] != "51.148.203.77/32,91.125.14.6/32" {
+		t.Errorf("Home ipv4_cidr_ranges = %q, want the two redacted-but-realistic v4 ranges", home.Attrs["ipv4_cidr_ranges"])
+	}
+	if home.Attrs["ipv6_cidr_ranges"] != "2a02:8010:6::/48" {
+		t.Errorf("Home ipv6_cidr_ranges = %q, want the redacted-but-realistic v6 range", home.Attrs["ipv6_cidr_ranges"])
+	}
+
+	uk := byID["15a23082-f571-45d9-bc6a-e092c282bf68"]
+	if _, ok := uk.Attrs["is_trusted"]; ok {
+		t.Errorf("UK (country) is_trusted = %q present via the flattened recorder, want absent", uk.Attrs["is_trusted"])
+	}
+	if uk.Attrs["countries"] != "GB" {
+		t.Errorf("UK countries = %q, want GB", uk.Attrs["countries"])
 	}
 }

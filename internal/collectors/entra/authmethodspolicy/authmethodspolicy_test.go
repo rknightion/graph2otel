@@ -382,6 +382,246 @@ func TestCollectEmitsLegacyEnabledCount(t *testing.T) {
 	}
 }
 
+// TestCollectEmitsPolicyLogTwin pins the singleton entra.auth_methods_policy
+// log twin's typed fields against the VERBATIM live capture (#317, Option A):
+// the policy's own identity/metadata plus the registration campaign's
+// bounded target-id array, never raw configuration JSON.
+func TestCollectEmitsPolicyLogTwin(t *testing.T) {
+	g := &fakeGraph{body: livePolicy}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	var found *telemetrytest.LogRecord
+	for _, r := range rec.LogRecords() {
+		if r.EventName == eventPolicy {
+			r := r
+			found = &r
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("no %s log record emitted", eventPolicy)
+	}
+
+	want := map[string]string{
+		"id":                        "authenticationMethodsPolicy",
+		"display_name":              "Authentication Methods Policy",
+		"last_modified_date_time":   "2025-11-21T20:01:36.9599169Z",
+		"policy_version":            "1.5",
+		"state":                     "default",
+		"snooze_duration_in_days":   "1",
+		"include_target_ids":        "all_users",
+		"include_target_count":      "1",
+		"include_targets_truncated": "false",
+	}
+	for k, v := range want {
+		if got := found.Attrs[k]; got != v {
+			t.Errorf("policy twin attr %s = %q, want %q", k, got, v)
+		}
+	}
+	// policyMigrationState is wire-null: absent, never a fabricated empty string.
+	if _, ok := found.Attrs["policy_migration_state"]; ok {
+		t.Errorf("policy_migration_state present = %q, want absent (wire value is null)", found.Attrs["policy_migration_state"])
+	}
+	// The campaign has no excludeTargets on the wire: absent, not an empty array attr.
+	if _, ok := found.Attrs["exclude_target_ids"]; ok {
+		t.Errorf("exclude_target_ids present, want absent for an empty excludeTargets array")
+	}
+}
+
+// TestCollectEmitsOneConfigurationTwinPerReturnedEntry pins the 1:1
+// cardinality the #317 decision requires: exactly one
+// entra.auth_method_configuration record per entry in
+// authenticationMethodConfigurations, matching the seven the live capture
+// returns (including the two the metric-side catalog skips).
+func TestCollectEmitsOneConfigurationTwinPerReturnedEntry(t *testing.T) {
+	g := &fakeGraph{body: livePolicy}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	var ids []string
+	for _, r := range rec.LogRecords() {
+		if r.EventName == eventConfig {
+			ids = append(ids, r.Attrs["id"])
+		}
+	}
+	want := []string{"Fido2", "MicrosoftAuthenticator", "Sms", "Voice", "X509Certificate", "VerifiableCredentials", "QRCodePin"}
+	if len(ids) != len(want) {
+		t.Fatalf("got %d configuration twins %v, want %d %v", len(ids), ids, len(want), want)
+	}
+	for _, w := range want {
+		found := false
+		for _, id := range ids {
+			if id == w {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("missing configuration twin for id=%s", w)
+		}
+	}
+}
+
+// TestCollectFido2TwinCarriesSubtypeFields pins the Fido2-specific typed
+// fields observed live 2026-07-28 (#317): self-service/attestation flags,
+// the default passkey profile id, key restriction enforcement, and the
+// bounded aaGuids/passkeyProfiles id arrays — identifiers only, never the
+// nested per-profile attestation config.
+func TestCollectFido2TwinCarriesSubtypeFields(t *testing.T) {
+	g := &fakeGraph{body: livePolicy}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	var fido2 *telemetrytest.LogRecord
+	for _, r := range rec.LogRecords() {
+		if r.EventName == eventConfig && r.Attrs["id"] == "Fido2" {
+			r := r
+			fido2 = &r
+			break
+		}
+	}
+	if fido2 == nil {
+		t.Fatal("no Fido2 configuration twin emitted")
+	}
+
+	want := map[string]string{
+		"state":                                "enabled",
+		"odata_type":                           "#microsoft.graph.fido2AuthenticationMethodConfiguration",
+		"method":                               "fido2",
+		"is_self_service_registration_allowed": "true",
+		"is_attestation_enforced":              "true",
+		"default_passkey_profile_id":           "00000000-0000-0000-0000-000000000001",
+		"key_restriction_enforced":             "true",
+		"key_restriction_enforcement_type":     "allow",
+		"key_restriction_aaguids_truncated":    "false",
+		"passkey_profile_ids_truncated":        "false",
+		"include_target_ids":                   "all_users",
+		"include_target_count":                 "1",
+	}
+	for k, v := range want {
+		if got := fido2.Attrs[k]; got != v {
+			t.Errorf("fido2 twin attr %s = %q, want %q", k, got, v)
+		}
+	}
+	if got := fido2.Attrs["key_restriction_aaguids"]; got == "" {
+		t.Error("key_restriction_aaguids missing")
+	}
+	if got := fido2.Attrs["passkey_profile_ids"]; got != "00000000-0000-0000-0000-000000000001,e47a833c-5dfa-45f1-9471-bb0cf0eb425b" {
+		t.Errorf("passkey_profile_ids = %q", got)
+	}
+	// excludeTargets is an empty array on the wire for Fido2: absent, not a
+	// zero count masquerading as "measured empty".
+	if _, ok := fido2.Attrs["exclude_target_ids"]; ok {
+		t.Errorf("exclude_target_ids present, want absent for an empty excludeTargets array")
+	}
+}
+
+// TestCollectSmsTwinHasNoFido2Fields pins that the union-struct decoding
+// approach never leaks another subtype's fields onto an unrelated
+// configuration: Sms carries no isSelfServiceRegistrationAllowed on the
+// wire, so its twin must not claim one.
+func TestCollectSmsTwinHasNoFido2Fields(t *testing.T) {
+	g := &fakeGraph{body: livePolicy}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	var sms *telemetrytest.LogRecord
+	for _, r := range rec.LogRecords() {
+		if r.EventName == eventConfig && r.Attrs["id"] == "Sms" {
+			r := r
+			sms = &r
+			break
+		}
+	}
+	if sms == nil {
+		t.Fatal("no Sms configuration twin emitted")
+	}
+	for _, k := range []string{"is_self_service_registration_allowed", "is_attestation_enforced", "default_passkey_profile_id", "key_restriction_aaguids", "passkey_profile_ids", "is_office_phone_allowed", "pin_length"} {
+		if _, ok := sms.Attrs[k]; ok {
+			t.Errorf("sms twin unexpectedly carries %s=%q", k, sms.Attrs[k])
+		}
+	}
+	if got, want := sms.Attrs["method"], "sms"; got != want {
+		t.Errorf("method = %q, want %q", got, want)
+	}
+	if got, want := sms.Attrs["exclude_target_ids"], "c118ea33-87b7-4c8a-9bb3-e72b80bb75dd"; got != want {
+		t.Errorf("exclude_target_ids = %q, want %q", got, want)
+	}
+}
+
+// unknownSubtypePolicy is a SYNTHETIC (hand-built, not a live capture)
+// single-configuration policy body used only to exercise the unknown-subtype
+// fallback path deterministically. It stands in for any configuration type
+// this collector has not observed evidence for (Temporary Access Pass,
+// hardware/software OATH, email, custom/external...) — the point of the test
+// is the CODE PATH, not an assertion about what any particular real subtype's
+// wire shape is. Deliberately includes includeTargets and subtype-shaped
+// extra fields to prove they are dropped, not merely absent from the input.
+const unknownSubtypePolicy = `{
+  "id": "authenticationMethodsPolicy",
+  "authenticationMethodConfigurations": [
+    {
+      "@odata.type": "#microsoft.graph.temporaryAccessPassAuthenticationMethodConfiguration",
+      "id": "TemporaryAccessPass",
+      "state": "disabled",
+      "includeTargets": [{"id": "all_users", "targetType": "group"}],
+      "isUsableOnce": true
+    }
+  ]
+}`
+
+// TestCollectUnknownSubtypeEmitsOnlyGenericFields pins the load-bearing half
+// of the #317 decision: a configuration whose @odata.type is not in the
+// known-observed set gets id/state/odata_type and NOTHING else — not even
+// the include/exclude target arrays every KNOWN configuration carries —
+// because an unreviewed field on an unseen subtype could be sensitive.
+func TestCollectUnknownSubtypeEmitsOnlyGenericFields(t *testing.T) {
+	g := &fakeGraph{body: unknownSubtypePolicy}
+	rec := telemetrytest.New()
+
+	if err := New(g, nil).Collect(context.Background(), rec.Emitter(), nil); err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+
+	var tap *telemetrytest.LogRecord
+	for _, r := range rec.LogRecords() {
+		if r.EventName == eventConfig {
+			r := r
+			tap = &r
+			break
+		}
+	}
+	if tap == nil {
+		t.Fatal("no configuration twin emitted")
+	}
+	want := map[string]string{
+		"id":         "TemporaryAccessPass",
+		"state":      "disabled",
+		"odata_type": "#microsoft.graph.temporaryAccessPassAuthenticationMethodConfiguration",
+	}
+	if len(tap.Attrs) != len(want) {
+		t.Fatalf("got %d attrs %v, want exactly %v", len(tap.Attrs), tap.Attrs, want)
+	}
+	for k, v := range want {
+		if got := tap.Attrs[k]; got != v {
+			t.Errorf("attr %s = %q, want %q", k, got, v)
+		}
+	}
+}
+
 func TestCollectSurfacesFetchError(t *testing.T) {
 	g := &fakeGraph{err: errors.New("throttled")}
 	rec := telemetrytest.New()

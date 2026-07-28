@@ -17,5 +17,49 @@
       ]
     }
   ],
-  "Logs": null
+  "Logs": [
+    {
+      "EventName": "entra.auth_method_configuration",
+      "AttrKeys": [
+        "default_passkey_profile_id",
+        "exclude_target_count",
+        "exclude_target_ids",
+        "exclude_targets_truncated",
+        "id",
+        "include_target_count",
+        "include_target_ids",
+        "include_targets_truncated",
+        "is_attestation_enforced",
+        "is_office_phone_allowed",
+        "is_self_service_registration_allowed",
+        "is_software_oath_enabled",
+        "key_restriction_aaguids",
+        "key_restriction_aaguids_truncated",
+        "key_restriction_enforced",
+        "key_restriction_enforcement_type",
+        "method",
+        "odata_type",
+        "passkey_profile_ids",
+        "passkey_profile_ids_truncated",
+        "pin_length",
+        "standard_qr_code_lifetime_in_days",
+        "state"
+      ]
+    },
+    {
+      "EventName": "entra.auth_methods_policy",
+      "AttrKeys": [
+        "description",
+        "display_name",
+        "id",
+        "include_target_count",
+        "include_target_ids",
+        "include_targets_truncated",
+        "last_modified_date_time",
+        "policy_version",
+        "snooze_duration_in_days",
+        "state"
+      ]
+    }
+  ]
 }

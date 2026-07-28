@@ -1,0 +1,43 @@
+{
+  "Metrics": [
+    {
+      "Name": "m365.mailbox_usage.quota_status.mailboxes",
+      "Unit": "{mailbox}",
+      "Kind": "gauge",
+      "Description": "Count of mailboxes per Exchange quota-status bucket (Microsoft's own under_limit/warning_issued/send_prohibited/send_receive_prohibited/indeterminate vocabulary).",
+      "AttrKeys": [
+        "quota_state"
+      ]
+    },
+    {
+      "Name": "m365.mailbox_usage.storage_used_bytes",
+      "Unit": "By",
+      "Kind": "gauge",
+      "Description": "Tenant-wide Exchange mailbox storage used, in bytes.",
+      "AttrKeys": []
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.mailbox_usage",
+      "AttrKeys": [
+        "created_date",
+        "days_inactive",
+        "deleted_item_count",
+        "deleted_item_quota_bytes",
+        "deleted_item_size_bytes",
+        "display_name",
+        "has_archive",
+        "is_deleted",
+        "issue_warning_quota",
+        "item_count",
+        "last_activity_date",
+        "names_concealed",
+        "prohibit_send_quota",
+        "prohibit_send_receive_quota",
+        "storage_used_bytes",
+        "user_principal_name"
+      ]
+    }
+  ]
+}

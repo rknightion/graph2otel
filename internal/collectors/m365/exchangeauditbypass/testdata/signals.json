@@ -1,0 +1,36 @@
+{
+  "Metrics": [
+    {
+      "Name": "m365.exchange.audit_bypass.enabled_count",
+      "Unit": "{association}",
+      "Kind": "gauge",
+      "Description": "Exchange Online mailbox audit-bypass associations with AuditBypassEnabled=true — mailboxes producing NO mailbox audit records. The healthy steady state is zero. Per-mailbox identity is never a label here (#112); see the m365.exchange_audit_bypass log twin, emitted only for associations counted in this gauge.",
+      "AttrKeys": []
+    },
+    {
+      "Name": "m365.exchange.audit_bypass.examined",
+      "Unit": "{association}",
+      "Kind": "gauge",
+      "Description": "Exchange Online mailbox audit-bypass associations this poll classified true/false. Excludes rows where AuditBypassEnabled was absent from the wire (indeterminate, counted in neither gauge). Compare against m365.exchange.audit_bypass.enabled_count: a healthy tenant reads examined\u003e0, enabled_count=0 — examined=0 means the source call returned nothing, not that the tenant is clean.",
+      "AttrKeys": []
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.exchange_audit_bypass",
+      "AttrKeys": [
+        "distinguished_name",
+        "exchange_object_id",
+        "guid",
+        "id",
+        "identity",
+        "ingest_transport",
+        "is_valid",
+        "name",
+        "object_class",
+        "organization_id",
+        "when_changed_utc"
+      ]
+    }
+  ]
+}

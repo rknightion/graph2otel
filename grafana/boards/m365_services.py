@@ -26,6 +26,13 @@ SECTIONS = [
         "m365.exchange.accepted_domains",
         "m365.exchange.remote_domains",
         "m365.exchange.dkim.signing",
+        ("Mailbox audit bypass (audit-blinding: healthy is zero)",
+         ["m365.exchange.audit_bypass.enabled_count",
+          "m365.exchange.audit_bypass.examined"],
+         {"viz": "timeseries"}),
+        ("Mailbox quota status", ["m365.mailbox_usage.quota_status.mailboxes"],
+         {"viz": "timeseries"}),
+        "m365.mailbox_usage.storage_used_bytes",
     ]),
     ("SharePoint and OneDrive", [
         ("SharePoint tenant sharing posture", ["m365.sharepoint.sharing"],
