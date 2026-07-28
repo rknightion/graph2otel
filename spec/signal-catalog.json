@@ -1,5 +1,5 @@
 {
-  "package_count": 158,
+  "package_count": 160,
   "domains": [
     "defender",
     "entra",
@@ -4639,6 +4639,48 @@
       ]
     },
     {
+      "name": "m365.exchange.connection_filter.ip_allow_list_length",
+      "prometheus_name": "m365_exchange_connection_filter_ip_allow_list_length",
+      "unit": "{ip}",
+      "kind": "gauge",
+      "description": "The tenant's DEFAULT connection filter policy's IPAllowList entry count. Emitted as a measured 0 when empty (this project's healthy default), never omitted — a vanished series and a measured zero are different facts. Individual IPs are per-entity data and are never a label here (#112); see the m365.exchange_connection_filter_policy log twin.",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/m365/exchangeconnectionfilter"
+      ]
+    },
+    {
+      "name": "m365.exchange.connection_filter.ip_block_list_length",
+      "prometheus_name": "m365_exchange_connection_filter_ip_block_list_length",
+      "unit": "{ip}",
+      "kind": "gauge",
+      "description": "The tenant's DEFAULT connection filter policy's IPBlockList entry count. Emitted as a measured 0 when empty, never omitted. Individual IPs are per-entity data and are never a label here (#112); see the m365.exchange_connection_filter_policy log twin.",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/m365/exchangeconnectionfilter"
+      ]
+    },
+    {
+      "name": "m365.exchange.connection_filter.policies",
+      "prometheus_name": "m365_exchange_connection_filter_policies",
+      "unit": "{policy}",
+      "kind": "gauge",
+      "description": "Exchange Online connection filter policies by whether each is the tenant's default policy and whether Microsoft's dynamic safe list is enabled. Both dimensions are strict booleans; the policy NAME/identity and its IP lists live on the m365.exchange_connection_filter_policy log twin only, never here (#112).",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "enable_safe_list",
+        "is_default"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangeconnectionfilter"
+      ]
+    },
+    {
       "name": "m365.exchange.connectors",
       "prometheus_name": "m365_exchange_connectors",
       "unit": "{connector}",
@@ -4730,6 +4772,37 @@
       ],
       "packages": [
         "internal/collectors/m365/exchangeorgconfig"
+      ]
+    },
+    {
+      "name": "m365.exchange.outbound_spam.policies",
+      "prometheus_name": "m365_exchange_outbound_spam_policies",
+      "unit": "{policy}",
+      "kind": "gauge",
+      "description": "Exchange Online outbound spam filter policies by whether each is the tenant's default policy and whether it is enabled. Both dimensions are strict booleans; the policy NAME/identity lives on the m365.exchange_outbound_spam_policy log twin only, never here (#112).",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "enabled",
+        "is_default"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangeoutboundspam"
+      ]
+    },
+    {
+      "name": "m365.exchange.outbound_spam.recipient_limit",
+      "prometheus_name": "m365_exchange_outbound_spam_recipient_limit",
+      "unit": "{recipient}",
+      "kind": "gauge",
+      "description": "The tenant's DEFAULT outbound spam policy's three recipient-limit thresholds, keyed by limit (external_per_hour/internal_per_hour/per_day). Sourced from the default policy only, even when custom policies exist — see the package doc. Absent entirely when this poll returned no policy with is_default=true.",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "limit"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangeoutboundspam"
       ]
     },
     {
@@ -8254,6 +8327,34 @@
       ]
     },
     {
+      "event_name": "m365.exchange_connection_filter_policy",
+      "domain": "m365",
+      "attr_keys": [
+        "admin_display_name",
+        "arrays_truncated",
+        "directory_based_edge_block_mode",
+        "distinguished_name",
+        "enable_safe_list",
+        "exchange_object_id",
+        "guid",
+        "id",
+        "identity",
+        "ingest_transport",
+        "ip_allow_list",
+        "ip_allow_list_count",
+        "ip_block_list",
+        "ip_block_list_count",
+        "is_default",
+        "is_valid",
+        "name",
+        "organization_id",
+        "when_changed_utc"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangeconnectionfilter"
+      ]
+    },
+    {
       "event_name": "m365.exchange_connector",
       "domain": "m365",
       "attr_keys": [
@@ -8385,6 +8486,39 @@
       ],
       "packages": [
         "internal/collectors/m365/exchangeorgconfig"
+      ]
+    },
+    {
+      "event_name": "m365.exchange_outbound_spam_policy",
+      "domain": "m365",
+      "attr_keys": [
+        "action_when_threshold_reached",
+        "admin_display_name",
+        "auto_forwarding_mode",
+        "bcc_suspicious_outbound_additional_recipients",
+        "bcc_suspicious_outbound_mail",
+        "config_type",
+        "distinguished_name",
+        "enabled",
+        "exchange_object_id",
+        "guid",
+        "id",
+        "identity",
+        "ingest_transport",
+        "is_default",
+        "is_valid",
+        "name",
+        "notify_outbound_spam",
+        "notify_outbound_spam_recipients",
+        "organization_id",
+        "recipient_limit_external_per_hour",
+        "recipient_limit_internal_per_hour",
+        "recipient_limit_per_day",
+        "recommended_policy_type",
+        "when_changed_utc"
+      ],
+      "packages": [
+        "internal/collectors/m365/exchangeoutboundspam"
       ]
     },
     {

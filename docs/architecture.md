@@ -99,8 +99,8 @@ constructs them once per eligible tenant. There are **7 registration paths**:
 | EXO | `EXODeps` / `RegisterEXO` | `SnapshotCollector` | Exchange Online admin API |
 | Hunt | `HuntDeps` / `RegisterHunt` / `HuntAll` | `SnapshotCollector` | Microsoft Defender XDR advanced-hunting query API |
 
-The current registry contains **155 registration-path candidates** representing
-**152 logical collectors**. The difference is intentional: a logical signal can
+The current registry contains **157 registration-path candidates** representing
+**154 logical collectors**. The difference is intentional: a logical signal can
 have more than one mutually exclusive source candidate. `internal/collectordoc`
 walks every path and the generated collector reference is drift-gated. An
 eighth path is incomplete unless the census, `collectordoc.Rows` signature, and

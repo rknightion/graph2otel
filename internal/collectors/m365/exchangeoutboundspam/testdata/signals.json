@@ -1,0 +1,54 @@
+{
+  "Metrics": [
+    {
+      "Name": "m365.exchange.outbound_spam.policies",
+      "Unit": "{policy}",
+      "Kind": "gauge",
+      "Description": "Exchange Online outbound spam filter policies by whether each is the tenant's default policy and whether it is enabled. Both dimensions are strict booleans; the policy NAME/identity lives on the m365.exchange_outbound_spam_policy log twin only, never here (#112).",
+      "AttrKeys": [
+        "enabled",
+        "is_default"
+      ]
+    },
+    {
+      "Name": "m365.exchange.outbound_spam.recipient_limit",
+      "Unit": "{recipient}",
+      "Kind": "gauge",
+      "Description": "The tenant's DEFAULT outbound spam policy's three recipient-limit thresholds, keyed by limit (external_per_hour/internal_per_hour/per_day). Sourced from the default policy only, even when custom policies exist — see the package doc. Absent entirely when this poll returned no policy with is_default=true.",
+      "AttrKeys": [
+        "limit"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.exchange_outbound_spam_policy",
+      "AttrKeys": [
+        "action_when_threshold_reached",
+        "admin_display_name",
+        "auto_forwarding_mode",
+        "bcc_suspicious_outbound_additional_recipients",
+        "bcc_suspicious_outbound_mail",
+        "config_type",
+        "distinguished_name",
+        "enabled",
+        "exchange_object_id",
+        "guid",
+        "id",
+        "identity",
+        "ingest_transport",
+        "is_default",
+        "is_valid",
+        "name",
+        "notify_outbound_spam",
+        "notify_outbound_spam_recipients",
+        "organization_id",
+        "recipient_limit_external_per_hour",
+        "recipient_limit_internal_per_hour",
+        "recipient_limit_per_day",
+        "recommended_policy_type",
+        "when_changed_utc"
+      ]
+    }
+  ]
+}

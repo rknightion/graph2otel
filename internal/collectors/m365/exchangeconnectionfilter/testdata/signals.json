@@ -1,0 +1,54 @@
+{
+  "Metrics": [
+    {
+      "Name": "m365.exchange.connection_filter.ip_allow_list_length",
+      "Unit": "{ip}",
+      "Kind": "gauge",
+      "Description": "The tenant's DEFAULT connection filter policy's IPAllowList entry count. Emitted as a measured 0 when empty (this project's healthy default), never omitted — a vanished series and a measured zero are different facts. Individual IPs are per-entity data and are never a label here (#112); see the m365.exchange_connection_filter_policy log twin.",
+      "AttrKeys": []
+    },
+    {
+      "Name": "m365.exchange.connection_filter.ip_block_list_length",
+      "Unit": "{ip}",
+      "Kind": "gauge",
+      "Description": "The tenant's DEFAULT connection filter policy's IPBlockList entry count. Emitted as a measured 0 when empty, never omitted. Individual IPs are per-entity data and are never a label here (#112); see the m365.exchange_connection_filter_policy log twin.",
+      "AttrKeys": []
+    },
+    {
+      "Name": "m365.exchange.connection_filter.policies",
+      "Unit": "{policy}",
+      "Kind": "gauge",
+      "Description": "Exchange Online connection filter policies by whether each is the tenant's default policy and whether Microsoft's dynamic safe list is enabled. Both dimensions are strict booleans; the policy NAME/identity and its IP lists live on the m365.exchange_connection_filter_policy log twin only, never here (#112).",
+      "AttrKeys": [
+        "enable_safe_list",
+        "is_default"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.exchange_connection_filter_policy",
+      "AttrKeys": [
+        "admin_display_name",
+        "arrays_truncated",
+        "directory_based_edge_block_mode",
+        "distinguished_name",
+        "enable_safe_list",
+        "exchange_object_id",
+        "guid",
+        "id",
+        "identity",
+        "ingest_transport",
+        "ip_allow_list",
+        "ip_allow_list_count",
+        "ip_block_list",
+        "ip_block_list_count",
+        "is_default",
+        "is_valid",
+        "name",
+        "organization_id",
+        "when_changed_utc"
+      ]
+    }
+  ]
+}
