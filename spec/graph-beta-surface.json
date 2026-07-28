@@ -472,6 +472,35 @@
       ]
     },
     {
+      "package": "internal/collectors/entra/serviceactivity",
+      "collectors": [
+        "entra.service_activity"
+      ],
+      "operations": [
+        {
+          "path": "/reports/serviceActivity/getMetricsForMfaSignInSuccess(inclusiveIntervalStartDateTime={t0},exclusiveIntervalEndDateTime={t1},aggregationIntervalInMinutes={n})",
+          "resolve_as": "/reports/serviceActivity/getMetricsForMfaSignInSuccess",
+          "note": "one of 19 bound functions on graph.serviceActivity, every one returning Collection(graph.serviceActivityValueMetric). The parameters are stripped for resolution the same way aggregatedAppsDetails is: the EDM declares the bound function without the inline parameter list. Watching one function watches the shared return type, which is the thing a decoder can break on"
+        },
+        {
+          "path": "/reports/serviceActivity/getMetricsForNetworkAccessRemoteNetworkBranchesAlive(inclusiveIntervalStartDateTime={t0},exclusiveIntervalEndDateTime={t1},aggregationIntervalInMinutes={n})",
+          "resolve_as": "/reports/serviceActivity/getMetricsForNetworkAccessRemoteNetworkBranchesAlive",
+          "note": "the Global Secure Access half of the same surface, watched separately because it is a different bound function even though it shares the return type"
+        }
+      ]
+    },
+    {
+      "package": "internal/collectors/intune/featureupdatedevices",
+      "collectors": [
+        "intune.feature_update_devices"
+      ],
+      "operations": [
+        {
+          "path": "/deviceManagement/windowsFeatureUpdateProfiles"
+        }
+      ]
+    },
+    {
       "package": "internal/collectors/m365/unifiedaudit",
       "collectors": [
         "m365.unified_audit"

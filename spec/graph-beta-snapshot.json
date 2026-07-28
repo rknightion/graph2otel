@@ -367,6 +367,16 @@
       "resolution": "model"
     },
     {
+      "path": "/reports/serviceActivity/getMetricsForMfaSignInSuccess(inclusiveIntervalStartDateTime={t0},exclusiveIntervalEndDateTime={t1},aggregationIntervalInMinutes={n})",
+      "type": "microsoft.graph.serviceActivityValueMetric",
+      "resolution": "model"
+    },
+    {
+      "path": "/reports/serviceActivity/getMetricsForNetworkAccessRemoteNetworkBranchesAlive(inclusiveIntervalStartDateTime={t0},exclusiveIntervalEndDateTime={t1},aggregationIntervalInMinutes={n})",
+      "type": "microsoft.graph.serviceActivityValueMetric",
+      "resolution": "model"
+    },
+    {
       "path": "/reports/servicePrincipalSignInActivities",
       "type": "microsoft.graph.servicePrincipalSignInActivity",
       "resolution": "model"
@@ -3664,6 +3674,13 @@
         "notSecureCount": "Edm.Int32",
         "secureCount": "Edm.Int32",
         "unknownCount": "Edm.Int32"
+      }
+    },
+    "microsoft.graph.serviceActivityValueMetric": {
+      "kind": "ComplexType",
+      "properties": {
+        "intervalStartDateTime": "Edm.DateTimeOffset",
+        "value": "Edm.Int64"
       }
     },
     "microsoft.graph.servicePrincipalLockConfiguration": {

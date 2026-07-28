@@ -33,8 +33,8 @@ spec:
     tuning_required: "The values here are Microsoft's client-app names and have not been measured on this project's wire, so run the sign-in client-app hunt first to see which names your tenant emits and at what rate. Add status_error_code=`0` to narrow to SUCCESSFUL legacy sign-ins, which is the smaller and more urgent set; failed ones are mostly spray traffic and better handled as a trend than a page. If your tenant still has legitimate legacy clients this fires continuously and belongs on a dashboard, not a pager, until they are migrated."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-detect-legacy-auth-signin"
     __dashboardUid__: "graph2otel"
-    __panelId__: "102"
-    dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=102"
+    __panelId__: "110"
+    dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=110"
   expressions:
     A:
       model:

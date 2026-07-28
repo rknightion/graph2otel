@@ -99,6 +99,13 @@ SECTIONS = [
         "intune.driver_update.sync_staleness_seconds",
         "intune.driver_update_summary.devices",
         "intune.feature_update_summary.devices",
+        # #351. The summary above counts devices per policy and structurally
+        # cannot name one. These three are keyed by the MACHINE status columns,
+        # never the localized _loc twins, which change with the tenant's
+        # display language and would split one series into two.
+        "intune.feature_update_devices.states",
+        "intune.feature_update_devices.update_status",
+        "intune.feature_update_devices.alerts",
         "intune.feature_update_profile.eol_target",
         "intune.quality_update_summary.devices",
         "intune.quality_update_config.count",
@@ -175,6 +182,10 @@ SECTIONS = [
 ]
 
 LOGS = [
+    {"kind": "table", "event": "intune.feature_update_device",
+     "title": "Feature-update outcome per device (which device, which failure)",
+     "by": ["aggregate_state", "device_update_status"]},
+
     {"kind": "logs", "event": "intune.audit_event",
      "title": "Who changed what in Intune",
      "desc": "modifiedProperties NAMES are emitted; their old/new values never are — "

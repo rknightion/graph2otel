@@ -1,6 +1,25 @@
 {
   "Metrics": [
     {
+      "Name": "entra.access_reviews.decisions",
+      "Unit": "{decision}",
+      "Kind": "gauge",
+      "Description": "Entra access-review reviewer decisions, by decision and applied result. An instance whose decisions fetch failed contributes nothing this cycle, never a fabricated zero.",
+      "AttrKeys": [
+        "applied_result",
+        "decision"
+      ]
+    },
+    {
+      "Name": "entra.access_reviews.instances",
+      "Unit": "{instance}",
+      "Kind": "gauge",
+      "Description": "Entra access-review instances (recurrences), by instance status. A definition whose instances fetch failed is omitted this cycle, never counted as zero.",
+      "AttrKeys": [
+        "status"
+      ]
+    },
+    {
       "Name": "entra.access_reviews.total",
       "Unit": "{review}",
       "Kind": "gauge",
@@ -57,6 +76,45 @@
         "scope_query",
         "scope_resource_queries",
         "stage_count",
+        "status"
+      ]
+    },
+    {
+      "EventName": "entra.access_review_decision",
+      "AttrKeys": [
+        "applied_result",
+        "decision",
+        "decision_id",
+        "definition_id",
+        "display_name",
+        "instance_id",
+        "last_user_sign_in_date_time",
+        "principal_id",
+        "principal_link",
+        "principal_type",
+        "recommendation",
+        "resource_display_name",
+        "resource_id",
+        "resource_link",
+        "resource_type",
+        "user_principal_name"
+      ]
+    },
+    {
+      "EventName": "entra.access_review_instance",
+      "AttrKeys": [
+        "arrays_truncated",
+        "definition_id",
+        "end_date_time",
+        "fallback_reviewer_count",
+        "id",
+        "reviewer_count",
+        "reviewer_queries",
+        "scope_odata_type",
+        "scope_principal_queries",
+        "scope_query",
+        "scope_resource_queries",
+        "start_date_time",
         "status"
       ]
     }

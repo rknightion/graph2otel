@@ -103,6 +103,12 @@ SECTIONS = [
         ("PIM role policy requirements", ["entra.pim.role_policy.requirement"],
          {"viz": "table", "w": 12, "h": 8}),
         "entra.access_reviews.total",
+        # #319. The definition count says a review EXISTS; these two say whether
+        # anyone is doing it. decision x applied_result are separate labels on
+        # purpose: a decision can be Deny and still never have been applied,
+        # which is the "the review ran and changed nothing" case.
+        "entra.access_reviews.instances",
+        "entra.access_reviews.decisions",
         # Role DEFINITIONS (#320) — what roles exist and whether they are
         # built-in/enabled, independent of who holds them. Sits beside the
         # membership counts on purpose: a custom or disabled definition has no
@@ -149,6 +155,17 @@ SECTIONS = [
         "entra.risky_agents.total",
         "entra.signin.count",
     ]),
+    ("Service activity — measured tenant experience (Experimental, opt-in)", [
+        # #368. The counterpart to m365.service_health, which reports what
+        # MICROSOFT has DECLARED. These report what the tenant actually
+        # experienced, at 30-minute resolution, between declared incidents.
+        # Four metrics rather than one because the units differ and a
+        # mixed-unit sum would be meaningless.
+        "entra.service_activity.signins",
+        "entra.service_activity.network_access_apps",
+        "entra.service_activity.network_access_users",
+        "entra.service_activity.network_access_branches",
+    ]),
     ("Global Secure Access (beta, opt-in)", [
         "entra.gsa.onboarding_status",
         "entra.gsa.forwarding_profiles",
@@ -166,6 +183,13 @@ SECTIONS = [
 ]
 
 LOGS = [
+    {"kind": "table", "event": "entra.access_review_decision",
+     "title": "Access-review decisions — who is pending, and was it ever applied",
+     "desc": "An undecided decision carries a ZERO-GUID reviewedBy on the wire; graph2otel drops "
+             "it rather than publishing a phantom reviewer, so an absent reviewed_by_id means "
+             "nobody has acted.",
+     "by": ["decision", "applied_result"]},
+
     {"kind": "logs", "event": "entra.signin",
      "title": "Failed sign-ins — which user, which IP, which error",
      "filters": [f("status_error_code", "ne", "0")],

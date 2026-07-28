@@ -1,0 +1,53 @@
+{
+  "Metrics": [
+    {
+      "Name": "intune.feature_update_devices.alerts",
+      "Unit": "{device}",
+      "Kind": "gauge",
+      "Description": "Per-device Intune Windows feature-update latest alert code, by policy and alert message code.",
+      "AttrKeys": [
+        "latest_alert_message",
+        "policy_name"
+      ]
+    },
+    {
+      "Name": "intune.feature_update_devices.states",
+      "Unit": "{device}",
+      "Kind": "gauge",
+      "Description": "Per-device Intune Windows feature-update outcome, by policy and aggregate state.",
+      "AttrKeys": [
+        "aggregate_state",
+        "policy_name"
+      ]
+    },
+    {
+      "Name": "intune.feature_update_devices.update_status",
+      "Unit": "{device}",
+      "Kind": "gauge",
+      "Description": "Per-device Intune Windows feature-update current status code, by policy and device update status code.",
+      "AttrKeys": [
+        "device_update_status",
+        "policy_name"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "intune.feature_update_device",
+      "AttrKeys": [
+        "aggregate_state",
+        "aggregate_state_localized",
+        "device_id",
+        "device_name",
+        "device_update_status",
+        "device_update_status_localized",
+        "feature_update_version",
+        "ingest_transport",
+        "latest_alert_message",
+        "latest_alert_message_localized",
+        "policy_name",
+        "upn"
+      ]
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 {
-  "package_count": 170,
+  "package_count": 172,
   "domains": [
     "defender",
     "entra",
@@ -448,6 +448,37 @@
       ],
       "packages": [
         "internal/collectors/defender/vulnerabilities"
+      ]
+    },
+    {
+      "name": "entra.access_reviews.decisions",
+      "prometheus_name": "entra_access_reviews_decisions",
+      "unit": "{decision}",
+      "kind": "gauge",
+      "description": "Entra access-review reviewer decisions, by decision and applied result. An instance whose decisions fetch failed contributes nothing this cycle, never a fabricated zero.",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "applied_result",
+        "decision"
+      ],
+      "packages": [
+        "internal/collectors/entra/accessreviews"
+      ]
+    },
+    {
+      "name": "entra.access_reviews.instances",
+      "prometheus_name": "entra_access_reviews_instances",
+      "unit": "{instance}",
+      "kind": "gauge",
+      "description": "Entra access-review instances (recurrences), by instance status. A definition whose instances fetch failed is omitted this cycle, never counted as zero.",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/entra/accessreviews"
       ]
     },
     {
@@ -1669,6 +1700,70 @@
       "attr_keys": [],
       "packages": [
         "internal/collectors/entra/securescore"
+      ]
+    },
+    {
+      "name": "entra.service_activity.network_access_apps",
+      "prometheus_name": "entra_service_activity_network_access_apps",
+      "unit": "{app}",
+      "kind": "gauge",
+      "description": "Count of Global Secure Access app-policy evaluations in the latest complete 30-minute bucket, by activity (internet/private app policy, allowed/blocked).",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "activity",
+        "aggregation_interval_minutes"
+      ],
+      "packages": [
+        "internal/collectors/entra/serviceactivity"
+      ]
+    },
+    {
+      "name": "entra.service_activity.network_access_branches",
+      "prometheus_name": "entra_service_activity_network_access_branches",
+      "unit": "{branch}",
+      "kind": "gauge",
+      "description": "Count of Global Secure Access remote-network branches in the latest complete 30-minute bucket, by connectivity activity (alive, BGP/tunnel connected or disconnected).",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "activity",
+        "aggregation_interval_minutes"
+      ],
+      "packages": [
+        "internal/collectors/entra/serviceactivity"
+      ]
+    },
+    {
+      "name": "entra.service_activity.network_access_users",
+      "prometheus_name": "entra_service_activity_network_access_users",
+      "unit": "{user}",
+      "kind": "gauge",
+      "description": "Count of Global Secure Access user-policy evaluations in the latest complete 30-minute bucket, by activity (internet/private app policy, allowed/blocked).",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "activity",
+        "aggregation_interval_minutes"
+      ],
+      "packages": [
+        "internal/collectors/entra/serviceactivity"
+      ]
+    },
+    {
+      "name": "entra.service_activity.signins",
+      "prometheus_name": "entra_service_activity_signins",
+      "unit": "{signin}",
+      "kind": "gauge",
+      "description": "Count of tenant sign-ins in the latest complete 30-minute bucket, by activity (MFA success/failure, SAML, Conditional Access outcome). Beta M365 monitoring serviceActivity surface (#368) — measured sign-in experience, distinct from m365.service_health's declared incidents. See the package doc.",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "activity",
+        "aggregation_interval_minutes"
+      ],
+      "packages": [
+        "internal/collectors/entra/serviceactivity"
       ]
     },
     {
@@ -3981,6 +4076,54 @@
       ],
       "packages": [
         "internal/collectors/intune/epmelevationsbyuser"
+      ]
+    },
+    {
+      "name": "intune.feature_update_devices.alerts",
+      "prometheus_name": "intune_feature_update_devices_alerts",
+      "unit": "{device}",
+      "kind": "gauge",
+      "description": "Per-device Intune Windows feature-update latest alert code, by policy and alert message code.",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "latest_alert_message",
+        "policy_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/featureupdatedevices"
+      ]
+    },
+    {
+      "name": "intune.feature_update_devices.states",
+      "prometheus_name": "intune_feature_update_devices_states",
+      "unit": "{device}",
+      "kind": "gauge",
+      "description": "Per-device Intune Windows feature-update outcome, by policy and aggregate state.",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "aggregate_state",
+        "policy_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/featureupdatedevices"
+      ]
+    },
+    {
+      "name": "intune.feature_update_devices.update_status",
+      "prometheus_name": "intune_feature_update_devices_update_status",
+      "unit": "{device}",
+      "kind": "gauge",
+      "description": "Per-device Intune Windows feature-update current status code, by policy and device update status code.",
+      "additive": true,
+      "domain": "intune",
+      "attr_keys": [
+        "device_update_status",
+        "policy_name"
+      ],
+      "packages": [
+        "internal/collectors/intune/featureupdatedevices"
       ]
     },
     {
@@ -7022,6 +7165,53 @@
       ]
     },
     {
+      "event_name": "entra.access_review_decision",
+      "domain": "entra",
+      "attr_keys": [
+        "applied_result",
+        "decision",
+        "decision_id",
+        "definition_id",
+        "display_name",
+        "instance_id",
+        "last_user_sign_in_date_time",
+        "principal_id",
+        "principal_link",
+        "principal_type",
+        "recommendation",
+        "resource_display_name",
+        "resource_id",
+        "resource_link",
+        "resource_type",
+        "user_principal_name"
+      ],
+      "packages": [
+        "internal/collectors/entra/accessreviews"
+      ]
+    },
+    {
+      "event_name": "entra.access_review_instance",
+      "domain": "entra",
+      "attr_keys": [
+        "arrays_truncated",
+        "definition_id",
+        "end_date_time",
+        "fallback_reviewer_count",
+        "id",
+        "reviewer_count",
+        "reviewer_queries",
+        "scope_odata_type",
+        "scope_principal_queries",
+        "scope_query",
+        "scope_resource_queries",
+        "start_date_time",
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/entra/accessreviews"
+      ]
+    },
+    {
       "event_name": "entra.agent_blueprint",
       "domain": "entra",
       "attr_keys": [
@@ -8828,6 +9018,27 @@
       ],
       "packages": [
         "internal/collectors/intune/epmelevationsbyuser"
+      ]
+    },
+    {
+      "event_name": "intune.feature_update_device",
+      "domain": "intune",
+      "attr_keys": [
+        "aggregate_state",
+        "aggregate_state_localized",
+        "device_id",
+        "device_name",
+        "device_update_status",
+        "device_update_status_localized",
+        "feature_update_version",
+        "ingest_transport",
+        "latest_alert_message",
+        "latest_alert_message_localized",
+        "policy_name",
+        "upn"
+      ],
+      "packages": [
+        "internal/collectors/intune/featureupdatedevices"
       ]
     },
     {

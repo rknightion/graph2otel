@@ -23,34 +23,67 @@
 // the "an absent field is not a sentinel" failure this repo has already shipped
 // once.
 //
-// # The instances decision: OUT of scope, and this collector says so
+// # The instances decision: RESOLVED (#319) — the non-inline route works
 //
-// A definition's `instances` are its recurrences, and per-instance state — how
-// much has been reviewed, what was decided — is what would actually answer "is
-// this review being done". They are NOT collected here, for a reason that is a
-// wire fact rather than a preference:
+// #260 left the definition inventory as an explicit residual: the INLINE
+// `instances` nav property on the definitions list came back an EMPTY ARRAY on
+// both v1.0 and beta for a definition whose status was InProgress
+// (live-measured 2026-07-24), so its length was never a fact about the review.
+// That inline-array finding still holds and this collector still never reads
+// `instances` off the definitions response.
 //
-//   - The list response DOES include an `instances` nav property, expanded, with
-//     its own @odata.context — and on both v1.0 and beta it came back as an EMPTY
-//     ARRAY for a definition whose status is InProgress (live-measured
-//     2026-07-24). So the inline array is not merely incomplete, it is empty for
-//     precisely the review whose progress a reader would want. Its length is
-//     therefore not a fact about the review, and this collector never emits it as
-//     an instance count.
-//   - Real instance state needs a separate GET per definition
-//     (/definitions/{id}/instances), and decision-level detail a further GET per
-//     instance — an N x M fan-out on a workload that is rate-limited and sends no
-//     Retry-After. That is a different collector with a different cost profile.
+// What has changed (live-probed 2026-07-28, read-only, `AccessReview.Read.All`,
+// no new scope) is that the NON-inline, separately-fetched route answers fully:
 //
-// The consequence is stated rather than papered over: **this collector cannot
-// tell you whether a review is being completed.** It reports that a review
-// exists, what it is scoped to, who is meant to review it, how often it recurs,
-// and what its status field says — nothing about progress. There is deliberately
-// no "stuck InProgress" or staleness warning, because the data that would make
-// such a warning honest is not fetched. #260's shape note asked for exactly this
-// choice to be explicit.
+//	GET .../definitions/{id}/instances                    -> 200
+//	GET .../definitions/{id}/instances/{iid}/decisions    -> 200
 //
-// # Severity ladder
+// both around 0.2s per request. This collector now fans out into both: one
+// `instances` fetch per definition, then one `decisions` fetch per instance —
+// bounded by maxDefinitions/maxInstancesPerDefinition/maxDecisionsPerInstance
+// below — and reports the bounded aggregate (entra.access_reviews.instances,
+// entra.access_reviews.decisions) plus one twin per instance
+// (entra.access_review_instance) and one per decision
+// (entra.access_review_decision). This is what finally answers "is this review
+// being completed" — the definition inventory alone never could.
+//
+// contactedReviewers (`.../instances/{iid}/contactedReviewers`) was ALSO
+// probed live and answers 200, but is deliberately NOT fetched here: nothing in
+// #319 named a metric or a twin attribute for it, so fetching it would be a
+// request this collector pays for and then discards. Left for a future issue
+// if a concrete signal is specified.
+//
+// # Three sentinels on a decision record (live-measured 2026-07-28, #319)
+//
+//   - `reviewedBy`/`appliedBy` arrive as a FULLY POPULATED object whose `id` is
+//     the zero GUID (`00000000-0000-0000-0000-000000000000`) on an undecided
+//     decision — not null, not absent. Treated as ABSENT: the id (and, for
+//     reviewedBy, the display name) are omitted rather than mapped through,
+//     because a real id would publish a reviewer that does not exist.
+//   - `reviewedDateTime`/`appliedDateTime` are JSON `null` on an undecided
+//     decision — omitted, never zero-stamped.
+//   - `principal.lastUserSignInDateTime` is an EMPTY STRING when unknown, never
+//     null — a presence (non-nil) check would miss it; telemetry.SetStr's own
+//     empty-string omission is what actually protects this one.
+//
+// # Severity ladder — decisions and instances both now judge staleness
+//
+// Unlike the definition twin (still purely descriptive — see below), the
+// instance and decision twins DO judge: an expired instance or an
+// expired-and-never-reviewed decision is exactly the failure #319 exists to
+// surface, and by this point real per-instance/per-decision state is fetched,
+// so the judgement is honest.
+//
+//   - Decision twin: WARN when the owning instance's `endDateTime` is in the
+//     past AND `decision` is still "NotReviewed" — the review expired without
+//     being done. INFO otherwise.
+//   - Instance twin: WARN when `status` is "InProgress" AND `endDateTime` is in
+//     the past. INFO otherwise.
+//
+// "Now" comes from the Collector's `now` field (defaults to time.Now, overridden
+// in tests) so severity is never wall-clock-dependent in a fixture.
+//
+// # Definition severity ladder (unchanged from #260)
 //
 //   - WARN — `settings.mailNotificationsEnabled` and
 //     `settings.reminderNotificationsEnabled` are BOTH false. Reviewers are never
@@ -65,21 +98,50 @@
 // because otherwise the WARN rung would silently stop working the day Graph
 // stopped sending settings.
 //
-// # wirecheck: `scope_type` watched, `status` deliberately NOT
+// # Independent degradation and the #240 rule
+//
+// Each definition's `instances` fetch, and each instance's `decisions` fetch,
+// can fail without losing the rest of the poll (errors.Join, same pattern the
+// rest of this package already uses). A definition whose instances fetch fails
+// is OMITTED from entra.access_reviews.instances entirely for that cycle — it
+// is never counted as zero, because a failed read is a gap, not a measurement
+// (#240). The same holds one level down: an instance whose decisions fetch
+// fails still gets its instance twin (instance-level facts are known), but
+// contributes nothing to entra.access_reviews.decisions and gets no decision
+// twins that cycle.
+//
+// # Bounding the fan-out
+//
+// maxDefinitions/maxInstancesPerDefinition/maxDecisionsPerInstance (below) cap
+// the fan-out breadth. A cap that truncates is logged, and where a twin exists
+// to carry it also stamps semconv.AttrArraysTruncated:
+//
+//   - maxDecisionsPerInstance stamps the OWNING instance twin — "how many
+//     decisions we processed for this instance" is a fact about that instance.
+//   - maxInstancesPerDefinition has no single owning instance, so every
+//     SURVIVING instance twin under the affected definition is stamped: each
+//     one is a member of a set this collector knows was cut short.
+//   - maxDefinitions is logged only. It bounds which DEFINITIONS get an
+//     instances fetch at all, before any instance twin exists to carry the
+//     mark, and the existing definition twin is frozen (see the top of this
+//     file) — there is no entity left to stamp.
+//
+// # wirecheck: `scope_type` watched, three new closed enums NOT
 //
 // `scope` is polymorphic and its @odata.type is read as the discriminator (as is
 // `settings.applyActions`), never decoded structurally. The watched Enum is
 // derived from the exact set of discriminators this collector extracts queries
 // from, so it can only fire on a hole in THIS collector's mapping — never on
-// correct data (#234's rule).
+// correct data (#234's rule). The same scope-reading code and Enum are reused
+// for an instance's scope: it is the identical polymorphic shape.
 //
-// `status` is left UNWATCHED, and that is a recorded evidence gap rather than an
-// oversight. Exactly one value has ever been observed on the wire —
-// "InProgress", on one tenant, once. One observed value is not a value set, and
-// #234 is explicit that an Enum is declared only from evidence in the repo or a
-// live sample, never from Microsoft's documentation, because a watchdog that
-// fires on correct data is worse than no watchdog. Declare it when a second
-// value has been seen on the wire, and not before.
+// `status` (definition and instance), `decision`, `applied_result` and
+// `recommendation` are all left UNWATCHED, for the same #234 reason: every
+// value seen so far ("InProgress"; "NotReviewed"; "New"; "Deny"/"Approve") comes
+// from ONE tenant's one review instance. A closed Enum needs evidence that the
+// full value SET is known, and one tenant's sample — however many distinct
+// values it happens to contain — is not that. Declare wirecheck coverage once a
+// second tenant (or a value outside this set) has been seen live, not before.
 package accessreviews
 
 import (
@@ -113,12 +175,59 @@ const metricReviews = "entra.access_reviews.total"
 // eventReview is the per-definition log twin (#114).
 const eventReview = "entra.access_review"
 
+// metricInstances counts access-review INSTANCES (a definition's recurrences)
+// by status (#319). Bounded by maxDefinitions x maxInstancesPerDefinition, a
+// fan-out breadth this collector itself caps.
+const metricInstances = "entra.access_reviews.instances"
+
+// metricDecisions counts reviewer DECISIONS by decision x applied_result
+// (#319) — both closed Graph enums. Deliberately not also broken out by
+// recommendation: that would be a third label answering a question a LogQL
+// `count by` over the twin already answers, tripling the series for it.
+const metricDecisions = "entra.access_reviews.decisions"
+
+// eventInstance is the per-instance log twin (#114, #319).
+const eventInstance = "entra.access_review_instance"
+
+// eventDecision is the per-decision log twin (#114, #319).
+const eventDecision = "entra.access_review_decision"
+
 // defaultBaseURL is the Graph v1.0 root — see the package doc on why this is
 // not beta.
 const defaultBaseURL = "https://graph.microsoft.com/v1.0"
 
 // definitionsPath lists the tenant's access-review definitions.
 const definitionsPath = "/identityGovernance/accessReviews/definitions"
+
+// zeroGUID is the sentinel Graph sends for reviewedBy/appliedBy on an
+// undecided decision: a FULLY POPULATED identity object whose id is all
+// zeroes rather than a null object or an absent key (live-measured
+// 2026-07-28, #319). Treated as absent — see the package doc's sentinel
+// section.
+const zeroGUID = "00000000-0000-0000-0000-000000000000"
+
+// The fan-out bounds for the instances/decisions walk (#319). Each is a
+// breadth cap on requests fired, chosen against the live-measured ~0.2s cost
+// per request (definitions, instances and decisions endpoints alike):
+//
+//   - maxDefinitions caps how many definitions get an instances fetch at all.
+//     200 definitions x 0.2s = 40s worst case for this layer alone — far more
+//     than any tenant's review-definition count (governance config, not
+//     tenant-size-shaped), while still bounding a pathological tenant.
+//   - maxInstancesPerDefinition caps how many instances of ONE definition get a
+//     decisions fetch. 50 x 0.2s = 10s worst case per definition — an
+//     absoluteMonthly review keeps at most ~4 open instances a year, so 50 is
+//     over a decade of headroom.
+//   - maxDecisionsPerInstance caps how many decision records ONE instance's
+//     (already-paginated) decisions response contributes as twins. Unlike the
+//     two above, this does not cost an extra request per unit — it bounds
+//     memory/twin volume on a review scoped to a very large principal set.
+//     5000 covers a large-tenant "review every user" instance with headroom.
+const (
+	maxDefinitions            = 200
+	maxInstancesPerDefinition = 50
+	maxDecisionsPerInstance   = 5000
+)
 
 // fieldSettings names the `settings` block in wirecheck findings. It is a wire
 // field name, not an emitted attribute key, so it is a local const rather than a
@@ -229,12 +338,72 @@ type recurrence struct {
 	} `json:"range"`
 }
 
-// Collector polls the tenant's access-review definitions.
+// accessReviewInstance is one recurrence of a definition (#319). Scope and
+// reviewers reuse the exact same polymorphic shapes the definition already
+// declares — Graph returns them identically on both endpoints.
+type accessReviewInstance struct {
+	ID                string          `json:"id"`
+	StartDateTime     string          `json:"startDateTime"`
+	EndDateTime       string          `json:"endDateTime"`
+	Status            string          `json:"status"`
+	Scope             *scope          `json:"scope"`
+	Reviewers         []reviewerScope `json:"reviewers"`
+	FallbackReviewers []reviewerScope `json:"fallbackReviewers"`
+}
+
+// accessReviewDecision is one reviewer decision on one principal within one
+// instance (#319). ReviewedDateTime/AppliedDateTime are pointers because they
+// arrive as JSON null on an undecided decision — a plain string would collapse
+// "null" and "unparseable" into the same empty value; a pointer keeps "the
+// wire sent null" honest and unambiguous to omit.
+type accessReviewDecision struct {
+	ID               string             `json:"id"`
+	ReviewedDateTime *string            `json:"reviewedDateTime"`
+	Decision         string             `json:"decision"`
+	Justification    string             `json:"justification"`
+	AppliedDateTime  *string            `json:"appliedDateTime"`
+	ApplyResult      string             `json:"applyResult"`
+	Recommendation   string             `json:"recommendation"`
+	PrincipalLink    string             `json:"principalLink"`
+	ResourceLink     string             `json:"resourceLink"`
+	ReviewedBy       *userIdentity      `json:"reviewedBy"`
+	AppliedBy        *userIdentity      `json:"appliedBy"`
+	Resource         *decisionResource  `json:"resource"`
+	Principal        *decisionPrincipal `json:"principal"`
+}
+
+// decisionResource is the access being reviewed (a directory role, in the
+// live sample).
+type decisionResource struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"displayName"`
+	Type        string `json:"type"`
+}
+
+// decisionPrincipal is the reviewed principal. LastUserSignInDateTime is an
+// EMPTY STRING (never null) when unknown — telemetry.SetStr's own
+// empty-string omission is what makes that safe to map without a special case
+// (see the package doc's sentinel section).
+type decisionPrincipal struct {
+	ODataType              string `json:"@odata.type"`
+	ID                     string `json:"id"`
+	DisplayName            string `json:"displayName"`
+	Type                   string `json:"type"`
+	UserPrincipalName      string `json:"userPrincipalName"`
+	LastUserSignInDateTime string `json:"lastUserSignInDateTime"`
+}
+
+// Collector polls the tenant's access-review definitions, instances and
+// decisions.
 type Collector struct {
 	g       collectors.GraphClient
 	baseURL string
 	logger  *slog.Logger
 	watch   *wirecheck.Reporter
+	// now returns the instant instance/decision expiry is judged against.
+	// Defaults to time.Now; tests override it for a deterministic severity
+	// ladder — see the package doc's "never wall-clock-dependent" note.
+	now func() time.Time
 }
 
 // New builds the access-reviews collector. A nil logger falls back to the slog
@@ -243,7 +412,7 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Collector{g: g, baseURL: defaultBaseURL, logger: logger, watch: wirecheck.New(collectorName, logger)}
+	return &Collector{g: g, baseURL: defaultBaseURL, logger: logger, watch: wirecheck.New(collectorName, logger), now: time.Now}
 }
 
 // Name implements collector.Collector.
@@ -271,6 +440,12 @@ func (c *Collector) RequiredPermissions() []string {
 // one fetch: the bounded per-status gauge and one twin per definition. A 403 is a
 // graceful info-skip (no governance feature, or the scope not consented); a bad
 // row is skipped with its error aggregated rather than taking the poll down.
+//
+// It then fans out into each definition's instances, and each instance's
+// decisions (#319), bounded by maxDefinitions/maxInstancesPerDefinition/
+// maxDecisionsPerInstance and independently degrading per definition/instance
+// — see the package doc for the #240 "a failed read is a gap, never a zero"
+// rule this loop follows throughout.
 func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+definitionsPath, nil, outcomes)
 	if err != nil {
@@ -286,6 +461,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *
 
 	byStatus := map[string]int64{}
 	var errs []error
+	var definitionIDs []string
 	for _, raw := range raws {
 		var d accessReviewScheduleDefinition
 		if err := json.Unmarshal(raw, &d); err != nil {
@@ -301,6 +477,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *
 		byStatus[d.Status]++
 		e.LogEvent(c.twin(e, d))
 		entraoutcome.Emitted(outcomes, 1)
+		definitionIDs = append(definitionIDs, d.ID)
 	}
 
 	points := make([]telemetry.GaugePoint, 0, len(byStatus))
@@ -313,7 +490,180 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *
 	e.GaugeSnapshot(metricReviews, "{review}",
 		"Entra access-review definitions configured for the tenant, by review status.", points)
 
+	fanoutIDs, defsTruncated := capSlice(definitionIDs, maxDefinitions)
+	if defsTruncated {
+		c.logger.Warn("access reviews: instances fan-out capped",
+			"collector", collectorName, "limit", maxDefinitions, "definitions", len(definitionIDs))
+	}
+
+	instanceCounts := map[string]int64{}
+	decisionCounts := map[[2]string]int64{}
+	for _, definitionID := range fanoutIDs {
+		if err := c.collectInstances(ctx, e, outcomes, definitionID, instanceCounts, decisionCounts); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	instancePoints := make([]telemetry.GaugePoint, 0, len(instanceCounts))
+	for status, n := range instanceCounts {
+		instancePoints = append(instancePoints, telemetry.GaugePoint{
+			Value: float64(n),
+			Attrs: telemetry.Attrs{semconv.AttrStatus: status},
+		})
+	}
+	e.GaugeSnapshot(metricInstances, "{instance}",
+		"Entra access-review instances (recurrences), by instance status. A definition whose instances "+
+			"fetch failed is omitted this cycle, never counted as zero.", instancePoints)
+
+	decisionPoints := make([]telemetry.GaugePoint, 0, len(decisionCounts))
+	for k, n := range decisionCounts {
+		decisionPoints = append(decisionPoints, telemetry.GaugePoint{
+			Value: float64(n),
+			Attrs: telemetry.Attrs{semconv.AttrDecision: k[0], semconv.AttrAppliedResult: k[1]},
+		})
+	}
+	e.GaugeSnapshot(metricDecisions, "{decision}",
+		"Entra access-review reviewer decisions, by decision and applied result. An instance whose "+
+			"decisions fetch failed contributes nothing this cycle, never a fabricated zero.", decisionPoints)
+
 	return errors.Join(errs...)
+}
+
+// collectInstances fetches one definition's instances, bounds them at
+// maxInstancesPerDefinition, and for each surviving instance fetches its
+// decisions and emits the instance twin. A fetch failure here means the
+// definition contributes NOTHING to instanceCounts/decisionCounts this cycle
+// (#240) — it is returned as an error so the caller's outcome/error surface
+// sees it, but does not stop sibling definitions from being processed.
+func (c *Collector) collectInstances(
+	ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder,
+	definitionID string, instanceCounts map[string]int64, decisionCounts map[[2]string]int64,
+) error {
+	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+definitionsPath+"/"+definitionID+"/instances", nil, outcomes)
+	if err != nil {
+		c.logger.Warn("access reviews: instances fetch failed, omitting definition from the instances gauge this cycle",
+			"collector", collectorName, "definition_id", definitionID, "error", err)
+		entraoutcome.SourceError(outcomes)
+		return fmt.Errorf("fetch instances for definition %s: %w", definitionID, err)
+	}
+
+	var instances []accessReviewInstance
+	for _, raw := range raws {
+		var inst accessReviewInstance
+		if err := json.Unmarshal(raw, &inst); err != nil {
+			entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
+			c.logger.Warn("access reviews: skipping unparseable instance",
+				"collector", collectorName, "definition_id", definitionID, "error", err)
+			continue
+		}
+		if inst.ID == "" {
+			entraoutcome.Dropped(outcomes, 1, recordoutcome.CauseMappingError)
+			continue
+		}
+		instances = append(instances, inst)
+	}
+
+	capped, truncated := capSlice(instances, maxInstancesPerDefinition)
+	if truncated {
+		c.logger.Warn("access reviews: instances truncated for definition",
+			"collector", collectorName, "definition_id", definitionID,
+			"limit", maxInstancesPerDefinition, "total", len(instances))
+	}
+
+	var errs []error
+	for _, inst := range capped {
+		decisionsTruncated, err := c.collectDecisions(ctx, e, outcomes, definitionID, inst, decisionCounts)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		instanceCounts[inst.Status]++
+		// Every survivor is stamped when the INSTANCE LIST itself was
+		// truncated (no single owning instance for that fact), OR'd with this
+		// one instance's own decisions truncation.
+		e.LogEvent(c.instanceTwin(e, definitionID, inst, truncated || decisionsTruncated))
+		entraoutcome.Emitted(outcomes, 1)
+	}
+	return errors.Join(errs...)
+}
+
+// collectDecisions fetches one instance's decisions, bounds them at
+// maxDecisionsPerInstance, and emits one decision twin per surviving row. A
+// fetch failure means the instance contributes nothing to decisionCounts this
+// cycle (#240) but the instance twin is still emitted by the caller — the
+// instance's own facts are known even when its decisions are not.
+func (c *Collector) collectDecisions(
+	ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder,
+	definitionID string, inst accessReviewInstance, decisionCounts map[[2]string]int64,
+) (truncated bool, err error) {
+	raws, err := collectors.GetAllValuesRecorded(
+		ctx, c.g, c.baseURL+definitionsPath+"/"+definitionID+"/instances/"+inst.ID+"/decisions", nil, outcomes)
+	if err != nil {
+		c.logger.Warn("access reviews: decisions fetch failed, instance emitted without decisions this cycle",
+			"collector", collectorName, "definition_id", definitionID, "instance_id", inst.ID, "error", err)
+		entraoutcome.SourceError(outcomes)
+		return false, fmt.Errorf("fetch decisions for instance %s: %w", inst.ID, err)
+	}
+
+	capped, truncated := capSlice(raws, maxDecisionsPerInstance)
+	if truncated {
+		c.logger.Warn("access reviews: decisions truncated for instance",
+			"collector", collectorName, "instance_id", inst.ID,
+			"limit", maxDecisionsPerInstance, "total", len(raws))
+	}
+
+	instanceExpired := c.isExpired(inst.EndDateTime)
+	for _, raw := range capped {
+		var dec accessReviewDecision
+		if err := json.Unmarshal(raw, &dec); err != nil {
+			entraoutcome.Errored(outcomes, 1, recordoutcome.CauseDecodeError)
+			c.logger.Warn("access reviews: skipping unparseable decision",
+				"collector", collectorName, "instance_id", inst.ID, "error", err)
+			continue
+		}
+		if dec.ID == "" {
+			entraoutcome.Dropped(outcomes, 1, recordoutcome.CauseMappingError)
+			continue
+		}
+		decisionCounts[[2]string{dec.Decision, dec.ApplyResult}]++
+		e.LogEvent(decisionTwin(definitionID, inst.ID, dec, instanceExpired))
+		entraoutcome.Emitted(outcomes, 1)
+	}
+	return truncated, nil
+}
+
+// isExpired reports whether a Graph timestamp is unparseable-safe-false or in
+// the past relative to c.now. An unparseable timestamp is treated as "not
+// expired" — a WARN must never fire from a value this collector could not
+// even read.
+func (c *Collector) isExpired(raw string) bool {
+	t, ok := parseGraphTime(raw)
+	return ok && t.Before(c.now())
+}
+
+// parseGraphTime parses a Graph RFC3339 timestamp, trying the fractional-second
+// form first (the shape every live sample here uses) and falling back to bare
+// RFC3339.
+func parseGraphTime(raw string) (time.Time, bool) {
+	if raw == "" {
+		return time.Time{}, false
+	}
+	if t, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+		return t, true
+	}
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		return t, true
+	}
+	return time.Time{}, false
+}
+
+// capSlice caps vals at maxLen, reporting whether it had to. Never mutates
+// vals — the returned slice on the truncated path is a fresh subslice header
+// (agentgovernance's capStrings pattern, generalized).
+func capSlice[T any](vals []T, maxLen int) (out []T, truncated bool) {
+	if len(vals) > maxLen {
+		return vals[:maxLen:maxLen], true
+	}
+	return vals, false
 }
 
 // twin renders one definition as a log record. It takes the emitter because the
@@ -460,6 +810,131 @@ func label(d accessReviewScheduleDefinition) string {
 		return d.DisplayName
 	}
 	return d.ID
+}
+
+// instanceTwin renders one instance as a log record (#319). It takes the
+// emitter and definitionID for the same reason twin does: the reused scope
+// discriminator is checked here, and definitionID is the twin's foreign key to
+// its parent. truncated marks semconv.AttrArraysTruncated on this twin when
+// EITHER this instance's own decisions were capped, OR the definition's
+// instance list itself was capped and this instance survived the cut (see the
+// package doc's bounding section for why the latter has no single owning
+// entity of its own).
+func (c *Collector) instanceTwin(e telemetry.Emitter, definitionID string, inst accessReviewInstance, truncated bool) telemetry.Event {
+	attrs := telemetry.Attrs{}
+	telemetry.SetStr(attrs, semconv.AttrId, inst.ID)
+	telemetry.SetStr(attrs, semconv.AttrDefinitionId, definitionID)
+	telemetry.SetStr(attrs, semconv.AttrStatus, inst.Status)
+	telemetry.SetStr(attrs, semconv.AttrStartDateTime, inst.StartDateTime)
+	telemetry.SetStr(attrs, semconv.AttrEndDateTime, inst.EndDateTime)
+
+	c.scopeAttrs(e, attrs, inst.Scope)
+
+	telemetry.SetStrs(attrs, semconv.AttrReviewerQueries, queries(inst.Reviewers))
+	attrs[semconv.AttrReviewerCount] = int64(len(inst.Reviewers))
+	attrs[semconv.AttrFallbackReviewerCount] = int64(len(inst.FallbackReviewers))
+
+	if truncated {
+		attrs[semconv.AttrArraysTruncated] = true
+	}
+
+	sev := telemetry.SeverityInfo
+	if inst.Status == "InProgress" && c.isExpired(inst.EndDateTime) {
+		sev = telemetry.SeverityWarn
+	}
+
+	return telemetry.Event{
+		Name:     eventInstance,
+		Body:     fmt.Sprintf("access review instance %s (definition %s): status=%s reviewers=%d", inst.ID, definitionID, inst.Status, len(inst.Reviewers)),
+		Severity: sev,
+		Attrs:    attrs,
+	}
+}
+
+// decisionTwin renders one reviewer decision as a log record (#319).
+// instanceExpired is passed in rather than recomputed so every decision under
+// one instance judges expiry against the exact same clock read.
+func decisionTwin(definitionID, instanceID string, dec accessReviewDecision, instanceExpired bool) telemetry.Event {
+	attrs := telemetry.Attrs{}
+	telemetry.SetStr(attrs, semconv.AttrDecisionId, dec.ID)
+	telemetry.SetStr(attrs, semconv.AttrInstanceId, instanceID)
+	telemetry.SetStr(attrs, semconv.AttrDefinitionId, definitionID)
+	telemetry.SetStr(attrs, semconv.AttrDecision, dec.Decision)
+	telemetry.SetStr(attrs, semconv.AttrAppliedResult, dec.ApplyResult)
+	telemetry.SetStr(attrs, semconv.AttrRecommendation, dec.Recommendation)
+	telemetry.SetStr(attrs, semconv.AttrJustification, dec.Justification)
+	telemetry.SetStr(attrs, semconv.AttrPrincipalLink, dec.PrincipalLink)
+	telemetry.SetStr(attrs, semconv.AttrResourceLink, dec.ResourceLink)
+
+	if dec.ReviewedDateTime != nil {
+		telemetry.SetStr(attrs, semconv.AttrReviewedDateTime, *dec.ReviewedDateTime)
+	}
+	if dec.AppliedDateTime != nil {
+		telemetry.SetStr(attrs, semconv.AttrAppliedDateTime, *dec.AppliedDateTime)
+	}
+
+	// The zero-GUID sentinel: a fully populated but meaningless identity on an
+	// undecided decision. Treated as absent — see the package doc.
+	setRealIdentity(attrs, semconv.AttrReviewedById, semconv.AttrReviewedByDisplayName, dec.ReviewedBy)
+	setRealIdentity(attrs, semconv.AttrAppliedById, "", dec.AppliedBy)
+
+	if dec.Resource != nil {
+		telemetry.SetStr(attrs, semconv.AttrResourceId, dec.Resource.ID)
+		telemetry.SetStr(attrs, semconv.AttrResourceDisplayName, dec.Resource.DisplayName)
+		telemetry.SetStr(attrs, semconv.AttrResourceType, dec.Resource.Type)
+	}
+
+	principalName := ""
+	if dec.Principal != nil {
+		principalName = dec.Principal.DisplayName
+		telemetry.SetStr(attrs, semconv.AttrPrincipalId, dec.Principal.ID)
+		telemetry.SetStr(attrs, semconv.AttrDisplayName, dec.Principal.DisplayName)
+		telemetry.SetStr(attrs, semconv.AttrPrincipalType, dec.Principal.Type)
+		telemetry.SetStr(attrs, semconv.AttrUserPrincipalName, dec.Principal.UserPrincipalName)
+		// LastUserSignInDateTime arrives as an EMPTY STRING when unknown, never
+		// null — SetStr's own empty-string omission is what makes this safe.
+		telemetry.SetStr(attrs, semconv.AttrLastUserSignInDateTime, dec.Principal.LastUserSignInDateTime)
+	}
+
+	sev := telemetry.SeverityInfo
+	if dec.Decision == "NotReviewed" && instanceExpired {
+		sev = telemetry.SeverityWarn
+	}
+
+	return telemetry.Event{
+		Name: eventDecision,
+		Body: fmt.Sprintf("access review decision %s (instance %s): principal=%s decision=%s applied_result=%s",
+			dec.ID, instanceID, displayOrID(principalName, dec.Principal), dec.Decision, dec.ApplyResult),
+		Severity: sev,
+		Attrs:    attrs,
+	}
+}
+
+// setRealIdentity stamps id (and, when nameKey is non-empty, displayName) from
+// u, unless u is nil or u.ID is the zero-GUID sentinel — in which case nothing
+// is stamped at all. Reused for both reviewedBy (which gets a display name
+// attribute) and appliedBy (which, per the frozen semconv contract, does not).
+func setRealIdentity(attrs telemetry.Attrs, idKey, nameKey string, u *userIdentity) {
+	if u == nil || u.ID == "" || u.ID == zeroGUID {
+		return
+	}
+	telemetry.SetStr(attrs, idKey, u.ID)
+	if nameKey != "" {
+		telemetry.SetStr(attrs, nameKey, u.DisplayName)
+	}
+}
+
+// displayOrID is the human handle for a decision's body line: the principal's
+// display name when known, else its id, else "unknown" when Graph sent no
+// principal object at all.
+func displayOrID(name string, p *decisionPrincipal) string {
+	if name != "" {
+		return name
+	}
+	if p != nil && p.ID != "" {
+		return p.ID
+	}
+	return "unknown"
 }
 
 // isForbidden reports whether err is a Graph 403 — the signal that this tenant

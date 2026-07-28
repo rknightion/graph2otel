@@ -33,8 +33,8 @@ spec:
     tuning_required: "Needs entra.graph_activity, which arrives over blob ingest. The threshold of 10 in 5 minutes is a starting point from one small tenant; a tenant with more automation will need a higher one. Measure your own per-app 403 baseline before enabling."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-detect-graph-403-burst"
     __dashboardUid__: "graph2otel"
-    __panelId__: "95"
-    dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=95"
+    __panelId__: "102"
+    dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=102"
   expressions:
     A:
       model:

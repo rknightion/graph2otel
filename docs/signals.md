@@ -78,10 +78,10 @@ attribute set, and the Graph API permission scope each collector needs), see
 
 ## Shipped collector and ingest surface
 
-The generated registry currently exposes **164 logical collectors** through
+The generated registry currently exposes **166 logical collectors** through
 **7 registration paths**: Snapshot, Window, Blob, O365, MDCA, EXO, and Hunt. The generated
 [collector reference](collectors.md) is authoritative; the registration-path inventory
-contains 167 registration-path candidates because some logical collectors can register
+contains 169 registration-path candidates because some logical collectors can register
 through more than one transport.
 
 Reusable ingest-engine shapes handle the event and export transports:
@@ -172,11 +172,48 @@ metadata and the `{service_name="graph2otel"} | event_name=…` form above stays
 
 Two caveats worth knowing before you build on it. The attribute is emitted by graph2otel
 unconditionally, but it only becomes a *stream label* once it is added to the tenant's Loki
-**structured-metadata promotion** list — a Grafana Cloud-side setting, not a repo change,
-and the promotion slots are shared with other exporters pushing to the same tenant. Until
-then it is queryable as structured metadata like any other attribute. And the value is
-derived from the event name alone, so it tells you which product area produced a record —
-not which transport carried it. `ingest_transport` is still the attribute for that.
+**structured-metadata promotion** list — a Grafana Cloud-side setting, not a repo change.
+Until then it is queryable as structured metadata like any other attribute. **As of
+2026-07-28 it is not promoted:** a live `series` read for `{service_name="graph2otel"}`
+returns only `service_name` plus Loki's internal `__stream_shard__` / `__time_shard__`, so
+the single hot stream is still being auto-sharded. And the value is derived from the event
+name alone, so it tells you which product area produced a record — not which transport
+carried it. `ingest_transport` is still the attribute for that.
+
+### Why no *log attribute* can ever be promoted, and what promotion would cost (#404)
+
+This trips people up in a specific way, so it is worth stating flatly: **you cannot promote
+`event_name`, `ingest_transport` or `tenant_id`, and no tenant setting will let you.**
+
+Loki's `otlp_config` exposes the `index_label` action **only** under `resource_attributes`.
+`scope_attributes` and `log_attributes` accept `structured_metadata` and `drop`, and nothing
+else. So a dimension has to be on the OTLP **resource** before promotion is even a question,
+and `graph2otel.event_domain` is the only graph2otel-specific attribute that is — which is
+exactly why it exists.
+
+Hoisting another dimension onto the resource is not a rename. An OTLP resource binds to a
+`LoggerProvider`, not to a record, so **N distinct values means N `LoggerProvider`s**. That
+is the shape `internal/telemetry` already carries for `event_domain`: one provider per
+domain, all sharing a single OTLP exporter, with per-processor queue depth reduced in step
+with the provider count and a shutdown path that closes the shared exporter exactly once,
+last. Any future promotion candidate pays the same price, and the value set must be closed
+and code-defined — `event_name` was rejected for this at 73 distinct values over 6h, which
+would mint ~73 tiny streams for ~23 MB/day and grow with every collector added.
+
+**The slot question, settled — an earlier framing here was wrong.** This page previously said
+the promotion slots are *shared with other exporters pushing to the same tenant*, implying
+graph2otel competes with `opnsense-exporter` and `tailscale2otel` for a pool of ~15. That is
+**not** what the 15 is: `max_label_names_per_series` is the maximum number of label names on a
+**single stream**, enforced by the distributor at ingest. A graph2otel stream never carries an
+`opnsense_*` label, so the limits were never shared and each exporter independently gets its
+own budget. The genuinely shared resource is the tenant's promoted-attribute *list*, which is
+capped well above what three exporters need — adding entries is additive and cannot affect
+another exporter's streams, but it is one list, so edits must be GET-merge-PUT rather than a
+blind partial write.
+
+Promotion buys **query scan only**. Loki bills on volume, so it does not reduce ingest cost at
+all. Verify it with a `series` read, not a log query: structured metadata cannot appear in
+`series` output, so presence there is the proof.
 
 ### An unset identifier filter matches everything, not nothing
 

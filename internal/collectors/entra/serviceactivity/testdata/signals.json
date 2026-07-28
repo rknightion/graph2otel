@@ -1,0 +1,45 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.service_activity.network_access_apps",
+      "Unit": "{app}",
+      "Kind": "gauge",
+      "Description": "Count of Global Secure Access app-policy evaluations in the latest complete 30-minute bucket, by activity (internet/private app policy, allowed/blocked).",
+      "AttrKeys": [
+        "activity",
+        "aggregation_interval_minutes"
+      ]
+    },
+    {
+      "Name": "entra.service_activity.network_access_branches",
+      "Unit": "{branch}",
+      "Kind": "gauge",
+      "Description": "Count of Global Secure Access remote-network branches in the latest complete 30-minute bucket, by connectivity activity (alive, BGP/tunnel connected or disconnected).",
+      "AttrKeys": [
+        "activity",
+        "aggregation_interval_minutes"
+      ]
+    },
+    {
+      "Name": "entra.service_activity.network_access_users",
+      "Unit": "{user}",
+      "Kind": "gauge",
+      "Description": "Count of Global Secure Access user-policy evaluations in the latest complete 30-minute bucket, by activity (internet/private app policy, allowed/blocked).",
+      "AttrKeys": [
+        "activity",
+        "aggregation_interval_minutes"
+      ]
+    },
+    {
+      "Name": "entra.service_activity.signins",
+      "Unit": "{signin}",
+      "Kind": "gauge",
+      "Description": "Count of tenant sign-ins in the latest complete 30-minute bucket, by activity (MFA success/failure, SAML, Conditional Access outcome). Beta M365 monitoring serviceActivity surface (#368) — measured sign-in experience, distinct from m365.service_health's declared incidents. See the package doc.",
+      "AttrKeys": [
+        "activity",
+        "aggregation_interval_minutes"
+      ]
+    }
+  ],
+  "Logs": null
+}
