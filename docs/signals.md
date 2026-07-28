@@ -78,10 +78,10 @@ attribute set, and the Graph API permission scope each collector needs), see
 
 ## Shipped collector and ingest surface
 
-The generated registry currently exposes **150 logical collectors** through
+The generated registry currently exposes **152 logical collectors** through
 **7 registration paths**: Snapshot, Window, Blob, O365, MDCA, EXO, and Hunt. The generated
 [collector reference](collectors.md) is authoritative; the registration-path inventory
-contains 153 registration-path candidates because some logical collectors can register
+contains 155 registration-path candidates because some logical collectors can register
 through more than one transport.
 
 Reusable ingest-engine shapes handle the event and export transports:
@@ -156,6 +156,27 @@ resource attributes) are stream labels. This changes how you write LogQL:
   after the selector. This is the form the shipped alert rules (e.g. the `entra-security-g2o`
   group) and any dashboard log panel must use — building a Grafana alert on
   `{event_name="…"}` is the single most common way to get a rule that silently never fires.
+
+### `graph2otel.event_domain` — the one coarse dimension on the logs *resource*
+
+Because Loki only promotes **resource** attributes to stream labels, graph2otel puts exactly
+one coarse partition there: `graph2otel.event_domain`, the first segment of the event name.
+The closed value set is `defender`, `entra`, `graph2otel`, `intune`, `m365`, `mdca`,
+`purview`, plus an `other` bucket that nothing catalogued should ever land in (a test
+asserts that against `spec/signal-catalog.json`). It rides the **logs** resource only —
+never metrics, where a resource attribute would fork every series for no query benefit.
+
+This exists so one hot log stream can be split into single-digit streams rather than
+shard on write. It does **not** change how you query: `event_name` is still structured
+metadata and the `{service_name="graph2otel"} | event_name=…` form above stays correct.
+
+Two caveats worth knowing before you build on it. The attribute is emitted by graph2otel
+unconditionally, but it only becomes a *stream label* once it is added to the tenant's Loki
+**structured-metadata promotion** list — a Grafana Cloud-side setting, not a repo change,
+and the promotion slots are shared with other exporters pushing to the same tenant. Until
+then it is queryable as structured metadata like any other attribute. And the value is
+derived from the event name alone, so it tells you which product area produced a record —
+not which transport carried it. `ingest_transport` is still the attribute for that.
 
 ### An unset identifier filter matches everything, not nothing
 

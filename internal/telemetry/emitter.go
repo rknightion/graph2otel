@@ -15,8 +15,20 @@ import (
 
 // otelEmitter implements Emitter on top of the OpenTelemetry Go SDK.
 type otelEmitter struct {
-	meter  metric.Meter
+	meter metric.Meter
+
+	// logger is the log sink used when no per-domain routing table is wired
+	// (NewEmitter, and every test that builds an emitter over a single
+	// logger). It is also the fallback if loggers somehow lacks the domain a
+	// record resolves to — a record is never dropped for want of a route.
 	logger log.Logger
+
+	// loggers routes a record to a logger by its event domain (#402). Each
+	// logger comes from a different sdklog.LoggerProvider whose resource
+	// carries that domain, which is the only way a resource attribute can vary
+	// per record in the OTEL Go SDK — see eventdomain.go. Nil means "no
+	// routing", which is the single-logger behavior above.
+	loggers map[string]log.Logger
 
 	// card counts distinct attribute combinations per source metric for the
 	// graph2otel.series.active self-metric. Nil disables tracking; Observe is
@@ -293,8 +305,25 @@ func (e *otelEmitter) LogEvent(ev Event) {
 		r.SetEventName(ev.Name)
 	}
 	r.AddAttributes(toLogKV(ev.Attrs)...)
-	e.logger.Emit(context.Background(), r)
+	e.loggerFor(ev.Name).Emit(context.Background(), r)
 	e.logRecords.Add(1)
+}
+
+// loggerFor resolves the per-domain logger for an event name, falling back to
+// the unrouted logger. The fallback matters: it keeps every single-logger
+// construction path (NewEmitter and the tests built on it) working unchanged,
+// and it guarantees a record is emitted even if the routing table is somehow
+// missing the domain EventDomain resolved to. Losing the domain LABEL is a
+// degraded query experience; losing the RECORD is data loss, and only one of
+// those is acceptable.
+func (e *otelEmitter) loggerFor(eventName string) log.Logger {
+	if e.loggers == nil {
+		return e.logger
+	}
+	if l, ok := e.loggers[EventDomain(eventName)]; ok {
+		return l
+	}
+	return e.logger
 }
 
 func toLogSeverity(s Severity) log.Severity {

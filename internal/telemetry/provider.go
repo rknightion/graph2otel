@@ -113,11 +113,22 @@ type Options struct {
 	StdoutWriter io.Writer
 }
 
-// Provider owns the OTEL MeterProvider and LoggerProvider and exposes a single
-// Emitter for collectors. Shutdown flushes and releases both.
+// Provider owns the OTEL MeterProvider and the per-domain LoggerProviders, and
+// exposes a single Emitter for collectors. Shutdown flushes and releases all of
+// them.
 type Provider struct {
 	mp *sdkmetric.MeterProvider
-	lp *sdklog.LoggerProvider
+	// lps is one LoggerProvider per telemetry.EventDomains() value (#402).
+	// There is deliberately no single "the" LoggerProvider: a record's
+	// graph2otel.event_domain rides its RESOURCE, the SDK stamps a resource
+	// from the provider that created the logger, and sdklog.Record has no
+	// resource setter — so varying the attribute per record means varying the
+	// provider per record. See eventdomain.go.
+	lps map[string]*sdklog.LoggerProvider
+	// sharedLogExp is the one exporter every domain provider writes through.
+	// Provider.Shutdown closes it explicitly, because the per-provider
+	// shutdowns deliberately do not — see sharedLogExporter.
+	sharedLogExp *sharedLogExporter
 	// transport is the process-wide post-compression payload/retry tracker.
 	// It is separate from delivery: delivery observes one SDK exporter callback
 	// after all internal retries, while transport observes the attempts within it.
@@ -270,24 +281,23 @@ func newProvider(
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExp, sdkmetric.WithInterval(interval))),
 	)
 	mp := sdkmetric.NewMeterProvider(mpOpts...)
-	lp := sdklog.NewLoggerProvider(
-		sdklog.WithResource(logRes),
-		sdklog.WithProcessor(sdklog.NewBatchProcessor(logExp)),
-	)
+	lps, loggers, sharedLogExp := newDomainLoggerProviders(logRes, logExp)
 
 	var card *CardinalityTracker
 	if opts.SelfObsEnabled {
 		card = NewCardinalityTrackerForLimit(opts.Limits.PerMetric)
 	}
 
-	emitter := newOtelEmitter(mp.Meter(scopeName), lp.Logger(scopeName), card)
+	emitter := newOtelEmitter(mp.Meter(scopeName), loggers[EventDomainOther], card)
+	emitter.loggers = loggers
 	limiter := NewLimiter(opts.Limits)
 	volume := &VolumeTracker{}
 	now := time.Now()
 
 	return &Provider{
 		mp:             mp,
-		lp:             lp,
+		lps:            lps,
+		sharedLogExp:   sharedLogExp,
 		transport:      transport,
 		delivery:       delivery,
 		emitter:        emitter,
@@ -405,8 +415,26 @@ func (p *Provider) Throughput() Throughput { return p.emitter.Throughput() }
 func (p *Provider) Cardinality() *CardinalityTracker { return p.card }
 
 // Shutdown flushes and stops the metric and log pipelines.
+//
+// EVERY domain provider is shut down, not just the busiest: each owns its own
+// BatchProcessor and therefore its own queue, so skipping one silently discards
+// whatever it had buffered at exit. Errors are joined rather than
+// short-circuited for the same reason — one provider failing to flush must not
+// stop the others from trying.
 func (p *Provider) Shutdown(ctx context.Context) error {
-	return errors.Join(p.mp.Shutdown(ctx), p.lp.Shutdown(ctx))
+	errs := make([]error, 0, len(p.lps)+1)
+	errs = append(errs, p.mp.Shutdown(ctx))
+	for _, d := range EventDomains() {
+		if lp, ok := p.lps[d]; ok {
+			errs = append(errs, lp.Shutdown(ctx))
+		}
+	}
+	// Last, and only now: the shared exporter. Closing it any earlier would
+	// discard whatever the not-yet-drained providers still hold.
+	if p.sharedLogExp != nil {
+		errs = append(errs, p.sharedLogExp.closeShared(ctx))
+	}
+	return errors.Join(errs...)
 }
 
 // buildResource builds the OTEL resource. includeServiceVersion controls
