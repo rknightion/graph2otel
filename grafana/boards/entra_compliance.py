@@ -116,6 +116,26 @@ SECTIONS = [
         ("Role definitions by built-in / enabled",
          ["entra.role_definitions.definitions"], {"viz": "timeseries"}),
     ]),
+    ("Directory recoverability", [
+        # #334. Age is the first panel, not the count, because that is the
+        # signal: retention holds 7 daily snapshots, so the count sits flat at
+        # 7 on a healthy tenant and says nothing, while the newest-snapshot age
+        # is what climbs when the backup service stops taking them. A missing
+        # age series means no snapshot exists at all — worse than a large one,
+        # and deliberately NOT rendered as zero.
+        ("Newest snapshot age",
+         ["entra.directory_recovery.newest_snapshot_age"], {"viz": "timeseries"}),
+        ("Retained snapshots",
+         ["entra.directory_recovery.snapshots"], {"viz": "timeseries"}),
+        # Both job series are panelled. The total is flat at 0 on a tenant
+        # nobody has ever run a restore on, which is the point: it distinguishes
+        # "no job has ever run" from "the collector stopped reporting", and the
+        # by-status breakdown is empty in that same steady state.
+        ("Recovery jobs",
+         ["entra.directory_recovery.jobs"], {"viz": "timeseries"}),
+        ("Recovery jobs by status",
+         ["entra.directory_recovery.jobs_by_status"], {"viz": "timeseries"}),
+    ]),
     ("Agent ID governance", [
         # #333. without_owner / without_sponsor get their own single-stat
         # panels rather than living only inside the joint gauge: "an agent

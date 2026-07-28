@@ -33,8 +33,8 @@ spec:
     tuning_required: "The filter is two terms because a negative label filter also matches a record that carries no action_result at all: LogQL treats a missing structured-metadata key as the empty string, so the presence term `action_result=~`.+`` is what keeps this from firing on every remediation record. Run the post-delivery hunt to see which result values your tenant emits and how often a non-success one is a transient retry rather than a real miss. Needs the Defender advanced-hunting blob ingest configured; without it the stream is absent, not clean."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-detect-mail-remediation-failed"
     __dashboardUid__: "graph2otel"
-    __panelId__: "278"
-    dashboard_path: "/d/graph2otel?dtab=Defender&viewPanel=278"
+    __panelId__: "283"
+    dashboard_path: "/d/graph2otel?dtab=Defender&viewPanel=283"
   expressions:
     A:
       model:

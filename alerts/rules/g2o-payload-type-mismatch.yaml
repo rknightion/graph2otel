@@ -32,8 +32,8 @@ spec:
     description: "A source-controlled optional field arrived with a different JSON type. The otherwise-usable record was still emitted. Paused initially until the tenant's normal payload-shape baseline is established; labels never contain field values."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-payload-type-mismatch"
     __dashboardUid__: "graph2otel"
-    __panelId__: "432"
-    dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=432"
+    __panelId__: "437"
+    dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=437"
   expressions:
     A:
       model:

@@ -1,0 +1,62 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.directory_recovery.jobs",
+      "Unit": "{job}",
+      "Kind": "gauge",
+      "Description": "Total count of Entra directory recovery jobs.",
+      "AttrKeys": []
+    },
+    {
+      "Name": "entra.directory_recovery.jobs_by_status",
+      "Unit": "{job}",
+      "Kind": "gauge",
+      "Description": "Count of Entra directory recovery jobs, per status.",
+      "AttrKeys": [
+        "status"
+      ]
+    },
+    {
+      "Name": "entra.directory_recovery.newest_snapshot_age",
+      "Unit": "s",
+      "Kind": "gauge",
+      "Description": "Age of the newest Entra directory recovery snapshot.",
+      "AttrKeys": []
+    },
+    {
+      "Name": "entra.directory_recovery.snapshots",
+      "Unit": "{snapshot}",
+      "Kind": "gauge",
+      "Description": "Count of retained Entra directory recovery snapshots.",
+      "AttrKeys": []
+    },
+    {
+      "Name": "graph2otel.api.unexpected",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
+      "AttrKeys": [
+        "collector",
+        "field",
+        "kind"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "entra.directory_recovery_job",
+      "AttrKeys": [
+        "id",
+        "status"
+      ]
+    },
+    {
+      "EventName": "entra.directory_recovery_snapshot",
+      "AttrKeys": [
+        "created_date_time",
+        "id",
+        "snapshot_age_seconds"
+      ]
+    }
+  ]
+}

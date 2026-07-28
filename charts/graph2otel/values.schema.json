@@ -52,6 +52,7 @@
                 "entra.devices",
                 "entra.directory_audits",
                 "entra.directory_counts",
+                "entra.directory_recovery",
                 "entra.domains",
                 "entra.graph_activity",
                 "entra.graph_notifications",

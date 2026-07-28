@@ -33,8 +33,8 @@ spec:
     tuning_required: "The endpoint answers with real detections even on a tenant without Workload Identities Premium, live-measured, so absence of data here is genuinely absence of detections rather than a licence wall. It is usually silent, which makes the threshold of zero plausible and unmeasured at the same time: run the workload-identity risk hunt over 90 days, and if it returns nothing, keep the rule paused until you have confirmed the stream works by synthesising one detection."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-detect-workload-identity-risk"
     __dashboardUid__: "graph2otel"
-    __panelId__: "87"
-    dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=87"
+    __panelId__: "92"
+    dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=92"
   expressions:
     A:
       model:

@@ -53,6 +53,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/devices"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/directoryaudits"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/directorycounts"
+	_ "github.com/rknightion/graph2otel/internal/collectors/entra/directoryrecovery"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/domains"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/graphactivity"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/graphnotifications"

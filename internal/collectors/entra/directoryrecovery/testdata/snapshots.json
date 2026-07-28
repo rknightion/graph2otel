@@ -1,0 +1,33 @@
+{
+  "@context": "https://graph.microsoft.com/v1.0/$metadata#directory/recovery/snapshots",
+  "value": [
+    {
+      "id": "MTc4NTE4OTYwMA==",
+      "createdDateTime": "2026-07-27T22:00:00Z"
+    },
+    {
+      "id": "MTc4NTEwMzIwMA==",
+      "createdDateTime": "2026-07-26T22:00:00Z"
+    },
+    {
+      "id": "MTc4NTAxNjgwMA==",
+      "createdDateTime": "2026-07-25T22:00:00Z"
+    },
+    {
+      "id": "MTc4NDkzMDQwMA==",
+      "createdDateTime": "2026-07-24T22:00:00Z"
+    },
+    {
+      "id": "MTc4NDg0NDAwMA==",
+      "createdDateTime": "2026-07-23T22:00:00Z"
+    },
+    {
+      "id": "MTc4NDc1NzYwMA==",
+      "createdDateTime": "2026-07-22T22:00:00Z"
+    },
+    {
+      "id": "MTc4NDY3MTIwMA==",
+      "createdDateTime": "2026-07-21T22:00:00Z"
+    }
+  ]
+}

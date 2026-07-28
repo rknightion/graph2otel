@@ -33,8 +33,8 @@ spec:
     description: "compliant / total intune_compliance_devices is below 0.9 for tenant {{ $labels.tenant_id }} for 30m. The `and >= 5` fleet-size guard suppresses the ratio on tiny fleets where one non-compliant device swings the percentage. The runbook covers the false-positive notes."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-intune-compliance-ratio-low"
     __dashboardUid__: "graph2otel"
-    __panelId__: "136"
-    dashboard_path: "/d/graph2otel?dtab=Intune&viewPanel=136"
+    __panelId__: "141"
+    dashboard_path: "/d/graph2otel?dtab=Intune&viewPanel=141"
   expressions:
     A:
       model:

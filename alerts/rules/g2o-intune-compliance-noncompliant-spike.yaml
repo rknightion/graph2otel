@@ -33,8 +33,8 @@ spec:
     description: "Companion to g2o-intune-compliance-ratio-low: catches a sharp swing even when the absolute ratio hasn't crossed 90% yet (e.g. a large compliant fleet with a sudden policy regression). Paused by default — the 1h/10pp thresholds are unvalidated against real fleet churn."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-intune-compliance-noncompliant-spike"
     __dashboardUid__: "graph2otel"
-    __panelId__: "136"
-    dashboard_path: "/d/graph2otel?dtab=Intune&viewPanel=136"
+    __panelId__: "141"
+    dashboard_path: "/d/graph2otel?dtab=Intune&viewPanel=141"
   expressions:
     A:
       model:

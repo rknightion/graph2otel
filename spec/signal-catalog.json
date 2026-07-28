@@ -1,5 +1,5 @@
 {
-  "package_count": 173,
+  "package_count": 174,
   "domains": [
     "defender",
     "entra",
@@ -946,6 +946,60 @@
       "attr_keys": [],
       "packages": [
         "internal/collectors/entra/organization"
+      ]
+    },
+    {
+      "name": "entra.directory_recovery.jobs",
+      "prometheus_name": "entra_directory_recovery_jobs",
+      "unit": "{job}",
+      "kind": "gauge",
+      "description": "Total count of Entra directory recovery jobs.",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/directoryrecovery"
+      ]
+    },
+    {
+      "name": "entra.directory_recovery.jobs_by_status",
+      "prometheus_name": "entra_directory_recovery_jobs_by_status",
+      "unit": "{job}",
+      "kind": "gauge",
+      "description": "Count of Entra directory recovery jobs, per status.",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/entra/directoryrecovery"
+      ]
+    },
+    {
+      "name": "entra.directory_recovery.newest_snapshot_age",
+      "prometheus_name": "entra_directory_recovery_newest_snapshot_age_seconds",
+      "unit": "s",
+      "kind": "gauge",
+      "description": "Age of the newest Entra directory recovery snapshot.",
+      "additive": false,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/directoryrecovery"
+      ]
+    },
+    {
+      "name": "entra.directory_recovery.snapshots",
+      "prometheus_name": "entra_directory_recovery_snapshots",
+      "unit": "{snapshot}",
+      "kind": "gauge",
+      "description": "Count of retained Entra directory recovery snapshots.",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/directoryrecovery"
       ]
     },
     {
@@ -1958,6 +2012,7 @@
         "internal/collectors/defender/quarantine",
         "internal/collectors/entra/accessreviews",
         "internal/collectors/entra/conditionalaccess",
+        "internal/collectors/entra/directoryrecovery",
         "internal/collectors/entra/recommendations",
         "internal/collectors/entra/risk",
         "internal/collectors/entra/riskyagents",
@@ -7677,6 +7732,29 @@
       ],
       "packages": [
         "internal/collectors/entra/directoryaudits"
+      ]
+    },
+    {
+      "event_name": "entra.directory_recovery_job",
+      "domain": "entra",
+      "attr_keys": [
+        "id",
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/entra/directoryrecovery"
+      ]
+    },
+    {
+      "event_name": "entra.directory_recovery_snapshot",
+      "domain": "entra",
+      "attr_keys": [
+        "created_date_time",
+        "id",
+        "snapshot_age_seconds"
+      ],
+      "packages": [
+        "internal/collectors/entra/directoryrecovery"
       ]
     },
     {
