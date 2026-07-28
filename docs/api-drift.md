@@ -23,7 +23,7 @@ tool is beta-specific except the default `metadata_url`.
 
 ## Coverage
 
-26 packages, 28 collectors, 79 beta operations. The authoritative list is
+27 packages, 29 collectors, 81 beta operations. The authoritative list is
 `spec/graph-beta-surface.json`; `TestBetaDriftDocNamesEveryWatchedCollector` fails if a
 collector listed there stops being named below.
 
@@ -33,7 +33,10 @@ collector listed there stops being named below.
 | Intune | `intune.apple_tokens`, `intune.autopilot`, `intune.autopilot_events`, `intune.certificates`, `intune.cloud_pki`, `intune.connectors`, `intune.device_encryption`, `intune.endpoint_analytics`, `intune.gpo_analytics`, `intune.hardware_inventory`, `intune.remediation_run_states`, `intune.scripts`, `intune.settings_catalog`, `intune.updates`, `intune.windows_updates` |
 | M365 | `m365.teams`, `m365.unified_audit` |
 | Purview | `purview.dlp_policies` |
+| MDCA | `mdca.cloud_discovery` |
 
+Note that the two MDCA collectors sit on opposite sides of this line, and the domain name
+is the only thing they share. `mdca.cloud_discovery` is watched: it is ordinary Graph beta.
 Not covered, and not a gap in this canary: `mdca.discovery_parse` reaches the legacy
 Defender for Cloud Apps portal API, which publishes no machine-readable schema; the
 `defender.*` and blob-transport collectors read Azure Storage blobs, whose envelope shape

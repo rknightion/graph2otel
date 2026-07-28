@@ -386,6 +386,12 @@ var sections = []section{
 	// rather than the blob ones — its endpoint and role are not a container and
 	// a Storage role.
 	{"Defender", KindSnapshot, "Defender — metrics (snapshot collectors)"},
+	// MDCA reaches two entirely different services that happen to share a domain
+	// name (#361): mdca.discovery_parse polls the legacy portal API with a static
+	// token, while mdca.cloud_discovery is ordinary Graph beta. They are separated
+	// by kind here rather than by transport because that is what the table columns
+	// key off, but a reader comparing the two rows should not assume one endpoint.
+	{"Defender for Cloud Apps", KindSnapshot, "Defender for Cloud Apps — metrics (snapshot collectors)"},
 	{"Defender for Cloud Apps", KindWindow, "Defender for Cloud Apps — logs (window collectors)"},
 	{"Self-observability", KindSnapshot, "Self-observability — metrics (snapshot collectors)"},
 }

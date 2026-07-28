@@ -1,0 +1,67 @@
+{
+  "Metrics": [
+    {
+      "Name": "m365.collaboration_activity.actions",
+      "Unit": "{action}",
+      "Kind": "gauge",
+      "Description": "Sum, across all users, of each workload's collaboration action counts for the report period.",
+      "AttrKeys": [
+        "action",
+        "workload"
+      ]
+    },
+    {
+      "Name": "m365.collaboration_activity.shared_externally",
+      "Unit": "{file}",
+      "Kind": "gauge",
+      "Description": "Sum, across all users, of files shared externally — the alertable external-sharing signal, as its own series so it needs no aggregation over the actions gauge.",
+      "AttrKeys": [
+        "workload"
+      ]
+    },
+    {
+      "Name": "m365.collaboration_activity.users",
+      "Unit": "{user}",
+      "Kind": "gauge",
+      "Description": "Count of licensed users per (workload, derived activity_state) bucket: active (activity within the report window), inactive (activity outside it), never_active (no Last Activity Date on record).",
+      "AttrKeys": [
+        "activity_state",
+        "workload"
+      ]
+    },
+    {
+      "Name": "m365.collaboration_activity.users.deleted",
+      "Unit": "{user}",
+      "Kind": "gauge",
+      "Description": "Count of users marked deleted in the workload's usage report.",
+      "AttrKeys": [
+        "workload"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.collaboration_activity_user",
+      "AttrKeys": [
+        "assigned_products",
+        "call_count",
+        "files_shared_externally_count",
+        "files_shared_internally_count",
+        "files_synced_count",
+        "files_viewed_or_edited_count",
+        "is_deleted",
+        "last_activity_date",
+        "meetings_attended_count",
+        "meetings_organized_count",
+        "pages_visited_count",
+        "private_chat_message_count",
+        "report_period",
+        "report_refresh_date",
+        "team_chat_message_count",
+        "user_id",
+        "user_principal_name",
+        "workload"
+      ]
+    }
+  ]
+}

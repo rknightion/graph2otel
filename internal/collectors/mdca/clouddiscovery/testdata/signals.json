@@ -1,0 +1,98 @@
+{
+  "Metrics": [
+    {
+      "Name": "graph2otel.api.unexpected",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
+      "AttrKeys": [
+        "collector",
+        "field",
+        "kind"
+      ]
+    },
+    {
+      "Name": "mdca.cloud_discovery.apps",
+      "Unit": "{app}",
+      "Kind": "gauge",
+      "Description": "Cloud Discovery apps discovered from uploaded traffic logs in the trailing 30 days, by category.",
+      "AttrKeys": [
+        "category"
+      ]
+    },
+    {
+      "Name": "mdca.cloud_discovery.apps.by_risk",
+      "Unit": "{app}",
+      "Kind": "gauge",
+      "Description": "Cloud Discovery apps discovered in the trailing 30 days, by risk band (this collector's own low/medium/high/critical banding of riskScore).",
+      "AttrKeys": [
+        "risk_band"
+      ]
+    },
+    {
+      "Name": "mdca.cloud_discovery.apps_truncated",
+      "Unit": "{stream}",
+      "Kind": "gauge",
+      "Description": "Count of Cloud Discovery upload streams whose discovered-app list hit the per-poll cap. Non-zero means some discovered apps for that stream were not processed this cycle.",
+      "AttrKeys": []
+    },
+    {
+      "Name": "mdca.cloud_discovery.log_files.total",
+      "Unit": "{file}",
+      "Kind": "gauge",
+      "Description": "Sum of logFileCount across every Cloud Discovery upload stream. Unlabeled: a per-stream figure would key a series by stream identity, which grows with tenant configuration.",
+      "AttrKeys": []
+    },
+    {
+      "Name": "mdca.cloud_discovery.streams",
+      "Unit": "{stream}",
+      "Kind": "gauge",
+      "Description": "Cloud Discovery upload streams configured for the tenant, by whether the stream is a one-off snapshot report.",
+      "AttrKeys": [
+        "is_snapshot_report"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "mdca.discovered_app",
+      "AttrKeys": [
+        "category",
+        "display_name",
+        "domain_count",
+        "domains",
+        "domains_truncated",
+        "download_bytes",
+        "id",
+        "ip_address_count",
+        "last_seen_date_time",
+        "risk_band",
+        "risk_score",
+        "stream_display_name",
+        "stream_id",
+        "tags",
+        "transactions_count",
+        "upload_bytes",
+        "user_count"
+      ]
+    },
+    {
+      "EventName": "mdca.discovery_stream",
+      "AttrKeys": [
+        "anonymize_machine_data",
+        "anonymize_user_data",
+        "apps_discovered",
+        "apps_truncated",
+        "created_date_time",
+        "display_name",
+        "id",
+        "is_snapshot_report",
+        "last_data_received_date_time",
+        "last_modified_date_time",
+        "log_file_count",
+        "supported_entity_types",
+        "supported_traffic_types"
+      ]
+    }
+  ]
+}

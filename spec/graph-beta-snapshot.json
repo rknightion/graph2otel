@@ -382,6 +382,16 @@
       "resolution": "model"
     },
     {
+      "path": "/security/dataDiscovery/cloudAppDiscovery/uploadedStreams",
+      "type": "microsoft.graph.security.cloudAppDiscoveryReport",
+      "resolution": "model"
+    },
+    {
+      "path": "/security/dataDiscovery/cloudAppDiscovery/uploadedStreams/{id}/aggregatedAppsDetails(period=duration'P30D')",
+      "type": "microsoft.graph.security.discoveredCloudAppDetail",
+      "resolution": "model"
+    },
+    {
       "path": "/security/dataSecurityAndGovernance/policyFiles",
       "type": "microsoft.graph.policyFile",
       "resolution": "model"
@@ -2906,6 +2916,58 @@
         "unknown"
       ]
     },
+    "microsoft.graph.security.appCategory": {
+      "kind": "EnumType",
+      "members": [
+        "accountingAndFinance",
+        "advertising",
+        "aiModelProvider",
+        "businessIntelligence",
+        "businessManagement",
+        "clientAiApp",
+        "cloudComputingPlatform",
+        "cloudStorage",
+        "codeHosting",
+        "collaboration",
+        "communications",
+        "contentManagement",
+        "contentSharing",
+        "crm",
+        "customerSupport",
+        "dataAnalytics",
+        "developmentTools",
+        "eCommerce",
+        "education",
+        "forums",
+        "generativeAi",
+        "health",
+        "hostingServices",
+        "humanResourceManagement",
+        "internetOfThings",
+        "itServices",
+        "marketing",
+        "mcpServer",
+        "newsAndEntertainment",
+        "onlineMeetings",
+        "operationsManagement",
+        "personalInstantMessaging",
+        "productDesign",
+        "productivity",
+        "projectManagement",
+        "propertyManagement",
+        "sales",
+        "security",
+        "socialNetwork",
+        "supplyChainAndLogistics",
+        "transportationAndTravel",
+        "unknown",
+        "unknownFutureValue",
+        "vendorManagementSystems",
+        "webAnalytics",
+        "webemail",
+        "websiteMonitoring"
+      ]
+    },
     "microsoft.graph.security.auditData": {
       "kind": "ComplexType",
       "properties": {
@@ -3454,6 +3516,142 @@
         "System",
         "SystemPolicy",
         "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.security.cloudAppDiscoveryReport": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "anonymizeMachineData": "Edm.Boolean",
+        "anonymizeUserData": "Edm.Boolean",
+        "createdDateTime": "Edm.DateTimeOffset",
+        "description": "Edm.String",
+        "displayName": "Edm.String",
+        "isSnapshotReport": "Edm.Boolean",
+        "lastDataReceivedDateTime": "Edm.DateTimeOffset",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "logDataProvider": "microsoft.graph.security.logDataProvider",
+        "logFileCount": "Edm.Int32",
+        "receiverProtocol": "microsoft.graph.security.receiverProtocol",
+        "supportedEntityTypes": "Collection(microsoft.graph.security.entityType)",
+        "supportedTrafficTypes": "Collection(microsoft.graph.security.trafficType)"
+      }
+    },
+    "microsoft.graph.security.discoveredCloudAppDetail": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "category": "microsoft.graph.security.appCategory",
+        "description": "Edm.String",
+        "displayName": "Edm.String",
+        "domains": "Collection(Edm.String)",
+        "downloadNetworkTrafficInBytes": "Edm.Int64",
+        "firstSeenDateTime": "Edm.DateTimeOffset",
+        "ipAddressCount": "Edm.Int64",
+        "lastSeenDateTime": "Edm.DateTimeOffset",
+        "riskScore": "Edm.Int64",
+        "tags": "Collection(Edm.String)",
+        "transactionCount": "Edm.Int64",
+        "uploadNetworkTrafficInBytes": "Edm.Int64",
+        "userCount": "Edm.Int64"
+      },
+      "navigation_properties": {
+        "appInfo": "microsoft.graph.security.discoveredCloudAppInfo",
+        "ipAddresses": "Collection(microsoft.graph.security.discoveredCloudAppIPAddress)",
+        "users": "Collection(microsoft.graph.security.discoveredCloudAppUser)"
+      }
+    },
+    "microsoft.graph.security.entityType": {
+      "kind": "EnumType",
+      "members": [
+        "ipAddress",
+        "machineName",
+        "other",
+        "unknown",
+        "unknownFutureValue",
+        "userName"
+      ]
+    },
+    "microsoft.graph.security.logDataProvider": {
+      "kind": "EnumType",
+      "members": [
+        "barracuda",
+        "barracudaNextGenFw",
+        "barracudaNextGenFwWeblog",
+        "bluecoat",
+        "checkpoint",
+        "checkpointCef",
+        "checkpointSmartViewTracker",
+        "checkpointXml",
+        "ciscoAsa",
+        "ciscoAsaFirepower",
+        "ciscoFirepowerV6",
+        "ciscoFwsm",
+        "ciscoIronportProxy",
+        "ciscoIronportWsaIi",
+        "ciscoIronportWsaIii",
+        "ciscoScanSafe",
+        "clavister",
+        "contentkeeper",
+        "corrata",
+        "customParser",
+        "forcepoint",
+        "forcepointLeef",
+        "fortigate",
+        "fortios",
+        "genericCef",
+        "genericLeef",
+        "genericW3C",
+        "iFilter",
+        "iboss",
+        "juniperSrx",
+        "juniperSrxSd",
+        "juniperSrxWelf",
+        "juniperSsg",
+        "machineZoneMeraki",
+        "mcafeeSwg",
+        "menloSecurityCef",
+        "microsoftConditionalAppAccess",
+        "microsoftDefenderForEndpoint",
+        "microsoftIsaW3C",
+        "openSystemsSecureWebGateway",
+        "paloAlto",
+        "paloAltoLeef",
+        "sonicwall",
+        "sophosCyberoam",
+        "sophosSg",
+        "sophosXg",
+        "squid",
+        "squidNative",
+        "stormshield",
+        "unknownFutureValue",
+        "wandera",
+        "watchguardXtm",
+        "websenseSiemCef",
+        "websenseV75",
+        "zscaler",
+        "zscalerCef",
+        "zscalerQradar"
+      ]
+    },
+    "microsoft.graph.security.receiverProtocol": {
+      "kind": "EnumType",
+      "members": [
+        "ftp",
+        "ftps",
+        "syslogTcp",
+        "syslogTls",
+        "syslogUdp",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.security.trafficType": {
+      "kind": "EnumType",
+      "members": [
+        "downloadedBytes",
+        "unknown",
+        "unknownFutureValue",
+        "uploadedBytes"
       ]
     },
     "microsoft.graph.securityBaselineStateSummary": {

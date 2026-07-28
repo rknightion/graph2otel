@@ -99,6 +99,21 @@ SECTIONS = [
          {"viz": "table", "w": 24, "h": 8}),
         "m365.service_messages.total",
     ]),
+    ("Collaboration activity (daily usage reports)", [
+        # #362. Adoption and staleness, not events — the audit feeds cover
+        # events. never_active is the interesting bucket: a licensed user who
+        # has never touched the workload is a licence question.
+        ("Users by workload and activity state",
+         ["m365.collaboration_activity.users"], {"viz": "table", "w": 12, "h": 8}),
+        ("Activity totals by workload and action",
+         ["m365.collaboration_activity.actions"], {"viz": "table", "w": 12, "h": 8}),
+        # External sharing gets its own panel rather than living inside the
+        # actions table: it is the alertable one, and an operator should not
+        # have to filter a table to find it.
+        ("Files shared EXTERNALLY by workload",
+         ["m365.collaboration_activity.shared_externally"], {"viz": "timeseries"}),
+        "m365.collaboration_activity.users.deleted",
+    ]),
     ("Mail flow (message trace — HIGH VOLUME, opt-in)", [
         "m365.message_trace.messages",
         "m365.message_trace.bytes",

@@ -1,5 +1,5 @@
 {
-  "package_count": 166,
+  "package_count": 168,
   "domains": [
     "defender",
     "entra",
@@ -1775,6 +1775,7 @@
         "internal/collectors/m365/messagetrace",
         "internal/collectors/m365/sharepointsettings",
         "internal/collectors/m365/unifiedaudit",
+        "internal/collectors/mdca/clouddiscovery",
         "internal/collectors/purview/retentionlabels",
         "internal/collectors/purview/sensitivitylabels",
         "internal/wirecheck"
@@ -4748,6 +4749,68 @@
       ]
     },
     {
+      "name": "m365.collaboration_activity.actions",
+      "prometheus_name": "m365_collaboration_activity_actions",
+      "unit": "{action}",
+      "kind": "gauge",
+      "description": "Sum, across all users, of each workload's collaboration action counts for the report period.",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "action",
+        "workload"
+      ],
+      "packages": [
+        "internal/collectors/m365/collaborationactivity"
+      ]
+    },
+    {
+      "name": "m365.collaboration_activity.shared_externally",
+      "prometheus_name": "m365_collaboration_activity_shared_externally",
+      "unit": "{file}",
+      "kind": "gauge",
+      "description": "Sum, across all users, of files shared externally — the alertable external-sharing signal, as its own series so it needs no aggregation over the actions gauge.",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "workload"
+      ],
+      "packages": [
+        "internal/collectors/m365/collaborationactivity"
+      ]
+    },
+    {
+      "name": "m365.collaboration_activity.users",
+      "prometheus_name": "m365_collaboration_activity_users",
+      "unit": "{user}",
+      "kind": "gauge",
+      "description": "Count of licensed users per (workload, derived activity_state) bucket: active (activity within the report window), inactive (activity outside it), never_active (no Last Activity Date on record).",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "activity_state",
+        "workload"
+      ],
+      "packages": [
+        "internal/collectors/m365/collaborationactivity"
+      ]
+    },
+    {
+      "name": "m365.collaboration_activity.users.deleted",
+      "prometheus_name": "m365_collaboration_activity_users_deleted",
+      "unit": "{user}",
+      "kind": "gauge",
+      "description": "Count of users marked deleted in the workload's usage report.",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "workload"
+      ],
+      "packages": [
+        "internal/collectors/m365/collaborationactivity"
+      ]
+    },
+    {
       "name": "m365.exchange.accepted_domains",
       "prometheus_name": "m365_exchange_accepted_domains",
       "unit": "{domain}",
@@ -5488,6 +5551,77 @@
       "attr_keys": [],
       "packages": [
         "internal/collectors/m365/teams"
+      ]
+    },
+    {
+      "name": "mdca.cloud_discovery.apps",
+      "prometheus_name": "mdca_cloud_discovery_apps",
+      "unit": "{app}",
+      "kind": "gauge",
+      "description": "Cloud Discovery apps discovered from uploaded traffic logs in the trailing 30 days, by category.",
+      "additive": true,
+      "domain": "mdca",
+      "attr_keys": [
+        "category"
+      ],
+      "packages": [
+        "internal/collectors/mdca/clouddiscovery"
+      ]
+    },
+    {
+      "name": "mdca.cloud_discovery.apps.by_risk",
+      "prometheus_name": "mdca_cloud_discovery_apps_by_risk",
+      "unit": "{app}",
+      "kind": "gauge",
+      "description": "Cloud Discovery apps discovered in the trailing 30 days, by risk band (this collector's own low/medium/high/critical banding of riskScore).",
+      "additive": true,
+      "domain": "mdca",
+      "attr_keys": [
+        "risk_band"
+      ],
+      "packages": [
+        "internal/collectors/mdca/clouddiscovery"
+      ]
+    },
+    {
+      "name": "mdca.cloud_discovery.apps_truncated",
+      "prometheus_name": "mdca_cloud_discovery_apps_truncated",
+      "unit": "{stream}",
+      "kind": "gauge",
+      "description": "Count of Cloud Discovery upload streams whose discovered-app list hit the per-poll cap. Non-zero means some discovered apps for that stream were not processed this cycle.",
+      "additive": true,
+      "domain": "mdca",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/mdca/clouddiscovery"
+      ]
+    },
+    {
+      "name": "mdca.cloud_discovery.log_files.total",
+      "prometheus_name": "mdca_cloud_discovery_log_files_total",
+      "unit": "{file}",
+      "kind": "gauge",
+      "description": "Sum of logFileCount across every Cloud Discovery upload stream. Unlabeled: a per-stream figure would key a series by stream identity, which grows with tenant configuration.",
+      "additive": true,
+      "domain": "mdca",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/mdca/clouddiscovery"
+      ]
+    },
+    {
+      "name": "mdca.cloud_discovery.streams",
+      "prometheus_name": "mdca_cloud_discovery_streams",
+      "unit": "{stream}",
+      "kind": "gauge",
+      "description": "Cloud Discovery upload streams configured for the tenant, by whether the stream is a one-off snapshot report.",
+      "additive": true,
+      "domain": "mdca",
+      "attr_keys": [
+        "is_snapshot_report"
+      ],
+      "packages": [
+        "internal/collectors/mdca/clouddiscovery"
       ]
     },
     {
@@ -8658,6 +8792,33 @@
       ]
     },
     {
+      "event_name": "m365.collaboration_activity_user",
+      "domain": "m365",
+      "attr_keys": [
+        "assigned_products",
+        "call_count",
+        "files_shared_externally_count",
+        "files_shared_internally_count",
+        "files_synced_count",
+        "files_viewed_or_edited_count",
+        "is_deleted",
+        "last_activity_date",
+        "meetings_attended_count",
+        "meetings_organized_count",
+        "pages_visited_count",
+        "private_chat_message_count",
+        "report_period",
+        "report_refresh_date",
+        "team_chat_message_count",
+        "user_id",
+        "user_principal_name",
+        "workload"
+      ],
+      "packages": [
+        "internal/collectors/m365/collaborationactivity"
+      ]
+    },
+    {
       "event_name": "m365.drive_storage",
       "domain": "m365",
       "attr_keys": [
@@ -9224,6 +9385,32 @@
       ]
     },
     {
+      "event_name": "mdca.discovered_app",
+      "domain": "mdca",
+      "attr_keys": [
+        "category",
+        "display_name",
+        "domain_count",
+        "domains",
+        "domains_truncated",
+        "download_bytes",
+        "id",
+        "ip_address_count",
+        "last_seen_date_time",
+        "risk_band",
+        "risk_score",
+        "stream_display_name",
+        "stream_id",
+        "tags",
+        "transactions_count",
+        "upload_bytes",
+        "user_count"
+      ],
+      "packages": [
+        "internal/collectors/mdca/clouddiscovery"
+      ]
+    },
+    {
       "event_name": "mdca.discovery_parse",
       "domain": "mdca",
       "attr_keys": [
@@ -9238,6 +9425,28 @@
       ],
       "packages": [
         "internal/collectors/mdca/discoveryparse"
+      ]
+    },
+    {
+      "event_name": "mdca.discovery_stream",
+      "domain": "mdca",
+      "attr_keys": [
+        "anonymize_machine_data",
+        "anonymize_user_data",
+        "apps_discovered",
+        "apps_truncated",
+        "created_date_time",
+        "display_name",
+        "id",
+        "is_snapshot_report",
+        "last_data_received_date_time",
+        "last_modified_date_time",
+        "log_file_count",
+        "supported_entity_types",
+        "supported_traffic_types"
+      ],
+      "packages": [
+        "internal/collectors/mdca/clouddiscovery"
       ]
     },
     {

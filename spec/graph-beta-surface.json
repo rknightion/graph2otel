@@ -429,6 +429,22 @@
       ]
     },
     {
+      "package": "internal/collectors/mdca/clouddiscovery",
+      "collectors": [
+        "mdca.cloud_discovery"
+      ],
+      "operations": [
+        {
+          "path": "/security/dataDiscovery/cloudAppDiscovery/uploadedStreams"
+        },
+        {
+          "path": "/security/dataDiscovery/cloudAppDiscovery/uploadedStreams/{id}/aggregatedAppsDetails(period=duration'P30D')",
+          "resolve_as": "/security/dataDiscovery/cloudAppDiscovery/uploadedStreams/{id}/aggregatedAppsDetails",
+          "note": "an OData bound FUNCTION, not a collection segment. The collector sends the period parameter inline as (period=duration'P30D'); the EDM declares the function without it, so resolve_as strips the parameter to give the walker a resolvable path. The function is IsComposable and returns Collection(discoveredCloudAppDetail), which is the type actually watched. It pages on @odata.nextLink and throttles with a 429 carrying a bare JSON {\"detail\": ...} body rather than Graph's usual error envelope."
+        }
+      ]
+    },
+    {
       "package": "internal/collectors/purview/dlppolicies",
       "collectors": [
         "purview.dlp_policies"

@@ -56,6 +56,22 @@ SECTIONS = [
         "mdca.discovery.parse.transactions",
         "mdca.discovery.parse.cloud_services",
     ]),
+    ("Defender for Cloud Apps — discovered shadow IT (Experimental, opt-in)", [
+        # #361. A different transport from the parse-health panels above:
+        # those reach the legacy portal API, these are Graph beta. Category
+        # is the only per-app dimension that is bounded, so the app inventory
+        # reads as a table by category rather than as a per-app series.
+        ("Discovered apps by category (generativeAi is usually the one being looked for)",
+         ["mdca.cloud_discovery.apps"], {"viz": "table", "w": 12, "h": 8}),
+        ("Discovered apps by risk band", ["mdca.cloud_discovery.apps.by_risk"],
+         {"viz": "timeseries"}),
+        ("Upload streams and log files ingested",
+         ["mdca.cloud_discovery.streams", "mdca.cloud_discovery.log_files.total"],
+         {"viz": "timeseries"}),
+        # A capped app scan reports a partial view; without this panel a
+        # truncated inventory is indistinguishable from a small one.
+        "mdca.cloud_discovery.apps_truncated",
+    ]),
 ]
 
 LOGS = [

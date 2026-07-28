@@ -32,8 +32,8 @@ spec:
     description: "At least one source record was dropped or errored in the last 15m. `dropped` covers deliberate rejection such as an unparseable event timestamp; `errored` covers decode or processing failure. This is default-enabled because either outcome means fetched source data did not become useful telemetry."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-record-integrity-loss"
     __dashboardUid__: "graph2otel"
-    __panelId__: "387"
-    dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=387"
+    __panelId__: "397"
+    dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=397"
   expressions:
     A:
       model:
