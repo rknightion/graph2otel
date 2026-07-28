@@ -1,5 +1,5 @@
 {
-  "package_count": 172,
+  "package_count": 173,
   "domains": [
     "defender",
     "entra",
@@ -1980,6 +1980,7 @@
         "internal/collectors/m365/sharepointsettings",
         "internal/collectors/m365/unifiedaudit",
         "internal/collectors/mdca/clouddiscovery",
+        "internal/collectors/purview/ediscoveryhealth",
         "internal/collectors/purview/retentionlabels",
         "internal/collectors/purview/sensitivitylabels",
         "internal/wirecheck"
@@ -5999,6 +6000,48 @@
       ]
     },
     {
+      "name": "purview.ediscovery.case_health.cases_covered",
+      "prometheus_name": "purview_ediscovery_case_health_cases_covered",
+      "unit": "{case}",
+      "kind": "gauge",
+      "description": "eDiscovery cases actually polled for case-health detail this cycle. Compare against purview.ediscovery.case_health.cases_total: covered \u003c total means DefaultMaxCases left part of the tenant's case inventory unpolled this cycle, not that the tenant has few cases.",
+      "additive": true,
+      "domain": "purview",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/purview/ediscoveryhealth"
+      ]
+    },
+    {
+      "name": "purview.ediscovery.case_health.cases_total",
+      "prometheus_name": "purview_ediscovery_case_health_cases_total",
+      "unit": "{case}",
+      "kind": "gauge",
+      "description": "Total eDiscovery cases this tenant has, per the case list. Always emitted alongside cases_covered so partial coverage is never indistinguishable from a genuinely small tenant.",
+      "additive": true,
+      "domain": "purview",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/purview/ediscoveryhealth"
+      ]
+    },
+    {
+      "name": "purview.ediscovery.case_operations",
+      "prometheus_name": "purview_ediscovery_case_operations",
+      "unit": "{operation}",
+      "kind": "gauge",
+      "description": "eDiscovery case operations across every covered case, counted by action and status. Never labeled by case or operation identity (#112).",
+      "additive": true,
+      "domain": "purview",
+      "attr_keys": [
+        "action",
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/purview/ediscoveryhealth"
+      ]
+    },
+    {
       "name": "purview.ediscovery.cases",
       "prometheus_name": "purview_ediscovery_cases",
       "unit": "{case}",
@@ -6011,6 +6054,64 @@
       ],
       "packages": [
         "internal/collectors/purview/ediscoverycases"
+      ]
+    },
+    {
+      "name": "purview.ediscovery.custodians",
+      "prometheus_name": "purview_ediscovery_custodians",
+      "unit": "{custodian}",
+      "kind": "gauge",
+      "description": "eDiscovery custodians across every covered case — a plain count, no field mapper. Every case observed live returns zero rows; see the package doc for why no ediscoveryCustodian shape is mapped. Absent entirely when no case's fetch succeeded, so a total read failure never reads as a measured zero (#240).",
+      "additive": true,
+      "domain": "purview",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/purview/ediscoveryhealth"
+      ]
+    },
+    {
+      "name": "purview.ediscovery.hold_sources",
+      "prometheus_name": "purview_ediscovery_hold_sources",
+      "unit": "{source}",
+      "kind": "gauge",
+      "description": "eDiscovery legal-hold data sources (userSources + siteSources) across every covered case, counted by which collection the row came from and its dataSourceHoldStatus. Never labeled by case, hold or source identity (#112).",
+      "additive": true,
+      "domain": "purview",
+      "attr_keys": [
+        "hold_status",
+        "source_type"
+      ],
+      "packages": [
+        "internal/collectors/purview/ediscoveryhealth"
+      ]
+    },
+    {
+      "name": "purview.ediscovery.legal_holds",
+      "prometheus_name": "purview_ediscovery_legal_holds",
+      "unit": "{hold}",
+      "kind": "gauge",
+      "description": "eDiscovery legal holds across every covered case, counted by isEnabled and whether the hold's errors array is non-empty. legalHold.status is null on every hold observed live, so it does not bucket this gauge — see AttrHoldState on the log twin. Never labeled by case or hold identity (#112).",
+      "additive": true,
+      "domain": "purview",
+      "attr_keys": [
+        "enabled",
+        "has_errors"
+      ],
+      "packages": [
+        "internal/collectors/purview/ediscoveryhealth"
+      ]
+    },
+    {
+      "name": "purview.ediscovery.noncustodial_data_sources",
+      "prometheus_name": "purview_ediscovery_noncustodial_data_sources",
+      "unit": "{source}",
+      "kind": "gauge",
+      "description": "eDiscovery non-custodial data sources across every covered case — a plain count, no field mapper. Absent entirely when no case's fetch succeeded (#240).",
+      "additive": true,
+      "domain": "purview",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/purview/ediscoveryhealth"
       ]
     },
     {
@@ -9960,6 +10061,63 @@
       ],
       "packages": [
         "internal/collectors/purview/ediscoverycases"
+      ]
+    },
+    {
+      "event_name": "purview.ediscovery_case_operation",
+      "domain": "purview",
+      "attr_keys": [
+        "action",
+        "case_display_name",
+        "case_id",
+        "completed_date_time",
+        "created_by_display_name",
+        "created_date_time",
+        "id",
+        "percent_progress",
+        "status"
+      ],
+      "packages": [
+        "internal/collectors/purview/ediscoveryhealth"
+      ]
+    },
+    {
+      "event_name": "purview.ediscovery_hold_source",
+      "domain": "purview",
+      "attr_keys": [
+        "case_display_name",
+        "case_id",
+        "created_date_time",
+        "display_name",
+        "hold_id",
+        "hold_status",
+        "id",
+        "included_sources",
+        "site_web_url",
+        "source_type",
+        "user_principal_name"
+      ],
+      "packages": [
+        "internal/collectors/purview/ediscoveryhealth"
+      ]
+    },
+    {
+      "event_name": "purview.ediscovery_legal_hold",
+      "domain": "purview",
+      "attr_keys": [
+        "case_display_name",
+        "case_id",
+        "created_by_display_name",
+        "created_date_time",
+        "display_name",
+        "enabled",
+        "error_count",
+        "has_errors",
+        "id",
+        "last_modified_date_time"
+      ],
+      "packages": [
+        "internal/collectors/purview/ediscoveryhealth"
       ]
     },
     {

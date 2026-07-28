@@ -159,6 +159,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/mdca/discoveryparse"
 	_ "github.com/rknightion/graph2otel/internal/collectors/purview/dlppolicies"
 	_ "github.com/rknightion/graph2otel/internal/collectors/purview/ediscoverycases"
+	_ "github.com/rknightion/graph2otel/internal/collectors/purview/ediscoveryhealth"
 	_ "github.com/rknightion/graph2otel/internal/collectors/purview/retentionlabels"
 	_ "github.com/rknightion/graph2otel/internal/collectors/purview/sensitivitylabels"
 	_ "github.com/rknightion/graph2otel/internal/collectors/selfobs/blobcategories"

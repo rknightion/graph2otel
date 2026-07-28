@@ -17,10 +17,10 @@ import (
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
-func TestCollectorOverrideInventoryHas166LogicalNamesAcrossAllSevenPaths(t *testing.T) {
+func TestCollectorOverrideInventoryHas167LogicalNamesAcrossAllSevenPaths(t *testing.T) {
 	known, _ := collectorOverrideInventory()
 
-	if got, want := len(known), 166; got != want {
+	if got, want := len(known), 167; got != want {
 		t.Fatalf("logical collector names = %d, want %d", got, want)
 	}
 	for path, name := range map[string]string{

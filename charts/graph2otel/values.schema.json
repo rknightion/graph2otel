@@ -167,6 +167,7 @@
                 "mdca.cloud_discovery",
                 "mdca.discovery_parse",
                 "purview.dlp_policies",
+                "purview.ediscovery_case_health",
                 "purview.ediscovery_cases",
                 "purview.retention_labels",
                 "purview.sensitivity_labels"

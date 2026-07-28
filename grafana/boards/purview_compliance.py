@@ -24,6 +24,19 @@ SECTIONS = [
     ("eDiscovery", [
         "purview.ediscovery.cases",
     ]),
+    ("eDiscovery case health", [
+        "purview.ediscovery.legal_holds",
+        "purview.ediscovery.hold_sources",
+        "purview.ediscovery.case_operations",
+        "purview.ediscovery.custodians",
+        "purview.ediscovery.noncustodial_data_sources",
+        # Read these two together, always. cases_covered below cases_total means
+        # DefaultMaxCases left part of the tenant's case inventory unpolled this
+        # cycle — every other panel in this section is then a partial view, not a
+        # small tenant.
+        "purview.ediscovery.case_health.cases_covered",
+        "purview.ediscovery.case_health.cases_total",
+    ]),
 ]
 
 LOGS = [
@@ -38,4 +51,17 @@ LOGS = [
     {"kind": "table", "event": "purview.retention_label",
      "title": "Retention labels by retention behaviour",
      "by": ["behavior_during_retention", "action_after_retention"]},
+    {"kind": "table", "event": "purview.ediscovery_legal_hold",
+     "title": "eDiscovery legal holds — which case, enabled, erroring",
+     "by": ["case_display_name", "enabled", "has_errors"]},
+    {"kind": "logs", "event": "purview.ediscovery_hold_source",
+     "title": "eDiscovery hold data sources — who and what is preserved",
+     "desc": "The metric counts sources by type and hold status. This names each "
+             "one: the mailbox or site, its hold status, and the hold it belongs "
+             "to. Source ids are not always GUIDs — an inactive mailbox arrives "
+             "as a zero-GUID prefixed with its address.",
+     "w": 24, "h": 10},
+    {"kind": "table", "event": "purview.ediscovery_case_operation",
+     "title": "eDiscovery case operations by action and status",
+     "by": ["action", "status"]},
 ]

@@ -30832,6 +30832,608 @@
         "kind": "Panel",
         "spec": {
           "id": 380,
+          "title": "Ediscovery legal holds",
+          "description": "eDiscovery legal holds across every covered case, counted by isEnabled and whether the hold's errors array is non-empty. legalHold.status is null on every hold observed live, so it does not bucket this gauge \u2014 see AttrHoldState on the log twin. Never labeled by case or hold identity (#112).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "sum by (tenant_id, enabled, has_errors) (purview_ediscovery_legal_holds{tenant_id=~\"$tenant\"})",
+                        "editorMode": "code",
+                        "range": true,
+                        "instant": false,
+                        "legendFormat": "{{tenant_id}} {{enabled}} {{has_errors}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": true
+                  },
+                  "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-381": {
+        "kind": "Panel",
+        "spec": {
+          "id": 381,
+          "title": "Ediscovery hold sources",
+          "description": "eDiscovery legal-hold data sources (userSources + siteSources) across every covered case, counted by which collection the row came from and its dataSourceHoldStatus. Never labeled by case, hold or source identity (#112).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "sum by (tenant_id, hold_status, source_type) (purview_ediscovery_hold_sources{tenant_id=~\"$tenant\"})",
+                        "editorMode": "code",
+                        "range": true,
+                        "instant": false,
+                        "legendFormat": "{{tenant_id}} {{hold_status}} {{source_type}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": true
+                  },
+                  "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-382": {
+        "kind": "Panel",
+        "spec": {
+          "id": 382,
+          "title": "Ediscovery case operations",
+          "description": "eDiscovery case operations across every covered case, counted by action and status. Never labeled by case or operation identity (#112).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "sum by (tenant_id, action, status) (purview_ediscovery_case_operations{tenant_id=~\"$tenant\"})",
+                        "editorMode": "code",
+                        "range": true,
+                        "instant": false,
+                        "legendFormat": "{{tenant_id}} {{action}} {{status}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": true
+                  },
+                  "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-383": {
+        "kind": "Panel",
+        "spec": {
+          "id": 383,
+          "title": "Ediscovery custodians",
+          "description": "eDiscovery custodians across every covered case \u2014 a plain count, no field mapper. Every case observed live returns zero rows; see the package doc for why no ediscoveryCustodian shape is mapped. Absent entirely when no case's fetch succeeded, so a total read failure never reads as a measured zero (#240).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "sum by (tenant_id) (purview_ediscovery_custodians{tenant_id=~\"$tenant\"})",
+                        "editorMode": "code",
+                        "range": true,
+                        "instant": false,
+                        "legendFormat": "{{tenant_id}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "colorMode": "none",
+                "graphMode": "area",
+                "textMode": "auto",
+                "justifyMode": "auto",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {},
+                  "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-384": {
+        "kind": "Panel",
+        "spec": {
+          "id": 384,
+          "title": "Ediscovery noncustodial data sources",
+          "description": "eDiscovery non-custodial data sources across every covered case \u2014 a plain count, no field mapper. Absent entirely when no case's fetch succeeded (#240).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "sum by (tenant_id) (purview_ediscovery_noncustodial_data_sources{tenant_id=~\"$tenant\"})",
+                        "editorMode": "code",
+                        "range": true,
+                        "instant": false,
+                        "legendFormat": "{{tenant_id}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "colorMode": "none",
+                "graphMode": "area",
+                "textMode": "auto",
+                "justifyMode": "auto",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {},
+                  "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-385": {
+        "kind": "Panel",
+        "spec": {
+          "id": 385,
+          "title": "Ediscovery case health cases covered",
+          "description": "eDiscovery cases actually polled for case-health detail this cycle. Compare against purview.ediscovery.case_health.cases_total: covered < total means DefaultMaxCases left part of the tenant's case inventory unpolled this cycle, not that the tenant has few cases.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "sum by (tenant_id) (purview_ediscovery_case_health_cases_covered{tenant_id=~\"$tenant\"})",
+                        "editorMode": "code",
+                        "range": true,
+                        "instant": false,
+                        "legendFormat": "{{tenant_id}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "colorMode": "none",
+                "graphMode": "area",
+                "textMode": "auto",
+                "justifyMode": "auto",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {},
+                  "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-386": {
+        "kind": "Panel",
+        "spec": {
+          "id": 386,
+          "title": "Ediscovery case health cases total",
+          "description": "Total eDiscovery cases this tenant has, per the case list. Always emitted alongside cases_covered so partial coverage is never indistinguishable from a genuinely small tenant.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "sum by (tenant_id) (purview_ediscovery_case_health_cases_total{tenant_id=~\"$tenant\"})",
+                        "editorMode": "code",
+                        "range": true,
+                        "instant": false,
+                        "legendFormat": "{{tenant_id}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "colorMode": "none",
+                "graphMode": "area",
+                "textMode": "auto",
+                "justifyMode": "auto",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {},
+                  "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-388": {
+        "kind": "Panel",
+        "spec": {
+          "id": 388,
           "title": "Sensitivity labels \u2014 which label, what it applies to",
           "description": "The metric counts labels by scope. This names each one, with its priority and description.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -30901,10 +31503,10 @@
           }
         }
       },
-      "panel-381": {
+      "panel-389": {
         "kind": "Panel",
         "spec": {
-          "id": 381,
+          "id": 389,
           "title": "DLP policies by enforcement mode",
           "description": "\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -30993,10 +31595,10 @@
           }
         }
       },
-      "panel-382": {
+      "panel-390": {
         "kind": "Panel",
         "spec": {
-          "id": 382,
+          "id": 390,
           "title": "Retention labels by retention behaviour",
           "description": "\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -31085,10 +31687,273 @@
           }
         }
       },
-      "panel-383": {
+      "panel-391": {
         "kind": "Panel",
         "spec": {
-          "id": 383,
+          "id": 391,
+          "title": "eDiscovery legal holds \u2014 which case, enabled, erroring",
+          "description": "\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "topk(20, sum by (tenant_id, case_display_name, enabled, has_errors) (count_over_time({service_name=\"graph2otel\"} | event_name=`purview.ediscovery_legal_hold` | tenant_id=~\"$tenant\" [$__auto])))",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "legendFormat": "{{tenant_id}} {{case_display_name}} {{enabled}} {{has_errors}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "reduce",
+                  "spec": {
+                    "options": {
+                      "reducers": [
+                        "sum"
+                      ],
+                      "mode": "seriesToRows"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "fields": ""
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {},
+                  "noValue": "No rows. Either no Loki datasource is selected above, or nothing matched. Log attributes are structured metadata: filter with | attr=\u2026 after {service_name=\"graph2otel\"}, never {attr=\"\u2026\"}.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-392": {
+        "kind": "Panel",
+        "spec": {
+          "id": 392,
+          "title": "eDiscovery hold data sources \u2014 who and what is preserved",
+          "description": "The metric counts sources by type and hold status. This names each one: the mailbox or site, its hold status, and the hold it belongs to. Source ids are not always GUIDs \u2014 an inactive mailbox arrives as a zero-GUID prefixed with its address.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [
+            {
+              "title": "Investigate this account \u2014 this account's sign-ins, risk detections, registration state, privilege elevations, certificates and mailbox records",
+              "url": "/d/graph2otel?dtab=Overview&from=${__from}&to=${__to}&${__all_variables}",
+              "targetBlank": false
+            }
+          ],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`purview.ediscovery_hold_source` | tenant_id=~\"$tenant\"",
+                        "editorMode": "code",
+                        "queryType": "range"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "logs",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showTime": true,
+                "wrapLogMessage": true,
+                "sortOrder": "Descending",
+                "enableLogDetails": true,
+                "dedupStrategy": "none",
+                "prettifyLogMessage": false
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "No rows. Either no Loki datasource is selected above, or nothing matched. Log attributes are structured metadata: filter with | attr=\u2026 after {service_name=\"graph2otel\"}, never {attr=\"\u2026\"}.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-393": {
+        "kind": "Panel",
+        "spec": {
+          "id": 393,
+          "title": "eDiscovery case operations by action and status",
+          "description": "\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "topk(20, sum by (tenant_id, action, status) (count_over_time({service_name=\"graph2otel\"} | event_name=`purview.ediscovery_case_operation` | tenant_id=~\"$tenant\" [$__auto])))",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "legendFormat": "{{tenant_id}} {{action}} {{status}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "reduce",
+                  "spec": {
+                    "options": {
+                      "reducers": [
+                        "sum"
+                      ],
+                      "mode": "seriesToRows"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "fields": ""
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {},
+                  "noValue": "No rows. Either no Loki datasource is selected above, or nothing matched. Log attributes are structured metadata: filter with | attr=\u2026 after {service_name=\"graph2otel\"}, never {attr=\"\u2026\"}.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-394": {
+        "kind": "Panel",
+        "spec": {
+          "id": 394,
           "title": "About Self-obs",
           "description": "",
           "links": [],
@@ -31113,10 +31978,10 @@
           }
         }
       },
-      "panel-385": {
+      "panel-396": {
         "kind": "Panel",
         "spec": {
-          "id": 385,
+          "id": 396,
           "title": "What this summary cannot prove",
           "description": "",
           "links": [],
@@ -31141,10 +32006,10 @@
           }
         }
       },
-      "panel-386": {
+      "panel-397": {
         "kind": "Panel",
         "spec": {
-          "id": 386,
+          "id": 397,
           "title": "Current source collection failures",
           "description": "Current runtime, startup and permission failures only. Healthy-empty, configured absence, alternative coverage and subscription limitations are intentionally not failures.",
           "links": [],
@@ -31216,7 +32081,7 @@
                   "links": [
                     {
                       "title": "Open Collector availability failures",
-                      "url": "/d/graph2otel?viewPanel=405&from=${__from}&to=${__to}&${__all_variables}",
+                      "url": "/d/graph2otel?viewPanel=416&from=${__from}&to=${__to}&${__all_variables}",
                       "targetBlank": false
                     }
                   ]
@@ -31227,10 +32092,10 @@
           }
         }
       },
-      "panel-387": {
+      "panel-398": {
         "kind": "Panel",
         "spec": {
-          "id": 387,
+          "id": 398,
           "title": "Known source-to-emitter record loss",
           "description": "Source rows deliberately dropped or lost to decode/processing errors during the selected range. This stops at the emitter boundary.",
           "links": [],
@@ -31302,7 +32167,7 @@
                   "links": [
                     {
                       "title": "Open Dropped / errored source-record rate",
-                      "url": "/d/graph2otel?viewPanel=419&from=${__from}&to=${__to}&${__all_variables}",
+                      "url": "/d/graph2otel?viewPanel=430&from=${__from}&to=${__to}&${__all_variables}",
                       "targetBlank": false
                     }
                   ]
@@ -31313,10 +32178,10 @@
           }
         }
       },
-      "panel-388": {
+      "panel-399": {
         "kind": "Panel",
         "spec": {
-          "id": 388,
+          "id": 399,
           "title": "Current exporter callback degradation",
           "description": "Latest process-local callback state by signal. Success means the exporter accepted the callback; it is not backend retention and not exactly-once delivery evidence.\n\nColour meaning: the emitter's description states this is whether the most recent exporter callback failure remains unrecovered by a subsequent successful export (#268). 1 means the most recent exporter failure has not been followed by a success, so telemetry is being lost now. This is the delivery-degradation state #268 defines, not a rate this repository chose a limit for.",
           "links": [],
@@ -31407,7 +32272,7 @@
                   "links": [
                     {
                       "title": "Open Current exporter degradation by signal",
-                      "url": "/d/graph2otel?viewPanel=395&from=${__from}&to=${__to}&${__all_variables}",
+                      "url": "/d/graph2otel?viewPanel=406&from=${__from}&to=${__to}&${__all_variables}",
                       "targetBlank": false
                     }
                   ]
@@ -31418,10 +32283,10 @@
           }
         }
       },
-      "panel-389": {
+      "panel-400": {
         "kind": "Panel",
         "spec": {
-          "id": 389,
+          "id": 400,
           "title": "Checkpoint persistence failures",
           "description": "Checkpoint writes that failed during the selected range. A nonzero value means restart replay risk even when the collection itself succeeded.",
           "links": [],
@@ -31493,7 +32358,7 @@
                   "links": [
                     {
                       "title": "Open Checkpoint persist error rate",
-                      "url": "/d/graph2otel?viewPanel=415&from=${__from}&to=${__to}&${__all_variables}",
+                      "url": "/d/graph2otel?viewPanel=426&from=${__from}&to=${__to}&${__all_variables}",
                       "targetBlank": false
                     }
                   ]
@@ -31504,10 +32369,10 @@
           }
         }
       },
-      "panel-390": {
+      "panel-401": {
         "kind": "Panel",
         "spec": {
-          "id": 390,
+          "id": 401,
           "title": "Source-event emission lag",
           "description": "P95 source timestamp to graph2otel emission lag by collector and transport. This does not measure backend acceptance or OTLP delivery latency.",
           "links": [],
@@ -31579,7 +32444,7 @@
                   "links": [
                     {
                       "title": "Open Source-event lag at emission",
-                      "url": "/d/graph2otel?viewPanel=420&from=${__from}&to=${__to}&${__all_variables}",
+                      "url": "/d/graph2otel?viewPanel=431&from=${__from}&to=${__to}&${__all_variables}",
                       "targetBlank": false
                     }
                   ]
@@ -31590,10 +32455,10 @@
           }
         }
       },
-      "panel-391": {
+      "panel-402": {
         "kind": "Panel",
         "spec": {
-          "id": 391,
+          "id": 402,
           "title": "Series clipped last interval",
           "description": "Process-wide metric series folded or dropped by the central cardinality limiter during the latest export interval.",
           "links": [],
@@ -31665,7 +32530,7 @@
                   "links": [
                     {
                       "title": "Open Series clipped, by mode (process-wide)",
-                      "url": "/d/graph2otel?viewPanel=436&from=${__from}&to=${__to}&${__all_variables}",
+                      "url": "/d/graph2otel?viewPanel=447&from=${__from}&to=${__to}&${__all_variables}",
                       "targetBlank": false
                     }
                   ]
@@ -31676,10 +32541,10 @@
           }
         }
       },
-      "panel-392": {
+      "panel-403": {
         "kind": "Panel",
         "spec": {
-          "id": 392,
+          "id": 403,
           "title": "Microsoft API assumption violations",
           "description": "Report-only wire values that violated a collector's validated API assumptions during the selected range. Records are not dropped.",
           "links": [],
@@ -31751,7 +32616,7 @@
                   "links": [
                     {
                       "title": "Open Microsoft API drift rate \u2014 a response no longer matches what a collector expects",
-                      "url": "/d/graph2otel?viewPanel=454&from=${__from}&to=${__to}&${__all_variables}",
+                      "url": "/d/graph2otel?viewPanel=465&from=${__from}&to=${__to}&${__all_variables}",
                       "targetBlank": false
                     }
                   ]
@@ -31762,10 +32627,10 @@
           }
         }
       },
-      "panel-393": {
+      "panel-404": {
         "kind": "Panel",
         "spec": {
-          "id": 393,
+          "id": 404,
           "title": "Maximum reported throttle consumption",
           "description": "Maximum currently reported Microsoft Graph throttle-budget consumption. The header is not present on every response, so absence is unknown.",
           "links": [],
@@ -31837,7 +32702,7 @@
                   "links": [
                     {
                       "title": "Open Graph-reported throttle budget consumed",
-                      "url": "/d/graph2otel?viewPanel=441&from=${__from}&to=${__to}&${__all_variables}",
+                      "url": "/d/graph2otel?viewPanel=452&from=${__from}&to=${__to}&${__all_variables}",
                       "targetBlank": false
                     }
                   ]
@@ -31848,10 +32713,10 @@
           }
         }
       },
-      "panel-395": {
+      "panel-406": {
         "kind": "Panel",
         "spec": {
-          "id": 395,
+          "id": 406,
           "title": "Current exporter degradation by signal",
           "description": "Current process-local exporter callback state for metrics and logs. 1 means the latest failure has not been cleared by a later successful export; 0 means it has. This does not change liveness or readiness.\n\nColour meaning: the emitter's description states this is whether the most recent exporter callback failure remains unrecovered by a subsequent successful export (#268). 1 means the most recent exporter failure has not been followed by a success, so telemetry is being lost now. This is the delivery-degradation state #268 defines, not a rate this repository chose a limit for.",
           "links": [],
@@ -31946,10 +32811,10 @@
           }
         }
       },
-      "panel-396": {
+      "panel-407": {
         "kind": "Panel",
         "spec": {
-          "id": 396,
+          "id": 407,
           "title": "Exporter callback rates by signal",
           "description": "Exporter callback attempts, accepted callbacks, and failures for the metrics and logs pipelines independently. These overlapping rates are deliberately unstacked; attempts equal successes plus failures.",
           "links": [],
@@ -32090,10 +32955,10 @@
           }
         }
       },
-      "panel-397": {
+      "panel-408": {
         "kind": "Panel",
         "spec": {
-          "id": 397,
+          "id": 408,
           "title": "Force-flush failure rate by signal",
           "description": "Failed force-flush callbacks by signal. A later successful export clears degradation; an empty successful flush does not claim payload acceptance.",
           "links": [],
@@ -32180,10 +33045,10 @@
           }
         }
       },
-      "panel-398": {
+      "panel-409": {
         "kind": "Panel",
         "spec": {
-          "id": 398,
+          "id": 409,
           "title": "Shutdown failure total by signal",
           "description": "Process-lifetime failed shutdown callbacks by signal. Shutdown failure does not alter dependency-free liveness or readiness semantics.",
           "links": [],
@@ -32270,10 +33135,10 @@
           }
         }
       },
-      "panel-399": {
+      "panel-410": {
         "kind": "Panel",
         "spec": {
-          "id": 399,
+          "id": 410,
           "title": "Exact transmitted OTLP payload rate by signal",
           "description": "Exact post-compression OTLP payload bytes accepted by the client transport on each send. This process-wide measurement excludes HTTP/gRPC framing, TLS, TCP/IP and kernel retransmission.",
           "links": [],
@@ -32360,10 +33225,10 @@
           }
         }
       },
-      "panel-400": {
+      "panel-411": {
         "kind": "Panel",
         "spec": {
-          "id": 400,
+          "id": 411,
           "title": "Exact exporter retry rate by signal",
           "description": "Exact second-and-later exporter retry-loop attempts for metrics and logs. Redirects and transparent connection retries are excluded.",
           "links": [],
@@ -32450,10 +33315,10 @@
           }
         }
       },
-      "panel-402": {
+      "panel-413": {
         "kind": "Panel",
         "spec": {
-          "id": 402,
+          "id": 413,
           "title": "Current collector availability",
           "description": "One current value-1 row per tenant and logical collector. collector_transport is the resolved collector transport, not the log-record ingest_transport.",
           "links": [],
@@ -32529,10 +33394,10 @@
           }
         }
       },
-      "panel-403": {
+      "panel-414": {
         "kind": "Panel",
         "spec": {
-          "id": 403,
+          "id": 414,
           "title": "Collector availability by state",
           "description": "Current logical-collector counts by bounded availability state. This is a snapshot, not a scrape-success or record-throughput count.",
           "links": [],
@@ -32610,10 +33475,10 @@
           }
         }
       },
-      "panel-404": {
+      "panel-415": {
         "kind": "Panel",
         "spec": {
-          "id": 404,
+          "id": 415,
           "title": "Intentional collector absence",
           "description": "Disabled and covered collectors are intentional absence, shown separately from runtime or startup failures.",
           "links": [],
@@ -32689,10 +33554,10 @@
           }
         }
       },
-      "panel-405": {
+      "panel-416": {
         "kind": "Panel",
         "spec": {
-          "id": 405,
+          "id": 416,
           "title": "Collector availability failures",
           "description": "Current permission-denied blocks, degraded runs, failed runs, and startup failures. This is deliberately separate from configured absence and subscription limitations.",
           "links": [],
@@ -32794,10 +33659,10 @@
           }
         }
       },
-      "panel-406": {
+      "panel-417": {
         "kind": "Panel",
         "spec": {
-          "id": 406,
+          "id": 417,
           "title": "Subscription and capability limitations",
           "description": "This non-failure view shows subscription and capability limitations: a partial license can keep a collector running with a reduced capability set, while an unavailable license blocks it. Exact omitted capabilities are available from the admin status, not labels.",
           "links": [],
@@ -32899,10 +33764,10 @@
           }
         }
       },
-      "panel-408": {
+      "panel-419": {
         "kind": "Panel",
         "spec": {
-          "id": 408,
+          "id": 419,
           "title": "Scrape success by collector",
           "description": "1 when the last reconciled run was empty or successful; 0 when it was partial or failed (including a recovered panic). A green tick is not evidence of data: several collectors succeed on an empty collection by design.\n\nColour meaning: the emitter's description states 1 if the last scrape result was empty or success, 0 for partial or failure. 0 is a partial or failed scrape, which is a completed runtime failure the emitter defines. Green starts at 1 so the failing state is the uncoloured one and cannot be mistaken for a threshold this repository invented.",
           "links": [],
@@ -33008,10 +33873,10 @@
           }
         }
       },
-      "panel-409": {
+      "panel-420": {
         "kind": "Panel",
         "spec": {
-          "id": 409,
+          "id": 420,
           "title": "Scrape duration by collector",
           "description": "",
           "links": [],
@@ -33098,10 +33963,10 @@
           }
         }
       },
-      "panel-410": {
+      "panel-421": {
         "kind": "Panel",
         "spec": {
-          "id": 410,
+          "id": 421,
           "title": "Scrape staleness (seconds since last healthy result)",
           "description": "Counts up from process start until the first empty or successful result, so a collector that has never been healthy shows a growing value rather than no series.",
           "links": [],
@@ -33177,10 +34042,10 @@
           }
         }
       },
-      "panel-411": {
+      "panel-422": {
         "kind": "Panel",
         "spec": {
-          "id": 411,
+          "id": 422,
           "title": "Age of the latest completed scrape",
           "description": "Wall-clock age of the latest completed run, whether it succeeded or failed.",
           "links": [],
@@ -33267,10 +34132,10 @@
           }
         }
       },
-      "panel-412": {
+      "panel-423": {
         "kind": "Panel",
         "spec": {
-          "id": 412,
+          "id": 423,
           "title": "Scrape budget (duration / interval)",
           "description": "At or above 1 a scrape takes as long as its own poll interval \u2014 no headroom, risk of overrun.\n\nColour meaning: 1.0 is a scrape consuming its entire poll interval, so it cannot finish before the next one is due. The boundary is the configured poll interval itself, not a chosen number.",
           "links": [],
@@ -33361,10 +34226,10 @@
           }
         }
       },
-      "panel-413": {
+      "panel-424": {
         "kind": "Panel",
         "spec": {
-          "id": 413,
+          "id": 424,
           "title": "Effective expected poll interval per collector",
           "description": "The scheduler's EFFECTIVE interval per collector (#299) \u2014 a clamped or defaulted value, never the raw config override. This is exactly what the collector-staleness alert's staleness/expected-interval ratio compares against, so a collector with a short or long interval gets its own correct multiple instead of one placeholder threshold.",
           "links": [],
@@ -33440,10 +34305,10 @@
           }
         }
       },
-      "panel-414": {
+      "panel-425": {
         "kind": "Panel",
         "spec": {
-          "id": 414,
+          "id": 425,
           "title": "Scrape error rate by error type",
           "description": "",
           "links": [],
@@ -33530,10 +34395,10 @@
           }
         }
       },
-      "panel-415": {
+      "panel-426": {
         "kind": "Panel",
         "spec": {
-          "id": 415,
+          "id": 426,
           "title": "Checkpoint persist error rate",
           "description": "The window succeeded but its high-water mark did not reach disk. The next tick still advances; the window is only re-polled after a restart.",
           "links": [],
@@ -33620,10 +34485,10 @@
           }
         }
       },
-      "panel-417": {
+      "panel-428": {
         "kind": "Panel",
         "spec": {
-          "id": 417,
+          "id": 428,
           "title": "Collector run rate by reconciled result",
           "description": "Separates healthy-empty polls from successful data-bearing polls and from partial or failed runs.",
           "links": [],
@@ -33710,10 +34575,10 @@
           }
         }
       },
-      "panel-418": {
+      "panel-429": {
         "kind": "Panel",
         "spec": {
-          "id": 418,
+          "id": 429,
           "title": "Source-record rate by outcome",
           "description": "One source row counts once at each lifecycle boundary; fetched, mapped, and terminal outcomes overlap and are deliberately unstacked. This is not the number of OTEL metric points or log records.",
           "links": [],
@@ -33800,10 +34665,10 @@
           }
         }
       },
-      "panel-419": {
+      "panel-430": {
         "kind": "Panel",
         "spec": {
-          "id": 419,
+          "id": 430,
           "title": "Dropped / errored source-record rate",
           "description": "Any nonzero value is record loss. `dropped` is a deliberate rejection such as a missing event timestamp; `errored` is decode or processing failure.",
           "links": [],
@@ -33890,10 +34755,10 @@
           }
         }
       },
-      "panel-420": {
+      "panel-431": {
         "kind": "Panel",
         "spec": {
-          "id": 420,
+          "id": 431,
           "title": "Source-event lag at emission",
           "description": "Source timestamp to graph2otel emission. It does not measure backend acceptance or OTLP delivery latency.",
           "links": [],
@@ -34007,10 +34872,10 @@
           }
         }
       },
-      "panel-421": {
+      "panel-432": {
         "kind": "Panel",
         "spec": {
-          "id": 421,
+          "id": 432,
           "title": "Payload type-mismatch rate",
           "description": "Report-only payload drift. Labels contain only source-controlled field names and closed JSON types, never field values.",
           "links": [],
@@ -34086,10 +34951,10 @@
           }
         }
       },
-      "panel-423": {
+      "panel-434": {
         "kind": "Panel",
         "spec": {
-          "id": 423,
+          "id": 434,
           "title": "Exact source-record rate by collector and traffic class",
           "description": "Exact logical source records fetched by completed collector runs. This traffic-class view comes from the same immutable snapshot as record.outcomes{outcome=\"fetched\"}. Normal runtime emits steady_state and cold_start_backfill; manual_replay is reserved and not emitted here.",
           "links": [],
@@ -34176,10 +35041,10 @@
           }
         }
       },
-      "panel-424": {
+      "panel-435": {
         "kind": "Panel",
         "spec": {
-          "id": 424,
+          "id": 435,
           "title": "Exact emitted-point rate by collector, signal and traffic class",
           "description": "Exact metric and log points after the central limiter and handed to the OpenTelemetry SDK. This is not backend acceptance or retention.",
           "links": [],
@@ -34266,10 +35131,10 @@
           }
         }
       },
-      "panel-425": {
+      "panel-436": {
         "kind": "Panel",
         "spec": {
-          "id": 425,
+          "id": 436,
           "title": "Estimated projected collector cost (configured period)",
           "description": "Estimate, not invoice. Present only when cost.enabled is true, using the operator-supplied rates and configured projection period. This projects recurring steady_state rows from cumulative process-lifetime observations; exceptional interval cost remains in the admin view. Logical record and point components are exact; the collector payload-byte allocation is estimated. A configured budget is display-only and never changes collector behavior.",
           "links": [],
@@ -34346,10 +35211,10 @@
           }
         }
       },
-      "panel-427": {
+      "panel-438": {
         "kind": "Panel",
         "spec": {
-          "id": 427,
+          "id": 438,
           "title": "Build info (process-wide)",
           "description": "One series for the graph2otel process. Tenant selection does not apply: duplicating build identity per tenant would create misleading copies of the same process fact.",
           "links": [],
@@ -34425,10 +35290,10 @@
           }
         }
       },
-      "panel-428": {
+      "panel-439": {
         "kind": "Panel",
         "spec": {
-          "id": 428,
+          "id": 439,
           "title": "Detected license tier by tenant",
           "description": "",
           "links": [],
@@ -34504,10 +35369,10 @@
           }
         }
       },
-      "panel-430": {
+      "panel-441": {
         "kind": "Panel",
         "spec": {
-          "id": 430,
+          "id": 441,
           "title": "Export job rate by result",
           "description": "",
           "links": [],
@@ -34594,10 +35459,10 @@
           }
         }
       },
-      "panel-431": {
+      "panel-442": {
         "kind": "Panel",
         "spec": {
-          "id": 431,
+          "id": 442,
           "title": "Export job duration",
           "description": "",
           "links": [],
@@ -34684,10 +35549,10 @@
           }
         }
       },
-      "panel-432": {
+      "panel-443": {
         "kind": "Panel",
         "spec": {
-          "id": 432,
+          "id": 443,
           "title": "Export polls to terminal state",
           "description": "",
           "links": [],
@@ -34774,10 +35639,10 @@
           }
         }
       },
-      "panel-433": {
+      "panel-444": {
         "kind": "Panel",
         "spec": {
-          "id": 433,
+          "id": 444,
           "title": "Downloaded export size",
           "description": "",
           "links": [],
@@ -34864,10 +35729,10 @@
           }
         }
       },
-      "panel-435": {
+      "panel-446": {
         "kind": "Panel",
         "spec": {
-          "id": 435,
+          "id": 446,
           "title": "Active series by source metric (process-wide)",
           "description": "Distinct series emitted per source metric across the shared process AFTER limiting \u2014 the series actually billed. Tenant selection does not apply.",
           "links": [],
@@ -34943,10 +35808,10 @@
           }
         }
       },
-      "panel-436": {
+      "panel-447": {
         "kind": "Panel",
         "spec": {
-          "id": 436,
+          "id": 447,
           "title": "Series clipped, by mode (process-wide)",
           "description": "mode=folded were summed into the `other` bucket; mode=dropped were discarded because the metric is not additive and a synthetic aggregate would be worse than the loss. Counts cover the shared process; tenant selection does not apply.",
           "links": [],
@@ -35032,10 +35897,10 @@
           }
         }
       },
-      "panel-437": {
+      "panel-448": {
         "kind": "Panel",
         "spec": {
-          "id": 437,
+          "id": 448,
           "title": "Total active series (process-wide)",
           "description": "Total distinct active series across the shared process during the last export interval. Tenant selection does not apply.",
           "links": [],
@@ -35114,10 +35979,10 @@
           }
         }
       },
-      "panel-438": {
+      "panel-449": {
         "kind": "Panel",
         "spec": {
-          "id": 438,
+          "id": 449,
           "title": "Configured per-metric series limit (process-wide)",
           "description": "One process-wide cardinality policy. Tenant selection does not apply.",
           "links": [],
@@ -35196,10 +36061,10 @@
           }
         }
       },
-      "panel-440": {
+      "panel-451": {
         "kind": "Panel",
         "spec": {
-          "id": 440,
+          "id": 451,
           "title": "Throttle (429) rate by workload",
           "description": "",
           "links": [],
@@ -35286,10 +36151,10 @@
           }
         }
       },
-      "panel-441": {
+      "panel-452": {
         "kind": "Panel",
         "spec": {
-          "id": 441,
+          "id": 452,
           "title": "Graph-reported throttle budget consumed",
           "description": "From the x-ms-throttle-limit-percentage response header, which is not sent on every 429 or every workload \u2014 an absent series does NOT mean the budget is healthy.",
           "links": [],
@@ -35376,10 +36241,10 @@
           }
         }
       },
-      "panel-442": {
+      "panel-453": {
         "kind": "Panel",
         "spec": {
-          "id": 442,
+          "id": 453,
           "title": "Outbound Graph request latency (p95)",
           "description": "",
           "links": [],
@@ -35466,10 +36331,10 @@
           }
         }
       },
-      "panel-443": {
+      "panel-454": {
         "kind": "Panel",
         "spec": {
-          "id": 443,
+          "id": 454,
           "title": "Outbound Graph 4xx / 5xx rate by workload",
           "description": "",
           "links": [],
@@ -35583,10 +36448,10 @@
           }
         }
       },
-      "panel-445": {
+      "panel-456": {
         "kind": "Panel",
         "spec": {
-          "id": 445,
+          "id": 456,
           "title": "Exchange Online request latency (p95)",
           "description": "",
           "links": [],
@@ -35673,10 +36538,10 @@
           }
         }
       },
-      "panel-446": {
+      "panel-457": {
         "kind": "Panel",
         "spec": {
-          "id": 446,
+          "id": 457,
           "title": "Exchange Online error and throttle rate",
           "description": "",
           "links": [],
@@ -35817,10 +36682,10 @@
           }
         }
       },
-      "panel-447": {
+      "panel-458": {
         "kind": "Panel",
         "spec": {
-          "id": 447,
+          "id": 458,
           "title": "Advanced hunting request latency (p95)",
           "description": "",
           "links": [],
@@ -35907,10 +36772,10 @@
           }
         }
       },
-      "panel-448": {
+      "panel-459": {
         "kind": "Panel",
         "spec": {
-          "id": 448,
+          "id": 459,
           "title": "Advanced hunting error and throttle rate",
           "description": "",
           "links": [],
@@ -36051,10 +36916,10 @@
           }
         }
       },
-      "panel-449": {
+      "panel-460": {
         "kind": "Panel",
         "spec": {
-          "id": 449,
+          "id": 460,
           "title": "MDCA request latency (p95)",
           "description": "",
           "links": [],
@@ -36141,10 +37006,10 @@
           }
         }
       },
-      "panel-450": {
+      "panel-461": {
         "kind": "Panel",
         "spec": {
-          "id": 450,
+          "id": 461,
           "title": "MDCA error and throttle rate",
           "description": "",
           "links": [],
@@ -36285,10 +37150,10 @@
           }
         }
       },
-      "panel-451": {
+      "panel-462": {
         "kind": "Panel",
         "spec": {
-          "id": 451,
+          "id": 462,
           "title": "O365 Activity request latency (p95)",
           "description": "",
           "links": [],
@@ -36375,10 +37240,10 @@
           }
         }
       },
-      "panel-452": {
+      "panel-463": {
         "kind": "Panel",
         "spec": {
-          "id": 452,
+          "id": 463,
           "title": "O365 Activity error and throttle rate",
           "description": "",
           "links": [],
@@ -36519,10 +37384,10 @@
           }
         }
       },
-      "panel-454": {
+      "panel-465": {
         "kind": "Panel",
         "spec": {
-          "id": 454,
+          "id": 465,
           "title": "Microsoft API drift rate \u2014 a response no longer matches what a collector expects",
           "description": "Report-only wire values outside a collector's mapped assumptions. Unexpected values do not drop records.",
           "links": [],
@@ -36609,10 +37474,10 @@
           }
         }
       },
-      "panel-456": {
+      "panel-467": {
         "kind": "Panel",
         "spec": {
-          "id": 456,
+          "id": 467,
           "title": "Records dropped as older than the backend accept window",
           "description": "Any nonzero value is data loss, and it is EXPECTED on a blob-derived stream: those replay historical records, so a record can age past the backend's 7-day accept window before it is ever read (#401). graph2otel drops it rather than sending a record the gateway rejects per-entry, because the loss is identical either way and only this way is it countable. Pair with 'Source-event lag at emission' above: a rising p95 there is the leading indicator of this counter starting to move. Note that record_outcomes counts these as emitted, so this counter \u2014 not that one \u2014 is the authoritative statement that they did not land.",
           "links": [],
@@ -36699,10 +37564,10 @@
           }
         }
       },
-      "panel-458": {
+      "panel-469": {
         "kind": "Panel",
         "spec": {
-          "id": 458,
+          "id": 469,
           "title": "Blob categories",
           "description": "Azure diagnostic-settings categories on the aadiam provider, by census state: consumed / enabled_unread (billed but read by no collector) / mapped_but_disabled (a collector polls a container that is never written) / disabled.",
           "links": [],
@@ -36789,10 +37654,10 @@
           }
         }
       },
-      "panel-459": {
+      "panel-470": {
         "kind": "Panel",
         "spec": {
-          "id": 459,
+          "id": 470,
           "title": "Blob endpoint paths",
           "description": "Distinct normalized Graph endpoint paths seen by this collector \u2014 headroom against the path cap (#185).",
           "links": [],
@@ -36879,10 +37744,10 @@
           }
         }
       },
-      "panel-460": {
+      "panel-471": {
         "kind": "Panel",
         "spec": {
-          "id": 460,
+          "id": 471,
           "title": "Blob event age",
           "description": "Freshest blob event age this tick \u2014 the metric propagation floor (#128).",
           "links": [],
@@ -36969,10 +37834,10 @@
           }
         }
       },
-      "panel-461": {
+      "panel-472": {
         "kind": "Panel",
         "spec": {
-          "id": 461,
+          "id": 472,
           "title": "Blob records dropped rate",
           "description": "Blob records dropped because they had no parseable event time (#275).",
           "links": [],
@@ -37059,10 +37924,10 @@
           }
         }
       },
-      "panel-462": {
+      "panel-473": {
         "kind": "Panel",
         "spec": {
-          "id": 462,
+          "id": 473,
           "title": "Blob self excluded rate",
           "description": "Blob records dropped by exclude_self because their appId matched the poller's proved authenticated application ID (#154).",
           "links": [],
@@ -37149,10 +38014,10 @@
           }
         }
       },
-      "panel-463": {
+      "panel-474": {
         "kind": "Panel",
         "spec": {
-          "id": 463,
+          "id": 474,
           "title": "Blob record rate: emitted as metrics vs gated",
           "description": "",
           "links": [],
@@ -37266,10 +38131,10 @@
           }
         }
       },
-      "panel-464": {
+      "panel-475": {
         "kind": "Panel",
         "spec": {
-          "id": 464,
+          "id": 475,
           "title": "Logpipeline self excluded rate",
           "description": "Graph-polled records dropped by exclude_self because their appId matched the poller's proved authenticated application ID (#176).",
           "links": [],
@@ -37356,10 +38221,10 @@
           }
         }
       },
-      "panel-466": {
+      "panel-477": {
         "kind": "Panel",
         "spec": {
-          "id": 466,
+          "id": 477,
           "title": "Annotation degraded",
           "description": "Whether the most recent Grafana annotation write failed and has not been recovered by a later success.",
           "links": [],
@@ -37438,10 +38303,10 @@
           }
         }
       },
-      "panel-467": {
+      "panel-478": {
         "kind": "Panel",
         "spec": {
-          "id": 467,
+          "id": 478,
           "title": "Annotation outcome rate: published vs dropped",
           "description": "",
           "links": [],
@@ -37555,10 +38420,10 @@
           }
         }
       },
-      "panel-469": {
+      "panel-480": {
         "kind": "Panel",
         "spec": {
-          "id": 469,
+          "id": 480,
           "title": "Blob diagnostic categories \u2014 which container, mapped or not",
           "description": "One record per diagnostic category found in the storage account, saying whether graph2otel has a mapper for it. An unmapped category is data arriving that nothing reads.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -37628,10 +38493,10 @@
           }
         }
       },
-      "panel-470": {
+      "panel-481": {
         "kind": "Panel",
         "spec": {
-          "id": 470,
+          "id": 481,
           "title": "Starts, versions and configuration fingerprints",
           "description": "One record per configured tenant on every process start, carrying the version, the Go runtime version and a one-way configuration fingerprint. This is the detail behind the deploy annotations on every time axis. A configuration change is two consecutive records whose config.fingerprint differs \u2014 the fingerprint is a hash, so it says THAT the configuration changed and never what it changed to. It is deliberately over-sensitive: it covers the whole configuration, so a change that does not alter behaviour can still move it. A rotated credential does not, because credentials are redacted by type before hashing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -37701,10 +38566,10 @@
           }
         }
       },
-      "panel-472": {
+      "panel-483": {
         "kind": "Panel",
         "spec": {
-          "id": 472,
+          "id": 483,
           "title": "Signal availability",
           "description": "Current collector state from graph2otel.collector.availability. Intentional absence is disabled (transport_not_configured, experimental_not_enabled, high_volume_not_enabled, disabled_by_config) or covered (covered_by_alternative). healthy_empty/empty is a successful zero-row source response. limited/partial_license is non-failure; blocked/license_unavailable identifies a missing entitlement, while blocked/permission_denied requires access. degraded and failed (including source_error) describe completed runtime outcomes; startup_failed describes initialization failure. An empty table is unknown, never evidence of disabled.",
           "links": [],
@@ -37929,10 +38794,10 @@
           }
         }
       },
-      "panel-473": {
+      "panel-484": {
         "kind": "Panel",
         "spec": {
-          "id": 473,
+          "id": 484,
           "title": "Read this before writing your own query",
           "description": "",
           "links": [],
@@ -37957,10 +38822,10 @@
           }
         }
       },
-      "panel-474": {
+      "panel-485": {
         "kind": "Panel",
         "spec": {
-          "id": 474,
+          "id": 485,
           "title": "Investigate one entity",
           "description": "",
           "links": [],
@@ -37985,10 +38850,10 @@
           }
         }
       },
-      "panel-475": {
+      "panel-486": {
         "kind": "Panel",
         "spec": {
-          "id": 475,
+          "id": 486,
           "title": "Which signals name this device",
           "description": "**Which of graph2otel's log signals name it, and how often.** This device's compliance, configuration, certificate, encryption, startup, logon and vulnerability records.\n\n**Identifier:** the device the record is ABOUT \u2014 the managed or onboarded device the source system names, never the device that observed the event.\n\n**Queried keys:** `device_id` (42 log events), `device_name` (38 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `aad_device_id`, `serial_number`, `device_serial_number`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\n**Read this first:** `device_id` is source-scoped. On `intune.*` it is Intune's managed-device id; on `defender.*` it is Defender's machine id. They are different id namespaces for the same physical machine and graph2otel does not map between them, so pivoting on an Intune id will not reach Defender rows. `device_name` is usually what bridges the two, and is usually what an alert quotes.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -38103,10 +38968,10 @@
           }
         }
       },
-      "panel-476": {
+      "panel-487": {
         "kind": "Panel",
         "spec": {
-          "id": 476,
+          "id": 487,
           "title": "Every record naming this device",
           "description": "**Every record that names it, newest first.** This device's compliance, configuration, certificate, encryption, startup, logon and vulnerability records.\n\n**Identifier:** the device the record is ABOUT \u2014 the managed or onboarded device the source system names, never the device that observed the event.\n\n**Queried keys:** `device_id` (42 log events), `device_name` (38 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `aad_device_id`, `serial_number`, `device_serial_number`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\n**Read this first:** `device_id` is source-scoped. On `intune.*` it is Intune's managed-device id; on `defender.*` it is Defender's machine id. They are different id namespaces for the same physical machine and graph2otel does not map between them, so pivoting on an Intune id will not reach Defender rows. `device_name` is usually what bridges the two, and is usually what an alert quotes.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -38201,10 +39066,10 @@
           }
         }
       },
-      "panel-477": {
+      "panel-488": {
         "kind": "Panel",
         "spec": {
-          "id": 477,
+          "id": 488,
           "title": "Which signals name this application or service principal",
           "description": "**Which of graph2otel's log signals name it, and how often.** This app's sign-ins, credential and federated-credential state, consent and permission grants, risk detections and graph activity.\n\n**Identifier:** the application the record is about. `app_id` is the Entra application (client) id, `service_principal_id` the directory object id of its service principal, and `application_id` the same app as other products name it. One app registration has all three and they are different values.\n\n**Queried keys:** `app_id` (15 log events), `service_principal_id` (5 log events), `application_id` (4 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `app_display_name`, `app_object_id`, `oauth_app_id`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -38345,10 +39210,10 @@
           }
         }
       },
-      "panel-478": {
+      "panel-489": {
         "kind": "Panel",
         "spec": {
-          "id": 478,
+          "id": 489,
           "title": "Every record naming this application or service principal",
           "description": "**Every record that names it, newest first.** This app's sign-ins, credential and federated-credential state, consent and permission grants, risk detections and graph activity.\n\n**Identifier:** the application the record is about. `app_id` is the Entra application (client) id, `service_principal_id` the directory object id of its service principal, and `application_id` the same app as other products name it. One app registration has all three and they are different values.\n\n**Queried keys:** `app_id` (15 log events), `service_principal_id` (5 log events), `application_id` (4 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `app_display_name`, `app_object_id`, `oauth_app_id`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -38468,12 +39333,12 @@
           }
         }
       },
-      "panel-479": {
+      "panel-490": {
         "kind": "Panel",
         "spec": {
-          "id": 479,
+          "id": 490,
           "title": "Which signals name this account",
-          "description": "**Which of graph2otel's log signals name it, and how often.** This account's sign-ins, risk detections, registration state, privilege elevations, certificates and mailbox records.\n\n**Identifier:** the account named on the record, as a user principal name. Three attribute names carry the same UPN value \u2014 Entra writes `user_principal_name`, Intune writes `upn`, Defender writes `account_upn` \u2014 so all three are queried and one input covers them.\n\n**Queried keys:** `user_principal_name` (14 log events), `upn` (13 log events), `account_upn` (6 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `user_id`, `account_object_id`, `account_name`, `user_display_name`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\n**Read this first:** Object-id keys are a different value shape from a UPN, so they are not folded into this input: pasting a UPN into an object-id filter would match nothing and the empty result would look like a verdict.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "**Which of graph2otel's log signals name it, and how often.** This account's sign-ins, risk detections, registration state, privilege elevations, certificates and mailbox records.\n\n**Identifier:** the account named on the record, as a user principal name. Three attribute names carry the same UPN value \u2014 Entra writes `user_principal_name`, Intune writes `upn`, Defender writes `account_upn` \u2014 so all three are queried and one input covers them.\n\n**Queried keys:** `user_principal_name` (15 log events), `upn` (13 log events), `account_upn` (6 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `user_id`, `account_object_id`, `account_name`, `user_display_name`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\n**Read this first:** Object-id keys are a different value shape from a UPN, so they are not folded into this input: pasting a UPN into an object-id filter would match nothing and the empty result would look like a verdict.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -38497,7 +39362,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "topk(80, sum by (tenant_id, event_name) (count_over_time({service_name=\"graph2otel\"} | event_name=~`^(entra\\.access_review_decision|entra\\.deleted_item|entra\\.directory_sync_error|entra\\.risk_detection|entra\\.risky_user|entra\\.signin|entra\\.user_registration|intune\\.cloud_pki_leaf_certificate|intune\\.device_certificate|intune\\.device_encryption|intune\\.managed_device|m365\\.collaboration_activity_user|m365\\.exchange_mailbox|m365\\.mailbox_usage)$` | tenant_id=~\"$tenant\" | user_principal_name=~`.+` | user_principal_name=`$pivot_account` [$__auto])))",
+                        "expr": "topk(80, sum by (tenant_id, event_name) (count_over_time({service_name=\"graph2otel\"} | event_name=~`^(entra\\.access_review_decision|entra\\.deleted_item|entra\\.directory_sync_error|entra\\.risk_detection|entra\\.risky_user|entra\\.signin|entra\\.user_registration|intune\\.cloud_pki_leaf_certificate|intune\\.device_certificate|intune\\.device_encryption|intune\\.managed_device|m365\\.collaboration_activity_user|m365\\.exchange_mailbox|m365\\.mailbox_usage|purview\\.ediscovery_hold_source)$` | tenant_id=~\"$tenant\" | user_principal_name=~`.+` | user_principal_name=`$pivot_account` [$__auto])))",
                         "editorMode": "code",
                         "queryType": "range",
                         "legendFormat": "{{tenant_id}} {{event_name}}"
@@ -38612,12 +39477,12 @@
           }
         }
       },
-      "panel-480": {
+      "panel-491": {
         "kind": "Panel",
         "spec": {
-          "id": 480,
+          "id": 491,
           "title": "Every record naming this account",
-          "description": "**Every record that names it, newest first.** This account's sign-ins, risk detections, registration state, privilege elevations, certificates and mailbox records.\n\n**Identifier:** the account named on the record, as a user principal name. Three attribute names carry the same UPN value \u2014 Entra writes `user_principal_name`, Intune writes `upn`, Defender writes `account_upn` \u2014 so all three are queried and one input covers them.\n\n**Queried keys:** `user_principal_name` (14 log events), `upn` (13 log events), `account_upn` (6 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `user_id`, `account_object_id`, `account_name`, `user_display_name`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\n**Read this first:** Object-id keys are a different value shape from a UPN, so they are not folded into this input: pasting a UPN into an object-id filter would match nothing and the empty result would look like a verdict.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "**Every record that names it, newest first.** This account's sign-ins, risk detections, registration state, privilege elevations, certificates and mailbox records.\n\n**Identifier:** the account named on the record, as a user principal name. Three attribute names carry the same UPN value \u2014 Entra writes `user_principal_name`, Intune writes `upn`, Defender writes `account_upn` \u2014 so all three are queried and one input covers them.\n\n**Queried keys:** `user_principal_name` (15 log events), `upn` (13 log events), `account_upn` (6 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `user_id`, `account_object_id`, `account_name`, `user_display_name`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\n**Read this first:** Object-id keys are a different value shape from a UPN, so they are not folded into this input: pasting a UPN into an object-id filter would match nothing and the empty result would look like a verdict.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -38641,7 +39506,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "{service_name=\"graph2otel\"} | event_name=~`^(entra\\.access_review_decision|entra\\.deleted_item|entra\\.directory_sync_error|entra\\.risk_detection|entra\\.risky_user|entra\\.signin|entra\\.user_registration|intune\\.cloud_pki_leaf_certificate|intune\\.device_certificate|intune\\.device_encryption|intune\\.managed_device|m365\\.collaboration_activity_user|m365\\.exchange_mailbox|m365\\.mailbox_usage)$` | tenant_id=~\"$tenant\" | user_principal_name=~`.+` | user_principal_name=`$pivot_account`",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=~`^(entra\\.access_review_decision|entra\\.deleted_item|entra\\.directory_sync_error|entra\\.risk_detection|entra\\.risky_user|entra\\.signin|entra\\.user_registration|intune\\.cloud_pki_leaf_certificate|intune\\.device_certificate|intune\\.device_encryption|intune\\.managed_device|m365\\.collaboration_activity_user|m365\\.exchange_mailbox|m365\\.mailbox_usage|purview\\.ediscovery_hold_source)$` | tenant_id=~\"$tenant\" | user_principal_name=~`.+` | user_principal_name=`$pivot_account`",
                         "editorMode": "code",
                         "queryType": "range"
                       }
@@ -38735,10 +39600,10 @@
           }
         }
       },
-      "panel-481": {
+      "panel-492": {
         "kind": "Panel",
         "spec": {
-          "id": 481,
+          "id": 492,
           "title": "Which signals name this email message",
           "description": "**Which of graph2otel's log signals name it, and how often.** This message's delivery verdict, attachments, urls and clicks, quarantine state and transport trace.\n\n**Identifier:** the message the record is about. `network_message_id` is Microsoft's per-tenant id used across the Defender for Office 365 tables; `internet_message_id` is the RFC 5322 Message-ID from the header \u2014 the one an end user or an external system can quote.\n\n**Queried keys:** `network_message_id` (7 log events), `internet_message_id` (4 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `message_trace_id`, `email_cluster_id`, `message_id`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -38853,10 +39718,10 @@
           }
         }
       },
-      "panel-482": {
+      "panel-493": {
         "kind": "Panel",
         "spec": {
-          "id": 482,
+          "id": 493,
           "title": "Every record naming this email message",
           "description": "**Every record that names it, newest first.** This message's delivery verdict, attachments, urls and clicks, quarantine state and transport trace.\n\n**Identifier:** the message the record is about. `network_message_id` is Microsoft's per-tenant id used across the Defender for Office 365 tables; `internet_message_id` is the RFC 5322 Message-ID from the header \u2014 the one an end user or an external system can quote.\n\n**Queried keys:** `network_message_id` (7 log events), `internet_message_id` (4 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `message_trace_id`, `email_cluster_id`, `message_id`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -38951,10 +39816,10 @@
           }
         }
       },
-      "panel-483": {
+      "panel-494": {
         "kind": "Panel",
         "spec": {
-          "id": 483,
+          "id": 494,
           "title": "Which signals name this security alert",
           "description": "**Which of graph2otel's log signals name it, and how often.** This alert's evidence rows and the graph security-alert record that reports it.\n\n**Identifier:** the alert the record is about. `alert_id` is the source product's own alert id \u2014 Defender XDR's on the advanced-hunting alert tables, PIM's on its own alerts, which are different namespaces \u2014 and `provider_alert_id` is the originating provider's id carried on the Graph security alert.\n\n**Queried keys:** `alert_id` (3 log events), `provider_alert_id` (1 log events). An input matching any one of them matches; an empty input matches nothing.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [
@@ -39075,10 +39940,10 @@
           }
         }
       },
-      "panel-484": {
+      "panel-495": {
         "kind": "Panel",
         "spec": {
-          "id": 484,
+          "id": 495,
           "title": "Every record naming this security alert",
           "description": "**Every record that names it, newest first.** This alert's evidence rows and the graph security-alert record that reports it.\n\n**Identifier:** the alert the record is about. `alert_id` is the source product's own alert id \u2014 Defender XDR's on the advanced-hunting alert tables, PIM's on its own alerts, which are different namespaces \u2014 and `provider_alert_id` is the originating provider's id carried on the Graph security alert.\n\n**Queried keys:** `alert_id` (3 log events), `provider_alert_id` (1 log events). An input matching any one of them matches; an empty input matches nothing.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [
@@ -39179,10 +40044,10 @@
           }
         }
       },
-      "panel-485": {
+      "panel-496": {
         "kind": "Panel",
         "spec": {
-          "id": 485,
+          "id": 496,
           "title": "Which signals name this security incident",
           "description": "**Which of graph2otel's log signals name it, and how often.** Every alert graph2otel has recorded under this incident.\n\n**Identifier:** the incident that groups one or more alerts, as Microsoft's Graph security API reports it on each alert it contains.\n\n**Queried keys:** `incident_id` (1 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Read this first:** Exactly one cataloged log signal carries `incident_id` today (`entra.security_alert`), so this pivot lists the alerts in the incident and nothing else. Pivot from each alert id for its evidence.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -39271,10 +40136,10 @@
           }
         }
       },
-      "panel-486": {
+      "panel-497": {
         "kind": "Panel",
         "spec": {
-          "id": 486,
+          "id": 497,
           "title": "Every record naming this security incident",
           "description": "**Every record that names it, newest first.** Every alert graph2otel has recorded under this incident.\n\n**Identifier:** the incident that groups one or more alerts, as Microsoft's Graph security API reports it on each alert it contains.\n\n**Queried keys:** `incident_id` (1 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Read this first:** Exactly one cataloged log signal carries `incident_id` today (`entra.security_alert`), so this pivot lists the alerts in the incident and nothing else. Pivot from each alert id for its evidence.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -39375,7 +40240,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-472"
+                                    "name": "panel-483"
                                   }
                                 }
                               },
@@ -39388,7 +40253,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-473"
+                                    "name": "panel-484"
                                   }
                                 }
                               },
@@ -39401,7 +40266,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-474"
+                                    "name": "panel-485"
                                   }
                                 }
                               }
@@ -39429,7 +40294,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-475"
+                                    "name": "panel-486"
                                   }
                                 }
                               },
@@ -39442,7 +40307,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-476"
+                                    "name": "panel-487"
                                   }
                                 }
                               }
@@ -39469,7 +40334,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-477"
+                                    "name": "panel-488"
                                   }
                                 }
                               },
@@ -39482,7 +40347,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-478"
+                                    "name": "panel-489"
                                   }
                                 }
                               }
@@ -39509,7 +40374,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-479"
+                                    "name": "panel-490"
                                   }
                                 }
                               },
@@ -39522,7 +40387,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-480"
+                                    "name": "panel-491"
                                   }
                                 }
                               }
@@ -39549,7 +40414,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-481"
+                                    "name": "panel-492"
                                   }
                                 }
                               },
@@ -39562,7 +40427,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-482"
+                                    "name": "panel-493"
                                   }
                                 }
                               }
@@ -39589,7 +40454,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-483"
+                                    "name": "panel-494"
                                   }
                                 }
                               },
@@ -39602,7 +40467,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-484"
+                                    "name": "panel-495"
                                   }
                                 }
                               }
@@ -39629,7 +40494,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-485"
+                                    "name": "panel-496"
                                   }
                                 }
                               },
@@ -39642,7 +40507,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-486"
+                                    "name": "panel-497"
                                   }
                                 }
                               }
@@ -45483,6 +46348,125 @@
                     {
                       "kind": "TabsLayoutTab",
                       "spec": {
+                        "title": "eDiscovery case health",
+                        "layout": {
+                          "kind": "RowsLayout",
+                          "spec": {
+                            "rows": [
+                              {
+                                "kind": "RowsLayoutRow",
+                                "spec": {
+                                  "title": "",
+                                  "collapse": false,
+                                  "layout": {
+                                    "kind": "GridLayout",
+                                    "spec": {
+                                      "items": [
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
+                                            "x": 0,
+                                            "y": 0,
+                                            "width": 12,
+                                            "height": 8,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-380"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
+                                            "x": 12,
+                                            "y": 0,
+                                            "width": 12,
+                                            "height": 8,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-381"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
+                                            "x": 0,
+                                            "y": 8,
+                                            "width": 12,
+                                            "height": 8,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-382"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
+                                            "x": 12,
+                                            "y": 8,
+                                            "width": 12,
+                                            "height": 8,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-383"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
+                                            "x": 0,
+                                            "y": 16,
+                                            "width": 12,
+                                            "height": 8,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-384"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
+                                            "x": 12,
+                                            "y": 16,
+                                            "width": 12,
+                                            "height": 8,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-385"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
+                                            "x": 0,
+                                            "y": 24,
+                                            "width": 12,
+                                            "height": 8,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-386"
+                                            }
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "hideHeader": true
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "kind": "TabsLayoutTab",
+                      "spec": {
                         "title": "Logs \u2014 which one, not how many (#162)",
                         "layout": {
                           "kind": "RowsLayout",
@@ -45506,7 +46490,7 @@
                                             "height": 10,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-380"
+                                              "name": "panel-388"
                                             }
                                           }
                                         },
@@ -45519,7 +46503,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-381"
+                                              "name": "panel-389"
                                             }
                                           }
                                         },
@@ -45532,7 +46516,46 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-382"
+                                              "name": "panel-390"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
+                                            "x": 0,
+                                            "y": 18,
+                                            "width": 12,
+                                            "height": 8,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-391"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
+                                            "x": 0,
+                                            "y": 26,
+                                            "width": 24,
+                                            "height": 10,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-392"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
+                                            "x": 0,
+                                            "y": 36,
+                                            "width": 12,
+                                            "height": 8,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-393"
                                             }
                                           }
                                         }
@@ -45611,7 +46634,7 @@
                                             "height": 4,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-383"
+                                              "name": "panel-394"
                                             }
                                           }
                                         },
@@ -45624,7 +46647,7 @@
                                             "height": 5,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-385"
+                                              "name": "panel-396"
                                             }
                                           }
                                         },
@@ -45637,7 +46660,7 @@
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-386"
+                                              "name": "panel-397"
                                             }
                                           }
                                         },
@@ -45650,7 +46673,7 @@
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-387"
+                                              "name": "panel-398"
                                             }
                                           }
                                         },
@@ -45663,7 +46686,7 @@
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-388"
+                                              "name": "panel-399"
                                             }
                                           }
                                         },
@@ -45676,7 +46699,7 @@
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-389"
+                                              "name": "panel-400"
                                             }
                                           }
                                         },
@@ -45689,7 +46712,7 @@
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-390"
+                                              "name": "panel-401"
                                             }
                                           }
                                         },
@@ -45702,7 +46725,7 @@
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-391"
+                                              "name": "panel-402"
                                             }
                                           }
                                         },
@@ -45715,7 +46738,7 @@
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-392"
+                                              "name": "panel-403"
                                             }
                                           }
                                         },
@@ -45728,7 +46751,7 @@
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-393"
+                                              "name": "panel-404"
                                             }
                                           }
                                         }
@@ -45769,7 +46792,7 @@
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-395"
+                                              "name": "panel-406"
                                             }
                                           }
                                         },
@@ -45782,7 +46805,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-396"
+                                              "name": "panel-407"
                                             }
                                           }
                                         },
@@ -45795,7 +46818,7 @@
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-397"
+                                              "name": "panel-408"
                                             }
                                           }
                                         },
@@ -45808,7 +46831,7 @@
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-398"
+                                              "name": "panel-409"
                                             }
                                           }
                                         },
@@ -45821,7 +46844,7 @@
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-399"
+                                              "name": "panel-410"
                                             }
                                           }
                                         },
@@ -45834,7 +46857,7 @@
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-400"
+                                              "name": "panel-411"
                                             }
                                           }
                                         }
@@ -45875,7 +46898,7 @@
                                             "height": 12,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-402"
+                                              "name": "panel-413"
                                             }
                                           }
                                         },
@@ -45888,7 +46911,7 @@
                                             "height": 7,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-403"
+                                              "name": "panel-414"
                                             }
                                           }
                                         },
@@ -45901,7 +46924,7 @@
                                             "height": 7,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-404"
+                                              "name": "panel-415"
                                             }
                                           }
                                         },
@@ -45914,7 +46937,7 @@
                                             "height": 7,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-405"
+                                              "name": "panel-416"
                                             }
                                           }
                                         },
@@ -45927,7 +46950,7 @@
                                             "height": 7,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-406"
+                                              "name": "panel-417"
                                             }
                                           }
                                         }
@@ -45968,7 +46991,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-408"
+                                              "name": "panel-419"
                                             }
                                           }
                                         },
@@ -45981,7 +47004,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-409"
+                                              "name": "panel-420"
                                             }
                                           }
                                         },
@@ -45994,7 +47017,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-410"
+                                              "name": "panel-421"
                                             }
                                           }
                                         },
@@ -46007,7 +47030,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-411"
+                                              "name": "panel-422"
                                             }
                                           }
                                         },
@@ -46020,7 +47043,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-412"
+                                              "name": "panel-423"
                                             }
                                           }
                                         },
@@ -46033,7 +47056,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-413"
+                                              "name": "panel-424"
                                             }
                                           }
                                         },
@@ -46046,7 +47069,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-414"
+                                              "name": "panel-425"
                                             }
                                           }
                                         },
@@ -46059,7 +47082,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-415"
+                                              "name": "panel-426"
                                             }
                                           }
                                         }
@@ -46100,7 +47123,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-417"
+                                              "name": "panel-428"
                                             }
                                           }
                                         },
@@ -46113,7 +47136,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-418"
+                                              "name": "panel-429"
                                             }
                                           }
                                         },
@@ -46126,7 +47149,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-419"
+                                              "name": "panel-430"
                                             }
                                           }
                                         },
@@ -46139,7 +47162,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-420"
+                                              "name": "panel-431"
                                             }
                                           }
                                         },
@@ -46152,7 +47175,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-421"
+                                              "name": "panel-432"
                                             }
                                           }
                                         }
@@ -46193,7 +47216,7 @@
                                             "height": 7,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-423"
+                                              "name": "panel-434"
                                             }
                                           }
                                         },
@@ -46206,7 +47229,7 @@
                                             "height": 7,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-424"
+                                              "name": "panel-435"
                                             }
                                           }
                                         },
@@ -46219,7 +47242,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-425"
+                                              "name": "panel-436"
                                             }
                                           }
                                         }
@@ -46260,7 +47283,7 @@
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-427"
+                                              "name": "panel-438"
                                             }
                                           }
                                         },
@@ -46273,7 +47296,7 @@
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-428"
+                                              "name": "panel-439"
                                             }
                                           }
                                         }
@@ -46314,7 +47337,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-430"
+                                              "name": "panel-441"
                                             }
                                           }
                                         },
@@ -46327,7 +47350,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-431"
+                                              "name": "panel-442"
                                             }
                                           }
                                         },
@@ -46340,7 +47363,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-432"
+                                              "name": "panel-443"
                                             }
                                           }
                                         },
@@ -46353,7 +47376,7 @@
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-433"
+                                              "name": "panel-444"
                                             }
                                           }
                                         }
@@ -46394,7 +47417,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-435"
+                                              "name": "panel-446"
                                             }
                                           }
                                         },
@@ -46407,7 +47430,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-436"
+                                              "name": "panel-447"
                                             }
                                           }
                                         },
@@ -46420,7 +47443,7 @@
                                             "height": 4,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-437"
+                                              "name": "panel-448"
                                             }
                                           }
                                         },
@@ -46433,7 +47456,7 @@
                                             "height": 4,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-438"
+                                              "name": "panel-449"
                                             }
                                           }
                                         }
@@ -46474,7 +47497,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-440"
+                                              "name": "panel-451"
                                             }
                                           }
                                         },
@@ -46487,7 +47510,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-441"
+                                              "name": "panel-452"
                                             }
                                           }
                                         },
@@ -46500,7 +47523,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-442"
+                                              "name": "panel-453"
                                             }
                                           }
                                         },
@@ -46513,7 +47536,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-443"
+                                              "name": "panel-454"
                                             }
                                           }
                                         }
@@ -46554,7 +47577,7 @@
                                             "height": 7,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-445"
+                                              "name": "panel-456"
                                             }
                                           }
                                         },
@@ -46567,7 +47590,7 @@
                                             "height": 7,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-446"
+                                              "name": "panel-457"
                                             }
                                           }
                                         },
@@ -46580,7 +47603,7 @@
                                             "height": 7,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-447"
+                                              "name": "panel-458"
                                             }
                                           }
                                         },
@@ -46593,7 +47616,7 @@
                                             "height": 7,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-448"
+                                              "name": "panel-459"
                                             }
                                           }
                                         },
@@ -46606,7 +47629,7 @@
                                             "height": 7,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-449"
+                                              "name": "panel-460"
                                             }
                                           }
                                         },
@@ -46619,7 +47642,7 @@
                                             "height": 7,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-450"
+                                              "name": "panel-461"
                                             }
                                           }
                                         },
@@ -46632,7 +47655,7 @@
                                             "height": 7,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-451"
+                                              "name": "panel-462"
                                             }
                                           }
                                         },
@@ -46645,7 +47668,7 @@
                                             "height": 7,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-452"
+                                              "name": "panel-463"
                                             }
                                           }
                                         }
@@ -46686,7 +47709,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-454"
+                                              "name": "panel-465"
                                             }
                                           }
                                         }
@@ -46727,7 +47750,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-456"
+                                              "name": "panel-467"
                                             }
                                           }
                                         }
@@ -46768,7 +47791,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-458"
+                                              "name": "panel-469"
                                             }
                                           }
                                         },
@@ -46781,7 +47804,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-459"
+                                              "name": "panel-470"
                                             }
                                           }
                                         },
@@ -46794,7 +47817,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-460"
+                                              "name": "panel-471"
                                             }
                                           }
                                         },
@@ -46807,7 +47830,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-461"
+                                              "name": "panel-472"
                                             }
                                           }
                                         },
@@ -46820,7 +47843,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-462"
+                                              "name": "panel-473"
                                             }
                                           }
                                         },
@@ -46833,7 +47856,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-463"
+                                              "name": "panel-474"
                                             }
                                           }
                                         },
@@ -46846,7 +47869,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-464"
+                                              "name": "panel-475"
                                             }
                                           }
                                         }
@@ -46887,7 +47910,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-466"
+                                              "name": "panel-477"
                                             }
                                           }
                                         },
@@ -46900,7 +47923,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-467"
+                                              "name": "panel-478"
                                             }
                                           }
                                         }
@@ -46941,7 +47964,7 @@
                                             "height": 10,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-469"
+                                              "name": "panel-480"
                                             }
                                           }
                                         },
@@ -46954,7 +47977,7 @@
                                             "height": 10,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-470"
+                                              "name": "panel-481"
                                             }
                                           }
                                         }

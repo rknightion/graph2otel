@@ -96,25 +96,37 @@ know the principal, which is a different failure from a missing scope (that one 
 `graph2otel check` cannot detect this: it reports what is granted and consented, and the grant is
 not the problem.
 
-Only Purview eDiscovery (`purview.ediscovery_cases`, opt-in) needs this today. It ships the
-eDiscovery (Premium) **case inventory** — a bounded count of cases by status plus a log twin
-per case. It is v1.0 GA, not a beta endpoint, but it is **off by default** because it needs
-two prerequisites a normal collector does not. To enable it:
+Only the two Purview eDiscovery collectors need this today, and both are opt-in.
+`purview.ediscovery_cases` ships the eDiscovery (Premium) **case inventory** — a bounded count
+of cases by status plus a log twin per case. `purview.ediscovery_case_health` goes one level
+down into each case: legal holds by enabled × has_errors, their data sources by
+source_type × hold_status, and long-running operations by action × status. Both are v1.0 GA,
+not beta endpoints, but both are **off by default** because they need two prerequisites a
+normal collector does not. To enable them:
 
 1. **Grant + admin-consent `eDiscovery.Read.All`** on the app registration (§2 above).
 2. **Register the app's service principal in the Security & Compliance data plane** via
    PowerShell — the Graph scope alone returns 401 until you do. See
    [`data-plane-registration.md`](./data-plane-registration.md) for the exact procedure.
-3. **Turn the collector on** — it is `Experimental` (opt-in), so it runs only when you
+3. **Turn the collector(s) on** — both are `Experimental` (opt-in), so each runs only when you
    enable it explicitly in config (quote the dotted key):
 
    ```yaml
    collectors:
      "purview.ediscovery_cases":
        enabled: true
+     "purview.ediscovery_case_health":
+       enabled: true
    ```
 
-Enabling the collector without step 2 produces a loud 401 on every poll (by design — a
+   `purview.ediscovery_case_health` fans out `1 + 4C + 2H` requests over some of the slowest
+   endpoints in Graph — an empty `legalHolds` list has been measured at 11–22 s — so it caps
+   the cases it polls per cycle and reports any shortfall as
+   `purview.ediscovery.case_health.cases_covered` against `…cases_total`. A covered count below
+   the total means the cap left part of the tenant unpolled this cycle, not that the tenant is
+   small.
+
+Enabling a collector without step 2 produces a loud 401 on every poll (by design — a
 swallowed 401 is how a half-configured data plane hides as "no cases"). `graph2otel check`
 cannot detect the missing data-plane registration: it reports what is granted and consented,
 and the grant is not the problem.
