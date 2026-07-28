@@ -289,6 +289,52 @@ class TestPushRequiresTheMeasuredFlags(unittest.TestCase):
         self.assertEqual(result["failures"], [])
         self.assertEqual(result["ungrouped"], ["g2o-record-integrity-loss"])
 
+    def test_an_ungroupable_rule_is_retried_without_its_group_so_content_lands(self):
+        """An UNGROUPABLE failure must not leave the rule's CONTENT stale.
+
+        The group phase pushes the manifest *with* its group label, so when the
+        API refuses the grouping the whole update is rejected — annotations,
+        query, thresholds and all. Reporting that as merely "differs in UI
+        grouping" was wrong: a live readback against the m7kni stack caught two
+        rules whose panel deep links stayed stale through a push that reported
+        no failures. The fix is a third phase retrying exactly those rules
+        group-less, the same shape the create phase already uses.
+        """
+        pushes = []
+
+        def fake_gcx(args, context, parse=True):
+            path = args[args.index("-p") + 1]
+            grouped = False
+            for name in sorted(os.listdir(path)):
+                with open(os.path.join(path, name), encoding="utf-8") as f:
+                    if "grafana.com/group:" in f.read():
+                        grouped = True
+            pushes.append(grouped)
+            if grouped:
+                return json.dumps({
+                    "type": "gcx.mutation_batch", "summary": {"succeeded": 0},
+                    "failures": [{"target": {"name": "g2o-record-integrity-loss"},
+                                  "error": f"403 Forbidden: {rules_deploy.UNGROUPABLE}"}],
+                })
+            return json.dumps({"type": "gcx.mutation_batch",
+                               "summary": {"succeeded": 1}, "failures": []})
+
+        manifests = {"g2o-record-integrity-loss.yaml":
+                     build_rules.render_app_platform()[
+                         "g2o-record-integrity-loss.yaml"]}
+        with mock.patch.object(rules_deploy, "gcx", fake_gcx):
+            result = rules_deploy.push(
+                "ctx", {build_rules.ALERT_GROUP: "uid"}, manifests, absent=set())
+
+        self.assertEqual(result["failures"], [])
+        self.assertEqual(result["ungrouped"], ["g2o-record-integrity-loss"])
+        self.assertIn(
+            "regroup", result["phases"],
+            "an UNGROUPABLE rule must be retried group-less or its content never updates")
+        self.assertEqual(result["phases"]["regroup"]["failures"], [])
+        self.assertEqual(pushes, [True, False],
+                         "the retry must push the SAME rule without its group label")
+
     def test_every_manifest_declares_api_provenance(self):
         """The other half of the same 409: without this annotation the update is
         refused with `provided provenance '', needs 'api'`."""

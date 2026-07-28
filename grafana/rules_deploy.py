@@ -217,10 +217,7 @@ def push(context: str, folder_uids: dict, manifests: dict,
     # Phase 2 pushes every rule WITH its group. For a rule that already belongs
     # to the group this is an ordinary update. For one this run just created it
     # fails with `cannot set group when updating un-grouped rule` — see
-    # UNGROUPABLE. That is a genuine API limitation, not a defect in the push, so
-    # it is reported as `ungrouped` rather than swallowed OR counted as a failure:
-    # the rule exists, evaluates on its own `spec.trigger.interval`, and differs
-    # only in its UI grouping.
+    # UNGROUPABLE. That is a genuine API limitation, not a defect in the push.
     phases["group"] = _push_dir(context, resolved)
     ungrouped, real_failures = [], []
     for failure in phases["group"]["failures"]:
@@ -228,6 +225,35 @@ def push(context: str, folder_uids: dict, manifests: dict,
             ungrouped.append(failure["target"]["name"])
         else:
             real_failures.append(failure)
+
+    # Phase 3 retries exactly the UNGROUPABLE rules with their group labels
+    # stripped, so their CONTENT still lands.
+    #
+    # This phase exists because leaving it out was a live bug, not a
+    # theoretical gap. A rejected push applies NOTHING — annotations, query,
+    # thresholds and all — so an UNGROUPABLE rule kept whatever content it had
+    # while the run reported zero failures. A read-back against the m7kni stack
+    # on 2026-07-28 caught two rules whose dashboard deep links were still
+    # pointing at panel ids from before the last dashboard change, through a
+    # push that looked clean. The old comment here claimed such a rule "differs
+    # only in its UI grouping"; that was true of the intent and false of the
+    # effect.
+    #
+    # They stay named in `ungrouped` afterwards: the content is now current but
+    # the rule genuinely is not in the group, and the read-back reports that as
+    # its own signal rather than as content drift.
+    retry = {fname: strip_group_labels(data)
+             for fname, data in resolved.items()
+             if fname[: -len(".yaml")] in set(ungrouped)}
+    if retry:
+        # Guarded on `retry`, not on `ungrouped`: a name reported by the API
+        # that matches nothing in this push would otherwise send an EMPTY
+        # directory to `gcx resources push`, which is a request that can only
+        # produce noise — no rule to update, and any failure it reports is
+        # about nothing.
+        phases["regroup"] = _push_dir(context, retry)
+        real_failures.extend(phases["regroup"]["failures"])
+
     return {"phases": phases, "pushed": phases["group"]["pushed"],
             "failures": real_failures, "ungrouped": sorted(ungrouped)}
 
