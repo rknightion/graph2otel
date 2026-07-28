@@ -44,6 +44,28 @@ SECTIONS = [
         "defender.mdo.policies",
         "defender.mdo.protection_enabled",
         "defender.quarantine.held_messages.total",
+        # #354, the rule layer. A policy says what protection is applied; a rule
+        # says to whom. The two panels that matter are the last two: an
+        # unreferenced policy is configured and inert, and an unscoped enabled
+        # rule applies org-wide — read together they answer "is preset
+        # protection actually reaching anyone", which the policy panels above
+        # structurally cannot.
+        "defender.mdo.rules",
+        "defender.mdo.rules.conditions",
+        "defender.mdo.rules.unscoped",
+        "defender.mdo.unreferenced_policies",
+    ]),
+    ("Exposure graph (opt-in: hunting.enabled)", [
+        # #350. node_label and edge_label are Microsoft's own ontology, so a
+        # table by label IS the census. `twinned` is the load-bearing dimension:
+        # it distinguishes "we saw nothing" from "we deliberately did not twin
+        # 990,000 CVE and recommendation nodes", which on a raw count panel look
+        # identical.
+        ("Exposure graph nodes by label (twinned=false is bulk inventory, counted not twinned)",
+         ["defender.exposure_graph.nodes"], {"viz": "table", "w": 12, "h": 8}),
+        ("Exposure graph edges by label", ["defender.exposure_graph.edges"],
+         {"viz": "table", "w": 12, "h": 8}),
+        "defender.exposure_graph.excluded_labels",
     ]),
     ("OAuth apps", [
         "defender.oauth_app.apps",
@@ -84,6 +106,14 @@ LOGS = [
     {"kind": "table", "event": "defender.vulnerability",
      "title": "Top vulnerable software (which CVE, which device)",
      "by": ["software_name", "severity"]},
+    {"kind": "table", "event": "defender.exposure_graph_node",
+     "title": "Exposure graph — the investigable entities, by label and category",
+     "by": ["node_label", "categories"]},
+    {"kind": "logs", "event": "defender.mdo_rule",
+     "title": "MDO protection rules — which policy reaches whom, in what priority",
+     "desc": "Recipient addresses, groups and domains are structured metadata here and "
+             "never metric labels (#112). Empty unless exchange_online.enabled is set.",
+     "w": 24, "h": 10},
     {"kind": "rate", "event": "defender.device_logon",
      "title": "Device logon rate by logon type",
      "by": ["logon_type", "action_type"]},

@@ -1,0 +1,38 @@
+{
+  "@odata.context": "https://outlook.office365.com/adminapi/beta/4b8c18bd-2f9f-4227-af55-9f1061cf9c32/$metadata#Collection(Exchange.GenericHashTable)",
+  "adminapi.warnings@odata.type": "#Collection(String)",
+  "@adminapi.warnings": [],
+  "value": [
+    {
+      "SafeAttachmentPolicy": "Built-In Protection Policy",
+      "SafeLinksPolicy": "Built-In Protection Policy",
+      "State": "Enabled",
+      "Priority@data.type": "System.Int32",
+      "Priority": 0,
+      "Comments": null,
+      "Description": "Take the following actions:\r\n\tApply safe attachment policy \"Built-In Protection Policy\"., Apply safe links policy \"Built-In Protection Policy\".\r\n",
+      "RuleVersion": "14.0.0.0",
+      "SentTo": null,
+      "SentToMemberOf": null,
+      "RecipientDomainIs": null,
+      "ExceptIfSentTo": null,
+      "ExceptIfSentToMemberOf": null,
+      "ExceptIfRecipientDomainIs": null,
+      "Conditions": null,
+      "Exceptions": null,
+      "Identity": "ATP Built-In Protection Rule",
+      "DistinguishedName": "CN=ATP Built-In Protection Rule,CN=ATPBuiltInProtectionRuleVersioned,CN=Rules,CN=Transport Settings,CN=Configuration,CN=m7knio.onmicrosoft.com,CN=ConfigurationUnits,DC=gbrp265a018,DC=prod,DC=outlook,DC=com",
+      "Guid@data.type": "System.Guid",
+      "Guid@odata.type": "#Guid",
+      "Guid": "ab6e621b-0877-4828-a3fa-85544744a3cb",
+      "ImmutableId@data.type": "System.Guid",
+      "ImmutableId@odata.type": "#Guid",
+      "ImmutableId": "ab6e621b-0877-4828-a3fa-85544744a3cb",
+      "OrganizationId": "gbrp265a018.prod.outlook.com/Microsoft Exchange Hosted Organizations/m7knio.onmicrosoft.com - gbrp265a018.prod.outlook.com/ConfigurationUnits/m7knio.onmicrosoft.com/Configuration",
+      "Name": "ATP Built-In Protection Rule",
+      "IsValid": true,
+      "WhenChanged@data.type": "System.DateTime",
+      "WhenChanged": "2026-07-15T19:29:12.0000000+00:00"
+    }
+  ]
+}

@@ -33,8 +33,8 @@ spec:
     description: "graph2otel_scrape_staleness_seconds / graph2otel_collector_expected_interval_seconds for collector={{ $labels.collector }}, tenant {{ $labels.tenant_id }} has exceeded 3 for 5m — i.e. it has been more than 3x that COLLECTOR'S OWN effective poll interval (not a fixed second count) since its last successful scrape. Both metrics carry exactly (tenant_id, collector), so the division is a one-to-one vector match with no on()/ignoring() needed. 3x tolerates one missed poll plus backoff jitter without paging — several workloads have mandatory client-side rate limiters (reporting 5/10s, Identity Protection 1/s, Intune export 48/min) that make an occasional missed poll routine rather than a fault; a tighter 2x was rejected for exactly that reason. The rule sets its no-data state to Alerting because the whole query returning zero rows means every collector's self-obs signal went dark at once — the exporter process died, or a tenant's only collector was removed. It does NOT mean one collector's series disappearing: Grafana evaluates this rule per (tenant_id, collector) combination the query actually returns, so when ONE collector among several is deliberately removed (or disabled), its ratio series simply stops existing and its alert instance resolves silently — the other collectors' instances are unaffected and noDataState never applies to it. That silent, clean disappearance is the deliberately removed collector's correct outcome, not an accident."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-collector-staleness"
     __dashboardUid__: "graph2otel"
-    __panelId__: "388"
-    dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=388"
+    __panelId__: "398"
+    dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=398"
   expressions:
     A:
       model:

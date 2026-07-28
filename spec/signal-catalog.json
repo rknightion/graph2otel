@@ -1,5 +1,5 @@
 {
-  "package_count": 168,
+  "package_count": 170,
   "domains": [
     "defender",
     "entra",
@@ -75,6 +75,53 @@
       ]
     },
     {
+      "name": "defender.exposure_graph.edges",
+      "prometheus_name": "defender_exposure_graph_edges",
+      "unit": "{edge}",
+      "kind": "gauge",
+      "description": "ExposureGraphEdges rows (pruned of bulk-inventory node labels), by edge label and whether the label was twinned.",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "edge_label",
+        "twinned"
+      ],
+      "packages": [
+        "internal/collectors/defender/exposuregraph"
+      ]
+    },
+    {
+      "name": "defender.exposure_graph.excluded_labels",
+      "prometheus_name": "defender_exposure_graph_excluded_labels",
+      "unit": "{label}",
+      "kind": "gauge",
+      "description": "Node and edge labels excluded from twinning as bulk inventory (population over the twin threshold), by entity type.",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "entity_type"
+      ],
+      "packages": [
+        "internal/collectors/defender/exposuregraph"
+      ]
+    },
+    {
+      "name": "defender.exposure_graph.nodes",
+      "prometheus_name": "defender_exposure_graph_nodes",
+      "unit": "{node}",
+      "kind": "gauge",
+      "description": "ExposureGraphNodes rows, by node label and whether the label was twinned.",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "node_label",
+        "twinned"
+      ],
+      "packages": [
+        "internal/collectors/defender/exposuregraph"
+      ]
+    },
+    {
       "name": "defender.mdo.policies",
       "prometheus_name": "defender_mdo_policies",
       "unit": "{policy}",
@@ -103,6 +150,68 @@
       ],
       "packages": [
         "internal/collectors/defender/mdopolicies"
+      ]
+    },
+    {
+      "name": "defender.mdo.rules",
+      "prometheus_name": "defender_mdo_rules",
+      "unit": "{rule}",
+      "kind": "gauge",
+      "description": "Microsoft Defender for Office 365 / EOP protection rules, by rule family and state. Every (rule_family, state) pair is seeded to 0 for a family that was successfully read, so a rule appearing where none existed is a change from 0 rather than a series materializing from nothing. A family whose fetch FAILED this cycle emits no point at all — a failed fetch is a gap, not a measured zero.",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "rule_family",
+        "state"
+      ],
+      "packages": [
+        "internal/collectors/defender/mdorules"
+      ]
+    },
+    {
+      "name": "defender.mdo.rules.conditions",
+      "prometheus_name": "defender_mdo_rules_conditions",
+      "unit": "{rule}",
+      "kind": "gauge",
+      "description": "MDO/EOP rules by rule family and which recipient condition they carry (sent_to, sent_to_member_of, recipient_domain_is, except_sent_to, except_sent_to_member_of, except_recipient_domain_is). The recipient VALUES are twin-only (#112); this counts only which condition KIND is present.",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "condition",
+        "rule_family"
+      ],
+      "packages": [
+        "internal/collectors/defender/mdorules"
+      ]
+    },
+    {
+      "name": "defender.mdo.rules.unscoped",
+      "prometheus_name": "defender_mdo_rules_unscoped",
+      "unit": "{rule}",
+      "kind": "gauge",
+      "description": "ENABLED MDO/EOP rules per rule family with no recipient condition on any include axis (SentTo, SentToMemberOf, RecipientDomainIs) — rules that apply org-wide. Every successfully-read rule_family is seeded to 0; a family whose fetch failed this cycle emits no point.",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "rule_family"
+      ],
+      "packages": [
+        "internal/collectors/defender/mdorules"
+      ]
+    },
+    {
+      "name": "defender.mdo.unreferenced_policies",
+      "prometheus_name": "defender_mdo_unreferenced_policies",
+      "unit": "{policy}",
+      "kind": "gauge",
+      "description": "Microsoft Defender for Office 365 / EOP policies not referenced by any ENABLED rule, by policy type — a configured control nothing currently applies. Suppressed entirely (no points emitted) for a cycle where any of the seven policy fetches failed, rather than reporting a false zero.",
+      "additive": true,
+      "domain": "defender",
+      "attr_keys": [
+        "policy_type"
+      ],
+      "packages": [
+        "internal/collectors/defender/mdorules"
       ]
     },
     {
@@ -6435,6 +6544,104 @@
       ]
     },
     {
+      "event_name": "defender.exposure_graph_edge",
+      "domain": "defender",
+      "attr_keys": [
+        "delegated_permissions",
+        "edge_id",
+        "edge_label",
+        "has_primary_refresh_token",
+        "is_local_admin",
+        "logon_methods",
+        "role_permissions",
+        "source_node_id",
+        "source_node_label",
+        "source_node_name",
+        "target_node_id",
+        "target_node_label",
+        "target_node_name",
+        "user_rights"
+      ],
+      "packages": [
+        "internal/collectors/defender/exposuregraph"
+      ]
+    },
+    {
+      "event_name": "defender.exposure_graph_node",
+      "domain": "defender",
+      "attr_keys": [
+        "aad_device_id",
+        "account_display_name",
+        "account_domain",
+        "account_enabled",
+        "account_upn",
+        "agent_id",
+        "agent_name",
+        "agent_version",
+        "alternative_names",
+        "app_id",
+        "app_owner_organization_id",
+        "base_model_name",
+        "base_model_version",
+        "categories",
+        "collection_type",
+        "created_by",
+        "created_date_time",
+        "criticality_level",
+        "criticality_rule_names",
+        "deprecation_date",
+        "device_category",
+        "device_name",
+        "device_subtype",
+        "device_type",
+        "email_address",
+        "entity_id_types",
+        "entity_ids",
+        "exposure_score",
+        "first_seen",
+        "has_ad_leaked_credentials",
+        "has_leaked_credentials",
+        "hierarchy_identifier",
+        "hierarchy_type",
+        "identity_type",
+        "is_customer_facing",
+        "is_excluded",
+        "is_expired",
+        "is_hybrid_azure_ad_joined",
+        "last_seen",
+        "model_name",
+        "model_version",
+        "node_id",
+        "node_label",
+        "node_name",
+        "onboarding_status",
+        "os_platform",
+        "os_platform_friendly_name",
+        "os_version",
+        "os_version_friendly_name",
+        "platform",
+        "primary_provider",
+        "published_agent_indicator",
+        "published_status",
+        "publisher_domain",
+        "publisher_name",
+        "recommendation_category",
+        "risk_score",
+        "rule_based_criticality_level",
+        "saas_name",
+        "security_issue",
+        "sensor_health_state",
+        "service_principal_type",
+        "severity",
+        "subscription_name",
+        "task_capabilities",
+        "vendor"
+      ],
+      "packages": [
+        "internal/collectors/defender/exposuregraph"
+      ]
+    },
+    {
       "event_name": "defender.identity_info",
       "domain": "defender",
       "attr_keys": [
@@ -6537,6 +6744,46 @@
       ],
       "packages": [
         "internal/collectors/defender/mdopolicies"
+      ]
+    },
+    {
+      "event_name": "defender.mdo_rule",
+      "domain": "defender",
+      "attr_keys": [
+        "description",
+        "except_if_recipient_domain_is",
+        "except_if_sent_to",
+        "except_if_sent_to_member_of",
+        "guid",
+        "ingest_transport",
+        "is_valid",
+        "policy_name",
+        "priority",
+        "recipient_domain_is",
+        "referenced_policies",
+        "rule_family",
+        "rule_identity",
+        "rule_name",
+        "rule_version",
+        "sent_to",
+        "sent_to_member_of",
+        "state",
+        "when_changed"
+      ],
+      "packages": [
+        "internal/collectors/defender/mdorules"
+      ]
+    },
+    {
+      "event_name": "defender.mdo_unreferenced_policy",
+      "domain": "defender",
+      "attr_keys": [
+        "ingest_transport",
+        "policy_name",
+        "policy_type"
+      ],
+      "packages": [
+        "internal/collectors/defender/mdorules"
       ]
     },
     {

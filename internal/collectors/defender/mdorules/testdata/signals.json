@@ -1,0 +1,76 @@
+{
+  "Metrics": [
+    {
+      "Name": "defender.mdo.rules",
+      "Unit": "{rule}",
+      "Kind": "gauge",
+      "Description": "Microsoft Defender for Office 365 / EOP protection rules, by rule family and state. Every (rule_family, state) pair is seeded to 0 for a family that was successfully read, so a rule appearing where none existed is a change from 0 rather than a series materializing from nothing. A family whose fetch FAILED this cycle emits no point at all — a failed fetch is a gap, not a measured zero.",
+      "AttrKeys": [
+        "rule_family",
+        "state"
+      ]
+    },
+    {
+      "Name": "defender.mdo.rules.conditions",
+      "Unit": "{rule}",
+      "Kind": "gauge",
+      "Description": "MDO/EOP rules by rule family and which recipient condition they carry (sent_to, sent_to_member_of, recipient_domain_is, except_sent_to, except_sent_to_member_of, except_recipient_domain_is). The recipient VALUES are twin-only (#112); this counts only which condition KIND is present.",
+      "AttrKeys": [
+        "condition",
+        "rule_family"
+      ]
+    },
+    {
+      "Name": "defender.mdo.rules.unscoped",
+      "Unit": "{rule}",
+      "Kind": "gauge",
+      "Description": "ENABLED MDO/EOP rules per rule family with no recipient condition on any include axis (SentTo, SentToMemberOf, RecipientDomainIs) — rules that apply org-wide. Every successfully-read rule_family is seeded to 0; a family whose fetch failed this cycle emits no point.",
+      "AttrKeys": [
+        "rule_family"
+      ]
+    },
+    {
+      "Name": "defender.mdo.unreferenced_policies",
+      "Unit": "{policy}",
+      "Kind": "gauge",
+      "Description": "Microsoft Defender for Office 365 / EOP policies not referenced by any ENABLED rule, by policy type — a configured control nothing currently applies. Suppressed entirely (no points emitted) for a cycle where any of the seven policy fetches failed, rather than reporting a false zero.",
+      "AttrKeys": [
+        "policy_type"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "defender.mdo_rule",
+      "AttrKeys": [
+        "description",
+        "except_if_recipient_domain_is",
+        "except_if_sent_to",
+        "except_if_sent_to_member_of",
+        "guid",
+        "ingest_transport",
+        "is_valid",
+        "policy_name",
+        "priority",
+        "recipient_domain_is",
+        "referenced_policies",
+        "rule_family",
+        "rule_identity",
+        "rule_name",
+        "rule_version",
+        "sent_to",
+        "sent_to_member_of",
+        "state",
+        "when_changed"
+      ]
+    },
+    {
+      "EventName": "defender.mdo_unreferenced_policy",
+      "AttrKeys": [
+        "ingest_transport",
+        "policy_name",
+        "policy_type"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+[
+ {
+  "EdgeLabel": "can authenticate as",
+  "n": 122
+ },
+ {
+  "EdgeLabel": "has permissions to",
+  "n": 120
+ },
+ {
+  "EdgeLabel": "has credentials of",
+  "n": 20
+ },
+ {
+  "EdgeLabel": "member of",
+  "n": 17
+ },
+ {
+  "EdgeLabel": "routes traffic to",
+  "n": 16
+ },
+ {
+  "EdgeLabel": "can impersonate as",
+  "n": 15
+ },
+ {
+  "EdgeLabel": "can authenticate to",
+  "n": 14
+ },
+ {
+  "EdgeLabel": "runs on",
+  "n": 3
+ },
+ {
+  "EdgeLabel": "contains",
+  "n": 3
+ },
+ {
+  "EdgeLabel": "affecting",
+  "n": 2
+ },
+ {
+  "EdgeLabel": "frequently logged in by",
+  "n": 2
+ },
+ {
+  "EdgeLabel": "has role on",
+  "n": 2
+ },
+ {
+  "EdgeLabel": "used by",
+  "n": 1
+ }
+]

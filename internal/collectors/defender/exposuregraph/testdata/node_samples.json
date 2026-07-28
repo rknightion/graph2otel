@@ -1,0 +1,692 @@
+[
+ {
+  "NodeLabel": "baseModel",
+  "NodeId": "5261a20334ee44e7af8b88969b583674",
+  "NodeName": "gpt-realtime-mini version 2025-10-06",
+  "Categories@odata.type": "#Collection(String)",
+  "Categories": [
+   "AI",
+   "ai_model"
+  ],
+  "EntityIds@odata.type": "#Collection(String)",
+  "EntityIds": [
+   "{\"type\":\"AiModelNameAndVersion\",\"id\":\"name=gpt-realtime-mini;version=2025-10-06\"}"
+  ],
+  "NodeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+    "aiModelMetadata": {
+     "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+     "type": "AiModelMetadata",
+     "createdBy": "Microsoft",
+     "modelName": "gpt-realtime-mini",
+     "modelVersion": "2025-10-06T00:00:00.0000000Z",
+     "baseModelName": "gpt-realtime-mini",
+     "baseModelVersion": "2025-10-06T00:00:00.0000000Z",
+     "collectionType": "OpenAI",
+     "isExpired": false,
+     "depricationDate": "2026-09-21T00:00:00.0000000Z",
+     "taskCapabilities@odata.type": "#Collection(String)",
+     "taskCapabilities": [
+      "realtime"
+     ],
+     "creationTime": "2025-10-06T00:00:00.0000000Z"
+    }
+   }
+  }
+ },
+ {
+  "NodeLabel": "serviceprincipal",
+  "NodeId": "d760751e951643a89f910fca09dc0b0f",
+  "NodeName": "d8e62520-b67c-4001-84c6-229a1c45b102",
+  "Categories@odata.type": "#Collection(String)",
+  "Categories": [
+   "application_identity",
+   "environmentAzure",
+   "environmentCloud",
+   "identities",
+   "identity"
+  ],
+  "EntityIds@odata.type": "#Collection(String)",
+  "EntityIds": [
+   "{\"type\":\"AadObjectId\",\"id\":\"tenantid=4b8c18bd-2f9f-4227-af55-9f1061cf9c32;objectid=d8e62520-b67c-4001-84c6-229a1c45b102\"}"
+  ],
+  "NodeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+    "tags@odata.type": "#Collection(String)",
+    "tags": [],
+    "accountDisplayName": "OneNote",
+    "accountEnabled": true,
+    "appId": "2d4d3d8e-2be3-4bef-9f87-7875a61c29de",
+    "servicePrincipalType": "Application",
+    "appOwnerOrganizationId": "f8cdef31-a31e-4b4a-93e4-5f571e91255a",
+    "publisherName": "Microsoft Services"
+   }
+  }
+ },
+ {
+  "NodeLabel": "ai-agent",
+  "NodeId": "39fc25df0d794090b8b7110f3bb541e6",
+  "NodeName": "Perfect Wiki",
+  "Categories@odata.type": "#Collection(String)",
+  "Categories": [
+   "AI",
+   "ai_agent",
+   "ai_service",
+   "environmentAzure",
+   "environmentCloud"
+  ],
+  "EntityIds@odata.type": "#Collection(String)",
+  "EntityIds": [
+   "{\"type\":\"A365RegistryAIAgentId\",\"id\":\"tenantid=4b8c18bd-2f9f-4227-af55-9f1061cf9c32;titleid=p_be373803-9c6c-2af3-80c9-c857df4e4f8d\"}"
+  ],
+  "NodeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+    "publishedAgentIndicator": true,
+    "aiAgentMetadata": {
+     "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+     "type": "AiAgentMetadata",
+     "name": "Perfect Wiki",
+     "id": "7859040e-bfaf-4054-bcd9-50cfd88dec3b",
+     "platform": "Other",
+     "agentVersion": "1.0.51",
+     "createdAt": "2024-12-14T19:19:21.7911879Z",
+     "publishedStatus": "Published",
+     "description": "Turn scattered company knowledge into instant AI-powered answers"
+    }
+   }
+  }
+ },
+ {
+  "NodeLabel": "mdcManagementRecommendation",
+  "NodeId": "82cbd351ea744ca4bfd58d7893a059ce",
+  "NodeName": "Vulnerability Assessment should be configured on SQL Server 2012 and higher only",
+  "Categories@odata.type": "#Collection(String)",
+  "Categories": [
+   "finding",
+   "management_finding"
+  ],
+  "EntityIds@odata.type": "#Collection(String)",
+  "EntityIds": [
+   "{\"type\":\"MdcAssessmentId\",\"id\":\"82735d78-e25e-4dc1-bf02-11136003cd69\"}"
+  ],
+  "NodeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+    "description": "To run a Vulnerability Assessment scan on your SQL Server, the server needs to be upgraded to SQL Server 2012 or higher.SQL Server 2008 R2 and below are no longer supported by Microsoft. See <a href='https://www.microsoft.com/en-us/cloud-platform/windows-sql-server-2008'>here</a>",
+    "severity": "High",
+    "recommendationCategory": "Unknown",
+    "securityIssue": {
+     "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+     "type": "MdcRecommandationSecurityIssue",
+     "securityIssue": "Management"
+    }
+   }
+  }
+ },
+ {
+  "NodeLabel": "device",
+  "NodeId": "ce6b5df83a3b4a3dabfe61cc31649675",
+  "NodeName": "localhost",
+  "Categories@odata.type": "#Collection(String)",
+  "Categories": [
+   "compute",
+   "device",
+   "physical_device"
+  ],
+  "EntityIds@odata.type": "#Collection(String)",
+  "EntityIds": [
+   "{\"type\":\"DeviceInventoryId\",\"id\":\"9c12151b4d07a15a2abd063a8cc8e33fbde86d68\"}"
+  ],
+  "NodeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+    "osVersionFriendlyName": "Other",
+    "deviceName": "localhost",
+    "isExcluded": false,
+    "firstSeenByInventory": "2026-07-18T10:59:25.9749817Z",
+    "onboardingStatus": "InsufficientInfo",
+    "osPlatformFriendlyName": "Other",
+    "graphInternalLabel": "unclassifiedDevice",
+    "deviceType": "Unknown",
+    "isHybridAzureADJoined": false,
+    "lastSeen": "2026-07-18T10:59:27.6733835Z",
+    "riskScore": "None",
+    "sensorHealthState": "InactiveRecent",
+    "deviceCategory": "Unknown",
+    "exposureScore": "None",
+    "isCustomerFacing": true,
+    "deviceSubtype": "Unknown",
+    "deviceRole@odata.type": "#Collection(String)",
+    "deviceRole": [],
+    "machineGroup": "UnassignedGroup",
+    "vendor": "Texas Instruments",
+    "discoverySources-udi": {
+     "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+     "type": "DiscoverySources",
+     "sources@odata.type": "#Collection(String)",
+     "sources": [
+      "{\"productName\":\"Defender for Endpoint\"}"
+     ]
+    }
+   }
+  }
+ },
+ {
+  "NodeLabel": "Microsoft Entra OAuth App",
+  "NodeId": "6ebd17e116ed4a249efa71470a42979b",
+  "NodeName": "PH - OTEL Demo",
+  "Categories@odata.type": "#Collection(String)",
+  "Categories": [
+   "application_identity",
+   "identities",
+   "identity"
+  ],
+  "EntityIds@odata.type": "#Collection(String)",
+  "EntityIds": [
+   "{\"type\":\"AadApplicationId\",\"id\":\"63dfe505-bbbc-419f-bd61-4e98df12b268\"}"
+  ],
+  "NodeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+    "appOwnerOrganizationId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+    "publisherDomain": "m7kni.io",
+    "isBelongToExternalApplication": false
+   }
+  }
+ },
+ {
+  "NodeLabel": "mdcAuditingRecommendation",
+  "NodeId": "bc82dee4a46c42958f06cecbc1333114",
+  "NodeName": "log_disconnections should be set to 'on' for PostgreSQL Servers",
+  "Categories@odata.type": "#Collection(String)",
+  "Categories": [
+   "auditing_finding",
+   "finding"
+  ],
+  "EntityIds@odata.type": "#Collection(String)",
+  "EntityIds": [
+   "{\"type\":\"MdcAssessmentId\",\"id\":\"3d48c44b-31a0-45a9-9e21-c70eee41f4f6\"}"
+  ],
+  "NodeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+    "description": "<b>What is log_disconnections?</b><br><br>log_disconnections is a PostgreSQL parameter that logs when a client disconnects from the server, including session duration and resource usage.<br><br><b>Why is it a security concern?</b><br><br>If disabled, session termination events are not recorded, reducing visibility into suspicious short-lived sessions or brute-force attempts.<br><br><b>How could attackers exploit it or how could it lead to data breaches?</b><br><br>Attackers could connect and disconnect rapidly to probe the system without leaving traces, making detection harder.",
+    "severity": "Medium",
+    "recommendationCategory": "Unknown",
+    "securityIssue": {
+     "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+     "type": "MdcRecommandationSecurityIssue",
+     "securityIssue": "Auditing"
+    }
+   }
+  }
+ },
+ {
+  "NodeLabel": "group",
+  "NodeId": "5ccd50cfe3de46fcabfa5ee291f86e7b",
+  "NodeName": "teamtest",
+  "Categories@odata.type": "#Collection(String)",
+  "Categories": [
+   "environmentAzure",
+   "environmentCloud",
+   "identities",
+   "identity",
+   "user_group"
+  ],
+  "EntityIds@odata.type": "#Collection(String)",
+  "EntityIds": [
+   "{\"type\":\"SecurityIdentifier\",\"id\":\"s-1-12-1-1540650807-1222976285-1460445366-3244480320\"}",
+   "{\"type\":\"AadObjectId\",\"id\":\"tenantid=4b8c18bd-2f9f-4227-af55-9f1061cf9c32;objectid=5bd47737-231d-48e5-b6a0-0c5740d762c1\"}"
+  ],
+  "NodeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+    "primaryProvider": "AzureActiveDirectory",
+    "aadSid": "S-1-12-1-1540650807-1222976285-1460445366-3244480320",
+    "aadDisplayName": "teamtest",
+    "aadId": "5bd47737-231d-48e5-b6a0-0c5740d762c1",
+    "adGroupType@odata.type": "#Collection(String)",
+    "adGroupType": [],
+    "adIsDeleted": false,
+    "adMembersTruncated": false,
+    "radiusGroupId": "AadGroup_4b8c18bd-2f9f-4227-af55-9f1061cf9c32_5bd47737-231d-48e5-b6a0-0c5740d762c1",
+    "timestamp": "2026-07-28T09:30:14.2991814Z"
+   }
+  }
+ },
+ {
+  "NodeLabel": "IP address",
+  "NodeId": "6ad90af1626d48d896dfadffbad6a59d",
+  "NodeName": "96.91.245.18",
+  "Categories@odata.type": "#Collection(String)",
+  "Categories": [
+   "ip_address",
+   "network"
+  ],
+  "EntityIds@odata.type": "#Collection(String)",
+  "EntityIds": [
+   "{\"type\":\"IPv4Address\",\"id\":\"96.91.245.18\"}"
+  ],
+  "NodeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue"
+   }
+  }
+ },
+ {
+  "NodeLabel": "SaaS Application",
+  "NodeId": "0b79f5912536457192d6d394e43d7264",
+  "NodeName": "Microsoft Entra ID",
+  "Categories@odata.type": "#Collection(String)",
+  "Categories": [
+   "application_identity",
+   "identities",
+   "identity"
+  ],
+  "EntityIds@odata.type": "#Collection(String)",
+  "EntityIds": [
+   "{\"type\":\"SaaSTenantScoped\",\"id\":\"tenantid=4b8c18bd-2f9f-4227-af55-9f1061cf9c32;saasid=58571\"}"
+  ],
+  "NodeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+    "vendor": "Microsoft",
+    "saasName": "Microsoft Entra ID",
+    "criticalityLevel": {
+     "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+     "type": "CriticalityLevel",
+     "criticalityLevel@odata.type": "#Int64",
+     "criticalityLevel": 0,
+     "ruleBasedCriticalityLevel@odata.type": "#Int64",
+     "ruleBasedCriticalityLevel": 0,
+     "ruleNames@odata.type": "#Collection(String)",
+     "ruleNames": [
+      "SaaS Application - Microsoft Entra ID"
+     ]
+    }
+   }
+  }
+ },
+ {
+  "NodeLabel": "microsoft.compute/virtualmachines",
+  "NodeId": "98e93214e43d49a99fc534101a3c14fd",
+  "NodeName": "wintest",
+  "Categories@odata.type": "#Collection(String)",
+  "Categories": [
+   "compute",
+   "device",
+   "environmentAzure",
+   "environmentCloud",
+   "virtual_machine"
+  ],
+  "EntityIds@odata.type": "#Collection(String)",
+  "EntityIds": [
+   "{\"type\":\"AzureResourceId\",\"id\":\"/subscriptions/388aaa1e-a7f7-42d7-8ca9-676d33ddae7e/resourcegroups/robk/providers/microsoft.compute/virtualmachines/wintest\"}",
+   "{\"type\":\"DeviceInventoryId\",\"id\":\"3af884598a523b6af01141902ab5d1317a1798e0\"}",
+   "{\"type\":\"SenseDeviceId\",\"id\":\"3af884598a523b6af01141902ab5d1317a1798e0\"}"
+  ],
+  "NodeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+    "deviceCategory": "Endpoint",
+    "osPlatform": "Windows11",
+    "osPlatformFriendlyName": "Windows11",
+    "firstSeenByInventory": "2026-07-20T22:53:11.9174802Z",
+    "onboardingStatus": "Onboarded",
+    "isExcluded": false,
+    "osVersionFriendlyName": "25H2",
+    "senseClientVersion": "10.8830.26200.8875",
+    "sensorHealthState": "Active",
+    "deviceName": "wintest",
+    "isCustomerFacing": true,
+    "osBuildRevision": "8875",
+    "lastSeen": "2026-07-28T02:24:40.8401678Z",
+    "aadDeviceId": "c7071125-5e75-4979-9c49-5dbeb56fcdb9",
+    "deviceSubtype": "Workstation",
+    "deviceType": "Workstation",
+    "isHybridAzureADJoined": true,
+    "isAzureADJoined": true,
+    "osArchitecture": "x64",
+    "osReleaseId": "2009",
+    "azureADJoinType": "AAD Joined",
+    "osVersion": "10.0",
+    "riskScore": "None",
+    "deviceRole@odata.type": "#Collection(String)",
+    "deviceRole": [],
+    "osDistribution": "Windows",
+    "exposureScore": "High",
+    "graphInternalLabel": "azure-microsoft.compute/virtualmachines",
+    "osBuild": "26200",
+    "publicIP": "20.117.241.228",
+    "hasGuardMisconfigurations@odata.type": "#Collection(String)",
+    "hasGuardMisconfigurations": [
+     "{\"type\":\"M365MisConfiguration\",\"category\":\"Security controls\",\"subCategory\":\"Credential Guard\",\"activeScid\":2080}"
+    ],
+    "machineGroup": "main",
+    "isInternetFacing": true,
+    "exposedToInternetDevice@odata.type": "#Collection(String)",
+    "exposedToInternetDevice": [
+     "{\"publicIps\":[{\"ipAddress\":\"20.117.241.228\",\"portsInfo\":[{\"port\":3389,\"connectionProtocol\":\"Tcp\"}]}],\"localIps\":[\"10.0.0.4\"]}"
+    ],
+    "discoverySources-udi": {
+     "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+     "type": "DiscoverySources",
+     "sources@odata.type": "#Collection(String)",
+     "sources": [
+      "{\"productName\":\"Defender for Endpoint\"}"
+     ]
+    },
+    "rdpStatus": {
+     "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+     "type": "RdpStatus",
+     "serviceRunning": true,
+     "allowConnections": true
+    },
+    "remoteServicesInfo": {
+     "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+     "type": "RemoteServicesInfo",
+     "wmi": {
+      "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+      "serviceRunning": true,
+      "startMode": "Auto"
+     },
+     "smb": {
+      "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+      "serviceRunning": true,
+      "startMode": "Auto",
+      "announceServer": false,
+      "auditSmb1Access": false,
+      "autoShareServer": true,
+      "autoShareWorkstation": true,
+      "enableSecuritySignature": false,
+      "enableSmb1Protocol": false,
+      "enableSmb2Protocol": true,
+      "enableSmbQuic": true,
+      "enableStrictNameChecking": true,
+      "encryptData": false,
+      "rejectUnencryptedAccess": true,
+      "requireSecuritySignature": true,
+      "restrictNamedpipeAccessViaQuic": true,
+      "serverHidden": true
+     },
+     "rdp": {
+      "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+      "serviceRunning": true,
+      "allowConnections": true,
+      "startMode": "Manual",
+      "nlaRequired": false
+     },
+     "winRm": {
+      "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+      "serviceRunning": false,
+      "startMode": "Manual"
+     },
+     "rpc": {
+      "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+      "serviceRunning": true,
+      "startMode": "Auto"
+     },
+     "rpcMapper": {
+      "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+      "serviceRunning": true,
+      "startMode": "Auto"
+     }
+    },
+    "tpmData": {
+     "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+     "type": "TpmData",
+     "supported": true,
+     "activated": true,
+     "enabled": true,
+     "version": "2.0, 0, 1.38"
+    }
+   }
+  }
+ },
+ {
+  "NodeLabel": "mde-healthFinding",
+  "NodeId": "d3d2129f44874db6a1ecf0d1b5c82d1e",
+  "NodeName": "Defender for Endpoint (MDE) Unified integration is not configured",
+  "Categories@odata.type": "#Collection(String)",
+  "Categories": [
+   "finding",
+   "management_finding"
+  ],
+  "EntityIds@odata.type": "#Collection(String)",
+  "EntityIds": [
+   "{\"type\":\"HealthIssueTypeIdentifier\",\"id\":\"type=defenderforendpointmdeunifiedintegrationisnotconfigured;tool=microsoftdefenderforendpointagent\"}"
+  ],
+  "NodeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+    "description": "Enable the unified agent integration on subscriptions to maintain support for machines and receive the full extended feature set.",
+    "remediationOptions@odata.type": "#Collection(String)",
+    "remediationOptions": [
+     "See [here](https://learn.microsoft.com/en-us/azure/defender-for-cloud/enable-defender-for-endpoint#windows) how to enable unified integration on your subscriptions."
+    ]
+   }
+  }
+ },
+ {
+  "NodeLabel": "user",
+  "NodeId": "07398938d25c40b79a3c2f440355fa65",
+  "NodeName": "Peter Hewitt",
+  "Categories@odata.type": "#Collection(String)",
+  "Categories": [
+   "environmentAzure",
+   "environmentCloud",
+   "identities",
+   "identity",
+   "user_account"
+  ],
+  "EntityIds@odata.type": "#Collection(String)",
+  "EntityIds": [
+   "{\"type\":\"SecurityIdentifier\",\"id\":\"s-1-12-1-3881165938-1319564011-2421857666-2986147974\"}",
+   "{\"type\":\"AadObjectId\",\"id\":\"tenantid=4b8c18bd-2f9f-4227-af55-9f1061cf9c32;objectid=e755e472-f2eb-4ea6-829d-5a908600fdb1\"}"
+  ],
+  "NodeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+    "tags@odata.type": "#Collection(String)",
+    "tags": [],
+    "accountEnabled": true,
+    "accountDisplayName": "Peter Hewitt",
+    "primaryProvider": "AzureActiveDirectory",
+    "aadSid": "S-1-12-1-3881165938-1319564011-2421857666-2986147974",
+    "accountDomain": "m7knio.onmicrosoft.com",
+    "accountUpn": "peter.hewitt_grafana.com#EXT#@m7knio.onmicrosoft.com",
+    "hasAdLeakedCredentials": false,
+    "identityType": "User",
+    "createdDateTime": "2026-07-14T14:34:38.0000000Z",
+    "hasLeakedCredentials": false,
+    "hasServicePrincipalName": false,
+    "emailAddress": "peter.hewitt@grafana.com",
+    "accountName": "Peter Hewitt",
+    "accountObjectId": "e755e472-f2eb-4ea6-829d-5a908600fdb1",
+    "assignedRoles@odata.type": "#Collection(String)",
+    "assignedRoles": [
+     "Cloud Application Administrator",
+     "Global Administrator"
+    ],
+    "isActive": true,
+    "criticalityLevel": {
+     "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+     "type": "CriticalityLevel",
+     "criticalityLevel@odata.type": "#Int64",
+     "criticalityLevel": 0,
+     "ruleBasedCriticalityLevel@odata.type": "#Int64",
+     "ruleBasedCriticalityLevel": 0,
+     "ruleNames@odata.type": "#Collection(String)",
+     "ruleNames": [
+      "Cloud Application Administrator",
+      "Global Administrator"
+     ]
+    }
+   }
+  }
+ },
+ {
+  "NodeLabel": "managedidentity",
+  "NodeId": "5820c789052a467aa837173d5cc558d5",
+  "NodeName": "18239d67-ccb4-48f5-b54f-667832c94f10",
+  "Categories@odata.type": "#Collection(String)",
+  "Categories": [
+   "application_identity",
+   "environmentAzure",
+   "environmentCloud",
+   "identities",
+   "identity"
+  ],
+  "EntityIds@odata.type": "#Collection(String)",
+  "EntityIds": [
+   "{\"type\":\"AadObjectId\",\"id\":\"tenantid=4b8c18bd-2f9f-4227-af55-9f1061cf9c32;objectid=18239d67-ccb4-48f5-b54f-667832c94f10\"}"
+  ],
+  "NodeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+    "accountDisplayName": "camden",
+    "tags@odata.type": "#Collection(String)",
+    "tags": [],
+    "accountEnabled": true,
+    "appId": "d5fbc5ba-c774-48d9-9fbd-26c68537c488",
+    "servicePrincipalType": "ManagedIdentity",
+    "alternativeNames@odata.type": "#Collection(String)",
+    "alternativeNames": [
+     "isExplicit=False",
+     "/subscriptions/1bdad520-a1e9-4977-9d0b-ef62853b26fd/resourcegroups/arc/providers/Microsoft.HybridCompute/machines/camden"
+    ]
+   }
+  }
+ },
+ {
+  "NodeLabel": "entra-userCookie",
+  "NodeId": "05336cc9b43a4b61aab1b198b90f8d1f",
+  "NodeName": "cc1d05969876c18bc68cf31695876f000926efa6ba33df4d5ab3fd1c61e41ae9",
+  "Categories@odata.type": "#Collection(String)",
+  "Categories": [
+   "cookies",
+   "secret"
+  ],
+  "EntityIds@odata.type": "#Collection(String)",
+  "EntityIds": [
+   "{\"type\":\"GeneratedSecretId\",\"id\":\"cc1d05969876c18bc68cf31695876f000926efa6ba33df4d5ab3fd1c61e41ae9\"}"
+  ],
+  "NodeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+    "entraCookiesSecretData": {
+     "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+     "type": "EntraCookiesSecretData",
+     "entraObjectId": "7957928c-3cd2-4bbb-98c8-cfc8466f490a",
+     "tenantId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32"
+    }
+   }
+  }
+ },
+ {
+  "NodeLabel": "subscriptions",
+  "NodeId": "87987be588cb460596c871894978b71b",
+  "NodeName": "docintel",
+  "Categories@odata.type": "#Collection(String)",
+  "Categories": [
+   "access",
+   "cloud_account",
+   "environmentAzure",
+   "environmentCloud",
+   "identity"
+  ],
+  "EntityIds@odata.type": "#Collection(String)",
+  "EntityIds": [
+   "{\"type\":\"AzureResourceId\",\"id\":\"/subscriptions/67168613-8902-422c-860b-abeafca636a2\"}"
+  ],
+  "NodeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+    "environmentName@odata.type": "#Int64",
+    "environmentName": 0,
+    "hierarchyIdentifier": "67168613-8902-422c-860b-abeafca636a2",
+    "hierarchyType": "subscriptionid",
+    "subscriptionName": "docintel"
+   }
+  }
+ },
+ {
+  "NodeLabel": "mdcSoftwareScanningTool",
+  "NodeId": "9434ec0b172b4dffbc3a832f7e857562",
+  "NodeName": "mdcSoftwareScanningTool",
+  "Categories@odata.type": "#Collection(String)",
+  "Categories": [
+   "finding",
+   "management_finding"
+  ],
+  "EntityIds@odata.type": "#Collection(String)",
+  "EntityIds": [
+   "{\"type\":\"SecurityToolProductAndName\",\"id\":\"product=microsoftdefenderforcloud;name=softwarescan\"}"
+  ],
+  "NodeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue"
+   }
+  }
+ },
+ {
+  "NodeLabel": "dataSensitivityScan",
+  "NodeId": "0e5e1cbbcdc94a22bd825854e05efefb",
+  "NodeName": "dataSensitivityScan",
+  "Categories@odata.type": "#Collection(String)",
+  "Categories": [
+   "finding",
+   "security_tool"
+  ],
+  "EntityIds@odata.type": "#Collection(String)",
+  "EntityIds": [
+   "{\"type\":\"SecurityToolProductAndName\",\"id\":\"product=microsoftdefenderforcloud;name=datasensitivityscan\"}"
+  ],
+  "NodeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue"
+   }
+  }
+ },
+ {
+  "NodeLabel": "aadSecurityRecommendation",
+  "NodeId": "f436e4c3421143f8884dbfe87edae0b9",
+  "NodeName": "UserRiskPolicy",
+  "Categories@odata.type": "#Collection(String)",
+  "Categories": [
+   "finding",
+   "security_finding"
+  ],
+  "EntityIds@odata.type": "#Collection(String)",
+  "EntityIds": [
+   "{\"type\":\"AadRecommendationId\",\"id\":\"userriskpolicy\"}"
+  ],
+  "NodeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue"
+   }
+  }
+ }
+]

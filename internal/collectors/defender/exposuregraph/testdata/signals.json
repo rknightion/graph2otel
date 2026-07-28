@@ -1,0 +1,125 @@
+{
+  "Metrics": [
+    {
+      "Name": "defender.exposure_graph.edges",
+      "Unit": "{edge}",
+      "Kind": "gauge",
+      "Description": "ExposureGraphEdges rows (pruned of bulk-inventory node labels), by edge label and whether the label was twinned.",
+      "AttrKeys": [
+        "edge_label",
+        "twinned"
+      ]
+    },
+    {
+      "Name": "defender.exposure_graph.excluded_labels",
+      "Unit": "{label}",
+      "Kind": "gauge",
+      "Description": "Node and edge labels excluded from twinning as bulk inventory (population over the twin threshold), by entity type.",
+      "AttrKeys": [
+        "entity_type"
+      ]
+    },
+    {
+      "Name": "defender.exposure_graph.nodes",
+      "Unit": "{node}",
+      "Kind": "gauge",
+      "Description": "ExposureGraphNodes rows, by node label and whether the label was twinned.",
+      "AttrKeys": [
+        "node_label",
+        "twinned"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "defender.exposure_graph_edge",
+      "AttrKeys": [
+        "delegated_permissions",
+        "edge_id",
+        "edge_label",
+        "has_primary_refresh_token",
+        "is_local_admin",
+        "logon_methods",
+        "role_permissions",
+        "source_node_id",
+        "source_node_label",
+        "source_node_name",
+        "target_node_id",
+        "target_node_label",
+        "target_node_name",
+        "user_rights"
+      ]
+    },
+    {
+      "EventName": "defender.exposure_graph_node",
+      "AttrKeys": [
+        "aad_device_id",
+        "account_display_name",
+        "account_domain",
+        "account_enabled",
+        "account_upn",
+        "agent_id",
+        "agent_name",
+        "agent_version",
+        "alternative_names",
+        "app_id",
+        "app_owner_organization_id",
+        "base_model_name",
+        "base_model_version",
+        "categories",
+        "collection_type",
+        "created_by",
+        "created_date_time",
+        "criticality_level",
+        "criticality_rule_names",
+        "deprecation_date",
+        "device_category",
+        "device_name",
+        "device_subtype",
+        "device_type",
+        "email_address",
+        "entity_id_types",
+        "entity_ids",
+        "exposure_score",
+        "first_seen",
+        "has_ad_leaked_credentials",
+        "has_leaked_credentials",
+        "hierarchy_identifier",
+        "hierarchy_type",
+        "identity_type",
+        "is_customer_facing",
+        "is_excluded",
+        "is_expired",
+        "is_hybrid_azure_ad_joined",
+        "last_seen",
+        "model_name",
+        "model_version",
+        "node_id",
+        "node_label",
+        "node_name",
+        "onboarding_status",
+        "os_platform",
+        "os_platform_friendly_name",
+        "os_version",
+        "os_version_friendly_name",
+        "platform",
+        "primary_provider",
+        "published_agent_indicator",
+        "published_status",
+        "publisher_domain",
+        "publisher_name",
+        "recommendation_category",
+        "risk_score",
+        "rule_based_criticality_level",
+        "saas_name",
+        "security_issue",
+        "sensor_health_state",
+        "service_principal_type",
+        "severity",
+        "subscription_name",
+        "task_capabilities",
+        "vendor"
+      ]
+    }
+  ]
+}

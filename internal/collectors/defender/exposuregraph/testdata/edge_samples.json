@@ -1,0 +1,422 @@
+[
+ {
+  "EdgeLabel": "runs on",
+  "EdgeId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32_A08FB73E4601963356CBFC334AF2466A",
+  "SourceNodeId": "c709c57a1e4741f6b0568254c1abe5e4",
+  "SourceNodeName": "Claude Code",
+  "SourceNodeLabel": "ai-agent",
+  "SourceNodeCategories": [
+   "AI",
+   "ai_agent",
+   "ai_service",
+   "environmentAzure",
+   "environmentCloud"
+  ],
+  "TargetNodeId": "252858b12b3c4826a7c29254eb0011ed",
+  "TargetNodeName": "MBP16",
+  "TargetNodeLabel": "device",
+  "TargetNodeCategories": [
+   "compute",
+   "device",
+   "physical_device"
+  ],
+  "EdgeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue"
+   }
+  }
+ },
+ {
+  "EdgeLabel": "can authenticate to",
+  "EdgeId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32_990D7FB64FD627C81B0AA53F58EB5B38",
+  "SourceNodeId": "14bc0e3362604788adb17dcdc591d11e",
+  "SourceNodeName": "Rob Knight",
+  "SourceNodeLabel": "user",
+  "SourceNodeCategories": [
+   "environmentAzure",
+   "environmentCloud",
+   "identities",
+   "identity",
+   "user_account"
+  ],
+  "TargetNodeId": "36b40b41e3c44b189132f6fb0eed65a7",
+  "TargetNodeName": "lapham",
+  "TargetNodeLabel": "device",
+  "TargetNodeCategories": [
+   "compute",
+   "device",
+   "physical_device"
+  ],
+  "EdgeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+    "userRightsOnDevice": {
+     "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+     "type": "RightsOnDevice",
+     "userRights@odata.type": "#Collection(String)",
+     "userRights": [
+      "SeDebugPrivilege",
+      "SeImpersonatePrivilege",
+      "SeBackupPrivilege",
+      "SeRestorePrivilege",
+      "SeLoadDriverPrivilege",
+      "SeTakeOwnershipPrivilege"
+     ],
+     "logonMethods@odata.type": "#Collection(String)",
+     "logonMethods": [
+      "remoteInteractive",
+      "interactive",
+      "network",
+      "batch"
+     ],
+     "isLocalAdmin": true
+    }
+   }
+  }
+ },
+ {
+  "EdgeLabel": "member of",
+  "EdgeId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32_5ECA5C68BBFF4CBC0E4CD9D06425D70D",
+  "SourceNodeId": "14bc0e3362604788adb17dcdc591d11e",
+  "SourceNodeName": "Rob Knight",
+  "SourceNodeLabel": "user",
+  "SourceNodeCategories": [
+   "environmentAzure",
+   "environmentCloud",
+   "identities",
+   "identity",
+   "user_account"
+  ],
+  "TargetNodeId": "ed7d3c91695749c69e1c87199d2372e2",
+  "TargetNodeName": "Rob's Personal Devices",
+  "TargetNodeLabel": "group",
+  "TargetNodeCategories": [
+   "environmentAzure",
+   "environmentCloud",
+   "identities",
+   "identity",
+   "user_group"
+  ],
+  "EdgeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue"
+   }
+  }
+ },
+ {
+  "EdgeLabel": "has permissions to",
+  "EdgeId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32_94C5B0EEB2AC03B7CED911F5DCF0729B",
+  "SourceNodeId": "9439c5449c604566a2e8cf7fe22cbcab",
+  "SourceNodeName": "929ff591-40b1-48b3-88e7-a09a65eea6c4",
+  "SourceNodeLabel": "serviceprincipal",
+  "SourceNodeCategories": [
+   "application_identity",
+   "environmentAzure",
+   "environmentCloud",
+   "identities",
+   "identity"
+  ],
+  "TargetNodeId": "dc31950c478b4de0879b5cc31694bbbd",
+  "TargetNodeName": "Microsoft Intune",
+  "TargetNodeLabel": "SaaS Application",
+  "TargetNodeCategories": [
+   "application_identity",
+   "identities",
+   "identity"
+  ],
+  "EdgeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+    "delegatedPermissions": {
+     "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+     "type": "OAuthPermission",
+     "permissions@odata.type": "#Collection(String)",
+     "permissions": [
+      "{\"permissionValue\":\"DeviceManagementApps.ReadWrite.All\"}",
+      "{\"permissionValue\":\"DeviceManagementConfiguration.ReadWrite.All\"}",
+      "{\"permissionValue\":\"DeviceManagementManagedDevices.ReadWrite.All\"}",
+      "{\"permissionValue\":\"DeviceManagementServiceConfig.ReadWrite.All\"}",
+      "{\"permissionValue\":\"DeviceManagementRBAC.ReadWrite.All\"}",
+      "{\"permissionValue\":\"DeviceManagementManagedDevices.PrivilegedOperations.All\"}"
+     ]
+    },
+    "applicationPermissions": {
+     "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+     "type": "OAuthPermission",
+     "permissions@odata.type": "#Collection(String)",
+     "permissions": []
+    }
+   }
+  }
+ },
+ {
+  "EdgeLabel": "can authenticate as",
+  "EdgeId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32_77CC43DA7ED699A202C434E0ABC7A108",
+  "SourceNodeId": "907e319185324152b5bdebca64a2238d",
+  "SourceNodeName": "OneDrive for Business Connector",
+  "SourceNodeLabel": "Microsoft Entra OAuth App",
+  "SourceNodeCategories": [
+   "application_identity",
+   "identities",
+   "identity"
+  ],
+  "TargetNodeId": "63fee91693044ef48d2b5edc604d5977",
+  "TargetNodeName": "OneDrive for Business Connector",
+  "TargetNodeLabel": "serviceprincipal",
+  "TargetNodeCategories": [
+   "application_identity",
+   "environmentAzure",
+   "environmentCloud",
+   "identities",
+   "identity"
+  ],
+  "EdgeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue"
+   }
+  }
+ },
+ {
+  "EdgeLabel": "can impersonate as",
+  "EdgeId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32_4F9F12574F986A24C40E248BCD0E38B9",
+  "SourceNodeId": "7519766a7959443ca9f199351bf0ff6e",
+  "SourceNodeName": "Apple Internet Accounts",
+  "SourceNodeLabel": "serviceprincipal",
+  "SourceNodeCategories": [
+   "application_identity",
+   "environmentAzure",
+   "environmentCloud",
+   "identities",
+   "identity"
+  ],
+  "TargetNodeId": "14bc0e3362604788adb17dcdc591d11e",
+  "TargetNodeName": "Rob Knight",
+  "TargetNodeLabel": "user",
+  "TargetNodeCategories": [
+   "environmentAzure",
+   "environmentCloud",
+   "identities",
+   "identity",
+   "user_account"
+  ],
+  "EdgeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue"
+   }
+  }
+ },
+ {
+  "EdgeLabel": "has credentials of",
+  "EdgeId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32_BF25D274CF377DA7A71F790E7642DC13",
+  "SourceNodeId": "414aedfcf4564f249e4b9f579aa5b998",
+  "SourceNodeName": "desktop-mogqrtq",
+  "SourceNodeLabel": "device",
+  "SourceNodeCategories": [
+   "compute",
+   "device",
+   "physical_device"
+  ],
+  "TargetNodeId": "14bc0e3362604788adb17dcdc591d11e",
+  "TargetNodeName": "Rob Knight",
+  "TargetNodeLabel": "user",
+  "TargetNodeCategories": [
+   "environmentAzure",
+   "environmentCloud",
+   "identities",
+   "identity",
+   "user_account"
+  ],
+  "EdgeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+    "primaryRefreshToken": {
+     "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+     "type": "PrimaryRefreshToken",
+     "primaryRefreshToken": true
+    }
+   }
+  }
+ },
+ {
+  "EdgeLabel": "routes traffic to",
+  "EdgeId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32_B9A9A90C279E0EFC40A275849926F095",
+  "SourceNodeId": "09cf41cf08aa48bda9e4149c8cabcb96",
+  "SourceNodeName": "1.1.1.1",
+  "SourceNodeLabel": "IP address",
+  "SourceNodeCategories": [
+   "ip_address",
+   "network"
+  ],
+  "TargetNodeId": "dbac29be16ba4463b04875938d655eb8",
+  "TargetNodeName": "loungesw-f89e2841d54e",
+  "TargetNodeLabel": "device",
+  "TargetNodeCategories": [
+   "compute",
+   "device",
+   "physical_device"
+  ],
+  "EdgeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue"
+   }
+  }
+ },
+ {
+  "EdgeLabel": "has role on",
+  "EdgeId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32_AB9B62088CF942DC8F027BF9E7878448",
+  "SourceNodeId": "14bc0e3362604788adb17dcdc591d11e",
+  "SourceNodeName": "Rob Knight",
+  "SourceNodeLabel": "user",
+  "SourceNodeCategories": [
+   "environmentAzure",
+   "environmentCloud",
+   "identities",
+   "identity",
+   "user_account"
+  ],
+  "TargetNodeId": "326b82c65f6d4744a4cace60d1aec0d8",
+  "TargetNodeName": "robs-blueprint",
+  "TargetNodeLabel": "serviceprincipal",
+  "TargetNodeCategories": [
+   "application_identity",
+   "environmentAzure",
+   "environmentCloud",
+   "identities",
+   "identity"
+  ],
+  "EdgeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+    "roles": {
+     "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+     "type": "RolePermission",
+     "rolePermissions@odata.type": "#Collection(String)",
+     "rolePermissions": [
+      "{\"roleValue\":\"Owner\"}"
+     ]
+    }
+   }
+  }
+ },
+ {
+  "EdgeLabel": "used by",
+  "EdgeId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32_3DDD0FFB73B31E38CAC0CB1D5BA8637C",
+  "SourceNodeId": "e7770397248d461aa9a56a5a311b3fca",
+  "SourceNodeName": "ChatGPT Classic",
+  "SourceNodeLabel": "ai-agent",
+  "SourceNodeCategories": [
+   "AI",
+   "ai_agent",
+   "ai_service",
+   "environmentAzure",
+   "environmentCloud"
+  ],
+  "TargetNodeId": "14bc0e3362604788adb17dcdc591d11e",
+  "TargetNodeName": "Rob Knight",
+  "TargetNodeLabel": "user",
+  "TargetNodeCategories": [
+   "environmentAzure",
+   "environmentCloud",
+   "identities",
+   "identity",
+   "user_account"
+  ],
+  "EdgeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue"
+   }
+  }
+ },
+ {
+  "EdgeLabel": "frequently logged in by",
+  "EdgeId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32_688A3F571769A91BB905CEE03E44C6F2",
+  "SourceNodeId": "3af057007da8473baa02e13c57d5c539",
+  "SourceNodeName": "winsrv",
+  "SourceNodeLabel": "microsoft.compute/virtualmachines",
+  "SourceNodeCategories": [
+   "compute",
+   "device",
+   "environmentAzure",
+   "environmentCloud",
+   "virtual_machine"
+  ],
+  "TargetNodeId": "14bc0e3362604788adb17dcdc591d11e",
+  "TargetNodeName": "Rob Knight",
+  "TargetNodeLabel": "user",
+  "TargetNodeCategories": [
+   "environmentAzure",
+   "environmentCloud",
+   "identities",
+   "identity",
+   "user_account"
+  ],
+  "EdgeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue"
+   }
+  }
+ },
+ {
+  "EdgeLabel": "contains",
+  "EdgeId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32_B87F367A0083A51BE84D26F7A6DBEC24",
+  "SourceNodeId": "69b6a5aadf9e433f870d24cb085ccb8e",
+  "SourceNodeName": "desktop-n3fh69o",
+  "SourceNodeLabel": "device",
+  "SourceNodeCategories": [
+   "compute",
+   "device",
+   "physical_device"
+  ],
+  "TargetNodeId": "4355d257661147ad93618aeaa01e1735",
+  "TargetNodeName": "8a63e38a0bb2890ec045a03df68bba12acef0149053940eeebe441ded7150805",
+  "TargetNodeLabel": "entra-userCookie",
+  "TargetNodeCategories": [
+   "cookies",
+   "secret"
+  ],
+  "EdgeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue"
+   }
+  }
+ },
+ {
+  "EdgeLabel": "affecting",
+  "EdgeId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32_895029F28DA95BF052BD71FD5A801A01",
+  "SourceNodeId": "f436e4c3421143f8884dbfe87edae0b9",
+  "SourceNodeName": "UserRiskPolicy",
+  "SourceNodeLabel": "aadSecurityRecommendation",
+  "SourceNodeCategories": [
+   "finding",
+   "security_finding"
+  ],
+  "TargetNodeId": "14bc0e3362604788adb17dcdc591d11e",
+  "TargetNodeName": "Rob Knight",
+  "TargetNodeLabel": "user",
+  "TargetNodeCategories": [
+   "environmentAzure",
+   "environmentCloud",
+   "identities",
+   "identity",
+   "user_account"
+  ],
+  "EdgeProperties": {
+   "@odata.type": "#microsoft.graph.security.dynamicColumnValue",
+   "rawData": {
+    "@odata.type": "#microsoft.graph.security.dynamicColumnValue"
+   }
+  }
+ }
+]

@@ -7,7 +7,7 @@ but works with any OTLP-compatible backend. The exporter is a single static Go
 binary, push-only, and multi-tenant from the start.
 
 > **Status:** v1.0.0 shipped on 2026-07-25 and is live in production. The generated
-> registry currently contains **162 logical collectors** across Entra ID, Intune,
+> registry currently contains **164 logical collectors** across Entra ID, Intune,
 > Microsoft 365, Purview, Defender XDR, and Defender for Cloud Apps.
 
 Release packaging is complete: multi-arch container images, platform binaries,

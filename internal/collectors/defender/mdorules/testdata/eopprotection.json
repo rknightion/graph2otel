@@ -1,0 +1,39 @@
+{
+  "@odata.context": "https://outlook.office365.com/adminapi/beta/4b8c18bd-2f9f-4227-af55-9f1061cf9c32/$metadata#Collection(Exchange.GenericHashTable)",
+  "adminapi.warnings@odata.type": "#Collection(String)",
+  "@adminapi.warnings": [],
+  "value": [
+    {
+      "HostedContentFilterPolicy": "Standard Preset Security Policy1784144691483",
+      "AntiPhishPolicy": "Standard Preset Security Policy1784144689723",
+      "MalwareFilterPolicy": "Standard Preset Security Policy1784144693315",
+      "State": "Enabled",
+      "Priority@data.type": "System.Int32",
+      "Priority": 0,
+      "Comments": null,
+      "Description": "Take the following actions:\r\n\tApply hosted content filter policy \"Standard Preset Security Policy1784144691483\"., Apply AntiPhish policy \"Standard Preset Security Policy1784144689723\"., Apply malware filter policy \"Standard Preset Security Policy1784144693315\".\r\n",
+      "RuleVersion": "14.0.0.0",
+      "SentTo": null,
+      "SentToMemberOf": null,
+      "RecipientDomainIs": null,
+      "ExceptIfSentTo": null,
+      "ExceptIfSentToMemberOf": null,
+      "ExceptIfRecipientDomainIs": null,
+      "Conditions": null,
+      "Exceptions": null,
+      "Identity": "Standard Preset Security Policy",
+      "DistinguishedName": "CN=Standard Preset Security Policy,CN=EOPProtectionPolicyRuleVersioned,CN=Rules,CN=Transport Settings,CN=Configuration,CN=m7knio.onmicrosoft.com,CN=ConfigurationUnits,DC=gbrp265a018,DC=prod,DC=outlook,DC=com",
+      "Guid@data.type": "System.Guid",
+      "Guid@odata.type": "#Guid",
+      "Guid": "0c13168e-3b97-4e6c-b108-0ddd32197339",
+      "ImmutableId@data.type": "System.Guid",
+      "ImmutableId@odata.type": "#Guid",
+      "ImmutableId": "0c13168e-3b97-4e6c-b108-0ddd32197339",
+      "OrganizationId": "gbrp265a018.prod.outlook.com/Microsoft Exchange Hosted Organizations/m7knio.onmicrosoft.com - gbrp265a018.prod.outlook.com/ConfigurationUnits/m7knio.onmicrosoft.com/Configuration",
+      "Name": "Standard Preset Security Policy",
+      "IsValid": true,
+      "WhenChanged@data.type": "System.DateTime",
+      "WhenChanged": "2026-07-15T19:45:06.0000000+00:00"
+    }
+  ]
+}

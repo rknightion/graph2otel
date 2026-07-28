@@ -1,0 +1,6 @@
+{
+  "@odata.context": "https://outlook.office365.com/adminapi/beta/4b8c18bd-2f9f-4227-af55-9f1061cf9c32/$metadata#Collection(Exchange.GenericHashTable)",
+  "adminapi.warnings@odata.type": "#Collection(String)",
+  "@adminapi.warnings": [],
+  "value": []
+}

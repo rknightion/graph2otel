@@ -33,8 +33,8 @@ spec:
     description: "increase(mdca_discovery_parse_tasks_total{is_success=\"false\"}[1h]) > 0 for input_stream_id={{ $labels.input_stream_id }}, template={{ $labels.template }}, tenant {{ $labels.tenant_id }}: at least one Cloud Discovery parse task FAILED in the last hour while the upload almost certainly reported HTTP 200. The template label names which failure (e.g. REPOOPER_COMPLETION_STATUS_BASELOGPARSER_UNEXPECTED_FORMAT = malformed log format). This is the 22-silent-failures outage from #145. Default-enabled; pair with g2o-mdca-uploads-stopped, which catches a dead uploader this rule cannot see."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-mdca-parse-failing"
     __dashboardUid__: "graph2otel"
-    __panelId__: "272"
-    dashboard_path: "/d/graph2otel?dtab=Defender&viewPanel=272"
+    __panelId__: "280"
+    dashboard_path: "/d/graph2otel?dtab=Defender&viewPanel=280"
   expressions:
     A:
       model:

@@ -1,0 +1,86 @@
+[
+ {
+  "NodeLabel": "baseModel",
+  "n": 1057
+ },
+ {
+  "NodeLabel": "serviceprincipal",
+  "n": 895
+ },
+ {
+  "NodeLabel": "ai-agent",
+  "n": 254
+ },
+ {
+  "NodeLabel": "mdcManagementRecommendation",
+  "n": 195
+ },
+ {
+  "NodeLabel": "device",
+  "n": 163
+ },
+ {
+  "NodeLabel": "Microsoft Entra OAuth App",
+  "n": 127
+ },
+ {
+  "NodeLabel": "mdcAuditingRecommendation",
+  "n": 96
+ },
+ {
+  "NodeLabel": "group",
+  "n": 74
+ },
+ {
+  "NodeLabel": "IP address",
+  "n": 16
+ },
+ {
+  "NodeLabel": "SaaS Application",
+  "n": 13
+ },
+ {
+  "NodeLabel": "microsoft.compute/virtualmachines",
+  "n": 12
+ },
+ {
+  "NodeLabel": "mde-healthFinding",
+  "n": 12
+ },
+ {
+  "NodeLabel": "user",
+  "n": 6
+ },
+ {
+  "NodeLabel": "managedidentity",
+  "n": 4
+ },
+ {
+  "NodeLabel": "entra-userCookie",
+  "n": 3
+ },
+ {
+  "NodeLabel": "subscriptions",
+  "n": 2
+ },
+ {
+  "NodeLabel": "mdcSoftwareScanningTool",
+  "n": 1
+ },
+ {
+  "NodeLabel": "dataSensitivityScan",
+  "n": 1
+ },
+ {
+  "NodeLabel": "aadSecurityRecommendation",
+  "n": 1
+ },
+ {
+  "NodeLabel": "Cve",
+  "n": 372330
+ },
+ {
+  "NodeLabel": "mdcSecurityRecommendation",
+  "n": 618032
+ }
+]

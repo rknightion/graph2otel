@@ -33,8 +33,8 @@ spec:
     tuning_required: "Volume depends entirely on your Defender licensing and tenant size. Measure the alert rate over 30 days before enabling; on a noisy tenant raise the threshold or narrow to severity=high."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-detect-security-alert-unresolved"
     __dashboardUid__: "graph2otel"
-    __panelId__: "282"
-    dashboard_path: "/d/graph2otel?dtab=Defender&viewPanel=282"
+    __panelId__: "290"
+    dashboard_path: "/d/graph2otel?dtab=Defender&viewPanel=290"
   expressions:
     A:
       model:
