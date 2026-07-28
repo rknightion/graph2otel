@@ -1,0 +1,103 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.cross_tenant_access.access",
+      "Unit": "1",
+      "Kind": "gauge",
+      "Description": "1 per configured cross-tenant access control block, attributed by service/direction/target_kind/access_type.",
+      "AttrKeys": [
+        "access_type",
+        "direction",
+        "service",
+        "target_kind"
+      ]
+    },
+    {
+      "Name": "entra.cross_tenant_access.automatic_user_consent",
+      "Unit": "1",
+      "Kind": "gauge",
+      "Description": "1 if automatic user consent is enabled for the given direction, else 0.",
+      "AttrKeys": [
+        "direction"
+      ]
+    },
+    {
+      "Name": "entra.cross_tenant_access.inbound_trust",
+      "Unit": "1",
+      "Kind": "gauge",
+      "Description": "1 if this tenant accepts the external tenant's own claim for the given inbound-trust setting, else 0, per bounded setting.",
+      "AttrKeys": [
+        "setting"
+      ]
+    },
+    {
+      "Name": "entra.cross_tenant_access.partners.total",
+      "Unit": "{partner}",
+      "Kind": "gauge",
+      "Description": "Count of cross-tenant-access partner-tenant configurations.",
+      "AttrKeys": []
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "entra.cross_tenant_access_default",
+      "AttrKeys": [
+        "automatic_consent_inbound_allowed",
+        "automatic_consent_outbound_allowed",
+        "b2b_collab_inbound_apps_access_type",
+        "b2b_collab_inbound_apps_target_count",
+        "b2b_collab_inbound_apps_target_ids",
+        "b2b_collab_inbound_apps_targets_truncated",
+        "b2b_collab_inbound_users_access_type",
+        "b2b_collab_inbound_users_target_count",
+        "b2b_collab_inbound_users_target_ids",
+        "b2b_collab_inbound_users_targets_truncated",
+        "b2b_collab_outbound_apps_access_type",
+        "b2b_collab_outbound_apps_target_count",
+        "b2b_collab_outbound_apps_target_ids",
+        "b2b_collab_outbound_apps_targets_truncated",
+        "b2b_collab_outbound_users_access_type",
+        "b2b_collab_outbound_users_target_count",
+        "b2b_collab_outbound_users_target_ids",
+        "b2b_collab_outbound_users_targets_truncated",
+        "b2b_direct_inbound_apps_access_type",
+        "b2b_direct_inbound_apps_target_count",
+        "b2b_direct_inbound_apps_target_ids",
+        "b2b_direct_inbound_apps_targets_truncated",
+        "b2b_direct_inbound_users_access_type",
+        "b2b_direct_inbound_users_target_count",
+        "b2b_direct_inbound_users_target_ids",
+        "b2b_direct_inbound_users_targets_truncated",
+        "b2b_direct_outbound_apps_access_type",
+        "b2b_direct_outbound_apps_target_count",
+        "b2b_direct_outbound_apps_target_ids",
+        "b2b_direct_outbound_apps_targets_truncated",
+        "b2b_direct_outbound_users_access_type",
+        "b2b_direct_outbound_users_target_count",
+        "b2b_direct_outbound_users_target_ids",
+        "b2b_direct_outbound_users_targets_truncated",
+        "id",
+        "inbound_trust_compliant_device_accepted",
+        "inbound_trust_hybrid_azure_ad_joined_device_accepted",
+        "inbound_trust_mfa_accepted",
+        "is_service_default",
+        "tenant_restrictions_apps_access_type",
+        "tenant_restrictions_apps_target_count",
+        "tenant_restrictions_apps_target_ids",
+        "tenant_restrictions_apps_targets_truncated",
+        "tenant_restrictions_devices_access_type",
+        "tenant_restrictions_users_access_type",
+        "tenant_restrictions_users_target_count",
+        "tenant_restrictions_users_target_ids",
+        "tenant_restrictions_users_targets_truncated"
+      ]
+    },
+    {
+      "EventName": "entra.cross_tenant_access_policy",
+      "AttrKeys": [
+        "display_name",
+        "id"
+      ]
+    }
+  ]
+}

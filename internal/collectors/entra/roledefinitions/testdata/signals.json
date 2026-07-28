@@ -1,0 +1,36 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.role_definitions.definitions",
+      "Unit": "{definition}",
+      "Kind": "gauge",
+      "Description": "Count of Entra directory role definitions, per (is_built_in, is_enabled).",
+      "AttrKeys": [
+        "is_built_in",
+        "is_enabled"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "entra.role_definition",
+      "AttrKeys": [
+        "allowed_action_count",
+        "allowed_actions",
+        "allowed_actions_truncated",
+        "description",
+        "display_name",
+        "id",
+        "inherits_permissions_from_ids",
+        "inherits_permissions_from_truncated",
+        "is_built_in",
+        "is_enabled",
+        "resource_scopes",
+        "resource_scopes_truncated",
+        "role_permission_count",
+        "template_id",
+        "version"
+      ]
+    }
+  ]
+}

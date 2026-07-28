@@ -74,6 +74,24 @@ SECTIONS = [
          {"viz": "table", "w": 12, "h": 8}),
         "entra.agreements.total",
         "entra.agreements.acceptances.total",
+        # Authentication-strength inventory (#322). Which strength policies
+        # exist and what satisfies them — the posture Conditional Access
+        # references by id but never enumerates.
+        ("Authentication-strength policies", ["entra.auth_strength.policies"],
+         {"viz": "table", "w": 12, "h": 8}),
+    ]),
+    ("Cross-tenant access (which other tenants can reach this one)", [
+        # #321. The access ladder is a 0/1 posture gauge per
+        # (service, direction, target_kind, access_type), so a table reads far
+        # better than a time series: an operator wants "what is the boundary
+        # right now", not its history.
+        ("B2B / direct-connect / tenant-restriction boundaries",
+         ["entra.cross_tenant_access.access"], {"viz": "table", "w": 12, "h": 8}),
+        ("Inbound trust — what this tenant accepts from the OTHER tenant",
+         ["entra.cross_tenant_access.inbound_trust"], {"viz": "table", "w": 12, "h": 8}),
+        ("Automatic user consent (1 = consent is skipped)",
+         ["entra.cross_tenant_access.automatic_user_consent"], {"viz": "timeseries"}),
+        "entra.cross_tenant_access.partners.total",
     ]),
     ("Roles, PIM and access reviews", [
         "entra.roles.members.total",
@@ -85,6 +103,27 @@ SECTIONS = [
         ("PIM role policy requirements", ["entra.pim.role_policy.requirement"],
          {"viz": "table", "w": 12, "h": 8}),
         "entra.access_reviews.total",
+        # Role DEFINITIONS (#320) — what roles exist and whether they are
+        # built-in/enabled, independent of who holds them. Sits beside the
+        # membership counts on purpose: a custom or disabled definition has no
+        # members, so it is invisible in every other panel in this section.
+        ("Role definitions by built-in / enabled",
+         ["entra.role_definitions.definitions"], {"viz": "timeseries"}),
+    ]),
+    ("Agent ID governance", [
+        # #333. without_owner / without_sponsor get their own single-stat
+        # panels rather than living only inside the joint gauge: "an agent
+        # nobody owns" is the alertable finding, and it should be readable
+        # without a query.
+        ("Agents with no owner / no sponsor",
+         ["entra.agent_governance.agents.without_owner",
+          "entra.agent_governance.agents.without_sponsor"],
+         {"viz": "timeseries"}),
+        ("Agent identities by governance state",
+         ["entra.agent_governance.agents"], {"viz": "table", "w": 12, "h": 8}),
+        ("Blueprint principals", ["entra.agent_governance.blueprint_principals"],
+         {"viz": "timeseries"}),
+        "entra.agent_governance.blueprints.total",
     ]),
     ("Secure score and recommendations", [
         ("Secure score current vs max",

@@ -1,0 +1,59 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#applications/microsoft.graph.agentIdentityBlueprint",
+  "value": [
+    {
+      "appId": "ad0d3ffd-7304-49f0-ba90-8305b123240e",
+      "createdByAppId": "18ed3507-a475-4ccb-b669-d66bc9f2a36e",
+      "createdDateTime": "2026-07-20T08:20:23Z",
+      "defaultRedirectUri": null,
+      "description": null,
+      "disabledByMicrosoftStatus": null,
+      "displayName": "robs-blueprint",
+      "groupMembershipClaims": null,
+      "identifierUris": [],
+      "managerApplications": [],
+      "publisherDomain": "m7kni.io",
+      "serviceManagementReference": null,
+      "signInAudience": "AzureADMyOrg",
+      "tags": [],
+      "tokenEncryptionKeyId": null,
+      "uniqueName": null,
+      "id": "ad0d3ffd-7304-49f0-ba90-8305b123240e",
+      "certification": null,
+      "optionalClaims": null,
+      "api": {
+        "acceptMappedClaims": null,
+        "knownClientApplications": [],
+        "requestedAccessTokenVersion": 2,
+        "oauth2PermissionScopes": [],
+        "preAuthorizedApplications": []
+      },
+      "appRoles": [],
+      "info": {
+        "logoUrl": null,
+        "marketingUrl": null,
+        "privacyStatementUrl": null,
+        "supportUrl": null,
+        "termsOfServiceUrl": null
+      },
+      "keyCredentials": [],
+      "passwordCredentials": [],
+      "requiredResourceAccess": [],
+      "verifiedPublisher": {
+        "displayName": null,
+        "verifiedPublisherId": null,
+        "addedDateTime": null
+      },
+      "web": {
+        "homePageUrl": null,
+        "logoutUrl": null,
+        "redirectUris": [],
+        "implicitGrantSettings": {
+          "enableAccessTokenIssuance": false,
+          "enableIdTokenIssuance": false
+        },
+        "redirectUriSettings": []
+      }
+    }
+  ]
+}

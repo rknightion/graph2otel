@@ -1,5 +1,5 @@
 {
-  "package_count": 162,
+  "package_count": 166,
   "domains": [
     "defender",
     "entra",
@@ -357,6 +357,79 @@
       ]
     },
     {
+      "name": "entra.agent_governance.agents",
+      "prometheus_name": "entra_agent_governance_agents",
+      "unit": "{agent}",
+      "kind": "gauge",
+      "description": "Agent identities, by account-enabled state, sponsor/owner presence, and app-role-assignment requirement.",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "account_enabled",
+        "app_role_assignment_required",
+        "has_owner",
+        "has_sponsor"
+      ],
+      "packages": [
+        "internal/collectors/entra/agentgovernance"
+      ]
+    },
+    {
+      "name": "entra.agent_governance.agents.without_owner",
+      "prometheus_name": "entra_agent_governance_agents_without_owner",
+      "unit": "{agent}",
+      "kind": "gauge",
+      "description": "Count of agent identities with zero owners.",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/agentgovernance"
+      ]
+    },
+    {
+      "name": "entra.agent_governance.agents.without_sponsor",
+      "prometheus_name": "entra_agent_governance_agents_without_sponsor",
+      "unit": "{agent}",
+      "kind": "gauge",
+      "description": "Count of agent identities with zero sponsors.",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/agentgovernance"
+      ]
+    },
+    {
+      "name": "entra.agent_governance.blueprint_principals",
+      "prometheus_name": "entra_agent_governance_blueprint_principals",
+      "unit": "{principal}",
+      "kind": "gauge",
+      "description": "Agent ID blueprint principals, by account-enabled state and sign-in audience.",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "account_enabled",
+        "sign_in_audience"
+      ],
+      "packages": [
+        "internal/collectors/entra/agentgovernance"
+      ]
+    },
+    {
+      "name": "entra.agent_governance.blueprints.total",
+      "prometheus_name": "entra_agent_governance_blueprints_total",
+      "unit": "{blueprint}",
+      "kind": "gauge",
+      "description": "Count of Entra Agent ID blueprint applications.",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/agentgovernance"
+      ]
+    },
+    {
       "name": "entra.agreements.acceptances.total",
       "prometheus_name": "entra_agreements_acceptances_total",
       "unit": "{acceptance}",
@@ -475,6 +548,22 @@
       ]
     },
     {
+      "name": "entra.auth_strength.policies",
+      "prometheus_name": "entra_auth_strength_policies",
+      "unit": "{policy}",
+      "kind": "gauge",
+      "description": "Entra authentication-strength policies configured for the tenant, by policy type and requirements satisfied.",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "policy_type",
+        "requirements_satisfied"
+      ],
+      "packages": [
+        "internal/collectors/entra/authstrength"
+      ]
+    },
+    {
       "name": "entra.ca.policies.total",
       "prometheus_name": "entra_ca_policies_total",
       "unit": "{policy}",
@@ -520,6 +609,67 @@
       ],
       "packages": [
         "internal/collectors/entra/credentialexpiry"
+      ]
+    },
+    {
+      "name": "entra.cross_tenant_access.access",
+      "prometheus_name": "entra_cross_tenant_access_access_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "description": "1 per configured cross-tenant access control block, attributed by service/direction/target_kind/access_type.",
+      "additive": false,
+      "domain": "entra",
+      "attr_keys": [
+        "access_type",
+        "direction",
+        "service",
+        "target_kind"
+      ],
+      "packages": [
+        "internal/collectors/entra/crosstenantaccess"
+      ]
+    },
+    {
+      "name": "entra.cross_tenant_access.automatic_user_consent",
+      "prometheus_name": "entra_cross_tenant_access_automatic_user_consent_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "description": "1 if automatic user consent is enabled for the given direction, else 0.",
+      "additive": false,
+      "domain": "entra",
+      "attr_keys": [
+        "direction"
+      ],
+      "packages": [
+        "internal/collectors/entra/crosstenantaccess"
+      ]
+    },
+    {
+      "name": "entra.cross_tenant_access.inbound_trust",
+      "prometheus_name": "entra_cross_tenant_access_inbound_trust_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "description": "1 if this tenant accepts the external tenant's own claim for the given inbound-trust setting, else 0, per bounded setting.",
+      "additive": false,
+      "domain": "entra",
+      "attr_keys": [
+        "setting"
+      ],
+      "packages": [
+        "internal/collectors/entra/crosstenantaccess"
+      ]
+    },
+    {
+      "name": "entra.cross_tenant_access.partners.total",
+      "prometheus_name": "entra_cross_tenant_access_partners_total",
+      "unit": "{partner}",
+      "kind": "gauge",
+      "description": "Count of cross-tenant-access partner-tenant configurations.",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/crosstenantaccess"
       ]
     },
     {
@@ -1265,6 +1415,22 @@
       ],
       "packages": [
         "internal/collectors/entra/risk"
+      ]
+    },
+    {
+      "name": "entra.role_definitions.definitions",
+      "prometheus_name": "entra_role_definitions_definitions",
+      "unit": "{definition}",
+      "kind": "gauge",
+      "description": "Count of Entra directory role definitions, per (is_built_in, is_enabled).",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "is_built_in",
+        "is_enabled"
+      ],
+      "packages": [
+        "internal/collectors/entra/roledefinitions"
       ]
     },
     {
@@ -6475,6 +6641,63 @@
       ]
     },
     {
+      "event_name": "entra.agent_blueprint",
+      "domain": "entra",
+      "attr_keys": [
+        "app_id",
+        "created_by_app_id",
+        "created_date_time",
+        "display_name",
+        "id",
+        "publisher_domain",
+        "sign_in_audience"
+      ],
+      "packages": [
+        "internal/collectors/entra/agentgovernance"
+      ]
+    },
+    {
+      "event_name": "entra.agent_blueprint_principal",
+      "domain": "entra",
+      "attr_keys": [
+        "account_enabled",
+        "app_display_name",
+        "app_id",
+        "app_owner_organization_id",
+        "display_name",
+        "id",
+        "service_principal_type",
+        "sign_in_audience",
+        "tags"
+      ],
+      "packages": [
+        "internal/collectors/entra/agentgovernance"
+      ]
+    },
+    {
+      "event_name": "entra.agent_identity",
+      "domain": "entra",
+      "attr_keys": [
+        "account_enabled",
+        "app_role_assignment_required",
+        "blueprint_id",
+        "created_by_app_id",
+        "created_date_time",
+        "display_name",
+        "id",
+        "owner_count",
+        "owner_ids",
+        "owners_truncated",
+        "service_principal_type",
+        "sponsor_count",
+        "sponsor_ids",
+        "sponsors_truncated"
+      ],
+      "packages": [
+        "internal/collectors/entra/agentgovernance"
+      ]
+    },
+    {
       "event_name": "entra.agent_risk_detection",
       "domain": "entra",
       "attr_keys": [
@@ -6606,6 +6829,26 @@
       ]
     },
     {
+      "event_name": "entra.auth_strength_policy",
+      "domain": "entra",
+      "attr_keys": [
+        "allowed_combination_count",
+        "allowed_combinations",
+        "allowed_combinations_truncated",
+        "combination_configuration_count",
+        "created_date_time",
+        "description",
+        "display_name",
+        "id",
+        "modified_date_time",
+        "policy_type",
+        "requirements_satisfied"
+      ],
+      "packages": [
+        "internal/collectors/entra/authstrength"
+      ]
+    },
+    {
       "event_name": "entra.conditional_access_policy",
       "domain": "entra",
       "attr_keys": [
@@ -6654,6 +6897,74 @@
       ],
       "packages": [
         "internal/collectors/entra/consent"
+      ]
+    },
+    {
+      "event_name": "entra.cross_tenant_access_default",
+      "domain": "entra",
+      "attr_keys": [
+        "automatic_consent_inbound_allowed",
+        "automatic_consent_outbound_allowed",
+        "b2b_collab_inbound_apps_access_type",
+        "b2b_collab_inbound_apps_target_count",
+        "b2b_collab_inbound_apps_target_ids",
+        "b2b_collab_inbound_apps_targets_truncated",
+        "b2b_collab_inbound_users_access_type",
+        "b2b_collab_inbound_users_target_count",
+        "b2b_collab_inbound_users_target_ids",
+        "b2b_collab_inbound_users_targets_truncated",
+        "b2b_collab_outbound_apps_access_type",
+        "b2b_collab_outbound_apps_target_count",
+        "b2b_collab_outbound_apps_target_ids",
+        "b2b_collab_outbound_apps_targets_truncated",
+        "b2b_collab_outbound_users_access_type",
+        "b2b_collab_outbound_users_target_count",
+        "b2b_collab_outbound_users_target_ids",
+        "b2b_collab_outbound_users_targets_truncated",
+        "b2b_direct_inbound_apps_access_type",
+        "b2b_direct_inbound_apps_target_count",
+        "b2b_direct_inbound_apps_target_ids",
+        "b2b_direct_inbound_apps_targets_truncated",
+        "b2b_direct_inbound_users_access_type",
+        "b2b_direct_inbound_users_target_count",
+        "b2b_direct_inbound_users_target_ids",
+        "b2b_direct_inbound_users_targets_truncated",
+        "b2b_direct_outbound_apps_access_type",
+        "b2b_direct_outbound_apps_target_count",
+        "b2b_direct_outbound_apps_target_ids",
+        "b2b_direct_outbound_apps_targets_truncated",
+        "b2b_direct_outbound_users_access_type",
+        "b2b_direct_outbound_users_target_count",
+        "b2b_direct_outbound_users_target_ids",
+        "b2b_direct_outbound_users_targets_truncated",
+        "id",
+        "inbound_trust_compliant_device_accepted",
+        "inbound_trust_hybrid_azure_ad_joined_device_accepted",
+        "inbound_trust_mfa_accepted",
+        "is_service_default",
+        "tenant_restrictions_apps_access_type",
+        "tenant_restrictions_apps_target_count",
+        "tenant_restrictions_apps_target_ids",
+        "tenant_restrictions_apps_targets_truncated",
+        "tenant_restrictions_devices_access_type",
+        "tenant_restrictions_users_access_type",
+        "tenant_restrictions_users_target_count",
+        "tenant_restrictions_users_target_ids",
+        "tenant_restrictions_users_targets_truncated"
+      ],
+      "packages": [
+        "internal/collectors/entra/crosstenantaccess"
+      ]
+    },
+    {
+      "event_name": "entra.cross_tenant_access_policy",
+      "domain": "entra",
+      "attr_keys": [
+        "display_name",
+        "id"
+      ],
+      "packages": [
+        "internal/collectors/entra/crosstenantaccess"
       ]
     },
     {
@@ -7063,6 +7374,30 @@
       ],
       "packages": [
         "internal/collectors/entra/risk"
+      ]
+    },
+    {
+      "event_name": "entra.role_definition",
+      "domain": "entra",
+      "attr_keys": [
+        "allowed_action_count",
+        "allowed_actions",
+        "allowed_actions_truncated",
+        "description",
+        "display_name",
+        "id",
+        "inherits_permissions_from_ids",
+        "inherits_permissions_from_truncated",
+        "is_built_in",
+        "is_enabled",
+        "resource_scopes",
+        "resource_scopes_truncated",
+        "role_permission_count",
+        "template_id",
+        "version"
+      ],
+      "packages": [
+        "internal/collectors/entra/roledefinitions"
       ]
     },
     {

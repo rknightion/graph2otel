@@ -33,8 +33,8 @@ spec:
     tuning_required: "Conditional Access failures include ordinary events such as a user declining an MFA prompt, so on most tenants this needs either a threshold above zero or a narrowing to risk_state alone. Measure your CA failure rate over 30 days first. Risk states require Entra ID P2."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-detect-interactive-signin-anomaly"
     __dashboardUid__: "graph2otel"
-    __panelId__: "88"
-    dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=88"
+    __panelId__: "100"
+    dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=100"
   expressions:
     A:
       model:

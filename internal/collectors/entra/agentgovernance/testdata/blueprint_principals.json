@@ -1,0 +1,73 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#servicePrincipals/microsoft.graph.agentIdentityBlueprintPrincipal",
+  "value": [
+    {
+      "accountEnabled": true,
+      "appDescription": null,
+      "appDisplayName": "robs-blueprint",
+      "appId": "ad0d3ffd-7304-49f0-ba90-8305b123240e",
+      "appOwnerOrganizationId": "4b8c18bd-2f9f-4227-af55-9f1061cf9c32",
+      "appRoleAssignmentRequired": false,
+      "createdByAppId": "18ed3507-a475-4ccb-b669-d66bc9f2a36e",
+      "disabledByMicrosoftStatus": null,
+      "displayName": "robs-blueprint",
+      "servicePrincipalNames": [
+        "ad0d3ffd-7304-49f0-ba90-8305b123240e"
+      ],
+      "servicePrincipalType": "Application",
+      "signInAudience": "AzureADMyOrg",
+      "tags": [],
+      "id": "e37e4156-a0af-4540-afe4-7138ad405d0f",
+      "appRoles": [],
+      "info": {
+        "logoUrl": null,
+        "marketingUrl": null,
+        "privacyStatementUrl": null,
+        "supportUrl": null,
+        "termsOfServiceUrl": null
+      },
+      "oauth2PermissionScopes": [],
+      "verifiedPublisher": {
+        "displayName": null,
+        "verifiedPublisherId": null,
+        "addedDateTime": null
+      }
+    },
+    {
+      "accountEnabled": true,
+      "appDescription": null,
+      "appDisplayName": "Microsoft Copilot Studio agent identity blueprint",
+      "appId": "25664c89-cea5-4ab6-b924-a54fd8a19ae0",
+      "appOwnerOrganizationId": "f8cdef31-a31e-4b4a-93e4-5f571e91255a",
+      "appRoleAssignmentRequired": false,
+      "createdByAppId": null,
+      "disabledByMicrosoftStatus": null,
+      "displayName": "Microsoft Copilot Studio agent identity blueprint",
+      "servicePrincipalNames": [
+        "25664c89-cea5-4ab6-b924-a54fd8a19ae0"
+      ],
+      "servicePrincipalType": "Application",
+      "signInAudience": "AzureADMultipleOrgs",
+      "tags": [
+        "disableLegacyUserImpersonationClient",
+        "disableLegacyUserImpersonationResource",
+        "GitCreatedApp"
+      ],
+      "id": "f76eb33f-8f2d-478b-a298-cff2b10fbbcd",
+      "appRoles": [],
+      "info": {
+        "logoUrl": null,
+        "marketingUrl": null,
+        "privacyStatementUrl": null,
+        "supportUrl": null,
+        "termsOfServiceUrl": null
+      },
+      "oauth2PermissionScopes": [],
+      "verifiedPublisher": {
+        "displayName": null,
+        "verifiedPublisherId": null,
+        "addedDateTime": null
+      }
+    }
+  ]
+}

@@ -33,8 +33,8 @@ spec:
     tuning_required: "Users create their own inbox rules constantly, so on most tenants this is the noisiest rule in the pack and needs a per-actor exclusion or a review queue rather than a pager. Run the audit-operation hunt over 30 days first: it both gives you the rate and confirms your tenant spells the operation the way this regex expects. Rule parameters are not on the record, so the rule cannot tell a forwarding rule from a housekeeping one."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-detect-exchange-inbox-rule-change"
     __dashboardUid__: "graph2otel"
-    __panelId__: "318"
-    dashboard_path: "/d/graph2otel?dtab=M365&viewPanel=318"
+    __panelId__: "330"
+    dashboard_path: "/d/graph2otel?dtab=M365&viewPanel=330"
   expressions:
     A:
       model:

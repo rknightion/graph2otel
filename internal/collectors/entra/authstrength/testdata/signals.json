@@ -1,0 +1,32 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.auth_strength.policies",
+      "Unit": "{policy}",
+      "Kind": "gauge",
+      "Description": "Entra authentication-strength policies configured for the tenant, by policy type and requirements satisfied.",
+      "AttrKeys": [
+        "policy_type",
+        "requirements_satisfied"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "entra.auth_strength_policy",
+      "AttrKeys": [
+        "allowed_combination_count",
+        "allowed_combinations",
+        "allowed_combinations_truncated",
+        "combination_configuration_count",
+        "created_date_time",
+        "description",
+        "display_name",
+        "id",
+        "modified_date_time",
+        "policy_type",
+        "requirements_satisfied"
+      ]
+    }
+  ]
+}

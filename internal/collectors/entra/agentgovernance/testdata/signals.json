@@ -1,0 +1,94 @@
+{
+  "Metrics": [
+    {
+      "Name": "entra.agent_governance.agents",
+      "Unit": "{agent}",
+      "Kind": "gauge",
+      "Description": "Agent identities, by account-enabled state, sponsor/owner presence, and app-role-assignment requirement.",
+      "AttrKeys": [
+        "account_enabled",
+        "app_role_assignment_required",
+        "has_owner",
+        "has_sponsor"
+      ]
+    },
+    {
+      "Name": "entra.agent_governance.agents.without_owner",
+      "Unit": "{agent}",
+      "Kind": "gauge",
+      "Description": "Count of agent identities with zero owners.",
+      "AttrKeys": []
+    },
+    {
+      "Name": "entra.agent_governance.agents.without_sponsor",
+      "Unit": "{agent}",
+      "Kind": "gauge",
+      "Description": "Count of agent identities with zero sponsors.",
+      "AttrKeys": []
+    },
+    {
+      "Name": "entra.agent_governance.blueprint_principals",
+      "Unit": "{principal}",
+      "Kind": "gauge",
+      "Description": "Agent ID blueprint principals, by account-enabled state and sign-in audience.",
+      "AttrKeys": [
+        "account_enabled",
+        "sign_in_audience"
+      ]
+    },
+    {
+      "Name": "entra.agent_governance.blueprints.total",
+      "Unit": "{blueprint}",
+      "Kind": "gauge",
+      "Description": "Count of Entra Agent ID blueprint applications.",
+      "AttrKeys": []
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "entra.agent_blueprint",
+      "AttrKeys": [
+        "app_id",
+        "created_by_app_id",
+        "created_date_time",
+        "display_name",
+        "id",
+        "publisher_domain",
+        "sign_in_audience"
+      ]
+    },
+    {
+      "EventName": "entra.agent_blueprint_principal",
+      "AttrKeys": [
+        "account_enabled",
+        "app_display_name",
+        "app_id",
+        "app_owner_organization_id",
+        "display_name",
+        "id",
+        "service_principal_type",
+        "sign_in_audience",
+        "tags"
+      ]
+    },
+    {
+      "EventName": "entra.agent_identity",
+      "AttrKeys": [
+        "account_enabled",
+        "app_role_assignment_required",
+        "blueprint_id",
+        "created_by_app_id",
+        "created_date_time",
+        "display_name",
+        "id",
+        "owner_count",
+        "owner_ids",
+        "owners_truncated",
+        "service_principal_type",
+        "sponsor_count",
+        "sponsor_ids",
+        "sponsors_truncated"
+      ]
+    }
+  ]
+}

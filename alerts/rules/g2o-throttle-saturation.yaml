@@ -33,8 +33,8 @@ spec:
     description: "rate(graph2otel_throttle_count_total[10m]) (429 responses observed by the client-side rate limiter) is above 0 for workload={{ $labels.workload }}, tenant {{ $labels.tenant_id }}, sustained for 15m — i.e. throttling that isn't a one-off blip but is still happening 10-15 minutes later. The rule treats no data as OK: zero throttle events is the healthy steady state, not an absence worth alerting on. The runbook has the per-workload ceiling context (none of the reporting 5/10s, Identity Protection 1/s, Intune reports-export 48/min, or directory RU workloads send Retry-After, so silent throttling degrades data freshness before anything else visibly breaks)."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-throttle-saturation"
     __dashboardUid__: "graph2otel"
-    __panelId__: "396"
-    dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=396"
+    __panelId__: "408"
+    dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=408"
   expressions:
     A:
       model:
