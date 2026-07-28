@@ -19,10 +19,20 @@
 // The census reads GET providers/microsoft.aadiam/diagnosticSettings on the ARM
 // control plane. Contrary to #134's premise, the poller reads that as ITSELF —
 // authorized by its Entra roles, not by Azure RBAC (live-measured 2026-07-23: the
-// tenant-level microsoft.aadiam provider returns 200, while microsoft.intune and
-// the storage account resource return 403). So this census is the Entra half; the
-// Intune half needs an identity with Azure RBAC and is out of scope (recorded on
-// #238).
+// tenant-level microsoft.aadiam provider returns 200).
+//
+// The Intune half is NOT an Azure-RBAC problem, and the earlier note here saying
+// it "needs an identity with Azure RBAC" was WRONG. graph2otel-poller was granted
+// the built-in Reader role at SUBSCRIPTION scope and microsoft.intune still 403s
+// (live-measured 2026-07-28, #352). The 403 names the reason: the required action
+// is microsoft.intune/diagnosticSettings/read over scope "/providers/microsoft.intune"
+// — a TENANT-ROOT scope, which no subscription-scope assignment can ever cover.
+// The poller already holds Global Reader and Security Reader, so those do not
+// carry it either. Do not re-attempt this with a broader Azure role; the scope
+// hierarchy, not the role, is what denies it.
+//
+// The same grant DID change the storage-account resource read, which now returns
+// 200 where it previously 403'd — that one was genuinely subscription-scoped.
 //
 // # Capability semantics
 //
