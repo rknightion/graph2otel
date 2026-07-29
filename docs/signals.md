@@ -157,6 +157,20 @@ resource attributes) are stream labels. This changes how you write LogQL:
   group) and any dashboard log panel must use — building a Grafana alert on
   `{event_name="…"}` is the single most common way to get a rule that silently never fires.
 
+- **A line filter (`|=` / `!=` on the line) does NOT search structured metadata.** It matches
+  the log LINE only, and graph2otel bodies are one-line summaries like
+  `DlpRuleMatch by user@example [Exchange]`, so almost everything interesting lives in the
+  metadata the line filter cannot see. `live-measured 2026-07-29, #370`:
+  `{service_name="graph2otel"} |= "U.K. National Insurance Number (NINO)"` returned **zero
+  rows** while a record carrying exactly that string in `dlp_sensitive_type_names` was in the
+  window. Use a label filter (`| dlp_sensitive_type_names=~"…NINO…"`) instead.
+
+  This matters most when the query is being used as a **negative**: an empty `|=` result is
+  not evidence a value is absent from the telemetry. To prove absence — e.g. that a secret
+  never reached the backend — retrieve the records and inspect their full attribute set, with
+  a positive control in the same run to show the search would find a hit. Same family as the
+  empty-result trap in *Verifying backdated records* below.
+
 ### `graph2otel.event_domain` — the one coarse dimension on the logs *resource*
 
 Because Loki only promotes **resource** attributes to stream labels, graph2otel puts exactly
