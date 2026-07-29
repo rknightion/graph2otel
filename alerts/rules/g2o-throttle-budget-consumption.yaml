@@ -33,8 +33,8 @@ spec:
     description: "graph2otel_throttle_limit_percentage_percent (from the x-ms-throttle-limit-percentage response header) is above 80 for workload={{ $labels.workload }}, tenant {{ $labels.tenant_id }}, sustained for 15m. Best-effort: this header isn't guaranteed on every 429 or every workload, so absence of data here does NOT mean the budget is healthy — g2o-throttle-saturation is the primary signal; this is a companion when the header happens to be present. Paused by default."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-throttle-budget-consumption"
     __dashboardUid__: "graph2otel"
-    __panelId__: "457"
-    dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=457"
+    __panelId__: "464"
+    dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=464"
   expressions:
     A:
       model:

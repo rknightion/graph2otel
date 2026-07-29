@@ -1,0 +1,5 @@
+{
+  "@odata.context": "https://graph.microsoft.com/beta/$metadata#directory/tenantGovernance/settings/$entity",
+  "isRelatedTenantsEnabled": true,
+  "canReceiveInvitations": true
+}

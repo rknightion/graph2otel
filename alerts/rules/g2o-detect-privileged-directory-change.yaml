@@ -33,8 +33,8 @@ spec:
     tuning_required: "Fires on your own admin work. Run the query over 30 days to learn your tenant's normal change rate, then decide whether to route it to a review queue rather than a pager, or to exclude specific initiators."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-detect-privileged-directory-change"
     __dashboardUid__: "graph2otel"
-    __panelId__: "118"
-    dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=118"
+    __panelId__: "125"
+    dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=125"
   expressions:
     A:
       model:

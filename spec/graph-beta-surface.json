@@ -53,6 +53,22 @@
       ]
     },
     {
+      "package": "internal/collectors/entra/relatedtenants",
+      "collectors": [
+        "entra.related_tenants"
+      ],
+      "operations": [
+        {
+          "path": "/directory/tenantGovernance/settings",
+          "note": "read FIRST so a tenant with discovery disabled is detected from data (isRelatedTenantsEnabled false) rather than from a 403"
+        },
+        {
+          "path": "/directory/tenantGovernance/relatedTenants",
+          "note": "Microsoft documents this under /tenantRelationships/tenantGovernance, which answers 400 Resource not found for the segment; the tenantGovernance navigation property hangs off directory (live-measured 2026-07-28, #336)"
+        }
+      ]
+    },
+    {
       "package": "internal/collectors/entra/pimalerts",
       "collectors": [
         "entra.pim_alerts"

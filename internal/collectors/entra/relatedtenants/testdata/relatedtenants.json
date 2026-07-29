@@ -1,0 +1,420 @@
+{
+  "@odata.context": "https://graph.microsoft.com/beta/$metadata#directory/tenantGovernance/relatedTenants",
+  "value": [
+    {
+      "isMicrosoftInfrastructure": false,
+      "id": "888d8064-bfff-42bb-865a-d6e5019e9964",
+      "createdDateTime": "2026-07-29T00:38:59.5074078Z",
+      "b2BRegistrationMetrics": null,
+      "b2BSignInActivityMetrics": null,
+      "appB2BSignInActivityMetrics": null,
+      "multiTenantApplicationMetrics": {
+        "initial": {
+          "createdDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        },
+        "recent": {
+          "updateDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        }
+      },
+      "billingMetrics": null
+    },
+    {
+      "isMicrosoftInfrastructure": false,
+      "id": "8a895840-24cf-4c6c-b1e0-91fcea37dadc",
+      "createdDateTime": "2026-07-29T00:38:59.4790005Z",
+      "b2BRegistrationMetrics": null,
+      "b2BSignInActivityMetrics": null,
+      "appB2BSignInActivityMetrics": null,
+      "multiTenantApplicationMetrics": {
+        "initial": {
+          "createdDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        },
+        "recent": {
+          "updateDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        }
+      },
+      "billingMetrics": null
+    },
+    {
+      "isMicrosoftInfrastructure": false,
+      "id": "bd93039a-fb3d-4c1c-93f7-dc625db51fff",
+      "createdDateTime": "2026-07-29T00:38:59.4932508Z",
+      "b2BRegistrationMetrics": null,
+      "b2BSignInActivityMetrics": null,
+      "appB2BSignInActivityMetrics": null,
+      "multiTenantApplicationMetrics": {
+        "initial": {
+          "createdDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        },
+        "recent": {
+          "updateDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        }
+      },
+      "billingMetrics": null
+    },
+    {
+      "isMicrosoftInfrastructure": false,
+      "id": "744e6807-dee7-4443-aecc-7b93ddbe846f",
+      "createdDateTime": "2026-07-29T00:38:59.367984Z",
+      "b2BRegistrationMetrics": null,
+      "b2BSignInActivityMetrics": null,
+      "appB2BSignInActivityMetrics": null,
+      "multiTenantApplicationMetrics": {
+        "initial": {
+          "createdDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        },
+        "recent": {
+          "updateDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        }
+      },
+      "billingMetrics": null
+    },
+    {
+      "isMicrosoftInfrastructure": false,
+      "id": "890577fa-7e6c-4e04-86a5-8f3fb8624026",
+      "createdDateTime": "2026-07-29T00:38:59.2800455Z",
+      "b2BRegistrationMetrics": null,
+      "b2BSignInActivityMetrics": null,
+      "appB2BSignInActivityMetrics": null,
+      "multiTenantApplicationMetrics": {
+        "initial": {
+          "createdDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        },
+        "recent": {
+          "updateDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        }
+      },
+      "billingMetrics": null
+    },
+    {
+      "isMicrosoftInfrastructure": false,
+      "id": "6d89ab0b-c2a8-43b8-9064-435857b39e06",
+      "createdDateTime": "2026-07-29T00:38:59.5793498Z",
+      "b2BRegistrationMetrics": null,
+      "b2BSignInActivityMetrics": null,
+      "appB2BSignInActivityMetrics": null,
+      "multiTenantApplicationMetrics": {
+        "initial": {
+          "createdDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        },
+        "recent": {
+          "updateDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        }
+      },
+      "billingMetrics": null
+    },
+    {
+      "isMicrosoftInfrastructure": false,
+      "id": "920bcb9d-6e9c-4629-bf6e-a88b16090ed9",
+      "createdDateTime": "2026-07-29T00:38:59.5682436Z",
+      "b2BRegistrationMetrics": null,
+      "b2BSignInActivityMetrics": null,
+      "appB2BSignInActivityMetrics": null,
+      "multiTenantApplicationMetrics": {
+        "initial": {
+          "createdDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        },
+        "recent": {
+          "updateDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        }
+      },
+      "billingMetrics": null
+    },
+    {
+      "isMicrosoftInfrastructure": false,
+      "id": "e6d6f70c-2dcd-43f0-8dfd-7a50cb9e9a53",
+      "createdDateTime": "2026-07-29T00:38:59.4657744Z",
+      "b2BRegistrationMetrics": {
+        "initial": {
+          "createdDateTime": "2026-07-27T22:01:54Z",
+          "watermarkDateTime": "2026-07-26T00:00:00Z",
+          "inboundTotalUsers": 1,
+          "outboundTotalUsers": 1
+        },
+        "recent": {
+          "updateDateTime": "2026-07-27T22:01:54Z",
+          "watermarkDateTime": "2026-07-26T00:00:00Z",
+          "inboundTotalUsers": 1,
+          "outboundTotalUsers": 1
+        }
+      },
+      "b2BSignInActivityMetrics": {
+        "initial": {
+          "createdDateTime": "2026-07-27T20:12:06Z",
+          "watermarkDateTime": "2026-07-26T00:00:00Z",
+          "inboundMonthlyTotalUsers": 1,
+          "outboundMonthlyTotalUsers": 0,
+          "inboundMonthlyTotalApplications": 10,
+          "outboundMonthlyTotalApplications": 0
+        },
+        "recent": {
+          "updateDateTime": "2026-07-27T20:12:06Z",
+          "watermarkDateTime": "2026-07-26T00:00:00Z",
+          "inboundMonthlyTotalUsers": 1,
+          "outboundMonthlyTotalUsers": 0,
+          "inboundMonthlyTotalApplications": 10,
+          "outboundMonthlyTotalApplications": 0
+        }
+      },
+      "appB2BSignInActivityMetrics": {
+        "initial": {
+          "createdDateTime": "2026-07-27T20:12:06Z",
+          "watermarkDateTime": "2026-07-26T00:00:00Z",
+          "inboundMonthlyTotalUsers": 1,
+          "outboundMonthlyTotalUsers": 0,
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        },
+        "recent": {
+          "updateDateTime": "2026-07-27T20:12:06Z",
+          "watermarkDateTime": "2026-07-26T00:00:00Z",
+          "inboundMonthlyTotalUsers": 1,
+          "outboundMonthlyTotalUsers": 0,
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        }
+      },
+      "multiTenantApplicationMetrics": {
+        "initial": {
+          "createdDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        },
+        "recent": {
+          "updateDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        }
+      },
+      "billingMetrics": null
+    },
+    {
+      "isMicrosoftInfrastructure": false,
+      "id": "5bcb163f-fcf3-4592-a1cb-8c14e07350af",
+      "createdDateTime": "2026-07-29T00:38:59.2800389Z",
+      "b2BRegistrationMetrics": null,
+      "b2BSignInActivityMetrics": null,
+      "appB2BSignInActivityMetrics": null,
+      "multiTenantApplicationMetrics": {
+        "initial": {
+          "createdDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        },
+        "recent": {
+          "updateDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        }
+      },
+      "billingMetrics": null
+    },
+    {
+      "isMicrosoftInfrastructure": false,
+      "id": "45c4cd6b-325c-47d3-9d14-7e42578bf965",
+      "createdDateTime": "2026-07-29T00:38:59.4922868Z",
+      "b2BRegistrationMetrics": null,
+      "b2BSignInActivityMetrics": null,
+      "appB2BSignInActivityMetrics": null,
+      "multiTenantApplicationMetrics": {
+        "initial": {
+          "createdDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        },
+        "recent": {
+          "updateDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        }
+      },
+      "billingMetrics": null
+    },
+    {
+      "isMicrosoftInfrastructure": false,
+      "id": "120378e6-a04b-49ed-98ba-afbc867d56b3",
+      "createdDateTime": "2026-07-29T00:38:59.5029222Z",
+      "b2BRegistrationMetrics": null,
+      "b2BSignInActivityMetrics": null,
+      "appB2BSignInActivityMetrics": null,
+      "multiTenantApplicationMetrics": {
+        "initial": {
+          "createdDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        },
+        "recent": {
+          "updateDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        }
+      },
+      "billingMetrics": null
+    },
+    {
+      "isMicrosoftInfrastructure": true,
+      "id": "37b3388c-fbc2-456d-ab10-c2953da31e45",
+      "createdDateTime": "2026-07-29T00:38:59.5790152Z",
+      "b2BRegistrationMetrics": null,
+      "b2BSignInActivityMetrics": null,
+      "appB2BSignInActivityMetrics": null,
+      "multiTenantApplicationMetrics": {
+        "initial": {
+          "createdDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        },
+        "recent": {
+          "updateDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        }
+      },
+      "billingMetrics": null
+    },
+    {
+      "isMicrosoftInfrastructure": true,
+      "id": "7ed5d327-72ab-4712-8f19-bf34641b87c1",
+      "createdDateTime": "2026-07-29T00:38:59.4824587Z",
+      "b2BRegistrationMetrics": null,
+      "b2BSignInActivityMetrics": null,
+      "appB2BSignInActivityMetrics": null,
+      "multiTenantApplicationMetrics": {
+        "initial": {
+          "createdDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        },
+        "recent": {
+          "updateDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        }
+      },
+      "billingMetrics": null
+    },
+    {
+      "isMicrosoftInfrastructure": false,
+      "id": "037e699a-5d8a-4460-b7b9-01ec7eee9634",
+      "createdDateTime": "2026-07-29T00:38:59.4662824Z",
+      "b2BRegistrationMetrics": null,
+      "b2BSignInActivityMetrics": null,
+      "appB2BSignInActivityMetrics": null,
+      "multiTenantApplicationMetrics": {
+        "initial": {
+          "createdDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        },
+        "recent": {
+          "updateDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        }
+      },
+      "billingMetrics": null
+    },
+    {
+      "isMicrosoftInfrastructure": true,
+      "id": "eb7203cf-c685-42dc-ae72-914064b12b9b",
+      "createdDateTime": "2026-07-29T00:38:59.4669478Z",
+      "b2BRegistrationMetrics": null,
+      "b2BSignInActivityMetrics": null,
+      "appB2BSignInActivityMetrics": null,
+      "multiTenantApplicationMetrics": {
+        "initial": {
+          "createdDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 100,
+          "outboundMonthlyTotalApplications": 0
+        },
+        "recent": {
+          "updateDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 100,
+          "outboundMonthlyTotalApplications": 0
+        }
+      },
+      "billingMetrics": null
+    },
+    {
+      "isMicrosoftInfrastructure": false,
+      "id": "7298c50a-12b4-443c-9227-dd24b936930b",
+      "createdDateTime": "2026-07-29T00:38:59.4914106Z",
+      "b2BRegistrationMetrics": null,
+      "b2BSignInActivityMetrics": null,
+      "appB2BSignInActivityMetrics": null,
+      "multiTenantApplicationMetrics": {
+        "initial": {
+          "createdDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        },
+        "recent": {
+          "updateDateTime": "2026-07-28T04:39:58Z",
+          "watermarkDateTime": "2026-07-27T00:00:00Z",
+          "inboundMonthlyTotalApplications": 1,
+          "outboundMonthlyTotalApplications": 0
+        }
+      },
+      "billingMetrics": null
+    }
+  ]
+}

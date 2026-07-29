@@ -6,7 +6,7 @@ any compatible backend. It covers Entra ID, Intune, Microsoft 365, Purview, Defe
 XDR, Defender for Cloud Apps, and Exchange Online. One static binary can poll multiple
 tenants; there is no Prometheus endpoint to expose or scrape.
 
-**v1.0.0 is released and production-tested.** The registry currently exposes **168 logical collectors**.
+**v1.0.0 is released and production-tested.** The registry currently exposes **169 logical collectors**.
 [The generated collector reference](collectors.md) is the authoritative inventory: its
 contents and the collector census are checked against the same 7 registration paths
 used by the application.

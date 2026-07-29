@@ -20,7 +20,7 @@ import (
 func TestCollectorOverrideInventoryHas168LogicalNamesAcrossAllSevenPaths(t *testing.T) {
 	known, _ := collectorOverrideInventory()
 
-	if got, want := len(known), 168; got != want {
+	if got, want := len(known), 169; got != want {
 		t.Fatalf("logical collector names = %d, want %d", got, want)
 	}
 	for path, name := range map[string]string{

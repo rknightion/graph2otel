@@ -307,6 +307,16 @@
       "resolution": "model"
     },
     {
+      "path": "/directory/tenantGovernance/relatedTenants",
+      "type": "microsoft.graph.tenantGovernanceServices.relatedTenant",
+      "resolution": "model"
+    },
+    {
+      "path": "/directory/tenantGovernance/settings",
+      "type": "microsoft.graph.tenantGovernanceServices.tenantGovernanceSetting",
+      "resolution": "model"
+    },
+    {
       "path": "/identityGovernance/roleManagementAlerts/alertConfigurations",
       "type": "microsoft.graph.unifiedRoleManagementAlertConfiguration",
       "resolution": "model"
@@ -3913,6 +3923,29 @@
       "kind": "ComplexType",
       "properties": {
         "resourceSpecificPermissions": "Collection(microsoft.graph.teamsAppResourceSpecificPermission)"
+      }
+    },
+    "microsoft.graph.tenantGovernanceServices.relatedTenant": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "createdDateTime": "Edm.DateTimeOffset",
+        "isMicrosoftInfrastructure": "Edm.Boolean"
+      },
+      "navigation_properties": {
+        "appB2BSignInActivityMetrics": "microsoft.graph.tenantGovernanceServices.b2BSignInActivityMetrics",
+        "b2BRegistrationMetrics": "microsoft.graph.tenantGovernanceServices.b2bRegistrationMetrics",
+        "b2BSignInActivityMetrics": "microsoft.graph.tenantGovernanceServices.b2BSignInActivityMetrics",
+        "billingMetrics": "microsoft.graph.tenantGovernanceServices.billingMetrics",
+        "multiTenantApplicationMetrics": "microsoft.graph.tenantGovernanceServices.multiTenantApplicationMetrics"
+      }
+    },
+    "microsoft.graph.tenantGovernanceServices.tenantGovernanceSetting": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "canReceiveInvitations": "Edm.Boolean",
+        "isRelatedTenantsEnabled": "Edm.Boolean"
       }
     },
     "microsoft.graph.tokenIssuerType": {

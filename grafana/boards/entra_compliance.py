@@ -186,6 +186,28 @@ SECTIONS = [
         "entra.service_activity.network_access_users",
         "entra.service_activity.network_access_branches",
     ]),
+    ("Related tenants — discovered tenant entanglement (beta, opt-in)", [
+        # #336. Which OTHER tenants this one is entangled with, as DISCOVERED by
+        # Microsoft rather than declared by an admin — the counterpart to
+        # entra.cross_tenant_access, which reports configured policy.
+        #
+        # total is split by is_microsoft_infrastructure because 3 of 16 live rows
+        # are Microsoft's own infrastructure tenants; an unsplit total overstates
+        # external entanglement by exactly those.
+        "entra.related_tenants.total",
+        # with_metrics is the COVERAGE panel and the one to read first: four of
+        # the five metric blocks are null on almost every row, so a flat zero on
+        # the counters below means "Microsoft supplied no measurement", not "no
+        # B2B activity". Reading the counters without this panel is how that
+        # gets misread.
+        "entra.related_tenants.with_metrics",
+        "entra.related_tenants.b2b_registered_users",
+        "entra.related_tenants.b2b_signin_users",
+        "entra.related_tenants.multi_tenant_applications",
+        ("Tenant governance switches",
+         ["entra.related_tenants.discovery_enabled",
+          "entra.related_tenants.can_receive_invitations"]),
+    ]),
     ("Global Secure Access (beta, opt-in)", [
         "entra.gsa.onboarding_status",
         "entra.gsa.forwarding_profiles",

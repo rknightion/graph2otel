@@ -66,6 +66,7 @@
                 "entra.privileged_groups",
                 "entra.provisioning",
                 "entra.recommendations",
+                "entra.related_tenants",
                 "entra.risk",
                 "entra.risk_detections",
                 "entra.risky_agents",

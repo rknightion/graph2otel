@@ -1,5 +1,5 @@
 {
-  "package_count": 174,
+  "package_count": 175,
   "domains": [
     "defender",
     "entra",
@@ -1561,6 +1561,107 @@
       ],
       "packages": [
         "internal/collectors/entra/recommendations"
+      ]
+    },
+    {
+      "name": "entra.related_tenants.b2b_registered_users",
+      "prometheus_name": "entra_related_tenants_b2b_registered_users",
+      "unit": "{user}",
+      "kind": "gauge",
+      "description": "Total B2B guest registrations across all discovered related tenants, by direction.",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "direction"
+      ],
+      "packages": [
+        "internal/collectors/entra/relatedtenants"
+      ]
+    },
+    {
+      "name": "entra.related_tenants.b2b_signin_users",
+      "prometheus_name": "entra_related_tenants_b2b_signin_users",
+      "unit": "{user}",
+      "kind": "gauge",
+      "description": "Total monthly B2B sign-in users across all discovered related tenants, by direction.",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "direction"
+      ],
+      "packages": [
+        "internal/collectors/entra/relatedtenants"
+      ]
+    },
+    {
+      "name": "entra.related_tenants.can_receive_invitations",
+      "prometheus_name": "entra_related_tenants_can_receive_invitations",
+      "unit": "{setting}",
+      "kind": "gauge",
+      "description": "Whether the tenant can receive tenant-governance invitations from another tenant (1) or not (0).",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/relatedtenants"
+      ]
+    },
+    {
+      "name": "entra.related_tenants.discovery_enabled",
+      "prometheus_name": "entra_related_tenants_discovery_enabled",
+      "unit": "{setting}",
+      "kind": "gauge",
+      "description": "Whether Entra related-tenant discovery is enabled for the tenant (1) or not (0).",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/entra/relatedtenants"
+      ]
+    },
+    {
+      "name": "entra.related_tenants.multi_tenant_applications",
+      "prometheus_name": "entra_related_tenants_multi_tenant_applications",
+      "unit": "{application}",
+      "kind": "gauge",
+      "description": "Total monthly multi-tenant applications in use across all discovered related tenants, by direction.",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "direction"
+      ],
+      "packages": [
+        "internal/collectors/entra/relatedtenants"
+      ]
+    },
+    {
+      "name": "entra.related_tenants.total",
+      "prometheus_name": "entra_related_tenants_total",
+      "unit": "{tenant}",
+      "kind": "gauge",
+      "description": "Count of tenants discovered by Entra related-tenant discovery, split by whether the tenant is Microsoft infrastructure.",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "is_microsoft_infrastructure"
+      ],
+      "packages": [
+        "internal/collectors/entra/relatedtenants"
+      ]
+    },
+    {
+      "name": "entra.related_tenants.with_metrics",
+      "prometheus_name": "entra_related_tenants_with_metrics",
+      "unit": "{tenant}",
+      "kind": "gauge",
+      "description": "Count of discovered related tenants for which Microsoft supplied each kind of relationship metric.",
+      "additive": true,
+      "domain": "entra",
+      "attr_keys": [
+        "kind"
+      ],
+      "packages": [
+        "internal/collectors/entra/relatedtenants"
       ]
     },
     {
@@ -8038,6 +8139,40 @@
       ],
       "packages": [
         "internal/collectors/entra/recommendations"
+      ]
+    },
+    {
+      "event_name": "entra.related_tenant",
+      "domain": "entra",
+      "attr_keys": [
+        "app_b2b_signin_inbound_applications",
+        "app_b2b_signin_inbound_users",
+        "app_b2b_signin_outbound_applications",
+        "app_b2b_signin_outbound_users",
+        "app_b2b_signin_updated_date_time",
+        "app_b2b_signin_watermark_date_time",
+        "b2b_registration_inbound_users",
+        "b2b_registration_outbound_users",
+        "b2b_registration_updated_date_time",
+        "b2b_registration_watermark_date_time",
+        "b2b_signin_inbound_applications",
+        "b2b_signin_inbound_users",
+        "b2b_signin_outbound_applications",
+        "b2b_signin_outbound_users",
+        "b2b_signin_updated_date_time",
+        "b2b_signin_watermark_date_time",
+        "created_date_time",
+        "has_billing_metrics",
+        "is_microsoft_infrastructure",
+        "metrics_first_observed_date_time",
+        "multi_tenant_app_inbound_applications",
+        "multi_tenant_app_outbound_applications",
+        "multi_tenant_app_updated_date_time",
+        "multi_tenant_app_watermark_date_time",
+        "related_tenant_id"
+      ],
+      "packages": [
+        "internal/collectors/entra/relatedtenants"
       ]
     },
     {

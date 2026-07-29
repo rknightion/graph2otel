@@ -67,6 +67,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/privilegedgroups"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/provisioning"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/recommendations"
+	_ "github.com/rknightion/graph2otel/internal/collectors/entra/relatedtenants"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/risk"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/riskdetections"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/riskyagents"
