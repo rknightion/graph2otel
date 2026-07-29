@@ -23,13 +23,13 @@ tool is beta-specific except the default `metadata_url`.
 
 ## Coverage
 
-30 packages, 32 collectors, 86 beta operations. The authoritative list is
+31 packages, 33 collectors, 87 beta operations. The authoritative list is
 `spec/graph-beta-surface.json`; `TestBetaDriftDocNamesEveryWatchedCollector` fails if a
 collector listed there stops being named below.
 
 | domain | collectors |
 | --- | --- |
-| Entra ID | `entra.agent_risk_detections`, `entra.app_ownership`, `entra.gsa`, `entra.pim_alerts`, `entra.recommendations`, `entra.related_tenants`, `entra.risky_agents`, `entra.signin_activity`, `entra.signins.non_interactive`, `entra.signins.service_principal`, `entra.signins.managed_identity`, `entra.service_activity` |
+| Entra ID | `entra.agent_risk_detections`, `entra.app_ownership`, `entra.gsa`, `entra.network_access_traffic`, `entra.pim_alerts`, `entra.recommendations`, `entra.related_tenants`, `entra.risky_agents`, `entra.signin_activity`, `entra.signins.non_interactive`, `entra.signins.service_principal`, `entra.signins.managed_identity`, `entra.service_activity` |
 | Intune | `intune.apple_tokens`, `intune.autopilot`, `intune.autopilot_events`, `intune.certificates`, `intune.cloud_pki`, `intune.connectors`, `intune.device_encryption`, `intune.endpoint_analytics`, `intune.gpo_analytics`, `intune.hardware_inventory`, `intune.remediation_run_states`, `intune.scripts`, `intune.settings_catalog`, `intune.updates`, `intune.windows_updates`, `intune.feature_update_devices` |
 | M365 | `m365.teams`, `m365.unified_audit` |
 | Purview | `purview.dlp_policies` |

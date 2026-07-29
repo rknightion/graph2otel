@@ -1,5 +1,5 @@
 {
-  "package_count": 175,
+  "package_count": 176,
   "domains": [
     "defender",
     "entra",
@@ -8023,6 +8023,55 @@
       ],
       "packages": [
         "internal/collectors/entra/conditionalaccess"
+      ]
+    },
+    {
+      "event_name": "entra.network_access_traffic",
+      "domain": "entra",
+      "attr_keys": [
+        "action",
+        "agent_version",
+        "connection_id",
+        "destination_fqdn",
+        "destination_ip_address",
+        "destination_port",
+        "destination_web_category",
+        "device_category",
+        "device_id",
+        "device_operating_system",
+        "device_operating_system_version",
+        "filtering_profile_id",
+        "filtering_profile_name",
+        "ingest_transport",
+        "initiating_process_name",
+        "is_agentic",
+        "network_protocol",
+        "operation_status",
+        "policy_id",
+        "policy_name",
+        "policy_rule_id",
+        "policy_rule_name",
+        "pop_processing_region",
+        "received_bytes",
+        "response_code",
+        "sent_bytes",
+        "source_ip",
+        "source_port",
+        "threat_type",
+        "tls_action",
+        "tls_policy_id",
+        "tls_policy_name",
+        "tls_rule_id",
+        "tls_rule_name",
+        "tls_status",
+        "traffic_type",
+        "transaction_id",
+        "transport_protocol",
+        "user_id",
+        "user_principal_name"
+      ],
+      "packages": [
+        "internal/collectors/entra/networkaccesstraffic"
       ]
     },
     {

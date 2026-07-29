@@ -60,6 +60,7 @@
                 "entra.gsa",
                 "entra.licensing",
                 "entra.mfa_registration",
+                "entra.network_access_traffic",
                 "entra.organization",
                 "entra.pim_alerts",
                 "entra.pim_role_policies",

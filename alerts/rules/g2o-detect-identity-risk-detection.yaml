@@ -33,8 +33,8 @@ spec:
     tuning_required: "Requires Entra ID P2 — without it the endpoint answers with an empty collection and the rule can never fire, which reads exactly like a clean tenant. The event-type list is Microsoft's published set and has not been measured field-by-field here, so run the risk-detection-type hunt first: it tells you both which types your tenant actually produces and whether leakedCredentials alone already exceeds a sane page rate."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-detect-identity-risk-detection"
     __dashboardUid__: "graph2otel"
-    __panelId__: "124"
-    dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=124"
+    __panelId__: "127"
+    dashboard_path: "/d/graph2otel?dtab=Entra&viewPanel=127"
   expressions:
     A:
       model:

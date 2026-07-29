@@ -245,6 +245,28 @@ LOGS = [
      "title": "Top failing sign-in sources (country, client app)",
      "filters": [f("status_error_code", "ne", "0")],
      "by": ["location_country_or_region", "client_app_used"]},
+    {"kind": "logs", "event": "entra.network_access_traffic",
+     "title": "GSA blocked connections — which device reached for which host",
+     "filters": [f("action", "eq", "block")],
+     "desc": "Global Secure Access per-connection logs (#338, HighVolume + Experimental, OFF by "
+             "default). The only signal here that names a host a managed device connected to. "
+             "operation_status is GSA's OWN processing status, NOT the connection's — a blocked "
+             "connection reads operation_status=success, which is the obvious and wrong reading. "
+             "~3,695 records/hour from one client when enabled (live-measured 2026-07-29).",
+     "w": 24, "h": 12},
+    {"kind": "rate", "event": "entra.network_access_traffic",
+     "title": "GSA connection rate by traffic type and action",
+     "by": ["traffic_type", "action"],
+     "desc": "This panel is why no bounded counter is emitted: a LogQL count-by answers it for "
+             "free, and every other dimension worth slicing (destination FQDN, user, policy rule) "
+             "is unbounded and could never be a metric label (#112)."},
+    {"kind": "table", "event": "entra.network_access_traffic",
+     "title": "Top blocked destinations by web category and filtering rule",
+     "filters": [f("action", "eq", "block")],
+     "by": ["destination_web_category", "policy_rule_name"],
+     "desc": "destination_web_category arrives comma-joined from Microsoft and is kept verbatim, "
+             "so a multi-category destination is one value here rather than several."},
+
     {"kind": "logs", "event": "entra.risk_detection",
      "title": "Risk detections — MITRE ATT&CK technique, IP, user",
      "desc": "mitre_techniques is on every risk detection (#153). Add "

@@ -61,6 +61,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/gsa"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/licensing"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/mfaregistration"
+	_ "github.com/rknightion/graph2otel/internal/collectors/entra/networkaccesstraffic"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/organization"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/pimalerts"
 	_ "github.com/rknightion/graph2otel/internal/collectors/entra/pimrolepolicies"

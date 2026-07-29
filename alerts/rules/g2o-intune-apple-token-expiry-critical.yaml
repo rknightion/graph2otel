@@ -34,8 +34,8 @@ spec:
     description: "intune_apple_token_days_until_expiry (APNS/VPP/DEP) is below 14 for token_name={{ $labels.token_name }}, tenant {{ $labels.tenant_id }}, for 15m. Unlike the bucketed metrics, this is a raw days-remaining gauge over a tiny admin-configured token set, so the threshold is an exact day count — tune freely. Paused by default (companion of the primary compliance/credential set) — enable once the apple_tokens collector is on for tenants that use Apple MDM."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-intune-apple-token-expiry-critical"
     __dashboardUid__: "graph2otel"
-    __panelId__: "234"
-    dashboard_path: "/d/graph2otel?dtab=Intune&viewPanel=234"
+    __panelId__: "237"
+    dashboard_path: "/d/graph2otel?dtab=Intune&viewPanel=237"
   expressions:
     A:
       model:

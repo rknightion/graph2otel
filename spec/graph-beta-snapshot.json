@@ -357,6 +357,11 @@
       "resolution": "model"
     },
     {
+      "path": "/networkAccess/logs/traffic",
+      "type": "microsoft.graph.networkaccess.networkAccessTraffic",
+      "resolution": "model"
+    },
+    {
       "path": "/networkAccess/settings/conditionalAccess",
       "type": "microsoft.graph.networkaccess.conditionalAccessSettings",
       "resolution": "model"
@@ -2297,6 +2302,12 @@
         "networkType": "microsoft.graph.networkType"
       }
     },
+    "microsoft.graph.networkaccess.applicationSnapshot": {
+      "kind": "ComplexType",
+      "properties": {
+        "appId": "Edm.String"
+      }
+    },
     "microsoft.graph.networkaccess.association": {
       "kind": "ComplexType"
     },
@@ -2305,6 +2316,22 @@
       "base_type": "microsoft.graph.entity",
       "properties": {
         "name": "Edm.String"
+      }
+    },
+    "microsoft.graph.networkaccess.cloudApplicationMetadata": {
+      "kind": "ComplexType",
+      "properties": {
+        "activity": "microsoft.graph.networkaccess.applicationActivity",
+        "categories": "Collection(Edm.String)",
+        "cloudApplicationCatalogId": "Edm.String",
+        "complianceScore": "Edm.Int32",
+        "generalScore": "Edm.Int32",
+        "legalScore": "Edm.Int32",
+        "loginUser": "Edm.String",
+        "name": "Edm.String",
+        "riskScore": "Edm.Int32",
+        "securityScore": "Edm.Int32",
+        "subactivity": "Edm.String"
       }
     },
     "microsoft.graph.networkaccess.conditionalAccessSettings": {
@@ -2320,6 +2347,15 @@
       "properties": {
         "networkPacketTaggingStatus": "microsoft.graph.networkaccess.status"
       }
+    },
+    "microsoft.graph.networkaccess.deviceCategory": {
+      "kind": "EnumType",
+      "members": [
+        "branch",
+        "client",
+        "remoteNetwork",
+        "unknownFutureValue"
+      ]
     },
     "microsoft.graph.networkaccess.filteringPolicy": {
       "kind": "EntityType",
@@ -2357,6 +2393,119 @@
         "servicePrincipal": "microsoft.graph.servicePrincipal"
       }
     },
+    "microsoft.graph.networkaccess.headers": {
+      "kind": "ComplexType",
+      "properties": {
+        "origin": "Edm.String",
+        "referrer": "Edm.String",
+        "xForwardedFor": "Edm.String"
+      }
+    },
+    "microsoft.graph.networkaccess.httpMethod": {
+      "kind": "EnumType",
+      "members": [
+        "connect",
+        "delete",
+        "get",
+        "head",
+        "options",
+        "patch",
+        "post",
+        "put",
+        "trace",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.networkaccess.networkAccessTraffic": {
+      "kind": "EntityType",
+      "properties": {
+        "action": "microsoft.graph.networkaccess.filteringPolicyAction",
+        "agentVersion": "Edm.String",
+        "applicationSnapshot": "microsoft.graph.networkaccess.applicationSnapshot",
+        "cloudApplicationMetadata": "microsoft.graph.networkaccess.cloudApplicationMetadata",
+        "connectionId": "Edm.String",
+        "createdDateTime": "Edm.DateTimeOffset",
+        "description": "Edm.String",
+        "destinationFQDN": "Edm.String",
+        "destinationIp": "Edm.String",
+        "destinationPort": "Edm.Int32",
+        "destinationUrl": "Edm.String",
+        "destinationWebCategory": "microsoft.graph.networkaccess.webCategory",
+        "deviceCategory": "microsoft.graph.networkaccess.deviceCategory",
+        "deviceId": "Edm.String",
+        "deviceOperatingSystem": "Edm.String",
+        "deviceOperatingSystemVersion": "Edm.String",
+        "filteringProfileId": "Edm.String",
+        "filteringProfileName": "Edm.String",
+        "headers": "microsoft.graph.networkaccess.headers",
+        "httpMethod": "microsoft.graph.networkaccess.httpMethod",
+        "initiatingProcessName": "Edm.String",
+        "networkProtocol": "microsoft.graph.networkaccess.networkingProtocol",
+        "operationStatus": "microsoft.graph.networkaccess.networkTrafficOperationStatus",
+        "policyId": "Edm.String",
+        "policyName": "Edm.String",
+        "policyRuleId": "Edm.String",
+        "policyRuleName": "Edm.String",
+        "popProcessingRegion": "Edm.String",
+        "privateAccessDetails": "microsoft.graph.networkaccess.privateAccessDetails",
+        "receivedBytes": "Edm.Int64",
+        "remoteNetworkId": "Edm.String",
+        "resourceTenantId": "Edm.String",
+        "responseCode": "Edm.Int32",
+        "sentBytes": "Edm.Int64",
+        "sessionId": "Edm.String",
+        "sourceIp": "Edm.String",
+        "sourcePort": "Edm.Int32",
+        "tenantId": "Edm.String",
+        "threatType": "Edm.String",
+        "trafficType": "microsoft.graph.networkaccess.trafficType",
+        "transactionId": "Edm.String",
+        "transportProtocol": "microsoft.graph.networkaccess.networkingProtocol",
+        "userId": "Edm.String",
+        "userPrincipalName": "Edm.String",
+        "vendorNames": "Collection(Edm.String)"
+      },
+      "navigation_properties": {
+        "device": "microsoft.graph.device",
+        "user": "microsoft.graph.user"
+      }
+    },
+    "microsoft.graph.networkaccess.networkTrafficOperationStatus": {
+      "kind": "EnumType",
+      "members": [
+        "failure",
+        "success",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.networkaccess.networkingProtocol": {
+      "kind": "EnumType",
+      "members": [
+        "ggp",
+        "icmp",
+        "icmpV6",
+        "idp",
+        "igmp",
+        "ip",
+        "ipSecAuthenticationHeader",
+        "ipSecEncapsulatingSecurityPayload",
+        "ipv4",
+        "ipv6",
+        "ipv6DestinationOptions",
+        "ipv6FragmentHeader",
+        "ipv6NoNextHeader",
+        "ipv6RoutingHeader",
+        "ipx",
+        "nd",
+        "pup",
+        "raw",
+        "spx",
+        "spxII",
+        "tcp",
+        "udp",
+        "unknownFutureValue"
+      ]
+    },
     "microsoft.graph.networkaccess.onboardingStatus": {
       "kind": "EnumType",
       "members": [
@@ -2379,6 +2528,19 @@
       },
       "navigation_properties": {
         "policyRules": "Collection(microsoft.graph.networkaccess.policyRule)"
+      }
+    },
+    "microsoft.graph.networkaccess.privateAccessDetails": {
+      "kind": "ComplexType",
+      "properties": {
+        "accessType": "microsoft.graph.networkaccess.accessType",
+        "appSegmentId": "Edm.String",
+        "connectionStatus": "microsoft.graph.networkaccess.connectionStatus",
+        "connectorId": "Edm.String",
+        "connectorIp": "Edm.String",
+        "connectorName": "Edm.String",
+        "processingRegion": "Edm.String",
+        "thirdPartyTokenDetails": "microsoft.graph.networkaccess.thirdPartyTokenDetails"
       }
     },
     "microsoft.graph.networkaccess.profile": {
@@ -2454,6 +2616,9 @@
         "forwardingProfiles": "Collection(microsoft.graph.networkaccess.forwardingProfile)"
       }
     },
+    "microsoft.graph.networkaccess.ruleDestination": {
+      "kind": "ComplexType"
+    },
     "microsoft.graph.networkaccess.status": {
       "kind": "EnumType",
       "members": [
@@ -2478,6 +2643,25 @@
         "private",
         "unknownFutureValue"
       ]
+    },
+    "microsoft.graph.networkaccess.trafficType": {
+      "kind": "EnumType",
+      "members": [
+        "all",
+        "internet",
+        "microsoft365",
+        "private",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.networkaccess.webCategory": {
+      "kind": "ComplexType",
+      "base_type": "microsoft.graph.networkaccess.ruleDestination",
+      "properties": {
+        "displayName": "Edm.String",
+        "group": "Edm.String",
+        "name": "Edm.String"
+      }
     },
     "microsoft.graph.onPremisesPublishing": {
       "kind": "ComplexType",

@@ -121,7 +121,7 @@ warning for that tenant. A configured `client_id` alone is never proof.
 
 #### Per-tenant ingest and direct-API sources
 
-The shipped registry has 169 logical collectors across 7 registration paths. These
+The shipped registry has 170 logical collectors across 7 registration paths. These
 tenant blocks enable or configure the non-default source paths; they are file-only because
 the environment layer does not bind into the `tenants[]` slice:
 

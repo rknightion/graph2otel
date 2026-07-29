@@ -69,6 +69,18 @@
       ]
     },
     {
+      "package": "internal/collectors/entra/networkaccesstraffic",
+      "collectors": [
+        "entra.network_access_traffic"
+      ],
+      "operations": [
+        {
+          "path": "/networkAccess/logs/traffic",
+          "note": "$top ceiling is exactly 1000 ($top=1001 answers 400 naming the limit); $count=true answers 400 (Query option 'Count' is not allowed); $filter on createdDateTime works including a two-sided ge/lt window; the DEFAULT order is createdDateTime DESCENDING (live-measured 2026-07-29, #338)"
+        }
+      ]
+    },
+    {
       "package": "internal/collectors/entra/pimalerts",
       "collectors": [
         "entra.pim_alerts"

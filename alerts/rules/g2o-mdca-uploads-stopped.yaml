@@ -33,8 +33,8 @@ spec:
     description: "mdca_discovery_parse_last_success_age_seconds for input_stream_id={{ $labels.input_stream_id }}, tenant {{ $labels.tenant_id }} has exceeded 10800s (3h) for 15m. This is the alert-on-SILENCE signal a failure counter cannot produce: a dead uploader emits no failed parse tasks, so g2o-mdca-parse-failing stays green while data silently stops. Replace 10800 with ~3x YOUR upload cadence in seconds. The rule treats no data as OK because a tenant with no Cloud Discovery streams legitimately emits no series; once a stream has parsed once, the gauge is always present and keeps climbing when uploads stop."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-mdca-uploads-stopped"
     __dashboardUid__: "graph2otel"
-    __panelId__: "305"
-    dashboard_path: "/d/graph2otel?dtab=Defender&viewPanel=305"
+    __panelId__: "308"
+    dashboard_path: "/d/graph2otel?dtab=Defender&viewPanel=308"
   expressions:
     A:
       model:
