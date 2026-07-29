@@ -182,13 +182,15 @@ const (
 //   - Audit.AzureActiveDirectory: duplicates entra.directory_audits and
 //     entra.signins.interactive (a live blob held 8 UserLoggedIn of 20 records,
 //     #100). Both are logs-only, so running them together ships dupes.
-//   - DLP.All: needs the ActivityFeed.ReadDlp role this collector does not
-//     declare. Its record shape is now verified [live-measured 2026-07-18, #100]:
-//     m7kni DLP policies DO match (RecordType 13 ComplianceDLPExchange
-//     DlpRuleMatch records landed in DLP.All after the #148 test match, including
-//     from a TestWithNotifyUser simulation-mode rule), so the earlier "zero
-//     content, no policy matches" note is stale. But see RequiredPermissions on
-//     ReadDlp: the payload is a secrets hazard, not just an unverified shape.
+//   - DLP.All: opt-in, and the only content type whose payload is a SECRETS
+//     hazard rather than merely a volume one. Its mapper is built (#370,
+//     live-measured 2026-07-29 against a deliberate match: 8 records, 24
+//     sensitive-information matches, 11 distinct sensitive information types
+//     across OneDrive and Exchange) and drops DetectedValues whole — see
+//     RequiredPermissions for what that object actually contains and why the
+//     exclusion is wider than #100 assumed. Subscribing also requires the
+//     tenant to grant ActivityFeed.ReadDlp, which this collector declares only
+//     when DLP.All is configured.
 //
 // Once enabled, a content type ships EVERY record it carries — no record-type
 // include-list. #112: fetching per-entity rows and discarding them is a bug.
@@ -230,6 +232,10 @@ const (
 // It is deliberately NOT Experimental — see the package doc.
 type collectorImpl struct {
 	*o365pipeline.ActivityCollector
+	// contentTypes is what this tenant actually subscribes to, kept so
+	// RequiredPermissions can declare ActivityFeed.ReadDlp only when DLP.All is
+	// among them — see RequiredPermissions.
+	contentTypes []o365activityclient.ContentType
 }
 
 // ConflictsWith declares m365.unified_audit: the two are one signal over two
@@ -264,22 +270,37 @@ func (c *collectorImpl) ConflictsWith() []string {
 // is what makes this break the narrower of the two; the export job genuinely
 // requires a DeviceManagement*.ReadWrite.All.
 //
-// ActivityFeed.ReadDlp is deliberately NOT declared: it gates DLP.All's
-// sensitive-data detail, which is not a default content type. A tenant opting
-// into DLP.All needs that role granted separately.
+// ActivityFeed.ReadDlp is declared ONLY when this tenant subscribes to DLP.All.
+// It gates the sensitive-data detail on DLP records and is worthless — an
+// unused permission on a secrets-bearing surface — for a tenant that does not
+// subscribe. Declaring it conditionally keeps the preflight check honest in
+// both directions: it is named when it is needed and absent when it is not.
 //
-// SECURITY, if a DLP.All mapper is ever built: for a DLP match the value IS the
-// secret. The payload carries the raw matched content at PolicyDetails[].Rules[]
-// .ConditionsMatched.SensitiveInformation[].SensitiveInformationDetections
-// .DetectedValues[].Value — live-measured 2026-07-18 (#100) holding a full
-// credit-card number plus its surrounding message text, with
-// SensitiveInfoDetectionIsIncluded:true. This is the same class as
-// ModifiedProperties OldValue/NewValue (see mapRecord): emit the classification
-// metadata (SensitiveInformationTypeName, Confidence, Count, Location,
-// PolicyName, Severity) and NEVER DetectedValues. mapRecord's allowlist already
-// excludes it by construction; a richer DLP mapper must keep that boundary.
+// SECURITY (built, #370, live-measured 2026-07-29). The DLP payload carries the
+// matched content at PolicyDetails[].Rules[].ConditionsMatched
+// .SensitiveInformation[].SensitiveInformationDetections.DetectedValues[], and
+// BOTH of that object's fields are unsafe: `Name` is the matched value verbatim
+// (an AWS secret access key, a password, a card number) and `Value` is a
+// ~100-135 character WINDOW OF THE SURROUNDING DOCUMENT — measured leaking the
+// tail of the preceding access key ID and the start of the next section,
+// content that was never itself a match. That makes it strictly worse than
+// #100's "the value IS the credential": it exfiltrates arbitrary adjacent text
+// bounded only by a character window.
+//
+// Same class as ModifiedProperties OldValue/NewValue (see mapRecord): emit the
+// classification metadata and NEVER DetectedValues. mapRecord's allowlist
+// excludes it by construction and addDLPAttrs reads nothing from that object
+// except ResultsTruncated; a sentinel test proves the values reach no
+// attribute, body or fixture by any path.
 func (c *collectorImpl) RequiredPermissions() []string {
-	return []string{"ActivityFeed.Read"}
+	perms := []string{"ActivityFeed.Read"}
+	for _, ct := range c.contentTypes {
+		if ct == o365activityclient.ContentDLPAll {
+			perms = append(perms, "ActivityFeed.ReadDlp")
+			break
+		}
+	}
+	return perms
 }
 
 // newCollector builds the M365 activity collector for one tenant, wiring the
@@ -315,6 +336,7 @@ func newCollector(d collectors.O365Deps) *collectorImpl {
 	return &collectorImpl{
 		ActivityCollector: o365pipeline.NewActivityCollector(
 			collectorName, interval, lag, d.Client, d.Store, cfg),
+		contentTypes: contentTypes,
 	}
 }
 
@@ -488,6 +510,15 @@ func mapRecord(rec map[string]any) (string, telemetry.Event, bool) {
 	// per-entity data belongs.
 	telemetry.SetStrs(attrs, semconv.AttrActorIds, namesOf(rec, "Actor", "ID"))
 
+	// DLP.All classification metadata (#370). Keyed off the STRUCTURAL presence
+	// of PolicyDetails rather than off Operation or RecordType, deliberately:
+	// the two DLP workloads disagree on the spelling of the same operation —
+	// OneDrive sends `DLPRuleMatch`, Exchange sends `DlpRuleMatch`
+	// (live-measured 2026-07-29) — so a case-sensitive switch on the name
+	// silently drops one entire workload, and on the live sample the dropped
+	// one would have been Exchange, 1 record in 8.
+	addDLPAttrs(attrs, rec)
+
 	// Severity uses the same predicate as unifiedaudit.mapRecord, so the same
 	// event cannot arrive INFO from one transport and WARN from the other. The
 	// vocabulary spans both "Failed" (classic) and "Failure" (Entra).
@@ -535,6 +566,217 @@ func auditBody(operation, service, who string) string {
 		return fmt.Sprintf("%s by %s", operation, who)
 	}
 	return fmt.Sprintf("%s by %s [%s]", operation, who, service)
+}
+
+// addDLPAttrs adds the classification metadata of a DLP rule match, and
+// NEVER the matched content.
+//
+// # The exclusion, measured
+//
+// PolicyDetails[].Rules[].ConditionsMatched.SensitiveInformation[]
+// .SensitiveInformationDetections carries DetectedValues[], whose `Name` is the
+// matched value verbatim and whose `Value` is a ~100-135 character WINDOW OF
+// THE SURROUNDING DOCUMENT — on the live 2026-07-29 sample it leaked the tail
+// of the preceding AWS access key ID and the start of the next section, content
+// that was never itself a match. So `Value` exfiltrates arbitrary adjacent text
+// bounded only by a character window, which is strictly worse than #100's "the
+// value IS the credential".
+//
+// This function never reads that object except for ResultsTruncated, and
+// mapRecord's allowlist construction means nothing else can reach it either.
+// The safe half separates cleanly because every field below sits OUTSIDE
+// SensitiveInformationDetections.
+//
+// # Parallel slices, not attribute-per-name
+//
+// Policy names, rule names and SIT names are tenant-defined and unbounded, so
+// one attribute per name would mint unbounded attribute KEYS. The SIT
+// dimensions (name, id, confidence, count) are index-aligned, exactly as
+// ExtendedProperties' names/values already are.
+func addDLPAttrs(attrs telemetry.Attrs, rec map[string]any) {
+	policies, ok := rec["PolicyDetails"].([]any)
+	if !ok || len(policies) == 0 {
+		return
+	}
+
+	var policyNames, policyIDs, ruleNames, ruleModes, actions []string
+	var sitNames, sitIDs, confidences, counts []string
+	var location string
+	truncated := false
+	sawTruncatedFlag := false
+
+	for _, p := range policies {
+		pd, ok := p.(map[string]any)
+		if !ok {
+			continue
+		}
+		policyNames = appendNonEmpty(policyNames, str(pd, "PolicyName"))
+		policyIDs = appendNonEmpty(policyIDs, str(pd, "PolicyId"))
+
+		rules, ok := pd["Rules"].([]any)
+		if !ok {
+			continue
+		}
+		for _, r := range rules {
+			ru, ok := r.(map[string]any)
+			if !ok {
+				continue
+			}
+			ruleNames = appendNonEmpty(ruleNames, str(ru, "RuleName"))
+			ruleModes = appendNonEmpty(ruleModes, str(ru, "RuleMode"))
+			if sev := str(ru, "Severity"); sev != "" {
+				telemetry.SetStr(attrs, semconv.AttrSeverity, sev)
+			}
+			if as, ok := ru["Actions"].([]any); ok {
+				for _, a := range as {
+					if v, ok := a.(string); ok {
+						actions = appendNonEmpty(actions, v)
+					}
+				}
+			}
+
+			cm, ok := ru["ConditionsMatched"].(map[string]any)
+			if !ok {
+				continue
+			}
+			sis, ok := cm["SensitiveInformation"].([]any)
+			if !ok {
+				continue
+			}
+			for _, s := range sis {
+				si, ok := s.(map[string]any)
+				if !ok {
+					continue
+				}
+				sitNames = append(sitNames, str(si, "SensitiveInformationTypeName"))
+				sitIDs = append(sitIDs, str(si, "SensitiveType"))
+				confidences = append(confidences, numString(si, "Confidence"))
+				counts = append(counts, numString(si, "Count"))
+				if location == "" {
+					location = str(si, "Location")
+				}
+				// ResultsTruncated is the ONLY field read out of
+				// SensitiveInformationDetections. It is safe and it matters:
+				// it says the counts above are a floor, not a total.
+				if det, ok := si["SensitiveInformationDetections"].(map[string]any); ok {
+					if v, ok := det["ResultsTruncated"].(bool); ok {
+						sawTruncatedFlag = true
+						truncated = truncated || v
+					}
+				}
+			}
+		}
+	}
+
+	telemetry.SetStrs(attrs, semconv.AttrDlpPolicyNames, policyNames)
+	telemetry.SetStrs(attrs, semconv.AttrDlpPolicyIds, policyIDs)
+	telemetry.SetStrs(attrs, semconv.AttrDlpRuleNames, ruleNames)
+	telemetry.SetStrs(attrs, semconv.AttrDlpRuleModes, ruleModes)
+	telemetry.SetStrs(attrs, semconv.AttrDlpActions, actions)
+	telemetry.SetStrs(attrs, semconv.AttrDlpSensitiveTypeNames, sitNames)
+	telemetry.SetStrs(attrs, semconv.AttrDlpSensitiveTypeIds, sitIDs)
+	telemetry.SetStrs(attrs, semconv.AttrDlpMatchConfidences, confidences)
+	telemetry.SetStrs(attrs, semconv.AttrDlpMatchCounts, counts)
+	telemetry.SetStr(attrs, semconv.AttrDlpMatchLocation, location)
+	if sawTruncatedFlag {
+		telemetry.SetBool(attrs, semconv.AttrDlpResultsTruncated, truncated)
+	}
+
+	telemetry.SetStr(attrs, semconv.AttrDlpEvaluationSource, str(rec, "EvaluationSource"))
+	telemetry.SetStr(attrs, semconv.AttrIncidentId, str(rec, "IncidentId"))
+	if v, ok := rec["SensitiveInfoDetectionIsIncluded"].(bool); ok {
+		telemetry.SetBool(attrs, semconv.AttrDlpDetectionIncluded, v)
+	}
+
+	// The two workload metadata blocks are DISJOINT (live-measured
+	// 2026-07-29): SharePointMetaData carries file/site fields,
+	// ExchangeMetaData carries message fields, with only From, FileSize,
+	// IsViewableByExternalUsers, SensitivityLabelNames and UniqueID in common.
+	// Sharing one struct over them would invent a shape neither sends.
+	addDLPItemMetadata(attrs, nestedMap(rec, "SharePointMetaData"), nestedMap(rec, "ExchangeMetaData"))
+}
+
+// addDLPItemMetadata maps whichever of the two workload metadata blocks the
+// record carried. Everything here is per-entity and log-only (#112).
+func addDLPItemMetadata(attrs telemetry.Attrs, sp, ex map[string]any) {
+	for _, m := range []map[string]any{sp, ex} {
+		if m == nil {
+			continue
+		}
+		telemetry.SetStr(attrs, semconv.AttrMailFrom, str(m, "From"))
+		if v, present := num(m, "FileSize"); present {
+			attrs[semconv.AttrFileSizeBytes] = v
+		}
+		if v, ok := m["IsViewableByExternalUsers"].(bool); ok {
+			telemetry.SetBool(attrs, semconv.AttrIsViewableByExternalUsers, v)
+		}
+		telemetry.SetStrs(attrs, semconv.AttrSensitivityLabelNames, stringsOf(m, "SensitivityLabelNames"))
+	}
+	if sp != nil {
+		telemetry.SetStr(attrs, semconv.AttrFileName, str(sp, "FileName"))
+		telemetry.SetStr(attrs, semconv.AttrFilePathUrl, str(sp, "FilePathUrl"))
+		telemetry.SetStr(attrs, semconv.AttrFileOwner, str(sp, "FileOwner"))
+		telemetry.SetStr(attrs, semconv.AttrSiteCollectionUrl, str(sp, "SiteCollectionUrl"))
+	}
+	if ex != nil {
+		// Subject IS emitted. It is metadata by position and content by
+		// nature — a card number mailed in the subject line is exactly what
+		// these policies catch — but a DLP alert without the subject is very
+		// hard to action, and the per-entity SIEM feed is the point (#112).
+		// Recorded as a deliberate call on #370 rather than left implicit.
+		telemetry.SetStr(attrs, semconv.AttrSubject, str(ex, "Subject"))
+		telemetry.SetStrs(attrs, semconv.AttrMailTo, stringsOf(ex, "To"))
+		telemetry.SetStrs(attrs, semconv.AttrMailCc, stringsOf(ex, "CC"))
+		telemetry.SetStrs(attrs, semconv.AttrMailBcc, stringsOf(ex, "BCC"))
+		if v, present := num(ex, "RecipientCount"); present {
+			attrs[semconv.AttrRecipientCount] = v
+		}
+	}
+}
+
+// appendNonEmpty appends v unless it is empty or already present, so a record
+// tripping three rules of one policy does not repeat the policy name three
+// times.
+func appendNonEmpty(dst []string, v string) []string {
+	if v == "" {
+		return dst
+	}
+	for _, existing := range dst {
+		if existing == v {
+			return dst
+		}
+	}
+	return append(dst, v)
+}
+
+// numString renders a numeric field for an index-aligned parallel slice, or ""
+// when absent — the slot must still exist so the SIT dimensions stay aligned.
+func numString(m map[string]any, key string) string {
+	if v, present := num(m, key); present {
+		return itoa(v)
+	}
+	return ""
+}
+
+// nestedMap returns a nested object, or nil.
+func nestedMap(m map[string]any, key string) map[string]any {
+	n, _ := m[key].(map[string]any)
+	return n
+}
+
+// stringsOf reads a JSON array of strings.
+func stringsOf(m map[string]any, key string) []string {
+	raw, ok := m[key].([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(raw))
+	for _, v := range raw {
+		if s, ok := v.(string); ok && s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // --- small defensive accessors for untyped JSON ---

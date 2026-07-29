@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/o365activityclient"
+	"github.com/rknightion/graph2otel/internal/semconv"
 )
 
 // liveRecord returns a representative Office 365 Management Activity API
@@ -974,5 +976,283 @@ func TestBodyIsHumanReadable(t *testing.T) {
 	want := "Add app role assignment to service principal. by alice@contoso.com [AzureActiveDirectory]"
 	if ev.Body != want {
 		t.Errorf("Body = %q, want %q", ev.Body, want)
+	}
+}
+
+// --- DLP.All classification metadata (#370) ---
+
+// dlpSentinel is planted in BOTH DetectedValues fields in testdata/dlp_records.json.
+// The fixture keeps those fields rather than having them stripped, deliberately:
+// a fixture with no values would prove only that the fixture lacks them, while
+// this proves the MAPPER drops them. Same reasoning as #338's
+// process-argument sentinel.
+const dlpSentinel = "SENTINEL-SECRET-MUST-NEVER-BE-EMITTED-7f3a91"
+
+func dlpFixture(t *testing.T) []map[string]any {
+	t.Helper()
+	b, err := os.ReadFile("testdata/dlp_records.json")
+	if err != nil {
+		t.Fatalf("read dlp fixture: %v", err)
+	}
+	var recs []map[string]any
+	if err := json.Unmarshal(b, &recs); err != nil {
+		t.Fatalf("decode dlp fixture: %v", err)
+	}
+	if len(recs) != 2 {
+		t.Fatalf("fixture has %d records, want 2 (one OneDrive, one Exchange)", len(recs))
+	}
+	if !strings.Contains(string(b), dlpSentinel) {
+		t.Fatal("fixture no longer plants the sentinel inside DetectedValues; this suite " +
+			"would then prove nothing about the exclusion")
+	}
+	return recs
+}
+
+func dlpRecordFor(t *testing.T, workload string) map[string]any {
+	t.Helper()
+	for _, r := range dlpFixture(t) {
+		if r["Workload"] == workload {
+			return r
+		}
+	}
+	t.Fatalf("fixture has no %s record", workload)
+	return nil
+}
+
+// TestDLPMatchedValuesNeverReachTelemetry is the whole point of #370. The
+// sentinel sits in DetectedValues[].Name AND [].Value; neither may appear in any
+// attribute, in the body, or anywhere else the mapper produces.
+func TestDLPMatchedValuesNeverReachTelemetry(t *testing.T) {
+	for _, rec := range dlpFixture(t) {
+		workload, _ := rec["Workload"].(string)
+		_, ev, ok := mapRecord(rec)
+		if !ok {
+			t.Fatalf("%s: mapRecord rejected the record", workload)
+		}
+		if strings.Contains(ev.Body, dlpSentinel) {
+			t.Errorf("%s: record body carries the matched value: %q", workload, ev.Body)
+		}
+		for k, v := range ev.Attrs {
+			if s, ok := v.(string); ok && strings.Contains(s, dlpSentinel) {
+				t.Errorf("%s: attribute %s carries the matched value %q", workload, k, s)
+			}
+			if ss, ok := v.([]string); ok {
+				for _, s := range ss {
+					if strings.Contains(s, dlpSentinel) {
+						t.Errorf("%s: attribute %s carries the matched value %q", workload, k, s)
+					}
+				}
+			}
+		}
+		// Belt and braces over the whole rendered attribute set, so a future
+		// attribute of some other Go type cannot smuggle it past the two
+		// type switches above.
+		if blob, err := json.Marshal(ev.Attrs); err == nil && strings.Contains(string(blob), dlpSentinel) {
+			t.Errorf("%s: the marshaled attribute set contains the matched value", workload)
+		}
+	}
+}
+
+// TestDLPClassificationMetadataIsEmitted is the other half of #114: excluding the
+// values must not decay into dropping the field. The safe metadata has to be
+// there, or the collector can say a match happened and nothing about it.
+func TestDLPClassificationMetadataIsEmitted(t *testing.T) {
+	_, ev, ok := mapRecord(dlpRecordFor(t, "OneDrive"))
+	if !ok {
+		t.Fatal("mapRecord rejected the OneDrive DLP record")
+	}
+	for _, key := range []string{
+		semconv.AttrDlpPolicyNames,
+		semconv.AttrDlpPolicyIds,
+		semconv.AttrDlpRuleNames,
+		semconv.AttrDlpRuleModes,
+		semconv.AttrDlpActions,
+		semconv.AttrDlpSensitiveTypeNames,
+		semconv.AttrDlpSensitiveTypeIds,
+		semconv.AttrDlpMatchConfidences,
+		semconv.AttrDlpMatchCounts,
+		semconv.AttrIncidentId,
+		semconv.AttrSeverity,
+	} {
+		if _, present := ev.Attrs[key]; !present {
+			t.Errorf("%s absent; dropping the values must not decay into dropping the metadata (#114)", key)
+		}
+	}
+	if got, _ := ev.Attrs[semconv.AttrDlpPolicyNames].([]string); len(got) != 1 || got[0] != "Homelab - Secrets and Credentials" {
+		t.Errorf("dlp_policy_names = %v, want the live policy name", got)
+	}
+}
+
+// TestDLPSensitiveTypeSlicesStayIndexAligned: name, id, confidence and count are
+// parallel slices, and a consumer reading element i of each must get one match.
+// An empty slot is kept rather than skipped for exactly that reason.
+func TestDLPSensitiveTypeSlicesStayIndexAligned(t *testing.T) {
+	_, ev, _ := mapRecord(dlpRecordFor(t, "OneDrive"))
+	names, _ := ev.Attrs[semconv.AttrDlpSensitiveTypeNames].([]string)
+	ids, _ := ev.Attrs[semconv.AttrDlpSensitiveTypeIds].([]string)
+	confs, _ := ev.Attrs[semconv.AttrDlpMatchConfidences].([]string)
+	counts, _ := ev.Attrs[semconv.AttrDlpMatchCounts].([]string)
+
+	if len(names) == 0 {
+		t.Fatal("no sensitive information types mapped")
+	}
+	if len(ids) != len(names) || len(confs) != len(names) || len(counts) != len(names) {
+		t.Fatalf("parallel slices diverged: names=%d ids=%d confidences=%d counts=%d",
+			len(names), len(ids), len(confs), len(counts))
+	}
+	// The live OneDrive record matched four distinct SITs; pin one pair so a
+	// re-ordering that keeps the lengths equal still fails.
+	for i, n := range names {
+		if n == "GitHub Personal Access Token" && ids[i] != "927cd1e7-8377-4df3-9bc3-fabdaef94787" {
+			t.Errorf("SIT %q is paired with id %q, want its own GUID", n, ids[i])
+		}
+	}
+}
+
+// TestDLPBranchKeysOffPolicyDetailsNotOperationCasing is the workload-casing
+// trap: OneDrive sends Operation="DLPRuleMatch" and Exchange sends
+// "DlpRuleMatch" for the same event. Both must map, and a record with no
+// PolicyDetails must gain no DLP attributes at all.
+func TestDLPBranchKeysOffPolicyDetailsNotOperationCasing(t *testing.T) {
+	ops := map[string]string{}
+	for _, workload := range []string{"OneDrive", "Exchange"} {
+		rec := dlpRecordFor(t, workload)
+		ops[workload], _ = rec["Operation"].(string)
+		_, ev, _ := mapRecord(rec)
+		if _, present := ev.Attrs[semconv.AttrDlpSensitiveTypeNames]; !present {
+			t.Errorf("%s (Operation=%q) produced no DLP attributes; the two workloads spell the operation differently and both must map",
+				workload, ops[workload])
+		}
+	}
+	if ops["OneDrive"] == ops["Exchange"] {
+		t.Errorf("fixture no longer covers the casing difference (both %q); that difference is what this test guards", ops["OneDrive"])
+	}
+
+	// A non-DLP record must not gain DLP attributes.
+	_, ev, ok := mapRecord(map[string]any{
+		"CreationTime": "2026-07-29T21:35:19",
+		"Id":           "not-a-dlp-record",
+		"Operation":    "UserLoggedIn",
+		"Workload":     "AzureActiveDirectory",
+	})
+	if !ok {
+		t.Fatal("mapRecord rejected a plain record")
+	}
+	for _, key := range []string{semconv.AttrDlpPolicyNames, semconv.AttrDlpSensitiveTypeNames, semconv.AttrDlpResultsTruncated} {
+		if _, present := ev.Attrs[key]; present {
+			t.Errorf("non-DLP record gained %s", key)
+		}
+	}
+}
+
+// TestDLPWorkloadMetadataIsMappedPerBlock: the two metadata blocks are disjoint,
+// so each workload must contribute its own fields and neither may leak the
+// other's.
+func TestDLPWorkloadMetadataIsMappedPerBlock(t *testing.T) {
+	_, od, _ := mapRecord(dlpRecordFor(t, "OneDrive"))
+	for _, key := range []string{semconv.AttrFileName, semconv.AttrFilePathUrl, semconv.AttrFileOwner, semconv.AttrSiteCollectionUrl} {
+		if _, present := od.Attrs[key]; !present {
+			t.Errorf("OneDrive match is missing %s — the file path is what an operator needs to go and look", key)
+		}
+	}
+	for _, key := range []string{semconv.AttrSubject, semconv.AttrMailTo, semconv.AttrRecipientCount} {
+		if _, present := od.Attrs[key]; present {
+			t.Errorf("OneDrive match carries the Exchange-only attribute %s", key)
+		}
+	}
+
+	_, ex, _ := mapRecord(dlpRecordFor(t, "Exchange"))
+	for _, key := range []string{semconv.AttrSubject, semconv.AttrMailFrom, semconv.AttrRecipientCount} {
+		if _, present := ex.Attrs[key]; !present {
+			t.Errorf("Exchange match is missing %s", key)
+		}
+	}
+	for _, key := range []string{semconv.AttrFilePathUrl, semconv.AttrSiteCollectionUrl} {
+		if _, present := ex.Attrs[key]; present {
+			t.Errorf("Exchange match carries the SharePoint-only attribute %s", key)
+		}
+	}
+	// Location is Exchange-only on the live sample.
+	if _, present := ex.Attrs[semconv.AttrDlpMatchLocation]; !present {
+		t.Error("Exchange match is missing dlp_match_location, which the live record carries")
+	}
+	if _, present := od.Attrs[semconv.AttrDlpMatchLocation]; present {
+		t.Error("OneDrive match invented a dlp_match_location; the live record has none")
+	}
+}
+
+// TestDLPResultsTruncatedIsTheOnlyFieldReadFromDetections: ResultsTruncated says
+// the match counts are a floor rather than a total, and it is the one safe field
+// inside the object whose values are dropped.
+func TestDLPResultsTruncatedIsTheOnlyFieldReadFromDetections(t *testing.T) {
+	_, ev, _ := mapRecord(dlpRecordFor(t, "OneDrive"))
+	v, present := ev.Attrs[semconv.AttrDlpResultsTruncated]
+	if !present {
+		t.Fatal("dlp_results_truncated absent; a truncated match list must be visible")
+	}
+	// SetBool stamps the string "false", not a native bool — booleans are
+	// strings so Loki can query them as structured metadata.
+	if v != "false" {
+		t.Errorf("dlp_results_truncated = %#v, want the live \"false\"", v)
+	}
+
+	// And a truncated match must report true rather than staying silent.
+	rec := dlpRecordFor(t, "OneDrive")
+	pd := rec["PolicyDetails"].([]any)[0].(map[string]any)
+	ru := pd["Rules"].([]any)[0].(map[string]any)
+	si := ru["ConditionsMatched"].(map[string]any)["SensitiveInformation"].([]any)[0].(map[string]any)
+	si["SensitiveInformationDetections"].(map[string]any)["ResultsTruncated"] = true
+	_, ev2, _ := mapRecord(rec)
+	if got := ev2.Attrs[semconv.AttrDlpResultsTruncated]; got != "true" {
+		t.Errorf("a truncated match list set dlp_results_truncated = %#v, want \"true\"", got)
+	}
+}
+
+// TestDLPRequiredPermissionsFollowTheSubscription: ActivityFeed.ReadDlp is
+// declared only when DLP.All is subscribed. An unused permission on a
+// secrets-bearing surface is worse than none, and a missing one makes the
+// preflight check lie.
+func TestDLPRequiredPermissionsFollowTheSubscription(t *testing.T) {
+	withDLP := &collectorImpl{contentTypes: []o365activityclient.ContentType{
+		o365activityclient.ContentExchange, o365activityclient.ContentDLPAll,
+	}}
+	got := withDLP.RequiredPermissions()
+	if len(got) != 2 || got[0] != "ActivityFeed.Read" || got[1] != "ActivityFeed.ReadDlp" {
+		t.Errorf("with DLP.All subscribed, RequiredPermissions = %v, want both roles", got)
+	}
+
+	without := &collectorImpl{contentTypes: []o365activityclient.ContentType{
+		o365activityclient.ContentExchange, o365activityclient.ContentSharePoint,
+	}}
+	got = without.RequiredPermissions()
+	if len(got) != 1 || got[0] != "ActivityFeed.Read" {
+		t.Errorf("without DLP.All, RequiredPermissions = %v, want only ActivityFeed.Read", got)
+	}
+}
+
+// TestDLPPolicyNamesAreDedupedAcrossRules: one policy with several matching
+// rules must name the policy once, not once per rule.
+func TestDLPPolicyNamesAreDedupedAcrossRules(t *testing.T) {
+	_, ev, _ := mapRecord(map[string]any{
+		"CreationTime": "2026-07-29T21:35:19",
+		"Id":           "dedupe-1",
+		"Operation":    "DLPRuleMatch",
+		"Workload":     "OneDrive",
+		"PolicyDetails": []any{map[string]any{
+			"PolicyName": "One Policy",
+			"PolicyId":   "p1",
+			"Rules": []any{
+				map[string]any{"RuleName": "rule A"},
+				map[string]any{"RuleName": "rule B"},
+			},
+		}},
+	})
+	names, _ := ev.Attrs[semconv.AttrDlpPolicyNames].([]string)
+	if len(names) != 1 {
+		t.Errorf("dlp_policy_names = %v, want the policy named once across both rules", names)
+	}
+	rules, _ := ev.Attrs[semconv.AttrDlpRuleNames].([]string)
+	if len(rules) != 2 {
+		t.Errorf("dlp_rule_names = %v, want both rules", rules)
 	}
 }

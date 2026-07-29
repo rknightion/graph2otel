@@ -1,0 +1,296 @@
+[
+  {
+    "CreationTime": "2026-07-29T21:35:19",
+    "Id": "de884173-c847-409d-8437-71ba845600ca",
+    "Operation": "DLPRuleMatch",
+    "OrganizationId": "9f2b71ac-4d18-4c2e-b3a7-51e0c8d94b62",
+    "RecordType": 11,
+    "UserKey": "5c1d80ae-7b34-4f96-a2e1-0c7de49b1f23",
+    "UserType": 0,
+    "Version": 1,
+    "Workload": "OneDrive",
+    "ObjectId": "9168b612-28e4-4613-832e-2207bff34978",
+    "UserId": "J.HARPER@NORTHGATE-ENG.CO.UK",
+    "EvaluationSource": "DlpPolicyEventBasedAssistantOneDriveForBusiness",
+    "IncidentId": "d6109e83-f65e-de9f-3800-08deedb9f0ed",
+    "PolicyDetails": [
+      {
+        "PolicyId": "acaec97a-890c-469c-8e74-1841f34f22ee",
+        "PolicyName": "Homelab - Secrets and Credentials",
+        "PolicyVersion": "5730f873-1273-4ebf-b03b-08deecb98d46",
+        "Rules": [
+          {
+            "ActionParameters": [
+              "GenerateIncidentReport:j.harper@northgate-eng.co.uk"
+            ],
+            "Actions": [
+              "NotifyUser",
+              "GenerateIncidentReport"
+            ],
+            "ConditionsMatched": {
+              "ConditionMatchedInNewScheme": true,
+              "SensitiveInformation": [
+                {
+                  "ClassifierType": "Content",
+                  "Confidence": 85,
+                  "Count": 1,
+                  "SensitiveInformationDetailedClassificationAttributes": [
+                    {
+                      "Confidence": 65,
+                      "Count": 1,
+                      "IsMatch": false
+                    },
+                    {
+                      "Confidence": 75,
+                      "Count": 1,
+                      "IsMatch": true
+                    },
+                    {
+                      "Confidence": 85,
+                      "Count": 1,
+                      "IsMatch": true
+                    }
+                  ],
+                  "SensitiveInformationDetections": {
+                    "DetectedValues": [
+                      {
+                        "Name": "SENTINEL-SECRET-MUST-NEVER-BE-EMITTED-7f3a91-name",
+                        "Value": "SENTINEL-SECRET-MUST-NEVER-BE-EMITTED-7f3a91-window-of-surrounding-document-content"
+                      }
+                    ],
+                    "ResultsTruncated": false
+                  },
+                  "SensitiveInformationTypeName": "Amazon S3 Client Secret Access Key",
+                  "SensitiveType": "881b8266-702b-4ebc-9c27-ea38c3765ab5"
+                },
+                {
+                  "ClassifierType": "Content",
+                  "Confidence": 85,
+                  "Count": 1,
+                  "SensitiveInformationDetailedClassificationAttributes": [
+                    {
+                      "Confidence": 65,
+                      "Count": 1,
+                      "IsMatch": false
+                    },
+                    {
+                      "Confidence": 75,
+                      "Count": 1,
+                      "IsMatch": true
+                    },
+                    {
+                      "Confidence": 85,
+                      "Count": 1,
+                      "IsMatch": true
+                    }
+                  ],
+                  "SensitiveInformationDetections": {
+                    "DetectedValues": [
+                      {
+                        "Name": "SENTINEL-SECRET-MUST-NEVER-BE-EMITTED-7f3a91-name",
+                        "Value": "SENTINEL-SECRET-MUST-NEVER-BE-EMITTED-7f3a91-window-of-surrounding-document-content"
+                      }
+                    ],
+                    "ResultsTruncated": false
+                  },
+                  "SensitiveInformationTypeName": "User Login Credentials",
+                  "SensitiveType": "2de77d45-9d47-4ce2-990d-18e26b487194"
+                },
+                {
+                  "ClassifierType": "Content",
+                  "Confidence": 85,
+                  "Count": 1,
+                  "SensitiveInformationDetailedClassificationAttributes": [
+                    {
+                      "Confidence": 65,
+                      "Count": 1,
+                      "IsMatch": false
+                    },
+                    {
+                      "Confidence": 75,
+                      "Count": 1,
+                      "IsMatch": true
+                    },
+                    {
+                      "Confidence": 85,
+                      "Count": 1,
+                      "IsMatch": true
+                    }
+                  ],
+                  "SensitiveInformationDetections": {
+                    "DetectedValues": [
+                      {
+                        "Name": "SENTINEL-SECRET-MUST-NEVER-BE-EMITTED-7f3a91-name",
+                        "Value": "SENTINEL-SECRET-MUST-NEVER-BE-EMITTED-7f3a91-window-of-surrounding-document-content"
+                      }
+                    ],
+                    "ResultsTruncated": false
+                  },
+                  "SensitiveInformationTypeName": "GitHub Personal Access Token",
+                  "SensitiveType": "927cd1e7-8377-4df3-9bc3-fabdaef94787"
+                },
+                {
+                  "ClassifierType": "Content",
+                  "Confidence": 85,
+                  "Count": 1,
+                  "SensitiveInformationDetailedClassificationAttributes": [
+                    {
+                      "Confidence": 65,
+                      "Count": 1,
+                      "IsMatch": false
+                    },
+                    {
+                      "Confidence": 75,
+                      "Count": 1,
+                      "IsMatch": true
+                    },
+                    {
+                      "Confidence": 85,
+                      "Count": 1,
+                      "IsMatch": true
+                    }
+                  ],
+                  "SensitiveInformationDetections": {
+                    "DetectedValues": [
+                      {
+                        "Name": "SENTINEL-SECRET-MUST-NEVER-BE-EMITTED-7f3a91-name",
+                        "Value": "SENTINEL-SECRET-MUST-NEVER-BE-EMITTED-7f3a91-window-of-surrounding-document-content"
+                      }
+                    ],
+                    "ResultsTruncated": false
+                  },
+                  "SensitiveInformationTypeName": "X.509 Certificate Private Key",
+                  "SensitiveType": "417b111d-1909-4457-b686-d6470b29a7ec"
+                }
+              ]
+            },
+            "ManagementRuleId": "1b481bd0-d71f-46bf-82eb-d05eb31cfb6f",
+            "RuleId": "f800c2c8-91cd-4f08-8a95-261db82713ff",
+            "RuleMode": "TestWithNotifyUser",
+            "RuleName": "Homelab - Secrets and Credentials - rule",
+            "RuleVersion": "e3a0d735-a1dc-4744-25e3-08deecb98d19",
+            "Severity": "Low"
+          }
+        ]
+      }
+    ],
+    "SensitiveInfoDetectionIsIncluded": true,
+    "SharePointMetaData": {
+      "FileID": "SPO_NzE2MDM0OTgtNzJkZS00YzMwLWE2YmQtYTFlNjAxOWMzZmM1LDIyYjMwNGUyLTYyOTUtNGQzMy05NjM3LWNhNTU1YTdhMThlYyw5YjBkMTFmMy1iNjdjLTQ2NTItYjI0MS1kN2QzMzc5MDcxY2Q_01SPD36VISWZUJDZBICNDIGLRCA677GSLY",
+      "FileName": "01-credential-handover-SYNTHETIC.docx",
+      "FileOwner": "Rob Knight",
+      "FilePathUrl": "https://m7knio-my.sharepoint.com/personal/rob_m7kni_io/Documents/DLP-Test-2026-07-29/01-credential-handover-SYNTHETIC.docx",
+      "FileSize": 2149,
+      "From": "J.HARPER@NORTHGATE-ENG.CO.UK",
+      "IsViewableByExternalUsers": false,
+      "IsVisibleOnlyToOdbOwner": true,
+      "ItemCreationTime": "2026-07-29T21:34:47",
+      "ItemLastModifiedTime": "2026-07-29T21:34:47",
+      "ItemLastSharedTime": "0001-01-02T00:00:00",
+      "SensitivityLabelIds": [],
+      "SensitivityLabelNames": [],
+      "SharedBy": [
+        null
+      ],
+      "SiteAdmin": [],
+      "SiteCollectionGuid": "71603498-72de-4c30-a6bd-a1e6019c3fc5",
+      "SiteCollectionUrl": "https://m7knio-my.sharepoint.com/personal/rob_m7kni_io",
+      "UniqueID": "9168b612-28e4-4613-832e-2207bff34978"
+    }
+  },
+  {
+    "CreationTime": "2026-07-29T21:38:12",
+    "Id": "2467e5ca-d983-45ec-b430-8e0d50d59644",
+    "Operation": "DlpRuleMatch",
+    "OrganizationId": "9f2b71ac-4d18-4c2e-b3a7-51e0c8d94b62",
+    "RecordType": 13,
+    "UserKey": "5c1d80ae-7b34-4f96-a2e1-0c7de49b1f23",
+    "UserType": 0,
+    "Version": 1,
+    "Workload": "Exchange",
+    "ObjectId": "<CAKu+D0PjqobCEVo-4_5CZNJcOQ9yEOYE1_uYoDJEhioO2APQwQ@mail.gmail.com>",
+    "UserId": "j.harper@northgate-eng.co.uk",
+    "IncidentId": "3d0600ec-710e-41b8-3800-08deedb9f0ed",
+    "PolicyDetails": [
+      {
+        "PolicyId": "acaec97a-890c-469c-8e74-1841f34f22ee",
+        "PolicyName": "Homelab - Secrets and Credentials",
+        "Rules": [
+          {
+            "ActionParameters": [
+              "GenerateIncidentReport:j.harper@northgate-eng.co.uk"
+            ],
+            "Actions": [
+              "NotifyUser",
+              "GenerateIncidentReport"
+            ],
+            "ConditionsMatched": {
+              "ConditionMatchedInNewScheme": true,
+              "SensitiveInformation": [
+                {
+                  "ClassifierType": "Content",
+                  "Confidence": 85,
+                  "Count": 1,
+                  "Location": "Message Body",
+                  "SensitiveInformationDetailedClassificationAttributes": [
+                    {
+                      "Confidence": 65,
+                      "Count": 1,
+                      "IsMatch": false
+                    },
+                    {
+                      "Confidence": 75,
+                      "Count": 1,
+                      "IsMatch": true
+                    },
+                    {
+                      "Confidence": 85,
+                      "Count": 1,
+                      "IsMatch": true
+                    }
+                  ],
+                  "SensitiveInformationDetections": {
+                    "DetectedValues": [
+                      {
+                        "Name": "SENTINEL-SECRET-MUST-NEVER-BE-EMITTED-7f3a91-name",
+                        "Value": "SENTINEL-SECRET-MUST-NEVER-BE-EMITTED-7f3a91-window-of-surrounding-document-content"
+                      }
+                    ],
+                    "ResultsTruncated": false
+                  },
+                  "SensitiveInformationTypeName": "User Login Credentials",
+                  "SensitiveType": "2de77d45-9d47-4ce2-990d-18e26b487194",
+                  "SensitiveTypeSource": "OutOfBox",
+                  "UniqueCount": 1
+                }
+              ]
+            },
+            "ManagementRuleId": "1b481bd0-d71f-46bf-82eb-d05eb31cfb6f",
+            "RuleId": "f800c2c8-91cd-4f08-8a95-261db82713ff",
+            "RuleMode": "TestWithNotifyUser",
+            "RuleName": "Homelab - Secrets and Credentials - rule",
+            "Severity": "Low"
+          }
+        ]
+      }
+    ],
+    "SensitiveInfoDetectionIsIncluded": true,
+    "ExchangeMetaData": {
+      "BCC": [],
+      "CC": [],
+      "FileSize": 49706,
+      "From": "j.harper@northgate-eng.co.uk",
+      "IsViewableByExternalUsers": false,
+      "MessageID": "<CAKu+D0PjqobCEVo-4_5CZNJcOQ9yEOYE1_uYoDJEhioO2APQwQ@mail.gmail.com>",
+      "RecipientCount": 1,
+      "SensitivityLabelIds": [],
+      "SensitivityLabelNames": [],
+      "Sent": "2026-07-29T21:37:56",
+      "Subject": "EXTERNAL: Migration runbook - credential handover",
+      "To": [
+        "j.harper@northgate-eng.co.uk"
+      ],
+      "UniqueID": "bd7df511-e8bd-416e-1a49-08deedb9ae65"
+    }
+  }
+]
