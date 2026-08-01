@@ -819,7 +819,14 @@ class TestAppPlatformProjection(unittest.TestCase):
         spec = self._project()["spec"]
         self.assertEqual(spec["expressions"]["A"]["relativeTimeRange"],
                          {"from": "1h0m0s", "to": "0s"})
-        self.assertEqual(spec["for"], "5m0s")
+        # Derived from the rule rather than spelled out: this assertion is about
+        # the wire FORMAT, and pinning the literal only made a pending-window
+        # change fail a test with nothing to say about it (#406).
+        rule = next(r for r in build_rules.RULES
+                    if r["uid"] == "g2o-collector-staleness")
+        self.assertEqual(spec["for"],
+                         build_rules.go_duration(build_rules.parse_duration(rule["for"])))
+        self.assertRegex(spec["for"], r"^\d+[hm]")
 
     def test_only_datasource_backed_nodes_carry_a_datasource_and_time_range(self):
         """Expression nodes (`__expr__`) carry neither on the wire."""
@@ -919,8 +926,15 @@ class TestAppPlatformProjection(unittest.TestCase):
         self.assertNotIn("for", m["spec"])
 
     def test_a_nonzero_for_is_carried(self):
-        m = self._project()          # g2o-collector-staleness, for: 5m
-        self.assertEqual(m["spec"]["for"], "5m0s")
+        # The paired negative of the test above: a zero `for` is omitted from the
+        # spec, a nonzero one survives the projection. Which nonzero value it is
+        # does not matter here, so it comes from the rule (#406).
+        rule = next(r for r in build_rules.RULES
+                    if r["uid"] == "g2o-collector-staleness")
+        self.assertGreater(build_rules.parse_duration(rule["for"]), 0)
+        self.assertEqual(
+            self._project()["spec"]["for"],
+            build_rules.go_duration(build_rules.parse_duration(rule["for"])))
 
     def test_parse_duration_refuses_to_guess(self):
         """An unparseable `for` silently becoming 0 would turn a 5-minute alert

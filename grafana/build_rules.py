@@ -379,13 +379,13 @@ RULES = [
         "graph2otel collector scrape stale",
         f'max by (tenant_id, collector) ({_m("graph2otel.scrape.staleness")}) / '
         f'max by (tenant_id, collector) ({_m("graph2otel.collector.expected_interval")})',
-        "gt", [3], "5m",
+        "gt", [3], "10m",
         {"severity": "critical", "category": "self-observability", "source": "graph2otel"},
         "Collector {{ $labels.collector }} is more than 3x its expected poll interval "
         "overdue (tenant {{ $labels.tenant_id }})",
         "graph2otel_scrape_staleness_seconds / graph2otel_collector_expected_interval_seconds "
         "for collector={{ $labels.collector }}, tenant {{ $labels.tenant_id }} has exceeded 3 "
-        "for 5m — i.e. it has been more than 3x that COLLECTOR'S OWN effective poll interval "
+        "for 10m — i.e. it has been more than 3x that COLLECTOR'S OWN effective poll interval "
         "(not a fixed second count) since its last successful scrape. Both metrics carry "
         "exactly (tenant_id, collector), so the division is a one-to-one vector match with no "
         "on()/ignoring() needed. 3x tolerates one missed poll plus backoff jitter without "
@@ -400,7 +400,11 @@ RULES = [
         "removed (or disabled), its ratio series simply stops existing and its alert "
         "instance resolves silently — the other collectors' instances are unaffected and "
         "noDataState never applies to it. That silent, clean disappearance is the deliberately "
-        "removed collector's correct outcome, not an accident.",
+        "removed collector's correct outcome, not an accident. The pending window is 10m rather "
+        "than 5m — two evaluations at the 5m interval, not one — because that same noDataState "
+        "cannot distinguish a dead exporter from the network between a healthy exporter and "
+        "Grafana going away. Where the site firewall is that network, rebooting it takes 10-15 "
+        "minutes and every minute of it looks identical to total signal loss from here.",
         False,
         no_data_state="Alerting",
     ),
