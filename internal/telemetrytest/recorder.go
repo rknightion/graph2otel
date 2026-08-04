@@ -290,31 +290,54 @@ func attrMap(set attribute.Set) map[string]string {
 	return out
 }
 
-// logValueString renders a log attribute value of ANY kind as a string.
+// logValueString renders a log attribute value of ANY type as a string.
 //
-// log.Value.AsString() returns "" for every kind except KindString — it does not
-// convert, it asserts — so calling it directly captured bool, int64 and float64
-// attributes as empty. Tests could then only assert that a numeric attribute was
-// PRESENT, never that it was right, and an assertion against its value would
-// have been comparing "" to "": vacuously true. Numeric log attributes are a
-// large share of the signal surface (startup_impact_ms, battery_age_days, every
-// score and count), so this was a hole under the whole log-twin test estate.
-func logValueString(v log.Value) string {
-	switch v.Kind() {
-	case log.KindString:
+// attribute.Value.AsString() returns "" for every type except STRING — it does
+// not convert, it asserts — so calling it directly captured bool, int64 and
+// float64 attributes as empty. Tests could then only assert that a numeric
+// attribute was PRESENT, never that it was right, and an assertion against its
+// value would have been comparing "" to "": vacuously true. Numeric log
+// attributes are a large share of the signal surface (startup_impact_ms,
+// battery_age_days, every score and count), so this was a hole under the whole
+// log-twin test estate.
+//
+// otel/log v0.21.0 replaced log.Value with attribute.Value (upstream #8490).
+// The trap survived that migration UNCHANGED — attribute.Value.AsString() is
+// empty for every non-STRING type too (live-checked against v1.45.0) — so this
+// switch is still load-bearing and must not be collapsed into AsString().
+//
+// The generic String() fallback is deliberately NOT used for the slice types:
+// it renders them as JSON (`["a","b"]`) where this returns `a,b`, and the comma
+// form is what the log-twin assertions are written against. It is right for the
+// default branch, which now covers attribute.MAP (new in v1.45.0) and EMPTY.
+func logValueString(v attribute.Value) string {
+	switch v.Type() {
+	case attribute.STRING:
 		return v.AsString()
-	case log.KindBool:
+	case attribute.BOOL:
 		return strconv.FormatBool(v.AsBool())
-	case log.KindInt64:
+	case attribute.INT64:
 		return strconv.FormatInt(v.AsInt64(), 10)
-	case log.KindFloat64:
+	case attribute.FLOAT64:
 		return strconv.FormatFloat(v.AsFloat64(), 'g', -1, 64)
-	case log.KindBytes:
-		return string(v.AsBytes())
-	case log.KindSlice:
-		parts := make([]string, 0, len(v.AsSlice()))
-		for _, e := range v.AsSlice() {
-			parts = append(parts, logValueString(e))
+	case attribute.STRINGSLICE:
+		return strings.Join(v.AsStringSlice(), ",")
+	case attribute.BOOLSLICE:
+		parts := make([]string, 0, len(v.AsBoolSlice()))
+		for _, e := range v.AsBoolSlice() {
+			parts = append(parts, strconv.FormatBool(e))
+		}
+		return strings.Join(parts, ",")
+	case attribute.INT64SLICE:
+		parts := make([]string, 0, len(v.AsInt64Slice()))
+		for _, e := range v.AsInt64Slice() {
+			parts = append(parts, strconv.FormatInt(e, 10))
+		}
+		return strings.Join(parts, ",")
+	case attribute.FLOAT64SLICE:
+		parts := make([]string, 0, len(v.AsFloat64Slice()))
+		for _, e := range v.AsFloat64Slice() {
+			parts = append(parts, strconv.FormatFloat(e, 'g', -1, 64))
 		}
 		return strings.Join(parts, ",")
 	default:
@@ -325,8 +348,8 @@ func logValueString(v log.Value) string {
 // flattenLogRecord converts a captured sdklog.Record to a LogRecord.
 func flattenLogRecord(rec sdklog.Record) LogRecord {
 	attrs := map[string]string{}
-	rec.WalkAttributes(func(kv log.KeyValue) bool {
-		attrs[kv.Key] = logValueString(kv.Value)
+	rec.WalkAttributes(func(kv attribute.KeyValue) bool {
+		attrs[string(kv.Key)] = logValueString(kv.Value)
 		return true
 	})
 	return LogRecord{

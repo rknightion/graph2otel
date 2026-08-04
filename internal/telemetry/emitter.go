@@ -298,7 +298,7 @@ func (e *otelEmitter) LogEvent(ev Event) {
 	}
 	r.SetSeverity(toLogSeverity(ev.Severity))
 	r.SetSeverityText(ev.Severity.String())
-	r.SetBody(log.StringValue(ev.Body))
+	r.SetBody(attribute.StringValue(ev.Body))
 	// The log SDK exposes a native EventName field (log v0.20.0+); use it
 	// instead of carrying the event type as a separate "event.name" attribute.
 	if ev.Name != "" {
@@ -338,27 +338,34 @@ func toLogSeverity(s Severity) log.Severity {
 }
 
 // toLogKV converts an Attrs map to OTEL log attributes.
-func toLogKV(attrs Attrs) []log.KeyValue {
+//
+// otel/log v0.21.0 removed its own Kind/Value/KeyValue types in favor of
+// go.opentelemetry.io/otel/attribute (upstream #8490), so these are the same
+// attribute types the metric path already uses. The mapping is deliberately
+// unchanged: []string is still joined with "," into a single STRING rather
+// than emitted as a STRINGSLICE, because the join is what the log-twin
+// assertions and the Loki structured-metadata contract are written against.
+func toLogKV(attrs Attrs) []attribute.KeyValue {
 	if len(attrs) == 0 {
 		return nil
 	}
-	kvs := make([]log.KeyValue, 0, len(attrs))
+	kvs := make([]attribute.KeyValue, 0, len(attrs))
 	for k, v := range attrs {
 		switch val := v.(type) {
 		case string:
-			kvs = append(kvs, log.String(k, val))
+			kvs = append(kvs, attribute.String(k, val))
 		case bool:
-			kvs = append(kvs, log.Bool(k, val))
+			kvs = append(kvs, attribute.Bool(k, val))
 		case int:
-			kvs = append(kvs, log.Int64(k, int64(val)))
+			kvs = append(kvs, attribute.Int64(k, int64(val)))
 		case int64:
-			kvs = append(kvs, log.Int64(k, val))
+			kvs = append(kvs, attribute.Int64(k, val))
 		case float64:
-			kvs = append(kvs, log.Float64(k, val))
+			kvs = append(kvs, attribute.Float64(k, val))
 		case []string:
-			kvs = append(kvs, log.String(k, strings.Join(val, ",")))
+			kvs = append(kvs, attribute.String(k, strings.Join(val, ",")))
 		default:
-			kvs = append(kvs, log.String(k, fmt.Sprint(val)))
+			kvs = append(kvs, attribute.String(k, fmt.Sprint(val)))
 		}
 	}
 	return kvs

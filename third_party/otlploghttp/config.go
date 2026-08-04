@@ -4,7 +4,7 @@
 // Modified by the graph2otel project in 2026 to add RequestObserver.
 // See the repository root LICENSE for the combined work.
 
-package otlploghttp // import "go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
+package otlploghttp
 
 import (
 	"context"

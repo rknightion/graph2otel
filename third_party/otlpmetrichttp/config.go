@@ -4,7 +4,7 @@
 // Modified by the graph2otel project in 2026 to add RequestObserver.
 // See the repository root LICENSE for the combined work.
 
-package otlpmetrichttp // import "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
+package otlpmetrichttp
 
 import (
 	"context"
@@ -100,6 +100,11 @@ func WithEndpoint(endpoint string) Option {
 // take precedence.
 //
 // If an invalid URL is provided, the default value will be kept.
+//
+// The path of the provided URL is used as-is; with one exception: if the URL has
+// no path, it is normalized to the root path ("/"). The default metrics path
+// ("/v1/metrics") is not appended automatically. Use WithEndpoint if you want
+// that behavior, or pass a URL that includes that path.
 //
 // By default, if an environment variable is not set, and this option is not
 // passed, "localhost:4318" will be used.
