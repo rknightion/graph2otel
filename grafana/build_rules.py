@@ -408,6 +408,48 @@ RULES = [
         False,
         no_data_state="Alerting",
     ),
+    # g2o-collector-staleness stopped covering one case in #408: a collector
+    # that hits a permanent tenant-entitlement 403 now declines its run and
+    # stamps last-success, so staleness no longer climbs and that rule stays
+    # silent — deliberately, because no operator action clears an unlicensed
+    # endpoint and a critical page that can never be actioned is noise.
+    #
+    # But a REVOKED consent grant produces the identical outcome, and that one
+    # is very much actionable. Nothing else covered it: g2o-detect-graph-403-burst
+    # watches tenant-wide caller behaviour over blob-sourced entra.graph_activity,
+    # not this exporter's own health, and is paused. This rule closes that gap at
+    # warning rather than critical — a collector that is down but not lying is
+    # worth knowing about tomorrow morning, not at 3am.
+    #
+    # scrape.success is level-triggered (re-exported every OTLP interval, not
+    # only on a tick), so max_over_time works without any interval arithmetic:
+    # a 24h-interval collector whose last tick succeeded holds 1 for the whole
+    # window and never fires. That is why this rule needs no division by
+    # expected_interval the way the staleness rule does.
+    _alert(
+        "g2o-collector-degraded-sustained",
+        "graph2otel collector degraded for 6h",
+        f'max by (tenant_id, collector) '
+        f'(max_over_time({_m("graph2otel.scrape.success")}[6h]))',
+        "lt", [1], "30m",
+        {"severity": "warning", "category": "self-observability", "source": "graph2otel"},
+        "Collector {{ $labels.collector }} has not had a single successful scrape in 6h "
+        "(tenant {{ $labels.tenant_id }})",
+        "graph2otel_scrape_success_ratio for collector={{ $labels.collector }}, tenant "
+        "{{ $labels.tenant_id }} has been 0 for every sample in a 6h window. The collector "
+        "is running and reporting — this is not staleness — but every run is coming back "
+        "degraded or failed. The two causes worth separating are a REVOKED Graph consent "
+        "grant (actionable: re-consent the app role) and an endpoint the tenant is simply "
+        "not licensed for (not actionable: the collector correctly declines it forever, "
+        "which is why g2o-collector-staleness deliberately stays silent for that case since "
+        "#408). Read cause= on the WARN 'collector completed with degraded outcome' line, or "
+        "graph2otel_scrape_outcomes_total, to tell them apart. Warning rather than critical "
+        "because neither cause is a 3am page: the unlicensed one can never be actioned at "
+        "all, and a revoked grant has already been broken for six hours by the time this "
+        "fires. 6h with a 30m pending window tolerates the slowest collectors (24h "
+        "intervals) restarting mid-window without a false positive.",
+        False,
+    ),
     _alert(
         "g2o-checkpoint-persist-errors",
         "graph2otel checkpoint persist failing",
@@ -1745,6 +1787,8 @@ DASHBOARD_TARGETS = {
     "g2o-intune-compliance-noncompliant-spike": ("Intune", "Compliance devices"),
     "g2o-collector-staleness":
         ("Self-obs", "Scrape staleness (seconds since last healthy result)"),
+    "g2o-collector-degraded-sustained":
+        ("Self-obs", "Scrape success by collector"),
     "g2o-checkpoint-persist-errors":
         ("Self-obs", "Checkpoint persist error rate"),
     "g2o-record-integrity-loss":

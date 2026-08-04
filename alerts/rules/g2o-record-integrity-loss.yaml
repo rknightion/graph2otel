@@ -14,7 +14,7 @@ metadata:
     grafana.com/provenance: "api"
   labels:
     grafana.com/group: "graph2otel-alerts"
-    grafana.com/group-index: "8"
+    grafana.com/group-index: "9"
 spec:
   title: "graph2otel dropped or errored source records"
   paused: false

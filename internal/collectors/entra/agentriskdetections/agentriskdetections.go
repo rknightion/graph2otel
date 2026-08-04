@@ -56,13 +56,16 @@
 package agentriskdetections
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/graphclient"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -102,6 +105,49 @@ func (c *collectorImpl) RequiredPermissions() []string {
 // Experimental marks this collector as beta/opt-in: agentRiskDetections exists
 // only on the Graph beta endpoint, with no v1.0 fallback.
 func (c *collectorImpl) Experimental() bool { return true }
+
+// CollectWindow polls the window, turning a Graph 403 into a graceful decline
+// rather than a returned error. agentRiskDetections is an Entra Agent ID preview
+// a tenant may simply not be licensed for — m7kni lost the entitlement on
+// 2026-07-31 and the endpoint has answered
+// `403 "Your tenant is not licensed for this feature."` on every poll since.
+// That is a permanent tenant fact, not a fault: erroring on it made every scrape
+// fail forever, which ratcheted scrape.staleness into a critical page (#408).
+// The sibling entra.risky_agents collector already treats the identical 403 on
+// the identical tenant as an info-skip; this makes the pair consistent.
+//
+// The watermark is left where it was — a declined window consumed nothing, so
+// when the entitlement returns the collector resumes from the same point rather
+// than having silently skipped the intervening detections.
+func (c *collectorImpl) CollectWindow(
+	ctx context.Context,
+	from, to time.Time,
+	e telemetry.Emitter,
+	outcomes *recordoutcome.Recorder,
+) (time.Time, error) {
+	watermark, err := c.LogCollector.CollectWindow(ctx, from, to, e, outcomes)
+	if err != nil && isForbidden(err) {
+		outcomes.Cause(recordoutcome.CausePermissionDenied)
+		return from, nil
+	}
+	return watermark, err
+}
+
+// isForbidden reports whether err is a Graph 403 — the signal that this tenant
+// lacks the agent-risk feature. Matches the string form the graphclient
+// produces as well as the typed OData authorization code.
+func isForbidden(err error) bool {
+	if err == nil {
+		return false
+	}
+	if strings.Contains(err.Error(), "status 403") {
+		return true
+	}
+	if code, _, ok := graphclient.UnwrapODataError(err); ok {
+		return code == "Authorization_RequestDenied"
+	}
+	return false
+}
 
 // newCollector builds the agent risk-detections WindowCollector. Its Path is
 // distinct from every other IPC stream's, so it needs no CheckpointKey override.

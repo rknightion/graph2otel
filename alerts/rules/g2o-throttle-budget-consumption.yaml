@@ -14,7 +14,7 @@ metadata:
     grafana.com/provenance: "api"
   labels:
     grafana.com/group: "graph2otel-alerts"
-    grafana.com/group-index: "11"
+    grafana.com/group-index: "12"
 spec:
   title: "graph2otel throttle budget consumption high"
   paused: true

@@ -14,7 +14,7 @@ metadata:
     grafana.com/provenance: "api"
   labels:
     grafana.com/group: "graph2otel-alerts"
-    grafana.com/group-index: "7"
+    grafana.com/group-index: "8"
 spec:
   title: "graph2otel checkpoint persist failing"
   paused: true

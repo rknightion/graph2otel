@@ -198,7 +198,7 @@ metrics stopped carrying the same `(tenant_id, collector)` label pair, which is 
 graph2otel bug worth seeing rather than swallowing.
 
 **False positives:** a long-running Graph call near an interval boundary can push
-one cycle over 3x. The `for: 5m` window plus the 3x margin absorb one slow cycle,
+one cycle over 3x. The `for: 10m` window plus the 3x margin absorb one slow cycle,
 not zero.
 
 **Remediation:** open
@@ -206,8 +206,51 @@ not zero.
 that collector. A throttled workload shows up on
 **Graph throttling and outbound HTTP** as well — if `g2o-throttle-saturation` is
 also firing, fix that first, since staleness is the symptom. Check the exporter's
-own logs for the collector name; a permission failure produces a permanent
-staleness climb with no throttling, and the fix is a scope grant, not a restart.
+own logs for the collector name.
+
+**What this rule no longer covers:** a collector that hits a permanent 403 and
+*declines* the run — it records `permission_denied`, returns no error, and stamps
+last-success, so staleness stays flat and this rule stays silent. That is
+deliberate: an endpoint the tenant is not licensed for can never be actioned, and
+before #408 it paged critical forever. `g2o-collector-degraded-sustained` is the
+rule that covers that collector now, at warning. A 403 the collector could *not*
+handle still returns an error and still climbs staleness here, so a hard
+authorization failure has not gone quiet.
+
+### g2o-collector-degraded-sustained
+
+A collector has not had one successful scrape in six hours. It is running and
+reporting on schedule — this is not staleness — but every run comes back degraded
+or failed. `graph2otel_scrape_success_ratio` is level-triggered (re-exported on
+every OTLP interval, not only when a scrape finishes), so `max_over_time` over 6h
+needs no interval arithmetic: a 24-hour collector whose last run succeeded holds
+`1` across the whole window and never fires.
+
+Warning rather than critical on purpose. The two causes are a revoked Graph
+consent grant, which has already been broken for six hours by the time this
+fires, and an endpoint the tenant is not licensed for, which cannot be actioned
+at all. Neither is a 3am page.
+
+**No data:** `OK`. A collector that is disabled or removed has no series, and its
+silent disappearance is the correct outcome.
+
+**Evaluator error:** `Error`. The expression is a single range aggregation over
+one gauge, so an error is a datasource or expression problem, not a tenant one.
+
+**False positives:** an exporter restarted inside the window can show `0` for a
+collector that has not had its first tick yet. The 30m pending window covers a
+normal restart; a restart loop shows up here, which is arguably correct.
+
+**Remediation:** read `cause=` on the WARN `collector completed with degraded
+outcome` line for that collector, or split
+`graph2otel_scrape_outcomes_total` by `result`. `permission_denied` on an
+endpoint that used to work means a consent grant was revoked — re-consent the app
+role named by the collector's `RequiredPermissions()`. `permission_denied` on a
+beta or preview endpoint usually means the tenant lost (or never had) the
+entitlement; Graph says so in the body (`"Your tenant is not licensed for this
+feature."`), no grant will clear it, and the honest fix is to disable that
+collector for the tenant. Any other cause is a real failure — follow it from
+**Self-obs → Collector health**.
 
 ### g2o-checkpoint-persist-errors
 

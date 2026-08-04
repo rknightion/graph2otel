@@ -14,7 +14,7 @@ metadata:
     grafana.com/provenance: "api"
   labels:
     grafana.com/group: "graph2otel-alerts"
-    grafana.com/group-index: "12"
+    grafana.com/group-index: "13"
 spec:
   title: "graph2otel MDCA Cloud Discovery uploads stopped"
   paused: false

@@ -379,6 +379,90 @@ func TestScheduler_FailedTickSetsSuccessZeroAndStalenessGrows(t *testing.T) {
 	}
 }
 
+// TestScheduler_DeclinedPermissionDoesNotRatchetStaleness pins #408: a collector
+// that hits a tenant-entitlement 403, records permission_denied and RETURNS NIL
+// has completed its run — the endpoint is permanently unavailable on this tenant
+// and no operator action clears it. Ratcheting staleness on that pages
+// g2o-collector-staleness at critical forever. Everything that reports the
+// degradation must still do so; only the staleness ratchet is exempt.
+func TestScheduler_DeclinedPermissionDoesNotRatchetStaleness(t *testing.T) {
+	rec := telemetrytest.New()
+	now := time.Unix(1_000_000, 0).UTC()
+	s := collector.NewScheduler(
+		rec.Emitter(),
+		collector.NewMemoryStore(),
+		collector.WithClock(func() time.Time { return now }),
+	)
+	e := collector.Entry{
+		Collector: snapFunc{name: "risky_agents", def: time.Second, fn: func(
+			_ context.Context, _ telemetry.Emitter, outcomes *recordoutcome.Recorder,
+		) error {
+			outcomes.Cause(recordoutcome.CausePermissionDenied)
+			return nil
+		}},
+		Interval: time.Second,
+	}
+	lastSuccess := now
+	s.RunTick(context.Background(), e, &lastSuccess)
+
+	// The degradation is still fully reported.
+	assertGaugeAttrs(t, rec, collector.MetricScrapeSuccess, 0, map[string]string{
+		semconv.AttrCollector: "risky_agents",
+	})
+	assertMetricSeries(t, rec, collector.MetricScrapeOutcomes, 1, map[string]string{
+		semconv.AttrCollector:       "risky_agents",
+		semconv.AttrIngestTransport: "graph",
+		"result":                    "failure",
+	})
+
+	// But staleness does not climb: advance well past the interval and re-run.
+	now = now.Add(30 * time.Second)
+	s.RunTick(context.Background(), e, &lastSuccess)
+	staleness := rec.MetricPoints(collector.MetricScrapeStaleness)[0].Value
+	if staleness != 0 {
+		t.Fatalf("staleness after a declined-permission run = %v, want 0", staleness)
+	}
+	if lastSuccess != now {
+		t.Fatalf("lastSuccess = %v, want advanced to %v", lastSuccess, now)
+	}
+}
+
+// TestScheduler_ErroredPermissionStillRatchetsStaleness is the guard that keeps
+// #408's exemption narrow. A 403 that the collector could NOT handle — it
+// returned an error — is an unfinished run, not a declined one, and must still
+// go stale. Without this, "any 403 anywhere" would silence the staleness alert
+// and a genuinely revoked scope would page nothing.
+func TestScheduler_ErroredPermissionStillRatchetsStaleness(t *testing.T) {
+	rec := telemetrytest.New()
+	now := time.Unix(1_000_000, 0).UTC()
+	s := collector.NewScheduler(
+		rec.Emitter(),
+		collector.NewMemoryStore(),
+		collector.WithClock(func() time.Time { return now }),
+	)
+	e := collector.Entry{
+		Collector: snapFunc{name: "devices", def: time.Second, fn: func(
+			_ context.Context, _ telemetry.Emitter, outcomes *recordoutcome.Recorder,
+		) error {
+			outcomes.Cause(recordoutcome.CausePermissionDenied)
+			return errors.New("status 403")
+		}},
+		Interval: time.Second,
+	}
+	lastSuccess := now
+	s.RunTick(context.Background(), e, &lastSuccess)
+	now = now.Add(30 * time.Second)
+	s.RunTick(context.Background(), e, &lastSuccess)
+
+	staleness := rec.MetricPoints(collector.MetricScrapeStaleness)[0].Value
+	if staleness != 30 {
+		t.Fatalf("staleness after two errored 403 runs = %v, want 30", staleness)
+	}
+	if lastSuccess != time.Unix(1_000_000, 0).UTC() {
+		t.Fatalf("lastSuccess mutated on an errored run: %v", lastSuccess)
+	}
+}
+
 func TestScheduler_EmptyRunIsHealthyAndEmitsExplicitOutcome(t *testing.T) {
 	rec := telemetrytest.New()
 	s := collector.NewScheduler(

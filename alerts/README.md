@@ -178,8 +178,9 @@ that tenant, or the collector is disabled.
 
 ## Doc block 3 — Collector staleness
 
-**Rules:** `g2o-collector-staleness` (primary), `g2o-checkpoint-persist-errors`
-(companion).
+**Rules:** `g2o-collector-staleness` (primary),
+`g2o-collector-degraded-sustained` and `g2o-checkpoint-persist-errors`
+(companions).
 
 **What/why:** `graph2otel_scrape_staleness_seconds` (from `#9`) is seconds since a
 collector's last *successful* scrape — the same signal covers both a
@@ -212,8 +213,23 @@ data-durability signal, not a noisy one.
 
 **False positive looks like:** a long-running Graph API call near a collector's
 interval boundary can transiently push the ratio above 3 for one cycle; the `for:
-5m` window and the 3x margin together are meant to absorb one slow cycle, not
+10m` window and the 3x margin together are meant to absorb one slow cycle, not
 zero margin.
+
+**What staleness deliberately stopped covering (#408), and what took it over:** a
+collector that meets a permanent tenant-entitlement 403 *declines* its run — it
+records `permission_denied`, returns no error, and stamps last-success — so
+staleness stays flat and the primary rule stays silent. That is the point: an
+unlicensed endpoint can never be actioned, and this rule paged **critical**
+against three of them continuously for four days on m7kni before the fix. A 403
+the collector could not handle still returns an error and still climbs staleness,
+so a hard authorization failure has not gone quiet. The gap that opened was a
+genuinely *revoked* consent grant, which produces the same declined outcome and
+is very much actionable; `g2o-collector-degraded-sustained` covers it at
+**warning** on `graph2otel_scrape_success_ratio` staying `0` across a 6h window.
+That metric is level-triggered — re-exported on every OTLP interval rather than
+only when a scrape finishes — so `max_over_time` over a fixed 6h window is
+correct for a 24-hour collector without the interval division the primary needs.
 
 **Applicability and no-data semantics — corrected (#299):** self-obs metrics are
 emitted by every running collector, so this rule applies to all of them

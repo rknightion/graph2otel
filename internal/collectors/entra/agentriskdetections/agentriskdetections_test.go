@@ -3,11 +3,13 @@ package agentriskdetections
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
@@ -130,6 +132,49 @@ func TestCollectorEmitsLiveRecordEndToEnd(t *testing.T) {
 	}
 	if got.Attrs["risk_event_type"] != "adminConfirmedAgentCompromised" {
 		t.Errorf("risk_event_type = %q", got.Attrs["risk_event_type"])
+	}
+}
+
+// forbiddenFetcher returns the VERBATIM 403 body m7kni's poller received on
+// 2026-08-04, once the tenant lost the agent-risk preview entitlement.
+type forbiddenFetcher struct{ calls int }
+
+func (f *forbiddenFetcher) FetchPage(_ context.Context, _ string) ([]map[string]any, string, error) {
+	f.calls++
+	return nil, "", errors.New(
+		"graphclient: GET https://graph.microsoft.com/beta/identityProtection/agentRiskDetections?%24top=500: " +
+			`status 403: {"error":{"code":"Forbidden","message":"Your tenant is not licensed for this feature."}}`,
+	)
+}
+
+// TestCollectWindowDeclinesOn403 pins #408: agentRiskDetections is a beta preview
+// a tenant may simply not be licensed for, exactly like its sibling
+// entra.risky_agents. A 403 is a permanent tenant fact, so the collector declines
+// the window — records permission_denied, returns nil, and does not advance the
+// watermark — rather than returning an error every 30 minutes forever.
+func TestCollectWindowDeclinesOn403(t *testing.T) {
+	f := &forbiddenFetcher{}
+	rec := telemetrytest.New()
+	c := newCollector(collectors.WindowDeps{TenantID: "t1", Fetcher: f, Store: checkpoint.NewStore(t.TempDir())})
+
+	outcomes := recordoutcome.NewRecorder()
+	from := time.Date(2026, 8, 4, 17, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+	got, err := c.CollectWindow(context.Background(), from, to, rec.Emitter(), outcomes)
+	if err != nil {
+		t.Fatalf("CollectWindow on a 403 = %v, want nil (declined, not failed)", err)
+	}
+	if got != from {
+		t.Errorf("watermark = %v, want it left at %v — a declined window consumed nothing", got, from)
+	}
+	// Assert on the SUMMARIZED cause, not the raw list: the engine also records
+	// source_error on the failed fetch, and the summary's priority order is what
+	// the scheduler actually reads to decide whether to ratchet staleness.
+	if got := outcomes.Snapshot().Summarize(nil, false).Cause; got != recordoutcome.CausePermissionDenied {
+		t.Errorf("summarized cause = %q, want permission_denied", got)
+	}
+	if n := len(rec.LogRecords()); n != 0 {
+		t.Errorf("emitted %d records on a 403, want 0", n)
 	}
 }
 

@@ -234,6 +234,29 @@ func isShutdownCancellation(ctx context.Context, err error) bool {
 	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
+// declinedPermission reports whether a run finished by DECLINING rather than by
+// failing: it completed normally — no panic, no returned error — and its only
+// complaint is that the source refused it. Several endpoints are simply not
+// available on a given tenant (an unlicensed preview, a workload the tenant does
+// not own), so their collectors deliberately record permission_denied and return
+// nil rather than erroring; see riskyagents and retentionlabels.
+//
+// Such a run stamps last-success, because scrape.staleness answers "is this
+// collector still running" and the answer is yes — it ran, and the tenant said
+// no. Ratcheting staleness instead pages g2o-collector-staleness at critical
+// forever over a permanent condition no operator action can clear (#408).
+// Nothing else is softened: the run is still unhealthy, so scrape.success is 0,
+// the outcome is still result=failure with cause=permission_denied, the
+// availability tracker and status page still show it degraded, and the WARN
+// "degraded outcome" line is still logged every tick.
+//
+// The runErr test is what keeps this narrow. A 403 the collector could NOT
+// handle returns an error, which is an unfinished run and still goes stale —
+// otherwise a genuinely revoked scope would silently stop alerting.
+func declinedPermission(outcome recordoutcome.Summary, runErr error, panicked bool) bool {
+	return runErr == nil && !panicked && outcome.Cause == recordoutcome.CausePermissionDenied
+}
+
 // runTick executes one collection, recovering from panics so a single bad
 // collector run never crashes the scheduler. The whole run is timed and, when
 // self-obs is enabled, the per-collector scrape.* and record-outcome metrics are
@@ -310,7 +333,7 @@ func (s *Scheduler) runTick(ctx context.Context, e Entry, lastSuccess *time.Time
 
 		duration := time.Since(started)
 		finishedWall := s.now()
-		if healthy {
+		if healthy || declinedPermission(outcome, runErr, panicked) {
 			*lastSuccess = finishedWall
 		}
 		staleness := finishedWall.Sub(*lastSuccess)

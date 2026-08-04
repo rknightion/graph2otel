@@ -14,7 +14,7 @@ metadata:
     grafana.com/provenance: "api"
   labels:
     grafana.com/group: "graph2otel-alerts"
-    grafana.com/group-index: "10"
+    grafana.com/group-index: "11"
 spec:
   title: "graph2otel sustained Graph API throttling"
   paused: false

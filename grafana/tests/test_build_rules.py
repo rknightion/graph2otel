@@ -41,6 +41,7 @@ EXPECTED_PAUSED = {
     "g2o-intune-compliance-ratio-low": False,        # primary, doc block 2
     "g2o-intune-compliance-noncompliant-spike": True,  # companion
     "g2o-collector-staleness": False,                # primary, doc block 3
+    "g2o-collector-degraded-sustained": False,       # companion, doc block 3 (#408)
     "g2o-checkpoint-persist-errors": True,           # companion
     "g2o-record-integrity-loss": False,               # primary, doc block 6
     "g2o-payload-type-mismatch": True,                # companion, doc block 6
@@ -64,8 +65,8 @@ class TestRuleIdentity(unittest.TestCase):
         actual = {r["uid"]: r["isPaused"] for r in build_rules.RULES}
         self.assertEqual(actual, EXPECTED_PAUSED)
 
-    def test_fourteen_alert_rules_and_no_recording_rules(self):
-        self.assertEqual(len(build_rules.RULES), 14)
+    def test_fifteen_alert_rules_and_no_recording_rules(self):
+        self.assertEqual(len(build_rules.RULES), 15)
 
 
 class TestPipelineShape(unittest.TestCase):
@@ -134,8 +135,8 @@ class TestCollectorStalenessIsIntervalAware(unittest.TestCase):
     """#299: replace the fixed 3600s placeholder with a per-collector ratio
     against the scheduler's own effective interval, at the maintainer-approved
     3x multiplier. Modifies the EXISTING g2o-collector-staleness rule in place
-    (TestRuleIdentity.test_fourteen_alert_rules_and_no_recording_rules already
-    pins the rule count at 14 — this must not add a 15th)."""
+    (TestRuleIdentity.test_fifteen_alert_rules_and_no_recording_rules already
+    pins the rule count at 15 — this must not add a 16th)."""
 
     def _rule(self):
         return next(r for r in build_rules.RULES if r["uid"] == "g2o-collector-staleness")
