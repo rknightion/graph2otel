@@ -180,6 +180,36 @@ def strip_group_labels(manifest: bytes) -> bytes:
     return ("\n".join(kept) + "\n").encode()
 
 
+def _mutation_batch(out: str):
+    """Find gcx's mutation-batch document in either shape it is emitted in.
+
+    `-o json` PRETTY-PRINTS one document across many lines; agent mode emits
+    compact JSON-lines, optionally behind a `{"class":"hint",...}` banner. Both
+    are real and both reach this code, so whole-document is tried first and
+    line-at-a-time second. A line-only parser reads nothing from a pretty-printed
+    document — its first line is a bare `{` — which is how the first attempt at
+    #413 tripped its own guard against real CI output.
+    """
+    try:
+        doc = json.loads(out)
+    except json.JSONDecodeError:
+        pass
+    else:
+        return doc if doc.get("type") == "gcx.mutation_batch" else None
+    batch = None
+    for line in out.splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            doc = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if doc.get("type") == "gcx.mutation_batch":
+            batch = doc
+    return batch
+
+
 def _push_dir(context: str, files: dict) -> dict:
     """Push one directory of manifests and READ the result, or refuse.
 
@@ -203,17 +233,7 @@ def _push_dir(context: str, files: dict) -> dict:
                 f.write(data)
         out = gcx(["resources", "push", "-p", tmp, "--omit-manager-fields",
                    "-o", "json"], context, parse=False)
-    batch = None
-    for line in out.splitlines():
-        line = line.strip()
-        if not line.startswith("{"):
-            continue
-        try:
-            doc = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if doc.get("type") == "gcx.mutation_batch":
-            batch = doc
+    batch = _mutation_batch(out)
     if batch is None:
         raise DeployError(
             "gcx resources push returned no gcx.mutation_batch document, so the "

@@ -384,28 +384,60 @@ class TestAnUnreadableResultIsNotAZero(unittest.TestCase):
     all feed a JSON `gcx.mutation_batch` string, so they assert one layer above
     the bug and could never have caught it."""
 
-    def _push(self):
-        return rules_deploy.push(
-            "ctx", {build_rules.ALERT_GROUP: "uid"},
-            {"g2o-collector-staleness.yaml": build_rules.render_app_platform()[
-                "g2o-collector-staleness.yaml"]}, absent=set())
+    def _push(self, stdout=None):
+        fake = (lambda args, context, parse=True: stdout)
+        with mock.patch.object(rules_deploy, "gcx", fake):
+            return rules_deploy.push(
+                "ctx", {build_rules.ALERT_GROUP: "uid"},
+                {"g2o-collector-staleness.yaml": build_rules.render_app_platform()[
+                    "g2o-collector-staleness.yaml"]}, absent=set())
+
+    def test_a_pretty_printed_document_is_read(self):
+        """`-o json` PRETTY-PRINTS one document; agent mode emits compact
+        JSON-lines. Live-measured 2026-08-04 when the raise above caught a
+        line-at-a-time parser against real CI output: the first line of a
+        pretty-printed document is a bare `{`, which parses as nothing. Both
+        shapes are real, so both are pinned."""
+        def fake_gcx(args, context, parse=True):
+            path = args[args.index("-p") + 1]
+            grouped = any(
+                "grafana.com/group:" in open(os.path.join(path, n), encoding="utf-8").read()
+                for n in sorted(os.listdir(path)))
+            if grouped:      # what the m7kni stack actually returned, 2026-08-04
+                return json.dumps(
+                    {"type": "gcx.mutation_batch",
+                     "summary": {"succeeded": 0, "failed": 1},
+                     "failures": [
+                         {"target": {"kind": "AlertRule",
+                                     "name": "g2o-collector-staleness"},
+                          "error": f"403 Forbidden: {rules_deploy.UNGROUPABLE}"}]},
+                    indent=2)
+            return json.dumps({"type": "gcx.mutation_batch",
+                               "summary": {"succeeded": 1}, "failures": []},
+                              indent=2)
+
+        with mock.patch.object(rules_deploy, "gcx", fake_gcx):
+            result = rules_deploy.push(
+                "ctx", {build_rules.ALERT_GROUP: "uid"},
+                {"g2o-collector-staleness.yaml": build_rules.render_app_platform()[
+                    "g2o-collector-staleness.yaml"]}, absent=set())
+        # Reading the document is only useful if its failures survive the read
+        # and reach the retry — that is the whole causal chain #413 broke.
+        self.assertEqual(result["ungrouped"], ["g2o-collector-staleness"])
+        self.assertEqual(result["failures"], [])
+        self.assertIn("regroup", result["phases"])
 
     def test_text_mode_output_raises_instead_of_reporting_nothing_pushed(self):
-        with mock.patch.object(
-                rules_deploy, "gcx",
-                lambda args, context, parse=True: "15 resources pushed, 0 errors\n"):
-            with self.assertRaises(rules_deploy.DeployError) as caught:
-                self._push()
+        with self.assertRaises(rules_deploy.DeployError) as caught:
+            self._push("15 resources pushed, 0 errors\n")
         # The diagnostic names what it could not find, so the next reader does
         # not have to rediscover the agent-mode contract from scratch.
         self.assertIn("gcx.mutation_batch", str(caught.exception))
 
     def test_empty_output_raises_too(self):
         """A silent gcx is the same unknown outcome as a chatty one."""
-        with mock.patch.object(rules_deploy, "gcx",
-                               lambda args, context, parse=True: ""):
-            with self.assertRaises(rules_deploy.DeployError):
-                self._push()
+        with self.assertRaises(rules_deploy.DeployError):
+            self._push("")
 
 
 class TestAgentModeBannerIsToleratedOnReads(unittest.TestCase):
