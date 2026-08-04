@@ -187,12 +187,24 @@ metadata and the `{service_name="graph2otel"} | event_name=…` form above stays
 Two caveats worth knowing before you build on it. The attribute is emitted by graph2otel
 unconditionally, but it only becomes a *stream label* once it is added to the tenant's Loki
 **structured-metadata promotion** list — a Grafana Cloud-side setting, not a repo change.
-Until then it is queryable as structured metadata like any other attribute. **As of
-2026-07-28 it is not promoted:** a live `series` read for `{service_name="graph2otel"}`
-returns only `service_name` plus Loki's internal `__stream_shard__` / `__time_shard__`, so
-the single hot stream is still being auto-sharded. And the value is derived from the event
-name alone, so it tells you which product area produced a record — not which transport
-carried it. `ingest_transport` is still the attribute for that.
+Until then it is queryable as structured metadata like any other attribute. And the value is
+derived from the event name alone, so it tells you which product area produced a record — not
+which transport carried it. `ingest_transport` is still the attribute for that.
+
+**Checking whether promotion has landed.** Structured metadata can never appear in `series`
+output, so a `series` read is the only test that distinguishes a promoted attribute from an
+ordinary one — a `query` will happily return `graph2otel_event_domain` either way and tells
+you nothing:
+
+```sh
+gcx --context m7kni logs series --match '{service_name="graph2otel"}' -o json
+```
+
+Promoted looks like one stream per domain, each carrying `graph2otel_event_domain`, with no
+`__stream_shard__`. **Live-measured 2026-08-04 it is still not promoted:** the read returns
+only `service_name` plus Loki's internal `__stream_shard__` `0`/`1`, so the single hot stream
+is still being auto-sharded. The request sits with Grafana engineering (raised 2026-07-29);
+nothing in this repo gates it and there is no partial state to babysit.
 
 ### Why no *log attribute* can ever be promoted, and what promotion would cost (#404)
 
