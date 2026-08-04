@@ -246,6 +246,30 @@ class TestPushRequiresTheMeasuredFlags(unittest.TestCase):
         self.assertIn("--omit-manager-fields", seen["args"])
         self.assertEqual(result["pushed"], 19)  # whatever the fake reported
 
+    def test_push_asks_for_json_output(self):
+        """#413. gcx emits its `gcx.mutation_batch` document only in AGENT mode,
+        auto-detected from CLAUDECODE / CLAUDE_CODE / CURSOR_AGENT /
+        GITHUB_COPILOT / AMAZON_Q / GCX_AGENT_MODE. None of those exist on a
+        GitHub Actions runner, so an unflagged push there prints a human
+        one-liner instead — measured 2026-08-04. The two `resources get` calls
+        already pass `-o json`; the write must too, or CI reads nothing."""
+        seen = {}
+
+        def fake_gcx(args, context, parse=True):
+            seen["args"] = args
+            return json.dumps({"type": "gcx.mutation_batch",
+                               "summary": {"succeeded": 1}, "failures": []})
+
+        with mock.patch.object(rules_deploy, "gcx", fake_gcx):
+            rules_deploy.push(
+                "ctx", {build_rules.ALERT_GROUP: "uid"},
+                {"g2o-collector-staleness.yaml": build_rules.render_app_platform()[
+                    "g2o-collector-staleness.yaml"]}, absent=set())
+        args = seen["args"]
+        self.assertIn("-o", args)
+        self.assertEqual(args[args.index("-o") + 1], "json")
+
+
     def test_a_new_rule_is_created_without_its_group_label(self):
         """Measured: `403 cannot set group when creating a new rule`. The create
         phase therefore strips the group labels, and runs ONLY for rules that do
@@ -344,6 +368,77 @@ class TestPushRequiresTheMeasuredFlags(unittest.TestCase):
             self.assertEqual(
                 m["metadata"]["annotations"]["grafana.com/provenance"], "api",
                 rule["uid"])
+
+
+class TestAnUnreadableResultIsNotAZero(unittest.TestCase):
+    """#413's defect class, not just its instance.
+
+    A push whose result could not be PARSED is an unknown outcome. Reporting an
+    unknown outcome as `0 pushed, 0 failures` is what turned one missing flag
+    into six days of silent drift on the m7kni stack: with no failures visible
+    the UNGROUPABLE branch never fired, phase 3 never retried, and every rejected
+    update left its rule's content stale while the run looked clean.
+
+    Note what these fakes do differently from every other gcx fake in this file:
+    they return what gcx ACTUALLY prints outside agent mode. The existing tests
+    all feed a JSON `gcx.mutation_batch` string, so they assert one layer above
+    the bug and could never have caught it."""
+
+    def _push(self):
+        return rules_deploy.push(
+            "ctx", {build_rules.ALERT_GROUP: "uid"},
+            {"g2o-collector-staleness.yaml": build_rules.render_app_platform()[
+                "g2o-collector-staleness.yaml"]}, absent=set())
+
+    def test_text_mode_output_raises_instead_of_reporting_nothing_pushed(self):
+        with mock.patch.object(
+                rules_deploy, "gcx",
+                lambda args, context, parse=True: "15 resources pushed, 0 errors\n"):
+            with self.assertRaises(rules_deploy.DeployError) as caught:
+                self._push()
+        # The diagnostic names what it could not find, so the next reader does
+        # not have to rediscover the agent-mode contract from scratch.
+        self.assertIn("gcx.mutation_batch", str(caught.exception))
+
+    def test_empty_output_raises_too(self):
+        """A silent gcx is the same unknown outcome as a chatty one."""
+        with mock.patch.object(rules_deploy, "gcx",
+                               lambda args, context, parse=True: ""):
+            with self.assertRaises(rules_deploy.DeployError):
+                self._push()
+
+
+class TestAgentModeBannerIsToleratedOnReads(unittest.TestCase):
+    """The mirror of #413, in the other direction.
+
+    In agent mode gcx prepends a one-line `{"class":"hint",...}` banner ahead of
+    the payload — measured 2026-08-04, and it does so even with `-o json`. A bare
+    json.loads over that fails, so the deployer worked on a CI runner (no agent
+    mode) and broke in a Claude Code / Cursor session, which is precisely the
+    ambient-mode dependence #413 is about. scripts/grafana-prune-rules.py already
+    strips it; the deployer must too, or `make rules-push` succeeds or fails
+    depending on which terminal it was typed into."""
+
+    PAYLOAD = {"items": [{"metadata": {"name": "u"}, "spec": {"title": "t"}}]}
+
+    def _run(self, stdout):
+        done = mock.Mock(returncode=0, stdout=stdout, stderr="")
+        with mock.patch.object(rules_deploy.subprocess, "run", return_value=done):
+            return rules_deploy.gcx(["resources", "get", "folders", "-o", "json"],
+                                    "ctx")
+
+    def test_a_leading_hint_banner_is_stripped(self):
+        banner = json.dumps({"class": "hint", "summary": "use --json list …"})
+        self.assertEqual(
+            self._run(banner + "\n" + json.dumps(self.PAYLOAD)), self.PAYLOAD)
+
+    def test_plain_json_still_parses(self):
+        self.assertEqual(self._run(json.dumps(self.PAYLOAD)), self.PAYLOAD)
+
+    def test_genuinely_unparseable_output_still_raises(self):
+        """Stripping a banner must not become "skip the first line and hope"."""
+        with self.assertRaises(rules_deploy.DeployError):
+            self._run("NAME  TITLE\nfoo   bar\n")
 
 
 class TestContextIsAlwaysPinned(unittest.TestCase):

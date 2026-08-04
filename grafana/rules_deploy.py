@@ -80,9 +80,25 @@ def gcx(args: list, context: str, parse: bool = True):
         return done.stdout
     try:
         return json.loads(done.stdout)
-    except json.JSONDecodeError as exc:
-        raise DeployError(
-            f"gcx {' '.join(args[:3])} returned invalid JSON") from exc
+    except json.JSONDecodeError:
+        pass
+    # In agent mode — auto-detected from CLAUDECODE / CLAUDE_CODE / CURSOR_AGENT
+    # / GITHUB_COPILOT / AMAZON_Q / GCX_AGENT_MODE — gcx prepends a one-line
+    # {"class":"hint",...} banner ahead of the payload, and does so even with
+    # `-o json`. Without this the deployer parses on a CI runner and fails in a
+    # Claude Code or Cursor session: the same command, succeeding or failing on
+    # which terminal it was typed into. The banner is identified by content, not
+    # by position — "drop the first line" would turn a genuinely unparseable
+    # response into a silently truncated one.
+    head, _, rest = done.stdout.partition("\n")
+    if '"class"' in head and '"hint"' in head:
+        try:
+            return json.loads(rest)
+        except json.JSONDecodeError as exc:
+            raise DeployError(
+                f"gcx {' '.join(args[:3])} returned invalid JSON after its "
+                "agent-mode hint banner") from exc
+    raise DeployError(f"gcx {' '.join(args[:3])} returned invalid JSON")
 
 
 def resolve_folder_uid(folders: list, title: str) -> str:
@@ -165,13 +181,29 @@ def strip_group_labels(manifest: bytes) -> bytes:
 
 
 def _push_dir(context: str, files: dict) -> dict:
+    """Push one directory of manifests and READ the result, or refuse.
+
+    `-o json` is not optional. gcx emits its `gcx.mutation_batch` document only
+    in agent mode, which it auto-detects from CLAUDECODE / CLAUDE_CODE /
+    CURSOR_AGENT / GITHUB_COPILOT / AMAZON_Q / GCX_AGENT_MODE — none of which
+    exist on a GitHub Actions runner, where it prints a human one-liner instead.
+    The flag pins the format rather than depending on an env-var list that is
+    gcx's to change. Same reason the two `resources get` calls carry it.
+
+    A result that could not be parsed raises. It used to fall through to the
+    initialisers and report `0 pushed, 0 failures`, which is not a null result
+    but a WRONG one: an unread push looks identical to a push with nothing to do.
+    That is what made #413 six days of silent drift instead of one red run — with
+    no failures visible, the UNGROUPABLE branch below never fired, phase 3 never
+    retried, and every rejected update left its rule's content stale.
+    """
     with tempfile.TemporaryDirectory() as tmp:
         for fname, data in sorted(files.items()):
             with open(os.path.join(tmp, fname), "wb") as f:
                 f.write(data)
-        out = gcx(["resources", "push", "-p", tmp, "--omit-manager-fields"],
-                  context, parse=False)
-    pushed, failures = 0, []
+        out = gcx(["resources", "push", "-p", tmp, "--omit-manager-fields",
+                   "-o", "json"], context, parse=False)
+    batch = None
     for line in out.splitlines():
         line = line.strip()
         if not line.startswith("{"):
@@ -181,9 +213,14 @@ def _push_dir(context: str, files: dict) -> dict:
         except json.JSONDecodeError:
             continue
         if doc.get("type") == "gcx.mutation_batch":
-            pushed = doc.get("summary", {}).get("succeeded", 0)
-            failures = doc.get("failures", [])
-    return {"pushed": pushed, "failures": failures}
+            batch = doc
+    if batch is None:
+        raise DeployError(
+            "gcx resources push returned no gcx.mutation_batch document, so the "
+            "outcome of the push is unknown — refusing to report it as zero. "
+            f"Output was: {out.strip()[:400] or '(empty)'}")
+    return {"pushed": batch.get("summary", {}).get("succeeded", 0),
+            "failures": batch.get("failures", [])}
 
 
 def push(context: str, folder_uids: dict, manifests: dict,
