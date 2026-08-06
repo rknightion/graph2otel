@@ -297,6 +297,71 @@ timestamp field changed shape upstream — check
 `errored` on one collector is a mapper bug: capture the raw payload and open an
 issue rather than tuning the alert.
 
+### g2o-record-attrs-truncated
+
+At least one log record exceeded the backend's structured-metadata size limit in
+the last 15 minutes and had its largest attribute values shortened to fit
+([#419](https://github.com/rknightion/graph2otel/issues/419)). This is **content
+loss, not record loss** — the record landed, and every attribute is still on it,
+but one or more values are truncated.
+
+**No data:** `OK`.
+
+**Evaluator error:** `Error`.
+
+**False positives:** none. The counter only moves when a record genuinely did not
+fit, and graph2otel clips only what it must. Enabled at `>0` because the measured
+rate is 2-3 records per day, which is not noisy, and because a clip is the only
+thing that names an oversized shape.
+
+**Remediation:** this alert is a diagnostic, not a fire. Find the record:
+
+```logql
+{service_name="graph2otel"} | attrs_truncated = "true"
+```
+
+`attrs_truncated_keys` names the fields that were shortened and
+`attrs_truncated_bytes` says how much was lost. A collector that appears here
+once is fine — the guard did its job. A collector that appears **consistently**
+has a source field that genuinely does not fit, and wants a cap at its mapper,
+where the mapper can decide *what* to keep, rather than a blind byte cut at the
+emitter boundary. `attrs_dropped` being present is louder: that record was so
+wide its attribute KEYS alone exceeded the budget, and it is missing dimensions
+rather than merely shortened ones.
+
+### g2o-record-over-horizon
+
+Records were dropped because their event time was older than the backend's 7-day
+accept window, so sending them would have been rejected per-entry and lost anyway
+([#401](https://github.com/rknightion/graph2otel/issues/401)). This is real record
+loss, and `record_outcomes` counts these as `emitted` — this counter, not that
+one, is the authoritative statement that they did not land.
+
+**No data:** `OK`.
+
+**Evaluator error:** `Error`.
+
+**False positives:** not false measurements — every counted record really was
+dropped — but on a blob-derived stream the steady state is nonzero for a reason
+that needs no action. See below.
+
+**Paused by default, and the reason matters.** A nonzero value is *expected* on a
+blob-derived stream. Those replay historical records, so a record can cross the
+7-day window by ordinary aging with nothing misconfigured anywhere:
+[#297](https://github.com/rknightion/graph2otel/issues/297) measured graph2otel's
+blob-ingested Intune stream at 3.31 days old at the newest, 5.97 median and 6.95
+oldest. Enabling this rule at `>0` on such a tenant pages on normal behaviour.
+
+**Unblock condition:** open **Self-obs → Backend accept window** and read your own
+steady-state rate over a week. Raise the rule's threshold above it, then enable.
+On a Graph-only deployment with no blob ingest the steady state is genuinely zero
+and `>0` is the right threshold as written.
+
+**Remediation:** pair with **Source-event lag at emission** on the same board — a
+rising p95 there is the leading indicator of this counter starting to move. A
+sudden step usually means a stalled collector resumed and is replaying a backlog
+that has aged out; check the collector's checkpoint rather than the alert.
+
 ### g2o-payload-type-mismatch
 
 A source-controlled optional field arrived with a different JSON type than the

@@ -49,6 +49,8 @@ EXPECTED_PAUSED = {
     "g2o-throttle-budget-consumption": True,         # companion
     "g2o-mdca-uploads-stopped": False,               # default-enabled, doc block 5
     "g2o-mdca-parse-failing": False,                 # default-enabled, doc block 5
+    "g2o-record-attrs-truncated": False,             # default-enabled, doc block 7
+    "g2o-record-over-horizon": True,                 # companion, doc block 7
 }
 
 
@@ -65,8 +67,8 @@ class TestRuleIdentity(unittest.TestCase):
         actual = {r["uid"]: r["isPaused"] for r in build_rules.RULES}
         self.assertEqual(actual, EXPECTED_PAUSED)
 
-    def test_fifteen_alert_rules_and_no_recording_rules(self):
-        self.assertEqual(len(build_rules.RULES), 15)
+    def test_seventeen_alert_rules_and_no_recording_rules(self):
+        self.assertEqual(len(build_rules.RULES), 17)
 
 
 class TestPipelineShape(unittest.TestCase):

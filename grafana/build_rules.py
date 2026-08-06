@@ -577,6 +577,48 @@ RULES = [
         "with g2o-mdca-uploads-stopped, which catches a dead uploader this rule cannot see.",
         False,
     ),
+    # --- Backend record/content loss (#420) --------------------------------
+    # The two counters that exist to make data loss visible. Nothing watched
+    # either until #420; a loss metric nobody is alerted on is the same defect
+    # #419 was filed for, one level up.
+    _alert(
+        "g2o-record-attrs-truncated",
+        "graph2otel clipped a record's attributes to fit the backend size limit",
+        f'sum by (tenant_id, collector, ingest_transport) '
+        f'(increase({_m("graph2otel.event.attrs_truncated")}[15m]))',
+        "gt", [0], "0m",
+        {"severity": "warning", "category": "record-integrity", "source": "graph2otel"},
+        "Collector {{ $labels.collector }} emitted an oversized record on "
+        "{{ $labels.ingest_transport }} (tenant {{ $labels.tenant_id }})",
+        "At least one log record exceeded the backend's structured-metadata size limit in "
+        "the last 15m and had its largest attribute values shortened to fit (#419). This is "
+        "CONTENT loss, not record loss: the record landed, but one or more fields are "
+        "truncated. Default-enabled at >0 for two reasons — the measured rate is 2-3 records "
+        "per day, so it is not noisy, and the clipped record's attrs_truncated_keys is "
+        "currently the ONLY way to identify which record shape is oversized, since #419's "
+        "live-wire sweep cleared every reachable source. Treat the first firing as the "
+        "diagnostic it is.",
+        False,
+    ),
+    _alert(
+        "g2o-record-over-horizon",
+        "graph2otel dropped records older than the backend accept window",
+        f'sum by (tenant_id, collector, ingest_transport) '
+        f'(increase({_m("graph2otel.event.over_horizon")}[15m]))',
+        "gt", [0], "0m",
+        {"severity": "warning", "category": "record-integrity", "source": "graph2otel"},
+        "Collector {{ $labels.collector }} dropped over-age records on "
+        "{{ $labels.ingest_transport }} (tenant {{ $labels.tenant_id }})",
+        "Records were dropped because their event time was older than the backend's 7-day "
+        "accept window, so sending them would have been rejected per-entry and lost anyway "
+        "(#401). This is real record loss. PAUSED by default on purpose: a nonzero value is "
+        "EXPECTED on a blob-derived stream, which replays historical records and can age one "
+        "past 7 days by ordinary aging with nothing misconfigured (#297 measured graph2otel's "
+        "blob-ingested Intune stream at 6.95 days at the oldest). Enabling it as-is would "
+        "page on normal behaviour. Unblock condition: measure your own steady-state rate on "
+        "the 'Backend accept window' panel, raise the threshold above it, then enable.",
+        True,
+    ),
 ]
 
 
@@ -1801,6 +1843,10 @@ DASHBOARD_TARGETS = {
     "g2o-mdca-uploads-stopped":
         ("Defender", "Discovery parse last success age"),
     "g2o-mdca-parse-failing": ("Defender", "Discovery parse tasks rate"),
+    "g2o-record-attrs-truncated": (
+        "Self-obs", "Records whose attributes were clipped to fit the backend size limit"),
+    "g2o-record-over-horizon": (
+        "Self-obs", "Records dropped as older than the backend accept window"),
     "g2o-detect-privileged-directory-change":
         ("Entra", "Top directory audit activities"),
     "g2o-detect-security-alert-unresolved":

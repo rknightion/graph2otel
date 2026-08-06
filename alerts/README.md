@@ -377,6 +377,52 @@ tenant, collector, and ingest transport. The companion appears only where a
 collector has an explicit type expectation and observes a mismatch. Neither
 metric contains source record identifiers or values.
 
+## Doc block 7 — Backend record and content loss
+
+**Rules:** `g2o-record-attrs-truncated` (default-enabled),
+`g2o-record-over-horizon` (paused companion).
+
+**What/why:** doc block 6 accounts for records that never became telemetry.
+These two account for the records that became telemetry and were then refused,
+or shortened, by the backend — a loss the collector's own outcome counters
+cannot see, because they counted the record as `emitted` before it left.
+
+`graph2otel_event_attrs_truncated_total` counts records whose attributes
+exceeded the backend's structured-metadata size limit (65536 bytes on Grafana
+Cloud) and were clipped at the emitter boundary to fit. This is **content**
+loss: the record landed and every attribute is still on it, but one or more
+values were shortened. The record carries `attrs_truncated="true"`,
+`attrs_truncated_bytes`, and `attrs_truncated_keys` naming the affected fields.
+
+`graph2otel_event_over_horizon_total` counts records dropped because their event
+time was older than the backend's 7-day accept window. That is **record** loss.
+graph2otel drops them rather than sending records the gateway rejects per-entry,
+because the loss is identical either way and only this way is it countable.
+
+**Threshold rationale:** the truncation primary fires on the first clipped
+record in a 15-minute window (`gt 0`, `for: 0m`) and is enabled by default. The
+measured rate is 2-3 records per day, so `>0` is not noisy, and a clipped
+record's `attrs_truncated_keys` is the only thing that identifies an oversized
+record shape.
+
+The over-horizon companion uses the same threshold and is **paused**. A nonzero
+value is expected on a blob-derived stream: those replay historical records, so
+a record can cross the 7-day window by ordinary aging with nothing
+misconfigured. Enabling it as written would page on normal behaviour. Measure
+your own steady-state rate first, raise the threshold above it, then enable — on
+a Graph-only deployment with no blob ingest the steady state is genuinely zero
+and `>0` is correct as shipped.
+
+**False positive looks like:** for the truncation primary, none — the counter
+only moves when a record genuinely did not fit. A collector appearing there
+repeatedly is not a false alarm but a mapper that wants its own cap. For the
+over-horizon companion, the blob-replay steady state above is the whole reason
+it ships paused.
+
+**Applicability:** both apply to every collector and group by tenant, collector,
+and ingest transport. Neither metric contains source record identifiers or
+values.
+
 ## Detection examples — rule group `graph2otel-detections` (all paused)
 
 Eleven **portable security detections** built on graph2otel's log signals, generated into
