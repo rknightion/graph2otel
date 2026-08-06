@@ -235,7 +235,10 @@ func mapBlobSignIn(rec map[string]any) (telemetry.Event, bool) {
 		return telemetry.Event{}, false
 	}
 
-	_, ev := mapSignIn(props)
+	// No stream default here: a blob record carries its own signInEventTypes
+	// (the category IS the slice, and the exported envelope echoes it), so
+	// there is nothing to fill in and nothing to risk overwriting (#418).
+	_, ev := mapSignIn(props, "")
 	ev.Timestamp = ts
 	return ev, true
 }

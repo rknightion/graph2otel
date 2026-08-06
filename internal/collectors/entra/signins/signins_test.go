@@ -12,6 +12,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -133,6 +134,10 @@ func decodeLive(t *testing.T, raw string) map[string]any {
 // only on the three beta signInEventTypes-filtered streams, whose responses do
 // echo the filtered value.
 //
+// Since #418 the interactive stream STAMPS the attribute from its own slice
+// rather than leaving it unset — the wire fact pinned here is what makes that
+// stamp necessary, so this test guards the premise, not the old behavior.
+//
 // The synthetic TestMapSignInUserSignInSuccess fixture invents
 // signInEventTypes:["interactiveUser"] on what it labels a user sign-in; the
 // real interactive record carries isInteractive:true instead. This is the same
@@ -159,7 +164,9 @@ func TestLiveInteractiveRecordCarriesNoSignInEventTypes(t *testing.T) {
 // regardless of errorCode. That is faithful to the wire (all 5 captured records
 // carry it), so it is pinned here rather than "fixed".
 func TestMapSignInAgainstLiveInteractiveRecord(t *testing.T) {
-	id, ev := mapSignIn(decodeLive(t, liveInteractiveSignIn))
+	// Bound exactly as the interactive stream binds it, so this exact-set guard
+	// covers what actually ships rather than a configuration nothing uses.
+	id, ev := mapSignInFor("interactiveUser")(decodeLive(t, liveInteractiveSignIn))
 
 	if id != "d70d10b6-221a-4840-899d-87ee20ff5900" {
 		t.Errorf("dedupe id = %q, want the record's immutable sign-in id", id)
@@ -184,6 +191,7 @@ func TestMapSignInAgainstLiveInteractiveRecord(t *testing.T) {
 		"resource_id",
 		"risk_level_during_sign_in",
 		"risk_state",
+		"sign_in_event_types",
 		"status_error_code",
 		"status_failure_reason",
 		"user_id",
@@ -384,7 +392,7 @@ func TestMapSignInUserSignInSuccess(t *testing.T) {
 		"signInEventTypes":        []any{"interactiveUser"},
 		"status":                  map[string]any{"errorCode": float64(0)},
 	}
-	id, ev := mapSignIn(rec)
+	id, ev := mapSignIn(rec, "")
 	if id != "sign-in-1" {
 		t.Fatalf("dedupe id = %q, want sign-in-1", id)
 	}
@@ -417,7 +425,7 @@ func TestMapSignInFailureIsWarn(t *testing.T) {
 		"appDisplayName":    "Office",
 		"status":            map[string]any{"errorCode": float64(50126), "failureReason": "Invalid credentials"},
 	}
-	_, ev := mapSignIn(rec)
+	_, ev := mapSignIn(rec, "")
 	if ev.Severity != 1 { // SeverityWarn
 		t.Errorf("failed sign-in severity = %v, want Warn", ev.Severity)
 	}
@@ -443,7 +451,7 @@ func TestMapSignInServicePrincipalOmitsUserPrincipalName(t *testing.T) {
 		"resourceDisplayName":  "Microsoft Graph",
 		"status":               map[string]any{"errorCode": float64(0)},
 	}
-	_, ev := mapSignIn(rec)
+	_, ev := mapSignIn(rec, "")
 	if _, present := ev.Attrs["user_principal_name"]; present {
 		t.Errorf("service-principal sign-in must not carry user_principal_name, attrs=%v", ev.Attrs)
 	}
@@ -572,3 +580,40 @@ func TestCollectorDrainsEmitsAndPersistsWatermark(t *testing.T) {
 // margin the engine trails the watermark by when EndpointConfig.SafetyLag is
 // left at its default.
 const logpipelineDefaultSafetyLag = 15 * time.Minute
+
+// TestMapSignInForStampsStreamEventTypeWhenWireOmitsIt pins #418. The v1.0
+// default collection carries no `signInEventTypes` (see
+// TestLiveInteractiveRecordCarriesNoSignInEventTypes), so the interactive
+// stream used to emit records with no `sign_in_event_types` at all while the
+// three blob/beta streams always carry it. That asymmetry is silent and
+// detection-blocking: a query written against live data from the other three
+// streams looks correct and matches zero interactive sign-ins.
+//
+// The stream itself knows which slice it polls, so it supplies the value the
+// wire omits. The wire still wins whenever it is present, so a future v1.0 that
+// starts returning the property is picked up with no code change.
+func TestMapSignInForStampsStreamEventTypeWhenWireOmitsIt(t *testing.T) {
+	_, ev := mapSignInFor("interactiveUser")(decodeLive(t, liveInteractiveSignIn))
+
+	got, ok := ev.Attrs[semconv.AttrSignInEventTypes]
+	if !ok {
+		t.Fatalf("sign_in_event_types absent; want it stamped from the stream's own slice")
+	}
+	if !reflect.DeepEqual(got, []string{"interactiveUser"}) {
+		t.Errorf("sign_in_event_types = %#v, want []string{\"interactiveUser\"}", got)
+	}
+}
+
+// TestMapSignInForPrefersWireEventTypes guards the three beta streams: when the
+// record carries signInEventTypes, that value must win over the stream default,
+// so a mislabelled stream can never overwrite what Graph actually said.
+func TestMapSignInForPrefersWireEventTypes(t *testing.T) {
+	rec := decodeLive(t, liveInteractiveSignIn)
+	rec["signInEventTypes"] = []any{"servicePrincipal"}
+
+	_, ev := mapSignInFor("interactiveUser")(rec)
+
+	if got := ev.Attrs[semconv.AttrSignInEventTypes]; !reflect.DeepEqual(got, []string{"servicePrincipal"}) {
+		t.Errorf("sign_in_event_types = %#v, want the wire value to win", got)
+	}
+}

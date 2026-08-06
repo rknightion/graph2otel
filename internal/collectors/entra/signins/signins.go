@@ -84,6 +84,19 @@ var specs = []spec{
 	{name: "entra.signins.managed_identity", eventType: "managedIdentity", beta: true, checkpoint: "managedIdentity"},
 }
 
+// slice is the sign-in event type this stream represents, used to stamp
+// sign_in_event_types when the wire omits it (#418). It is DERIVED from
+// eventType rather than restated, so the stamped value cannot drift from the
+// filter the stream actually sends. The one stream with no filter is the v1.0
+// default collection, which is the interactive slice by definition — that is
+// exactly what `eventType: ""` means in specs below.
+func (s spec) slice() string {
+	if s.eventType != "" {
+		return s.eventType
+	}
+	return "interactiveUser"
+}
+
 // collectorImpl is one sign-in WindowCollector: the generic LogCollector plus
 // the license and beta-opt-in declarations the composition root gates on.
 type collectorImpl struct {
@@ -113,7 +126,7 @@ func newCollector(s spec, d collectors.WindowDeps) *collectorImpl {
 		TimeField:       "createdDateTime",
 		Flavor:          logpipeline.FlavorGeLe,
 		OrderByReliable: true, // $orderby createdDateTime asc is reliable on signIns
-		Map:             mapSignIn,
+		Map:             mapSignInFor(s.slice()),
 	}
 	if s.eventType != "" {
 		cfg.BaseURLOverride = betaBaseURL
@@ -133,12 +146,28 @@ func newCollector(s spec, d collectors.WindowDeps) *collectorImpl {
 	return &collectorImpl{LogCollector: lc, beta: s.beta}
 }
 
+// mapSignInFor binds a stream's own sign-in event type to the shared mapper.
+// The v1.0 default collection carries no `signInEventTypes` property at all
+// (pinned by TestLiveInteractiveRecordCarriesNoSignInEventTypes; $select-ing it
+// on v1.0 returns 400 while beta returns 200), so without this the interactive
+// stream would be the one stream of four whose records lack the attribute —
+// silently unmatched by any query that identifies a slice by event type (#418).
+// The stream knows which slice it polls, so it supplies what the wire omits.
+// streamEventType is "" for a stream that has no single slice, which leaves the
+// old wire-only behavior untouched.
+func mapSignInFor(streamEventType string) func(map[string]any) (string, telemetry.Event) {
+	return func(rec map[string]any) (string, telemetry.Event) {
+		return mapSignIn(rec, streamEventType)
+	}
+}
+
 // mapSignIn turns one raw signIn record into its dedupe id (the immutable
 // sign-in id) and the OTLP log Event. It sets only the attributes actually
 // present, so a service-principal or managed-identity sign-in (no
 // userPrincipalName) simply omits that attribute rather than emitting an empty
-// one. The same signIn resource shape serves all four streams.
-func mapSignIn(rec map[string]any) (string, telemetry.Event) {
+// one. The same signIn resource shape serves all four streams; streamEventType
+// is the caller's slice, applied only where the wire omits signInEventTypes.
+func mapSignIn(rec map[string]any, streamEventType string) (string, telemetry.Event) {
 	id := str(rec, "id")
 
 	attrs := telemetry.Attrs{}
@@ -161,8 +190,13 @@ func mapSignIn(rec map[string]any) (string, telemetry.Event) {
 	if loc := nested(rec, "location"); loc != nil {
 		telemetry.SetStr(attrs, semconv.AttrLocationCountryOrRegion, str(loc, "countryOrRegion"))
 	}
+	// The wire always wins, so a future v1.0 that starts returning the property
+	// is picked up with no code change, and a mislabelled stream can never
+	// overwrite what Graph actually said.
 	if types := strSlice(rec, "signInEventTypes"); len(types) > 0 {
 		attrs[semconv.AttrSignInEventTypes] = types
+	} else if streamEventType != "" {
+		attrs[semconv.AttrSignInEventTypes] = []string{streamEventType}
 	}
 
 	// status is a nested object with a numeric errorCode; 0 means success.

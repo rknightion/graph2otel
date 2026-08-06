@@ -602,7 +602,7 @@ func TestBlobAndPolledSignInDifferOnlyByIngestTransport(t *testing.T) {
 		TimeField:       "createdDateTime",
 		Flavor:          logpipeline.FlavorGeLe,
 		OrderByReliable: true,
-		Map:             mapSignIn,
+		Map:             mapSignInFor(""),
 	}
 	from := time.Date(2026, 7, 16, 15, 0, 0, 0, time.UTC)
 	fetcher := pageFetcherFunc(func(context.Context, string) ([]map[string]any, string, error) {
