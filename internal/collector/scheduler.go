@@ -550,7 +550,17 @@ func (s *Scheduler) runWindow(
 		s.reportCheckpointPersistError(c.Name(), "checkpoint persist failed", err)
 		return nil
 	}
-	if hasColdTarget && !hwm.Before(coldTarget) {
+	// Completion is a property of the WINDOW that was polled, not of the
+	// watermark it produced (#417). A collector's high-water mark deliberately
+	// trails its window's upper bound — every logpipeline collector returns
+	// `to - SafetyLag` — so testing `hwm >= coldTarget` is unsatisfiable for any
+	// non-zero SafetyLag: the target stayed set, windowNow stayed pinned to it,
+	// and the collector re-polled one frozen window forever while reporting
+	// healthy. `to` is capped at coldTarget while the target is set, so
+	// `to >= coldTarget` means this slice was the final one and the backfill has
+	// covered everything up to the frozen target. The scheduler deliberately
+	// does not need to know a collector's SafetyLag to decide this.
+	if hasColdTarget && !to.Before(coldTarget) {
 		if err := s.clearColdStartTarget(coldTargetKey, coldTarget); err != nil {
 			s.reportCheckpointPersistError(c.Name(), "cold-start target clear failed", err)
 			return fmt.Errorf("clear cold-start target: %w", err)

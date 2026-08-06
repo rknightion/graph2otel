@@ -359,3 +359,71 @@ func TestScheduler_ColdStartShutdownKeepsTargetForRestart(t *testing.T) {
 		t.Fatalf("shutdown keys = %q, want retained cold target only", store.Keys())
 	}
 }
+
+// TestScheduler_ColdStartTargetClearsWhenWatermarkTrailsBySafetyLag pins the
+// #417 livelock. Every logpipeline collector returns `to - SafetyLag` as its
+// high-water mark, never `to`, because the watermark deliberately trails the
+// window's upper bound. The cold-start completion test used to compare that
+// trailing watermark against the frozen target, so with a non-zero SafetyLag it
+// could never be satisfied: the target stayed set, windowNow stayed pinned to
+// it, and the collector re-polled one fixed window forever. Eight collectors on
+// the live tenant sat on the same 15-minute window for 11 days, fetching and
+// deduping the same records and emitting nothing while reporting healthy.
+//
+// The fake here returns `to - safetyLag` precisely because the pre-existing
+// cold-start tests return `to` — a collector shape no real collector has, which
+// is why they stayed green over the bug.
+func TestScheduler_ColdStartTargetClearsWhenWatermarkTrailsBySafetyLag(t *testing.T) {
+	const safetyLag = 15 * time.Minute
+	now := time.Unix(1_700_000_000, 0).UTC()
+	store := collector.NewMemoryStore()
+	var windows [][2]time.Time
+	var classes []telemetry.TrafficClass
+	entry := collector.Entry{
+		Collector: winFunc{
+			name: "signins",
+			def:  time.Minute,
+			fn: func(_ context.Context, from, to time.Time, _ telemetry.Emitter, outcomes *recordoutcome.Recorder) (time.Time, error) {
+				windows = append(windows, [2]time.Time{from, to})
+				outcomes.Add(recordoutcome.OutcomeFetched, 1)
+				outcomes.Add(recordoutcome.OutcomeMapped, 1)
+				outcomes.Add(recordoutcome.OutcomeDeduped, 1)
+				return to.Add(-safetyLag), nil
+			},
+		},
+		Interval:        time.Minute,
+		InitialLookback: time.Hour,
+	}
+	sched := collector.NewScheduler(
+		telemetrytest.New().Emitter(),
+		store,
+		collector.WithClock(func() time.Time { return now }),
+		collector.WithEmitterFactory(func(a telemetry.Attribution) telemetry.Emitter {
+			classes = append(classes, a.TrafficClass)
+			return telemetrytest.New().Emitter()
+		}),
+	)
+	var lastSuccess time.Time
+	for range 3 {
+		sched.RunTick(context.Background(), entry, &lastSuccess)
+	}
+
+	// The backfill covers everything up to the frozen target on the first tick,
+	// so tick two onwards must be steady state.
+	if len(classes) < 2 || classes[1] != telemetry.TrafficClassSteadyState {
+		t.Fatalf("traffic classes = %v, want steady state from the second tick", classes)
+	}
+	for _, key := range store.Keys() {
+		if key == "signins" {
+			continue
+		}
+		marker, ok := store.Get(key)
+		if ok && !marker.IsZero() {
+			t.Fatalf("cold-start target %q = %v, want cleared once the window reached it", key, marker)
+		}
+	}
+	// The livelock's signature: the same window polled over and over.
+	if len(windows) > 1 && windows[1] == windows[0] {
+		t.Fatalf("window repeated: %v then %v — collector is stuck on one range", windows[0], windows[1])
+	}
+}
