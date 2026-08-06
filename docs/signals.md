@@ -338,6 +338,50 @@ A related query-side footgun that caused one of those wrong readings: `count_ove
 looks back only 24h, so records timestamped 2–3 days ago are excluded **by the query**, not
 missing from the store. Widen the range before drawing a conclusion.
 
+## Oversized records: attributes are clipped, never dropped
+
+Loki caps one entry's **structured metadata** at **65536 bytes** — the sum of every key's and
+every value's length, counted across the record's own attributes *and* the resource attributes
+the OTLP translation folds into the same entry. An entry over that limit is refused per-entry
+with an HTTP 400, exactly like the too-old case above:
+
+```text
+400 Bad Request: stream '{service_name="graph2otel"}' has structured metadata too large:
+'135305' bytes, limit: '65536' bytes
+```
+
+`[live-measured 2026-08-06, #419]` — two such rejections in 24h on m7kni, at 135305 and 74478
+bytes. Nothing retried them, and nothing counted them: the loss happens **after** the emitter,
+so `graph2otel_record_outcomes_total` had already counted the record as `emitted` and
+`graph2otel_collector_availability` stayed healthy. The SDK error line was the only trace.
+
+graph2otel now clips at the emitter boundary instead. A record whose attributes exceed
+`telemetry.MaxAttributeBytes` (60000 — the limit less the live-measured 627–653 bytes of
+resource/scope overhead the guard cannot see, plus margin) has its **largest values shortened
+to a single common ceiling**, so every attribute survives and every small one survives intact.
+The record is delivered, degraded — never dropped. This is the #114 rule applied inside a
+record: undeliverable-as-is is degraded, and only *wrong* justifies a drop.
+
+A clipped record says so on itself:
+
+| attribute | meaning |
+| --- | --- |
+| `attrs_truncated` | `"true"` — set only when a clip happened, never `"false"` |
+| `attrs_truncated_bytes` | how many bytes of value content this record lost |
+| `attrs_truncated_keys` | comma-joined names of the attributes that were shortened |
+| `attrs_dropped` | count of attributes removed outright — only in the pathological case where the KEYS alone exceed the budget |
+
+Find them, and the field that is too big, with:
+
+```logql
+{service_name="graph2otel"} | attrs_truncated = "true"
+```
+
+The rate is on `graph2otel_event_attrs_truncated_total`, sliced by `tenant_id`, `collector`
+and `ingest_transport` (Self-obs board, "Record size limit"). A collector that appears there
+consistently has a source field that genuinely does not fit, and wants a cap at its mapper —
+where the mapper can decide *what* to keep — rather than a blind byte cut at the boundary.
+
 ## Event time and dedupe are transport contracts
 
 An event record must carry a parseable source event time. The log, async-job, blob, and

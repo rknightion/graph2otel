@@ -3,6 +3,7 @@ package telemetry_test
 import (
 	"flag"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -102,6 +103,21 @@ func TestSignalGolden(t *testing.T) {
 	).LogEvent(telemetry.Event{
 		Name:      "entra.capture",
 		Timestamp: time.Unix(100, 0),
+	})
+
+	// Capture the attribute-clip counter (#419) for the same reason as the
+	// over-horizon counter above: it fires only on a record the backend would
+	// refuse for size, which no collector test produces, so without this seed the
+	// metric that reports content loss would be invisible to the coverage gate.
+	telemetry.WithAttributeBudget(
+		telemetry.WithTenant(metricOnlyEmitter{Emitter: selfObs.Emitter()}, "tenant-capture"),
+		telemetry.MaxAttributeBytes,
+		"entra.capture",
+		"tenant-capture",
+		telemetry.TransportGraph,
+	).LogEvent(telemetry.Event{
+		Name:  "entra.capture",
+		Attrs: telemetry.Attrs{"capture.oversized": strings.Repeat("x", telemetry.MaxAttributeBytes+1)},
 	})
 
 	if err := signalcapture.GoldenAt(

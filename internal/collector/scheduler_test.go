@@ -1376,3 +1376,46 @@ func assertMetricSeries(
 	}
 	t.Fatalf("%s has no series matching attrs %v; points=%v", name, wantAttrs, rec.MetricPoints(name))
 }
+
+// TestScheduler_ClipsOversizedRecordAttributes pins the #419 guard at the seam
+// that actually reaches every collector. The unit tests in internal/telemetry
+// prove the decorator clips; this proves the Scheduler puts it in the chain, and
+// with the collector's own attribution. Both halves are needed: a guard that
+// works and is not wired loses exactly as much data as no guard at all.
+func TestScheduler_ClipsOversizedRecordAttributes(t *testing.T) {
+	rec := telemetrytest.New()
+	s := collector.NewScheduler(rec.Emitter(), collector.NewMemoryStore(), collector.WithTenant("acme"))
+	oversized := strings.Repeat("x", 200_000)
+	entry := collector.Entry{
+		Collector: snapFunc{
+			name: "defender.device_event",
+			def:  time.Minute,
+			fn: func(_ context.Context, e telemetry.Emitter, _ *recordoutcome.Recorder) error {
+				e.LogEvent(telemetry.Event{
+					Name:  "defender.device_event",
+					Attrs: telemetry.Attrs{"additional_fields": oversized},
+				})
+				return nil
+			},
+		},
+		Interval: time.Minute,
+	}
+	var lastSuccess time.Time
+	s.RunTick(context.Background(), entry, &lastSuccess)
+
+	records := rec.LogRecords()
+	if len(records) != 1 {
+		t.Fatalf("got %d log records, want 1 — the record must survive clipped", len(records))
+	}
+	size := 0
+	for k, v := range records[0].Attrs {
+		size += len(k) + len(v)
+	}
+	if size >= 65536 {
+		t.Fatalf("record reaching the exporter carries %d bytes of attributes; Loki refuses at 65536", size)
+	}
+	assertGaugeAttrs(t, rec, "graph2otel.event.attrs_truncated", 1, map[string]string{
+		semconv.AttrCollector: "defender.device_event",
+		semconv.AttrTenantID:  "acme",
+	})
+}

@@ -1,6 +1,17 @@
 {
   "Metrics": [
     {
+      "Name": "graph2otel.event.attrs_truncated",
+      "Unit": "{record}",
+      "Kind": "sum",
+      "Description": "Log records whose attributes were clipped to fit the backend's structured-metadata size limit. The record was still delivered; some attribute content was not.",
+      "AttrKeys": [
+        "collector",
+        "ingest_transport",
+        "tenant_id"
+      ]
+    },
+    {
       "Name": "graph2otel.event.lag",
       "Unit": "s",
       "Kind": "histogram",

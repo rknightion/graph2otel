@@ -2328,6 +2328,23 @@
       ]
     },
     {
+      "name": "graph2otel.event.attrs_truncated",
+      "prometheus_name": "graph2otel_event_attrs_truncated_total",
+      "unit": "{record}",
+      "kind": "sum",
+      "description": "Log records whose attributes were clipped to fit the backend's structured-metadata size limit. The record was still delivered; some attribute content was not.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "collector",
+        "ingest_transport",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/telemetry"
+      ]
+    },
+    {
       "name": "graph2otel.event.lag",
       "prometheus_name": "graph2otel_event_lag_seconds",
       "unit": "s",

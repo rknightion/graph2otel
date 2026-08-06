@@ -110,6 +110,33 @@ const (
 	// existing metric changes that metric's series identity and would break
 	// dashboards and alerts built on the current names (#82).
 	AttrIngestTransport = "ingest_transport"
+
+	// AttrAttrsTruncated marks a log record whose attribute set was clipped at
+	// the emitter boundary to fit the backend's structured-metadata limit
+	// (#419). "true" or absent — a record is never marked "false", so
+	// `| attrs_truncated = "true"` finds every affected record with no
+	// negative-match subtlety.
+	//
+	// The mark is not decoration. A clipped value is shorter than the source
+	// field, and a reader who cannot tell that apart will read a truncated
+	// command line as the whole command line. Marking degradation is what makes
+	// degradation acceptable instead of a quiet lie.
+	AttrAttrsTruncated = "attrs.truncated"
+	// AttrAttrsTruncatedBytes is how many bytes of attribute value the clip
+	// removed from this record. It is the size of the loss, per record — the
+	// count of affected records lives on graph2otel.event.attrs_truncated.
+	AttrAttrsTruncatedBytes = "attrs.truncated_bytes"
+	// AttrAttrsTruncatedKeys names the attributes this record's clip shortened,
+	// comma-joined. This is the diagnostic that finally identifies an oversized
+	// record shape in production: the collector is on the metric, the offending
+	// FIELD is only here.
+	AttrAttrsTruncatedKeys = "attrs.truncated_keys"
+	// AttrAttrsDropped is how many attributes had to be removed outright because
+	// their KEYS alone exceeded the budget — a record of hundreds of attributes,
+	// where no amount of value clipping fits. Nonzero means this record is
+	// missing dimensions, not merely shortened ones, so it is a louder signal
+	// than AttrAttrsTruncated and absent on every ordinary clip.
+	AttrAttrsDropped = "attrs.dropped"
 )
 
 // UCUM units used by the telemetry package's self-observability metrics.

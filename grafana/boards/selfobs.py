@@ -67,6 +67,7 @@ SCRAPE_OUTCOMES = SELF_OBS["graph2otel.scrape.outcomes"].prom
 RECORD_OUTCOMES = SELF_OBS["graph2otel.record.outcomes"].prom
 EVENT_LAG = SELF_OBS["graph2otel.event.lag"].prom
 OVER_HORIZON = SELF_OBS["graph2otel.event.over_horizon"].prom
+ATTRS_TRUNCATED = SELF_OBS["graph2otel.event.attrs_truncated"].prom
 TYPE_MISMATCHES = SELF_OBS["graph2otel.payload.type_mismatches"].prom
 CHECKPOINT_ERRORS = SELF_OBS["graph2otel.checkpoint.persist.errors"].prom
 BUILD_INFO = SELF_OBS["graph2otel.build_info"].prom
@@ -599,6 +600,24 @@ def extra(b):
              "there is the leading indicator of this counter starting to move. Note "
              "that record_outcomes counts these as emitted, so this counter — not "
              "that one — is the authoritative statement that they did not land.",
+    )
+
+    b.row("Record size limit (#419)")
+    b.raw(
+        "Records whose attributes were clipped to fit the backend size limit",
+        [f"sum by (tenant_id, collector, ingest_transport) "
+         f"(increase({ATTRS_TRUNCATED}{_SEL}[{RATE}]))"],
+        legends=["{{tenant_id}} {{collector}} {{ingest_transport}}"],
+        desc="A nonzero value is CONTENT loss, not record loss: the record landed, "
+             "but one or more attribute values were shortened to keep the entry "
+             "under Loki's 64 KiB structured-metadata limit, which refuses an "
+             "oversized entry per-entry and loses it outright (#419). The record "
+             "itself carries attrs_truncated=\"true\", attrs_truncated_bytes, and "
+             "attrs_truncated_keys naming the fields that were shortened — query "
+             "'{service_name=\"graph2otel\"} | attrs_truncated = \"true\"' to see "
+             "which shape is oversized. A collector appearing here consistently is "
+             "one whose source field genuinely does not fit and may want a cap at "
+             "the mapper instead.",
     )
 
     for summary, target in [

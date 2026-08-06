@@ -479,9 +479,22 @@ func (s *Scheduler) runEmitter(attribution telemetry.Attribution) telemetry.Emit
 	// still measured as lag before being dropped: otherwise the one signal that
 	// explains why records are disappearing would go quiet at exactly the moment
 	// it matters.
+	//
+	// The attribute-budget guard sits INSIDE the horizon guard (#419), because a
+	// record the horizon is about to drop should not be clipped and counted as a
+	// truncation first — that would report content loss on a record nobody sends.
+	// It is here, and not in the composition root, for the same reason the other
+	// two are: this is the one seam that knows which collector produced the
+	// record, and a clip nobody can attribute to a collector cannot be acted on.
 	return telemetry.WithEventLag(
 		telemetry.WithEventHorizon(
-			e,
+			telemetry.WithAttributeBudget(
+				e,
+				telemetry.MaxAttributeBytes,
+				attribution.Collector,
+				attribution.TenantID,
+				attribution.Transport,
+			),
 			telemetry.EventHorizon,
 			attribution.Collector,
 			attribution.TenantID,

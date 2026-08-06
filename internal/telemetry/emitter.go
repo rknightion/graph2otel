@@ -351,24 +351,32 @@ func toLogKV(attrs Attrs) []attribute.KeyValue {
 	}
 	kvs := make([]attribute.KeyValue, 0, len(attrs))
 	for k, v := range attrs {
-		switch val := v.(type) {
-		case string:
-			kvs = append(kvs, attribute.String(k, val))
-		case bool:
-			kvs = append(kvs, attribute.Bool(k, val))
-		case int:
-			kvs = append(kvs, attribute.Int64(k, int64(val)))
-		case int64:
-			kvs = append(kvs, attribute.Int64(k, val))
-		case float64:
-			kvs = append(kvs, attribute.Float64(k, val))
-		case []string:
-			kvs = append(kvs, attribute.String(k, strings.Join(val, ",")))
-		default:
-			kvs = append(kvs, attribute.String(k, fmt.Sprint(val)))
-		}
+		kvs = append(kvs, logKV(k, v))
 	}
 	return kvs
+}
+
+// logKV converts one attribute to its OTEL log form. It is the single place the
+// value mapping lives, so the attribute-budget guard (attrbudget.go) can size a
+// value against exactly what the exporter will put on the wire rather than
+// against a second, drifting copy of these rules.
+func logKV(k string, v any) attribute.KeyValue {
+	switch val := v.(type) {
+	case string:
+		return attribute.String(k, val)
+	case bool:
+		return attribute.Bool(k, val)
+	case int:
+		return attribute.Int64(k, int64(val))
+	case int64:
+		return attribute.Int64(k, val)
+	case float64:
+		return attribute.Float64(k, val)
+	case []string:
+		return attribute.String(k, strings.Join(val, ","))
+	default:
+		return attribute.String(k, fmt.Sprint(val))
+	}
 }
 
 // buildAttrs converts attrs to OTEL metric attributes. graph2otel has no
