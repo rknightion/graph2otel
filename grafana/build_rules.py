@@ -619,6 +619,36 @@ RULES = [
         "the 'Backend accept window' panel, raise the threshold above it, then enable.",
         True,
     ),
+    _alert(
+        "g2o-otlp-delivery-failing",
+        "graph2otel OTLP export failing",
+        f'sum by (signal) (increase({_m("graph2otel.otlp.delivery.export_failures")}[15m]))',
+        "gt", [0], "0m",
+        {"severity": "warning", "category": "record-integrity", "source": "graph2otel"},
+        "graph2otel OTLP {{ $labels.signal }} export failing",
+        "The exporter's own callback reported that a batch did not reach the backend in the "
+        "last 15m. This is the most GENERAL data-loss signal graph2otel has: it fires on any "
+        "rejection class — a size limit, a label-count limit, an expired credential, a "
+        "payload cap, a limit the backend adds in future — with no requirement that anyone "
+        "predicted it first. The per-limit rules (g2o-record-attrs-truncated, "
+        "g2o-record-over-horizon) each guard ONE known limit; this one is the backstop "
+        "behind all of them, and it is what would have caught #419 on the day it started "
+        "instead of a container-log grep days later. Enabled at >0 with no baseline needed: "
+        "an export failure is never a normal steady state. Grouped by signal because a "
+        "metrics-side failure and a logs-side failure are different investigations. "
+        "Deliberately watches export_failures ONLY — shutdown_failures moves on an ordinary "
+        "restart, and a rule that fires on every deploy is a rule people learn to ignore. "
+        "KNOWN BLIND SPOT, and it is why a delivery alert was originally forbidden outright "
+        "(#268/#421): this rule's own evidence travels through the METRICS exporter, so it "
+        "cannot be the metrics-path watchdog and its SILENCE is not proof that delivery is "
+        "healthy. A total metrics outage takes the counter with it. That is what "
+        "g2o-collector-staleness, /readyz and the process-local admin status are for. What "
+        "this rule does cover is everything that reports itself: every logs-side failure "
+        "(the metrics path is healthy throughout, which is exactly how #419 stayed queryable "
+        "while being invisible), and every partial metrics-side rejection, whose accepted "
+        "batches carry the counter.",
+        False,
+    ),
 ]
 
 
@@ -1847,6 +1877,8 @@ DASHBOARD_TARGETS = {
         "Self-obs", "Records whose attributes were clipped to fit the backend size limit"),
     "g2o-record-over-horizon": (
         "Self-obs", "Records dropped as older than the backend accept window"),
+    "g2o-otlp-delivery-failing": (
+        "Self-obs", "Exporter callback rates by signal"),
     "g2o-detect-privileged-directory-change":
         ("Entra", "Top directory audit activities"),
     "g2o-detect-security-alert-unresolved":

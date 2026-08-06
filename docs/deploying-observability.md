@@ -2,12 +2,12 @@
 
 graph2otel ships two kinds of Grafana asset, each in its own top-level
 directory. The generated inventory is drift-gated at
-**1 dashboard, 17 alert rules, and 11 paused detection examples**:
+**1 dashboard, 18 alert rules, and 11 paused detection examples**:
 
 | Directory | Assets | Format | Target Grafana Cloud folder |
 | --- | --- | --- | --- |
 | `dashboards/` | 1 dashboard (**generated**) | Grafana **v2 dynamic dashboard** resource (`dashboard.grafana.app/v2`) | folder of your choice |
-| `alerts/rules/` | 17 alert rules (**generated**) | Grafana **App Platform** `AlertRule` (`rules.alerting.grafana.app/v0alpha1`) | `graph2otel` |
+| `alerts/rules/` | 18 alert rules (**generated**) | Grafana **App Platform** `AlertRule` (`rules.alerting.grafana.app/v0alpha1`) | `graph2otel` |
 | `alerts/rules/` | 11 detection examples (**generated**, all **paused**) | same, separate rule group | `graph2otel detections` |
 
 The `gcx` CLI is the reproducible deploy path documented here. There is **no
@@ -254,7 +254,7 @@ finer-grained receivers (for example `severity = critical` to a pager,
 everything else to chat) — those three labels are mandatory on every rule, so
 a route keyed on them never silently stops matching. `component` is present
 on two rules only; do not key a route on it without a fallback receiver for
-the other fifteen.
+the other sixteen.
 
 ## Recording rules: none, deliberately
 

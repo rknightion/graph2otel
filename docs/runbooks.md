@@ -362,6 +362,66 @@ rising p95 there is the leading indicator of this counter starting to move. A
 sudden step usually means a stalled collector resumed and is replaying a backlog
 that has aged out; check the collector's checkpoint rather than the alert.
 
+### g2o-otlp-delivery-failing
+
+The OTLP exporter's own callback reported that a batch did not reach the backend
+in the last 15 minutes, for the named `signal` (`logs` or `metrics`).
+
+**No data:** `OK`.
+
+**Evaluator error:** `Error`.
+
+**False positives:** none. An export failure is never a normal steady state. A
+single transient network blip can produce one, and the SDK retries transport
+errors — so one isolated firing that does not recur is worth a glance, not an
+investigation. A sustained or repeating count is real, unrecovered loss.
+
+**This is the generic backstop, and that is the point.** `g2o-record-attrs-truncated`
+and `g2o-record-over-horizon` each guard one *known* backend limit. This rule
+fires on **any** rejection class — a size limit, a label-count limit, an expired
+credential, a payload cap, a limit the backend introduces next year — without
+anyone having predicted it. Treat the per-limit rules as diagnostics that tell
+you *which* limit; treat this one as the thing that tells you a limit exists at
+all. It is what would have caught
+[#419](https://github.com/rknightion/graph2otel/issues/419) on the day it began,
+rather than days later by grepping container logs.
+
+**Known blind spot — this rule's silence is not proof of health.** Its own
+evidence travels through the **metrics** exporter, so a *total* metrics outage
+takes the counter with it and this rule goes quiet at exactly the wrong moment.
+It cannot be the metrics-path watchdog; `g2o-collector-staleness`, `/readyz` and
+the process-local admin status are. This limitation is why a delivery alert was
+originally forbidden outright
+([#268](https://github.com/rknightion/graph2otel/issues/268)), and #421 narrowed
+that ban to what the reason actually supports: everything that *reports itself*
+is worth alerting on, and that is most of it — every logs-side failure (the
+metrics path is healthy throughout, which is exactly how #419's failures stayed
+queryable while being invisible), and every partial metrics-side rejection, whose
+accepted batches carry the counter.
+
+**Remediation:** the rejection reason is not in the metric — it is in the
+process's stderr, on the `otel sdk error` line, which quotes the backend's
+response body verbatim:
+
+```bash
+docker compose logs --since 1h 2>&1 | grep "otel sdk error"
+```
+
+That body names the limit and the measured value. From there:
+
+- a **size** rejection means an oversized record the emitter budget did not
+  catch — check `g2o-record-attrs-truncated` and `MaxAttributeBytes`;
+- a **timestamp** rejection means the horizon guard is set wider than the
+  backend's real accept window — see `g2o-record-over-horizon`;
+- a **401/403** is a credential problem, not a data problem;
+- anything else is a limit graph2otel does not yet model, and wants an issue
+  rather than a threshold change.
+
+Cross-check **Self-obs → OTLP delivery** for whether the degradation cleared: the
+`degraded` gauge is 1 only while the latest failure has not been followed by a
+successful export, so a 0 there with a nonzero counter here means the exporter
+recovered but records in the failed batch are still gone.
+
 ### g2o-payload-type-mismatch
 
 A source-controlled optional field arrived with a different JSON type than the

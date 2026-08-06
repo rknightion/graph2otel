@@ -599,11 +599,39 @@ class TestOTLPDeliveryPanels(unittest.TestCase):
                 )
                 self.assertIn("by (signal)", expr)
 
-    def test_no_delivery_alert_is_added(self):
-        # Recording rules were retired entirely by #297, so RULES is the whole
-        # generated rule surface this has to stay out of.
-        rendered = json.dumps({"alerts": build_rules.RULES})
-        self.assertNotIn("graph2otel_otlp_delivery_", rendered)
+    def test_a_delivery_alert_states_its_self_reporting_blind_spot(self):
+        """Superseded #421. This gate used to forbid a delivery alert outright.
+
+        The reason it existed is real and is preserved below: the delivery
+        metrics travel through the METRICS exporter, so they can be unobservable
+        in the backend at exactly the moment metrics delivery is failing. A rule
+        built on them therefore cannot be the metrics-path watchdog, and the
+        original gate stopped anyone believing otherwise.
+
+        What the blanket ban ALSO stopped was the case that actually happened.
+        #419 lost log records to per-entry HTTP 400s for days, visible only in
+        container logs, while ``export_failures{signal="logs"}`` recorded them
+        perfectly — the metrics path was healthy throughout, so the failure was
+        queryable the whole time. A partial metrics-side rejection reports itself
+        for the same reason: the accepted batches carry the counter.
+
+        So the ban is narrowed to what its reason supports. A delivery rule is
+        allowed, and MUST carry the blind spot in its own description, because
+        the failure mode this gate was built around is a responder trusting the
+        rule's silence. Recording rules were retired entirely by #297, so RULES
+        is the whole generated rule surface.
+        """
+        delivery = [r for r in build_rules.RULES
+                    if "graph2otel_otlp_delivery_" in json.dumps(r)]
+        for rule in delivery:
+            with self.subTest(uid=rule["uid"]):
+                description = rule["annotations"]["description"]
+                self.assertIn(
+                    "cannot be the metrics-path watchdog", description,
+                    f"{rule['uid']}: a delivery rule must state that its own evidence "
+                    "travels through the metrics exporter, so silence from it is not "
+                    "proof that delivery is healthy",
+                )
 
     def test_docs_define_the_callback_boundary_and_local_fallbacks(self):
         path = os.path.join(os.path.dirname(GRAFANA), "docs", "signals.md")

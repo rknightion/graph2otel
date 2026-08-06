@@ -423,6 +423,52 @@ it ships paused.
 and ingest transport. Neither metric contains source record identifiers or
 values.
 
+## Doc block 8 — OTLP delivery failure
+
+**Rules:** `g2o-otlp-delivery-failing` (default-enabled).
+
+**What/why:** doc blocks 6 and 7 account for records lost before they were sent,
+and for the two backend limits graph2otel knows about by name. This rule watches
+`graph2otel_otlp_delivery_export_failures_total`, the exporter's own report that
+a batch it built did not reach the backend at all — the most general data-loss
+signal the process has.
+
+It matters because it needs no foresight. The per-limit rules in doc block 7 each
+guard one limit somebody already discovered the hard way. This one fires on any
+rejection class — a size limit, a label-count limit, an expired credential, a
+payload cap, a limit the backend adds in a future release — the first time it
+happens. It is the difference between a guard and a lesson.
+
+**Threshold rationale:** `gt 0`, `for: 0m`, over a 15-minute window, enabled by
+default. No baseline is needed because an export failure is never a normal steady
+state. Grouped by `signal` (`logs`/`metrics`) rather than by tenant: the exporter
+is process-wide, and the two signals fail for different reasons and lead to
+different investigations.
+
+It watches `export_failures` **only**. `shutdown_failures` moves on an ordinary
+restart and `force_flush_failures` is a shutdown-path concern; folding either in
+would make the rule fire on every deploy, and a rule that fires on correct
+behaviour is one people learn to ignore. Both remain panel-only.
+
+**Known blind spot, stated rather than hidden:** these delivery metrics travel
+through the metrics exporter, so they can be unobservable in the backend at
+exactly the moment metrics delivery is failing. This rule therefore **cannot be
+the metrics-path watchdog**, and its silence is not evidence of health — a total
+metrics outage takes the counter with it. `g2o-collector-staleness`, `/readyz`
+and the process-local admin status cover that case. This limitation is why a
+delivery alert was originally forbidden outright (#268); #421 narrowed the ban to
+what the reason supports, because everything that reports itself is still worth
+alerting on: every logs-side failure, and every partial metrics-side rejection.
+
+**False positive looks like:** a single isolated firing from a transient network
+error the SDK then retried successfully. Worth a glance, not an investigation —
+check whether the `degraded` gauge cleared. A repeating or sustained count is
+real loss.
+
+**Applicability:** process-wide, every deployment, both signals. The metric
+carries no source record identifiers or values; the rejection reason lives in the
+process's `otel sdk error` log line, not in the metric.
+
 ## Detection examples — rule group `graph2otel-detections` (all paused)
 
 Eleven **portable security detections** built on graph2otel's log signals, generated into
