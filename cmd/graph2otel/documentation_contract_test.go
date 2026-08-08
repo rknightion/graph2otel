@@ -150,7 +150,7 @@ func TestArchitectureDocumentsCurrentTransportSeams(t *testing.T) {
 }
 
 func TestDocsSiteNavigationIncludesShippedIngestAndGeneratedReferences(t *testing.T) {
-	nav := readProjectDoc(t, "../../zensical.toml")
+	nav := readProjectDoc(t, "../../docs.toml")
 	for _, page := range []string{
 		"collectors.md",
 		"env-vars.md",
