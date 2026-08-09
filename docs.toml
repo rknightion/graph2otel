@@ -31,6 +31,9 @@ Home = "index.md"
 Configuration = "configuration.md"
 
 [[site.nav]]
+FAQ = "faq.md"
+
+[[site.nav]]
 "How It Works" = [
     { Architecture = "architecture.md" },
     { "Why This Exporter" = "comparison.md" },
@@ -59,7 +62,11 @@ Operations = [
     { "Deploying Observability" = "deploying-observability.md" },
     { Runbooks = "runbooks.md" },
     { "Hunting Queries" = "hunting.md" },
+    { Troubleshooting = "troubleshooting.md" },
 ]
+
+[[site.nav]]
+Changelog = "changelog.md"
 
 [assets]
 social_image = "assets/social-card.png"
