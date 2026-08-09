@@ -311,7 +311,7 @@ and rates for the schedule being modelled:
 - `budget_microunits` — a nonnegative comparison value for the projection
   period. `0` disables the comparison. The same Helm exact-integer cap applies.
 
-A microunit is \(10^{-6}\) of the configured currency unit. Integer rates and
+A microunit is 10⁻⁶ of the configured currency unit. Integer rates and
 integer arithmetic keep the result exact at that scale without presenting
 floating-point rounding as a billing fact.
 

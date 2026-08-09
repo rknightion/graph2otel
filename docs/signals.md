@@ -991,7 +991,7 @@ boundary.
 
 Cost projection is off unless the operator enables `cost` and supplies the complete,
 versioned rate schedule described in [Configuration](configuration.md#cost). graph2otel
-embeds no vendor prices. One microunit is \(10^{-6}\) of the configured currency unit.
+embeds no vendor prices. One microunit is 10⁻⁶ of the configured currency unit.
 
 For an observed interval, the source-record, metric-point, and log-record components use
 the exact logical deltas above. Metric payload bytes are allocated over metric points and
