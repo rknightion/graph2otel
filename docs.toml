@@ -33,6 +33,7 @@ Configuration = "configuration.md"
 [[site.nav]]
 "How It Works" = [
     { Architecture = "architecture.md" },
+    { "Why This Exporter" = "comparison.md" },
     { "Data-plane Registration" = "data-plane-registration.md" },
     { "Blob Ingest" = "blob-ingest.md" },
     { "O365 Management Activity API" = "o365-management-api.md" },
