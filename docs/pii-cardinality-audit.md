@@ -2,8 +2,8 @@
 
 Audits every metric label set and every log attribute emitted by every shipped
 collector against the cardinality boundary rule in `CLAUDE.md` and `SECURITY.md`,
-and reviews the Graph API permission scopes each collector requests. Tracks issue
-#33; a completed pass is a prerequisite for the v1.0.0 tag (#35).
+and reviews the Graph API permission scopes each collector requests. Tracks issue #33;
+a completed pass is a prerequisite for the v1.0.0 tag (#35).
 
 The audit was run against the **actual** collector source and live-emitted
 telemetry (the M2–M5 stdout OTLP captures), not the documentation's aspirational

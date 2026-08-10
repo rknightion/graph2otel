@@ -11,8 +11,8 @@ This page is the operator procedure for that second half, and the diagnostic tha
 whether you need it. Read it **before** granting `eDiscovery.Read.All` — the grant alone
 will not produce data, and the failure gives you nothing to work with.
 
-**Evidence tags**, as in [graph-api-gotchas.md](graph-api-gotchas.md): `[live YYYY-MM-DD,
-#issue]` was measured on the wire against a real tenant under the poller's own identity;
+**Evidence tags**, as in [graph-api-gotchas.md](graph-api-gotchas.md): `[live YYYY-MM-DD, #issue]`
+was measured on the wire against a real tenant under the poller's own identity;
 `[docs-only]` is believed from Microsoft's documentation and cheap to re-open; `[n=1]` is a
 single observation; `[unverified]` is not established either way. Microsoft's documentation
 has been wrong on essentially every load-bearing detail on this path — **wire over docs**.
