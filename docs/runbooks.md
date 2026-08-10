@@ -701,24 +701,54 @@ small tenant; measure your own per-application 403 baseline before enabling.
 
 ### g2o-detect-interactive-signin-anomaly
 
-A real user sign-in that Conditional Access blocked, or that Entra ID Protection
+A real user sign-in that Conditional Access refused, or that Entra ID Protection
 scored `atRisk` or `confirmedCompromised`.
+
+Error `50097` "Device authentication is required" is **excluded from the CA limb
+by default**. A **report-only** Conditional Access policy is still evaluated, and
+a report-only grant the device cannot satisfy makes Entra stamp
+`conditional_access_status=failure` with `50097` on a sign-in that nothing
+blocked. Measured on a live tenant (2026-08-10): all 6 interactive `50097`
+records in 30 days had every *enforced* policy returning `success`, the only
+non-success entry a report-only compliant-device grant, and a success record
+under the **same `correlation_id`** about one second later. Report-only is the
+documented way to stage a CA policy, so any tenant rolling one out produces this.
 
 **No data:** `OK`.
 
 **Evaluator error:** `Error`.
 
 **False positives:** Conditional Access failures include ordinary events such as
-a user declining an MFA prompt, so on most tenants this needs a threshold above
-zero or a narrowing to `risk_state` alone. The risk states require Entra ID P2.
+a user declining or fumbling an MFA prompt, so even after the `50097` exclusion
+most tenants need a threshold above zero or a narrowing to `risk_state` alone.
+The risk states require Entra ID P2.
 
-**Remediation:** check `user_principal_name`, `app_display_name` and `ip_address`
-on the record. Panel:
-**Entra → Logs → Failed sign-ins**. The tenant this rule came from adds a third
-clause for sign-ins outside its expected country; that is a per-tenant policy
-statement rather than a portable default, so it is not shipped — add an OR term
-filtering `location_country_or_region` against your own country code if you want
-it.
+**False negatives — read before enabling on a tenant that enforces device
+compliance.** A `50097` that is *not* followed by a success is a genuine block,
+and on a tenant enforcing a compliant-device or hybrid-join grant that is the
+normal case. Loki cannot join two records on `correlation_id`, so **the rule
+cannot tell an interrupt from a block** — the same limitation that keeps
+impossible travel out of this pack. Put `50097` back if you enforce such a grant.
+
+**Remediation:** check `user_principal_name`, `app_display_name`,
+`status_error_code` and `ip_address` on the record, then read
+`appliedConditionalAccessPolicies` on the sign-in in Entra to find *which* policy
+returned `failure` — graph2otel does not export that field, and without it a CA
+failure names no policy. A `result` of `reportOnlyFailure` there means the policy
+did not block anything. Panel:
+**Entra → Logs → Failed sign-ins**. Before enabling, run
+[Which Conditional Access failures does your tenant produce, by error code](hunting.md)
+to confirm the exclusion fits your tenant and to measure what is left. That hunt
+uses a 14-day window on purpose: a `[30d]` `count_over_time` exceeds the max query
+range on at least one Grafana Cloud Loki stack and returns **empty rather than an
+error**, which reads as a clean tenant. The tenant
+this rule came from adds a third clause for sign-ins outside its expected
+country; that is a per-tenant policy statement rather than a portable default, so
+it is not shipped — add an OR term filtering `location_country_or_region` against
+your own country code if you want it, and guard it with a presence check
+(`location_country_or_region != ""`) too, because Loki reads a missing label as
+the empty string and a bare `!=` fires on records carrying no location rather
+than on foreign ones.
 
 ### g2o-detect-exchange-inbox-rule-change
 

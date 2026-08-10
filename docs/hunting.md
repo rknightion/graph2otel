@@ -71,6 +71,19 @@ sum by (client_app_used, status_error_code) (count_over_time({service_name="grap
 **Measurement for:** [`g2o-detect-legacy-auth-signin`](runbooks.md#g2o-detect-legacy-auth-signin), [`g2o-detect-interactive-signin-anomaly`](runbooks.md#g2o-detect-interactive-signin-anomaly)
 
 
+## Which Conditional Access failures does your tenant produce, by error code
+
+**Question:** Which error codes does Conditional Access actually refuse with here, and how often?
+
+```logql
+sum by (status_error_code, app_display_name) (count_over_time({service_name="graph2otel"} | event_name=`entra.signin` | sign_in_event_types=`interactiveUser` | conditional_access_status=`failure` [14d]))
+```
+
+**What to look for:** The window is 14d, not the 30d the rule's tuning note asks for, because a `[30d]` count_over_time exceeds the max query range on at least one Grafana Cloud Loki stack and comes back EMPTY rather than erroring — measured 2026-08-10, where 21d returned data and 30d returned nothing on the same stream. An empty result there is indistinguishable from a clean tenant, which is the exact trap this page exists to avoid; widen it only after checking your own backend answers at that range. The share of 50097 'Device authentication is required'. `g2o-detect-interactive-signin-anomaly` excludes it by default because a REPORT-ONLY policy still stamps `conditional_access_status=failure` on a sign-in it never blocked, and 50097 is the code it uses; on the tenant this was measured on it was 6 of 10 CA failures in 30 days and every one was followed by a success. Confirm that on your own tenant before trusting the exclusion: take a handful of 50097 records and read `appliedConditionalAccessPolicies` on each in Entra (graph2otel does not export it). If the only non-success entry is a `reportOnlyFailure`, the exclusion is right for you. If you ENFORCE a compliant-device or hybrid-join grant, it is not — put 50097 back, because there it is a real block. Whatever remains after that decision is the number your threshold has to clear.
+
+**Measurement for:** [`g2o-detect-interactive-signin-anomaly`](runbooks.md#g2o-detect-interactive-signin-anomaly)
+
+
 ## Where do your workload identities sign in from
 
 **Question:** Which source addresses does each service-principal sign-in come from?

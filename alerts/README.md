@@ -539,11 +539,28 @@ First wave (#300), adapted from detections running on a real tenant:
 | `g2o-detect-security-alert-unresolved` | an unresolved medium/high alert from **any** Microsoft source on the security API — Defender for Endpoint, Defender for Cloud Apps and Entra ID Protection all arrive on one stream |
 | `g2o-detect-security-incident-active` | an active medium/high **incident**, the correlation layer above alerts — deliberately overlapping with the row above |
 | `g2o-detect-graph-403-burst` | one application taking more than 10 Graph authorization denials in 5 minutes |
-| `g2o-detect-interactive-signin-anomaly` | a real user sign-in that Conditional Access blocked, or that Entra ID Protection scored `atRisk`/`confirmedCompromised` |
+| `g2o-detect-interactive-signin-anomaly` | a real user sign-in that Conditional Access refused, or that Entra ID Protection scored `atRisk`/`confirmedCompromised` |
 
 The activity list in the first rule is the genuinely valuable, tenant-independent part: reconstructing
 "which directory activities mean someone is establishing persistence" is the hard half of that
 detection, and it is the same list on every tenant.
+
+**The sign-in rule excludes Entra error `50097` from its Conditional Access limb by default (#426),
+and that exclusion is a portable finding rather than a tenant preference.** A **report-only** CA
+policy is still evaluated, and a report-only grant the device cannot satisfy makes Entra stamp
+`conditional_access_status=failure` with `50097` on a sign-in nothing blocked. Measured on a live
+tenant 2026-08-10: all 6 interactive `50097` records in 30 days had every *enforced* policy
+returning `success`, the only non-success entry a report-only compliant-device grant, and a success
+record under the **same `correlation_id`** about one second later. Report-only is the documented way
+to stage a CA policy, so this is how Entra behaves rather than how one tenant is configured — which
+is what separates it from the country clause two paragraphs down.
+
+It is a **default, not a proof**, and the reason is the same one that keeps impossible travel out of
+this pack: a `50097` with no following success *is* a real block, and **Loki cannot join the two
+records on `correlation_id`**, so the rule cannot tell an interrupt from a block. On a tenant that
+*enforces* a compliant-device or hybrid-join grant, put `50097` back. The hunt
+[Which Conditional Access failures does your tenant produce, by error code](../docs/hunting.md) is
+how you decide which of those you are, and it is named in the rule's `tuning_required`.
 
 Second wave (#313), each one keyed on an (event, attribute) pair no rule above already asks about:
 

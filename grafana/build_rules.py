@@ -904,9 +904,15 @@ DETECTIONS = [
     _loki_alert(
         "g2o-detect-interactive-signin-anomaly",
         "Interactive sign-in blocked by Conditional Access or flagged at risk",
+        # 50097 is excluded from the CA limb by default (#426). A report-only
+        # policy still stamps conditional_access_status=failure on a sign-in it
+        # never blocked, and 50097 is the code it does it with — see the tuning
+        # note. Loki cannot join the interrupt to its own success record, so the
+        # exclusion is a default for the common case, not a proof of safety.
         "("
         + _count("entra.signin", f("sign_in_event_types", "eq", "interactiveUser"),
-                 f("conditional_access_status", "eq", "failure"))
+                 f("conditional_access_status", "eq", "failure"),
+                 f("status_error_code", "ne", "50097"))
         + ") + ("
         + _count("entra.signin", f("sign_in_event_types", "eq", "interactiveUser"),
                  f("risk_state", "re", "atRisk|confirmedCompromised"))
@@ -914,17 +920,44 @@ DETECTIONS = [
         "gt", [0],
         {"severity": "critical", "source": "entra", "category": "identity-threat"},
         "An interactive sign-in was CA-blocked or risk-flagged",
-        "A real user sign-in that Conditional Access blocked, or that Entra ID "
+        "A real user sign-in that Conditional Access refused, or that Entra ID "
         "Protection scored atRisk or confirmedCompromised. Check "
-        "user_principal_name, app_display_name and ip_address on the record. The "
-        "tenant this came from adds a third clause for sign-ins outside its "
-        "expected country; that is a per-tenant policy statement rather than a "
-        "portable default, so it is not shipped. Add another OR term filtering "
-        "location_country_or_region against your own country code if you want it.",
-        "Conditional Access failures include ordinary events such as a user "
-        "declining an MFA prompt, so on most tenants this needs either a "
-        "threshold above zero or a narrowing to risk_state alone. Measure your CA "
-        "failure rate over 30 days first. Risk states require Entra ID P2.",
+        "user_principal_name, app_display_name, status_error_code and ip_address "
+        "on the record, then read appliedConditionalAccessPolicies on the sign-in "
+        "in Entra to see WHICH policy returned failure — graph2otel does not "
+        "export that field, and without it a CA failure names no policy. Error "
+        "50097 is excluded by default; the tuning note explains why and when to "
+        "put it back. The tenant this came from adds a third clause for sign-ins "
+        "outside its expected country; that is a per-tenant policy statement "
+        "rather than a portable default, so it is not shipped. Add another OR "
+        "term filtering location_country_or_region against your own country code "
+        "if you want it — and guard it with a presence check "
+        "(location_country_or_region != \"\") as well, because Loki reads a "
+        "missing label as the empty string and a bare != would fire on records "
+        "that carry no location rather than on foreign ones.",
+        "Two measurements, and one exclusion already made for you. Error 50097 "
+        "'Device authentication is required' is excluded from the CA limb by "
+        "default because it is usually not a refusal at all: a REPORT-ONLY "
+        "Conditional Access policy is still evaluated, and a report-only grant "
+        "that the device cannot satisfy makes Entra stamp "
+        "conditional_access_status=failure with 50097 on a sign-in nothing "
+        "blocked. Measured on a live tenant 2026-08-10: all 6 interactive 50097 "
+        "records in 30 days had every ENFORCED policy returning success, the only "
+        "non-success entry a report-only compliant-device grant, and a success "
+        "record under the SAME correlation_id about one second later. Since "
+        "report-only is the documented way to stage a CA policy, any tenant "
+        "rolling one out produces this. PUT 50097 BACK if your tenant ENFORCES a "
+        "compliant-device or hybrid-join grant: there a 50097 with no following "
+        "success is a real block, and Loki cannot join the two records on "
+        "correlation_id to tell the two apart — that join is why this is a "
+        "default rather than a proof. Then measure what remains: CA failures "
+        "include ordinary events such as a user declining or fumbling an MFA "
+        "prompt, so most tenants still need a threshold above zero or a narrowing "
+        "to risk_state alone. Run the sign-in error-code hunt for both numbers — "
+        "it uses a 14-day window because a 30-day count_over_time exceeds the max "
+        "query range on at least one Grafana Cloud Loki stack and returns EMPTY "
+        "rather than erroring, so scale what you measure rather than widening the "
+        "query blind. Risk states require Entra ID P2.",
     ),
     # --- Second wave (#313) --------------------------------------------------
     #
@@ -1188,6 +1221,38 @@ HUNTS = [
                  "and is a trend, not an incident.",
         unblocks=("g2o-detect-legacy-auth-signin",
                   "g2o-detect-interactive-signin-anomaly"),
+    ),
+    _hunt(
+        "Which Conditional Access failures does your tenant produce, by error code",
+        "entra.signin", f("sign_in_event_types", "eq", "interactiveUser"),
+        f("conditional_access_status", "eq", "failure"),
+        by="status_error_code, app_display_name", window="14d",
+        question="Which error codes does Conditional Access actually refuse with "
+                 "here, and how often?",
+        look_for="The window is 14d, not the 30d the rule's tuning note asks "
+                 "for, because a `[30d]` count_over_time exceeds the max query "
+                 "range on at least one Grafana Cloud Loki stack and comes back "
+                 "EMPTY rather than erroring — measured 2026-08-10, where 21d "
+                 "returned data and 30d returned nothing on the same stream. An "
+                 "empty result there is indistinguishable from a clean tenant, "
+                 "which is the exact trap this page exists to avoid; widen it "
+                 "only after checking your own backend answers at that range. "
+                 "The share of 50097 'Device authentication is required'. "
+                 "`g2o-detect-interactive-signin-anomaly` excludes it by default "
+                 "because a REPORT-ONLY policy still stamps "
+                 "`conditional_access_status=failure` on a sign-in it never "
+                 "blocked, and 50097 is the code it uses; on the tenant this was "
+                 "measured on it was 6 of 10 CA failures in 30 days and every one "
+                 "was followed by a success. Confirm that on your own tenant "
+                 "before trusting the exclusion: take a handful of 50097 records "
+                 "and read `appliedConditionalAccessPolicies` on each in Entra "
+                 "(graph2otel does not export it). If the only non-success entry "
+                 "is a `reportOnlyFailure`, the exclusion is right for you. If "
+                 "you ENFORCE a compliant-device or hybrid-join grant, it is not "
+                 "— put 50097 back, because there it is a real block. Whatever "
+                 "remains after that decision is the number your threshold has to "
+                 "clear.",
+        unblocks=("g2o-detect-interactive-signin-anomaly",),
     ),
     _hunt(
         "Where do your workload identities sign in from",
