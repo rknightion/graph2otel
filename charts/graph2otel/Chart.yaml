@@ -7,7 +7,8 @@ description: >-
 type: application
 version: 2.0.0
 appVersion: 2.0.0
-home: https://github.com/rknightion/graph2otel
+home: https://m7kni.io/graph2otel/
+icon: https://m7kni.io/graph2otel/assets/project-icon-solid.svg
 sources:
   - https://github.com/rknightion/graph2otel
 keywords:
@@ -24,3 +25,19 @@ keywords:
   - grafana-cloud
 maintainers:
   - name: rknightion
+annotations:
+  artifacthub.io/category: monitoring-logging
+  artifacthub.io/license: AGPL-3.0
+  artifacthub.io/prerelease: "false"
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://m7kni.io/graph2otel/
+    - name: Getting started
+      url: https://m7kni.io/graph2otel/getting-started/
+    - name: Configuration reference
+      url: https://m7kni.io/graph2otel/configuration/
+    - name: source
+      url: https://github.com/rknightion/graph2otel
+  artifacthub.io/maintainers: |
+    - name: rknightion
+      email: rob@rob-knight.com
