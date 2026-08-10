@@ -31,6 +31,16 @@
       ]
     },
     {
+      "Name": "graph2otel.collector.watermark_timestamp",
+      "Unit": "s",
+      "Kind": "gauge",
+      "Description": "Unix epoch seconds of each window collector's durable checkpoint watermark — the last fully-processed event time, which advances every poll even when the window drained no records. A value that stops advancing is a stalled window, not a quiet tenant.",
+      "AttrKeys": [
+        "collector",
+        "tenant_id"
+      ]
+    },
+    {
       "Name": "graph2otel.ingest.source_records",
       "Unit": "{record}",
       "Kind": "sum",

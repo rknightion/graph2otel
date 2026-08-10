@@ -14,7 +14,7 @@ metadata:
     grafana.com/provenance: "api"
   labels:
     grafana.com/group: "graph2otel-alerts"
-    grafana.com/group-index: "15"
+    grafana.com/group-index: "16"
 spec:
   title: "graph2otel clipped a record's attributes to fit the backend size limit"
   paused: false
@@ -32,8 +32,8 @@ spec:
     description: "At least one log record exceeded the backend's structured-metadata size limit in the last 15m and had its largest attribute values shortened to fit (#419). This is CONTENT loss, not record loss: the record landed, but one or more fields are truncated. Default-enabled at >0 for two reasons — the measured rate is 2-3 records per day, so it is not noisy, and the clipped record's attrs_truncated_keys is currently the ONLY way to identify which record shape is oversized, since #419's live-wire sweep cleared every reachable source. Treat the first firing as the diagnostic it is."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-record-attrs-truncated"
     __dashboardUid__: "graph2otel"
-    __panelId__: "484"
-    dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=484"
+    __panelId__: "485"
+    dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=485"
   expressions:
     A:
       model:

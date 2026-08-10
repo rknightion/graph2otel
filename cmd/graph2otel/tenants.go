@@ -786,6 +786,12 @@ func setupTenantWithGraphAndLicenseBuilders(
 		runPeriodicAvailability,
 		func() { _ = sched.Run(ctx, registry) },
 	)
+	// graph2otel.collector.watermark_timestamp (#422): the direct statement of
+	// the #417 stalled-window fault, which every counter-derived signal read as
+	// healthy for 11 days. This runs as its own worker rather than inside
+	// startTenantWorkers because it needs the registry, which the availability
+	// path does not — and the registry is final only here.
+	wg.Go(func() { runPeriodicWatermarks(ctx, registry, emitter, ta.TenantID) })
 
 	tlog.Info("tenant started", "collectors", len(registry.Entries()))
 	return admin.CollectorSource{

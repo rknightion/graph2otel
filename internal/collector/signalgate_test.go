@@ -43,6 +43,19 @@ func (c captureSnapshot) Collect(
 	return c.err
 }
 
+// captureWatermark stands in for an engine collector (logpipeline and friends)
+// that persists a window cursor and reports it through CheckpointReporter, so
+// the #422 watermark metric has something to publish in the signal golden.
+type captureWatermark struct{ captureSnapshot }
+
+func (captureWatermark) Name() string { return "capture.window_cursor" }
+func (captureWatermark) CheckpointState() *collector.CheckpointState {
+	return &collector.CheckpointState{
+		Kind:      collector.CheckpointKindWindow,
+		Watermark: time.Unix(1_700_000_001, 0).UTC(),
+	}
+}
+
 type captureWindow struct{}
 
 func (captureWindow) Name() string                   { return "capture.window" }
@@ -123,6 +136,16 @@ func TestSignalGolden(t *testing.T) {
 	intervalRegistry.RegisterWindow(captureWindow{}, 0, time.Hour, time.Hour)
 	intervalRegistry.EmitExpectedIntervals(expectedInterval.Emitter(), "capture-tenant")
 
+	// #422: graph2otel.collector.watermark_timestamp — one series per window
+	// collector that has drained a window, carrying the raw cursor as Unix epoch
+	// seconds. Only the CheckpointReporter contributes; captureSnapshot persists
+	// no cursor and must stay absent from the golden.
+	watermark := telemetrytest.New()
+	watermarkRegistry := collector.NewRegistry()
+	watermarkRegistry.Register(captureSnapshot{name: "capture.success"}, time.Minute)
+	watermarkRegistry.Register(captureWatermark{}, time.Minute)
+	watermarkRegistry.EmitWatermarkTimestamps(watermark.Emitter(), "capture-tenant")
+
 	if err := signalcapture.GoldenAt(
 		"testdata/signals.json",
 		*updateSignalGolden,
@@ -132,6 +155,7 @@ func TestSignalGolden(t *testing.T) {
 		checkpoint,
 		build,
 		expectedInterval,
+		watermark,
 	); err != nil {
 		t.Fatal(err)
 	}

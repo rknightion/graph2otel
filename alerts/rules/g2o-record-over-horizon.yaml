@@ -14,7 +14,7 @@ metadata:
     grafana.com/provenance: "api"
   labels:
     grafana.com/group: "graph2otel-alerts"
-    grafana.com/group-index: "16"
+    grafana.com/group-index: "17"
 spec:
   title: "graph2otel dropped records older than the backend accept window"
   paused: true
@@ -32,8 +32,8 @@ spec:
     description: "Records were dropped because their event time was older than the backend's 7-day accept window, so sending them would have been rejected per-entry and lost anyway (#401). This is real record loss. PAUSED by default on purpose: a nonzero value is EXPECTED on a blob-derived stream, which replays historical records and can age one past 7 days by ordinary aging with nothing misconfigured (#297 measured graph2otel's blob-ingested Intune stream at 6.95 days at the oldest). Enabling it as-is would page on normal behaviour. Unblock condition: measure your own steady-state rate on the 'Backend accept window' panel, raise the threshold above it, then enable."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-record-over-horizon"
     __dashboardUid__: "graph2otel"
-    __panelId__: "482"
-    dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=482"
+    __panelId__: "483"
+    dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=483"
   expressions:
     A:
       model:

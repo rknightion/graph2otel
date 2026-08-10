@@ -179,14 +179,22 @@ that tenant, or the collector is disabled.
 ## Doc block 3 — Collector staleness
 
 **Rules:** `g2o-collector-staleness` (primary),
-`g2o-collector-degraded-sustained` and `g2o-checkpoint-persist-errors`
-(companions).
+`g2o-collector-degraded-sustained`, `g2o-collector-watermark-stalled` and
+`g2o-checkpoint-persist-errors` (companions).
 
 **What/why:** `graph2otel_scrape_staleness_seconds` (from `#9`) is seconds since a
-collector's last *successful* scrape — the same signal covers both a
-SnapshotCollector going quiet (Graph calls failing) and a WindowCollector's
-watermark stalling (log-shaped endpoints have no delta query, so a stuck
-watermark silently stops advancing). The companion,
+collector's last *successful* scrape — it covers a collector going quiet because
+its Graph calls are failing.
+
+**CORRECTION (#417/#422):** an earlier version of this block claimed the same
+signal also covered "a WindowCollector's watermark stalling". **That was WRONG,
+and it cost 11 days.** A stalled watermark does not make scrapes fail — in #417
+eight collectors re-polled one frozen 15-minute window, re-fetched records
+already in `SeenIDs`, deduped them, and reported a completely healthy scrape.
+Staleness peaked at **1.008** against its threshold of 3, the 6h degraded rule
+sat at exactly `1` every hour for 7 days, and availability read
+`state=healthy, reason=success` throughout. Watermark stalling needs its own
+signal, and `g2o-collector-watermark-stalled` (below) is it. The companion,
 `graph2otel_checkpoint_persist_errors_total`, catches a narrower failure:
 the window succeeded but its watermark isn't reaching disk, so a restart can
 re-poll or drop an already-processed window depending on the checkpoint
@@ -246,6 +254,45 @@ alert INSTANCE resolves silently — the surviving collectors' instances, and th
 rule's `noDataState`, are unaffected. That silent disappearance is the correct,
 non-accidental outcome for a deliberately removed collector, not an omission:
 there is nothing left to alert on for a signal nothing emits anymore.
+
+**The stalled-watermark companion (#422), and why it is a watermark rather than
+an outcome expression:** `g2o-collector-watermark-stalled` fires on
+`(time() - graph2otel_collector_watermark_timestamp_seconds) /
+graph2otel_collector_expected_interval_seconds > 20`, normalized by each
+collector's own interval for exactly the reason the primary is. The obvious
+alternative was an expression over `graph2otel_record_outcomes_total`, since the
+#417 fingerprint is `fetched == mapped == deduped` with the `emitted` series
+**absent** — and note that such an expression must use `unless`, never `== 0`,
+because `== 0` never matches an absent series and absent is what `emitted` was.
+It was rejected anyway: a genuinely quiet window collector re-polling its overlap
+window and deduping every record is **indistinguishable** from a livelock by
+outcome counters alone, and on a small tenant that is a normal steady state, not
+a fault. The watermark carries no such ambiguity, because `logpipeline.Poll`
+advances it to `(window end − SafetyLag)` even when the window drained **zero**
+records — a window confirmed empty is still a window that has been processed. So
+a quiet collector's watermark keeps advancing at its poll interval, and a frozen
+one means the window itself stopped moving. The watermark also covers a case no
+outcome counter can see at all: a window frozen in the *future*, fetching
+nothing, producing no outcomes to count.
+
+**Why it ships PAUSED, and the unblock condition:** the `20` multiplier is a
+placeholder, not a measured bound. `SafetyLag` is subtracted from the watermark,
+is per-collector, and is **not** exported, so it inflates this ratio by an
+unknown amount that hurts the fastest collectors most. Unblock by observing
+`(time() - graph2otel_collector_watermark_timestamp_seconds) /
+graph2otel_collector_expected_interval_seconds` across every window collector for
+at least one full week on a live tenant, taking the per-collector maximum over
+that week, and setting the threshold above the largest. That measurement was not
+possible before the metric shipped. Enabling it first risks firing on correct
+data, which is the specific failure mode #422 names — an alert that fires on
+correct data trains the reader to ignore the signal, and that is how the next
+11-day freeze goes unnoticed.
+
+**Applicability:** window cursors only. Blob consumers track a byte offset with
+no timestamp (`checkpoint.BlobCursor`) and never report this metric, and a
+collector that has not yet drained a window is **absent** rather than published
+as infinitely stale — a zero `time.Time` is epoch `-62135596800` (year 1), not
+`0`, so publishing it would page on every cold start.
 
 ## Doc block 4 — Throttle saturation
 

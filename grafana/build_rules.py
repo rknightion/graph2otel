@@ -450,6 +450,63 @@ RULES = [
         "intervals) restarting mid-window without a false positive.",
         False,
     ),
+    # #422: the detection gap #417 left behind. #417 livelocked eight collectors
+    # for 11 days while g2o-collector-staleness peaked at 1.008, the 6h degraded
+    # rule sat at exactly 1 every hour for 7 days, and record-integrity saw only
+    # `deduped` — a normal outcome. All three were starved of input because the
+    # scrapes genuinely SUCCEEDED: the collector re-polled one frozen 15-minute
+    # window and deduped everything it fetched.
+    #
+    # #422 proposed an expression over record_outcomes (`fetched > 0 unless
+    # emitted > 0`, `unless` rather than `== 0` because the emitted series was
+    # ABSENT, and `== 0` never matches an absent series). That was rejected in
+    # favour of the watermark, which the issue itself raised as the better
+    # option: a quiet tenant re-polling its overlap window and deduping every
+    # record is INDISTINGUISHABLE from a livelock by outcome counters alone, and
+    # the watermark has no such ambiguity — logpipeline.Poll advances it to
+    # (to - SafetyLag) even on a window that drained zero records, so it keeps
+    # moving on a quiet tenant and freezes only when the window does. It also
+    # catches the case no counter can see at all: a window frozen in the FUTURE,
+    # fetching nothing, producing no outcomes to count.
+    #
+    # Normalized by expected_interval for the same reason g2o-collector-staleness
+    # is: window collectors run anywhere from minutes to a day apart, so one
+    # absolute second count is wrong for all but one of them. Both metrics carry
+    # exactly (tenant_id, collector), so this is a one-to-one vector match with
+    # no on()/ignoring().
+    _alert(
+        "g2o-collector-watermark-stalled",
+        "graph2otel window watermark not advancing",
+        f'(time() - max by (tenant_id, collector) '
+        f'({_m("graph2otel.collector.watermark_timestamp")})) / '
+        f'max by (tenant_id, collector) ({_m("graph2otel.collector.expected_interval")})',
+        "gt", [20], "30m",
+        {"severity": "critical", "category": "self-observability", "source": "graph2otel"},
+        "Collector {{ $labels.collector }} has a window watermark more than 20x its poll "
+        "interval behind now (tenant {{ $labels.tenant_id }})",
+        "The durable checkpoint watermark for collector={{ $labels.collector }}, tenant "
+        "{{ $labels.tenant_id }} has stopped advancing: it is more than 20x that "
+        "COLLECTOR'S OWN effective poll interval behind wall-clock. This is the #417 "
+        "fingerprint — a livelocked window poller that re-fetches one frozen range every "
+        "tick, dedupes it, and reports a perfectly healthy scrape. Expect "
+        "graph2otel_scrape_success_ratio to be 1, availability to read healthy, and "
+        "graph2otel_record_outcomes_total to show fetched == mapped == deduped with NO "
+        "emitted series at all; none of that is evidence against this alert, it is the "
+        "shape of the fault. "
+        "PAUSED, and the threshold is a placeholder. The unblock condition is a "
+        "MEASUREMENT that cannot be taken until this metric has shipped: observe "
+        "(time() - graph2otel_collector_watermark_timestamp_seconds) / "
+        "graph2otel_collector_expected_interval_seconds across every window collector for "
+        "at least one full week on a live tenant, take the per-collector maximum over that "
+        "week, and set the threshold above the largest of them. 20x is a guess chosen to "
+        "clear the per-collector SafetyLag (which is subtracted from the watermark and is "
+        "NOT exported, so it inflates this ratio by an unknown amount that hurts the "
+        "fastest collectors most) — it is not a measured bound. Enabling it before that "
+        "measurement risks firing on correct data, which is the specific failure #422 "
+        "names: an alert that fires on correct data trains the reader to ignore the "
+        "signal, and that is how the next 11-day freeze goes unnoticed.",
+        True,
+    ),
     _alert(
         "g2o-checkpoint-persist-errors",
         "graph2otel checkpoint persist failing",
@@ -1861,6 +1918,8 @@ DASHBOARD_TARGETS = {
         ("Self-obs", "Scrape staleness (seconds since last healthy result)"),
     "g2o-collector-degraded-sustained":
         ("Self-obs", "Scrape success by collector"),
+    "g2o-collector-watermark-stalled":
+        ("Self-obs", "Window watermark age (seconds behind now)"),
     "g2o-checkpoint-persist-errors":
         ("Self-obs", "Checkpoint persist error rate"),
     "g2o-record-integrity-loss":

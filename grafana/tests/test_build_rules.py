@@ -42,6 +42,11 @@ EXPECTED_PAUSED = {
     "g2o-intune-compliance-noncompliant-spike": True,  # companion
     "g2o-collector-staleness": False,                # primary, doc block 3
     "g2o-collector-degraded-sustained": False,       # companion, doc block 3 (#408)
+    # companion, doc block 3 (#422). Paused because its 20x multiplier is a
+    # placeholder, not a measured bound: SafetyLag is subtracted from the
+    # watermark and is not exported, so the ratio is inflated by an unknown
+    # amount. Unblock by measuring the live per-collector maximum over a week.
+    "g2o-collector-watermark-stalled": True,
     "g2o-checkpoint-persist-errors": True,           # companion
     "g2o-record-integrity-loss": False,               # primary, doc block 6
     "g2o-payload-type-mismatch": True,                # companion, doc block 6
@@ -68,8 +73,8 @@ class TestRuleIdentity(unittest.TestCase):
         actual = {r["uid"]: r["isPaused"] for r in build_rules.RULES}
         self.assertEqual(actual, EXPECTED_PAUSED)
 
-    def test_eighteen_alert_rules_and_no_recording_rules(self):
-        self.assertEqual(len(build_rules.RULES), 18)
+    def test_nineteen_alert_rules_and_no_recording_rules(self):
+        self.assertEqual(len(build_rules.RULES), 19)
 
 
 class TestPipelineShape(unittest.TestCase):

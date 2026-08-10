@@ -62,6 +62,7 @@ SCRAPE_STALENESS = SELF_OBS["graph2otel.scrape.staleness"].prom
 SCRAPE_LAST = SELF_OBS["graph2otel.scrape.last_timestamp"].prom
 SCRAPE_BUDGET = SELF_OBS["graph2otel.scrape.budget"].prom
 EXPECTED_INTERVAL = SELF_OBS["graph2otel.collector.expected_interval"].prom
+WATERMARK_TIMESTAMP = SELF_OBS["graph2otel.collector.watermark_timestamp"].prom
 SCRAPE_ERRORS = SELF_OBS["graph2otel.scrape.errors"].prom
 SCRAPE_OUTCOMES = SELF_OBS["graph2otel.scrape.outcomes"].prom
 RECORD_OUTCOMES = SELF_OBS["graph2otel.record.outcomes"].prom
@@ -385,6 +386,21 @@ def extra(b):
                "collector-staleness alert's staleness/expected-interval ratio compares "
                "against, so a collector with a short or long interval gets its own "
                "correct multiple instead of one placeholder threshold.")
+    b.raw("Window watermark age (seconds behind now)",
+          [f"time() - {WATERMARK_TIMESTAMP}{_SEL}"],
+          viz="table", unit="s",
+          about="graph2otel.collector.watermark_timestamp",
+          desc="How far behind the clock each window collector's durable cursor sits "
+               "(#422). This is the direct read of the #417 fault, which every "
+               "success/staleness signal missed for 11 days: a livelocked collector "
+               "re-polls one frozen window, dedupes everything it fetches, and reports a "
+               "healthy scrape forever while this value climbs without bound. A QUIET "
+               "tenant does NOT climb — logpipeline advances the watermark to "
+               "(window end - safety lag) even when the window drained zero records — so "
+               "a rising value here means the window itself stopped moving, not that "
+               "nothing happened. Only window cursors appear: blob consumers track a byte "
+               "offset with no timestamp, and a collector that has not yet drained a "
+               "window is absent rather than shown as infinitely stale.")
     b.raw("Scrape error rate by error type",
           [f"sum by (tenant_id, collector, error_type) "
            f"(rate({SCRAPE_ERRORS}{_SEL}[{RATE}]))"],

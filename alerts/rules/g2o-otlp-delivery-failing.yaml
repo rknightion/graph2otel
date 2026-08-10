@@ -14,7 +14,7 @@ metadata:
     grafana.com/provenance: "api"
   labels:
     grafana.com/group: "graph2otel-alerts"
-    grafana.com/group-index: "17"
+    grafana.com/group-index: "18"
 spec:
   title: "graph2otel OTLP export failing"
   paused: false

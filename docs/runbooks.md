@@ -252,6 +252,75 @@ feature."`), no grant will clear it, and the honest fix is to disable that
 collector for the tenant. Any other cause is a real failure — follow it from
 **Self-obs → Collector health**.
 
+### g2o-collector-watermark-stalled
+
+A window collector's durable checkpoint watermark has stopped advancing: it is
+more than 20x that collector's own effective poll interval behind wall-clock.
+This is the **#417 fingerprint**, and it is the one fault where every other
+self-observability signal reads green while the collector ships nothing.
+
+Recognise it by what it does NOT look like. Over the 11-day #417 freeze on
+m7kni: `g2o-collector-staleness` peaked at **1.008** against a threshold of 3;
+`g2o-collector-degraded-sustained` sat at exactly **1** every hour for 7 days;
+`graph2otel_collector_availability` reported `state=healthy, reason=success`;
+and nothing was logged, because nothing errored. The scrapes genuinely
+succeeded — the collector re-polled one frozen 15-minute window, re-fetched
+records already in its `SeenIDs` set, and deduped them. In
+`graph2otel_record_outcomes_total` that shows as **`fetched == mapped ==
+deduped` with the `emitted` series entirely ABSENT** — `entra.signins.interactive`
+recorded 2013 / 2013 / 2013 over 7 days and no `emitted` series at all. A
+healthy scrape ratio is not evidence against this alert; it is part of the
+fault's shape.
+
+**Why the watermark and not the outcome counters.** An expression over
+`record_outcomes` cannot separate this from a genuinely quiet tenant re-polling
+its overlap window and deduping every record, which is a normal steady state on
+a small tenant. The watermark can: `logpipeline.Poll` advances it to
+`(window end − SafetyLag)` even when the window drained **zero** records, so a
+quiet collector's watermark keeps moving at its poll interval and only a stalled
+window freezes it. It also catches a case no counter can see — a watermark
+frozen in the *future*, where the collector fetches nothing at all because its
+window is unreachable, so there are no outcomes to count. (If you do write an
+outcome-counter query while investigating, use `unless`, never `== 0`: `== 0`
+never matches an absent series, and absent is exactly what `emitted` was.)
+
+**PAUSED, and the threshold is a placeholder.** Unblock condition: observe
+`(time() - graph2otel_collector_watermark_timestamp_seconds) /
+graph2otel_collector_expected_interval_seconds` across every window collector
+for at least one full week on a live tenant, take the per-collector maximum over
+that week, and set the threshold above the largest. That measurement could not
+be taken before this metric shipped. `20` is a guess sized to clear the
+per-collector `SafetyLag`, which is subtracted from the watermark, is **not**
+exported, and therefore inflates this ratio by an unknown amount that hurts the
+fastest collectors most. Enabling it before the measurement risks firing on
+correct data — and an alert that fires on correct data trains the reader to
+ignore it, which is precisely how the next 11-day freeze goes unnoticed.
+
+**No data:** `OK`. Only window collectors that have drained at least one window
+report this metric. Blob consumers track a byte offset with no timestamp and
+never appear; a collector that has not yet completed a window is absent rather
+than reported as infinitely stale.
+
+**Evaluator error:** `Error`. Both metrics carry exactly `(tenant_id,
+collector)`, so the division is a one-to-one vector match with no
+`on()`/`ignoring()` — an error here is a datasource or expression problem, not a
+tenant one.
+
+**False positives:** a collector whose `SafetyLag` is a large fraction of its
+poll interval sits at a permanently elevated ratio. That is the measurement
+above, and the reason this ships paused.
+
+**Remediation:** confirm the freeze first — read the collector's watermark on
+the admin status page (`/api/status.json`, per-collector checkpoint state) and
+against the on-disk checkpoint under the mounted `checkpoints/` volume. If the
+watermark is genuinely frozen, restart the exporter: a restart re-reads the
+checkpoint and resumes from `watermark − overlap`, which clears a livelock but
+does **not** clear a corrupt or future-dated watermark. For a watermark ahead of
+now, or one that re-freezes after a restart, the checkpoint file itself is the
+problem — capture it before touching it, then delete that collector's checkpoint
+to force a cold start from its initial lookback, accepting the gap between the
+frozen watermark and the lookback horizon.
+
 ### g2o-checkpoint-persist-errors
 
 A `WindowCollector`'s high-water mark is not reaching disk, so a restart re-polls

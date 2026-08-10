@@ -70,6 +70,49 @@ func reportAvailability(
 	}
 }
 
+// reportWatermarks re-publishes every window collector's durable watermark on
+// each tick (#422). Unlike graph2otel.collector.expected_interval — fixed for
+// the life of the process, so emitted once — a watermark changes every poll,
+// and GaugeSnapshot's observable callback keeps reporting whatever set it was
+// last handed. Without this loop the metric would freeze at its first value,
+// which is indistinguishable from the stalled-window fault it exists to detect:
+// the detector would report the fault permanently, everywhere, from startup.
+//
+// It reads the registry rather than being pushed to from the scheduler because
+// GaugeSnapshot replaces a metric's whole per-tenant point set: emitting one
+// collector's watermark as each run finishes would delete every other
+// collector's series. The complete set has to be published together.
+func reportWatermarks(
+	ctx context.Context,
+	registry *collector.Registry,
+	emitter telemetry.Emitter,
+	tenantID string,
+	ticks <-chan time.Time,
+) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticks:
+			registry.EmitWatermarkTimestamps(emitter, tenantID)
+		}
+	}
+}
+
+// runPeriodicWatermarks drives reportWatermarks off the shared self-obs report
+// interval — the same cadence availability uses, so the two health signals a
+// responder reads together never disagree merely because one is fresher.
+func runPeriodicWatermarks(
+	ctx context.Context,
+	registry *collector.Registry,
+	emitter telemetry.Emitter,
+	tenantID string,
+) {
+	ticker := time.NewTicker(selfObsReportInterval)
+	defer ticker.Stop()
+	reportWatermarks(ctx, registry, emitter, tenantID, ticker.C)
+}
+
 type periodicAvailabilityReporter func(
 	context.Context,
 	*availability.Tracker,
