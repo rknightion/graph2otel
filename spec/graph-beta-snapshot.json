@@ -308,12 +308,12 @@
     },
     {
       "path": "/directory/tenantGovernance/relatedTenants",
-      "type": "microsoft.graph.tenantGovernanceServices.relatedTenant",
+      "type": "microsoft.graph.relatedTenant",
       "resolution": "model"
     },
     {
       "path": "/directory/tenantGovernance/settings",
-      "type": "microsoft.graph.tenantGovernanceServices.tenantGovernanceSetting",
+      "type": "microsoft.graph.tenantGovernanceSetting",
       "resolution": "model"
     },
     {
@@ -1091,6 +1091,13 @@
         "isBlocked": "Edm.Boolean"
       }
     },
+    "microsoft.graph.connectorHealthCheck": {
+      "kind": "ComplexType",
+      "properties": {
+        "metricName": "microsoft.graph.connectorHealthCheckMetricName",
+        "status": "microsoft.graph.ndesConnectorHealthStatus"
+      }
+    },
     "microsoft.graph.depOnboardingSetting": {
       "kind": "EntityType",
       "base_type": "microsoft.graph.entity",
@@ -1458,6 +1465,7 @@
         "enrollment",
         "exchangeOnline",
         "intuneManagementExtension",
+        "intuneOpenExtensibility",
         "linuxMdm",
         "mdm",
         "microsoftSense",
@@ -2281,11 +2289,24 @@
         "connectorVersion": "Edm.String",
         "displayName": "Edm.String",
         "enrolledDateTime": "Edm.DateTimeOffset",
+        "healthChecks": "Collection(microsoft.graph.connectorHealthCheck)",
+        "healthStatus": "microsoft.graph.ndesConnectorHealthStatus",
         "lastConnectionDateTime": "Edm.DateTimeOffset",
         "machineName": "Edm.String",
         "roleScopeTagIds": "Collection(Edm.String)",
         "state": "microsoft.graph.ndesConnectorState"
       }
+    },
+    "microsoft.graph.ndesConnectorHealthStatus": {
+      "kind": "EnumType",
+      "members": [
+        "actionRequired",
+        "attentionRequired",
+        "disconnected",
+        "noActionRequired",
+        "unknown",
+        "unknownFutureValue"
+      ]
     },
     "microsoft.graph.ndesConnectorState": {
       "kind": "EnumType",
@@ -2987,6 +3008,21 @@
         "userRiskPolicy",
         "verifyAppPublisher"
       ]
+    },
+    "microsoft.graph.relatedTenant": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "createdDateTime": "Edm.DateTimeOffset",
+        "isMicrosoftInfrastructure": "Edm.Boolean"
+      },
+      "navigation_properties": {
+        "appB2BSignInActivityMetrics": "microsoft.graph.b2BSignInActivityMetrics",
+        "b2BRegistrationMetrics": "microsoft.graph.b2bRegistrationMetrics",
+        "b2BSignInActivityMetrics": "microsoft.graph.b2BSignInActivityMetrics",
+        "billingMetrics": "microsoft.graph.billingMetrics",
+        "multiTenantApplicationMetrics": "microsoft.graph.multiTenantApplicationMetrics"
+      }
     },
     "microsoft.graph.remediationState": {
       "kind": "EnumType",
@@ -4109,22 +4145,7 @@
         "resourceSpecificPermissions": "Collection(microsoft.graph.teamsAppResourceSpecificPermission)"
       }
     },
-    "microsoft.graph.tenantGovernanceServices.relatedTenant": {
-      "kind": "EntityType",
-      "base_type": "microsoft.graph.entity",
-      "properties": {
-        "createdDateTime": "Edm.DateTimeOffset",
-        "isMicrosoftInfrastructure": "Edm.Boolean"
-      },
-      "navigation_properties": {
-        "appB2BSignInActivityMetrics": "microsoft.graph.tenantGovernanceServices.b2BSignInActivityMetrics",
-        "b2BRegistrationMetrics": "microsoft.graph.tenantGovernanceServices.b2bRegistrationMetrics",
-        "b2BSignInActivityMetrics": "microsoft.graph.tenantGovernanceServices.b2BSignInActivityMetrics",
-        "billingMetrics": "microsoft.graph.tenantGovernanceServices.billingMetrics",
-        "multiTenantApplicationMetrics": "microsoft.graph.tenantGovernanceServices.multiTenantApplicationMetrics"
-      }
-    },
-    "microsoft.graph.tenantGovernanceServices.tenantGovernanceSetting": {
+    "microsoft.graph.tenantGovernanceSetting": {
       "kind": "EntityType",
       "base_type": "microsoft.graph.entity",
       "properties": {
