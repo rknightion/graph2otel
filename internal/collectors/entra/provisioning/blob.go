@@ -32,9 +32,6 @@ import (
 // container name.
 const blobContainer = "insights-logs-provisioninglogs"
 
-// blobInterval is how often the container is re-listed (#89).
-const blobInterval = 5 * time.Minute
-
 // blobCollector wraps the generic BlobCollector in a package-local named type so
 // collectordoc can recover THIS package by reflection (see the twin note in
 // directoryaudits/blob.go and collectordoc.directBlobPackages).
@@ -51,7 +48,7 @@ func newBlobCollector(d collectors.BlobDeps) collector.SnapshotCollector {
 		Map:           mapBlobProvisioning,
 		CollectorName: name,
 	}
-	return &blobCollector{blobpipeline.NewBlobCollector(name, blobInterval, d.TenantID, cfg, d.Source, d.Store, d.Logger)}
+	return &blobCollector{blobpipeline.NewBlobCollector(name, d.BlobInterval(), d.TenantID, cfg, d.Source, d.Store, d.Logger)}
 }
 
 // blobPrefix returns the tenant-level listing prefix "tenantId=<guid>/" (#89).

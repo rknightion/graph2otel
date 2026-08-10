@@ -65,7 +65,6 @@ const (
 	// blobDevicesContainer is the Devices diagnostic-settings category's fixed
 	// container name (the category lowercased).
 	blobDevicesContainer = "insights-logs-devices"
-	blobInterval         = 5 * time.Minute
 	// lastContactLayout parses the blob's LastContact, which has no timezone
 	// suffix (e.g. "2026-07-17T23:55:14.00258"); a layout with no zone yields UTC.
 	lastContactLayout = "2006-01-02T15:04:05.999999999"
@@ -101,7 +100,7 @@ func newBlobDevices(d collectors.BlobDeps) collector.SnapshotCollector {
 		Map:           mapBlobDevice,
 		CollectorName: blobDevicesCollector,
 	}
-	return &blobCollector{blobpipeline.NewBlobCollector(blobDevicesCollector, blobInterval, d.TenantID, cfg, d.Source, d.Store, d.Logger)}
+	return &blobCollector{blobpipeline.NewBlobCollector(blobDevicesCollector, d.BlobInterval(), d.TenantID, cfg, d.Source, d.Store, d.Logger)}
 }
 
 func blobPrefix(tenantID string) string { return "tenantId=" + tenantID + "/" }

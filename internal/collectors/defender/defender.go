@@ -43,12 +43,6 @@ import (
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
-// Interval is how often each Defender container is re-listed. Records land
-// minutes behind the event and the floor is Azure-side, so polling faster only
-// bills list operations (#89) — the same 5-minute cadence every blob collector
-// uses.
-const Interval = 5 * time.Minute
-
 // Container returns the fixed Azure Monitor container name for a Defender
 // advanced-hunting table: "insights-logs-advancedhunting-<table>", table
 // lowercased. Verified live 2026-07-18 (#106) across all 18 enabled containers.
@@ -77,7 +71,7 @@ func New(name, table string, mapFn func(map[string]any) (telemetry.Event, bool),
 		Map:           mapFn,
 		CollectorName: name,
 	}
-	return blobpipeline.NewBlobCollector(name, Interval, d.TenantID, cfg, d.Source, d.Store, d.Logger)
+	return blobpipeline.NewBlobCollector(name, d.BlobInterval(), d.TenantID, cfg, d.Source, d.Store, d.Logger)
 }
 
 // Props returns the advanced-hunting record's inner `properties` object — the

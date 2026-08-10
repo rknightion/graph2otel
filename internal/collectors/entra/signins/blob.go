@@ -37,11 +37,6 @@ import (
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
-// blobInterval is how often each sign-in container is re-listed. Records land
-// minutes behind the event and the floor is Azure-side, so polling faster buys
-// nothing but list operations — which are billed at the write rate (#89).
-const blobInterval = 5 * time.Minute
-
 // blobSpec describes one sign-in diagnostic-settings category.
 type blobSpec struct {
 	// name is the stable collector key. Where a polled twin exists it carries a
@@ -188,7 +183,7 @@ func newBlobCollector(s blobSpec, d collectors.BlobDeps) *blobCollectorImpl {
 	}
 	return &blobCollectorImpl{
 		BlobCollector: blobpipeline.NewBlobCollector(
-			s.name, blobInterval, d.TenantID, cfg, d.Source, d.Store, d.Logger),
+			s.name, blobpipeline.MetricDerivingInterval, d.TenantID, cfg, d.Source, d.Store, d.Logger),
 		conflicts: s.conflictsWith,
 	}
 }

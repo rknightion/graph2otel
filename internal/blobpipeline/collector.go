@@ -71,6 +71,18 @@ func NewBlobCollector(
 // Name implements collector.Collector.
 func (c *BlobCollector) Name() string { return c.NameField }
 
+// DerivesMetrics reports whether this collector emits metrics as well as logs,
+// i.e. whether its ContainerConfig sets Derive.
+//
+// It exists so the poll-cadence invariant can be gated on the REASON rather
+// than on a hand-written list of collector names (#425): a metric-deriving
+// collector must run at MetricDerivingInterval, because its tick is an input to
+// #128's metric-recency gate, while a log-only one takes the slower, cheaper
+// DefaultInterval. Every collector subpackage wraps *BlobCollector in a
+// package-local named type, so callers assert on the method rather than on the
+// concrete type — embedding promotes it.
+func (c *BlobCollector) DerivesMetrics() bool { return c.Config.Derive != nil }
+
 // DefaultInterval implements collector.Collector.
 func (c *BlobCollector) DefaultInterval() time.Duration { return c.Interval }
 

@@ -41,6 +41,62 @@ import (
 // exceeds it is finished on the next tick, never dropped.
 const DefaultMaxBytesPerTick = 32 << 20
 
+// DefaultInterval is how often a blob collector re-lists its container (#425).
+//
+// It lives here, not in each collector, because the cadence is a property of
+// THE ENGINE THAT DOES THE LISTING rather than of the signal being listed: the
+// billed `ListBlobs` call and the Azure-side latency floor are identical for
+// every container, so eleven collectors previously carried eleven identical
+// copies of one decision — and stated its rationale in exactly one of them.
+//
+// **Polling faster buys no freshness and costs real money.** The floor is
+// Azure-side: Azure Monitor writes hour-partitioned blobs and appends to the
+// current hour on its own cadence, and blob-derived records were measured at
+// 3.3-7.0 days of event-time lag on this pipeline (#297). Against days of lag,
+// the difference between a 5- and a 15-minute list is invisible in the data. It
+// is visible on the bill, where each list is a billed transaction and the rate
+// is a straight multiple: the previous 5-minute default billed 3x this one for
+// no observable benefit.
+//
+// It applies to LOG-ONLY blob collectors, which is nearly all of them. A
+// collector that also derives metrics is pinned faster — see
+// MetricDerivingInterval, which explains why. Per-tenant `blob_ingest.interval`
+// overrides this; a per-collector `interval:` overrides both.
+const DefaultInterval = 15 * time.Minute
+
+// MetricDerivingInterval is the cadence for a blob collector that sets
+// ContainerConfig.Derive — today exactly `entra.graph_activity` and the
+// `entra.signins.*` blob streams, the only two blob collectors that emit
+// metrics at all.
+//
+// They cannot use DefaultInterval, because the tick is an INPUT to #128's
+// metric-recency gate and nothing enforces the relationship between them.
+// Derive runs only for records whose event time is within
+// BlobIngestConfig.MetricRecencyWindow (default 20m); anything older takes the
+// log path only, so a backfilled event is never credited to "now" under
+// cumulative temporality.
+//
+// A record appended just after one tick is not read until the next, so its age
+// at the gate is up to `tick + Azure write latency`. Azure's steady-state blob
+// latency is ~5m, so a 5m tick puts the worst case at ~10m — comfortably inside
+// the 20m window, which is exactly the margin
+// DefaultMetricRecencyWindow's own derivation assumes. A 15m tick would put it
+// at ~20m: level with the window, no margin, and the tail of every tick's batch
+// would stop counting toward metrics. **Silently** — the logs would still be
+// complete, so nothing would look broken while the two metric streams
+// undercounted.
+//
+// Raising the window instead was considered and rejected: it would re-admit
+// older backfill into cumulative counters, which is the precise bug #128 exists
+// to prevent. Keeping these two fast costs ~5 of ~35 collectors' worth of
+// listing and leaves the gate untouched.
+//
+// TestBlobIntervalMatchesWhetherTheCollectorDerivesMetrics gates the pairing off
+// DerivesMetrics() rather than off a hand-written list of names, so adding
+// Derive to a log-only collector fails loudly instead of quietly gating its new
+// metrics away.
+const MetricDerivingInterval = 5 * time.Minute
+
 // metricSelfExcluded counts records dropped by exclude_self (#154): a blob record
 // whose actor appId equals the poller's proved authenticated application ID —
 // graph2otel's own polling exhaust, up to ~60% of

@@ -429,6 +429,9 @@
                                     "account_url": {
                                         "type": "string"
                                     },
+                                    "interval": {
+                                        "type": "string"
+                                    },
                                     "metric_recency_window": {
                                         "type": "string"
                                     }

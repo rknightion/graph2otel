@@ -42,11 +42,6 @@ const (
 	container = "insights-logs-microsoftgraphactivitylogs"
 	// eventName is the OTLP LogRecord EventName every record carries.
 	eventName = "entra.graph_activity"
-	// interval is how often the container is re-listed. Records land ~4-5
-	// minutes behind the event (an Entra-side floor measured live — the
-	// destination cannot beat it, #89), so polling faster than this buys
-	// nothing but list operations, which are billed at the write rate.
-	interval = 5 * time.Minute
 )
 
 // blobPrefix returns the listing prefix for a tenant's records.
@@ -84,7 +79,7 @@ func newCollector(d collectors.BlobDeps) collector.SnapshotCollector {
 		Derive:        newActivityDeriver().derive,
 		RecencyWindow: d.MetricRecencyWindow,
 	}
-	return blobpipeline.NewBlobCollector(collectorName, interval, d.TenantID, cfg, d.Source, d.Store, d.Logger)
+	return blobpipeline.NewBlobCollector(collectorName, blobpipeline.MetricDerivingInterval, d.TenantID, cfg, d.Source, d.Store, d.Logger)
 }
 
 // deriveActivity emits the bounded request counter for one MGAL record. Only

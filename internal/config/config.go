@@ -437,6 +437,27 @@ type BlobIngestConfig struct {
 	// margin. Validated (0, 1h]: a larger window would re-admit backfill, the
 	// exact bug the gate exists to prevent.
 	MetricRecencyWindow time.Duration `yaml:"metric_recency_window"`
+	// Interval is how often a LOG-ONLY blob collector re-lists its container
+	// (#425). Unset (the default) means blobpipeline.DefaultInterval, 15m.
+	//
+	// It is worth turning up. Every listing is a billed Azure Storage
+	// transaction, and the freshness floor is Azure-side: Azure Monitor writes
+	// hour-partitioned blobs and appends on its own cadence, and blob-derived
+	// records were measured at 3.3-7.0 days of event-time lag (#297). Against
+	// that, halving the tick buys nothing observable and doubles the listing bill.
+	//
+	// It deliberately does NOT apply to the two collectors that derive metrics
+	// (entra.graph_activity, the entra.signins.* blob streams), because their
+	// tick is an input to the MetricRecencyWindow gate above: slowing them would
+	// push records past the window and silently stop them counting toward
+	// metrics while their logs stayed complete. They keep
+	// blobpipeline.MetricDerivingInterval and are still changeable through the
+	// per-collector `interval:` override, which is explicit enough to be a
+	// deliberate act rather than a side effect of a cost tweak.
+	//
+	// Validated like any other collector interval: zero means unset, and a
+	// positive value must be at least minInterval.
+	Interval time.Duration `yaml:"interval"`
 }
 
 // DefaultMetricRecencyWindow is the blob-derived-metrics gate window when a
@@ -458,6 +479,27 @@ func (c *Config) BlobMetricRecencyWindow(tenantID string) time.Duration {
 		}
 	}
 	return DefaultMetricRecencyWindow
+}
+
+// BlobInterval returns the tenant's configured log-only blob poll cadence, or
+// ZERO when the tenant has not set one. Like BlobMetricRecencyWindow,
+// blob_ingest is a per-tenant, file-only key — there is no top-level
+// Config.BlobIngest — so this iterates tenants rather than reading a global
+// block.
+//
+// Unlike BlobMetricRecencyWindow it deliberately does NOT substitute the
+// default here: the default lives on blobpipeline.DefaultInterval, next to the
+// engine that does the listing and to the reasoning about what the cadence
+// costs, and this package cannot import blobpipeline (blobpipeline already
+// depends on config). collectors.BlobDeps.BlobInterval applies the fallback —
+// it is the one seam that sees both.
+func (c *Config) BlobInterval(tenantID string) time.Duration {
+	for i := range c.Tenants {
+		if c.Tenants[i].TenantID == tenantID {
+			return c.Tenants[i].BlobIngest.Interval
+		}
+	}
+	return 0
 }
 
 // CollectorSettings resolves the effective enabled state and interval for a
@@ -757,6 +799,15 @@ func (c *Config) Validate() error {
 
 		if w := t.BlobIngest.MetricRecencyWindow; w < 0 || w > MaxMetricRecencyWindow {
 			return fmt.Errorf("tenants[%d].blob_ingest.metric_recency_window: %v out of range (0, %v]", i, w, MaxMetricRecencyWindow)
+		}
+
+		// Zero means unset (use blobpipeline.DefaultInterval); any positive value
+		// takes the same floor as every other collector interval, so a typo like
+		// `1s` is rejected rather than turned into a listing-cost incident.
+		if d := t.BlobIngest.Interval; d != 0 {
+			if err := validateInterval(d); err != nil {
+				return fmt.Errorf("tenants[%d].blob_ingest.interval: %w", i, err)
+			}
 		}
 
 		if err := t.MDCA.validate(); err != nil {

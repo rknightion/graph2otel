@@ -62,10 +62,6 @@ const (
 	blobContainer = "insights-logs-windows365auditlogs"
 	// eventName is the OTLP LogRecord EventName every Cloud PC audit record carries.
 	eventName = "intune.cloud_pc_audit"
-	// blobInterval is how often the container is re-listed. Records land minutes
-	// behind the event and the floor is Azure-side, so polling faster only bills
-	// list operations (#89).
-	blobInterval = 5 * time.Minute
 	// usTimeLayout parses the US-format, timezone-less activityDateTime the wire
 	// carries inside OtherExtendedProperties; it reads as UTC (verified against the
 	// envelope `time` Z clock, #198).
@@ -234,7 +230,7 @@ func newBlobCollector(d collectors.BlobDeps) collector.SnapshotCollector {
 		Map:           mapRecord,
 		CollectorName: name,
 	}
-	return &blobCollector{blobpipeline.NewBlobCollector(name, blobInterval, d.TenantID, cfg, d.Source, d.Store, d.Logger)}
+	return &blobCollector{blobpipeline.NewBlobCollector(name, d.BlobInterval(), d.TenantID, cfg, d.Source, d.Store, d.Logger)}
 }
 
 func init() { collectors.RegisterBlob(newBlobCollector) }

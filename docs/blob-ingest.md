@@ -197,6 +197,66 @@ tenants:
   non-empty `appid`, filtering fails open: every record is retained and startup
   emits one bounded warning for the tenant.
 
+## Poll cadence — `blob_ingest.interval` (#425)
+
+Listing is the one part of the bill graph2otel itself controls. Per the measured breakdown
+above, **~9,400 ListBlobs/day is ~£1.30/month, about 10% of the total** — billed at the write
+rate, not the read rate. That is a straight multiple of the poll cadence: halving the tick
+doubles it.
+
+**The default is 15 minutes, and turning it up costs you nothing observable.** The freshness
+floor is Azure-side: Azure Monitor writes hour-partitioned blobs and appends to the current
+hour on its own cadence, and blob-derived records were measured at **3.3–7.0 days** of
+event-time lag (#297). Against days, the difference between a 5- and a 15-minute list does not
+show up in the data — only on the invoice.
+
+```yaml
+tenants:
+  - tenant_id: "..."
+    blob_ingest:
+      account_url: "https://myaccount.blob.core.windows.net"
+      interval: 30m            # optional; default 15m
+```
+
+Precedence, loosest to tightest:
+
+| layer | applies to |
+| --- | --- |
+| `blobpipeline.DefaultInterval` (15m) | every log-only blob collector |
+| `blob_ingest.interval` | every log-only blob collector on that tenant |
+| `collectors.<name>.interval` | that one collector, whatever it derives |
+
+### The two collectors this does NOT slow down, and why
+
+`entra.graph_activity` and the `entra.signins.*` blob streams are the only blob collectors
+that emit **metrics** as well as logs. They are pinned to `blobpipeline.MetricDerivingInterval`
+(5m) and `blob_ingest.interval` does not move them.
+
+Their tick is an **input to the metric-recency gate** (#128). `Derive` runs only for records
+whose event time is inside `blob_ingest.metric_recency_window` (default 20m); anything older
+takes the log path only, so a backfilled event is never credited to "now" under cumulative
+temporality. A record appended just after one tick is not read until the next, so its age at
+the gate is up to `tick + Azure write latency`. Azure's steady-state blob latency is ~5m, so:
+
+| tick | worst-case age at the gate | vs the 20m window |
+| --- | --- | --- |
+| 5m | ~10m | comfortable margin |
+| 15m | ~20m | level with it — no margin |
+
+At 15m the tail of every tick's batch would stop counting toward metrics. **Silently** — the
+logs would still be complete, so nothing would look broken while those two metric streams
+undercounted. Raising the window instead was considered and rejected: it re-admits older
+backfill into cumulative counters, which is the precise bug #128 exists to prevent.
+
+Keeping two of ~35 collectors fast costs a small fraction of the listing saving. If you do want
+them slower, use the per-collector `interval:` override — explicit enough to be a deliberate
+act rather than a side effect of a cost tweak — and raise `metric_recency_window` to match, or
+accept the undercount knowingly.
+
+`TestBlobIntervalMatchesWhetherTheCollectorDerivesMetrics` gates the pairing off
+`DerivesMetrics()` rather than a list of collector names, so adding `Derive` to a log-only
+collector fails the build instead of quietly gating its new metrics away.
+
 ## Setup
 
 1. **Create a storage account** (StorageV2, Hot, LRS is fine; disable public blob access)

@@ -40,11 +40,6 @@ import (
 // audit logs, lowercased into its fixed container name.
 const blobContainer = "insights-logs-auditlogs"
 
-// blobInterval is how often the container is re-listed. Records land minutes
-// behind the event and the floor is Azure-side, so polling faster only bills
-// list operations (#89).
-const blobInterval = 5 * time.Minute
-
 // blobCollector wraps the generic BlobCollector in a package-local named type so
 // collectordoc can recover THIS package (and its signals golden) by reflection
 // from the constructed value — a bare *blobpipeline.BlobCollector resolves to the
@@ -64,7 +59,7 @@ func newBlobCollector(d collectors.BlobDeps) collector.SnapshotCollector {
 		Map:           mapBlobDirectoryAudit,
 		CollectorName: name,
 	}
-	return &blobCollector{blobpipeline.NewBlobCollector(name, blobInterval, d.TenantID, cfg, d.Source, d.Store, d.Logger)}
+	return &blobCollector{blobpipeline.NewBlobCollector(name, d.BlobInterval(), d.TenantID, cfg, d.Source, d.Store, d.Logger)}
 }
 
 // blobPrefix returns the listing prefix for a tenant's records: "tenantId=<guid>/"

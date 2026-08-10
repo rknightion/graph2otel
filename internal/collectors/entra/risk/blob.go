@@ -47,9 +47,6 @@ const (
 	// blobRiskyUsersContainer is the RiskyUsers diagnostic-settings category's
 	// fixed container name (the category lowercased).
 	blobRiskyUsersContainer = "insights-logs-riskyusers"
-	// blobInterval is how often the container is re-listed; the freshness floor
-	// is Azure-side, so faster only bills list operations (#89).
-	blobInterval = 5 * time.Minute
 )
 
 // blobCollector wraps the generic BlobCollector in a package-local named type so
@@ -66,7 +63,7 @@ func newBlobRiskyUsers(d collectors.BlobDeps) collector.SnapshotCollector {
 		Map:           mapBlobRiskyUser,
 		CollectorName: blobRiskyUsersCollector,
 	}
-	return &blobCollector{blobpipeline.NewBlobCollector(blobRiskyUsersCollector, blobInterval, d.TenantID, cfg, d.Source, d.Store, d.Logger)}
+	return &blobCollector{blobpipeline.NewBlobCollector(blobRiskyUsersCollector, d.BlobInterval(), d.TenantID, cfg, d.Source, d.Store, d.Logger)}
 }
 
 // blobPrefix is the tenant-level diagnostic-settings listing prefix (#89).

@@ -953,6 +953,7 @@ func registerBlobCollectors(
 	bdeps := collectors.BlobDeps{
 		Source: src, TenantID: ta.TenantID, Logger: tlog, Store: store,
 		MetricRecencyWindow: cfg.BlobMetricRecencyWindow(ta.TenantID),
+		Interval:            cfg.BlobInterval(ta.TenantID),
 	}
 	selfIdentity.applyBlob(&bdeps)
 	for _, bf := range blobFactories {

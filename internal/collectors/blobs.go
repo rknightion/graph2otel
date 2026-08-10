@@ -50,6 +50,39 @@ type BlobDeps struct {
 	// counter. Zero here means "unset" — but the composition root sources it from
 	// Config.BlobMetricRecencyWindow, which never returns zero (defaults to 20m).
 	MetricRecencyWindow time.Duration
+	// Interval is the tenant's blob_ingest.interval (#425): how often a LOG-ONLY
+	// blob collector re-lists its container. Zero means "unset" — the composition
+	// root sources it from Config.BlobInterval, which never returns zero
+	// (defaults to blobpipeline.DefaultInterval), so a factory can use it
+	// directly.
+	//
+	// It deliberately does NOT apply to a collector that derives metrics
+	// (entra.graph_activity and the entra.signins.* blob streams). Their tick is
+	// an input to the #128 recency gate, so an operator slowing every blob
+	// collector down to save on listing would otherwise silently stop those two
+	// counting records toward metrics. They are pinned to
+	// blobpipeline.MetricDerivingInterval and remain changeable through the
+	// per-collector `interval:` override, which is explicit enough to be a
+	// deliberate act. See blobpipeline.MetricDerivingInterval for the arithmetic.
+	Interval time.Duration
+}
+
+// BlobInterval returns the poll cadence a LOG-ONLY blob collector should use:
+// the tenant's blob_ingest.interval when set, else blobpipeline.DefaultInterval.
+//
+// Factories call this rather than reading d.Interval directly so an unset value
+// can never reach NewBlobCollector as a zero interval. Registry.Register would
+// resolve a zero to the collector's own DefaultInterval, which for a
+// BlobCollector IS the value being passed in — a circular fallback that would
+// leave the cadence at zero.
+//
+// A metric-deriving collector must NOT call this — see the Interval field doc
+// and blobpipeline.MetricDerivingInterval.
+func (d BlobDeps) BlobInterval() time.Duration {
+	if d.Interval > 0 {
+		return d.Interval
+	}
+	return blobpipeline.DefaultInterval
 }
 
 // BlobFactory constructs one blob-sourced collector for a tenant. Registered

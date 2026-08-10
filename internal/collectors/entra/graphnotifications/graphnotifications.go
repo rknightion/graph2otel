@@ -41,9 +41,6 @@ const (
 	container = "insights-logs-graphnotificationsactivitylogs"
 	// eventName is the OTLP LogRecord EventName every record carries.
 	eventName = "entra.graph_notifications"
-	// interval is how often the container is re-listed. Records land minutes
-	// behind the event; polling faster buys nothing but list operations.
-	interval = 5 * time.Minute
 )
 
 // blobPrefix returns the listing prefix for a tenant's records.
@@ -76,7 +73,7 @@ func newCollector(d collectors.BlobDeps) collector.SnapshotCollector {
 		Map:           mapRecord,
 		CollectorName: collectorName,
 	}
-	return blobCollector{blobpipeline.NewBlobCollector(collectorName, interval, d.TenantID, cfg, d.Source, d.Store, d.Logger)}
+	return blobCollector{blobpipeline.NewBlobCollector(collectorName, d.BlobInterval(), d.TenantID, cfg, d.Source, d.Store, d.Logger)}
 }
 
 // mapRecord turns one raw GraphNotificationsActivityLogs record into its OTLP log
