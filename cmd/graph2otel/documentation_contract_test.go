@@ -31,7 +31,7 @@ func TestOperatorEntryPointsDescribeTheShippedV1Surface(t *testing.T) {
 			"Pre-1.0 and pre-first-release",
 			"A Helm chart is planned but not published yet",
 		},
-		"../../CLAUDE.md": {
+		"../../AGENTS.md": {
 			"The only open issue is #78",
 			"Helm defaults and the compose reference mount one",
 		},
@@ -69,7 +69,7 @@ func TestOperatorDocsReflectTheCanonicalCollectorCensus(t *testing.T) {
 
 	pathCount := reflect.TypeOf((*collectorFactoryVisitor)(nil)).Elem().NumMethod()
 	for _, path := range []string{
-		"../../CLAUDE.md",
+		"../../AGENTS.md",
 		"../../docs/index.md",
 		"../../docs/configuration.md",
 		"../../docs/signals.md",
@@ -103,7 +103,7 @@ func TestOperatorDocsReflectTheCanonicalCollectorCensus(t *testing.T) {
 		}
 	}
 	for _, path := range []string{
-		"../../CLAUDE.md",
+		"../../AGENTS.md",
 		"../../docs/index.md",
 		"../../docs/configuration.md",
 		"../../docs/architecture.md",
