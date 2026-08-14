@@ -281,8 +281,7 @@ correction narratives in task notes).
 
 The tracker is **Backlog.md**, in `backlog/`, committed to git. `backlog task list --plain`
 is the queue; `backlog doc list --plain` lists the durable docs. Everything below is
-enforced by `.claude/hooks/backlog-guard.py` (with `.claude/hooks/backlog-guard_test.py`
-covering both directions), because each failure mode is silent and unrepairable.
+enforced by a global `PreToolUse` hook in the agent config, because each failure mode is silent and unrepairable.
 
 - **Read the fan-out protocol doc before designing a wave, and the wave operating model
   doc for this project's own rules.** `backlog doc list --plain` shows both.

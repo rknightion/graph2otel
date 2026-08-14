@@ -39,14 +39,9 @@ __pycache__/
 *.pyc
 
 # Claude Code repo-local config. `settings.json` and `hooks/` ARE tracked — they
-# enforce the Backlog.md rules (bare --notes/--plan replaces a section silently;
-# hand-edited task markdown loses one at exit 0) for anyone working in this repo.
-# Everything else under .claude/ is per-machine state: agent scratch worktrees
 # (transient checkouts of this repo, never content), scheduler locks, and
 # settings.local.json.
-.claude/*
-!.claude/settings.json
-!.claude/hooks/
+.claude/
 
 # Injected by the m7kni.io hub at build time — never commit these.
 # The hub copies its own SEO template, brand stylesheet and fonts into a clone
