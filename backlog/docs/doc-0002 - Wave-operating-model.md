@@ -3,7 +3,7 @@ id: doc-0002
 title: Wave operating model
 type: guide
 created_date: '2026-08-14 16:28'
-updated_date: '2026-08-14 16:28'
+updated_date: '2026-08-14 16:36'
 ---
 > **This document carries only what is true of graph2otel.** The campaign model itself — run
 > contract and run modes, the routing contract, authority and the thread pool, the append-only
@@ -139,6 +139,6 @@ its final summary and the `make check` evidence cited, not asserted. Blocked wor
 concrete resume boundary — the specific next probe or decision, not "needs investigation". Work
 discovered mid-run becomes a new task labelled `needs-triage`.
 
-**Cite pre-2026-08-14 work as `#NNN` and new work as `gto-NNNN`.** The GitHub issues were deleted on
+**Cite pre-2026-08-14 work as `#NNN` and new work as `GTO-NNNN`.** The GitHub issues were deleted on
 2026-08-14; `#NNN` resolves to `archive/github-issues-2026-08-14.json`, indexed by the *Closed GitHub
 issues* doc. Two ID spaces exist over this project's history and only one of them is still growing.

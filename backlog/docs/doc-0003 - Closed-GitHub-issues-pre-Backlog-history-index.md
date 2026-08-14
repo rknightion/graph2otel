@@ -3,7 +3,7 @@ id: doc-0003
 title: Closed GitHub issues (pre-Backlog history index)
 type: other
 created_date: '2026-08-14 16:28'
-updated_date: '2026-08-14 16:28'
+updated_date: '2026-08-14 16:36'
 ---
 > **Historical index of work tracked on GitHub Issues before this repo moved to Backlog.md on
 > 2026-08-14.** The issues themselves were **deleted from GitHub** on that date, so `gh issue view
@@ -25,7 +25,7 @@ could never carry the number the history already cites. `AGENTS.md`, the referen
 `docs/`, the commit log and code comments all reference this work as `#NNN`; keeping the GitHub
 numbers as the only ID space over this history is what keeps those references resolvable. Four
 hundred `Done` rows would also drown the board's only real signal — what is left. **Cite closed work
-as `#NNN`; cite new work as `gto-NNNN`.**
+as `#NNN`; cite new work as `GTO-NNNN`.**
 
 **The commits column is every commit whose message cites the issue**, newest first, capped at three.
 It is a lead, not a verdict: a commit may cite an issue it only touches, and a squashed or un-citing

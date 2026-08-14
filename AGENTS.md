@@ -296,7 +296,7 @@ covering both directions), because each failure mode is silent and unrepairable.
   task IDs. `backlog/config.yml` is the one exception and is edited by hand, because
   list-valued keys cannot be set through `backlog config set`.
 - **Finalize in one call**, so an interrupted session cannot leave finished work looking
-  unfinished: `backlog task edit gto-0007 --check-ac 1 --check-ac 2 -s Done`.
+  unfinished: `backlog task edit GTO-0007 --check-ac 1 --check-ac 2 -s Done`.
 - **Never let two agents edit the same task.** v1.50.x fixed the edit funnel, but not
   reorder, draft saves, the TUI path, `doc update` or decision updates.
 - **`backlog/` is committed, so keep new account identifiers and personal data out of
@@ -324,7 +324,7 @@ covering both directions), because each failure mode is silent and unrepairable.
   goes in **docs**; tasks are the unit.
 
 `#NNN` refers to the pre-2026-08-14 GitHub issues, which were deleted — see the *Closed
-GitHub issues* doc and `archive/`. New work is `gto-NNNN`.
+GitHub issues* doc and `archive/`. New work is `GTO-NNNN`.
 
 <!-- BACKLOG.MD GUIDELINES START -->
 <!-- backlog.md-instructions-version: 1.50.1 -->
