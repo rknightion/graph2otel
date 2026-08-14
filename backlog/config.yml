@@ -1,0 +1,20 @@
+project_name: "graph2otel"
+default_status: "To Do"
+statuses: ["To Do", "In Progress", "Parked", "Done"]
+definition_of_done:
+  - "make check is green — vet, go test -race ./..., lint, govulncheck, tidy-check, tools-check, forks-check, grafana-check, build. Evidence, not assertion: paste or cite the run."
+  - "make regen run and its output committed if the change touches a registry-driven or generated surface (collectors, env vars, beta drift spec)."
+  - "Committed green to main and pushed, with the resulting SHA recorded in this task."
+labels: []
+date_format: yyyy-mm-dd
+max_column_width: 20
+auto_open_browser: true
+default_port: 6420
+remote_operations: false
+auto_commit: false
+filesystem_only: false
+zero_padded_ids: 4
+bypass_git_hooks: false
+check_active_branches: false
+active_branch_days: 30
+task_prefix: "gto"
