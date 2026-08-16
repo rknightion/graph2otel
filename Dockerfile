@@ -2,7 +2,7 @@
 
 # ---- build ----
 # Digest-pinned (Renovate's docker:pinDigests keeps this current — see renovate.json).
-FROM golang:1.26.5-bookworm@sha256:6c5605ab3a9a9fb3c4eafe5b3d63cdbf3881caf113262b67862547b54a9db599 AS build
+FROM golang:1.26.5-bookworm@sha256:53eeac89074db483fdf0ab3be1df32bf6e47562263d2d0d6baa7f26acb4957dd AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 # Root go.mod replaces both OTLP/HTTP exporters with narrow local forks. Copy
