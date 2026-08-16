@@ -19,7 +19,7 @@
 
 Export Entra ID, Intune, Defender, M365, and Purview telemetry from Microsoft Graph, Azure Storage blobs, and the O365 Management Activity API as OpenTelemetry-native metrics and logs over OTLP.
 
-**Homepage:** <https://github.com/rknightion/graph2otel>
+**Homepage:** <https://m7kni.io/graph2otel/>
 
 ## Maintainers
 
