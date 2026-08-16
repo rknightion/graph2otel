@@ -3,14 +3,18 @@ id: GTO-0004
 title: >-
   govulncheck fails on three Go stdlib CVEs: go.mod pins 1.26.5, all are fixed
   in 1.26.6
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@codex'
 created_date: '2026-08-14 17:20'
+updated_date: '2026-08-16 10:22'
 labels:
   - needs-triage
   - ci
   - security
 dependencies: []
+modified_files:
+  - go.mod
 priority: high
 ordinal: 4000
 ---
@@ -33,7 +37,7 @@ Not caused by the tracker migration; it appeared when the advisories were publis
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 go.mod requires a Go version that carries fixes for GO-2026-6218, GO-2026-6091 and GO-2026-6090
+- [x] #1 go.mod requires a Go version that carries fixes for GO-2026-6218, GO-2026-6091 and GO-2026-6090
 - [ ] #2 govulncheck passes in CI, not only on a maintainer laptop
 - [ ] #3 make check is green
 <!-- AC:END -->
@@ -44,3 +48,15 @@ Not caused by the tracker migration; it appeared when the advisories were publis
 - [ ] #2 make regen run and its output committed if the change touches a registry-driven or generated surface (collectors, env vars, beta drift spec).
 - [ ] #3 Committed green to main and pushed, with the resulting SHA recorded in this task.
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Raise the pinned Go toolchain to the patched 1.26.6 release. 2. Run the full repository gate, including govulncheck, under the pinned toolchain.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Updated go.mod to 1.26.6. Full local validation is blocked by the supplied Go installations: the preinstalled go command crashes while selecting 1.26.6, and a downloaded archive reports go1.26.6 while containing a standard library compiled by go1.24.3. CI-only criteria remain unchecked pending GitHub.
+<!-- SECTION:NOTES:END -->

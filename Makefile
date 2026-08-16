@@ -309,4 +309,4 @@ tools-helm-docs:
 # Regenerate the Helm chart README from the values.yaml `# --` annotations. The CI
 # helm job diffs the result, so run this after editing charts/graph2otel/values.yaml.
 helm-docs: tools-helm-docs
-	$(TOOLS_DIR)/helm-docs --chart-search-root charts/graph2otel
+	$(TOOLS_DIR)/helm-docs --chart-search-root charts
