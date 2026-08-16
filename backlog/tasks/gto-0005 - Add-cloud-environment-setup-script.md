@@ -1,10 +1,10 @@
 ---
 id: GTO-0005
 title: Add cloud environment setup script
-status: Done
+status: Parked
 assignee: []
 created_date: '2026-08-16 11:25'
-updated_date: '2026-08-16 12:56'
+updated_date: '2026-08-16 18:07'
 labels: []
 dependencies: []
 references:

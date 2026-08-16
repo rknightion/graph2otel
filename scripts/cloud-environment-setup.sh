@@ -10,6 +10,18 @@ readonly GO_VERSION="1.26.6"
 readonly HELM_VERSION="v3.18.4"
 readonly INSTALL_BIN="/usr/local/bin"
 
+# SHA-256 checksums for Go 1.26.6 (verified from go.dev)
+declare -A GO_SHA256=(
+  [amd64]="708effb774be8237570d0add163225abbdfaf4fca28b2611df167beba4feef89"
+  [arm64]="d0507e9e9d7fe012aae570108cbd76c15de879e17130ab8cb90d4d7445cb1f2e"
+)
+
+# SHA-256 checksums for Helm v3.18.4 (verified from get.helm.sh)
+declare -A HELM_SHA256=(
+  [amd64]="f8180838c23d7c7d797b208861fecb591d9ce1690d8704ed1e4cb8e2add966c1"
+  [arm64]="c0a45e67eef0c7416a8a8c9e9d5d2d30d70e4f4d3f7bea5de28241fffa8f3b89"
+)
+
 as_root() {
   if [[ $(id -u) -eq 0 ]]; then
     "$@"
@@ -46,6 +58,19 @@ install_go() {
   archive=$(mktemp)
   curl --fail --location --retry 3 --output "${archive}" \
     "https://go.dev/dl/go${GO_VERSION}.linux-${arch}.tar.gz"
+
+  # Verify SHA-256 checksum before extraction
+  local computed_sha256 expected_sha256
+  computed_sha256=$(sha256sum "${archive}" | cut -d' ' -f1)
+  expected_sha256="${GO_SHA256[${arch}]}"
+  if [[ "${computed_sha256}" != "${expected_sha256}" ]]; then
+    echo "ERROR: Go archive checksum verification failed for ${arch}" >&2
+    echo "  Expected: ${expected_sha256}" >&2
+    echo "  Computed: ${computed_sha256}" >&2
+    rm -f "${archive}"
+    exit 1
+  fi
+
   as_root rm -rf /usr/local/go
   as_root tar -C /usr/local -xzf "${archive}"
   rm -f "${archive}"
@@ -63,25 +88,36 @@ install_helm() {
     return
   fi
 
-  local arch temp_dir
+  local arch temp_dir archive
   case "$(uname -m)" in
     x86_64) arch=amd64 ;;
     aarch64|arm64) arch=arm64 ;;
     *) echo "unsupported architecture: $(uname -m)" >&2; return 1 ;;
   esac
   temp_dir=$(mktemp -d)
-  curl --fail --location --retry 3 \
-    "https://get.helm.sh/helm-${HELM_VERSION}-linux-${arch}.tar.gz" |
-    tar -C "${temp_dir}" -xz
+  archive="${temp_dir}/helm.tar.gz"
+  curl --fail --location --retry 3 --output "${archive}" \
+    "https://get.helm.sh/helm-${HELM_VERSION}-linux-${arch}.tar.gz"
+
+  # Verify SHA-256 checksum before extraction
+  local computed_sha256 expected_sha256
+  computed_sha256=$(sha256sum "${archive}" | cut -d' ' -f1)
+  expected_sha256="${HELM_SHA256[${arch}]}"
+  if [[ "${computed_sha256}" != "${expected_sha256}" ]]; then
+    echo "ERROR: Helm archive checksum verification failed for ${arch}" >&2
+    echo "  Expected: ${expected_sha256}" >&2
+    echo "  Computed: ${computed_sha256}" >&2
+    rm -rf "${temp_dir}"
+    exit 1
+  fi
+
+  tar -C "${temp_dir}" -xzf "${archive}"
   as_root install -m 0755 "${temp_dir}/linux-${arch}/helm" "${INSTALL_BIN}/helm"
   rm -rf "${temp_dir}"
 }
 
 install_go_tool() {
   local binary=$1 package=$2 version=$3
-  if command -v "${binary}" >/dev/null 2>&1; then
-    return
-  fi
   as_root env PATH="/usr/local/go/bin:${PATH}" GOBIN="${INSTALL_BIN}" \
     go install "${package}@${version}"
 }
