@@ -25,7 +25,7 @@ jobs:
       contents: write      # create the RC tag and the GitHub prerelease
       pull-requests: read  # find the open release-please PR
       checks: read         # poll ci-success for this commit
-    uses: rknightion/.github/.github/workflows/auto-rc.yml@5095ea299501253ccbd528ff4f1967d0e8136fac # main
+    uses: rknightion/.github/.github/workflows/auto-rc.yml@abfb917ddc93841112e3b4cc3c90da0be0dd148f # main
     with:
       image-ref: ghcr.io/rknightion/graph2otel
 
