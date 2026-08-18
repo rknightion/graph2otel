@@ -1,0 +1,65 @@
+# Automatic release candidates. On every push to main that passes CI, cut
+# vX.Y.Z-rc.N against the version release-please is already staging in its open
+# release PR, then publish the image, chart and binaries for it.
+#
+# The stable release path (release-please.yml) is untouched: it still opens and
+# maintains the release PR, and a stable release still requires an explicit
+# merge. The RC path never writes to the changelog or the release PR.
+name: auto-rc
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never cancel a half-published RC; serialize instead.
+  group: auto-rc
+  cancel-in-progress: false
+
+jobs:
+  rc:
+    permissions:
+      contents: write      # create the RC tag and the GitHub prerelease
+      pull-requests: read  # find the open release-please PR
+      checks: read         # poll ci-success for this commit
+    uses: rknightion/.github/.github/workflows/auto-rc.yml@5095ea299501253ccbd528ff4f1967d0e8136fac # main
+    with:
+      image-ref: ghcr.io/rknightion/graph2otel
+
+  # Same image + chart path a stable release takes, just with an RC tag.
+  # container-publish suppresses `latest` for any tag containing '-', so an RC
+  # can never steal Latest from a stable release.
+  publish:
+    needs: rc
+    if: needs.rc.outputs.tag != ''
+    permissions:
+      contents: write        # attach SBOMs + notices to the RC release
+      packages: write        # push the image and chart to GHCR
+      id-token: write        # cosign keyless signing
+      attestations: write    # SLSA build provenance
+      security-events: write # Trivy SARIF upload
+    uses: ./.github/workflows/publish.yml
+    with:
+      release_tag: ${{ needs.rc.outputs.tag }}
+
+  # goreleaser args and pre-cmd are copied VERBATIM from release-please.yml's
+  # binaries job, including the 12 GB swap that stops the full-matrix
+  # cross-compile OOM-killing the 7 GB runner. If these drift, RC binary builds
+  # will OOM while stable ones keep succeeding.
+  binaries:
+    needs: rc
+    if: needs.rc.outputs.tag != ''
+    permissions:
+      contents: write     # upload binaries + checksums to the RC release
+      id-token: write     # cosign keyless signing
+      packages: write     # goreleaser reads the registry for existing artifacts
+      attestations: write # SLSA build provenance on the archives
+    uses: rknightion/.github/.github/workflows/binaries.yml@d1c590b295b9d7f2535fadc7bc5e74f2eddbd512 # main
+    with:
+      release-tag: ${{ needs.rc.outputs.tag }}
+      install-cosign: true
+      goreleaser-args: "release --clean --skip=docker -p 2"
+      pre-cmd: "sudo swapoff -a || true; sudo rm -f /mnt/swapfile; sudo fallocate -l 12G /mnt/swapfile && sudo chmod 600 /mnt/swapfile && sudo mkswap /mnt/swapfile && sudo swapon /mnt/swapfile && go install github.com/anchore/syft/cmd/syft@v1.18.1 && go install github.com/google/go-licenses@v1.6.0"
