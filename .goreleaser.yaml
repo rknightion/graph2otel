@@ -21,8 +21,18 @@ report_sizes: true
 
 # Verifiable builds: fetch deps from proxy.golang.org and verify against
 # sum.golang.org during release builds (the repo and module are public).
+# proxy: false is REQUIRED here, not a preference. This module has local
+# `replace` directives (third_party/otlploghttp), and goreleaser refuses to
+# release with a replace directive while module proxying is on:
+#   "cannot use the go.mod replace directive with go mod proxy enabled"
+#
+# The failure is SILENT in ordinary CI: ci.yml's goreleaser job runs --snapshot,
+# which skips the go.mod check entirely, so the gate stays green while real
+# releases ship with no binaries at all. v2.0.0 shipped that way -- 13 binary
+# assets on v1.0.0, zero on v2.0.0, because the replace directive landed between
+# them. Do not "restore" proxy: true without first removing the replace.
 gomod:
-  proxy: true
+  proxy: false
 
 builds:
   - id: graph2otel
