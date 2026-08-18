@@ -21,7 +21,7 @@ jobs:
     permissions:
       contents: read
       packages: write # delete package versions
-    uses: rknightion/.github/.github/workflows/ghcr-cleanup.yml@a363b594a7adc19292361081969f2d7af12026f7 # main
+    uses: rknightion/.github/.github/workflows/ghcr-cleanup.yml@1e0f45bfdc28163f4e3ae99a7d497638ac6d9223 # v1.7.0
     with:
       packages: "graph2otel,charts/graph2otel"
       # Scheduled runs prune for real; a manual dispatch defaults to dry-run.
