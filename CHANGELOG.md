@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.1.0](https://github.com/rknightion/graph2otel/compare/v2.0.0...v2.1.0) (2026-08-21)
+
+
+### Features
+
+* **chart:** add Artifact Hub metadata and point home at the docs site ([cede7dd](https://github.com/rknightion/graph2otel/commit/cede7dd60d8cf2b897f7c1234eb08626ccc98547))
+
+
+### Bug Fixes
+
+* author is Rob Knight, not Rob Knighton ([a0797e6](https://github.com/rknightion/graph2otel/commit/a0797e649a944770954546cfe096c5e6b6e9c7d2))
+* **ci:** restore Renovate automerge gates ([#433](https://github.com/rknightion/graph2otel/issues/433)) ([9c0c6eb](https://github.com/rknightion/graph2otel/commit/9c0c6eb0e948518b8b9ee176de67d0297a50ebac))
+* **deps:** update module github.com/azure/azure-sdk-for-go/sdk/azcore to v1.23.0 ([#430](https://github.com/rknightion/graph2otel/issues/430)) ([4e640cd](https://github.com/rknightion/graph2otel/commit/4e640cd1bc116ac0ecc3603130c5c1d3f9adf4dd))
+* **deps:** update module github.com/grafana/pyroscope-go to v1.4.2 ([#429](https://github.com/rknightion/graph2otel/issues/429)) ([9a47fdc](https://github.com/rknightion/graph2otel/commit/9a47fdc331f2c9bbf197539a371f4ea0146548a0))
+* **deps:** update module google.golang.org/grpc to v1.83.1 ([#435](https://github.com/rknightion/graph2otel/issues/435)) ([7273b95](https://github.com/rknightion/graph2otel/commit/7273b95df32de8c2308bbe5adf6d8996c4093633))
+* **docs:** stop two wrapped references rendering as page headings ([5278959](https://github.com/rknightion/graph2otel/commit/52789597c460a570763af93b8a54d216d6795a86))
+* **goreleaser:** disable module proxying so releases actually ship binaries ([7c00bf2](https://github.com/rknightion/graph2otel/commit/7c00bf29c659f85860446f10dc7ad15072b83452))
+* **test:** point the documentation gates at AGENTS.md, not the import stub ([ed4009e](https://github.com/rknightion/graph2otel/commit/ed4009eed9cca74faec35ecc934e921a800a75a1))
+
 ## [2.0.0](https://github.com/rknightion/graph2otel/compare/v1.0.0...v2.0.0) (2026-08-10)
 
 
