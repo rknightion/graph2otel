@@ -1,6 +1,6 @@
 ---
 title: Environment Variables
-description: Every G2O_* environment variable, its default, and what it controls
+description: Reference every G2O_* environment variable, its default value, configuration precedence, and the graph2otel behavior it controls.
 ---
 
 # Environment-variable reference

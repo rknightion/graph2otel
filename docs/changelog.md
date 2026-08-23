@@ -1,6 +1,6 @@
 ---
 title: Changelog
-description: Release history for graph2otel
+description: Review graph2otel releases, Microsoft Graph integrations, telemetry changes, deployment updates, and resolved defects.
 ---
 
 # Changelog
