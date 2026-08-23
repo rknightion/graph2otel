@@ -8,7 +8,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X github.com/rknightion/graph2otel/internal/version.Version=$(VERSION)
 
 # Pinned tool versions (override via env; majors are load-bearing for the v2 config schema).
-GOLANGCI_LINT_VERSION ?= v2.12.2
+GOLANGCI_LINT_VERSION ?= v2.13.1
 # go-licenses v1.x: `go install github.com/google/go-licenses@vX`. A bump to v2+
 # needs the `/v2` module suffix in the install path below (and a re-check of the
 # `report --template` CLI), so keep this on v1 unless that path is updated too.

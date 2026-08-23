@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-08-14 17:20'
-updated_date: '2026-08-23 19:49'
+updated_date: '2026-08-23 20:21'
 labels:
   - needs-triage
   - ci
@@ -53,4 +53,6 @@ Current plan only: the earlier 1.26.6 patch step is historical and superseded. R
 Updated go.mod to 1.26.6. Full local validation is blocked by the supplied Go installations: the preinstalled go command crashes while selecting 1.26.6, and a downloaded archive reports go1.26.6 while containing a standard library compiled by go1.24.3. CI-only criteria remain unchecked pending GitHub.
 
 Go 1.27.0 full local make check passed: race tests, lint with 0 issues, govulncheck with no reachable vulnerabilities, tidy, nested tools, fork checks, Grafana checks, and build. No registry-driven or generated surface changed, so regeneration was not required. Paid-plan CodeRabbit review completed; its tracker-plan observations were clarified and its workflow mismatch claim was verified false against the root and nested module pins.
+
+The campaign-wide Linux compatibility sweep raised the local/cloud golangci-lint pin from v2.12.2 to current v2.13.1, matching the existing hosted workflow. The cloud setup contract test and shell syntax check passed. A local Linux-target lint attempt remained active for over 10 minutes and was stopped without a result; exact-head hosted CI is the Linux proof.
 <!-- SECTION:NOTES:END -->
