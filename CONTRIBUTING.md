@@ -16,7 +16,7 @@ bar — the workflow below keeps it that way.
 
 ## Dev setup
 
-Requires **Go 1.26+**. The single green-bar command is:
+Requires **Go 1.27+**. The single green-bar command is:
 
 ```bash
 make check    # vet + test + lint + govulncheck + build

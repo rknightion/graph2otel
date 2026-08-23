@@ -8,4 +8,4 @@
 // module's msgraph-heavy tree here would make a 10-second job a 3-minute one.
 module github.com/rknightion/graph2otel/tools/graphdrift
 
-go 1.26.5
+go 1.27.0

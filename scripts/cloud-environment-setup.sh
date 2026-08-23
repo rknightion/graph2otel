@@ -4,16 +4,15 @@
 
 set -euo pipefail
 
-# Use the patched release accepted by this module's `go 1.26.5` minimum. The
-# older patch is affected by standard-library findings that make govulncheck fail.
-readonly GO_VERSION="1.26.6"
+# Match the repository's Go toolchain requirement exactly.
+readonly GO_VERSION="1.27.0"
 readonly HELM_VERSION="v3.18.4"
 readonly INSTALL_BIN="/usr/local/bin"
 
-# SHA-256 checksums for Go 1.26.6 (verified from go.dev)
+# SHA-256 checksums for Go 1.27.0 (verified from go.dev)
 declare -A GO_SHA256=(
-  [amd64]="708effb774be8237570d0add163225abbdfaf4fca28b2611df167beba4feef89"
-  [arm64]="d0507e9e9d7fe012aae570108cbd76c15de879e17130ab8cb90d4d7445cb1f2e"
+  [amd64]="675c26c449cbb18fc24b74650de1eabbae6e16f64326fd85a283fb3b58280685"
+  [arm64]="51798d2c42d0e1c6ed7fd9f48728b4193abac9e8aad6dbac2fe96a81f5909bda"
 )
 
 # SHA-256 checksums for Helm v3.18.4 (verified from get.helm.sh)

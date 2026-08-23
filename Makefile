@@ -7,14 +7,6 @@ BINARY := graph2otel
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X github.com/rknightion/graph2otel/internal/version.Version=$(VERSION)
 
-# Build with the goroutineleakprofile runtime experiment so the shipped binary
-# registers the goroutineleak pprof profile (pushed to Pyroscope by default). The
-# profiling code guards on availability, so a build without this simply omits that
-# one profile type. Override to empty to drop it. Must match the Dockerfile and
-# .goreleaser.yaml. A future Go that removes the experiment fails the build loudly.
-GOEXPERIMENT ?= goroutineleakprofile
-export GOEXPERIMENT
-
 # Pinned tool versions (override via env; majors are load-bearing for the v2 config schema).
 GOLANGCI_LINT_VERSION ?= v2.12.2
 # go-licenses v1.x: `go install github.com/google/go-licenses@vX`. A bump to v2+
@@ -291,7 +283,7 @@ notices: tools-licensing
 
 # SPDX + CycloneDX SBOMs of the shipped binary -> dist/sbom/ (release artifacts).
 sbom: tools-sbom
-	CGO_ENABLED=0 GOEXPERIMENT=$(GOEXPERIMENT) $(GO) build -trimpath \
+	CGO_ENABLED=0 $(GO) build -trimpath \
 	  -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/$(BINARY)
 	SYFT=$(TOOLS_DIR)/syft bash scripts/sbom.sh
 

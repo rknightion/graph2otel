@@ -35,16 +35,14 @@ func TestBuildConfigBaseProfileTypesAndVersionTag(t *testing.T) {
 		t.Errorf("user tag env = %q, want lab", pc.Tags["env"])
 	}
 	// Base set (no mutex/block) = 6 types.
-	// Base set (no mutex/block) = 6 types, plus goroutine-leak when the binary
-	// was built with GOEXPERIMENT=goroutineleakprofile.
+	// Base set (no mutex/block) = 6 types, plus goroutine-leak when the runtime
+	// exposes it.
 	if want := 6 + leakCount(); len(pc.ProfileTypes) != want {
 		t.Errorf("ProfileTypes = %d, want %d (base set[+leak])", len(pc.ProfileTypes), want)
 	}
 }
 
-// leakCount is 1 when the goroutineleak profile is available (built with the
-// experiment), else 0 — so the type-count assertions hold in both CI (plain
-// build) and release builds.
+// leakCount is 1 when the goroutineleak profile is available, else 0.
 func leakCount() int {
 	if goroutineLeakAvailable() {
 		return 1
