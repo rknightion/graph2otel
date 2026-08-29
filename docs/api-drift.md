@@ -108,7 +108,7 @@ a red run means something.
 
 An `operation_added` / `operation_removed` change means the snapshot is out of sync with
 the manifest, not that upstream moved. `TestBetaSurfaceSnapshotMatchesManifest` catches
-that offline in `make check`, so it should never reach the daily run.
+that offline in `just check`, so it should never reach the daily run.
 
 ## Gates
 
@@ -126,10 +126,10 @@ first gate runs in both directions.
 
 ```sh
 # diff the live beta metadata against the committed snapshot
-make graphdrift
+just graphdrift
 
 # refresh the snapshot (after a manifest change, or after triaging real drift)
-make graphdrift-update
+just graphdrift-update
 
 # other formats / a local copy of $metadata, no network
 .tools/graphdrift -manifest spec/graph-beta-surface.json \
@@ -144,7 +144,7 @@ so a Microsoft outage cannot be mistaken for a clean run.
 
 **Run the built binary, not `go run`.** Live-measured on go1.26.5: `go run` collapses any
 non-zero exit to `1` and prints `exit status N` to stderr, which erases the difference
-between drift and a tool failure. The make targets and the workflow both build first.
+between drift and a tool failure. The just recipes and the workflow both build first.
 Running it under `go run -C tools/graphdrift .` is fine for eyeballing the report — just
 do not branch on its exit code.
 

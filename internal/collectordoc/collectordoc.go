@@ -5,7 +5,7 @@
 //
 // The reference was hand-maintained and drifted one-directionally: 57 collectors
 // were registered and 49 documented, because adding a collector never forced a
-// doc edit. Nothing in `make check` noticed. Worse, hand-diffing the table
+// doc edit. Nothing in `just check` noticed. Worse, hand-diffing the table
 // against the code gives the wrong answer in BOTH directions — a grep catches
 // metric names as if they were collectors and misses collectors whose names come
 // from spec structs. Only walking the registry gives truth.

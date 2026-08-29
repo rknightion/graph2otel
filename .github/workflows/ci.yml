@@ -26,12 +26,16 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: '1.58.0'
+
       # `-mod=readonly` only catches a go.mod missing a requirement, not stale
       # indirect/direct markers or leftover unused ones — `go mod tidy -diff`
       # reports those and exits non-zero without writing. Covers both modules;
-      # fix locally with `make tidy`.
+      # fix locally with `just tidy`.
       - name: go.mod tidy check
-        run: make tidy-check
+        run: just tidy-check
 
       - name: go vet
         run: go vet ./...
@@ -40,13 +44,13 @@ jobs:
         run: go build ./...
 
       - name: go test -race
-        run: go test -race ./...
+        run: just test
 
       # tools/ holds separate CI-only modules (graphdrift, the Graph beta drift
       # canary), so the root `./...` above does not see them. graphdrift is
       # standard-library-only — no module downloads, a few seconds.
       - name: vet + test the tools modules
-        run: make tools-check
+        run: just tools-check
 
   lint:
     name: golangci-lint
@@ -61,12 +65,16 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: '1.58.0'
+
       # gofmt/goimports are enforced here via the `formatters` block in
       # .golangci.yml, so there is no separate gofmt step.
+      - run: just setup
+
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
-        with:
-          version: v2.13.2
+        run: just lint
 
   govulncheck:
     name: govulncheck
@@ -81,11 +89,14 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: install govulncheck (pinned)
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: '1.58.0'
+
+      - run: just setup
 
       - name: govulncheck
-        run: govulncheck ./...
+        run: just audit
 
   goreleaser-snapshot:
     name: goreleaser build (snapshot)
@@ -144,6 +155,11 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           persist-credentials: false
+
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: '1.58.0'
+
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
 
       # The Dockerfile's `go build` step uses a BuildKit cache mount for the Go
@@ -180,7 +196,7 @@ jobs:
             VERSION=ci-${{ github.sha }}
 
       - name: smoke standalone container layout
-        run: make CONTAINER_SMOKE_IMAGE=graph2otel:ci SKIP_BUILD=1 container-smoke
+        run: just smoke graph2otel:ci 1
 
   helm:
     name: helm lint + template
@@ -197,32 +213,17 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: test rendered Helm contracts
-        run: go test ./charts/graph2otel -count=1
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: '1.58.0'
 
-      - name: helm lint
-        run: helm lint charts/graph2otel
+      - name: helm lint + template + contracts
+        run: just helm-check
 
       # The chart README is generated from values.yaml annotations (helm-docs). Fail
-      # if it drifts — regenerate with `make helm-docs`.
+      # if it drifts — regenerate with `just helm-docs`.
       - name: helm-docs README up to date
-        run: |
-          make helm-docs
-          git diff --exit-code charts/graph2otel/README.md
-
-      - name: helm template
-        run: helm template t charts/graph2otel > /dev/null
-
-      # Exercise the non-default branches (existing secret, PVC persistence,
-      # admin disabled) so a broken conditional doesn't slip past the default-
-      # values render above.
-      - name: helm template (persistence + existingSecret + admin disabled)
-        run: |
-          helm template t charts/graph2otel \
-            --set persistence.enabled=true \
-            --set existingSecret=my-secret \
-            --set config.admin.enabled=false \
-            > /dev/null
+        run: just helm-docs-check
 
   # Dashboards-as-code gate (#218). Fails when a metric graph2otel emits is on no
   # panel and carries no waiver, when a waiver is stale or reasonless, when a
@@ -241,8 +242,12 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: '1.58.0'
+
       - name: Verify dashboards, alert rules and generated docs
-        run: make grafana-check
+        run: just grafana-check
 
   # This chart published to GHCR with no schema validation against the real
   # Kubernetes API schemas at all — the `helm` job above only ran helm's own
@@ -281,8 +286,12 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: '1.58.0'
+
       - name: Generate coverage profile
-        run: make coverage
+        run: just coverage
 
       - name: Upload coverage to Codacy
         if: ${{ env.CODACY_PROJECT_TOKEN != '' }}   # skip on fork PRs (secret unavailable)

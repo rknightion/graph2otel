@@ -16,26 +16,27 @@ bar — the workflow below keeps it that way.
 
 ## Dev setup
 
-Requires **Go 1.27+**. The single green-bar command is:
+Requires **Go 1.27+**. `just setup` installs the pinned toolchain into `.tools/`.
+The single green-bar command is:
 
 ```bash
-make check    # vet + test + lint + govulncheck + build
+just check   # fmt + lint + tests + vuln scan + generated-asset drift + build
 ```
 
 Other useful targets:
 
 ```bash
-make build          # -> bin/graph2otel (version stamped via git describe)
-make test           # go test -race ./...
-make lint           # golangci-lint run
-make fmt            # golangci-lint fmt (gofmt + goimports)
-make docker         # build the container image locally
-make dashboard      # regenerate dashboards/graph2otel.json from grafana/boards/*.py
-make grafana-check  # dashboard metric coverage + log coverage + freshness (a CI leg)
+just build         # -> bin/graph2otel (version stamped via git describe)
+just test          # go test -race ./...
+just lint          # go vet + golangci-lint run
+just fmt           # golangci-lint fmt (gofmt + goimports) + just --fmt
+just image         # build the container image locally
+just dashboard     # regenerate dashboards/graph2otel.json from grafana/boards/*.py
+just grafana-check # dashboard metric coverage + log coverage + freshness (a CI leg)
 ```
 
 `dashboards/graph2otel.json` is **generated** — edit `grafana/boards/*.py`, not the JSON. A new
-collector's metrics must reach a panel (or a documented waiver) or `make grafana-check`
+collector's metrics must reach a panel (or a documented waiver) or `just grafana-check`
 fails; see [`grafana/AUTHORING.md`](grafana/AUTHORING.md). It needs only `python3` —
 no packages to install.
 
@@ -45,7 +46,7 @@ no packages to install.
    this project's own workflow below).
 2. Write a failing test first, watch it fail for the right reason, then write the minimal
    code to make it pass.
-3. Keep `make check` green.
+3. Keep `just check` green.
 4. Open a pull request with a clear description of the change and its motivation.
 
 ## Commit messages

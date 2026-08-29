@@ -20,23 +20,24 @@ for the user-facing pitch.
 > history, not current state. Keep this file to *current truth*; correction history lives
 > in the archive and in task notes.
 
-## Commands
+## Task interface
 
-```sh
-go build ./cmd/graph2otel   # build the binary (or: go build ./...)
-go test -race ./...         # unit + integration tests (race detector on)
-go vet ./...
-golangci-lint run           # lint (v2 config, .golangci.yml)
-golangci-lint fmt           # apply gofmt + goimports
-make tidy                   # tidy root, tools/graphdrift, and both OTLP/HTTP fork modules
-make forks-check            # vet/test/tidy + provenance gate for both third_party forks
-make tools-check            # vet + test the separate tools/graphdrift module
-make check                  # root + tools + forks + lint/vuln/tidy/build — the green bar
-```
+This repo's task surface is a `justfile`. Discover it, don't guess it:
 
-`make check` is the full gate; it covers the root module, `tools/graphdrift`, and
-the two modules under `third_party/`. Run it before every commit. CI runs the same
-steps.
+    just --list                        # human-readable
+    just --dump --dump-format json     # machine-readable
+    just --show <recipe>               # what a recipe actually runs
+
+- `just check` is the full gate and is exactly what `.github/workflows/ci.yml` enforces. It must
+  pass before you commit. It covers the root module, `tools/graphdrift`, and the two modules under
+  `third_party/`, plus the generated-asset drift gates.
+- `just ci` adds the docker legs (image build + container smoke) that need a local docker daemon.
+- Prefer `just <recipe>` over the underlying tool. If you are typing `go test`, you want `just test`.
+- Run `just` with stdin from /dev/null. Recipes marked `[confirm]` are destructive — stop and ask
+  before running one; never pass `--yes` or `JUST_YES=1` manually. The reviewed
+  `.github/workflows/grafana-sync.yml` invocation is the sole CI exception.
+- If a task you need does not exist, add a recipe with a `#` doc comment and a `[group(...)]`
+  rather than running a bare command.
 
 ## Development methodology
 
@@ -245,7 +246,7 @@ a trusted sink and scoping its credentials is the actual control. The rule only 
 | Anything blob-shaped | `docs/blob-ingest.md` | layout, byte-offset cursor design, backfill/freeze behavior, at-least-once duplicates, per-category envelope mapping rules |
 | `m365.activity` / O365 Management API | `docs/o365-management-api.md` | wire-format traps (CreationTime, PascalCase, unknown record types), AF20024, 24h window cap, arrival-clock dedupe rules |
 | Signal naming + LogQL | `docs/signals.md` | event names, structured-metadata querying, tenant_id truth |
-| Adding/changing a **beta** endpoint | `docs/api-drift.md` | the beta drift canary: `spec/graph-beta-surface.json` must list every beta-consuming package (gated both ways), then `make graphdrift-update` |
+| Adding/changing a **beta** endpoint | `docs/api-drift.md` | the beta drift canary: `spec/graph-beta-surface.json` must list every beta-consuming package (gated both ways), then `just graphdrift-update` |
 
 These docs carry the deep lore that used to live in this file. **They are current-truth
 references with evidence tags — keep them that way** (state the truth positively; leave

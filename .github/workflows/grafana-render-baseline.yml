@@ -1,7 +1,7 @@
 name: Grafana render baseline
 
 # Scheduled, read-only execution of #309's render lane
-# (grafana/performance_baseline.py --live-context via `make
+# (grafana/performance_baseline.py --live-context via `just
 # grafana-performance-render`). It logs into the production stack as the
 # SAME least-privilege read-only service account #308 already provisioned
 # (`graph2otel-semantic-canary`, Viewer role, id 36) — no second credential
@@ -120,6 +120,10 @@ jobs:
       - name: Verify gcx
         run: gcx --version
 
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: '1.58.0'
+
       # Non-interactive login, reusing #308's read-only service account
       # secrets verbatim. Never echo the secrets and never `set -x` in this
       # or any later step — GitHub masks secrets.* values in logs, but this
@@ -144,9 +148,7 @@ jobs:
         id: baseline
         run: |
           set +e
-          make grafana-performance-render \
-            GRAFANA_CONTEXT="$GCX_CONTEXT" \
-            GRAFANA_PERFORMANCE_BUDGET_SECONDS=30 \
+          just grafana-performance-render "$GCX_CONTEXT" 30 \
             > render-baseline-receipt.json 2> render-baseline-stderr.log
           code=$?
           echo "exit_code=${code}" >> "$GITHUB_OUTPUT"

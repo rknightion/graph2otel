@@ -1,7 +1,7 @@
 name: Grafana semantic canary
 
 # Scheduled, maintainer-owned execution of #308's read-only Grafana semantic
-# canary (grafana/semantic_canary.py via `make grafana-canary`). It logs into
+# canary (grafana/semantic_canary.py via `just grafana-canary`). It logs into
 # the production stack as the least-privilege `graph2otel-semantic-canary`
 # service account (Viewer role, id 36), runs the versioned probe manifest
 # (spec/grafana-semantic-canary.json), and uploads the JSON receipt as a
@@ -67,6 +67,10 @@ jobs:
       - name: Verify gcx
         run: gcx --version
 
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: '1.58.0'
+
       # Non-interactive login. Never echo the secrets and never `set -x` in
       # this or any later step — GitHub masks secrets.* values in logs, but
       # this step still must not print them itself.
@@ -87,10 +91,7 @@ jobs:
         id: canary
         run: |
           set +e
-          make grafana-canary \
-            GRAFANA_CONTEXT="$GCX_CONTEXT" \
-            GRAFANA_PROMETHEUS_DATASOURCE=grafanacloud-prom \
-            GRAFANA_LOKI_DATASOURCE=grafanacloud-logs \
+          just grafana-canary "$GCX_CONTEXT" grafanacloud-prom grafanacloud-logs \
             > canary-receipt.json 2> canary-stderr.log
           code=$?
           echo "exit_code=${code}" >> "$GITHUB_OUTPUT"

@@ -2,7 +2,7 @@
 
 Standard-library ``unittest`` only, same convention as ``test_build_rules.py``.
 Auto-discovered by ``python3 -m unittest discover -s tests -t .``, so
-``make grafana-check`` and CI run these.
+``just grafana-check`` and CI run these.
 
 # What these gates exist to prevent
 

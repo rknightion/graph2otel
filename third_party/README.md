@@ -64,7 +64,7 @@ Then, back in the repo:
 3. Bump the root `go.mod`. The two replaced modules need
    `go mod edit -require=...@<new>` — `go get` will not touch a replaced module,
    and `forks-check` fails if the required version does not match the manifest.
-4. `make tidy && make check`.
+4. `just tidy && just check`.
 
 ## Traps this has already produced
 

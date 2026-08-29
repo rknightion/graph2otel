@@ -6,7 +6,7 @@ convention). Auto-discovered by:
 
     python3 -m unittest discover -s tests -t .
 
-``make grafana-check`` runs them, so CI does too.
+``just grafana-check`` runs them, so CI does too.
 """
 
 from __future__ import annotations
@@ -308,7 +308,7 @@ class TestStaleness(unittest.TestCase):
 class TestYamlRoundTrips(unittest.TestCase):
     def test_every_manifest_round_trips_through_pyyaml(self):
         """Best-effort: PyYAML is NOT a build/CI dependency (pure-stdlib
-        generator, no setup-python step — see Makefile / ci.yml), so this skips
+        generator, no setup-python step — see the justfile / ci.yml), so this skips
         rather than fails when it is unavailable. It still matters, because the
         generator emits YAML with its own yamlify() and a real parser is the only
         thing that proves the output is valid YAML rather than merely
@@ -878,7 +878,7 @@ class TestAppPlatformProjection(unittest.TestCase):
             path = os.path.join(build_rules.RULES_DIR, fname)
             with open(path, "rb") as f:
                 self.assertEqual(f.read(), data,
-                                 f"{fname} is stale — run `make rules`")
+                                 f"{fname} is stale — run `just rules`")
 
     def test_no_classic_file_provisioning_bundle_is_committed(self):
         """#294: one representation only. A committed `apiVersion: 1` +

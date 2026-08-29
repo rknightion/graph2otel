@@ -1,7 +1,7 @@
 # Authoring graph2otel's dashboards
 
-`dashboards/graph2otel.json` is **generated**. Do not edit it — `make grafana-check`
-fails on a hand-edited file. Edit `grafana/boards/*.py` and run `make dashboard`.
+`dashboards/graph2otel.json` is **generated**. Do not edit it — `just grafana-check`
+fails on a hand-edited file. Edit `grafana/boards/*.py` and run `just dashboard`.
 
 The whole estate is ONE Grafana **v2 dynamic dashboard** (`dashboard.grafana.app/v2`,
 Grafana 13+): a root `TabsLayout` of seven tabs, each domain tab a nested `TabsLayout`
@@ -10,8 +10,8 @@ tab**, and its panels are packed into a 24-column grid — so a board module sti
 declares rows of panels and never writes a coordinate, a tab, or a layout kind.
 
 ```sh
-make dashboard       # regenerate dashboards/graph2otel.json
-make grafana-check   # the gate: coverage + log coverage + freshness + structure
+just dashboard       # regenerate dashboards/graph2otel.json
+just grafana-check   # the gate: coverage + log coverage + freshness + structure
 ```
 
 Pure standard-library `python3`. Nothing to install, which is why the CI job has no
@@ -32,7 +32,7 @@ Pure standard-library `python3`. Nothing to install, which is why the CI job has
 | `grafana/boards/*.py` | one module per dashboard; **data, not code** |
 | `grafana/waivers.json` | metrics deliberately off every panel, with a reason each |
 | `grafana/build_dashboard.py` | orchestrator, CLI, and every gate |
-| `grafana/tests/` | `unittest` structural gates, run by `make grafana-check` |
+| `grafana/tests/` | `unittest` structural gates, run by `just grafana-check` |
 
 ## Where the catalog comes from, and why nobody maintains it
 

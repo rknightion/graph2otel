@@ -21,8 +21,8 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 # Third-party notices for the linked modules, baked into /licenses/ in the runtime
 # stage below. Runs on the build platform against the module cache populated above
 # (scripts/notices.sh also runs `go mod download`). Keep GO_LICENSES_VERSION in sync
-# with the Makefile. bookworm ships bash, so no extra shell install is needed.
-# v1.x install path (no `/v2` suffix); keep in sync with the Makefile pin.
+# with the justfile. bookworm ships bash, so no extra shell install is needed.
+# v1.x install path (no `/v2` suffix); keep in sync with the justfile pin.
 ARG GO_LICENSES_VERSION=v1.6.0
 RUN --mount=type=cache,target=/root/.cache/go-build \
     GOBIN=/usr/local/bin go install github.com/google/go-licenses@${GO_LICENSES_VERSION} && \

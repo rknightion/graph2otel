@@ -5,10 +5,10 @@ Example Grafana alert rules that complement the dashboards in `../dashboards/`.
 `rules/` holds one **Grafana App Platform** `AlertRule` manifest per rule
 (`rules.alerting.grafana.app/v0alpha1`), **generated** by
 [`grafana/build_rules.py`](../grafana/build_rules.py) — do not hand-edit them;
-`make grafana-check` fails on a hand-edited file. Edit the `RULES` or
-`DETECTIONS` list in that script, then run `make rules`. This file (the prose
+`just grafana-check` fails on a hand-edited file. Edit the `RULES` or
+`DETECTIONS` list in that script, then run `just rules`. This file (the prose
 below) stays hand-authored: the generator never touches it. Deploy with
-`make rules-push`, documented in
+`just rules-push`, documented in
 [Deploying observability](../docs/deploying-observability.md).
 
 **Per-rule runbooks live on the docs site:**
@@ -16,7 +16,7 @@ below) stays hand-authored: the generator never touches it. Deploy with
 `runbook_url` annotation pointing at its own section there, plus
 `__dashboardUid__` + `__panelId__` so Grafana renders a link to the panel showing
 the same signal. Both are generated from the rule uid and from
-`dashboards/graph2otel.json`, and `make grafana-check` fails on a runbook anchor
+`dashboards/graph2otel.json`, and `just grafana-check` fails on a runbook anchor
 or panel that does not exist (#307). The doc blocks below carry the design
 rationale — thresholds, why a companion exists, what was rejected; the runbook
 page carries what to *do* when one fires.
@@ -637,7 +637,7 @@ tenant, which is exactly why they are yours to write and not ours to ship.
 
 ## Validating
 
-`make grafana-check` proves each manifest is well-formed, that every metric name
+`just grafana-check` proves each manifest is well-formed, that every metric name
 resolves against the generated signal catalog, that every log filter names an
 attribute graph2otel really emits, and that no committed file has drifted from
 the generator. It cannot prove a rule EVALUATES — that needs a live Grafana, and
@@ -651,9 +651,9 @@ MDCA parse failure. That is **not done here**.
 
 ## Loading
 
-`make rules-push GRAFANA_CONTEXT=<gcx-context>` deploys the health rules, and
-`INCLUDE_DETECTIONS=1` additionally deploys the paused detection pack into its own
-folder. `make rules-readback` compares the stack against the repository field by
+`just rules-push <gcx-context>` deploys the health rules, and
+`just rules-push <gcx-context> graph2otel 1` additionally deploys the paused detection pack into its own
+folder. `just rules-readback <gcx-context>` compares the stack against the repository field by
 field. See
 [Deploying observability](../docs/deploying-observability.md) for the four
 non-guessable API requirements this wraps.

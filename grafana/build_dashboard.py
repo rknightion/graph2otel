@@ -4,7 +4,7 @@
     python3 build_dashboard.py            # write dashboards/*.json, then gate
     python3 build_dashboard.py --check    # gate only, write nothing (CI)
 
-Run from grafana/ (``make dashboard`` / ``make grafana-check`` do).
+Run from grafana/ (``just dashboard`` / ``just grafana-check`` do).
 
 # What the coverage gate is for
 

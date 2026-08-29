@@ -159,7 +159,7 @@ func TestBetaSurfaceManifestCoversEveryBetaConsumer(t *testing.T) {
 // TestBetaSurfaceSnapshotMatchesManifest is the offline half of the canary: the
 // daily workflow catches upstream drift, this catches a snapshot that was never
 // regenerated after the manifest changed. Both files are committed, so it needs
-// no network and runs in `make check`.
+// no network and runs in `just check`.
 func TestBetaSurfaceSnapshotMatchesManifest(t *testing.T) {
 	man := loadBetaManifest(t)
 

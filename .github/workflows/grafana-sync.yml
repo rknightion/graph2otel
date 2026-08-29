@@ -7,7 +7,7 @@ name: grafana-sync
 #                Grafana GitSync source and Grafana writes UI saves back into it. A
 #                direct API push would create out-of-band edits and make the repo and
 #                the stack diverge with no way to tell which is right.
-#   rules     -> `make rules-push`, this repository's own deployer. NOT a bare
+#   rules     -> `just rules-push`, this repository's own deployer. NOT a bare
 #                `gcx resources push`: the committed manifests carry
 #                `grafana.app/folder: REPLACE_WITH_FOLDER_UID`, and an unresolved token
 #                fails with 403 rather than filing the rule somewhere wrong.
@@ -26,6 +26,7 @@ on:
       - 'alerts/**'
       - 'grafana/**'
       - 'scripts/grafana-prune-rules.py'
+      - 'justfile'
       - '.github/workflows/grafana-sync.yml'
   workflow_dispatch:
 
@@ -129,6 +130,10 @@ jobs:
           rm -f gcx gcx.tgz
           gcx version
 
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: '1.58.0'
+
       # rules_deploy.py pins the context by NAME and refuses to run without one, so
       # env-var auth alone is not enough here — a real config file is required.
       - name: write the gcx context
@@ -170,7 +175,7 @@ jobs:
           echo "RULES_FOLDER_UID=${uid}" >> "$GITHUB_ENV"
 
       # The deployable set is the deployer's own, not a filename heuristic: the
-      # detection pack is excluded here exactly as `make rules-push` excludes it.
+      # detection pack is excluded here exactly as `just rules-push` excludes it.
       - name: list the rules this repository deploys
         run: |
           set -euo pipefail
@@ -191,12 +196,12 @@ jobs:
             --keep-file expected-rules.txt
 
       - name: push rules
-        run: make rules-push GRAFANA_CONTEXT=m7kni
+        run: just --yes rules-push m7kni
 
       # A push that reports success is not a deployment that matches source — the
       # deployer's read-back compares projected CONTENT field by field.
       - name: prove the stack matches source
-        run: make rules-readback GRAFANA_CONTEXT=m7kni
+        run: just rules-readback m7kni
 
       - name: remove the credential file
         if: always()

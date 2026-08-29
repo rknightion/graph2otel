@@ -44,7 +44,7 @@ jobs:
       helm-chart-path: charts/graph2otel
 
   # go-licenses third-party notices (Go-specific; migrates to the shared binaries
-  # reusable later). Releases only. Runs `make notices` (scripts/notices.sh) — the
+  # reusable later). Releases only. Runs `just notices` (scripts/notices.sh) — the
   # same generator the image build bakes into /licenses/ and that runs locally.
   notices:
     if: inputs.release_tag != ''
@@ -66,8 +66,11 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        with:
+          just-version: '1.58.0'
       - name: Generate third-party notices
-        run: make notices
+        run: just notices
       - name: Attach third-party notices to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -112,7 +112,7 @@ func TestRenderEnvReferenceEscapesAndLists(t *testing.T) {
 
 // TestEnvReferenceDocInSync is the drift gate: docs/env-vars.md must equal the
 // table generated from config.example.yaml. It rides the normal `go test` run
-// (no separate tool/module), so it is already part of `make check`. Regenerate
+// (no separate tool/module), so it is already part of `just check`. Regenerate
 // with `scripts/regen-generated.sh envref` or
 // `go test ./internal/config -run TestEnvReferenceDocInSync -update`.
 func TestEnvReferenceDocInSync(t *testing.T) {

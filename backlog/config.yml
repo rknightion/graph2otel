@@ -2,8 +2,8 @@ project_name: "graph2otel"
 default_status: "To Do"
 statuses: ["To Do", "In Progress", "Parked", "Done"]
 definition_of_done:
-  - "make check is green — vet, go test -race ./..., lint, govulncheck, tidy-check, tools-check, forks-check, grafana-check, build. Evidence, not assertion: paste or cite the run."
-  - "make regen run and its output committed if the change touches a registry-driven or generated surface (collectors, env vars, beta drift spec)."
+  - "just check is green — fmt-check, lint, tidy-check, tools-check, forks-check, test, audit, gen-check, helm-check, build. Evidence, not assertion: paste or cite the run."
+  - "just gen run and its output committed if the change touches a registry-driven or generated surface (collectors, env vars, signal catalog, dashboards, alert rules, chart README, beta drift spec)."
   - "Committed green to main and pushed, with the resulting SHA recorded in this task."
 labels: []
 date_format: yyyy-mm-dd

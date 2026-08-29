@@ -18,23 +18,41 @@ import v2  # noqa: E402
 
 class TestOperatorObservabilityInventory(unittest.TestCase):
     def test_full_check_runs_the_grafana_asset_gate(self):
+        check = subprocess.run(
+            ["just", "--show", "check"],
+            cwd=REPO,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertIn("gen-check", check.stdout)
+
+        generated_assets = subprocess.run(
+            ["just", "--show", "gen-check"],
+            cwd=REPO,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertIn("grafana-check", generated_assets.stdout)
+
         result = subprocess.run(
-            ["make", "--no-print-directory", "-n", "check"],
+            ["just", "--show", "grafana-check"],
             cwd=REPO,
             check=True,
             capture_output=True,
             text=True,
         )
         self.assertIn(
-            "cd grafana && python3 build_dashboard.py --check",
+            "python3 build_dashboard.py --check",
             result.stdout,
         )
         self.assertIn(
-            "cd grafana && python3 build_rules.py --check",
+            "python3 build_rules.py --check",
             result.stdout,
         )
         self.assertIn(
-            "cd grafana && python3 -m unittest discover -s tests -t . -q",
+            "python3 -m unittest discover -s tests -t . -q",
             result.stdout,
         )
 

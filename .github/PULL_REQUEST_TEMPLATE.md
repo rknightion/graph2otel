@@ -9,7 +9,7 @@ Do not include secrets, tokens, tenant identifiers, or any Entra ID / Intune rec
 
 ## Checklist
 
-- [ ] `make check` is green (vet + test + lint + build)
+- [ ] `just check` is green (fmt + lint + tests + vuln scan + generated-asset drift + build)
 - [ ] Tests added/updated (TDD: failing test first), no live network in tests
 - [ ] New `.go` files carry the `SPDX-License-Identifier: AGPL-3.0-only` header
 - [ ] Conventional Commit title (`feat:` / `fix:` / `docs:` / … ; `!` for breaking)

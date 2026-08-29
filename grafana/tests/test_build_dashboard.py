@@ -5,7 +5,7 @@ rule on the Go side. Run from grafana/:
 
     python3 -m unittest discover -s tests -t .
 
-``make grafana-check`` runs them, so CI does too.
+``just grafana-check`` runs them, so CI does too.
 
 # The v2 single-dashboard shape (#399)
 

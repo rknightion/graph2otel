@@ -448,7 +448,7 @@ class TestAgentModeBannerIsToleratedOnReads(unittest.TestCase):
     json.loads over that fails, so the deployer worked on a CI runner (no agent
     mode) and broke in a Claude Code / Cursor session, which is precisely the
     ambient-mode dependence #413 is about. scripts/grafana-prune-rules.py already
-    strips it; the deployer must too, or `make rules-push` succeeds or fails
+    strips it; the deployer must too, or `just rules-push` succeeds or fails
     depending on which terminal it was typed into."""
 
     PAYLOAD = {"items": [{"metadata": {"name": "u"}, "spec": {"title": "t"}}]}

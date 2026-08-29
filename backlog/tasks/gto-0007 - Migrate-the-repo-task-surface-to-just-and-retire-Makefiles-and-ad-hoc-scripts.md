@@ -1,10 +1,11 @@
 ---
 id: GTO-0007
 title: Migrate the repo task surface to just and retire Makefiles and ad-hoc scripts
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@rknightion'
 created_date: '2026-08-28 19:15'
-updated_date: '2026-08-29 11:20'
+updated_date: '2026-08-29 13:28'
 labels:
   - 'wave:2-fleet'
 dependencies: []
@@ -843,6 +844,23 @@ them, which it should not).
 - [ ] #2 make regen run and its output committed if the change touches a registry-driven or generated surface (collectors, env vars, beta drift spec).
 - [ ] #3 Committed green to main and pushed, with the resulting SHA recorded in this task.
 <!-- DOD:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Execute the ratified task-surface migration: establish and validate the supplied justfile; move CI and documentation references without changing protected workflow seams; update the tracker configuration through Backlog; delete the retired make/SBOM surfaces; then run the specified local and post-push evidence gates.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Implementation validation:
+- `just --fmt --check`, `just --dump --dump-format json`, `just --groups`, `just gen` twice (idempotent), `just check`, `actionlint`, and the installed pre-commit hook passed.
+- Docker image build passed; `just smoke graph2otel:dev 1` passed on retry. The first run hit the smoke script's existing log-pipeline race; the pre-migration Make target passed against the same image, and the retried just recipe passed.
+- `zizmor .github/workflows/` remains non-zero on pre-existing findings in auto-rc, the goreleaser cache path, and existing Grafana-sync checkout credential persistence; no new migration finding was introduced.
+- CodeRabbit reviewed the staged diff on the rknightion plan: clarified the sole approved CI `--yes` exception. Left three stale/invalid minor suggestions: `just lint` already runs vet, the new positional rules interface replaces Make variables, and canary defaults are defined in the recipe.
+- `backlog config set` does not expose the list-valued `definition_of_done` key, so the repository's documented config.yml exception was used.
+<!-- SECTION:NOTES:END -->
 
 ## Comments
 

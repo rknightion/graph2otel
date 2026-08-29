@@ -77,9 +77,9 @@ reason.
 ### They are GENERATED — do not hand-edit them
 
 `dashboards/graph2otel.json` is built by `grafana/build_dashboard.py` from
-`grafana/boards/*.py` and `spec/signal-catalog.json`, and `make grafana-check`
+`grafana/boards/*.py` and `spec/signal-catalog.json`, and `just grafana-check`
 (a required CI leg) fails on a hand-edited file. To change a panel, edit the
-board module and run `make dashboard`. See
+board module and run `just dashboard`. See
 [`grafana/AUTHORING.md`](https://github.com/rknightion/graph2otel/blob/main/grafana/AUTHORING.md).
 
 The same gate fails when a metric graph2otel emits reaches no panel at all, so
@@ -113,7 +113,7 @@ annotations); leave both as-is.
 `rules.alerting.grafana.app/v0alpha1`, kind `AlertRule` — one manifest per rule,
 identified by `metadata.name` (the stable rule UID). They are generated from the
 `RULES` and `DETECTIONS` lists in `grafana/build_rules.py`; do not hand-edit them.
-Change the builder, run `make rules`, then `make grafana-check`.
+Change the builder, run `just rules`, then `just grafana-check`.
 
 The classic `/api/v1/provisioning/*` representation was **removed**, not kept as a
 fallback: those endpoints are deprecated upstream, a committed `apiVersion: 1` +
@@ -124,13 +124,13 @@ representations would also be two things to gate, and would drift.
 ### Deploy
 
 ```bash
-make rules-push GRAFANA_CONTEXT=<gcx-context>
+just rules-push <gcx-context>
 
 # also deploy the PAUSED portable detection pack (its own folder):
-make rules-push GRAFANA_CONTEXT=<gcx-context> INCLUDE_DETECTIONS=1
+just rules-push <gcx-context> graph2otel 1
 
 # read-only: does the stack still match the repository?
-make rules-readback GRAFANA_CONTEXT=<gcx-context>
+just rules-readback <gcx-context>
 ```
 
 `GRAFANA_CONTEXT` is a `gcx` **context name**, not a server hostname — check
@@ -270,16 +270,13 @@ committed asset, so this is a gate rather than a convention.
 
 ## Read-only semantic canary
 
-`make grafana-check` proves that generated Grafana assets and their query
+`just grafana-check` proves that generated Grafana assets and their query
 vocabulary agree with the repository. It does not prove that a selected live
 datasource accepts those queries or returns the required labels. The opt-in
 semantic canary covers that live boundary without changing Grafana:
 
 ```bash
-make grafana-canary \
-  GRAFANA_CONTEXT=<gcx-context> \
-  GRAFANA_PROMETHEUS_DATASOURCE=<prometheus-uid> \
-  GRAFANA_LOKI_DATASOURCE=<loki-uid>
+just grafana-canary <gcx-context>
 ```
 
 The versioned probe set is
@@ -320,8 +317,8 @@ the notification surface — this repository ships no external notifier,
 webhook, or contact point for this canary either (same #293/#296 decision as
 [Operator-owned routing](#operator-owned-routing) above).
 
-Offline manifest/runner tests are already part of `make grafana-check`; run the
-narrow lane with `make grafana-canary-check`.
+Offline manifest/runner tests are already part of `just grafana-check`; no
+separate narrow recipe is needed.
 
 ## Dashboard performance baseline
 
@@ -330,7 +327,7 @@ panel and row counts, expanded/collapsed rows, query panels and targets,
 instant/range modes, expression bytes, and repeated expressions.
 
 ```bash
-make grafana-performance-baseline > baseline.json
+just grafana-performance-baseline > baseline.json
 ```
 
 An optional live lane renders each stable dashboard UID serially through the
@@ -359,8 +356,8 @@ is not labelled cold or warm.
 This tool records evidence; it does not choose a performance policy. Numeric
 overview/explorer budgets, allowed variance, waiver review, CI/deployment
 credentials, and failure routing remain #309 decisions after #302 freezes the
-dashboard topology. Offline tests run under `make grafana-check`; the narrow
-lane is `make grafana-performance-check`.
+dashboard topology. Offline tests run under `just grafana-check`; no separate
+narrow recipe is needed.
 
 ## Scheduled render baseline
 
@@ -378,7 +375,7 @@ failing **is** the notification surface; this repository ships no external
 notifier, webhook, or contact point here either.
 
 ```bash
-make grafana-performance-render GRAFANA_CONTEXT=<gcx-context>
+just grafana-performance-render <gcx-context>
 ```
 
 Render parameters are fixed so runs are comparable over time: 6h range,
@@ -453,9 +450,9 @@ correct data is worse than no alert.
 
 The **static** per-leaf ceiling remains the gate that catches the realistic
 regression, and it needs no credentials: `LEAF_PANEL_CEILING = 24`, enforced on
-every `make grafana-check`, with the largest leaf currently at 18.
+every `just grafana-check`, with the largest leaf currently at 18.
 
-Offline tests for this half also run under `make grafana-performance-check`.
+Offline tests for this half also run under `just grafana-check`.
 
 ## If GitSync is adopted later
 
