@@ -24,7 +24,7 @@ tools := justfile_directory() / ".tools"
 golangci_lint_version := "v2.13.2"
 
 # renovate: datasource=go depName=golang.org/x/vuln
-govulncheck_version := "v1.3.0"
+govulncheck_version := "v1.7.0"
 
 # go-licenses v1.x. A bump to v2+ needs the `/v2` module suffix in the install
 # path below AND a re-check of the `report --template` CLI, so keep this on v1
