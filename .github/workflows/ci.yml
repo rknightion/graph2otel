@@ -259,7 +259,7 @@ jobs:
     with:
       chart-path: charts/graph2otel
       kubernetes-versions: "1.29.0"
-      permutations: |
+      permutations: |-
 
         --set persistence.enabled=true --set existingSecret=my-secret --set config.admin.enabled=false
 
