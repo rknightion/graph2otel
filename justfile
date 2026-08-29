@@ -33,7 +33,7 @@ govulncheck_version := "v1.3.0"
 go_licenses_version := "v1.6.0"
 
 # renovate: datasource=go depName=github.com/anchore/syft
-syft_version := "v1.48.0"
+syft_version := "v1.51.1"
 
 # renovate: datasource=go depName=github.com/norwoodj/helm-docs
 helm_docs_version := "v1.14.2"
