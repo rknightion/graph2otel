@@ -30,7 +30,7 @@ govulncheck_version := "v1.7.0"
 # path below AND a re-check of the `report --template` CLI, so keep this on v1
 # unless that path is updated too.
 # renovate: datasource=go depName=github.com/google/go-licenses
-go_licenses_version := "v1.6.0"
+go_licenses_version := "v2.0.1"
 
 # renovate: datasource=go depName=github.com/anchore/syft
 syft_version := "v1.51.1"
