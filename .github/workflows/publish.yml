@@ -37,7 +37,7 @@ jobs:
       id-token: write
       attestations: write
       security-events: write
-    uses: rknightion/.github/.github/workflows/container-publish.yml@65aedb61754e9bf31e947c17409256ba0c58c637 # v1.4.3
+    uses: rknightion/.github/.github/workflows/container-publish.yml@0e56520d848f5fda8cbfa0bda17797ef41f2a5a7 # v1.9.8
     with:
       release-tag: ${{ inputs.release_tag }}
       dockerfile: Dockerfile
