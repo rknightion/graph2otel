@@ -244,6 +244,25 @@ jobs:
       - name: Verify dashboards, alert rules and generated docs
         run: make grafana-check
 
+  # This chart published to GHCR with no schema validation against the real
+  # Kubernetes API schemas at all — the `helm` job above only ran helm's own
+  # lint plus this repo's Go render contracts, never a kubeconform check against
+  # real API schemas. No kubeVersion floor is declared in Chart.yaml, so this
+  # validates against the reusable's own default floor (1.29.0). Reproduces the
+  # `helm` job's two renders above (default, and persistence+existingSecret+
+  # admin-disabled) so both get schema-checked, not just lint-checked.
+  helm-schema-validate:
+    name: helm schema validate (kubeconform)
+    permissions:
+      contents: read
+    uses: rknightion/.github/.github/workflows/helm-validate.yml@97f4a7ad0cd1ddd83562a30b9061ef8295242405 # v1.14.0
+    with:
+      chart-path: charts/graph2otel
+      kubernetes-versions: "1.29.0"
+      permutations: |
+
+        --set persistence.enabled=true --set existingSecret=my-secret --set config.admin.enabled=false
+
   # Test coverage -> Codacy. Deliberately NOT in ci-success's `needs`: coverage reporting is
   # informational, so a Codacy outage — or a fork PR with no secret — must never block merges or
   # Renovate automerge. The repo-scoped CODACY_PROJECT_TOKEN self-identifies the repo.
@@ -280,7 +299,7 @@ jobs:
     name: ci-success
     runs-on: ubuntu-latest
     if: always()
-    needs: [build-test, lint, govulncheck, goreleaser-snapshot, docker-build, helm, grafana]
+    needs: [build-test, lint, govulncheck, goreleaser-snapshot, docker-build, helm, grafana, helm-schema-validate]
     steps:
       - name: Fail if any required job did not pass
         if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
