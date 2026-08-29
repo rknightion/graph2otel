@@ -268,7 +268,7 @@
               "name": "${datasource}"
             },
             "spec": {
-              "query": "label_values(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~\"entra\\..+\",state!~\"disabled|covered\"}, collector)",
+              "query": "label_values(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`entra\\..+`,state!~\"disabled|covered\"}, collector)",
               "refId": "has_entra"
             }
           },
@@ -332,7 +332,7 @@
               "name": "${datasource}"
             },
             "spec": {
-              "query": "label_values(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~\"intune\\..+\",state!~\"disabled|covered\"}, collector)",
+              "query": "label_values(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`intune\\..+`,state!~\"disabled|covered\"}, collector)",
               "refId": "has_intune"
             }
           },
@@ -364,7 +364,7 @@
               "name": "${datasource}"
             },
             "spec": {
-              "query": "label_values(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~\"(?:defender|mdca)\\..+\",state!~\"disabled|covered\"}, collector)",
+              "query": "label_values(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`(?:defender|mdca)\\..+`,state!~\"disabled|covered\"}, collector)",
               "refId": "has_defender"
             }
           },
@@ -396,7 +396,7 @@
               "name": "${datasource}"
             },
             "spec": {
-              "query": "label_values(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~\"m365\\..+\",state!~\"disabled|covered\"}, collector)",
+              "query": "label_values(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`m365\\..+`,state!~\"disabled|covered\"}, collector)",
               "refId": "has_m365"
             }
           },
@@ -428,7 +428,7 @@
               "name": "${datasource}"
             },
             "spec": {
-              "query": "label_values(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~\"purview\\..+\",state!~\"disabled|covered\"}, collector)",
+              "query": "label_values(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`purview\\..+`,state!~\"disabled|covered\"}, collector)",
               "refId": "has_purview"
             }
           },
@@ -505,7 +505,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~\"entra\\..+\"})",
+                        "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`entra\\..+`})",
                         "editorMode": "code",
                         "range": false,
                         "instant": true
@@ -10663,7 +10663,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~\"intune\\..+\"})",
+                        "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`intune\\..+`})",
                         "editorMode": "code",
                         "range": false,
                         "instant": true
@@ -22283,7 +22283,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~\"(?:defender|mdca)\\..+\"})",
+                        "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`(?:defender|mdca)\\..+`})",
                         "editorMode": "code",
                         "range": false,
                         "instant": true
@@ -26393,7 +26393,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~\"m365\\..+\"})",
+                        "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`m365\\..+`})",
                         "editorMode": "code",
                         "range": false,
                         "instant": true
@@ -31130,7 +31130,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~\"purview\\..+\"})",
+                        "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`purview\\..+`})",
                         "editorMode": "code",
                         "range": false,
                         "instant": true
@@ -39971,7 +39971,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~\".+\"})",
+                        "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`.+`})",
                         "editorMode": "code",
                         "range": false,
                         "instant": true

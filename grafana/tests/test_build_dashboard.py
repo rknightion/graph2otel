@@ -981,8 +981,10 @@ class TestDomainAvailabilityPresentation(unittest.TestCase):
                 )
                 self.assertIn(availability, panel["targets"][0]["expr"])
                 self.assertIn(TENANT_SEL, panel["targets"][0]["expr"])
+                # Backtick-quoted: a regex in a double-quoted PromQL string
+                # loses its backslashes and fails to parse.
                 self.assertIn(
-                    f'collector=~"{pattern}"',
+                    f"collector=~`{pattern}`",
                     panel["targets"][0]["expr"],
                 )
                 no_value = panel["fieldConfig"]["defaults"]["noValue"].lower()

@@ -526,7 +526,7 @@ class Builder:
         metric = self.cat.metric("graph2otel.collector.availability")
         expr = (
             "max by (tenant_id, collector, collector_transport, state, reason) "
-            f'({metric.prom}{{{TENANT_SEL},collector=~"{collector_pattern}"}})'
+            f"({metric.prom}{{{TENANT_SEL},collector=~`{collector_pattern}`}})"
         )
         guide = (
             "Current collector state from graph2otel.collector.availability. "
@@ -778,7 +778,7 @@ class Builder:
         """
         metric = self.cat.metric(TENANT_SOURCE_METRIC).prom
         if collector_pattern:
-            selector = (f'{{{TENANT_SEL},collector=~"{collector_pattern}",'
+            selector = (f"{{{TENANT_SEL},collector=~`{collector_pattern}`,"
                         'state!~"disabled|covered"}')
         else:
             selector = f"{{{TENANT_SEL}}}"
