@@ -83,10 +83,10 @@ jobs:
           token: ${{ steps.bao.outputs.token }}
           path: gitsync
 
-      # gitsync/graph2otel/ is its own GitSync folder ("graph2otel Dashboards"),
+      # gitsync/grafana/graph2otel/ is its own GitSync folder ("graph2otel Dashboards"),
       # deliberately distinct from the "graph2otel" ALERTS folder the rules job writes.
       - name: copy the generated dashboard into place
-        run: cp dashboards/graph2otel.json gitsync/graph2otel/graph2otel.json
+        run: cp dashboards/graph2otel.json gitsync/grafana/graph2otel/graph2otel.json
 
       - name: commit and push
         working-directory: gitsync
