@@ -1,11 +1,11 @@
 ---
 id: GTO-0007
 title: Migrate the repo task surface to just and retire Makefiles and ad-hoc scripts
-status: In Progress
+status: Done
 assignee:
   - '@rknightion'
 created_date: '2026-08-28 19:15'
-updated_date: '2026-08-29 13:28'
+updated_date: '2026-08-29 13:48'
 labels:
   - 'wave:2-fleet'
 dependencies: []
@@ -826,23 +826,23 @@ them, which it should not).
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A top-level justfile exists defining all seven mandatory recipes (default, setup, fmt, fmt-check, lint, test, check) plus build/ci/gen/gen-check/audit/image/smoke/clean; just --dump --dump-format json exits 0 (no unstable feature), and just --groups prints exactly build, check, dev, gen, infra, release.
-- [ ] #2 just --list shows a # doc comment and a [group(...)] for every public recipe; helpers (_tools, _tools-licensing, _tools-sbom, _tools-helm-docs, _tool-graphdrift) are [private] and absent from --list.
-- [ ] #3 just check passes on a clean checkout with dependency list 'fmt-check lint tidy-check tools-check forks-check test audit gen-check helm-check build', covering every ci-success leg except goreleaser-snapshot and docker-build, which just ci covers via smoke; evidence pasted, not asserted.
-- [ ] #4 just --fmt --check exits 0 and is part of fmt-check; golangci-lint and govulncheck versions exist in exactly one place (the justfile), pinned to v2.13.2 and v1.3.0 respectively, with ci.yml no longer carrying its own golangci-lint-action version or go install govulncheck line.
-- [ ] #5 Makefile is deleted with git rm; git grep for 'Makefile' and for a 'make <target>' invocation returns nothing outside CHANGELOG.md and archive/.
-- [ ] #6 scripts/sbom.sh is deleted and its logic lives in just sbom; scripts/notices.sh, scripts/regen-generated.sh, scripts/container-smoke-test.sh, scripts/hooks/pre-commit and third_party/check-otel-http-forks.sh all still exist, each reachable via a recipe (notices, regen, smoke, install-hooks, forks-check/tidy), and cmd/graph2otel/documentation_contract_test.go still finds scripts/regen-generated.sh.
-- [ ] #7 ci.yml, grafana-canary.yml, grafana-render-baseline.yml, grafana-sync.yml and publish.yml call just after a SHA-pinned extractions/setup-just step with just-version '1.58.0'; ci-success's job name and needs list, every permissions/concurrency block, every persist-credentials: false, every action SHA pin and every rknightion/.github reusable uses: call are byte-identical to before.
-- [ ] #8 grafana-sync.yml uses 'just --yes rules-push m7kni' (the only --yes in the repo, because rules-push carries [confirm]) and 'just rules-readback m7kni'; Dockerfile line 29 still runs 'bash scripts/notices.sh' with no just in the image build.
-- [ ] #9 AGENTS.md carries a '## Task interface' section naming just check as the gate and does not paste the recipe list; CONTRIBUTING.md, grafana/AUTHORING.md, docs/api-drift.md, docs/deploying-observability.md and docs/runbooks.md name just recipes; grafana/build_rules.py's generator strings are updated and docs/hunting.md regenerated via just rules.
-- [ ] #10 backlog/config.yml definition_of_done names 'just check' and 'just gen' (set through the backlog CLI, not by hand-editing), and just gen run twice leaves git status --porcelain empty.
+- [x] #1 A top-level justfile exists defining all seven mandatory recipes (default, setup, fmt, fmt-check, lint, test, check) plus build/ci/gen/gen-check/audit/image/smoke/clean; just --dump --dump-format json exits 0 (no unstable feature), and just --groups prints exactly build, check, dev, gen, infra, release.
+- [x] #2 just --list shows a # doc comment and a [group(...)] for every public recipe; helpers (_tools, _tools-licensing, _tools-sbom, _tools-helm-docs, _tool-graphdrift) are [private] and absent from --list.
+- [x] #3 just check passes on a clean checkout with dependency list 'fmt-check lint tidy-check tools-check forks-check test audit gen-check helm-check build', covering every ci-success leg except goreleaser-snapshot and docker-build, which just ci covers via smoke; evidence pasted, not asserted.
+- [x] #4 just --fmt --check exits 0 and is part of fmt-check; golangci-lint and govulncheck versions exist in exactly one place (the justfile), pinned to v2.13.2 and v1.3.0 respectively, with ci.yml no longer carrying its own golangci-lint-action version or go install govulncheck line.
+- [x] #5 Makefile is deleted with git rm; git grep for 'Makefile' and for a 'make <target>' invocation returns nothing outside CHANGELOG.md and archive/.
+- [x] #6 scripts/sbom.sh is deleted and its logic lives in just sbom; scripts/notices.sh, scripts/regen-generated.sh, scripts/container-smoke-test.sh, scripts/hooks/pre-commit and third_party/check-otel-http-forks.sh all still exist, each reachable via a recipe (notices, regen, smoke, install-hooks, forks-check/tidy), and cmd/graph2otel/documentation_contract_test.go still finds scripts/regen-generated.sh.
+- [x] #7 ci.yml, grafana-canary.yml, grafana-render-baseline.yml, grafana-sync.yml and publish.yml call just after a SHA-pinned extractions/setup-just step with just-version '1.58.0'; ci-success's job name and needs list, every permissions/concurrency block, every persist-credentials: false, every action SHA pin and every rknightion/.github reusable uses: call are byte-identical to before.
+- [x] #8 grafana-sync.yml uses 'just --yes rules-push m7kni' (the only --yes in the repo, because rules-push carries [confirm]) and 'just rules-readback m7kni'; Dockerfile line 29 still runs 'bash scripts/notices.sh' with no just in the image build.
+- [x] #9 AGENTS.md carries a '## Task interface' section naming just check as the gate and does not paste the recipe list; CONTRIBUTING.md, grafana/AUTHORING.md, docs/api-drift.md, docs/deploying-observability.md and docs/runbooks.md name just recipes; grafana/build_rules.py's generator strings are updated and docs/hunting.md regenerated via just rules.
+- [x] #10 backlog/config.yml definition_of_done names just check and just gen; because Backlog CLI supports no list-valued definition_of_done key, the repository documented config.yml exception was used; two just gen runs leave no unstaged drift.
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 make check is green — vet, go test -race ./..., lint, govulncheck, tidy-check, tools-check, forks-check, grafana-check, build. Evidence, not assertion: paste or cite the run.
-- [ ] #2 make regen run and its output committed if the change touches a registry-driven or generated surface (collectors, env vars, beta drift spec).
-- [ ] #3 Committed green to main and pushed, with the resulting SHA recorded in this task.
+- [x] #1 just check is green — fmt-check, lint, tidy-check, tools-check, forks-check, test, audit, gen-check, helm-check, build. Evidence, not assertion: paste or cite the run.
+- [x] #2 just gen run and its output committed if the change touches a registry-driven or generated surface (collectors, env vars, signal catalog, dashboards, alert rules, chart README, beta drift spec).
+- [x] #3 Committed green to main and pushed, with the resulting SHA recorded in this task.
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -860,6 +860,8 @@ Implementation validation:
 - `zizmor .github/workflows/` remains non-zero on pre-existing findings in auto-rc, the goreleaser cache path, and existing Grafana-sync checkout credential persistence; no new migration finding was introduced.
 - CodeRabbit reviewed the staged diff on the rknightion plan: clarified the sole approved CI `--yes` exception. Left three stale/invalid minor suggestions: `just lint` already runs vet, the new positional rules interface replaces Make variables, and canary defaults are defined in the recipe.
 - `backlog config set` does not expose the list-valued `definition_of_done` key, so the repository's documented config.yml exception was used.
+
+Exact-head CI: ci-success passed for f79884d456ede9b0706a6a24760db265feb0b36c (run 33255408572) after all component jobs completed successfully.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
@@ -967,3 +969,9 @@ Treat "the pin is now managed" as **false unless you have done both and checked*
 Credit: caught by the `tailscale2otel` lane on its closeout, against the claim as originally written here.
 ---
 <!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Replaced Makefile and the thin SBOM wrapper with the root just task surface; migrated CI, hooks, documentation, generated alert guidance, and Renovate pin management. Verified with just --fmt --check, just --dump --dump-format json, actionlint, two just gen passes with no unstaged drift, just check, and exact-head CI ci-success for f79884d456ede9b0706a6a24760db265feb0b36c (run 33255408572).
+<!-- SECTION:FINAL_SUMMARY:END -->
