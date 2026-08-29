@@ -1,12 +1,18 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "postUpdateOptions": ["gomodTidy"],
-  "ignorePaths": ["third_party/**"],
+  "postUpdateOptions": [
+    "gomodTidy"
+  ],
+  "ignorePaths": [
+    "third_party/**"
+  ],
   "customManagers": [
     {
       "customType": "regex",
       "description": "Update Renovate-annotated tool pins in the justfile",
-      "managerFilePatterns": ["/^justfile$/"],
+      "managerFilePatterns": [
+        "/^justfile$/"
+      ],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>[^\\s]+) depName=(?<depName>[^\\s]+)\\s+[A-Za-z0-9_]+_version\\s*:=\\s*\\\"(?<currentValue>[^\\\"]+)\\\""
       ]
@@ -15,10 +21,21 @@
   "packageRules": [
     {
       "description": "OpenTelemetry: update core (v1.x) and the 0.x log modules together in ONE PR and never automerge - a core bump without the log modules (or vice-versa) breaks the build. A bump here also needs the third_party forks re-vendored by hand; see third_party/README.md.",
-      "matchManagers": ["gomod"],
-      "matchPackageNames": ["go.opentelemetry.io/otel{,/**}"],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "go.opentelemetry.io/otel{,/**}"
+      ],
       "groupName": "OpenTelemetry",
       "automerge": false
+    },
+    {
+      "description": "go-licenses stays on v1: v2+ changes the module path to /v2 and reworks the `report --template` CLI. Renovate cannot read the justfile comment saying so, and a v2.0.1 bump broke CI on 2026-08-29 because the install path still resolved v1's module.",
+      "matchDepNames": [
+        "github.com/google/go-licenses"
+      ],
+      "allowedVersions": "<2"
     }
   ]
 }
