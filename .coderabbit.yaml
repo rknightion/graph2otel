@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Product-specific additions to the central CodeRabbit defaults.
+# Keep inheritance enabled; shared review policy lives in the owner/coderabbit repository.
+inheritance: true
+reviews:
+  path_filters:
+  - '!docs/env-vars.md'
+  - '!docs/collectors.md'
+  - '!internal/**/testdata/signals.json'
+  - '!spec/signal-catalog.json'
+  - '!dashboards/graph2otel.json'
+  - '!alerts/rules/**'
+  - '!docs/hunting.md'
+  - '!charts/graph2otel/README.md'
+  - '!charts/graph2otel/values.schema.json'
+  path_instructions:
+  - path: internal/**/*.go
+    instructions: >-
+      Keep external API work in the appropriate ingest engine and OTLP behind internal/telemetry. Records
+      without a parseable event time are dropped rather than stamped on arrival; undedupeable data is
+      degraded, not automatically dropped. Preserve tenant_id on every signal at the emitter boundary
+      and ingest_transport on logs only. Per-entity rows must have log twins and must not become metric
+      labels or disappear after aggregation.
+  - path: internal/graphclient/**/*.go
+    instructions: >-
+      Use raw REST through the hardened client, its workload limiter and backoff. Do not expand typed
+      Microsoft Graph SDK usage beyond the documented subscribedSkus adapter. Check pagination, watermark
+      overlap, seen-ID dedupe, asynchronous job polling/download and endpoint-specific Retry-After behaviour
+      against the actual transport.
+  - path: internal/collectordoc/**/*.go
+    instructions: >-
+      Collector documentation and coverage must walk every registration path. Adding a path requires changing
+      the Rows signature in the same change so coverage cannot stay green while omitting an engine. Assumed
+      enums are derived from the production map and unexpected values are reported without dropping records.
