@@ -14,6 +14,9 @@ It runs in production against a live tenant.
   `--yes`.
 - `just check` covers all four Go modules (root, `tools/graphdrift`, and both `third_party/`
   OTLP forks) plus the generated-asset drift gates. `just ci` adds the container smoke leg.
+- Committed generated artifacts are drift-gated and are never hand-edited. `docs/collectors.md`
+  is generated from the collector registry and is the authoritative collector count; `just gen`
+  regenerates every generated artifact.
 
 ## Working rules
 
@@ -24,6 +27,8 @@ It runs in production against a live tenant.
 - **Wire over docs.** Microsoft's documentation has been wrong on essentially every load-bearing
   detail on this project's path. Never assert API behaviour from docs alone: measure it, then
   record it with a `live-measured` tag.
+- **Test-first, as a deliberate override of the global operating-model testing policy**: failing
+  test, watch it fail for the right reason, minimal code, green, refactor.
 - Standard-library `testing` only. No third-party assertion libraries.
 - Mappers are written against live samples, never docs or hand-written fixtures.
 - Conventional Commits, `type(scope): subject`. release-please surfaces
@@ -33,6 +38,9 @@ It runs in production against a live tenant.
   `reference/backlog-workflow.md` before touching a task, doc or decision.
 
 ## Architecture (the seams)
+
+Closest analogs in the fleet: `sf2loki`'s composition-root pattern, `tailscale2otel`'s poll to
+`telemetry.Emitter` facade.
 
 - **Raw REST for all collectors** via `internal/graphclient` (OTEL-instrumented transport,
   per-workload client-side rate limiters, own backoff, because the throttled workloads send no
@@ -66,9 +74,11 @@ It runs in production against a live tenant.
   volume in production: the compose reference mounts one, the Helm chart defaults to an
   `emptyDir`, so production installs must set `persistence.enabled=true`. Fail fast if the
   configured checkpoint path is unwritable.
-- **Transport is exclusive per collector**: `source: graph` XOR `blob`, enforced by
-  `internal/collectors/conflicts.go`. There is no dual mode, and that was decided rather than
-  deferred: the log-shaped collectors emit zero metrics, so dual is identical to blob.
+- **Transport is exclusive per collector**: `source: graph` XOR `blob`, enforced by the
+  `ConflictsWith` collector interface in `internal/collectors/conflicts.go`. There is no dual
+  mode, and that was decided rather than deferred: the log-shaped collectors emit zero metrics,
+  so dual is identical to blob. `intune.devices` is the one genuinely dual-capable signal and
+  its mode remains an open question.
 - Single instance. No HA or leader election.
 
 ## Config and secrets
@@ -94,8 +104,10 @@ It runs in production against a live tenant.
 - **Client-side rate limiters are not optional**: reporting 5 per 10s, Identity Protection 1 per
   second per tenant across ALL apps, Intune export 48 per minute. None send `Retry-After`.
 - **Per-endpoint `$top` ceilings 400 when exceeded** (IPC 500, `/security/incidents` 50). Check
-  this first whenever a paged collector 400s. Some endpoints reject `$top` outright and must be
-  paged by the `@odata.nextLink` walk.
+  this first whenever a paged collector 400s. Two Endpoint Analytics segments reject `$top`
+  outright, with no ceiling to stay under, and answer 400 on one and 500 on the other for the
+  same cause; page them with `Prefer: odata.maxpagesize`, which is what `collectors.GetAllValues`
+  already does.
 - **An empty Loki query is not evidence of a drop.** Backdated log records are indexed through a
   late-data path and are **not queryable for some minutes** after being accepted, so a
   verification query run right after a poll returns zero rows for records that are there. The

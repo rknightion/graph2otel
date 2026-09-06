@@ -38,7 +38,8 @@ Read before adding or changing any metric, log attribute, namespace or opt-in ga
   and `exportjob` never emits at all. Outermost stamp wins: the Scheduler sets the `graph`
   baseline and each engine and export collector overrides it. **Log-only** - a metric label would
   change series identity. It is deliberately NOT called `source`, which already has four live
-  meanings.
+  meanings. The attribute-name registry that would gate attribute names centrally is still
+  unbuilt.
 - **Sign-ins are transport-identical; risk is NOT.** A blob and a Graph sign-in differ only by
   `ingest_transport` and share one gated mapper. Risk records differ in their field set
   (`riskType` is blob-only and does not exist on Graph v1.0), so do not generalise the sign-in

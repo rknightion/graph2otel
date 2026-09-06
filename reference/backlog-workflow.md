@@ -6,13 +6,16 @@ than `AGENTS.md`.
 
 ## CLI traps
 
+A guard hook in the agent config denies most of these calls outright, because each failure mode is
+silent and unrepairable.
+
 - **Never use `--notes` or `--plan` bare.** They *silently replace* the whole section, destroying
   another session's writes with no warning and exit 0. Use `--append-notes` and `--append-plan`.
   This is an open upstream bug, not a misunderstanding.
 - **Hand-editing tracker markdown is unrepairable, not merely discouraged.** Section boundaries
   are HTML-comment markers; break one and the section is *silently dropped* at exit 0. The data
   stays in the file but is invisible to the CLI until the next write destroys it for real. There
-  is no repair command. `backlog/config.yml` is the one exception and is edited by hand, because
+  is no repair command, and `backlog doctor` only fixes duplicate task IDs. `backlog/config.yml` is the one exception and is edited by hand, because
   list-valued keys cannot be set through `backlog config set`.
 - **Finalize in one call**, so an interrupted session cannot leave finished work looking
   unfinished: `backlog task edit GTO-0007 --check-ac 1 --check-ac 2 -s Done`.
@@ -23,6 +26,9 @@ than `AGENTS.md`.
   docs; tasks are the unit.
 
 ## Content rules
+
+- Before designing a wave, read this repo's own fan-out protocol doc and its wave operating model
+  doc; `backlog doc list --plain` lists both.
 
 - **Statuses are `To Do`, `In Progress`, `Parked`, `Done`.** `Parked` means attempted and
   blocked, with a **concrete resume boundary** in the notes: the specific next probe or decision,
