@@ -38,6 +38,9 @@ syft_version := "v1.51.1"
 # renovate: datasource=go depName=github.com/norwoodj/helm-docs
 helm_docs_version := "v1.14.2"
 
+# renovate: datasource=npm depName=@nanonets/graft
+graft_version := "0.16.0"
+
 # show the task surface
 default:
     @just --list
@@ -283,3 +286,14 @@ _tools-helm-docs:
 _tool-graphdrift:
     @mkdir -p '{{ tools }}'
     go build -C tools/graphdrift -o '{{ tools }}/graphdrift' .
+
+# Install and patch the graft CLI (re-run after a version bump)
+[group('dev')]
+graft-setup:
+    npm i -g @nanonets/graft@{{ graft_version }}
+    ~/.agents/bin/graft-postinstall
+
+# Build the local code graph
+[group('dev')]
+graft-build:
+    DO_NOT_TRACK=1 graft build .
