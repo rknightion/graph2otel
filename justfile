@@ -24,7 +24,7 @@ tools := justfile_directory() / ".tools"
 golangci_lint_version := "v2.13.2"
 
 # renovate: datasource=go depName=golang.org/x/vuln
-govulncheck_version := "v1.7.0"
+govulncheck_version := "v1.8.0"
 
 # go-licenses v1.x. A bump to v2+ needs the `/v2` module suffix in the install
 # path below AND a re-check of the `report --template` CLI, so keep this on v1
@@ -37,6 +37,9 @@ syft_version := "v1.51.1"
 
 # renovate: datasource=go depName=github.com/norwoodj/helm-docs
 helm_docs_version := "v1.14.2"
+
+# renovate: datasource=npm depName=@nanonets/graft
+graft_version := "0.16.0"
 
 # show the task surface
 default:
@@ -283,3 +286,14 @@ _tools-helm-docs:
 _tool-graphdrift:
     @mkdir -p '{{ tools }}'
     go build -C tools/graphdrift -o '{{ tools }}/graphdrift' .
+
+# Install and patch the graft CLI (re-run after a version bump)
+[group('dev')]
+graft-setup:
+    npm i -g @nanonets/graft@{{ graft_version }}
+    ~/.agents/bin/graft-postinstall
+
+# Build the local code graph
+[group('dev')]
+graft-build:
+    DO_NOT_TRACK=1 graft build .
