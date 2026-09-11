@@ -39,7 +39,7 @@ syft_version := "v1.51.1"
 helm_docs_version := "v1.14.2"
 
 # renovate: datasource=npm depName=@nanonets/graft
-graft_version := "0.16.0"
+graft_version := "0.18.0"
 
 # show the task surface
 default:
