@@ -32,3 +32,10 @@ reviews:
       Collector documentation and coverage must walk every registration path. Adding a path requires changing
       the Rows signature in the same change so coverage cannot stay green while omitting an engine. Assumed
       enums are derived from the production map and unexpected values are reported without dropping records.
+knowledge_base:
+  linked_repositories:
+  - repository: m7kni/m7kni-net-site
+    instructions: >-
+      Documentation hub. This repository dispatches documentation changes to the hub, which clones the
+      docs source and builds it. Check docs_path, config_file and the dispatch payload against this
+      repository's entry in the hub's docs-repos.json manifest.
