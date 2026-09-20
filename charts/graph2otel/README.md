@@ -25,7 +25,7 @@ Export Entra ID, Intune, Defender, M365, and Purview telemetry from Microsoft Gr
 
 | Name | Email | Url |
 | ---- | ------ | --- |
-| rknightion |  |  |
+| rknightion | <rob@m7kni.io> | <https://github.com/rknightion> |
 
 ## Source Code
 
