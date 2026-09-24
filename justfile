@@ -21,7 +21,7 @@ export GOFLAGS := env('GOFLAGS', '-mod=readonly')
 tools := justfile_directory() / ".tools"
 
 # renovate: datasource=github-releases depName=golangci/golangci-lint
-golangci_lint_version := "v2.13.2"
+golangci_lint_version := "v2.14.0"
 
 # renovate: datasource=go depName=golang.org/x/vuln
 govulncheck_version := "v1.8.0"
