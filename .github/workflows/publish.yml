@@ -48,7 +48,7 @@ jobs:
   # same generator the image build bakes into /licenses/ and that runs locally.
   notices:
     if: inputs.release_tag != ''
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
     steps:
