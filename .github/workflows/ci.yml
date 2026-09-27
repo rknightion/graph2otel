@@ -140,7 +140,7 @@ jobs:
       - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
         with:
           distribution: goreleaser
-          version: "v2.16.0"
+          version: "v2.18.2"
           # -p 2 builds two targets concurrently (the full 5-target matrix at
           # unbounded parallelism is too memory-hungry even with swap). Two
           # concurrent msgraph linkers peak ~8 GB — mostly RAM, lightly into the
