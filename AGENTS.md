@@ -27,8 +27,6 @@ It runs in production against a live tenant.
 - **Wire over docs.** Microsoft's documentation has been wrong on essentially every load-bearing
   detail on this project's path. Never assert API behaviour from docs alone: measure it, then
   record it with a `live-measured` tag.
-- **Test-first, as a deliberate override of the global operating-model testing policy**: failing
-  test, watch it fail for the right reason, minimal code, green, refactor.
 - Standard-library `testing` only. No third-party assertion libraries.
 - Mappers are written against live samples, never docs or hand-written fixtures.
 - Conventional Commits, `type(scope): subject`. release-please surfaces
