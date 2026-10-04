@@ -29,8 +29,6 @@ It runs in production against a live tenant.
   record it with a `live-measured` tag.
 - Standard-library `testing` only. No third-party assertion libraries.
 - Mappers are written against live samples, never docs or hand-written fixtures.
-- Conventional Commits, `type(scope): subject`. release-please surfaces
-  `feat`/`fix`/`perf`/`refactor`; `docs`/`test`/`chore`/`ci`/`build` are hidden.
 - The tracker is Backlog.md in `backlog/`, committed to git, and it is the record of intent and
   progress rather than this file. Its CLI has data-destroying traps: see
   `reference/backlog-workflow.md` before touching a task, doc or decision.
@@ -128,9 +126,6 @@ Closest analogs in the fleet: `sf2loki`'s composition-root pattern, `tailscale2o
 | `m365.activity` or O365 Management API work | `docs/o365-management-api.md` | wire-format traps (CreationTime, PascalCase, unknown record types), AF20024, the 24h window cap, arrival-clock dedupe |
 | Naming a signal or writing a LogQL query | `docs/signals.md` | event names, structured-metadata querying, `tenant_id` truth |
 | Adding or changing a **beta** endpoint | `docs/api-drift.md` | the beta drift canary: `spec/graph-beta-surface.json` must list every beta-consuming package, gated both ways, then `just graphdrift-update` |
-
-These docs are current-truth references with evidence tags. Keep them that way: state the truth
-positively and leave correction narratives in task notes.
 
 <!-- BACKLOG.MD GUIDELINES START -->
 <!-- backlog.md-instructions-version: 1.50.1 -->
