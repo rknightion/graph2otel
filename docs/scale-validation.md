@@ -32,7 +32,8 @@ correctness of the mechanisms that keep the exporter inside it.
   delay another tenant's first request — the limiter keys buckets per tenant, so
   a busy tenant can't starve a quiet one.
 - **Budget drift guard.** The configured rates are pinned to the documented Graph
-  ceilings (reporting 5/10s, Identity Protection 1/s, Intune export 48/min); a
+  ceilings (reporting 5/10s, Identity Protection 1/s; Intune export deliberately
+  24/min burst 4, half its documented 48/min, which 429s in practice); a
   change to a budget fails the test until the docs are updated too.
 
 ## Watermark correctness across restart

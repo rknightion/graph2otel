@@ -487,7 +487,7 @@ func setupTenantWithGraphAndLicenseBuilders(
 	// Snapshot collectors (metric-shaped inventory polls). exporter runs the
 	// Intune reports export-job pipeline (POST → poll → download → parse) for the
 	// M5 export-based report collectors; it shares gc's instrumented, rate-limited
-	// (48/min export bucket) transport for create/poll and a plain client for the
+	// (intune-export bucket) transport for create/poll and a plain client for the
 	// unauthenticated SAS download. Store/TenantID let it resume an export job it
 	// created but had not downloaded when the process restarted, rather than
 	// POSTing a second one against that same 48/min budget (#118).

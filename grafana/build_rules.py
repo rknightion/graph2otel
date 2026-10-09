@@ -111,6 +111,50 @@ def _m(name: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# g2o-collector-degraded-sustained's explicit exclusion list: collectors whose
+# endpoint Microsoft does not support for app-only access AT ALL, so every run
+# degrades forever on every tenant and no grant, licence or operator action can
+# clear it. Each entry names the collector and the evidence.
+#
+# Deliberately a per-collector list, NEVER a blanket exclusion by cause or state
+# (e.g. state="blocked" / cause="permission_denied"): a REVOKED consent grant
+# produces the identical outcome, and catching that is the reason the rule
+# exists. Add a collector here only when Microsoft's own documentation, or a live
+# probe as graph2otel-poller, shows app-only access is unsupported — not merely
+# unlicensed on one tenant (disable the collector for that tenant instead).
+# ---------------------------------------------------------------------------
+
+DEGRADED_RULE_UNSUPPORTED_COLLECTORS = {
+    "purview.retention_labels":
+        "Microsoft documents Application access as not supported for "
+        "/security/labels/retentionLabels and /security/triggerTypes/retentionEventTypes; "
+        "both 500 DataInsightsRequestError app-only even with RecordsManagement.Read.All "
+        "granted (docs/collectors.md).",
+}
+
+
+def _known_collectors() -> set:
+    """Collector names from the generated docs/collectors.md table."""
+    path = os.path.join(REPO, "docs", "collectors.md")
+    with open(path, encoding="utf-8") as fh:
+        return set(re.findall(r"^\| `([a-z0-9_.]+)` \|", fh.read(), re.M))
+
+
+def _degraded_rule_exclusions() -> str:
+    """PromQL label matchers excluding DEGRADED_RULE_UNSUPPORTED_COLLECTORS.
+
+    Exact != matchers (one per collector) rather than one regex, so a name needs
+    no escaping. An entry naming no real collector is a build error: a typo would
+    otherwise exclude nothing and look like it worked.
+    """
+    known = _known_collectors()
+    unknown = sorted(set(DEGRADED_RULE_UNSUPPORTED_COLLECTORS) - known)
+    if unknown:
+        raise KeyError(f"DEGRADED_RULE_UNSUPPORTED_COLLECTORS names unknown collector(s): {unknown}")
+    return ",".join(f'collector!="{name}"' for name in sorted(DEGRADED_RULE_UNSUPPORTED_COLLECTORS))
+
+
+# ---------------------------------------------------------------------------
 # tiny stdlib block-YAML emitter (no PyYAML — see the module docstring). Ported
 # from ~/repos/tailscale2otel/deploy/alerts/gen/build_rules.py's yamlify(). All
 # string scalars are double-quoted + escaped, which is always valid YAML and
@@ -268,17 +312,37 @@ RULES = [
     _alert(
         "g2o-entra-cred-expiry-critical",
         "Entra app/SP credential expiring within 7 days",
+        # lt_7d count, plus how many MORE credentials sit in `expired` than 7 days
+        # ago (clamped at 0). The expired bucket used to count in full, so one
+        # expired credential that was already replaced (Microsoft-managed "P2P
+        # Server" MS-Organization-P2P-Access [2025], whose [2026] successor exists)
+        # alerted forever. Suppressing an expired credential only when its owner
+        # holds a valid one needs a per-owner join, which this gauge cannot do: it
+        # is owner_type x credential_type x expiry_bucket by design (#112), never
+        # per app. So `expired` now counts only while it is RECENT — growth over
+        # the last 7d — and a credential still alerts for 7 days in lt_7d before it
+        # expires and up to 7 days after. The `or ... * 0` arm keeps the lt_7d leg
+        # alive when the 7d-ago sample does not exist yet (fresh install).
         f'sum by (tenant_id, owner_type, credential_type) '
-        f'({_m("entra.credentials.expiring.total")}{{expiry_bucket=~"lt_7d|expired"}})',
+        f'({_m("entra.credentials.expiring.total")}{{expiry_bucket="lt_7d"}}) '
+        f'+ clamp_min('
+        f'(sum by (tenant_id, owner_type, credential_type) '
+        f'({_m("entra.credentials.expiring.total")}{{expiry_bucket="expired"}}) '
+        f'- sum by (tenant_id, owner_type, credential_type) '
+        f'({_m("entra.credentials.expiring.total")}{{expiry_bucket="expired"}} offset 7d)) '
+        f'or sum by (tenant_id, owner_type, credential_type) '
+        f'({_m("entra.credentials.expiring.total")}{{expiry_bucket="expired"}}) * 0, 0)',
         "gt", [0], "15m",
         {"severity": "critical", "category": "credential-expiry", "source": "entra"},
         "{{ $labels.owner_type }} {{ $labels.credential_type }} credential(s) expiring "
-        "within 7 days (tenant {{ $labels.tenant_id }})",
-        "entra_credentials_expiring_total is non-zero in the lt_7d/expired buckets for "
-        "tenant {{ $labels.tenant_id }}, owner_type={{ $labels.owner_type }}, "
-        "credential_type={{ $labels.credential_type }} for 15m. Bucket-count based, never "
-        "per-credential. The runbook covers the false-positive notes and the lt_30d "
-        "warning-tier companion rule.",
+        "within 7 days or expired in the last 7 days (tenant {{ $labels.tenant_id }})",
+        "entra_credentials_expiring_total lt_7d bucket, plus growth of the expired bucket "
+        "over the last 7 days, is non-zero for tenant {{ $labels.tenant_id }}, "
+        "owner_type={{ $labels.owner_type }}, credential_type={{ $labels.credential_type }} "
+        "for 15m. A credential that expired more than 7 days ago no longer counts, so an "
+        "expired credential that was already replaced does not alert forever. Bucket-count "
+        "based, never per-credential. The runbook covers the false-positive notes and the "
+        "lt_30d warning-tier companion rule.",
         False,
     ),
     _alert(
@@ -429,8 +493,11 @@ RULES = [
     _alert(
         "g2o-collector-degraded-sustained",
         "graph2otel collector degraded for 6h",
+        # Known app-only-unsupported collectors are excluded by name — see
+        # DEGRADED_RULE_UNSUPPORTED_COLLECTORS for the list and why it is never
+        # a blanket state/cause exclusion.
         f'max by (tenant_id, collector) '
-        f'(max_over_time({_m("graph2otel.scrape.success")}[6h]))',
+        f'(max_over_time({_m("graph2otel.scrape.success")}{{{_degraded_rule_exclusions()}}}[6h]))',
         "lt", [1], "30m",
         {"severity": "warning", "category": "self-observability", "source": "graph2otel"},
         "Collector {{ $labels.collector }} has not had a single successful scrape in 6h "
@@ -442,7 +509,8 @@ RULES = [
         "grant (actionable: re-consent the app role) and an endpoint the tenant is simply "
         "not licensed for (not actionable: the collector correctly declines it forever, "
         "which is why g2o-collector-staleness deliberately stays silent for that case since "
-        "#408). Read cause= on the WARN 'collector completed with degraded outcome' line, or "
+        "#408). Collectors whose endpoint Microsoft does not support app-only at all "
+        "(purview.retention_labels) are excluded by name in the rule source. Read cause= on the WARN 'collector completed with degraded outcome' line, or "
         "graph2otel_scrape_outcomes_total, to tell them apart. Warning rather than critical "
         "because neither cause is a 3am page: the unlicensed one can never be actioned at "
         "all, and a revoked grant has already been broken for six hours by the time this "
@@ -1710,6 +1778,7 @@ _IDENT = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*")
 _GROUPING_CLAUSE = re.compile(r"\b(?:by|without)\s*\([^)]*\)")
 _LABEL_SELECTOR = re.compile(r"\{[^}]*\}")
 _RANGE_VECTOR = re.compile(r"\[[^\]]*\]")  # [15m], [1h:5m] — duration literals, not metrics
+_OFFSET = re.compile(r"\boffset\s+-?(?:\d+(?:ms|[smhdwy]))+")  # offset 7d — a duration, not a metric
 
 
 def _metric_tokens(expr: str) -> set:
@@ -1718,13 +1787,14 @@ def _metric_tokens(expr: str) -> set:
     Strips ``by (...)``/``without (...)`` grouping clauses (label names, not
     metric names), every ``{...}`` label selector's contents, and every
     ``[...]`` range-vector/subquery duration literal (``15m``'s ``m`` is not a
-    metric name), then returns every remaining bare identifier that is not
+    metric name) and every ``offset <duration>`` modifier, then returns every remaining bare identifier that is not
     immediately followed by ``(`` (a function call) and is not a PromQL
     keyword.
     """
     stripped = _GROUPING_CLAUSE.sub(" ", expr)
     stripped = _LABEL_SELECTOR.sub("", stripped)
     stripped = _RANGE_VECTOR.sub("", stripped)
+    stripped = _OFFSET.sub(" ", stripped)
     tokens = set()
     for m in _IDENT.finditer(stripped):
         tok = m.group(0)

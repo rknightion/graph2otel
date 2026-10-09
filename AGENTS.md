@@ -98,7 +98,10 @@ Closest analogs in the fleet: `sf2loki`'s composition-root pattern, `tailscale2o
   streams are beta-only. Streams sharing a Graph path need distinct `CheckpointKey`s.
 - **No delta query on any log endpoint.** Every `WindowCollector` owns its watermark.
 - **Client-side rate limiters are not optional**: reporting 5 per 10s, Identity Protection 1 per
-  second per tenant across ALL apps, Intune export 48 per minute. None send `Retry-After`.
+  second per tenant across ALL apps, Intune export 48 per minute documented but limited to
+  24/min burst 4 because the documented ceiling 429s under the 6h export burst. None send
+  `Retry-After`. Export jobs are also capped at 3 concurrent per tenant and retry a 429 within
+  the tick (`internal/exportjob`).
 - **Per-endpoint `$top` ceilings 400 when exceeded** (IPC 500, `/security/incidents` 50). Check
   this first whenever a paged collector 400s. Two Endpoint Analytics segments reject `$top`
   outright, with no ceiling to stay under, and answer 400 on one and 500 on the other for the

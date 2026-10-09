@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
@@ -68,7 +69,7 @@ func (c *Client) RawGetWithHeaders(ctx context.Context, url string, headers map[
 		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("graphclient: GET %s: status %d: %s", url, resp.StatusCode, string(body))
+		return nil, newHTTPStatusError(http.MethodGet, url, resp, body)
 	}
 	return body, nil
 }
@@ -113,9 +114,39 @@ func (c *Client) RawPost(ctx context.Context, url string, body []byte, headers m
 		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("graphclient: POST %s: status %d: %s", url, resp.StatusCode, string(respBody))
+		return nil, newHTTPStatusError(http.MethodPost, url, resp, respBody)
 	}
 	return respBody, nil
+}
+
+// HTTPStatusError is the error RawGet, RawGetWithHeaders and RawPost return for
+// a non-2xx response that survived the transport's own retries. Its Error() text
+// is the historical "graphclient: METHOD url: status N: body" string, which many
+// collectors still classify with strings.Contains("status 403"), so that text
+// must not change. Callers that need to act on the status — the export-job
+// engine retrying a 429 within its tick — use errors.As instead.
+type HTTPStatusError struct {
+	Method     string
+	URL        string
+	StatusCode int
+	Body       []byte
+	// RetryAfter is the response's Retry-After in seconds form, or 0 when absent
+	// or unparsable. Most throttled Graph workloads send none (see workload.go).
+	RetryAfter time.Duration
+}
+
+func (e *HTTPStatusError) Error() string {
+	return fmt.Sprintf("graphclient: %s %s: status %d: %s", e.Method, e.URL, e.StatusCode, string(e.Body))
+}
+
+func newHTTPStatusError(method, url string, resp *http.Response, body []byte) *HTTPStatusError {
+	return &HTTPStatusError{
+		Method:     method,
+		URL:        url,
+		StatusCode: resp.StatusCode,
+		Body:       body,
+		RetryAfter: parseRetryAfter(resp.Header.Get(headerRetryAfter)),
+	}
 }
 
 // maxRawBodyBytes caps a raw-REST response read so a pathological/hostile

@@ -10,9 +10,12 @@
 // GET .../exportJobs/{id} with exponential backoff to a terminal status
 // (completed|failed), download the pre-signed SAS-url ZIP before it expires,
 // and parse its single CSV or JSON entry into Rows. The whole flow shares one
-// 48-req/min-per-app rate budget (graphclient's WorkloadIntuneExport) — every
-// poll counts against it, which is why backoff matters here more than on a
-// typical paged endpoint.
+// per-app rate budget (documented 48 req/min; graphclient's WorkloadIntuneExport
+// limits it to 24/min burst 4) — every poll counts against it, which is why
+// backoff matters here more than on a typical paged endpoint. One Client runs at
+// most Options.MaxConcurrent exports at once and retries a throttled create or
+// poll within the same call (see throttleRetry), so a tick-aligned burst of
+// export collectors is metered rather than 429ed into a skipped cycle.
 //
 // This file is the frozen cross-package seam for M5
 // (docs/superpowers/plans/m5-export-seam.md): the report collectors in #37/
@@ -32,10 +35,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
+	"github.com/rknightion/graph2otel/internal/graphclient"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -57,6 +62,33 @@ const (
 	// export's SAS url expires anyway: adopting a long-dead export job would only
 	// reach ErrSASExpired and re-create, one wasted poll later.
 	defaultJobMaxAge = 30 * time.Minute
+
+	// defaultMaxConcurrent caps how many Export calls one Client runs at once
+	// (create through download). Every export collector defaults to a 6h interval
+	// and the scheduler starts them all within its ~3s stagger window, so without
+	// a cap ~22 jobs are created in the same few seconds and Graph 429s many of
+	// them (live 2026-10-09: graph2otel_throttle_count{workload="intune-export"}
+	// 46-57 per tick). A job takes tens of seconds, so 3 slots drain the whole set
+	// in minutes — negligible against a 6h interval — while holding the request
+	// rate to a few creates plus backed-off polls at any moment.
+	defaultMaxConcurrent = 3
+
+	// In-tick retry of a throttled (HTTP 429) create or poll. The transport's own
+	// Kiota retry (3 attempts, seconds apart) is too short to outlast a burst, so
+	// Export backs off further on top of it, reusing graphclient.Backoff: a
+	// Retry-After wins verbatim; otherwise exponential from throttleBackoffBase to
+	// throttleBackoffMax with equal jitter.
+	//
+	// Bounded two ways so it can never overrun the tick: at most
+	// defaultThrottleRetries waits per Export call, and their total may not exceed
+	// defaultThrottleBudget (a Retry-After that would cross it ends the call
+	// instead). The worst case with no Retry-After is 15+30+60+120+120+120 = 465s;
+	// 10 minutes is far inside the 6h export interval and inside defaultJobMaxAge,
+	// so a job id saved before a throttled poll is still adoptable next tick.
+	defaultThrottleRetries = 6
+	defaultThrottleBudget  = 10 * time.Minute
+	throttleBackoffBase    = 15 * time.Second
+	throttleBackoffMax     = 2 * time.Minute
 )
 
 // Format selects the export job's payload encoding.
@@ -153,6 +185,10 @@ type Options struct {
 	// TenantID namespaces the persisted record, so two tenants exporting the same
 	// report never adopt each other's job. Required when Store is set.
 	TenantID string
+	// MaxConcurrent caps how many Export calls run at once on this Client (and so
+	// on this tenant's export budget); further callers wait their turn, honoring
+	// ctx. Defaults to defaultMaxConcurrent; there is no unlimited setting.
+	MaxConcurrent int
 	// JobMaxAge bounds how long a persisted in-flight job id stays adoptable;
 	// defaults to defaultJobMaxAge. A NEGATIVE value disables adoption entirely —
 	// every call creates a fresh job, the pre-#118 behavior — which exists as an
@@ -177,6 +213,9 @@ func (o Options) withDefaults() Options {
 	}
 	if o.PollMax <= 0 {
 		o.PollMax = defaultPollMax
+	}
+	if o.MaxConcurrent <= 0 {
+		o.MaxConcurrent = defaultMaxConcurrent
 	}
 	if o.JobMaxAge == 0 {
 		o.JobMaxAge = defaultJobMaxAge
@@ -219,12 +258,15 @@ type Client struct {
 	graph Poster
 	dl    Downloader
 	opts  Options
+	// slots is the MaxConcurrent semaphore shared by every Export on this Client.
+	slots chan struct{}
 }
 
 // New returns a Client. graph is typically *graphclient.Client; dl is
 // typically DefaultDownloader().
 func New(graph Poster, dl Downloader, opts Options) *Client {
-	return &Client{graph: graph, dl: dl, opts: opts.withDefaults()}
+	opts = opts.withDefaults()
+	return &Client{graph: graph, dl: dl, opts: opts, slots: make(chan struct{}, opts.MaxConcurrent)}
 }
 
 // exportJobBody is the create request's JSON body.
@@ -259,14 +301,22 @@ func (c *Client) Export(ctx context.Context, req Request, e telemetry.Emitter) (
 		format = FormatCSV
 	}
 
-	start := c.opts.Now()
+	select {
+	case c.slots <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	defer func() { <-c.slots }()
 
-	id, err := c.resumeOrCreate(ctx, req, format)
+	start := c.opts.Now()
+	throttle := &throttleRetry{sleep: c.opts.Sleep, backoff: &graphclient.Backoff{Base: throttleBackoffBase, Max: throttleBackoffMax}}
+
+	id, err := c.resumeOrCreate(ctx, req, format, throttle)
 	if err != nil {
 		return nil, err
 	}
 
-	jr, pollCount, err := c.poll(ctx, req.ReportName, id)
+	jr, pollCount, err := c.poll(ctx, req.ReportName, id, throttle)
 	if err != nil {
 		// A failed job can never complete, so its id is worthless — drop it and let
 		// the next tick create a fresh one. Any other poll failure is transient by
@@ -317,16 +367,27 @@ func (c *Client) Export(ctx context.Context, req Request, e telemetry.Emitter) (
 // resumeOrCreate returns the job id to poll: the persisted in-flight job when it
 // is still adoptable, otherwise a newly created one (recorded before returning,
 // so a caller killed during the poll loop leaves an adoptable record behind).
-func (c *Client) resumeOrCreate(ctx context.Context, req Request, format Format) (string, error) {
+func (c *Client) resumeOrCreate(ctx context.Context, req Request, format Format, throttle *throttleRetry) (string, error) {
 	scope := requestScope(req, format)
 
 	if rec := c.loadJob(req.ReportName); rec != nil && c.adoptable(rec.InFlight, scope) {
 		return rec.InFlight.ID, nil
 	}
 
-	id, err := c.create(ctx, req, format)
-	if err != nil {
-		return "", fmt.Errorf("exportjob: %s: create: %w", req.ReportName, err)
+	var id string
+	for {
+		var err error
+		id, err = c.create(ctx, req, format)
+		if err == nil {
+			break
+		}
+		retry, werr := throttle.wait(ctx, err)
+		if werr != nil {
+			return "", fmt.Errorf("exportjob: %s: create: %w", req.ReportName, werr)
+		}
+		if !retry {
+			return "", fmt.Errorf("exportjob: %s: create: %w", req.ReportName, err)
+		}
 	}
 	c.saveJob(req.ReportName, &checkpoint.InFlightJob{ID: id, CreatedAt: c.opts.Now(), Scope: scope})
 	return id, nil
@@ -457,7 +518,7 @@ func (c *Client) create(ctx context.Context, req Request, format Format) (string
 // PollInitial to PollMax between attempts. It returns the terminal response
 // (only populated on "completed"), the number of polls it took, and
 // ErrJobFailed wrapped when the job reports "failed".
-func (c *Client) poll(ctx context.Context, reportName, id string) (exportJobResponse, int, error) {
+func (c *Client) poll(ctx context.Context, reportName, id string, throttle *throttleRetry) (exportJobResponse, int, error) {
 	pollURL := c.opts.BaseURL + "/deviceManagement/reports/exportJobs/" + id
 	delay := c.opts.PollInitial
 	pollCount := 0
@@ -469,6 +530,15 @@ func (c *Client) poll(ctx context.Context, reportName, id string) (exportJobResp
 
 		body, err := c.graph.RawGetWithHeaders(ctx, pollURL, nil)
 		if err != nil {
+			// A throttled poll waits and re-polls without advancing the status
+			// backoff: the job itself is unaffected by our being throttled.
+			retry, werr := throttle.wait(ctx, err)
+			if werr != nil {
+				return exportJobResponse{}, pollCount, werr
+			}
+			if retry {
+				continue
+			}
 			return exportJobResponse{}, pollCount, fmt.Errorf("exportjob: %s: poll: %w", reportName, err)
 		}
 		pollCount++
@@ -497,6 +567,41 @@ func (c *Client) poll(ctx context.Context, reportName, id string) (exportJobResp
 			delay = c.opts.PollMax
 		}
 	}
+}
+
+// throttleRetry is one Export call's in-tick retry budget for HTTP 429s on the
+// create and poll requests, shared across both stages so the call as a whole is
+// bounded (see defaultThrottleRetries / defaultThrottleBudget).
+type throttleRetry struct {
+	sleep   func(ctx context.Context, d time.Duration) error
+	backoff *graphclient.Backoff
+	retries int
+	spent   time.Duration
+}
+
+// wait reports whether err is a 429 that may be retried. When it is, wait first
+// sleeps the server's Retry-After (if any) or the computed backoff. Any other
+// error, or a throttle past the retry count or time budget, returns false so
+// the caller surfaces the original error. A non-nil error is ctx cancellation
+// during the sleep.
+func (r *throttleRetry) wait(ctx context.Context, err error) (bool, error) {
+	var se *graphclient.HTTPStatusError
+	if !errors.As(err, &se) || se.StatusCode != http.StatusTooManyRequests {
+		return false, nil
+	}
+	if r.retries >= defaultThrottleRetries {
+		return false, nil
+	}
+	d := r.backoff.Delay(r.retries, se.RetryAfter)
+	if r.spent+d > defaultThrottleBudget {
+		return false, nil
+	}
+	if serr := r.sleep(ctx, d); serr != nil {
+		return false, serr
+	}
+	r.retries++
+	r.spent += d
+	return true, nil
 }
 
 // emitTerminal records the graph2otel.export.* self-obs metrics for one

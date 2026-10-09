@@ -21,7 +21,14 @@ import (
 //     covers the tight case.
 //   - intune-general: ~1000 requests / 20s per app per tenant.
 //   - intune-devices: ~2000 reads / 20s per app per tenant (elevated ceiling).
-//   - intune-export:  48 requests / minute per app — the tightest Intune ceiling.
+//   - intune-export:  Microsoft documents 48 requests / minute per app, but that
+//     ceiling 429s in practice: at 48/min with a 48 burst, the ~22 export jobs
+//     every 6h collector creates at once drew 46-57 429s per tick (live
+//     2026-10-09). The limiter runs at HALF the documented rate with a burst of
+//     4, so a startup or tick-aligned burst is metered out at 1 per 2.5s instead
+//     of firing 48 back to back. Half is a safety margin, not a measured
+//     ceiling; exportjob's concurrency cap (3 jobs) is the primary burst control,
+//     and graph2otel.throttle.count{workload="intune-export"} is the check.
 //   - unknown:        no limiter (permissive default).
 var workloadRates = map[Workload]struct {
 	every rate.Limit
@@ -32,7 +39,7 @@ var workloadRates = map[Workload]struct {
 	WorkloadDirectory:     {every: rate.Every(10 * time.Second / 50), burst: 50},
 	WorkloadIntuneGeneral: {every: rate.Every(20 * time.Second / 1000), burst: 1000},
 	WorkloadIntuneDevices: {every: rate.Every(20 * time.Second / 2000), burst: 2000},
-	WorkloadIntuneExport:  {every: rate.Every(time.Minute / 48), burst: 48},
+	WorkloadIntuneExport:  {every: rate.Every(time.Minute / 24), burst: 4},
 }
 
 // limiterKey identifies one token bucket. Every workload is keyed per

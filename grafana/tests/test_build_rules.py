@@ -277,6 +277,28 @@ class TestReverseValidation(unittest.TestCase):
         self.assertIn("test-bogus-rule", violations[0])
         self.assertIn("graph2otel_this_metric_does_not_exist_total", violations[0])
 
+    def test_an_offset_modifier_does_not_hide_the_metric_beside_it(self):
+        """`offset 7d` is skipped as a duration, never the metric it modifies."""
+        bogus = [{
+            "uid": "test-offset-rule",
+            "data": [{
+                "model": {
+                    "datasource": {"type": "prometheus"},
+                    "expr": "sum(graph2otel_not_a_metric_total offset 7d)",
+                }
+            }],
+        }]
+        violations = build_rules.reverse_validate(CAT, bogus)
+        self.assertEqual(len(violations), 1)
+        self.assertIn("'graph2otel_not_a_metric_total' is not a catalogued", violations[0])
+
+    def test_degraded_rule_exclusion_of_an_unknown_collector_is_refused(self):
+        """A typo in the exclusion list would exclude nothing; it must fail the build."""
+        with mock.patch.dict(build_rules.DEGRADED_RULE_UNSUPPORTED_COLLECTORS,
+                             {"purview.retention_labelz": "typo"}):
+            with self.assertRaises(KeyError):
+                build_rules._degraded_rule_exclusions()
+
     def test_throttle_limit_percentage_bug_is_fixed(self):
         """#219: the shipped rule queried a metric name that cannot exist —
         the unit is '%', so OTLP normalization appends _percent."""

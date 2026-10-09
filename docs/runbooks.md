@@ -46,8 +46,13 @@ a recommendation.
 ### g2o-entra-cred-expiry-critical
 
 An Entra application or service-principal credential (client secret or
-certificate) lands in the `lt_7d` or `expired` bucket. When one of these expires,
-sign-in or an integration breaks with no warning.
+certificate) lands in the `lt_7d` bucket, or has expired within the last 7 days
+(the `expired` bucket grew over 7 days). When one of these expires, sign-in or an
+integration breaks with no warning. A credential that expired longer ago no
+longer counts, so an expired credential that was already replaced stops alerting
+a week after expiry; the gauge has no per-owner dimension to tell "replaced" from
+"forgotten" directly. Long-expired credentials are still in the
+`entra.app_credential` log twin with `expiry_bucket=expired`.
 
 **No data:** `OK`. No soon-expiring credentials is the healthy state. It also
 means the `entra.credential_expiry` collector may be off — check
@@ -230,6 +235,11 @@ Warning rather than critical on purpose. The two causes are a revoked Graph
 consent grant, which has already been broken for six hours by the time this
 fires, and an endpoint the tenant is not licensed for, which cannot be actioned
 at all. Neither is a 3am page.
+
+Collectors whose endpoint Microsoft does not support for app-only access at all
+are excluded by name (`DEGRADED_RULE_UNSUPPORTED_COLLECTORS` in
+`grafana/build_rules.py`; today `purview.retention_labels`). There is deliberately
+no exclusion by cause or state: a revoked consent grant looks the same.
 
 **No data:** `OK`. A collector that is disabled or removed has no series, and its
 silent disappearance is the correct outcome.
@@ -529,7 +539,9 @@ widen it if your startup bursts routinely last longer.
 
 **Remediation:** the alert's `workload` label names the ceiling being hit —
 reporting is 5 requests per 10s, Identity Protection 1/s per tenant across *all*
-applications sharing the tenant, Intune reports-export 48/min. Because the
+applications sharing the tenant, Intune reports-export 48/min documented (the
+client limits itself to 24/min burst 4, and the export engine runs at most 3 jobs
+at once and retries a throttled create or poll within the tick). Because the
 Identity Protection limit is tenant-wide, another application in your tenant can
 throttle graph2otel; check whether anything else started polling before assuming
 a graph2otel change. Otherwise lengthen the poll intervals of the collectors on

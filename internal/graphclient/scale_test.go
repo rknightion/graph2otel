@@ -76,7 +76,9 @@ func TestScaleLimiterBudgetsMatchDocumentedCeilings(t *testing.T) {
 	}{
 		{WorkloadReporting, rate.Every(10 * time.Second / 5), 5, "reporting 5/10s"},
 		{WorkloadIPC, rate.Every(time.Second), 1, "identity-protection 1/s"},
-		{WorkloadIntuneExport, rate.Every(time.Minute / 48), 48, "intune-export 48/min"},
+		// Deliberately half Microsoft's documented 48/min with a small burst:
+		// the documented ceiling 429s under the 6h export-tick burst.
+		{WorkloadIntuneExport, rate.Every(time.Minute / 24), 4, "intune-export 24/min burst 4"},
 	}
 	for _, tc := range cases {
 		spec, ok := workloadRates[tc.wl]

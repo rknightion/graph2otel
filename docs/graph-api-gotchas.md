@@ -113,7 +113,7 @@ Independent ceilings, none of which reliably send `Retry-After` — client-side 
 | reporting | 5 req / 10 s per app per tenant |
 | Identity Protection | **1 req/s per tenant, across ALL apps** |
 | Intune general | own tier; Devices endpoints elevated |
-| Intune reports-export | 48 req/min per app |
+| Intune reports-export | 48 req/min per app documented; **429s in practice** under a burst of ~22 jobs `[live-measured 2026-10-09]`, so the limiter runs 24/min burst 4 and `exportjob` caps 3 concurrent jobs and retries a 429 in-tick |
 | directory `keyCredentials` select | ~150 req/min per tenant |
 
 ## Entra recommendations

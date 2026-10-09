@@ -30,7 +30,7 @@ spec:
     pipeline: "graph2otel"
   annotations:
     summary: "Collector {{ $labels.collector }} has not had a single successful scrape in 6h (tenant {{ $labels.tenant_id }})"
-    description: "graph2otel_scrape_success_ratio for collector={{ $labels.collector }}, tenant {{ $labels.tenant_id }} has been 0 for every sample in a 6h window. The collector is running and reporting — this is not staleness — but every run is coming back degraded or failed. The two causes worth separating are a REVOKED Graph consent grant (actionable: re-consent the app role) and an endpoint the tenant is simply not licensed for (not actionable: the collector correctly declines it forever, which is why g2o-collector-staleness deliberately stays silent for that case since #408). Read cause= on the WARN 'collector completed with degraded outcome' line, or graph2otel_scrape_outcomes_total, to tell them apart. Warning rather than critical because neither cause is a 3am page: the unlicensed one can never be actioned at all, and a revoked grant has already been broken for six hours by the time this fires. 6h with a 30m pending window tolerates the slowest collectors (24h intervals) restarting mid-window without a false positive."
+    description: "graph2otel_scrape_success_ratio for collector={{ $labels.collector }}, tenant {{ $labels.tenant_id }} has been 0 for every sample in a 6h window. The collector is running and reporting — this is not staleness — but every run is coming back degraded or failed. The two causes worth separating are a REVOKED Graph consent grant (actionable: re-consent the app role) and an endpoint the tenant is simply not licensed for (not actionable: the collector correctly declines it forever, which is why g2o-collector-staleness deliberately stays silent for that case since #408). Collectors whose endpoint Microsoft does not support app-only at all (purview.retention_labels) are excluded by name in the rule source. Read cause= on the WARN 'collector completed with degraded outcome' line, or graph2otel_scrape_outcomes_total, to tell them apart. Warning rather than critical because neither cause is a 3am page: the unlicensed one can never be actioned at all, and a revoked grant has already been broken for six hours by the time this fires. 6h with a 30m pending window tolerates the slowest collectors (24h intervals) restarting mid-window without a false positive."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-collector-degraded-sustained"
     __dashboardUid__: "graph2otel"
     __panelId__: "434"
@@ -42,7 +42,7 @@ spec:
           type: "prometheus"
           uid: "grafanacloud-prom"
         editorMode: "code"
-        expr: "max by (tenant_id, collector) (max_over_time(graph2otel_scrape_success_ratio[6h]))"
+        expr: "max by (tenant_id, collector) (max_over_time(graph2otel_scrape_success_ratio{collector!=\"purview.retention_labels\"}[6h]))"
         instant: false
         range: true
         intervalMs: 1000

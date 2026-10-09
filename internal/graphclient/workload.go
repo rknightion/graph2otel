@@ -32,7 +32,8 @@ const (
 	// collections: ~2000 reads / 20s per app per tenant.
 	WorkloadIntuneDevices Workload = "intune-devices"
 	// WorkloadIntuneExport covers the Intune reports-export job endpoint, the
-	// tightest Intune ceiling: 48 requests / minute per app.
+	// tightest Intune ceiling: documented 48 requests / minute per app, limited
+	// client-side to 24/min burst 4 (see workloadRates).
 	WorkloadIntuneExport Workload = "intune-export"
 	// WorkloadUnknown is anything not matched by the table below. It gets no
 	// client-side limiter (a generous, permissive default) rather than being

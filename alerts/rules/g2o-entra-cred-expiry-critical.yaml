@@ -29,8 +29,8 @@ spec:
     source: "entra"
     pipeline: "graph2otel"
   annotations:
-    summary: "{{ $labels.owner_type }} {{ $labels.credential_type }} credential(s) expiring within 7 days (tenant {{ $labels.tenant_id }})"
-    description: "entra_credentials_expiring_total is non-zero in the lt_7d/expired buckets for tenant {{ $labels.tenant_id }}, owner_type={{ $labels.owner_type }}, credential_type={{ $labels.credential_type }} for 15m. Bucket-count based, never per-credential. The runbook covers the false-positive notes and the lt_30d warning-tier companion rule."
+    summary: "{{ $labels.owner_type }} {{ $labels.credential_type }} credential(s) expiring within 7 days or expired in the last 7 days (tenant {{ $labels.tenant_id }})"
+    description: "entra_credentials_expiring_total lt_7d bucket, plus growth of the expired bucket over the last 7 days, is non-zero for tenant {{ $labels.tenant_id }}, owner_type={{ $labels.owner_type }}, credential_type={{ $labels.credential_type }} for 15m. A credential that expired more than 7 days ago no longer counts, so an expired credential that was already replaced does not alert forever. Bucket-count based, never per-credential. The runbook covers the false-positive notes and the lt_30d warning-tier companion rule."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-entra-cred-expiry-critical"
     __dashboardUid__: "graph2otel"
     __panelId__: "32"
@@ -42,7 +42,7 @@ spec:
           type: "prometheus"
           uid: "grafanacloud-prom"
         editorMode: "code"
-        expr: "sum by (tenant_id, owner_type, credential_type) (entra_credentials_expiring_total{expiry_bucket=~\"lt_7d|expired\"})"
+        expr: "sum by (tenant_id, owner_type, credential_type) (entra_credentials_expiring_total{expiry_bucket=\"lt_7d\"}) + clamp_min((sum by (tenant_id, owner_type, credential_type) (entra_credentials_expiring_total{expiry_bucket=\"expired\"}) - sum by (tenant_id, owner_type, credential_type) (entra_credentials_expiring_total{expiry_bucket=\"expired\"} offset 7d)) or sum by (tenant_id, owner_type, credential_type) (entra_credentials_expiring_total{expiry_bucket=\"expired\"}) * 0, 0)"
         instant: false
         range: true
         intervalMs: 1000

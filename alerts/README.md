@@ -118,7 +118,24 @@ certificates — **note the bucket label values differ between the two
 collectors**: `lt_7d`/`lt_30d`/`lt_90d`/`gt_90d`/`expired` for Entra
 credential expiry vs. `0d_7d`/`7d_30d`/`30d_90d`/`over_90d`/`unknown` for
 Intune certificates). The paused `g2o-entra-cred-expiry-warning` companion
-uses the `lt_30d` bucket as an earlier warning tier. There is no `lt_14d` /
+uses the `lt_30d` bucket as an earlier warning tier.
+
+The Entra `expired` bucket counts toward the primary rule **only while it is
+recent**: the rule adds the `lt_7d` count to the growth of `expired` over the
+last 7 days (clamped at zero), not the whole `expired` count. Counting all of it
+alerted forever on a credential that had expired and already been replaced
+(Microsoft-managed "P2P Server" `MS-Organization-P2P-Access [2025]`, superseded by
+its `[2026]` successor). Suppressing an expired credential only when its owner
+holds a valid one would need a per-owner join, and the gauge is deliberately
+`owner_type` x `credential_type` x `expiry_bucket`, never per app, so that join
+is not available on the metric. A credential now alerts for its 7 days in
+`lt_7d` and up to 7 days after it expires. The `expired` leg needs a sample from
+7 days ago, so for the first week after a fresh install only `lt_7d` alerts; and
+if an old expired credential is deleted in the same week a new one expires, the
+two cancel in the growth term (the new one already alerted through `lt_7d`).
+Find long-expired credentials in the `entra.app_credential` log twin.
+
+There is no `lt_14d` /
 `7d_14d` bucket in either collector — the fixed bucket boundaries are 7/30/90
 days, not 7/14/30 — so "30/14/7 day thresholds" collapses to the two buckets
 that actually exist (7d and 30d); tune your own bucket boundaries in the
@@ -235,6 +252,11 @@ so a hard authorization failure has not gone quiet. The gap that opened was a
 genuinely *revoked* consent grant, which produces the same declined outcome and
 is very much actionable; `g2o-collector-degraded-sustained` covers it at
 **warning** on `graph2otel_scrape_success_ratio` staying `0` across a 6h window.
+Collectors whose endpoint Microsoft does not support app-only at all are
+excluded from it **by name**, through `DEGRADED_RULE_UNSUPPORTED_COLLECTORS` in
+`grafana/build_rules.py` (today only `purview.retention_labels`). It is never a
+blanket exclusion by cause or state: a revoked grant looks identical, and that is
+the case this rule is for.
 That metric is level-triggered — re-exported on every OTLP interval rather than
 only when a scrape finishes — so `max_over_time` over a fixed 6h window is
 correct for a 24-hour collector without the interval division the primary needs.
