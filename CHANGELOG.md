@@ -1,5 +1,49 @@
 # Changelog
 
+## [2.1.0](https://github.com/rknightion/graph2otel/compare/v2.0.0...v2.1.0) (2026-10-10)
+
+
+### Features
+
+* **chart:** add Artifact Hub metadata and point home at the docs site ([cede7dd](https://github.com/rknightion/graph2otel/commit/cede7dd60d8cf2b897f7c1234eb08626ccc98547))
+
+
+### Bug Fixes
+
+* author is Rob Knight, not Rob Knighton ([a0797e6](https://github.com/rknightion/graph2otel/commit/a0797e649a944770954546cfe096c5e6b6e9c7d2))
+* **ci:** repin rknightion/.github refs to v1.9.7 so Renovate can track them ([b942f2b](https://github.com/rknightion/graph2otel/commit/b942f2bf82804f3f338c564e39cad2f999a7dbce))
+* **ci:** restore Renovate automerge gates ([#433](https://github.com/rknightion/graph2otel/issues/433)) ([9c0c6eb](https://github.com/rknightion/graph2otel/commit/9c0c6eb0e948518b8b9ee176de67d0297a50ebac))
+* **deps:** bump golang.org/x/net to v0.60.0 ([4244f91](https://github.com/rknightion/graph2otel/commit/4244f91212fe70cad141924c7842d1a9a53cf1aa))
+* **deps:** hold go-licenses on v1 and make Renovate enforce it ([c31be5f](https://github.com/rknightion/graph2otel/commit/c31be5fa950ddc225ee6632773c3f4f47ed1985d))
+* **deps:** update module github.com/azure/azure-sdk-for-go/sdk/azcore to v1.23.0 ([#430](https://github.com/rknightion/graph2otel/issues/430)) ([4e640cd](https://github.com/rknightion/graph2otel/commit/4e640cd1bc116ac0ecc3603130c5c1d3f9adf4dd))
+* **deps:** update module github.com/azure/azure-sdk-for-go/sdk/azcore to v1.23.1 ([#443](https://github.com/rknightion/graph2otel/issues/443)) ([4eb153b](https://github.com/rknightion/graph2otel/commit/4eb153b1fb9136ec241d8983d9c12de467f996c6))
+* **deps:** update module github.com/azure/azure-sdk-for-go/sdk/azcore to v1.23.2 ([#483](https://github.com/rknightion/graph2otel/issues/483)) ([66cd126](https://github.com/rknightion/graph2otel/commit/66cd1267b776f76010f0041ef0f346448ce3d4f7))
+* **deps:** update module github.com/azure/azure-sdk-for-go/sdk/azcore to v1.23.3 ([#498](https://github.com/rknightion/graph2otel/issues/498)) ([7414bf9](https://github.com/rknightion/graph2otel/commit/7414bf9dd9766b2e6c63388d7a4187829d740ea5))
+* **deps:** update module github.com/azure/azure-sdk-for-go/sdk/azidentity to v1.14.1 ([#444](https://github.com/rknightion/graph2otel/issues/444)) ([5133e15](https://github.com/rknightion/graph2otel/commit/5133e1534c8d7f1f30cddb399d589c790f2840f2))
+* **deps:** update module github.com/azure/azure-sdk-for-go/sdk/storage/azblob to v1.8.1 ([#466](https://github.com/rknightion/graph2otel/issues/466)) ([ebbf399](https://github.com/rknightion/graph2otel/commit/ebbf399ff7dd1074edc6f0094d8dce242575ab24))
+* **deps:** update module github.com/azure/azure-sdk-for-go/sdk/storage/azblob to v1.8.2 ([#487](https://github.com/rknightion/graph2otel/issues/487)) ([e7dc49e](https://github.com/rknightion/graph2otel/commit/e7dc49ea6e6283ebed88a797e8da7de26e441fe9))
+* **deps:** update module github.com/grafana/pyroscope-go to v1.4.2 ([#429](https://github.com/rknightion/graph2otel/issues/429)) ([9a47fdc](https://github.com/rknightion/graph2otel/commit/9a47fdc331f2c9bbf197539a371f4ea0146548a0))
+* **deps:** update module github.com/grafana/pyroscope-go to v1.4.3 ([#485](https://github.com/rknightion/graph2otel/issues/485)) ([e7bd8e7](https://github.com/rknightion/graph2otel/commit/e7bd8e7d1eeebd758102c0bd1f7c25ce43cfee56))
+* **deps:** update module github.com/knadh/koanf/providers/env/v2 to v2.0.2 ([#492](https://github.com/rknightion/graph2otel/issues/492)) ([5469a1f](https://github.com/rknightion/graph2otel/commit/5469a1fc8ffc8a0089532e0bdf4bf2a9b0a514c2))
+* **deps:** update module github.com/knadh/koanf/v2 to v2.3.7 ([#478](https://github.com/rknightion/graph2otel/issues/478)) ([5c3b42a](https://github.com/rknightion/graph2otel/commit/5c3b42abb8ea552179ccc73d8e2671c2f850d46d))
+* **deps:** update module github.com/knadh/koanf/v2 to v2.3.8 ([#501](https://github.com/rknightion/graph2otel/issues/501)) ([935fc73](https://github.com/rknightion/graph2otel/commit/935fc735dd5e2ef16a84be9bad3605d9e456404c))
+* **deps:** update module github.com/microsoft/kiota-http-go to v1.5.7 ([#499](https://github.com/rknightion/graph2otel/issues/499)) ([1d3fb67](https://github.com/rknightion/graph2otel/commit/1d3fb6700197574518185245df5dd9110a1f41a8))
+* **deps:** update module github.com/microsoftgraph/msgraph-sdk-go to v1.102.0 ([#462](https://github.com/rknightion/graph2otel/issues/462)) ([ac21f9f](https://github.com/rknightion/graph2otel/commit/ac21f9f924f00670f52dae8a975e75ba37b992ab))
+* **deps:** update module github.com/microsoftgraph/msgraph-sdk-go to v1.103.0 ([#469](https://github.com/rknightion/graph2otel/issues/469)) ([b782409](https://github.com/rknightion/graph2otel/commit/b78240959fa7f0c28c7c4faca74598c172e63d28))
+* **deps:** update module github.com/microsoftgraph/msgraph-sdk-go to v1.104.0 ([#500](https://github.com/rknightion/graph2otel/issues/500)) ([5fcb3bd](https://github.com/rknightion/graph2otel/commit/5fcb3bd5f261b7adf1e161c4a3b85718aba6dccf))
+* **deps:** update module go.opentelemetry.io/proto/otlp to v1.11.1 ([#484](https://github.com/rknightion/graph2otel/issues/484)) ([5b2f4d4](https://github.com/rknightion/graph2otel/commit/5b2f4d429bb8ac93a5804a17d16ed742987a67d2))
+* **deps:** update module golang.org/x/time to v0.16.0 ([#464](https://github.com/rknightion/graph2otel/issues/464)) ([a8da271](https://github.com/rknightion/graph2otel/commit/a8da27159fa023c3f4f4a6026ab498cce11d1b26))
+* **deps:** update module google.golang.org/grpc to v1.83.1 ([#435](https://github.com/rknightion/graph2otel/issues/435)) ([7273b95](https://github.com/rknightion/graph2otel/commit/7273b95df32de8c2308bbe5adf6d8996c4093633))
+* **deps:** update module google.golang.org/grpc to v1.83.2 ([#441](https://github.com/rknightion/graph2otel/issues/441)) ([628f316](https://github.com/rknightion/graph2otel/commit/628f3164b81c805b816286197d7a99925f8fe622))
+* **deps:** update module google.golang.org/grpc to v1.84.0 ([#471](https://github.com/rknightion/graph2otel/issues/471)) ([d7df44e](https://github.com/rknightion/graph2otel/commit/d7df44e95f63980fbc3ef3013efce4e52a168b99))
+* **docs:** stop two wrapped references rendering as page headings ([5278959](https://github.com/rknightion/graph2otel/commit/52789597c460a570763af93b8a54d216d6795a86))
+* **exportjob:** stop Intune export bursts losing 6h of data to 429s ([0c9edbb](https://github.com/rknightion/graph2otel/commit/0c9edbbaee09b71af920ab0a880168fdb44d5144))
+* **goreleaser:** disable module proxying so releases actually ship binaries ([7c00bf2](https://github.com/rknightion/graph2otel/commit/7c00bf29c659f85860446f10dc7ad15072b83452))
+* **grafana-sync:** write into the hub's grafana/ subtree ([0801a2d](https://github.com/rknightion/graph2otel/commit/0801a2d9b03e8bbdcc4637f05e7499e0cb820ad3))
+* **grafana:** quote collector regexes as PromQL raw strings ([4f4c202](https://github.com/rknightion/graph2otel/commit/4f4c202fb62dc8a10da53c8759537fc63049f376))
+* **helm:** chomp the permutations block scalar ([2acdb89](https://github.com/rknightion/graph2otel/commit/2acdb896b380a0af3b1b2c2f414c41f57d0b50e0))
+* **test:** point the documentation gates at AGENTS.md, not the import stub ([ed4009e](https://github.com/rknightion/graph2otel/commit/ed4009eed9cca74faec35ecc934e921a800a75a1))
+
 ## [2.0.0](https://github.com/rknightion/graph2otel/compare/v1.0.0...v2.0.0) (2026-08-10)
 
 
