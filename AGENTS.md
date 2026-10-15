@@ -29,6 +29,7 @@ It runs in production against a live tenant.
   record it with a `live-measured` tag.
 - Standard-library `testing` only. No third-party assertion libraries.
 - Mappers are written against live samples, never docs or hand-written fixtures.
+- Loops: the protocol lives in `~/repos/agent-docs/sources/loop/` (this board's "Loop protocol pointer" doc points there); this repository's loop facts are in `LOOP.md`.
 - The tracker is Backlog.md in `backlog/`, committed to git, and it is the record of intent and
   progress rather than this file. Its CLI has data-destroying traps: see
   `reference/backlog-workflow.md` before touching a task, doc or decision.

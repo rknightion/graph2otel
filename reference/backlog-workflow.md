@@ -27,8 +27,7 @@ silent and unrepairable.
 
 ## Content rules
 
-- Before designing a wave, read this repo's own fan-out protocol doc and its wave operating model
-  doc; `backlog doc list --plain` lists both.
+- Loops: the protocol lives in `~/repos/agent-docs/sources/loop/` (this board's "Loop protocol pointer" doc points there); this repository's loop facts are in `LOOP.md`.
 
 - **Statuses are `To Do`, `In Progress`, `Parked`, `Done`.** `Parked` means attempted and
   blocked, with a **concrete resume boundary** in the notes: the specific next probe or decision,
