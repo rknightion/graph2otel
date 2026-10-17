@@ -1,0 +1,3 @@
+# Remote gate runner contract (m7kni/gate-runner): see that repo's README.
+# Defaults suffice: the estate image, root, no extra env.
+{}

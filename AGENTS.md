@@ -18,6 +18,10 @@ It runs in production against a live tenant.
   is generated from the collector registry and is the authoritative collector count; `just gen`
   regenerates every generated artifact.
 
+Off the Mac, when the remote gate runner is installed (`which gaterun`): `gaterun -- just ci` (or
+`just check`), paced across lanes with `gaterun-slot <lane> -- gaterun -- just ci`; `.gaterunner.yaml`
+is its contract. Run one test or package locally.
+
 ## Working rules
 
 - **Validate a task's premise against the live tenant before implementing**, probing as
