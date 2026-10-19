@@ -19,7 +19,7 @@ require (
 	github.com/knadh/koanf/providers/structs v1.0.1
 	github.com/knadh/koanf/v2 v2.4.1
 	github.com/microsoft/kiota-authentication-azure-go v1.3.1
-	github.com/microsoft/kiota-http-go v1.5.8
+	github.com/microsoft/kiota-http-go v1.5.9
 	github.com/microsoftgraph/msgraph-sdk-go v1.104.0
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.21.0
