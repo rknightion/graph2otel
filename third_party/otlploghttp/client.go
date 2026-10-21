@@ -51,13 +51,6 @@ var exporterN atomic.Int64
 
 var errInsecureEndpointWithTLS = errors.New("insecure HTTP endpoint cannot use TLS client configuration")
 
-// maxResponseBodySize is the maximum number of bytes to read from a response
-// body. It is set to 4 MiB per the OTLP specification recommendation to
-// mitigate excessive memory usage caused by a misconfigured or malicious
-// server. If exceeded, the response is treated as a not-retryable error.
-// This is a variable to allow tests to override it.
-var maxResponseBodySize int64 = 4 * 1024 * 1024
-
 // nextExporterID returns the next unique ID for an exporter.
 func nextExporterID() int64 {
 	const inc = 1
@@ -115,12 +108,13 @@ func newHTTPClient(ctx context.Context, cfg config) (*client, error) {
 	req.Header.Set("Content-Type", "application/x-protobuf")
 
 	c := &httpClient{
-		compression:    cfg.compression.Value,
-		maxRequestSize: cfg.maxRequestSize.Value,
-		req:            req,
-		requestFunc:    cfg.retryCfg.Value.RequestFunc(evaluate),
-		client:         hc,
-		observer:       cfg.requestObserver,
+		compression:     cfg.compression.Value,
+		maxRequestSize:  cfg.maxRequestSize.Value,
+		maxResponseSize: cfg.maxResponseSize.Value,
+		req:             req,
+		requestFunc:     cfg.retryCfg.Value.RequestFunc(evaluate),
+		client:          hc,
+		observer:        cfg.requestObserver,
 	}
 
 	id := nextExporterID()
@@ -131,20 +125,21 @@ func newHTTPClient(ctx context.Context, cfg config) (*client, error) {
 
 type httpClient struct {
 	// req is cloned for every upload the client makes.
-	req            *http.Request
-	compression    Compression
-	maxRequestSize int
-	requestFunc    retry.RequestFunc
-	client         *http.Client
-	observer       RequestObserver
+	req             *http.Request
+	compression     Compression
+	maxRequestSize  int
+	maxResponseSize int64
+	requestFunc     retry.RequestFunc
+	client          *http.Client
+	observer        RequestObserver
 
 	inst *observ.Instrumentation
 }
 
-// Keep it in sync with golang's DefaultTransport from net/http! We
+// Keep it in sync with Go's DefaultTransport from net/http! We
 // have our own copy to avoid handling a situation where the
 // DefaultTransport is overwritten with some different implementation
-// of http.RoundTripper or it's modified by another package.
+// of http.RoundTripper or it is modified by another package.
 var ourTransport = &http.Transport{
 	Proxy: http.ProxyFromEnvironment,
 	DialContext: (&net.Dialer{
@@ -160,7 +155,7 @@ var ourTransport = &http.Transport{
 
 func (c *httpClient) uploadLogs(ctx context.Context, data []*logpb.ResourceLogs) (uploadErr error) {
 	// The Exporter synchronizes access to client methods. This is not called
-	// after the Exporter is shutdown. Only thing to do here is send data.
+	// after the Exporter is shut down. The only thing to do here is send data.
 
 	pbRequest := &collogpb.ExportLogsServiceRequest{ResourceLogs: data}
 	body, err := proto.Marshal(pbRequest)
@@ -223,11 +218,7 @@ func (c *httpClient) uploadLogs(ctx context.Context, data []*logpb.ResourceLogs)
 
 			// Read the partial success message, if any.
 			var respData bytes.Buffer
-			if _, err := io.Copy(&respData, http.MaxBytesReader(nil, resp.Body, maxResponseBodySize)); err != nil {
-				var maxBytesErr *http.MaxBytesError
-				if errors.As(err, &maxBytesErr) {
-					return fmt.Errorf("response body too large: exceeded %d bytes", maxBytesErr.Limit)
-				}
+			if err := internal.CopyResponseBody(&respData, resp.Body, c.maxResponseSize); err != nil {
 				return err
 			}
 			if respData.Len() == 0 {
@@ -258,11 +249,7 @@ func (c *httpClient) uploadLogs(ctx context.Context, data []*logpb.ResourceLogs)
 		// message to be returned. It will help in
 		// debugging the actual issue.
 		var respData bytes.Buffer
-		if _, err := io.Copy(&respData, http.MaxBytesReader(nil, resp.Body, maxResponseBodySize)); err != nil {
-			var maxBytesErr *http.MaxBytesError
-			if errors.As(err, &maxBytesErr) {
-				return fmt.Errorf("response body too large: exceeded %d bytes", maxBytesErr.Limit)
-			}
+		if err := internal.CopyResponseBody(&respData, resp.Body, c.maxResponseSize); err != nil {
 			return err
 		}
 		respStr := strings.TrimSpace(respData.String())
@@ -400,9 +387,9 @@ type retryableError struct {
 	err      error
 }
 
-// newResponseError returns a retryableError and will extract any explicit
-// throttle delay contained in headers. The returned error wraps wrapped
-// if it is not nil.
+// newResponseError returns a retryableError and extracts any explicit
+// throttle delay contained in headers. The returned error wraps the supplied
+// error when it is non-nil.
 func newResponseError(header http.Header, wrapped error) error {
 	var rErr retryableError
 	if v := header.Get("Retry-After"); v != "" {
@@ -455,8 +442,8 @@ func (e retryableError) As(target any) bool {
 	}
 }
 
-// evaluate returns if err is retry-able. If it is and it includes an explicit
-// throttling delay, that delay is also returned.
+// evaluate reports whether err is retryable. If so, it also returns any
+// explicit throttling delay included in err.
 func evaluate(err error) (bool, time.Duration) {
 	if err == nil {
 		return false, 0

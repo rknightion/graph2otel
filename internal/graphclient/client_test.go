@@ -524,3 +524,54 @@ func TestRawPostReplaysBodyBeforeCompression(t *testing.T) {
 		t.Errorf("attempts = %d, want 2", attempts)
 	}
 }
+
+// A RoundTripper may still read the previous body after returning an early 429.
+// Draining it during the next attempt must not drain the retried body as well.
+func TestRawPostRetryDoesNotReuseInFlightBody(t *testing.T) {
+	const payload = `{"reportName":"R"}`
+	var attempts int
+	var firstBody io.ReadCloser
+	var firstEncoding string
+	readPayload := func(body io.ReadCloser, encoding string) {
+		defer body.Close()
+		var reader io.Reader = body
+		if encoding == "gzip" {
+			gz, err := gzip.NewReader(body)
+			if err != nil {
+				t.Errorf("gzip body: %v", err)
+				return
+			}
+			defer gz.Close()
+			reader = gz
+		}
+		data, err := io.ReadAll(reader)
+		if err != nil {
+			t.Errorf("read body: %v", err)
+		}
+		if string(data) != payload {
+			t.Errorf("payload = %q, want %q", data, payload)
+		}
+	}
+	edge := rawRoundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		attempts++
+		code := http.StatusCreated
+		if attempts == 1 {
+			firstBody, firstEncoding = r.Body, r.Header.Get("Content-Encoding")
+			code = http.StatusTooManyRequests
+		} else {
+			readPayload(firstBody, firstEncoding)
+			readPayload(r.Body, r.Header.Get("Content-Encoding"))
+		}
+		return &http.Response{StatusCode: code, Header: make(http.Header), Body: io.NopCloser(bytes.NewBufferString(`{"id":"job-1"}`)), Request: r}, nil
+	})
+	c, err := NewClient(context.Background(), &auth.TenantAuth{TenantID: "t", Cred: fakeCredential{token: "tok"}}, Options{ValidHosts: []string{"example.com"}, baseTransport: edge, MaxRetries: 1, RetryDelaySeconds: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.RawPost(context.Background(), "https://example.com", []byte(payload), nil); err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 2 {
+		t.Errorf("attempts = %d, want 2", attempts)
+	}
+}
