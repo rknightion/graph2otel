@@ -1,6 +1,6 @@
 module github.com/rknightion/graph2otel
 
-go 1.27.2
+go 1.27.3
 
 replace go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp => ./third_party/otlploghttp
 
@@ -8,7 +8,7 @@ replace go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp => ./t
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.3
-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.1
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.15.0
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.8.2
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/google/uuid v1.6.0
@@ -17,9 +17,9 @@ require (
 	github.com/knadh/koanf/providers/env/v2 v2.0.2
 	github.com/knadh/koanf/providers/file v1.2.1
 	github.com/knadh/koanf/providers/structs v1.0.1
-	github.com/knadh/koanf/v2 v2.3.8
+	github.com/knadh/koanf/v2 v2.4.1
 	github.com/microsoft/kiota-authentication-azure-go v1.3.1
-	github.com/microsoft/kiota-http-go v1.5.8
+	github.com/microsoft/kiota-http-go v1.5.9
 	github.com/microsoftgraph/msgraph-sdk-go v1.104.0
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.23.0
@@ -43,7 +43,7 @@ require (
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.13.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/storage/internal v0.1.0 // indirect
-	github.com/AzureAD/microsoft-authentication-library-for-go v1.8.0 // indirect
+	github.com/AzureAD/microsoft-authentication-library-for-go v1.10.1 // indirect
 	github.com/apache/arrow-go/v18 v18.7.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

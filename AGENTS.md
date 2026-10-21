@@ -22,6 +22,9 @@ Off the Mac, when the remote gate runner is installed (`which gaterun`): `gateru
 `just check`), paced across lanes with `gaterun-slot <lane> -- gaterun -- just ci`; `.gaterunner.yaml`
 is its contract. Run one test or package locally.
 
+The runtime image uses distroless Debian 13 for the patched eMudhra trust store; the Debian 12
+base remains unsuitable. Refresh the builder CA package before dependency downloads.
+
 ## Working rules
 
 - **Validate a task's premise against the live tenant before implementing**, probing as

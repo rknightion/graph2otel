@@ -1,5 +1,5 @@
 ---
-id: GTO-0009
+id: GTO-0011
 title: Prune tautological and change-detector unit tests
 status: To Do
 assignee: []
