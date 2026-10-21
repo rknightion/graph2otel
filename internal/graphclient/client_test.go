@@ -16,6 +16,8 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 
+	nethttplibrary "github.com/microsoft/kiota-http-go"
+
 	"github.com/rknightion/graph2otel/internal/auth"
 )
 
@@ -476,5 +478,49 @@ func TestRawPostResponseBodyLimit(t *testing.T) {
 				t.Errorf("RawPost body length = %d, want %d", got, maxRawBodyBytes)
 			}
 		})
+	}
+}
+
+// Retry must work before compression too: Kiota's default middleware factory
+// iterates a map, so its retry handler can see RawPost's original body.
+func TestRawPostReplaysBodyBeforeCompression(t *testing.T) {
+	const payload = `{"reportName":"R","select":["name"]}`
+	var attempts int
+	edge := rawRoundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		body, err := io.ReadAll(r.Body)
+		_ = r.Body.Close()
+		if err != nil {
+			t.Errorf("read request: %v", err)
+		}
+		if string(body) != payload {
+			t.Errorf("attempt payload = %q, want %q", body, payload)
+		}
+		attempts++
+		code := http.StatusCreated
+		if attempts == 1 {
+			code = http.StatusTooManyRequests
+		}
+		return &http.Response{StatusCode: code, Header: make(http.Header), Body: io.NopCloser(bytes.NewBufferString(`{"id":"job-1"}`)), Request: r}, nil
+	})
+	c, err := NewClient(context.Background(), &auth.TenantAuth{TenantID: "t", Cred: fakeCredential{token: "tok"}}, Options{ValidHosts: []string{"example.com"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Keep the real Kiota retry handler, while the network edge consumes each
+	// body completely. Compression must not hide the original body's contract.
+	c.httpClient.Transport = nethttplibrary.NewCustomTransportWithParentTransport(edge,
+		nethttplibrary.NewRetryHandlerWithOptions(nethttplibrary.RetryHandlerOptions{
+			MaxRetries: 1, DelaySeconds: 1,
+			ShouldRetry: func(time.Duration, int, *http.Request, *http.Response) bool { return true },
+		}))
+	body, err := c.RawPost(context.Background(), "https://example.com", []byte(payload), nil)
+	if err != nil {
+		t.Fatalf("RawPost: %v", err)
+	}
+	if string(body) != `{"id":"job-1"}` {
+		t.Errorf("response = %q", body)
+	}
+	if attempts != 2 {
+		t.Errorf("attempts = %d, want 2", attempts)
 	}
 }
