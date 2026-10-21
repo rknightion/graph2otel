@@ -1,6 +1,6 @@
 module github.com/rknightion/graph2otel
 
-go 1.27.2
+go 1.27.3
 
 replace go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp => ./third_party/otlploghttp
 

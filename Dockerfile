@@ -3,6 +3,9 @@
 # ---- build ----
 # Digest-pinned (Renovate's docker:pinDigests keeps this current — see renovate.json).
 FROM golang:1.27.3-bookworm@sha256:21ade014faf952365b9ecbd8dbdb87176fbacb82fac9fb132d9f2a7b8cc3f132 AS build
+# Refresh the builder trust store before Go or license-tool downloads.
+RUN apt-get update && apt-get install -y --no-install-recommends --only-upgrade ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY go.mod go.sum ./
 # Root go.mod replaces both OTLP/HTTP exporters with narrow local forks. Copy
@@ -33,7 +36,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 RUN install -d -m 0750 -o 65532 -g 65532 /out/checkpoints
 
 # ---- runtime ----
-FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+FROM gcr.io/distroless/static-debian13:nonroot@sha256:d62067879de890a1def9da0e7766b7d20810a5e5555cef8506b752437d7a3e88
 COPY --from=build /out/graph2otel /usr/local/bin/graph2otel
 # License compliance travels with the image (OCI /licenses convention): the AGPL
 # text plus the verbatim third-party module notices generated in the build stage.
