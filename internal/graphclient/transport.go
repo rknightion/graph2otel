@@ -166,7 +166,13 @@ func newGraphHTTPClient(opts Options) *http.Client {
 		}
 	}
 	instrumented := &instrumentedTransport{next: base, emitter: opts.Emitter, tenantID: opts.TenantID}
-	kiotaTransport := nethttplibrary.NewCustomTransportWithParentTransport(instrumented, buildMiddlewares(opts)...)
+	middlewares := buildMiddlewares(opts)
+	for i, middleware := range middlewares {
+		if _, ok := middleware.(*nethttplibrary.RetryHandler); ok {
+			middlewares[i] = &replayBodyRetry{next: middleware}
+		}
+	}
+	kiotaTransport := nethttplibrary.NewCustomTransportWithParentTransport(instrumented, middlewares...)
 	queryBrokerRetry := &queryBrokerRetryTransport{
 		next:              kiotaTransport,
 		maxRetries:        opts.MaxRetries,

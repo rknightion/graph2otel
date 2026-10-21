@@ -49,6 +49,8 @@ Closest analogs in the fleet: `sf2loki`'s composition-root pattern, `tailscale2o
 - Raw POST bodies must retain `io.Seeker` through Kiota's `NopCloser`: its retry
   handler seeks rather than calling `GetBody`, and its default middleware factory
   iterates a map. Compression cannot be relied on to add seekability before retry.
+  The retry middleware also snapshots the body and supplies a separate reader per
+  attempt: net/http can continue draining an old body after an early response.
 - **Raw REST for all collectors** via `internal/graphclient` (OTEL-instrumented transport,
   per-workload client-side rate limiters, own backoff, because the throttled workloads send no
   `Retry-After`). `msgraph-sdk-go` remains for exactly **one** typed call site,
