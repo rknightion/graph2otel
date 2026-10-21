@@ -13,6 +13,8 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 
+	nethttplibrary "github.com/microsoft/kiota-http-go"
+
 	"github.com/rknightion/graph2otel/internal/auth"
 )
 
@@ -95,6 +97,15 @@ func (c *Client) RawPost(ctx context.Context, url string, body []byte, headers m
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("graphclient: build request %s: %w", url, err)
+	}
+	// Kiota retries by seeking the body, rather than calling GetBody. Keep
+	// the reader seekable like Kiota's own request adapter: default middleware
+	// order varies, so compression cannot be relied on to supply that wrapper.
+	if len(body) > 0 {
+		req.Body = nethttplibrary.NopCloser(bytes.NewReader(body))
+		req.GetBody = func() (io.ReadCloser, error) {
+			return nethttplibrary.NopCloser(bytes.NewReader(body)), nil
+		}
 	}
 	req.Header.Set("Authorization", "Bearer "+tok.Token)
 	req.Header.Set("Content-Type", "application/json")
