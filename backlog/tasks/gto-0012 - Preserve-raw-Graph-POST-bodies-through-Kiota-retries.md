@@ -4,7 +4,7 @@ title: Preserve raw Graph POST bodies through Kiota retries
 status: In Progress
 assignee: []
 created_date: '2026-10-21T15:50:00Z'
-updated_date: '2026-10-21T15:54:00Z'
+updated_date: '2026-10-21T15:57:00Z'
 labels: []
 dependencies: []
 references:
@@ -24,6 +24,8 @@ Coverage CI during the Go 1.27.3 security update exposed a real retry failure: a
 <!-- AC:BEGIN -->
 - [ ] #1 RawPost replays the identical nonempty payload when the real Kiota retry handler runs before compression, with a regression observed red before the fix and green afterward
 - [ ] #2 The existing export throttle integration test passes thirty repetitions and the final full gate, CodeRabbit review, and exact-head required CI pass before landing
+- [ ] #3 RawPost replays the identical nonempty payload when the real Kiota retry handler runs before compression, with a regression observed red before the fix and green afterward
+- [ ] #4 The existing export throttle integration test passes thirty repetitions and the final full gate, CodeRabbit review, and exact-head required CI pass before reporting completion
 <!-- AC:END -->
 
 ## Definition of Done
@@ -47,4 +49,6 @@ Measured 2026-10-21: unchanged-tree remote run20261021T154344Z-graph2otel-52f459
 CodeRabbit delta review completed with findings0; both changed Go files reviewed. Required status on the previous PR head is green but its optional coverage job revealed the real failure, so the corrected candidate must replace it and pass CI before landing.
 
 Final corrected-code full gate PASS: remote run20261021T155018Z-graph2otel-c9b294bf, tree560c38fa26c0176e3aa85b9fec0c9081f4f07f83, 15:50:21–15:54:09UTC. CodeRabbit complete with findings0. Corrected-head GitHub CI still required before landing.
+
+Renovate auto-merged the earlier Go update while the retry fix was being reviewed. Used the explicitly authorized direct-main route for reviewed/gated fix a4aaef5a4400d51b4223ddf71efafa465d087bbb. Acceptance wording corrected from CI before landing to CI before completion to reflect that authorized direct-main workflow; exact-head CI remains mandatory. No generated surface changed.
 <!-- SECTION:NOTES:END -->
