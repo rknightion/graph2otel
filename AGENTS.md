@@ -46,6 +46,9 @@ base remains unsuitable. Refresh the builder CA package before dependency downlo
 Closest analogs in the fleet: `sf2loki`'s composition-root pattern, `tailscale2otel`'s poll to
 `telemetry.Emitter` facade.
 
+- Raw POST bodies must retain `io.Seeker` through Kiota's `NopCloser`: its retry
+  handler seeks rather than calling `GetBody`, and its default middleware factory
+  iterates a map. Compression cannot be relied on to add seekability before retry.
 - **Raw REST for all collectors** via `internal/graphclient` (OTEL-instrumented transport,
   per-workload client-side rate limiters, own backoff, because the throttled workloads send no
   `Retry-After`). `msgraph-sdk-go` remains for exactly **one** typed call site,
