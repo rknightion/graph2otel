@@ -38,7 +38,7 @@ jobs:
       contents: write      # create the RC tag and the GitHub prerelease
       pull-requests: read  # find the open release-please PR
       checks: read         # poll ci-success for this commit
-    uses: rknightion/.github/.github/workflows/auto-rc.yml@882bdd6522795490984b296cf0068f99808f16d1 # v1.25.16
+    uses: rknightion/.github/.github/workflows/auto-rc.yml@072f91d24bad803b1cd08579924e7b8cc073f903 # v1.25.18
     with:
       # Under workflow_run, github.sha is the DEFAULT BRANCH HEAD, not the
       # commit CI ran on — it races ahead on rapid pushes. head_sha is the
@@ -74,7 +74,7 @@ jobs:
       id-token: write     # cosign keyless signing
       packages: write     # goreleaser reads the registry for existing artifacts
       attestations: write # SLSA build provenance on the archives
-    uses: rknightion/.github/.github/workflows/binaries.yml@882bdd6522795490984b296cf0068f99808f16d1 # v1.25.16
+    uses: rknightion/.github/.github/workflows/binaries.yml@072f91d24bad803b1cd08579924e7b8cc073f903 # v1.25.18
     with:
       release-tag: ${{ needs.rc.outputs.tag }}
       install-cosign: true
