@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.1](https://github.com/rknightion/graph2otel/compare/v2.1.0...v2.1.1) (2026-10-23)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/microsoftgraph/msgraph-sdk-go to v1.105.0 ([#532](https://github.com/rknightion/graph2otel/issues/532)) ([d9f11fe](https://github.com/rknightion/graph2otel/commit/d9f11fe2b3bdd0c31cf97a59acf30d3405ff5e83))
+
 ## [2.1.0](https://github.com/rknightion/graph2otel/compare/v2.0.0...v2.1.0) (2026-10-21)
 
 
