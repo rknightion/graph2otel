@@ -36,7 +36,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 RUN install -d -m 0750 -o 65532 -g 65532 /out/checkpoints
 
 # ---- runtime ----
-FROM gcr.io/distroless/static-debian13:nonroot@sha256:d62067879de890a1def9da0e7766b7d20810a5e5555cef8506b752437d7a3e88
+FROM gcr.io/distroless/static-debian13:nonroot@sha256:18f4cc26c9ffa7f20a359298be7deadac5c607c8e03a02b8119f1a5fc2f82c99
 COPY --from=build /out/graph2otel /usr/local/bin/graph2otel
 # License compliance travels with the image (OCI /licenses convention): the AGPL
 # text plus the verbatim third-party module notices generated in the build stage.
