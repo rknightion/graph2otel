@@ -19,7 +19,7 @@ require (
 	github.com/knadh/koanf/providers/structs v1.0.1
 	github.com/knadh/koanf/v2 v2.4.1
 	github.com/microsoft/kiota-authentication-azure-go v1.3.1
-	github.com/microsoft/kiota-http-go v1.5.9
+	github.com/microsoft/kiota-http-go v1.6.0
 	github.com/microsoftgraph/msgraph-sdk-go v1.105.0
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.23.0
@@ -60,7 +60,7 @@ require (
 	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
 	github.com/knadh/koanf/maps v0.1.2 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
-	github.com/microsoft/kiota-abstractions-go v1.11.1 // indirect
+	github.com/microsoft/kiota-abstractions-go v1.11.3 // indirect
 	github.com/microsoft/kiota-serialization-form-go v1.1.3 // indirect
 	github.com/microsoft/kiota-serialization-json-go v1.1.2 // indirect
 	github.com/microsoft/kiota-serialization-multipart-go v1.1.2 // indirect
