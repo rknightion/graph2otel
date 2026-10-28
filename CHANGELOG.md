@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.1.1](https://github.com/rknightion/graph2otel/compare/v2.1.0...v2.1.1) (2026-10-28)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/microsoft/kiota-http-go to v1.6.0 ([#539](https://github.com/rknightion/graph2otel/issues/539)) ([ee52048](https://github.com/rknightion/graph2otel/commit/ee52048b9ca6f25ab1c548df9a69b6b43d19d9ad))
+* **deps:** update module github.com/microsoftgraph/msgraph-sdk-go to v1.105.0 ([#532](https://github.com/rknightion/graph2otel/issues/532)) ([d9f11fe](https://github.com/rknightion/graph2otel/commit/d9f11fe2b3bdd0c31cf97a59acf30d3405ff5e83))
+* **deps:** update module google.golang.org/grpc to v1.85.0 ([#537](https://github.com/rknightion/graph2otel/issues/537)) ([11f95c6](https://github.com/rknightion/graph2otel/commit/11f95c6ab85ec8136fb39523faddb0fbcab3bf5d))
+
 ## [2.1.0](https://github.com/rknightion/graph2otel/compare/v2.0.0...v2.1.0) (2026-10-21)
 
 
