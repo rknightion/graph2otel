@@ -2,7 +2,7 @@
 
 # ---- build ----
 # Digest-pinned (Renovate's docker:pinDigests keeps this current — see renovate.json).
-FROM golang:1.27.3-bookworm@sha256:05237276236793ebedaf0b87dab86add9ec9adc66ebef2dbc3107c18254cde1c AS build
+FROM golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9 AS build
 # Refresh the builder trust store before Go or license-tool downloads.
 RUN apt-get update && apt-get install -y --no-install-recommends --only-upgrade ca-certificates && \
     rm -rf /var/lib/apt/lists/*
