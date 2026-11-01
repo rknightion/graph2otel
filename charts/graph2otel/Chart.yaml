@@ -5,8 +5,8 @@ description: >-
   Graph, Azure Storage blobs, and the O365 Management Activity API as
   OpenTelemetry-native metrics and logs over OTLP.
 type: application
-version: 2.1.1
-appVersion: 2.1.1
+version: 2.1.2
+appVersion: 2.1.2
 home: https://m7kni.io/graph2otel/
 icon: https://m7kni.io/graph2otel/assets/project-icon-solid.svg
 sources:
