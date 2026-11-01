@@ -3,12 +3,12 @@ package config_test
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/config"
+	"github.com/rknightion/graph2otel/internal/repotest"
 )
 
 func TestBackfillInitialLookbackDefaultsToZero(t *testing.T) {
@@ -217,11 +217,11 @@ func TestBackfillGuidanceMatchesMeasuredGrafanaCloudContract(t *testing.T) {
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
 
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller could not locate backfill_test.go")
+	root, err := repotest.Root()
+	if err != nil {
+		t.Fatalf("locate repository root: %v", err)
 	}
-	return filepath.Clean(filepath.Join(filepath.Dir(filename), "..", ".."))
+	return root
 }
 
 func backfillSection(t *testing.T, path, start, end string) string {
