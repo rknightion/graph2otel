@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.2](https://github.com/rknightion/graph2otel/compare/v2.1.1...v2.1.2) (2026-11-01)
+
+
+### Bug Fixes
+
+* **deps:** update module go.yaml.in/yaml/v3 to v3.0.6 ([#552](https://github.com/rknightion/graph2otel/issues/552)) ([6eeb790](https://github.com/rknightion/graph2otel/commit/6eeb7909af2add976c636446b1b4281b5363b84e))
+
 ## [2.1.1](https://github.com/rknightion/graph2otel/compare/v2.1.0...v2.1.1) (2026-10-28)
 
 
