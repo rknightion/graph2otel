@@ -748,7 +748,7 @@ RULES = [
         "g2o-otlp-delivery-failing",
         "graph2otel OTLP export failing",
         f'sum by (signal) (increase({_m("graph2otel.otlp.delivery.export_failures")}[15m]))',
-        "gt", [0], "0m",
+        "gt", [0], "20m",
         {"severity": "warning", "category": "record-integrity", "source": "graph2otel"},
         "graph2otel OTLP {{ $labels.signal }} export failing",
         "The exporter's own callback reported that a batch did not reach the backend in the "
@@ -759,7 +759,7 @@ RULES = [
         "g2o-record-over-horizon) each guard ONE known limit; this one is the backstop "
         "behind all of them, and it is what would have caught #419 on the day it started "
         "instead of a container-log grep days later. Enabled at >0 with no baseline needed: "
-        "an export failure is never a normal steady state. Grouped by signal because a "
+        "an export failure is never a normal steady state. Held 20m (the window is 15m) so a network blip, such as a switch firmware reboot, does not fire it; only failures that keep recurring do, and a one-off rejected batch will not alert. Grouped by signal because a "
         "metrics-side failure and a logs-side failure are different investigations. "
         "Deliberately watches export_failures ONLY — shutdown_failures moves on an ordinary "
         "restart, and a rule that fires on every deploy is a rule people learn to ignore. "
