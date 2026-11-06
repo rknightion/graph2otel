@@ -4,8 +4,8 @@ title: 'CI red since 2026-08-10: chart README drifted from its template in cede7
 status: In Progress
 assignee:
   - '@codex'
-created_date: '2026-08-14 17:20'
-updated_date: '2026-08-16 10:22'
+created_date: 2026-08-14 17:20
+updated_date: '2026-11-06T20:27:00Z'
 labels:
   - needs-triage
   - ci
@@ -55,4 +55,6 @@ The fix must point helm-docs at the parent `charts` directory and regenerate the
 Reproduced 2026-08-16: the existing make target exited 0 without a Found Chart message and left the stale homepage unchanged. Directly using --chart-search-root charts found graph2otel and produced the expected one-line README update. This corrects the earlier task claim that make helm-docs already generated the diff. Evidence class: locally measured (2026-08-16, GTO-0003).
 
 Validation 2026-08-16: make helm-docs logged Found Chart directories [graph2otel] and a second run preserved the README SHA-256 exactly. The CI-only acceptance criterion remains unchecked until the branch runs on GitHub.
+
+2026-11-06 locally measured: the current pinned helm-docs v1.14.2 finds the chart and regenerates the existing version-footer template correctly. The checked-in README was missing exactly the final two footer lines. The required full gate reached this drift only after the independent compression audit fix; all preceding module/race/audit and 411 dashboard tests passed. This correction retains the generated footer rather than editing the template or weakening the drift check. The final combined candidate must still pass a fresh full gate; main CI remains unverified.
 <!-- SECTION:NOTES:END -->
