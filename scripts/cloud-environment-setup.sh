@@ -125,15 +125,9 @@ install_os_packages
 install_go
 persist_path
 
-# Backlog.md is the repository's tracker and must be available before an agent
-# runs the mandatory `backlog instructions overview` command.
-if ! command -v backlog >/dev/null 2>&1 || [[ $(backlog --version 2>/dev/null) != *"1.50.1"* ]]; then
-  as_root npm install --global backlog.md@1.50.1
-fi
-
 install_go_tool golangci-lint github.com/golangci/golangci-lint/v2/cmd/golangci-lint v2.13.1
 install_go_tool govulncheck golang.org/x/vuln/cmd/govulncheck v1.3.0
 install_go_tool helm-docs github.com/norwoodj/helm-docs/cmd/helm-docs v1.14.2
 install_helm
 
-echo "Cloud environment ready: Go $(go version), Backlog.md $(backlog --version)"
+echo "Cloud environment ready: Go $(go version)"

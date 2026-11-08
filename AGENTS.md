@@ -36,10 +36,7 @@ base remains unsuitable. Refresh the builder CA package before dependency downlo
   record it with a `live-measured` tag.
 - Standard-library `testing` only. No third-party assertion libraries.
 - Mappers are written against live samples, never docs or hand-written fixtures.
-- Loops: the protocol lives in `~/repos/agent-docs/sources/loop/` (this board's "Loop protocol pointer" doc points there); this repository's loop facts are in `LOOP.md`.
-- The tracker is Backlog.md in `backlog/`, committed to git, and it is the record of intent and
-  progress rather than this file. Its CLI has data-destroying traps: see
-  `reference/backlog-workflow.md` before touching a task, doc or decision.
+- Loop facts for this repository are in `LOOP.md`.
 
 ## Architecture (the seams)
 
@@ -131,38 +128,32 @@ Closest analogs in the fleet: `sf2loki`'s composition-root pattern, `tailscale2o
 - **A milestone deferral for a milestone that has passed is unfinished work wearing a
   rationale.** No collector may cite one.
 
+## Tracking work
+
+Work is tracked in this repository's GitHub issues; they are the only queue. Do not add a checklist
+file such as `ROADMAP.md` beside them.
+
+- A pull request body says how it relates to an issue, on a line of its own: `Closes #N` with the
+  `Acceptance evidence` table from `.github/pull_request_template.md` (one row for each acceptance
+  criterion of that issue), `Refs #N` when it only relates to one, or `Task: none, <reason>`.
+- A pull request that changes `.github/workflows/` or `.github/actions/` carries no closing keyword:
+  write `Task: none, <reason>`, with `Refs #N` beside it if you like.
+- Contributors never need the project board or the tracker tooling; a maintainer handles both.
+- Issues and pull requests are public, so they carry no real identifiers: no email addresses,
+  handles, tenant or account ids, host or device names, addresses. Write the shape, not the
+  instance.
+- Older commits, docs and tests cite legacy board ids such as `GTO-0001`. `just issue <ID>` prints
+  the issue each one became; `.github/tracker/id-map.json` is the map. A bare `#NNN` of 426 or
+  lower cites a pre-2026-08-14 issue that GitHub no longer has: `archive/README.md` explains the
+  archive that holds it. A higher `#NNN` is a live issue or pull request.
+
 ## Deeper references
 
 | Read before | Doc | What it holds |
 | --- | --- | --- |
 | Adding or changing any metric, log attribute, namespace or opt-in gate | `reference/telemetry-model.md` | namespaces, `Experimental` vs `HighVolume`, `tenant_id` and `ingest_transport` stamping, the `wirecheck` value-set watchdog, the cardinality boundary and the one secret exclusion |
-| Creating, editing or finalising a Backlog task, doc or decision | `reference/backlog-workflow.md` | the flags that silently replace a section, the unrepairable hand-edit, statuses and evidence classes, the identifier sweep, what `#NNN` resolves to |
 | Any Graph/Intune/Purview endpoint work | `docs/graph-api-gotchas.md` | every live-verified API quirk: page-size ceilings, beta-only filters, throttle table, Intune export traps, Purview label state, permanent-gap ledger, probe rules |
 | Anything blob-shaped | `docs/blob-ingest.md` | layout, byte-offset cursor design, backfill and freeze behaviour, at-least-once duplicates, per-category envelope mapping |
 | `m365.activity` or O365 Management API work | `docs/o365-management-api.md` | wire-format traps (CreationTime, PascalCase, unknown record types), AF20024, the 24h window cap, arrival-clock dedupe |
 | Naming a signal or writing a LogQL query | `docs/signals.md` | event names, structured-metadata querying, `tenant_id` truth |
 | Adding or changing a **beta** endpoint | `docs/api-drift.md` | the beta drift canary: `spec/graph-beta-surface.json` must list every beta-consuming package, gated both ways, then `just graphdrift-update` |
-
-<!-- BACKLOG.MD GUIDELINES START -->
-<!-- backlog.md-instructions-version: 1.50.1 -->
-<CRITICAL_INSTRUCTION>
-
-## Backlog.md Workflow
-
-This project uses Backlog.md for task and project management.
-
-**For every user request in this project, run `backlog instructions overview` before answering or taking action.**
-
-Use the overview to decide whether to search, read, create, or update Backlog tasks.
-
-Before task lifecycle actions, read the matching detailed guide:
-- `backlog instructions task-creation` before creating or splitting tasks
-- `backlog instructions task-execution` before planning, changing status or assignee, adding a plan or implementation notes, or implementing task work
-- `backlog instructions task-finalization` before checking acceptance criteria, writing final summaries, or moving tasks to terminal statuses
-
-Use `backlog <command> --help` before running unfamiliar commands. Help shows options, fields, and examples.
-
-Do not edit Backlog task, draft, document, decision, or milestone markdown files directly. Use the `backlog` CLI so metadata, relationships, and history stay consistent.
-
-</CRITICAL_INSTRUCTION>
-<!-- BACKLOG.MD GUIDELINES END -->
