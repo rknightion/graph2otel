@@ -1,3 +1,4 @@
+// evidence-check probe: a comment-only change, never merged.
 package collectordoc
 
 import (
