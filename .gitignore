@@ -38,10 +38,11 @@ site/
 __pycache__/
 *.pyc
 
-# Claude Code repo-local config. `settings.json` and `hooks/` ARE tracked — they
-# (transient checkouts of this repo, never content), scheduler locks, and
-# settings.local.json.
-.claude/
+# Claude Code repo-local config and scratch: scheduler locks, transient checkouts and
+# settings.local.json stay local. `.claude/skills/` is tracked: it holds the links to the
+# contributor skills in `.agents/skills/`.
+.claude/*
+!.claude/skills/
 
 # Injected by the m7kni.io hub at build time — never commit these.
 # The hub copies its own SEO template, brand stylesheet and fonts into a clone

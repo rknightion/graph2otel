@@ -3,11 +3,27 @@ tier: guarded
 gate: just check
 ci-required: ci-success
 grafana-stack: none
+tracker: github
+landing: pr
+
+Issues are public: no tenant id, hostname, address or email in any issue, pull request or doc.
+The tracker working model is `~/repos/agent-docs/docs/github-tracker.md` (maintainers only).
 
 Runs in production against a live tenant. `just check` covers all four Go modules plus the
 generated-asset drift gates; `just ci` adds the container smoke leg. Run `just` with stdin from
 `/dev/null`; a `[confirm]` recipe writes a live Grafana stack, so never pass `--yes` or
 `JUST_YES=1`.
+
+## Queue
+
+- The queue is `just tracker queue`: open issues at Project Status Ready on the rknightion Project.
+- A charter selects work by labels (`type:task`, `type:bug`, `type:feature`, `needs-owner`,
+  `needs-triage`) and Project fields (Status, Priority, Effort, Lane). Never queue a `needs-owner` or
+  `needs-triage` issue.
+- Only the root writes issues and the Project, through `just tracker`. A lane returns the status and
+  the AC ticks it wants.
+- A queue row names the issue as `#N`. A legacy board id (`GTO-0001`) resolves with `just issue <ID>`;
+  `.github/tracker/id-map.json` is the map.
 
 ## Credentials
 
@@ -36,8 +52,8 @@ generated-asset drift gates; `just ci` adds the container smoke leg. Run `just` 
   nothing and exits 0. Keep lane worktrees outside the repo and diff the generated artifacts.
 - Mappers are written against live samples, never docs or hand-written fixtures; record API
   behaviour with a `live-measured` tag.
-- Cite pre-migration work as `#NNN` (resolves through the Closed GitHub issues doc) and new work as
-  `GTO-NNNN`.
+- Cite work as `#N`. A `#N` of 426 or lower is an early issue GitHub no longer has
+  (`archive/README.md` holds it); a legacy board id (`GTO-0001`) resolves with `just issue <ID>`.
 
 ## Mutexes
 
