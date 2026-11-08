@@ -303,7 +303,7 @@ days** rather than one hour, because the blob-derived stream it queries was
 measured at 3.3-7.0 days of event-time lag — a 1h lookback would pass green
 while being structurally incapable of matching a row, which is precisely how
 the retired recording rules went unnoticed for a month
-([#297](https://github.com/rknightion/graph2otel/issues/297)).
+(#297).
 
 ### Scheduled execution
 
