@@ -283,3 +283,18 @@ _tools-helm-docs:
 _tool-graphdrift:
     @mkdir -p '{{ tools }}'
     go build -C tools/graphdrift -o '{{ tools }}/graphdrift' .
+
+# GitHub issues and the rknightion Project; maintainers only (needs the tracker tools and credentials)
+[group('tracker')]
+[positional-arguments]
+tracker *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export TRACKER_REPO=rknightion/graph2otel TRACKER_PROJECT_OWNER=rknightion TRACKER_PROJECT=7
+    export TRACKER_ISSUE_IDENTITY=app TRACKER_PROJECT_IDENTITY=user
+    exec tracker-with-token "$@"
+
+# print the issue a legacy board id (GTO-0001) became
+[group('tracker')]
+issue id:
+    TRACKER_REPO=rknightion/graph2otel tracker legacy {{ quote(id) }}
