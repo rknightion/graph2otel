@@ -51,7 +51,7 @@ GitHub and is recreated by Renovate on every run.
 | 413 | 2026-08-04 |  | fix(ci): grafana-sync silently pushes nothing — gcx emits JSON only in agent mode, so every push reports 0/0 | `912fca0`, `fc5cb94` |
 | 408 | 2026-08-04 |  | fix(selfobs): a correctly-handled tenant-entitlement 403 still ratchets scrape staleness, paging critical forever | `a6b0038` |
 | 406 | 2026-08-01 |  | g2o-collector-staleness: 10m pending window so a firewall reboot doesn't page | `7b04434` |
-| 405 | 2026-07-29 |  | Publish the dashboard and alert rules to the m7kni stack from CI | `7ef1aa6` |
+| 405 | 2026-07-29 |  | Publish the dashboard and alert rules to the Grafana stack from CI | `7ef1aa6` |
 | 404 | 2026-07-28 |  | docs: record why no log attribute here can be promoted to a Loki index label | `0811619` |
 | 403 | 2026-07-27 |  | fix(ci): internal/annotations hangs for the full 10-minute timeout in the coverage job | `31a30ec` |
 | 402 | 2026-08-04 |  | feat(telemetry): add a bounded event_domain resource attribute so the single hot log stream can be split | `82d0f92`, `3cbd879` |
@@ -187,7 +187,7 @@ GitHub and is recreated by Renovate on every run.
 | 266 | 2026-07-26 |  | fix(auth): make the authenticated application identity authoritative | `1b8069c` |
 | 265 | 2026-07-26 |  | fix(config): reject unknown keys, collector names, and transport typos | `2277ba1` |
 | 264 | 2026-07-25 |  | fix(preflight): validate permissions for the actual enabled collector set | `7bb3fe9` |
-| 263 | 2026-07-25 |  | Deploy current generated Grafana dashboards and alert/recording rules to m7kni |  |
+| 263 | 2026-07-25 |  | Deploy current generated Grafana dashboards and alert/recording rules to the Grafana stack |  |
 | 262 | 2026-07-25 |  | bug(jobpipeline): an empty record id is added to SeenIDs as "", so every later empty-id record in the window is silently deduped away | `0d4bd53` |
 | 261 | 2026-07-24 |  | bug(intune.devices): the blob path lowercases CompliantState but the bucket map is camelCase — InGracePeriod and ConfigManager both land in 'other' | `3d129cb` |
 | 260 | 2026-07-24 |  | feat(entra): entra.access_reviews — data exists despite the licence caveat, and one review is InProgress right now | `0811619`, `3d129cb` |
@@ -303,21 +303,21 @@ GitHub and is recreated by Renovate on every run.
 | 147 | 2026-07-17 |  | fix(jobpipeline): cold checkpoint cannot adopt an in-flight async job — restart on first deploy still orphans and re-creates | `a14f34d` |
 | 146 | 2026-07-17 |  | meta: tracker + CLAUDE.md reorganisation — stop the agent-confusion doom loop | `7002932`, `bc0bb30` |
 | 145 | 2026-07-19 |  | feat(mdca): Cloud Discovery parse failures are invisible - the upload 200s while MDCA rejects the file, and nothing polls the governance log | `850e932`, `e8ee309` |
-| 144 | 2026-07-16 |  | fix(collectors): nothing enforces transport mutual-exclusion — camden ships every non-interactive + service-principal sign-in TWICE, measured | `2ac12bb`, `603cd69`, `7551f59` |
+| 144 | 2026-07-16 |  | fix(collectors): nothing enforces transport mutual-exclusion — the soak host ships every non-interactive + service-principal sign-in TWICE, measured | `2ac12bb`, `603cd69`, `7551f59` |
 | 143 | 2026-07-17 |  | fix(dashboards/docs): `docs/signals.md` claims every metric carries `tenant_id` - it does not, and the entra dashboard filters on it | `e627e02`, `77810ce`, `edf715d` |
 | 142 | 2026-07-17 |  | fix(intune): export reports return raw enum CODES, not names - `platform=2` ships live, and Defender's status bucket can never match | `e627e02`, `c2feef6`, `2800ef4` |
 | 141 | 2026-07-17 |  | feat(telemetry): no record says where it came from, and 198 attribute names are bare literals - define an attribute registry with a provenance attribute | `1f4dcb8`, `edf715d`, `b0293c4` |
 | 140 | 2026-07-17 |  | build(docs): nothing gates the signals we actually emit - metric AND log event names drift unguarded | `6ddaaf4`, `b2dfa9d`, `dc49fc1` |
 | 139 | 2026-07-16 |  | build(docs): generate the collector reference from the registry — 8 of 57 collectors are undocumented and nothing catches it | `77810ce`, `97e08b6`, `0f9b5da` |
 | 138 | 2026-07-18 |  | fix(blobpipeline): Azure delivers at-least-once — ~2.3% of blob-sourced records are duplicates | `5776acb`, `9832447`, `180caf8` |
-| 137 | 2026-07-18 |  | Re-measure the blob engine's two open questions once m7kni finishes backfilling | `fd1531e`, `5776acb`, `7728619` |
+| 137 | 2026-07-18 |  | Re-measure the blob engine's two open questions once the stack finishes backfilling | `fd1531e`, `5776acb`, `7728619` |
 | 135 | 2026-07-20 |  | feat(collectors): map the remaining 19 blob diagnostic categories (engine shipped; they land unread today) | `2ac12bb`, `4608e59`, `1df2370` |
 | 134 | 2026-07-18 |  | Assess 3 unknown Entra diagnostic categories: GraphNotificationsActivityLogs, MicrosoftGraphPolicyLogs, PreAuthenticationDiscoveryLogs (enabled blind — decide build or disable) | `0018b32`, `861d339`, `60d7571` |
 | 133 | 2026-07-20 |  | feat(collectors): three uncovered Identity Protection signals — SP risk detections, risky agents, agent risk events (no collector today) | `99670c8`, `3e0a7b8`, `9d50c0b` |
 | 132 | 2026-07-18 |  | Verify: do Intune Devices/DeviceComplianceOrg blob categories carry per-device inventory? (could retire the hourly full-fleet page-walk) | `635421d`, `fd06d6a`, `6192aa2` |
 | 131 | 2026-07-16 | ~ | Spike: dual-ship model — Graph poll for real-time metrics, blob for comprehensive logs (corrects the 'mutually exclusive source' assumption) | `09f3621`, `bc0bb30`, `6192aa2` |
 | 130 | 2026-07-17 |  | NetworkAccessTrafficLogs is NOT a Graph gap — /beta/networkAccess/logs/traffic exists and names its scope (CLAUDE.md wrong) | `27c2258`, `861d339`, `f2a3ccd` |
-| 129 | 2026-07-19 |  | Verify risk-signal mappings against a real event: synthesise a UserRiskEvent on m7kni (needs maintainer tenant action) | `f7c9739`, `9f4a4be`, `c7864d6` |
+| 129 | 2026-07-19 |  | Verify risk-signal mappings against a real event: synthesise a UserRiskEvent on the test stack (needs maintainer tenant action) | `f7c9739`, `9f4a4be`, `c7864d6` |
 | 128 | 2026-07-19 |  | Spike: derive OTEL metrics from blob-only signals (recency-gated <1h, never backfill) — gated on #137 | `00d6227`, `0c64deb`, `441e193` |
 | 127 | 2026-07-18 |  | SharePoint tenant sharing posture: external sharing + legacy auth config via Graph /admin/sharepoint/settings | `171b0c4` |
 | 126 | 2026-07-17 |  | Purview sensitivity labels: collector rebuilt on SensitivityLabel.Read — residual: narrow isUnavailable + guard test + SECURITY.md | `5d49f57`, `98c1dad`, `504d83b` |
@@ -410,7 +410,7 @@ GitHub and is recreated by Renovate on every run.
 | 34 | 2026-07-15 |  | Docs completeness pass: README, permission setup guide, per-collector reference | `9642643` |
 | 33 | 2026-07-15 |  | PII & cardinality audit gate (pre-v1 release blocker) | `5278959`, `9642643`, `f71c871` |
 | 32 | 2026-07-15 |  | Scale/soak validation against throttle budgets and watermark durability | `e0ce876` |
-| 31 | 2026-07-15 |  | Docs site: Zensical setup + m7kni-net-site hub onboarding | `9642643` |
+| 31 | 2026-07-15 |  | Docs site: Zensical setup + documentation hub onboarding | `9642643` |
 | 30 | 2026-07-15 |  | Example alert rules: credential expiry, compliance drop, collector staleness, throttle saturation | `ff22eb0` |
 | 29 | 2026-07-15 |  | Grafana dashboard: graph2otel self-observability | `6193d39`, `f71c871` |
 | 28 | 2026-07-15 |  | Grafana dashboard: Intune fleet overview | `f71c871` |
