@@ -1,0 +1,9 @@
+name: red-proof
+on:
+  pull_request:
+permissions: {}
+jobs:
+  echo:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ github.event.pull_request.title }}"
