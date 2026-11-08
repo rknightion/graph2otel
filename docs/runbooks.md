@@ -380,7 +380,7 @@ issue rather than tuning the alert.
 
 At least one log record exceeded the backend's structured-metadata size limit in
 the last 15 minutes and had its largest attribute values shortened to fit
-([#419](https://github.com/rknightion/graph2otel/issues/419)). This is **content
+(#419). This is **content
 loss, not record loss** — the record landed, and every attribute is still on it,
 but one or more values are truncated.
 
@@ -412,7 +412,7 @@ rather than merely shortened ones.
 
 Records were dropped because their event time was older than the backend's 7-day
 accept window, so sending them would have been rejected per-entry and lost anyway
-([#401](https://github.com/rknightion/graph2otel/issues/401)). This is real record
+(#401). This is real record
 loss, and `record_outcomes` counts these as `emitted` — this counter, not that
 one, is the authoritative statement that they did not land.
 
@@ -427,7 +427,7 @@ that needs no action. See below.
 **Paused by default, and the reason matters.** A nonzero value is *expected* on a
 blob-derived stream. Those replay historical records, so a record can cross the
 7-day window by ordinary aging with nothing misconfigured anywhere:
-[#297](https://github.com/rknightion/graph2otel/issues/297) measured graph2otel's
+#297 measured graph2otel's
 blob-ingested Intune stream at 3.31 days old at the newest, 5.97 median and 6.95
 oldest. Enabling this rule at `>0` on such a tenant pages on normal behaviour.
 
@@ -462,7 +462,7 @@ credential, a payload cap, a limit the backend introduces next year — without
 anyone having predicted it. Treat the per-limit rules as diagnostics that tell
 you *which* limit; treat this one as the thing that tells you a limit exists at
 all. It is what would have caught
-[#419](https://github.com/rknightion/graph2otel/issues/419) on the day it began,
+#419 on the day it began,
 rather than days later by grepping container logs.
 
 **Known blind spot — this rule's silence is not proof of health.** Its own
@@ -471,7 +471,7 @@ takes the counter with it and this rule goes quiet at exactly the wrong moment.
 It cannot be the metrics-path watchdog; `g2o-collector-staleness`, `/readyz` and
 the process-local admin status are. This limitation is why a delivery alert was
 originally forbidden outright
-([#268](https://github.com/rknightion/graph2otel/issues/268)), and #421 narrowed
+(#268), and #421 narrowed
 that ban to what the reason actually supports: everything that *reports itself*
 is worth alerting on, and that is most of it — every logs-side failure (the
 metrics path is healthy throughout, which is exactly how #419's failures stayed

@@ -7,7 +7,7 @@ retunes them, see [`configuration.md`](./configuration.md).
 
 > **The tables below are generated from the collector registry** — a collector cannot ship
 > undocumented, because `go test` fails when a registered one has no entry
-> ([#139](https://github.com/rknightion/graph2otel/issues/139)). Regenerate with
+> (#139). Regenerate with
 > `scripts/regen-generated.sh collectordoc`. Everything outside the generated block, including every
 > note in this page, is hand-written and safe to edit.
 >
@@ -18,7 +18,7 @@ retunes them, see [`configuration.md`](./configuration.md).
 > `internal/collectordoc/annotations.go`, because they describe things the registry cannot see (what
 > a collector is for, which endpoints it polls). The *Metric namespace* / *Log event* columns are
 > **also generated** — from each collector package's committed `testdata/signals.json` golden
-> ([#140](https://github.com/rknightion/graph2otel/issues/140)), not hand-written: that golden is a
+> (#140), not hand-written: that golden is a
 > real capture of what the package's tests drove into an in-memory Recorder, so it cannot describe a
 > signal that does not exist. Metric names show their attribute keys (`name{key1,key2}`); log event
 > names appear bare — a log's attribute set runs 15–22 keys deep and is per-entity by design (see the
