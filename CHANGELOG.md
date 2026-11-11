@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.1.2](https://github.com/rknightion/graph2otel/compare/v2.1.1...v2.1.2) (2026-11-11)
+
+
+### Bug Fixes
+
+* **chart:** regenerate the chart README so helm-docs-check passes ([#554](https://github.com/rknightion/graph2otel/issues/554)) ([bd8c9f0](https://github.com/rknightion/graph2otel/commit/bd8c9f0492336cd529f4f387f1d169e65b752890))
+* **deps:** build with Go 1.27.4 ([#578](https://github.com/rknightion/graph2otel/issues/578)) ([cc63629](https://github.com/rknightion/graph2otel/commit/cc63629cab91166e749fb9058ba872e40f542b08))
+* **deps:** update module go.yaml.in/yaml/v3 to v3.0.6 ([#552](https://github.com/rknightion/graph2otel/issues/552)) ([6eeb790](https://github.com/rknightion/graph2otel/commit/6eeb7909af2add976c636446b1b4281b5363b84e))
+* update compression decoder and generated chart documentation (GTO-0013) ([20618b7](https://github.com/rknightion/graph2otel/commit/20618b7f1e75908d598c0a5ee60f15e5c8706960))
+
 ## [2.1.1](https://github.com/rknightion/graph2otel/compare/v2.1.0...v2.1.1) (2026-10-28)
 
 
