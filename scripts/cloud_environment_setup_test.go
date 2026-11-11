@@ -15,7 +15,7 @@ func TestCloudEnvironmentSetupContract(t *testing.T) {
 	script := string(contents)
 	required := []string{
 		"LOCAL AGENTS: DO NOT RUN THIS SCRIPT",
-		`GO_VERSION="1.27.3"`,
+		`GO_VERSION="1.27.4"`,
 		"github.com/golangci/golangci-lint/v2/cmd/golangci-lint v2.13.1",
 		"golang.org/x/vuln/cmd/govulncheck v1.3.0",
 		"github.com/norwoodj/helm-docs/cmd/helm-docs v1.14.2",
