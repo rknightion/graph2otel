@@ -376,3 +376,5 @@ grafana_annotations:
     license:
       enabled: true # subscribed-SKU set changes and license exhaustion
       rollup: true # a tenant-wide license change moves many SKUs at once
+
+ci_coverage_proof: true
