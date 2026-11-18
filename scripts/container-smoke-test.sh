@@ -42,6 +42,7 @@ docker volume create "$volume" >/dev/null
 wait_for_stable_startup() {
   local container="$1"
   local running
+  local startup_log="$workdir/startup.log"
 
   for _ in $(seq 1 5); do
     running="$(docker inspect --format '{{.State.Running}}' "$container")"
@@ -52,8 +53,10 @@ wait_for_stable_startup() {
     sleep 1
   done
 
-  if docker logs "$container" 2>&1 | grep -Fq 'checkpoint directory unusable'; then
-    docker logs "$container" >&2 || true
+  # Capture the full Docker output so grep cannot close Docker's pipe early.
+  if docker logs "$container" >"$startup_log" 2>&1 &&
+    grep -Fq 'checkpoint directory unusable' "$startup_log"; then
+    cat "$startup_log" >&2 || true
     return 1
   fi
 }
@@ -76,8 +79,10 @@ if [ "$(docker inspect --format '{{.State.Running}}' "$negative_name")" = "true"
   echo "container started without an explicit checkpoint mount" >&2
   exit 1
 fi
-if ! docker logs "$negative_name" 2>&1 | grep -Fq 'checkpoint directory unusable'; then
-  docker logs "$negative_name" >&2 || true
+negative_log="$workdir/without-mount.log"
+if ! docker logs "$negative_name" >"$negative_log" 2>&1 ||
+  ! grep -Fq 'checkpoint directory unusable' "$negative_log"; then
+  cat "$negative_log" >&2 || true
   echo "container did not fail at checkpoint verification without an explicit mount" >&2
   exit 1
 fi
