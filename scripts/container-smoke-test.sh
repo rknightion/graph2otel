@@ -54,11 +54,18 @@ wait_for_stable_startup() {
   done
 
   # Capture the full Docker output so grep cannot close Docker's pipe early.
-  if docker logs "$container" >"$startup_log" 2>&1 &&
-    grep -Fq 'checkpoint directory unusable' "$startup_log"; then
+  if ! docker logs "$container" >"$startup_log" 2>&1; then
+    printf 'could not capture startup logs for %s\n' "$container" >&2
+    return 1
+  fi
+
+  local marker_status=0
+  grep -Fq 'checkpoint directory unusable' "$startup_log" || marker_status=$?
+  if [ "$marker_status" -eq 0 ]; then
     cat "$startup_log" >&2 || true
     return 1
   fi
+  test "$marker_status" -eq 1
 }
 
 # No checkpoint mount must fail fast even though the image contains the owned
@@ -80,8 +87,11 @@ if [ "$(docker inspect --format '{{.State.Running}}' "$negative_name")" = "true"
   exit 1
 fi
 negative_log="$workdir/without-mount.log"
-if ! docker logs "$negative_name" >"$negative_log" 2>&1 ||
-  ! grep -Fq 'checkpoint directory unusable' "$negative_log"; then
+if ! docker logs "$negative_name" >"$negative_log" 2>&1; then
+  printf 'could not capture startup logs for %s\n' "$negative_name" >&2
+  exit 1
+fi
+if ! grep -Fq 'checkpoint directory unusable' "$negative_log"; then
   cat "$negative_log" >&2 || true
   echo "container did not fail at checkpoint verification without an explicit mount" >&2
   exit 1
