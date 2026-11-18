@@ -7,6 +7,7 @@ set -euo pipefail
 # Match the repository's Go toolchain requirement exactly.
 readonly GO_VERSION="1.27.4"
 readonly HELM_VERSION="v3.18.4"
+readonly CURSOR_HELM_VERSION="v4.3.2"
 readonly INSTALL_BIN="/usr/local/bin"
 
 # SHA-256 checksums for Go 1.27.4 (verified from go.dev)
@@ -19,6 +20,13 @@ declare -A GO_SHA256=(
 declare -A HELM_SHA256=(
   [amd64]="f8180838c23d7c7d797b208861fecb591d9ce1690d8704ed1e4cb8e2add966c1"
   [arm64]="c0a45e67eef0c7416a8a8c9e9d5d2d30d70e4f4d3f7bea5de28241fffa8f3b89"
+)
+
+# Cursor matches the Helm 4 chart validation used in CI.
+# SHA-256 checksums for Helm v4.3.2 (verified from get.helm.sh)
+declare -A CURSOR_HELM_SHA256=(
+  [amd64]="d1c0278d46beab79582d7e50f5b3dc206944ba8e577cde618513fd07daa53983"
+  [arm64]="df31cb61680ef728f82c770e5280dd565617bee6b039d37e85c677288be4bbb0"
 )
 
 as_root() {
@@ -82,44 +90,49 @@ persist_path() {
   grep -Fqx "${path_line}" "${HOME}/.bashrc" || printf '\n%s\n' "${path_line}" >>"${HOME}/.bashrc"
 }
 
-install_helm() {
-  if command -v helm >/dev/null 2>&1 && [[ $(helm version --template '{{.Version}}') == "${HELM_VERSION}" ]]; then
+install_helm() (
+  local installer=$1 destination=$2 version=$3
+  if [[ -x "$destination" ]] && [[ $("$destination" version --template '{{.Version}}') == "$version" ]]; then
     return
   fi
 
-  local arch temp_dir archive
+  local arch expected_sha256 temp_dir archive
   case "$(uname -m)" in
-    x86_64) arch=amd64 ;;
-    aarch64|arm64) arch=arm64 ;;
+    x86_64) arch=amd64; expected_sha256=$4 ;;
+    aarch64|arm64) arch=arm64; expected_sha256=$5 ;;
     *) echo "unsupported architecture: $(uname -m)" >&2; return 1 ;;
   esac
   temp_dir=$(mktemp -d)
+  trap 'rm -rf "$temp_dir"' EXIT
   archive="${temp_dir}/helm.tar.gz"
-  curl --fail --location --retry 3 --output "${archive}" \
-    "https://get.helm.sh/helm-${HELM_VERSION}-linux-${arch}.tar.gz"
+  curl -q --fail --location --retry 3 --max-time 120 --output "${archive}" \
+    "https://get.helm.sh/helm-${version}-linux-${arch}.tar.gz"
 
   # Verify SHA-256 checksum before extraction
-  local computed_sha256 expected_sha256
+  local computed_sha256
   computed_sha256=$(sha256sum "${archive}" | cut -d' ' -f1)
-  expected_sha256="${HELM_SHA256[${arch}]}"
   if [[ "${computed_sha256}" != "${expected_sha256}" ]]; then
     echo "ERROR: Helm archive checksum verification failed for ${arch}" >&2
     echo "  Expected: ${expected_sha256}" >&2
     echo "  Computed: ${computed_sha256}" >&2
-    rm -rf "${temp_dir}"
     exit 1
   fi
 
   tar -C "${temp_dir}" -xzf "${archive}"
-  as_root install -m 0755 "${temp_dir}/linux-${arch}/helm" "${INSTALL_BIN}/helm"
-  rm -rf "${temp_dir}"
-}
+  "$installer" install -m 0755 "${temp_dir}/linux-${arch}/helm" "$destination"
+)
 
 install_go_tool() {
   local binary=$1 package=$2 version=$3
   as_root env PATH="/usr/local/go/bin:${PATH}" GOBIN="${INSTALL_BIN}" \
     go install "${package}@${version}"
 }
+
+if [[ ${1:-} == --helm-only ]]; then
+  install_helm command "${2:?Helm destination required}" "$CURSOR_HELM_VERSION" \
+    "${CURSOR_HELM_SHA256[amd64]}" "${CURSOR_HELM_SHA256[arm64]}"
+  exit
+fi
 
 install_os_packages
 install_go
@@ -128,6 +141,9 @@ persist_path
 install_go_tool golangci-lint github.com/golangci/golangci-lint/v2/cmd/golangci-lint v2.13.1
 install_go_tool govulncheck golang.org/x/vuln/cmd/govulncheck v1.3.0
 install_go_tool helm-docs github.com/norwoodj/helm-docs/cmd/helm-docs v1.14.2
-install_helm
+if ! command -v helm >/dev/null 2>&1 || [[ $(helm version --template '{{.Version}}') != "${HELM_VERSION}" ]]; then
+  install_helm as_root "${INSTALL_BIN}/helm" "$HELM_VERSION" \
+    "${HELM_SHA256[amd64]}" "${HELM_SHA256[arm64]}"
+fi
 
 echo "Cloud environment ready: Go $(go version)"
