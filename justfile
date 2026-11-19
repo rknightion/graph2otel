@@ -46,6 +46,31 @@ default:
 setup: _tools
     go mod download
 
+# Install the pinned gate tools and compile the Go test binaries for Cursor Cloud.
+[script('bash')]
+cloud-bootstrap: setup _tools-helm-docs
+    set -euo pipefail
+    bash scripts/cloud-environment-setup.sh --helm-only '{{ tools }}/helm'
+
+    scratch="$(mktemp -d)"
+    trap 'rm -rf "$scratch"' EXIT
+    # Download pristine upstream forks outside the checkout to preserve its sums.
+    while IFS=$'\t' read -r module version _; do
+      case "$module" in
+        ""|\#*) continue ;;
+      esac
+      go -C "$scratch" mod download "$module@$version"
+    done < third_party/otel-http-forks.tsv
+
+    go build ./...
+    go test -race -c -o /dev/null ./...
+    go test -c -o /dev/null ./charts/graph2otel
+    go -C tools/graphdrift test -c -o /dev/null ./...
+    for fork in third_party/otlpmetrichttp third_party/otlploghttp; do
+      go -C "$fork" mod download
+      go -C "$fork" test -race -c -o /dev/null ./...
+    done
+
 # format Go sources and this justfile in place
 [group('check')]
 fmt: _tools
@@ -124,7 +149,10 @@ helm-docs-check: helm-docs
 # lint and render the Helm chart, including its non-default branches
 [group('check')]
 [no-exit-message]
+[script('bash')]
 helm-check:
+    set -euo pipefail
+    export PATH='{{ tools }}':"$PATH"
     go test ./charts/graph2otel -count=1
     helm lint charts/graph2otel
     helm template t charts/graph2otel > /dev/null
