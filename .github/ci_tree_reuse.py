@@ -3,13 +3,13 @@
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import subprocess
 import sys
 import time
 import urllib.request
-
+from itertools import pairwise
+from pathlib import Path
 
 WORKFLOW = ".github/workflows/ci.yml"
 POLICY = (WORKFLOW, ".github/ci_tree_reuse.py", ".github/test_ci_tree_reuse.py")
@@ -215,7 +215,7 @@ def witnessed_jobs(api, run, pull, base, image):
     steps = [step for step in build["steps"] if step["name"] in wanted]
     expect(tuple(step["name"] for step in steps) == wanted
            and all(completed(step, pull) and step["conclusion"] == "success" for step in steps)
-           and all(a["number"] < b["number"] for a, b in zip(steps, steps[1:])),
+           and all(a["number"] < b["number"] for a, b in pairwise(steps)),
            "fresh checkout witness or build and test results are missing")
     return next(job for job in jobs if job["name"] == REQUIRED)
 

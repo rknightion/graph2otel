@@ -3,10 +3,10 @@
 import copy
 import hashlib
 import os
-from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from ci_tree_reuse import Fallback, main_proof, pr_witness
