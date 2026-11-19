@@ -1,0 +1,50 @@
+name: Graph594 snapshot profile
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened]
+
+permissions:
+  contents: read
+
+jobs:
+  profile:
+    name: Draft-only full snapshot cache profile
+    if: >-
+      github.repository == 'rknightion/graph2otel' && github.event.pull_request.draft &&
+      github.event.pull_request.head.repo.id == github.event.repository.id &&
+      github.event.pull_request.head.ref == 'proof/graph594-snapshot-profile' &&
+      github.event.pull_request.base.sha == '6d3d44691b35be9c5e175355fd6203ec8f194541'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Increase swap space
+        run: |
+          sudo swapoff -a || true
+          sudo rm -f /mnt/swapfile
+          sudo fallocate -l 12G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          distribution: goreleaser
+          version: "v2.19.0"
+          install-only: true
+
+      - name: Compare full cold and restored snapshots
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: bash scripts/ci-profile-snapshot-cache.sh
