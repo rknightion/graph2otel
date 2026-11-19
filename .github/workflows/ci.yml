@@ -22,14 +22,37 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: ${{ github.event_name == 'push' && 2 || 1 }}
           persist-credentials: false
 
+      # Keep the decision on this runner. A failed optional job would fail the whole
+      # workflow and block the normal RC producer even after a successful full fallback.
+      - name: Check protected tree and latest PR evidence
+        id: proof
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        timeout-minutes: 1
+        run: python3 -I .github/ci_tree_reuse.py main
+      - name: Inspect the actual PR checkout before running test code
+        id: witness
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.id == github.event.repository.id
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I .github/ci_tree_reuse.py witness
+      # GitHub exposes the name and conclusion of the step on this exact job attempt.
+      - name: Witness PR ${{ github.event.pull_request.number }} ${{ steps.witness.outputs.key }}
+        if: steps.witness.outcome == 'success' && steps.witness.outputs.key != ''
+        run: echo "Checked-out merge tree matches the PR head tree."
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: steps.proof.outcome != 'success' || steps.proof.outputs.reuse != 'true'
         with:
           go-version-file: go.mod
           cache: true
 
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0
+        if: steps.proof.outcome != 'success' || steps.proof.outputs.reuse != 'true'
         with:
           just-version: '1.59.0'
 
@@ -38,22 +61,30 @@ jobs:
       # reports those and exits non-zero without writing. Covers both modules;
       # fix locally with `just tidy`.
       - name: go.mod tidy check
+        if: steps.proof.outcome != 'success' || steps.proof.outputs.reuse != 'true'
         run: just tidy-check
 
       - name: go vet
+        if: steps.proof.outcome != 'success' || steps.proof.outputs.reuse != 'true'
         run: go vet ./...
 
       - name: go build
+        if: steps.proof.outcome != 'success' || steps.proof.outputs.reuse != 'true'
         run: go build ./...
 
       - name: go test -race
+        if: steps.proof.outcome != 'success' || steps.proof.outputs.reuse != 'true'
         run: just test
 
       # tools/ holds separate CI-only modules (graphdrift, the Graph beta drift
       # canary), so the root `./...` above does not see them. graphdrift is
       # standard-library-only — no module downloads, a few seconds.
       - name: vet + test the tools modules
+        if: steps.proof.outcome != 'success' || steps.proof.outputs.reuse != 'true'
         run: just tools-check
+
+      - name: Verify tree proof and fallback behavior
+        run: python3 -B -m unittest discover -s .github -p test_ci_tree_reuse.py
 
   lint:
     name: golangci-lint
@@ -382,7 +413,8 @@ jobs:
 
   # Single required status check for this workflow. Branch protection on `main`
   # requires this, so CI legs can be added or renamed without re-touching
-  # protection. Fails if any leg failed or was cancelled.
+  # protection. Fails if any leg failed or was cancelled. The build job must
+  # succeed even when its Go steps are reused on a protected push.
   # zizmor fails a pull request on any finding (enforce); push runs upload SARIF instead.
   zizmor:
     permissions:
@@ -400,11 +432,11 @@ jobs:
     needs: [build-test, lint, govulncheck, goreleaser-snapshot, docker-build, helm, grafana, helm-schema-validate, ac-evidence, privacy-sweep, backlog-freeze, zizmor]
     steps:
       - name: Fail if any required job did not pass
-        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        if: ${{ needs.build-test.result != 'success' || contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
         env:
           RESULTS: ${{ join(needs.*.result, ', ') }}
         run: |
-          echo "A required job failed or was cancelled: ${RESULTS}"
+          echo "A required job did not pass: ${RESULTS}"
           exit 1
       # A skipped job reports success, so on a pull request the pull request checks must have
       # actually run and passed. Off a pull request they are skipped by design.
