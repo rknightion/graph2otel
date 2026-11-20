@@ -373,6 +373,34 @@ def compare(projected: dict, live: dict) -> list:
     return diffs
 
 
+def parse_paused(value: str) -> set:
+    """Rule names from a comma- or whitespace-separated list; empty means none."""
+    return set(value.replace(",", " ").split())
+
+
+def pause_manifests(manifests: dict, names: set) -> dict:
+    """The manifests with `paused: true` for every rule named in `names`.
+
+    An operator can pause a generated rule on their own stack without forking
+    the generator. Without this a deploy unpauses it on every run, because the
+    committed manifest says `paused: false`. The rewrite is of the one generated
+    `spec.paused` line, so a manifest without exactly one is an error rather
+    than a silent no-op that would push the rule unpaused and report success.
+    """
+    out = dict(manifests)
+    for name in sorted(names):
+        fname = f"{name}.yaml"
+        lines = out[fname].decode().split("\n")
+        hits = [i for i, line in enumerate(lines)
+                if line.startswith("  paused: ")]
+        if len(hits) != 1:
+            raise DeployError(f"{fname}: expected one spec.paused line, "
+                              f"found {len(hits)}")
+        lines[hits[0]] = "  paused: true"
+        out[fname] = "\n".join(lines).encode()
+    return out
+
+
 def group_of(live: dict):
     return live.get("metadata", {}).get("labels", {}).get(GROUP_LABEL)
 
@@ -391,9 +419,16 @@ def project_all(include_detections: bool = True) -> dict:
     return projected
 
 
-def readback(context: str, include_detections: bool = True) -> dict:
-    """Compare every generated rule against the stack. Content, not counts."""
+def readback(context: str, include_detections: bool = True,
+             paused: "set | frozenset" = frozenset()) -> dict:
+    """Compare every generated rule against the stack. Content, not counts.
+
+    A rule in `paused` is expected paused on the stack, so an operator's pause
+    reads as a match and a pause that a later push undid still reads as drift.
+    """
     projected = project_all(include_detections)
+    for name in paused:
+        projected[name]["spec"]["paused"] = True
 
     live = fetch_live(context, sorted(projected))
     receipt = {"compared": len(projected), "absent": [], "divergent": {},
@@ -435,14 +470,25 @@ def main() -> int:
                              "they land in their own folder.")
     parser.add_argument("--readback-only", action="store_true",
                         help="compare source against the stack, change nothing")
+    parser.add_argument("--pause", default="",
+                        help="comma-separated rule names to deploy PAUSED on this "
+                             "stack, and to expect paused on read-back. For an "
+                             "operator who does not want one of the generated "
+                             "rules evaluating; empty pauses none.")
     args = parser.parse_args()
 
     scope = project_all(args.include_detections)
     manifests = {f"{uid}.yaml": data
                  for uid, data in build_rules.render_app_platform().items()
                  for uid in [uid[: -len(".yaml")]] if uid in scope}
+    paused = parse_paused(args.pause)
+    unknown = sorted(paused - set(scope))
+    if unknown:
+        parser.error("--pause names rules this deploy does not manage: "
+                     + ", ".join(unknown))
 
     try:
+        manifests = pause_manifests(manifests, paused)
         if not args.readback_only:
             groups = {build_rules.ALERT_GROUP: args.folder_title}
             if args.include_detections:
@@ -470,7 +516,7 @@ def main() -> int:
             if result["failures"]:
                 return 1
 
-        receipt = readback(args.context, args.include_detections)
+        receipt = readback(args.context, args.include_detections, paused)
     except DeployError as exc:
         print(json.dumps({"status": "operational_error", "error": str(exc)},
                          indent=2))

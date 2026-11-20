@@ -241,17 +241,17 @@ sbom target="bin/graph2otel" name="graph2otel" out="dist/sbom": _tools-sbom
     {{ tools }}/syft '{{ target }}' -q -o 'spdx-json={{ out }}/{{ name }}.spdx.json' -o 'cyclonedx-json={{ out }}/{{ name }}.cdx.json'
     @echo "sbom: wrote {{ out }}/{{ name }}.spdx.json + {{ out }}/{{ name }}.cdx.json"
 
-# deploy the generated alert rules to a Grafana stack (create-or-update, WRITES)
+# deploy the generated alert rules to a Grafana stack (create-or-update, WRITES); pause = rule names kept paused
 [confirm('This writes alert rules to a live Grafana stack. Continue?')]
 [group('infra')]
-rules-push context folder="graph2otel" include_detections="0":
-    @python3 grafana/rules_deploy.py --context '{{ context }}' --folder-title '{{ folder }}' {{ if include_detections == "1" { "--include-detections" } else { "" } }}
+rules-push context folder="graph2otel" include_detections="0" pause="":
+    @python3 grafana/rules_deploy.py --context '{{ context }}' --folder-title '{{ folder }}' --pause {{ quote(pause) }} {{ if include_detections == "1" { "--include-detections" } else { "" } }}
 
 # prove a Grafana stack still matches the repository's rules; read-only
 [group('infra')]
 [no-exit-message]
-rules-readback context include_detections="0":
-    @python3 grafana/rules_deploy.py --context '{{ context }}' --readback-only {{ if include_detections == "1" { "--include-detections" } else { "" } }}
+rules-readback context include_detections="0" pause="":
+    @python3 grafana/rules_deploy.py --context '{{ context }}' --readback-only --pause {{ quote(pause) }} {{ if include_detections == "1" { "--include-detections" } else { "" } }}
 
 # run the read-only Grafana semantic canary against a live stack (JSON receipt on stdout)
 [group('infra')]

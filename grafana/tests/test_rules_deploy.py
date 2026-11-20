@@ -494,5 +494,67 @@ class TestContextIsAlwaysPinned(unittest.TestCase):
         self.assertEqual(captured["cmd"][:3], ["gcx", "--context", "m7kni"])
 
 
+class TestOperatorPausedRules(unittest.TestCase):
+    """An operator pauses a generated rule on their own stack (`--pause`).
+
+    Without this a deploy unpauses it on every run, because the committed
+    manifest says `paused: false`, and the read-back then reports the paused
+    rule as drift."""
+
+    TARGET = "g2o-intune-compliance-ratio-low"
+
+    def _live_stack(self, paused_live=()):
+        out = {}
+        for index, rule in enumerate(build_rules.RULES):
+            m = as_live(build_rules.to_app_platform(
+                rule, build_rules.ALERT_GROUP, build_rules.GROUP_INTERVAL,
+                index))
+            if rule["uid"] in paused_live:
+                m["spec"]["paused"] = True
+            out[rule["uid"]] = m
+        for index, rule in enumerate(build_rules.DETECTIONS):
+            out[rule["uid"]] = as_live(build_rules.to_app_platform(
+                rule, build_rules.DETECTION_GROUP, build_rules.GROUP_INTERVAL,
+                index))
+        return out
+
+    def test_the_list_accepts_commas_spaces_and_empty(self):
+        self.assertEqual(rules_deploy.parse_paused(""), set())
+        self.assertEqual(rules_deploy.parse_paused("  "), set())
+        self.assertEqual(rules_deploy.parse_paused("a, b c,,"), {"a", "b", "c"})
+
+    def test_only_the_named_manifest_is_paused(self):
+        manifests = build_rules.render_app_platform()
+        out = rules_deploy.pause_manifests(manifests, {self.TARGET})
+        fname = f"{self.TARGET}.yaml"
+        self.assertIn(b"\n  paused: false\n", manifests[fname])
+        self.assertIn(b"\n  paused: true\n", out[fname])
+        self.assertNotIn(b"\n  paused: false\n", out[fname])
+        for other, data in manifests.items():
+            if other != fname:
+                self.assertEqual(out[other], data)
+
+    def test_a_manifest_without_one_paused_line_is_an_error(self):
+        """A silent no-op here would push the rule unpaused and report success."""
+        broken = {f"{self.TARGET}.yaml": b"spec:\n  title: x\n"}
+        with self.assertRaises(rules_deploy.DeployError):
+            rules_deploy.pause_manifests(broken, {self.TARGET})
+
+    def test_readback_expects_the_operator_paused_rule_paused(self):
+        live = self._live_stack(paused_live={self.TARGET})
+        with mock.patch.object(rules_deploy, "fetch_live",
+                               lambda context, names: live):
+            receipt = rules_deploy.readback("ctx", paused={self.TARGET})
+        self.assertEqual(receipt["status"], "matched")
+
+    def test_readback_still_catches_a_paused_rule_that_came_back(self):
+        live = self._live_stack()
+        with mock.patch.object(rules_deploy, "fetch_live",
+                               lambda context, names: live):
+            receipt = rules_deploy.readback("ctx", paused={self.TARGET})
+        self.assertEqual(receipt["status"], "drifted")
+        self.assertIn(self.TARGET, receipt["divergent"])
+
+
 if __name__ == "__main__":
     unittest.main()
