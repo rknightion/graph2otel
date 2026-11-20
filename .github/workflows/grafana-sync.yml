@@ -201,13 +201,22 @@ jobs:
             --folder "${RULES_FOLDER_UID}" \
             --keep-file expected-rules.txt
 
+      # GRAFANA_PAUSED_RULES (a repository variable, comma-separated rule names) lists
+      # generated rules this stack keeps PAUSED. Without it every sync unpauses them,
+      # because the committed manifests say `paused: false`. A variable rather than a
+      # committed list: which rules a stack does not want is that stack's choice, not
+      # the public generator's. Unset means none. Passed through env, never inlined.
       - name: push rules
-        run: just --yes rules-push m7kni
+        env:
+          PAUSED_RULES: ${{ vars.GRAFANA_PAUSED_RULES }}
+        run: just --yes rules-push m7kni graph2otel 0 "${PAUSED_RULES}"
 
       # A push that reports success is not a deployment that matches source — the
       # deployer's read-back compares projected CONTENT field by field.
       - name: prove the stack matches source
-        run: just rules-readback m7kni
+        env:
+          PAUSED_RULES: ${{ vars.GRAFANA_PAUSED_RULES }}
+        run: just rules-readback m7kni 0 "${PAUSED_RULES}"
 
       - name: remove the credential file
         if: always()

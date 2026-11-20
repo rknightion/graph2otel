@@ -143,6 +143,21 @@ The target folder must already exist (`--folder-title`, default `graph2otel`); t
 deploy does not create folders, and refuses to guess if two folders share the
 title.
 
+To keep one of the generated rules from evaluating on your stack, deploy it paused
+rather than deleting it or pausing it in the UI. A later deploy undoes both: it
+recreates a deleted rule and unpauses a paused one.
+
+```bash
+just rules-push <gcx-context> graph2otel 0 g2o-intune-compliance-ratio-low
+just rules-readback <gcx-context> 0 g2o-intune-compliance-ratio-low
+```
+
+The last argument is a comma-separated list of rule names (`--pause` on
+`grafana/rules_deploy.py`). The read-back then expects those rules paused, so it
+still reports a pause that something else undid. A name the deploy does not manage
+is refused. The `grafana-sync` workflow reads the list from the repository
+variable `GRAFANA_PAUSED_RULES`.
+
 ### Why a deploy tool and not a bare `gcx resources push`
 
 Four things about this API are not guessable, and each one was found by pushing
