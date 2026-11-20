@@ -7,9 +7,9 @@ replace go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp => ./third_p
 replace go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp => ./third_party/otlpmetrichttp
 
 require (
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.3
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.24.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.15.0
-	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.8.2
+	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.8.3
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/google/uuid v1.6.0
 	github.com/grafana/pyroscope-go v1.5.0
