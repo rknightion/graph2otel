@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.1.2](https://github.com/rknightion/graph2otel/compare/v2.1.1...v2.1.2) (2026-11-21)
+
+
+### Bug Fixes
+
+* capture complete Docker smoke logs ([#583](https://github.com/rknightion/graph2otel/issues/583)) ([a174826](https://github.com/rknightion/graph2otel/commit/a174826b3b5eb6c38d8cbac455a1d694fd877cb2))
+* **chart:** regenerate the chart README so helm-docs-check passes ([#554](https://github.com/rknightion/graph2otel/issues/554)) ([bd8c9f0](https://github.com/rknightion/graph2otel/commit/bd8c9f0492336cd529f4f387f1d169e65b752890))
+* **deps:** build with Go 1.27.4 ([#578](https://github.com/rknightion/graph2otel/issues/578)) ([cc63629](https://github.com/rknightion/graph2otel/commit/cc63629cab91166e749fb9058ba872e40f542b08))
+* **deps:** update azure-sdk-for-go monorepo ([#604](https://github.com/rknightion/graph2otel/issues/604)) ([7e03fe7](https://github.com/rknightion/graph2otel/commit/7e03fe7c90a1926ba7a5e70e74008ba741abf916))
+* **deps:** update module github.com/grafana/pyroscope-go to v1.5.0 ([#606](https://github.com/rknightion/graph2otel/issues/606)) ([ac11a13](https://github.com/rknightion/graph2otel/commit/ac11a13f2ddbaabe39679bf7d0ae0ab958c7ca23))
+* **deps:** update module github.com/microsoft/kiota-http-go to v1.7.0 ([#607](https://github.com/rknightion/graph2otel/issues/607)) ([0a3fadb](https://github.com/rknightion/graph2otel/commit/0a3fadb51cde32d5a4b95163ce2738f51d5da5f5))
+* **deps:** update module github.com/microsoftgraph/msgraph-sdk-go to v1.106.0 ([#608](https://github.com/rknightion/graph2otel/issues/608)) ([92808d4](https://github.com/rknightion/graph2otel/commit/92808d4bf0c4f613ef38db08ad6d31bd59fac591))
+* **deps:** update module github.com/microsoftgraph/msgraph-sdk-go to v1.107.0 ([#622](https://github.com/rknightion/graph2otel/issues/622)) ([003f10f](https://github.com/rknightion/graph2otel/commit/003f10f57673559d49347a1e495779d4ba962029))
+* **deps:** update module go.yaml.in/yaml/v3 to v3.0.6 ([#552](https://github.com/rknightion/graph2otel/issues/552)) ([6eeb790](https://github.com/rknightion/graph2otel/commit/6eeb7909af2add976c636446b1b4281b5363b84e))
+* **deps:** update the networking dependency in release binaries ([#586](https://github.com/rknightion/graph2otel/issues/586)) ([a930f3d](https://github.com/rknightion/graph2otel/commit/a930f3d62be60e2b16fb02e755b74ca55259ee7d))
+* update compression decoder and generated chart documentation (GTO-0013) ([20618b7](https://github.com/rknightion/graph2otel/commit/20618b7f1e75908d598c0a5ee60f15e5c8706960))
+
 ## [2.1.1](https://github.com/rknightion/graph2otel/compare/v2.1.0...v2.1.1) (2026-10-28)
 
 
