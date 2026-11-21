@@ -12,8 +12,8 @@
      satisfying both. helm-docs regenerates these same lines from Chart.yaml, so
      the two converge byte-for-byte. The Type badge is static, outside the block. -->
 <!-- x-release-please-start-version -->
-![Version](https://img.shields.io/static/v1?label=Version&message=2.1.1&color=informational&style=flat-square)
-![AppVersion](https://img.shields.io/static/v1?label=AppVersion&message=2.1.1&color=informational&style=flat-square)
+![Version](https://img.shields.io/static/v1?label=Version&message=2.1.2&color=informational&style=flat-square)
+![AppVersion](https://img.shields.io/static/v1?label=AppVersion&message=2.1.2&color=informational&style=flat-square)
 <!-- x-release-please-end -->
 ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square)
 
