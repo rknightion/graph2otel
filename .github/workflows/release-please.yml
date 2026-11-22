@@ -120,7 +120,7 @@ jobs:
     # Pinned past v1.4.3 for the checksums-locate fix (the attest step was nondeterministically
     # handed the cosign .sigstore.json bundle instead of SHA256SUMS). Renovate will repin this to
     # the tag once the shared repo cuts its next release.
-    uses: rknightion/.github/.github/workflows/binaries.yml@77faed457d4f87675fec4024e2cd526fe964d7c9 # v1.30.36
+    uses: rknightion/.github/.github/workflows/binaries.yml@f460d96cfd777d8e01066df655f4c157d4cf9332 # v1.31.1
     with:
       release-tag: ${{ needs.release-please.outputs.tag_name }}
       install-cosign: true
