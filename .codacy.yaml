@@ -1,0 +1,21 @@
+# Codacy repository configuration.
+#
+# Tool selection and patterns are governed centrally by the organization
+# "rknightion-standard" coding standard (Codacy Cloud), NOT by this file. This
+# file only narrows WHAT Codacy analyzes: Codacy Cloud reads `exclude_paths`
+# from the default branch to skip generated, vendored, design-mockup and test
+# files that would otherwise add noise.
+#
+# Glob syntax is Java-style (`**` spans directories). See
+# https://docs.codacy.com/repositories-configure/codacy-configuration-file/
+exclude_paths:
+  # --- shared convention (kept in sync across rknightion repos) ---
+  - "docs/**"          # user + generated docs and docs site assets
+  - "test/**"          # test trees (none today; future-proofing)
+  - "**/*_test.go"     # Go test files, high-churn and trip complexity/security rules
+  - "vendor/**"        # vendored deps (none today; future-proofing)
+  - "**/*.gen.go"      # code-generated Go (none today; future-proofing)
+  - "**/generated/**"  # any generated/ tree (future-proofing)
+
+  # --- repo-specific ---
+  - "design/**"        # UI mockup trees (design/console-v2), not application code
