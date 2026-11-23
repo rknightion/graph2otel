@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/config"
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // defaultKeySet is the canonical set of every leaf configuration key, derived by
