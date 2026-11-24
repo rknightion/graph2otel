@@ -251,10 +251,12 @@ func Rules() []Rule {
 			ID:        "m365.service_health_issue_resolved",
 			Category:  CategoryServiceHealth,
 			EventName: "m365.service_health_issue",
-			Kind:      KindState,
-			Match:     func(a telemetry.Attrs) bool { return attrBool(a, "is_resolved") },
-			Identity:  []string{"id", "is_resolved"},
-			Detail:    []string{"title", "service", "classification", "status", "feature", "last_modified_date_time"},
+			// A checkpointed transition, not a snapshot. It can legitimately
+			// be the first record after restart and must not prime silently.
+			Kind:     KindEvent,
+			Match:    func(a telemetry.Attrs) bool { return attrBool(a, "is_resolved") },
+			Identity: []string{"id", "is_resolved"},
+			Detail:   []string{"title", "service", "classification", "status", "feature", "end_date_time"},
 			Title: func(a telemetry.Attrs) string {
 				return "resolved — " + attrString(a, "service") + ": " + attrString(a, "title")
 			},
