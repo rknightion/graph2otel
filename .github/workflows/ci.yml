@@ -4,9 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
-    # `edited` re-runs CI when the pull request body changes, so the acceptance evidence check reads
-    # the new table. Every job runs on it: a job skipped by `if:` would report success to ci-success.
-    types: [opened, edited, reopened, synchronize, ready_for_review]
+    # The acceptance-evidence check reads the pull request body, so it runs in pr-metadata.yml;
+    # a body edit does not re-run this workflow.
+    types: [opened, reopened, synchronize, ready_for_review]
 
 permissions:
   contents: read
@@ -353,20 +353,8 @@ jobs:
           coverage-reports: coverage.out
           force-coverage-parser: go
 
-  # A pull request that closes an issue shows evidence for each of its acceptance criteria. Checks
-  # only pull requests with a closing keyword (enforce-all-prs: false), because this repository takes
-  # outside and bot pull requests. The reusable fails on any event but pull_request, so it runs on
-  # pull requests only. Check run: `ac-evidence / Acceptance evidence`.
-  ac-evidence:
-    if: github.event_name == 'pull_request'
-    permissions:
-      contents: read
-      issues: read
-      pull-requests: read
-    uses: rknightion/.github/.github/workflows/ac-evidence.yml@7ed87713176ccae972b0143071b0196ff370d804 # v1.32.3
-
   # The lines a pull request adds carry no identifier, email address, public address or credential
-  # shape. Pull requests only, like ac-evidence. Check run: `privacy-sweep / Privacy sweep`.
+  # shape. Pull requests only. Check run: `privacy-sweep / Privacy sweep`.
   privacy-sweep:
     if: github.event_name == 'pull_request'
     permissions:
@@ -429,7 +417,7 @@ jobs:
     name: ci-success
     runs-on: ubuntu-latest
     if: always()
-    needs: [build-test, lint, govulncheck, goreleaser-snapshot, docker-build, helm, grafana, helm-schema-validate, ac-evidence, privacy-sweep, backlog-freeze, zizmor]
+    needs: [build-test, lint, govulncheck, goreleaser-snapshot, docker-build, helm, grafana, helm-schema-validate, privacy-sweep, backlog-freeze, zizmor]
     steps:
       - name: Fail if any required job did not pass
         if: ${{ needs.build-test.result != 'success' || contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
@@ -443,12 +431,11 @@ jobs:
       - name: Fail if a pull request check did not run
         if: ${{ github.event_name == 'pull_request' }}
         env:
-          AC_EVIDENCE: ${{ needs.ac-evidence.result }}
           PRIVACY_SWEEP: ${{ needs.privacy-sweep.result }}
           BACKLOG_FREEZE: ${{ needs.backlog-freeze.result }}
         run: |
-          if [[ "$AC_EVIDENCE" != "success" || "$PRIVACY_SWEEP" != "success" || "$BACKLOG_FREEZE" != "success" ]]; then
-            echo "ac-evidence: ${AC_EVIDENCE}, privacy-sweep: ${PRIVACY_SWEEP}, backlog-freeze: ${BACKLOG_FREEZE}; all must pass on a pull request"
+          if [[ "$PRIVACY_SWEEP" != "success" || "$BACKLOG_FREEZE" != "success" ]]; then
+            echo "privacy-sweep: ${PRIVACY_SWEEP}, backlog-freeze: ${BACKLOG_FREEZE}; all must pass on a pull request"
             exit 1
           fi
       - name: All required jobs passed

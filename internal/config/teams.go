@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/rknightion/graph2otel/internal/teams/quality"
 	"github.com/rknightion/graph2otel/internal/teams/sites"
@@ -15,12 +16,13 @@ type TeamsQualityConfig struct {
 	QualityThresholds quality.Thresholds `yaml:"quality_thresholds"`
 }
 
-// TeamsConfig holds tenant-local site rules and the separate VAAC opt-in.
-// The site settings do not enable a collector.
+// TeamsConfig holds tenant-local enrichment settings and the separate VAAC opt-in.
+// The enrichment settings do not enable a collector.
 type TeamsConfig struct {
-	SitesFile       string      `yaml:"sites_file"`
-	InternalDomains []string    `yaml:"internal_domains"`
-	VAAC            *VAACConfig `yaml:"vaac" json:",omitempty"`
+	SitesFile       string           `yaml:"sites_file"`
+	InternalDomains []string         `yaml:"internal_domains"`
+	VAAC            *VAACConfig      `yaml:"vaac" json:",omitempty"`
+	GeoIP           TeamsGeoIPConfig `yaml:"geoip" json:",omitzero"`
 
 	siteFile *sites.File
 	domains  sites.Domains
@@ -53,6 +55,56 @@ func (c *Config) TenantVAAC(tenantID string) VAACConfig {
 		}
 	}
 	return VAACConfig{}
+}
+
+// TeamsGeoIPConfig contains optional local MaxMind database paths.
+type TeamsGeoIPConfig struct {
+	ASNDB  string `yaml:"asn_db"`
+	CityDB string `yaml:"city_db"`
+}
+
+const tenantTeamsGeoIPEnvPrefix = "tenants.<n>.teams.geoip."
+
+var teamsGeoIPFields = [...]string{"asn_db", "city_db"}
+
+type tenantGeoIPEnvOverride struct {
+	index                  int
+	field, variable, value string
+}
+
+func parseTenantGeoIPEnvName(name string) (tenantGeoIPEnvOverride, bool) {
+	parts := strings.Split(name, envNestDelim)
+	if len(parts) != 5 || parts[0] != EnvPrefix+"TENANTS" || parts[2] != "TEAMS" || parts[3] != "GEOIP" {
+		return tenantGeoIPEnvOverride{}, false
+	}
+	index, ok := parseTenantEnvIndex(parts[1])
+	field := strings.ToLower(parts[4])
+	if !ok || parts[4] != strings.ToUpper(field) || !slices.Contains(teamsGeoIPFields[:], field) {
+		return tenantGeoIPEnvOverride{}, false
+	}
+	return tenantGeoIPEnvOverride{index: index, field: field, variable: name}, true
+}
+
+func (c *Config) applyTeamsGeoIPEnvironment(overrides []tenantGeoIPEnvOverride) error {
+	for _, override := range overrides {
+		if override.index >= len(c.Tenants) {
+			return fmt.Errorf("%s: tenant index out of range (tenants are configured in YAML)", override.variable)
+		}
+		tenant := &c.Tenants[override.index]
+		if tenant.Teams == nil {
+			if override.value == "" {
+				continue
+			}
+			tenant.Teams = &TeamsConfig{}
+		}
+		switch override.field {
+		case "asn_db":
+			tenant.Teams.GeoIP.ASNDB = override.value
+		case "city_db":
+			tenant.Teams.GeoIP.CityDB = override.value
+		}
+	}
+	return nil
 }
 
 // resolveTeamsSites validates and opens each configured file once, during Load,

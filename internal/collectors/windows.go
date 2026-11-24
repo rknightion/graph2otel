@@ -9,6 +9,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/jobpipeline"
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
+	"github.com/rknightion/graph2otel/internal/teams/geoip"
 	"github.com/rknightion/graph2otel/internal/teams/quality"
 	"github.com/rknightion/graph2otel/internal/teams/sites"
 	"github.com/rknightion/graph2otel/internal/vaacclient"
@@ -86,6 +87,10 @@ type WindowDeps struct {
 	// The Teams call-record poll should reload it once per batch, report any
 	// error and use the resulting snapshot for both sides of every stream.
 	TeamsSites *sites.File
+
+	// TeamsGeoIP is the tenant's optional read-only offline enrichment reader.
+	// The runtime owns it and closes it after all collectors stop.
+	TeamsGeoIP *geoip.Reader
 	// TeamsInternalDomains classifies participant UPNs without filtering records.
 	TeamsInternalDomains sites.Domains
 	// TeamsQualityThresholds supplies validated limits; nil uses CQD defaults.

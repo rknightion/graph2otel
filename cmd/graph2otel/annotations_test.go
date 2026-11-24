@@ -136,7 +136,7 @@ func TestAnnotationWriterStartsAfterTheCheckpointProbeAndBeforeTenants(t *testin
 	source := string(raw)
 	probe := strings.Index(source, "checkpoint.NewStore(cfg.CheckpointDir).Verify()")
 	start := strings.Index(source, "startAnnotator(ctx, cfg, provider, logger)")
-	tenants := strings.Index(source, "startTenants(tenantCtx, cfg, provider, logger)")
+	tenants := strings.Index(source, "startTenants(tenantCtx, cfg, provider, logger, geoIPReaders)")
 	if probe < 0 || start < 0 || tenants < 0 {
 		t.Fatalf("could not locate the three call sites (probe=%d start=%d tenants=%d)", probe, start, tenants)
 	}

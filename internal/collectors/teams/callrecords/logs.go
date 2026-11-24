@@ -21,7 +21,7 @@ const (
 
 // emitCall is the typed delivery seam shared by the poll and direct fetch.
 // It runs only after logpipeline accepts the authoritative detail version.
-func emitCall(e telemetry.Emitter, c Call) {
+func (collector *Collector) emitCall(e telemetry.Emitter, c Call) {
 	a := telemetry.Attrs{
 		semconv.AttrVersion: c.Version, semconv.AttrParticipantCount: c.Counts.Total,
 		semconv.AttrParticipantUsers: c.Counts.Users, semconv.AttrParticipantGuests: c.Counts.Guests,
@@ -50,11 +50,11 @@ func emitCall(e telemetry.Emitter, c Call) {
 	}
 	e.LogEvent(telemetry.Event{Name: callEvent, Body: "Teams call", Timestamp: c.Start, Attrs: a})
 	for _, s := range c.Streams {
-		e.LogEvent(streamLog(c, s))
+		e.LogEvent(collector.streamLog(c, s))
 	}
 }
 
-func streamLog(c Call, s Stream) telemetry.Event {
+func (collector *Collector) streamLog(c Call, s Stream) telemetry.Event {
 	a := telemetry.Attrs{semconv.AttrVersion: c.Version, semconv.AttrMedia: s.Media}
 	setTexts(a, "", semconv.AttrCallId, c.ID, semconv.AttrSessionId, s.SessionID, semconv.AttrSegmentId, s.SegmentID,
 		semconv.AttrStreamId, s.ID, semconv.AttrMediaLabel, s.MediaLabel, semconv.AttrDirection, s.Direction,
@@ -80,6 +80,10 @@ func streamLog(c Call, s Stream) telemetry.Event {
 	setSide(a, "caller_", s.Caller)
 	setSide(a, "callee_", s.Callee)
 	setStreamQuality(a, s)
+	if collector.geoIP != nil {
+		collector.setGeoIP(a, "caller_", s.Caller.Network)
+		collector.setGeoIP(a, "callee_", s.Callee.Network)
+	}
 	if f := s.SessionFailure; f != nil {
 		setTexts(a, "", semconv.AttrSessionFailureStage, f.Stage, semconv.AttrSessionFailureReason, f.Reason)
 	}
@@ -133,6 +137,21 @@ func setSideQuality(a telemetry.Attrs, p string, s Stream, side Side) {
 	if issue && strings.EqualFold(side.Network.ConnectionType, "wifi") {
 		a[p+"wifi_with_issue"] = true
 	}
+}
+
+func (collector *Collector) setGeoIP(a telemetry.Attrs, prefix string, n Network) {
+	result, err := collector.geoIP.Lookup(n.ReflexiveIP, n.RelayIP)
+	if err != nil {
+		// Don't log addresses, DB values or decoder errors. A bad record in
+		// either database does not block the stream or the other DB's fields.
+		collector.logger.Debug("Teams GeoIP record could not be decoded", "collector", Name)
+	}
+	if result.ASN != 0 {
+		a[prefix+"asn"] = int64(result.ASN)
+	}
+	setTexts(a, prefix, "asn_organization", result.Organization, "geoip_country_code", result.CountryCode, "geoip_city", result.City)
+	setFloat(a, prefix+"geoip_latitude", result.Latitude)
+	setFloat(a, prefix+"geoip_longitude", result.Longitude)
 }
 
 func setSide(a telemetry.Attrs, p string, s Side) {

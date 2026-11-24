@@ -235,6 +235,34 @@ This unsupported integration signs in with a user password. It is incompatible
 with MFA and some Conditional Access policies, and the logs can carry caller
 and agent identities. Graph preflight cannot verify access to this feed.
 
+#### Teams offline ASN and GeoIP
+
+Set `tenants[].teams.geoip.asn_db` and/or `tenants[].teams.geoip.city_db` to local
+MaxMind-format `.mmdb` paths. The ASN and City databases are independent. Both
+paths default to empty; neither setting enables `teams.call_records`. To override
+one tenant's paths from the environment, use `G2O_TENANTS__<n>__TEAMS__GEOIP__ASN_DB`
+and `G2O_TENANTS__<n>__TEAMS__GEOIP__CITY_DB`, with the zero-based YAML tenant
+index. An empty override disables that database.
+
+Supply your own compatible ASN and City databases. If you choose GeoLite2, you
+must accept the [MaxMind GeoLite2 End User License Agreement](https://www.maxmind.com/en/geolite2/eula).
+Commercial or alternative data has its own terms. graph2otel does not bundle,
+download or update the data. Mount the files read-only with permissions that let
+the graph2otel process read them. With Helm, use `extraVolumes` and
+`extraVolumeMounts` and set the paths under `config.tenants`. Relative paths are
+relative to the process working directory. Replace files atomically and restart
+to pick up new data; never rewrite a memory-mapped database in place. A missing,
+unreadable or invalid configured file stops both startup and `check` before
+authentication is attempted.
+
+Only the public reflexive IP on each side of a stream is eligible. A reflexive
+address equal to that side's relay is skipped. Local, private and relay addresses
+and trace hops are not fallback sources. Lookups stay inside the process and do
+not send IPs to a lookup service. Results are approximate network locations,
+not participant locations. The `teams.call_stream` log gains only available
+ASN, organisation, country code, city and coordinate attributes, prefixed
+`caller_` or `callee_`. No metrics are added.
+
 ### `otlp`
 
 ```yaml

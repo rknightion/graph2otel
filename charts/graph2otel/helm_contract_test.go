@@ -106,6 +106,18 @@ config:
         entra.users:
           enabled: false
           interval: 30m
+      teams:
+        geoip:
+          asn_db: /etc/graph2otel/geoip/asn.mmdb
+          city_db: /etc/graph2otel/geoip/city.mmdb
+extraVolumes:
+  - name: teams-geoip
+    persistentVolumeClaim:
+      claimName: local-mmdb
+extraVolumeMounts:
+  - name: teams-geoip
+    mountPath: /etc/graph2otel/geoip
+    readOnly: true
 `)
 
 	for _, command := range []string{"lint", "template"} {
@@ -115,9 +127,20 @@ config:
 				args = append(args, "test")
 			}
 			args = append(args, ".", "-f", values)
-			if output, err := runHelm(t, args...); err != nil {
-				t.Fatalf("helm %s rejected valid extension maps and collector overrides: %v\n%s",
+			output, err := runHelm(t, args...)
+			if err != nil {
+				t.Fatalf("helm %s rejected valid extension maps, collector overrides or GeoIP: %v\n%s",
 					command, err, output)
+			}
+			if command == "template" {
+				for _, want := range []string{
+					"asn_db: /etc/graph2otel/geoip/asn.mmdb", "city_db: /etc/graph2otel/geoip/city.mmdb",
+					"mountPath: /etc/graph2otel/geoip", "claimName: local-mmdb",
+				} {
+					if !strings.Contains(string(output), want) {
+						t.Errorf("helm template did not render %q", want)
+					}
+				}
 			}
 		})
 	}
