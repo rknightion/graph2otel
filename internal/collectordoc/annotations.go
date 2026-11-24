@@ -759,6 +759,12 @@ var annotations = map[string]Annotation{
 		Source:   "`/reports/getSharePointSiteUsageStorage`, `/reports/getOneDriveUsageStorage`, `/reports/getSharePointSiteUsageDetail`, `/reports/getOneDriveUsageAccountDetail`",
 	},
 
+	"m365.teams_usage": {
+		Collects: "Teams client platform mix over D7, one D7 activity twin per team keyed by the report's `id` for joining to `m365.team`, and D30 daily user counts by activity. `days_ago=0` is the latest Report Date in the download, not today. Platform and activity groups overlap - do not sum them into a unique-user total. The concealment gauge is absent when the setting is unknown; if names are concealed, identifier joins are not guaranteed.",
+		Source:   "`/reports/getTeamsDeviceUsageUserDetail(period='D7')`, `/reports/getTeamsTeamActivityDetail(period='D7')`, `/reports/getTeamsUserActivityUserCounts(period='D30')` and `/admin/reportSettings`. [live-measured 2026-11-24, #664] The three CSV routes redirected to `reportsweu.office.com`; the download also accepts the documented `reports.office.com`. The platform flags are Yes/No and the Chrome OS header has two spaces after Used.",
+		Gating:   "Teams profile only; no SharePoint or OneDrive report calls. Uses the shared reporting limiter. A failed report clears only its own gauges, and no report emits zero for missing counts.",
+	},
+
 	// ---- Purview — snapshot collectors ----
 	"purview.dlp_policies": {
 		Collects: "DLP policy inventory + enforcement mode (#246): which policies exist, what mode each is in (audit vs Enforce — the \"did someone quietly downgrade enforcement\" signal), which workloads/actions each rule covers, when it last changed. Bounded gauges by enforcement_mode / workload×action / workload×binding_type + a single max-age gauge; log twins per policy (Warn when not Enforce) and per rule (SIT ids + confidence/count band). content is base64 of UTF-16LE XML; the version hash drives a parse-skip so the 76KB decode runs only on change. Emits policy DEFINITION only — a rule condition VALUE (matched content) is never emitted, guarded by test",

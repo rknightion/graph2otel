@@ -66,14 +66,14 @@ var additiveUnits = map[string]struct{}{
 	"kB": {}, "MB": {}, "GB": {}, "TB": {},
 }
 
-// nonCountableAnnotations are the inner words of an annotation unit that name a
-// QUALITY rather than a countable thing. "{score}" is a measurement on a scale,
-// not four hundred of something, so it does not follow the annotation
-// convention. Matched against the text inside the braces, lowercased.
+// nonCountableAnnotations are annotation units whose gauge points do not add
+// meaningfully. That includes qualities such as "{score}" and counts whose
+// groups overlap. Matched against the text inside the braces, lowercased.
 var nonCountableAnnotations = map[string]struct{}{
 	"score": {}, "ratio": {}, "percent": {}, "percentage": {},
 	"version": {}, "level": {}, "state": {}, "status": {},
 	"index": {}, "rank": {}, "grade": {}, "age": {},
+	"overlapping_user_count": {}, // the same user can be in multiple groups
 }
 
 // annotationInner returns the text inside a UCUM annotation unit and whether the

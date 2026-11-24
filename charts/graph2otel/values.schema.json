@@ -170,6 +170,7 @@
                 "m365.sharepoint_settings",
                 "m365.storage",
                 "m365.teams",
+                "m365.teams_usage",
                 "m365.unified_audit",
                 "mdca.cloud_discovery",
                 "mdca.discovery_parse",

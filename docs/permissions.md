@@ -21,6 +21,7 @@ the minimum Microsoft Graph application permissions for the default collectors a
 
 - `CallRecords.Read.All`
 - `Channel.ReadBasic.All`
+- `ReportSettings.Read.All`
 - `Reports.Read.All`
 - `ServiceHealth.Read.All`
 - `Team.ReadBasic.All`
