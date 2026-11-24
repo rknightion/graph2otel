@@ -46,15 +46,17 @@ type O365Deps struct {
 	// se, but because graph2otel is deployed by operators who pay per GB
 	// downstream, and defaulting them into a workload they never asked for is
 	// the wrong way round. A tenant that wants it — a SIEM feed, where Endpoint
-	// DLP file activity with hashes is a feature and not noise — opts in here,
-	// and then EVERY record is shipped (#112: fetching per-entity rows and
-	// discarding them is a bug, so there is no record-type include-list).
+	// DLP file activity with hashes is a feature and not noise - opts in here.
+	// All mapped records ship unless the tenant also sets RecordTypeAllowList.
 	//
 	// Audit.AzureActiveDirectory is also not a default: it carries UserLoggedIn
 	// and directory-audit records that entra.signins.interactive and
 	// entra.directory_audits already emit, and both of those are logs-only
 	// collectors, so subscribing here duplicates them into the same pipeline.
 	ContentTypes []o365activityclient.ContentType
+	// RecordTypeAllowList selects which numeric record types to emit across
+	// all subscriptions. Empty leaves all records eligible for mapping.
+	RecordTypeAllowList []int64
 	// TenantID is the tenant this collector instance serves. It is both the
 	// tenant component of the checkpoint key and the tenant GUID in the API's
 	// root URL.

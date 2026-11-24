@@ -44,6 +44,38 @@ scorecard ran **6-0 against Microsoft's documentation** — treat the docs as hy
 - **No server-side filtering exists.** Subscribe only to content types actually mapped —
   never `Audit.General` by default (it is the catch-all, including Teams; opt-in only).
 
+## Teams audit filtering
+
+To keep Microsoft Teams record type 25 from the O365 feed, set the following in
+that tenant's YAML:
+
+```yaml
+o365_activity:
+  content_types: [Audit.General]
+  record_type_allow_list: [25]
+```
+
+The API still lists and downloads the full `Audit.General` blobs. The allow-list
+saves downstream log ingest, not API traffic. It selects by the numeric
+`RecordType`, not the operation. Non-matching records are counted as `filtered`
+before mapping. The checkpoint still advances through the blobs, so widening
+or removing the list does not replay records that were filtered before.
+
+Live-measured 2026-11-24: six read-only windows of at most 24 hours on the
+already-enabled `Audit.General` subscription returned six blobs and one Teams
+record, type 25 `TeamsSessionStarted`. It emits as `m365.audit` with
+`operation=TeamsSessionStarted`, `record_type=MicrosoftTeams` and
+`record_type_id=25`. `object_id` stays opaque; the sample does not establish
+that it identifies a team, channel or meeting. The probe did not observe team creation, membership or
+settings changes, or meeting activity. Those operations still need samples
+before any Teams-specific fields can be mapped.
+
+If you need to reduce what you fetch, the experimental Graph collector
+`m365.unified_audit` uses server-side `recordTypeFilters` that include Teams and
+exclude Endpoint DLP. It is an alternative, not a second Teams feed: disable
+`m365.activity` before enabling it. Graph uses a slower, beta async query and
+can throttle query creation.
+
 ## Windowing and retention
 
 - **`/subscriptions/content` caps the list range at 24 HOURS** — `startTime`/`endTime`

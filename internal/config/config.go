@@ -379,8 +379,8 @@ type HuntingConfig struct {
 	Enabled bool `yaml:"enabled"`
 }
 
-// O365ActivityConfig selects which Management Activity API content types the
-// m365.activity collector subscribes to for a tenant (#100).
+// O365ActivityConfig selects the Management Activity API subscriptions and
+// which records m365.activity emits for a tenant.
 //
 // This is config rather than a constant because the API has NO server-side
 // filtering, so a content type is all-or-nothing: subscribing means fetching
@@ -404,15 +404,18 @@ type O365ActivityConfig struct {
 	//     who pay per GB downstream, and defaulting them into a workload they
 	//     never asked for is the wrong way round. It is a genuine feature for a
 	//     SIEM — Endpoint DLP carries per-file hashes, device and user, which is
-	//     exfiltration and ransomware signal, not noise — so when it IS set,
-	//     every record ships. There is no record-type include-list: fetching
-	//     per-entity rows and discarding them is the bug #112 calls out by name.
+	//     exfiltration and ransomware signal, not noise. By default, every
+	//     mapped record ships.
 	//
 	//   - Audit.AzureActiveDirectory is omitted because entra.signins.interactive
 	//     and entra.directory_audits already emit those records, both are
 	//     logs-only collectors, and both are default-on — so subscribing here
 	//     duplicates them into the same pipeline.
 	ContentTypes []string `yaml:"content_types"`
+	// RecordTypeAllowList lists the numeric RecordType IDs to emit across all
+	// selected content types. Unset or empty means no filtering. Filtering is
+	// local to the collector and does not reduce content fetched from the API.
+	RecordTypeAllowList []int64 `yaml:"record_type_allow_list"`
 }
 
 // BlobIngestConfig points a tenant's blob-sourced collectors at the Azure

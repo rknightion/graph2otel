@@ -81,6 +81,9 @@ func validateYAMLNode(node *yaml.Node, typ reflect.Type, path string) error {
 		if path == "tenants" && node.Kind == yaml.MappingNode {
 			return validateYAMLNode(node, typ.Elem(), "tenants[0]")
 		}
+		if strings.HasPrefix(path, "tenants[") && strings.HasSuffix(path, "].o365_activity.record_type_allow_list") {
+			return validateO365RecordTypeAllowList(node, path)
+		}
 		if node.Kind != yaml.SequenceNode {
 			if path == "profiles" || (strings.HasPrefix(path, "tenants[") && strings.HasSuffix(path, "].profiles")) {
 				return fmt.Errorf("%s: expected a list of profiles", path)
@@ -125,6 +128,22 @@ func validateTeamsField(node *yaml.Node, kind reflect.Kind, path string) error {
 			if dereferenceAlias(item).ShortTag() != "!!str" {
 				return fmt.Errorf("%s[%d]: expected a string", path, i)
 			}
+		}
+	}
+	return nil
+}
+
+// validateO365RecordTypeAllowList prevents weak config decoding from silently
+// truncating a fractional ID or coercing a scalar to a one-item list.
+func validateO365RecordTypeAllowList(node *yaml.Node, path string) error {
+	if node.Kind != yaml.SequenceNode {
+		return fmt.Errorf("%s: expected a list of positive integer record type IDs", path)
+	}
+	for i, raw := range node.Content {
+		item := dereferenceAlias(raw)
+		var id int64
+		if item.ShortTag() != "!!int" || item.Decode(&id) != nil || id <= 0 {
+			return fmt.Errorf("%s[%d]: expected a positive integer record type ID", path, i)
 		}
 	}
 	return nil

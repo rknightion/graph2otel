@@ -151,13 +151,17 @@ tenants:
   deduplicated downstream by record ID.
 - `o365_activity.content_types` configures the default-on, stable-v1.0
   `m365.activity` collector. Empty means `Audit.Exchange` plus `Audit.SharePoint`.
-  `Audit.AzureActiveDirectory`, `Audit.General`, and `DLP.All` are supported explicit
-  additions; `DLP.All` requires `ActivityFeed.ReadDlp`. The API has no record-level
-  server filter, so every record in a selected type is fetched and shipped.
+  An explicit list replaces the defaults. Other supported types are
+  `Audit.AzureActiveDirectory`, `Audit.General`, and `DLP.All`; the last requires
+  `ActivityFeed.ReadDlp`. The API fetches all records in the selected content types.
   `Audit.General` is deliberately not a default: on the measured six-device tenant,
   3,865 of 4,035 records over 23 hours were Endpoint DLP. The common audit mapper does
   not emit `PolicyDetails`, `SensitiveInformation`, or `DetectedValues`; there is no
   dedicated `DLP.All` classification mapper.
+- `o365_activity.record_type_allow_list` is an optional list of positive integer
+  record type IDs. It applies to all selected O365 content types. Omit it or use `[]`
+  to keep all records eligible for mapping. See [Teams audit filtering](o365-management-api.md#teams-audit-filtering)
+  for an example and the difference from Graph's server-side filtering.
 - `mdca.portal_url` opts into Cloud Discovery parse health over the legacy MDCA portal
   API. `token_file` is required and contains the static portal token; the secret itself
   must not appear in YAML or an environment variable.
