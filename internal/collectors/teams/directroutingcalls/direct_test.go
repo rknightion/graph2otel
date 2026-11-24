@@ -12,6 +12,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -98,7 +99,7 @@ func TestDirectRoutingFixtureReplay(t *testing.T) {
 	}
 }
 
-func TestDirectRoutingBoundsTrunkNames(t *testing.T) {
+func TestDirectRoutingUsesCentralTrunkBudget(t *testing.T) {
 	to := time.Now().UTC().Truncate(time.Second)
 	from := to.Add(-3 * time.Hour)
 	var rows []map[string]any
@@ -111,25 +112,33 @@ func TestDirectRoutingBoundsTrunkNames(t *testing.T) {
 	fetch := &replay{t: t, pages: []page{{url: initialURL(from, to), rows: rows}}}
 	c := newPoller(collectors.WindowDeps{TenantID: "fixture-tenant", Store: checkpoint.NewStore(t.TempDir()), Fetcher: fetch})
 	rec := telemetrytest.New()
-	if _, err := c.CollectWindow(t.Context(), from, to, rec.Emitter(), nil); err != nil {
+	const budget = 36
+	limited := telemetry.WithCardinalityLimits(rec.Emitter(), telemetry.Limits{PerMetric: budget})
+	if _, err := c.CollectWindow(t.Context(), from, to, limited, nil); err != nil {
 		t.Fatal(err)
 	}
-	points := rec.MetricPoints(countMetric)
-	if len(points) != 33 {
-		t.Fatalf("got %d count series, want 32 named trunks plus overflow", len(points))
-	}
-	var overflow float64
-	for _, p := range points {
-		if p.Attrs["trunk_fqdn"] == "other" {
-			overflow = p.Value
+	counts := make(map[string]float64)
+	for _, p := range rec.MetricPoints(countMetric) {
+		counts[p.Attrs["trunk_fqdn"]] += p.Value
+		if p.Attrs["outcome"] != "busy" || p.Attrs["sip_class"] != "6xx" {
+			t.Fatalf("SIP 600 did not retain its outcome and class: %+v", p)
 		}
-		if p.Attrs["outcome"] != "busy" {
-			t.Fatalf("SIP 600 did not classify as busy: %+v", p)
+	}
+	if len(counts) != budget+1 || counts["other"] != 4 {
+		t.Fatalf("central budget: %d count series with %v attempts in other, want %d plus 4 attempts in other", len(counts), counts["other"], budget+1)
+	}
+	ratios := rec.MetricPoints(ratioMetric)
+	if len(ratios) != budget {
+		t.Fatalf("got %d effectiveness ratios, want exactly the central budget %d", len(ratios), budget)
+	}
+	for _, p := range ratios {
+		if p.Attrs["trunk_fqdn"] == "other" || p.Value != 1 {
+			t.Fatalf("non-additive ratio must not be folded: %+v", p)
 		}
 	}
 	logs := rec.LogRecords()
-	if overflow != 8 || len(logs) != 40 || logs[39].Attrs["trunk_fqdn"] != "trunk-39.example.invalid" {
-		t.Fatalf("overflow = %v, log rows = %d; want 8 overflow attempts and all 40 raw trunk logs", overflow, len(logs))
+	if len(logs) != 40 || logs[39].Attrs["trunk_fqdn"] != "trunk-39.example.invalid" {
+		t.Fatalf("got %d log rows, want all 40 raw trunk logs", len(logs))
 	}
 }
 

@@ -17,13 +17,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
-const (
-	name = "teams.direct_routing_calls"
-	// SBCs are tenant infrastructure, not user endpoints. Still, bound the
-	// metric dimension even if Graph returns rotating or malformed trunk names.
-	// Pin at most 32 names for this collector's lifetime; never churn them.
-	maxTrunks = 32
-)
+const name = "teams.direct_routing_calls"
 
 var (
 	fqdn   = regexp.MustCompile(`^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?)$`)
@@ -39,18 +33,12 @@ var (
 	}
 )
 
-type poller struct {
-	*phonewindow.Window
-	trunks map[string]struct{}
-}
+type poller struct{ *phonewindow.Window }
 
 func (*poller) Profiles() collector.ProfileSet { return collector.ProfileTeams }
 
 func newPoller(d collectors.WindowDeps) *poller {
-	return &poller{
-		Window: phonewindow.New(d, name, "getDirectRoutingCalls", mapRow),
-		trunks: make(map[string]struct{}),
-	}
+	return &poller{phonewindow.New(d, name, "getDirectRoutingCalls", mapRow)}
 }
 
 func init() {
@@ -74,7 +62,7 @@ func (c *poller) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 	ratios := make(map[string]effectiveness)
 	observer := phonewindow.EventEmitter{Emitter: e, OnEvent: func(ev telemetry.Event) {
 		rawTrunk, _ := ev.Attrs[semconv.AttrTrunkFQDN].(string)
-		trunk := c.trunkLabel(rawTrunk)
+		trunk := normalizeTrunk(rawTrunk)
 		outcome, sipClass := classify(ev.Attrs)
 		counts[dimensions{trunk, outcome, sipClass}]++
 		ratio := ratios[trunk]
@@ -101,16 +89,11 @@ func (c *poller) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 	return hw, nil
 }
 
-func (c *poller) trunkLabel(raw string) string {
+// normalizeTrunk validates the source label; the emitter owns series admission.
+func normalizeTrunk(raw string) string {
 	trunk := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(raw), "."))
 	if len(trunk) > 253 || !fqdn.MatchString(trunk) {
 		return "unknown"
-	}
-	if _, exists := c.trunks[trunk]; !exists {
-		if len(c.trunks) >= maxTrunks {
-			return "other"
-		}
-		c.trunks[trunk] = struct{}{}
 	}
 	return trunk
 }
