@@ -783,6 +783,16 @@ var annotations = map[string]Annotation{
 		Source:   "`/security/labels/retentionLabels`, `/security/triggerTypes/retentionEventTypes`",
 	},
 
+	// ---- Teams Phone (window) ----
+	"teams.pstn_calls": {
+		Collects: "PSTN call logs, `teams.pstn.calls{call_type,connectivity_type}` and `teams.pstn.minutes`. Call and user identifiers and numbers are log-only. Where the wire omits connectivity type, the metric uses the operator distinction documented by the PSTN report. Shape and overlap are provisional, tested on synthetic docs-derived rows",
+		Source:   "`/communications/callRecords/getPstnCalls(fromDateTime=…,toDateTime=…)` (v1.0)",
+	},
+	"teams.direct_routing_calls": {
+		Collects: "Direct Routing attempt logs, `teams.direct_routing.calls{trunk_fqdn,outcome,sip_class}` and `teams.direct_routing.network_effectiveness_ratio{trunk_fqdn}` (answered or SIP 486/600 busy, divided by all new attempts in the latest successful poll). The central telemetry budget limits trunk series. Excess attempt counts fold into `other`; excess effectiveness ratios are dropped rather than combined. Missing or malformed names share `unknown`; logs retain the original trunk. Shape and overlap are provisional, tested on synthetic docs-derived rows",
+		Source:   "`/communications/callRecords/getDirectRoutingCalls(fromDateTime=…,toDateTime=…)` (v1.0)",
+	},
+
 	// ---- Self-observability (snapshot) ----
 	"graph2otel.blob_categories": {
 		Collects: "Blob-category census (#238): diffs the tenant's microsoft.aadiam diagnostic-settings categories against the Azure Storage containers graph2otel's blob collectors read. Bounded gauge graph2otel.blob.categories{state} where state ∈ consumed / enabled_unread (billed but read by no collector — Warn) / mapped_but_disabled (a collector polls a container that is never written — Error) / disabled; one log twin per category. Corrects #134 — the poller reads microsoft.aadiam as itself (Entra roles, not Azure RBAC); the microsoft.intune half needs a different identity and is out of scope",

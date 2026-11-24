@@ -3,6 +3,7 @@ package logpipeline
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/rknightion/graph2otel/internal/graphclient"
@@ -50,6 +51,9 @@ func (f *graphPageFetcher) FetchPage(ctx context.Context, pageURL string) ([]map
 	var page graphPage
 	if err := json.Unmarshal(body, &page); err != nil {
 		return nil, "", fmt.Errorf("logpipeline: decode page %s: %w", pageURL, err)
+	}
+	if page.Value == nil {
+		return nil, "", errors.New("logpipeline: Graph page is missing a non-null value array")
 	}
 	return page.Value, page.NextLink, nil
 }

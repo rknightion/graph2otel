@@ -1,0 +1,7 @@
+{
+  "fixture": "Synthetic, docs-derived from pstnCallLogRow and the Teams PSTN usage report. Repeated IDs are deliberate.",
+  "first": [{"id":"fixture-shared-id","callId":"fixture-call-a","conferenceId":"fixture-conference","userId":"fixture-user-id","userPrincipalName":"fixture-upn","userDisplayName":"Fixture user","startDateTime":"{{first}}","endDateTime":"{{end}}","duration":90,"callType":"user_in","callerNumber":"+000***","calleeNumber":"+001***","charge":0,"currency":"USD","destinationName":"Fixture region","destinationContext":"domestic","operator":"Microsoft","licenseCapability":"MCOPSTN1","inventoryType":"Subscriber"}],
+  "second": [{"id":"fixture-shared-id","callId":"fixture-call-b","startDateTime":"{{first}}","duration":30,"callType":"user_out","operator":"fixture-carrier","connectivityType":"OperatorConnect"}],
+  "late": [{"id":"fixture-late-id","callId":"fixture-call-c","startDateTime":"{{late}}","duration":60,"callType":"user_in","operator":"Microsoft"}],
+  "outside": [{"id":"fixture-too-old","startDateTime":"{{old}}","duration":600,"callType":"user_in"}]
+}

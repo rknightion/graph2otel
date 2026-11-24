@@ -1,0 +1,7 @@
+{
+  "fixture": "Synthetic, docs-derived from directRoutingLogRow; reserved trunk domains and non-dialable masked numbers.",
+  "answered": {"id":"fixture-answered","correlationId":"fixture-correlation","userId":"fixture-user-id","userPrincipalName":"fixture-upn","userDisplayName":"Fixture user","startDateTime":"{{start}}","inviteDateTime":"{{start}}","endDateTime":"{{end}}","failureDateTime":"0001-01-01T00:00:00Z","duration":30,"callType":"ByotIn","callerNumber":"+000***","calleeNumber":"+001***","successfulCall":true,"finalSipCode":200,"callEndSubReason":0,"finalSipCodePhrase":"Fixture answer","trunkFullyQualifiedDomainName":"SBC.EXAMPLE.INVALID.","mediaBypassEnabled":false,"mediaPathLocation":"fixture-media","signalingLocation":"fixture-signaling"},
+  "busy": {"id":"fixture-busy","startDateTime":"{{start}}","inviteDateTime":"{{start}}","failureDateTime":"{{end}}","successfulCall":false,"finalSipCode":486,"callEndSubReason":486001,"finalSipCodePhrase":"Busy Here","trunkFullyQualifiedDomainName":"sbc.example.invalid"},
+  "failed": {"id":"fixture-failed","startDateTime":"{{start}}","inviteDateTime":"{{start}}","failureDateTime":"{{end}}","successfulCall":false,"finalSipCode":503,"callEndSubReason":503001,"finalSipCodePhrase":"Service Unavailable","trunkFullyQualifiedDomainName":"sbc.example.invalid"},
+  "late": {"id":"fixture-late","startDateTime":"{{late}}","failureDateTime":"{{late}}","successfulCall":false,"finalSipCode":503,"trunkFullyQualifiedDomainName":"sbc.example.invalid"}
+}

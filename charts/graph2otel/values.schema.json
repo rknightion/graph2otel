@@ -177,7 +177,9 @@
                 "purview.ediscovery_case_health",
                 "purview.ediscovery_cases",
                 "purview.retention_labels",
-                "purview.sensitivity_labels"
+                "purview.sensitivity_labels",
+                "teams.direct_routing_calls",
+                "teams.pstn_calls"
             ]
         },
         "collectorOverride": {

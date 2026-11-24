@@ -1,0 +1,53 @@
+{
+  "Metrics": [
+    {
+      "Name": "teams.direct_routing.calls",
+      "Unit": "{call}",
+      "Kind": "sum",
+      "Description": "New Teams Direct Routing attempts",
+      "AttrKeys": [
+        "outcome",
+        "sip_class",
+        "trunk_fqdn"
+      ]
+    },
+    {
+      "Name": "teams.direct_routing.network_effectiveness_ratio",
+      "Unit": "1",
+      "Kind": "gauge",
+      "Description": "Fraction of new Teams Direct Routing attempts that answered or reached a busy user, in the latest successful poll",
+      "AttrKeys": [
+        "trunk_fqdn"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "teams.direct_routing_call",
+      "AttrKeys": [
+        "call_end_sub_reason",
+        "call_type",
+        "callee_number",
+        "caller_number",
+        "correlation_id",
+        "duration_seconds",
+        "end_time",
+        "failure_time",
+        "final_sip_code",
+        "final_sip_code_phrase",
+        "id",
+        "ingest_transport",
+        "invite_time",
+        "media_bypass_enabled",
+        "media_path_location",
+        "signaling_location",
+        "start_time",
+        "successful_call",
+        "trunk_fqdn",
+        "user_display_name",
+        "user_id",
+        "user_principal_name"
+      ]
+    }
+  ]
+}

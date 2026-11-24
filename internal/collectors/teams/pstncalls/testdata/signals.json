@@ -1,0 +1,49 @@
+{
+  "Metrics": [
+    {
+      "Name": "teams.pstn.calls",
+      "Unit": "{call}",
+      "Kind": "sum",
+      "Description": "New Teams PSTN calls",
+      "AttrKeys": [
+        "call_type",
+        "connectivity_type"
+      ]
+    },
+    {
+      "Name": "teams.pstn.minutes",
+      "Unit": "min",
+      "Kind": "sum",
+      "Description": "Connected minutes of new Teams PSTN calls",
+      "AttrKeys": []
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "teams.pstn_call",
+      "AttrKeys": [
+        "call_id",
+        "call_type",
+        "callee_number",
+        "caller_number",
+        "charge",
+        "conference_id",
+        "connectivity_type",
+        "currency",
+        "destination_context",
+        "destination_name",
+        "duration_seconds",
+        "end_time",
+        "id",
+        "ingest_transport",
+        "inventory_type",
+        "license_capability",
+        "operator",
+        "start_time",
+        "user_display_name",
+        "user_id",
+        "user_principal_name"
+      ]
+    }
+  ]
+}

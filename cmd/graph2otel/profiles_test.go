@@ -39,7 +39,7 @@ tenants:
       entra.users: {enabled: false}
 `)
 	source := setupProfileTestTenant(t, cfg)
-	want := []string{"entra.domains", "entra.organization", "m365.collaboration_activity", "m365.servicehealth", "m365.teams"}
+	want := []string{"entra.domains", "entra.organization", "m365.collaboration_activity", "m365.servicehealth", "m365.teams", "teams.direct_routing_calls", "teams.pstn_calls"}
 	if got := profileTestRegistryNames(source); !slices.Equal(got, want) {
 		t.Errorf("registered collectors = %v, want %v", got, want)
 	}
@@ -66,7 +66,7 @@ tenants:
 		t.Run(tc.name, func(t *testing.T) {
 			scopes := []string{
 				"Domain.Read.All", "Organization.Read.All", "Reports.Read.All", "ServiceHealth.Read.All",
-				"Team.ReadBasic.All", "TeamSettings.Read.All", "Channel.ReadBasic.All",
+				"Team.ReadBasic.All", "TeamSettings.Read.All", "Channel.ReadBasic.All", "CallRecords.Read.All",
 			}
 			if tc.role != "" {
 				scopes = append(scopes, tc.role)
@@ -141,7 +141,7 @@ tenants:
 	if len(cfg.Tenants) != 2 || cfg.Tenants[0].ClientID != "00000000-0000-0000-0000-000000000002" {
 		t.Fatalf("indexed env replaced unrelated YAML tenant configuration: %+v", cfg.Tenants)
 	}
-	want := []string{"m365.collaboration_activity", "m365.servicehealth", "m365.teams"}
+	want := []string{"m365.collaboration_activity", "m365.servicehealth", "m365.teams", "teams.direct_routing_calls", "teams.pstn_calls"}
 	if got := profileTestRegistryNames(setupProfileTestTenant(t, cfg)); !slices.Equal(got, want) {
 		t.Errorf("registered collectors = %v, want %v", got, want)
 	}
