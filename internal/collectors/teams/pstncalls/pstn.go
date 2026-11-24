@@ -14,6 +14,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/collectors/teams/phonewindow"
 	"github.com/rknightion/graph2otel/internal/recordoutcome"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
@@ -21,13 +22,13 @@ import (
 const name = "teams.pstn_calls"
 
 var fields = map[string]string{
-	"id": "id", "callId": "call_id", "conferenceId": "conference_id", "userId": "user_id",
-	"userPrincipalName": "user_principal_name", "userDisplayName": "user_display_name",
-	"callType": "call_type", "callerNumber": "caller_number", "calleeNumber": "callee_number",
-	"startDateTime": "start_time", "endDateTime": "end_time", "duration": "duration_seconds",
-	"charge": "charge", "currency": "currency", "destinationName": "destination_name",
-	"destinationContext": "destination_context", "operator": "operator", "licenseCapability": "license_capability",
-	"inventoryType": "inventory_type", "connectivityType": "connectivity_type",
+	"id": semconv.AttrId, "callId": semconv.AttrCallId, "conferenceId": semconv.AttrConferenceId, "userId": semconv.AttrUserId,
+	"userPrincipalName": semconv.AttrUserPrincipalName, "userDisplayName": semconv.AttrUserDisplayName,
+	"callType": semconv.AttrCallType, "callerNumber": semconv.AttrCallerNumber, "calleeNumber": semconv.AttrCalleeNumber,
+	"startDateTime": semconv.AttrStartTime, "endDateTime": semconv.AttrEndTime, "duration": semconv.AttrDurationSeconds,
+	"charge": semconv.AttrCharge, "currency": semconv.AttrCurrency, "destinationName": semconv.AttrDestinationName,
+	"destinationContext": semconv.AttrDestinationContext, "operator": semconv.AttrOperator, "licenseCapability": semconv.AttrLicenseCapability,
+	"inventoryType": semconv.AttrInventoryType, "connectivityType": semconv.AttrConnectivityType,
 }
 
 // The PSTN usage report documents these call types. Unknown values keep their
@@ -54,13 +55,13 @@ func init() {
 
 func mapRow(row map[string]any) (string, telemetry.Event) {
 	attrs := phonewindow.Fields(row, fields)
-	if _, present := attrs["connectivity_type"]; !present {
-		attrs["connectivity_type"] = connectivity(attrs)
+	if _, present := attrs[semconv.AttrConnectivityType]; !present {
+		attrs[semconv.AttrConnectivityType] = connectivity(attrs)
 	}
 	ev := telemetry.Event{Name: "teams.pstn_call", Body: "Teams PSTN call", Attrs: attrs}
-	id, _ := attrs["id"].(string)
-	callID, _ := attrs["call_id"].(string)
-	start, _ := attrs["start_time"].(string)
+	id, _ := attrs[semconv.AttrId].(string)
+	callID, _ := attrs[semconv.AttrCallId].(string)
+	start, _ := attrs[semconv.AttrStartTime].(string)
 	ts, err := time.Parse(time.RFC3339Nano, start)
 	if err != nil || (id == "" && callID == "") {
 		return "", ev
@@ -80,14 +81,14 @@ func (c *poller) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 	var seconds float64
 	var hasDuration bool
 	observer := phonewindow.EventEmitter{Emitter: e, OnEvent: func(ev telemetry.Event) {
-		callType, _ := ev.Attrs["call_type"].(string)
+		callType, _ := ev.Attrs[semconv.AttrCallType].(string)
 		callType = strings.ToLower(strings.TrimSpace(callType))
 		if !callTypes.Has(callType) {
-			wirecheck.Shared(name).Value(e, "call_type", callType, callTypes)
+			wirecheck.Shared(name).Value(e, semconv.AttrCallType, callType, callTypes)
 			callType = "unknown"
 		}
 		counts[dimensions{callType, connectivity(ev.Attrs)}]++
-		if n, ok := ev.Attrs["duration_seconds"].(float64); ok && n >= 0 {
+		if n, ok := ev.Attrs[semconv.AttrDurationSeconds].(float64); ok && n >= 0 {
 			seconds += n
 			hasDuration = true
 		}
@@ -98,7 +99,7 @@ func (c *poller) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 	}
 	for key, count := range counts {
 		e.Counter("teams.pstn.calls", "{call}", "New Teams PSTN calls", count,
-			telemetry.Attrs{"call_type": key.callType, "connectivity_type": key.connectivity})
+			telemetry.Attrs{semconv.AttrCallType: key.callType, semconv.AttrConnectivityType: key.connectivity})
 	}
 	if hasDuration {
 		e.Counter("teams.pstn.minutes", "min", "Connected minutes of new Teams PSTN calls", seconds/60, nil)
@@ -107,7 +108,7 @@ func (c *poller) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 }
 
 func connectivity(attrs telemetry.Attrs) string {
-	raw, _ := attrs["connectivity_type"].(string)
+	raw, _ := attrs[semconv.AttrConnectivityType].(string)
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "callingplan", "calling plan", "calling_plan":
 		return "calling_plan"
@@ -117,7 +118,7 @@ func connectivity(attrs telemetry.Attrs) string {
 		// v1.0 does not document a connectivityType property. The PSTN
 		// report documents Microsoft as the Calling Plan operator and
 		// carrier names for Operator Connect. Never label by carrier name.
-		operator, _ := attrs["operator"].(string)
+		operator, _ := attrs[semconv.AttrOperator].(string)
 		if operator = strings.TrimSpace(operator); operator != "" {
 			if strings.EqualFold(operator, "microsoft") {
 				return "calling_plan"

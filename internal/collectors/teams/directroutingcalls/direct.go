@@ -28,14 +28,14 @@ const (
 var (
 	fqdn   = regexp.MustCompile(`^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?)$`)
 	fields = map[string]string{
-		"id": "id", "correlationId": "correlation_id", "userId": "user_id",
-		"userPrincipalName": "user_principal_name", "userDisplayName": "user_display_name",
-		"callType": "call_type", "callerNumber": "caller_number", "calleeNumber": "callee_number",
-		"startDateTime": "start_time", "inviteDateTime": "invite_time", "endDateTime": "end_time",
-		"failureDateTime": "failure_time", "duration": "duration_seconds", "successfulCall": "successful_call",
-		"finalSipCode": "final_sip_code", "callEndSubReason": "call_end_sub_reason", "finalSipCodePhrase": "final_sip_code_phrase",
-		"trunkFullyQualifiedDomainName": "trunk_fqdn", "mediaBypassEnabled": "media_bypass_enabled",
-		"mediaPathLocation": "media_path_location", "signalingLocation": "signaling_location",
+		"id": semconv.AttrId, "correlationId": semconv.AttrCorrelationId, "userId": semconv.AttrUserId,
+		"userPrincipalName": semconv.AttrUserPrincipalName, "userDisplayName": semconv.AttrUserDisplayName,
+		"callType": semconv.AttrCallType, "callerNumber": semconv.AttrCallerNumber, "calleeNumber": semconv.AttrCalleeNumber,
+		"startDateTime": semconv.AttrStartTime, "inviteDateTime": semconv.AttrInviteTime, "endDateTime": semconv.AttrEndTime,
+		"failureDateTime": semconv.AttrFailureTime, "duration": semconv.AttrDurationSeconds, "successfulCall": semconv.AttrSuccessfulCall,
+		"finalSipCode": semconv.AttrFinalSIPCode, "callEndSubReason": semconv.AttrCallEndSubReason, "finalSipCodePhrase": semconv.AttrFinalSIPCodePhrase,
+		"trunkFullyQualifiedDomainName": semconv.AttrTrunkFQDN, "mediaBypassEnabled": semconv.AttrMediaBypassEnabled,
+		"mediaPathLocation": semconv.AttrMediaPathLocation, "signalingLocation": semconv.AttrSignalingLocation,
 	}
 )
 
@@ -61,7 +61,7 @@ func init() {
 
 func mapRow(row map[string]any) (string, telemetry.Event) {
 	attrs := phonewindow.Fields(row, fields)
-	id, _ := attrs["id"].(string)
+	id, _ := attrs[semconv.AttrId].(string)
 	return id, telemetry.Event{Name: "teams.direct_routing_call", Body: "Teams Direct Routing call", Attrs: attrs}
 }
 
@@ -73,7 +73,7 @@ func (c *poller) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 	counts := make(map[dimensions]float64)
 	ratios := make(map[string]effectiveness)
 	observer := phonewindow.EventEmitter{Emitter: e, OnEvent: func(ev telemetry.Event) {
-		rawTrunk, _ := ev.Attrs["trunk_fqdn"].(string)
+		rawTrunk, _ := ev.Attrs[semconv.AttrTrunkFQDN].(string)
 		trunk := c.trunkLabel(rawTrunk)
 		outcome, sipClass := classify(ev.Attrs)
 		counts[dimensions{trunk, outcome, sipClass}]++
@@ -90,11 +90,11 @@ func (c *poller) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 	}
 	for key, count := range counts {
 		e.Counter("teams.direct_routing.calls", "{call}", "New Teams Direct Routing attempts", count,
-			telemetry.Attrs{"trunk_fqdn": key.trunk, "outcome": key.outcome, "sip_class": key.sipClass})
+			telemetry.Attrs{semconv.AttrTrunkFQDN: key.trunk, semconv.AttrOutcome: key.outcome, semconv.AttrSIPClass: key.sipClass})
 	}
 	points := make([]telemetry.GaugePoint, 0, len(ratios))
 	for trunk, ratio := range ratios {
-		points = append(points, telemetry.GaugePoint{Value: ratio.effective / ratio.attempts, Attrs: telemetry.Attrs{"trunk_fqdn": trunk}})
+		points = append(points, telemetry.GaugePoint{Value: ratio.effective / ratio.attempts, Attrs: telemetry.Attrs{semconv.AttrTrunkFQDN: trunk}})
 	}
 	e.GaugeSnapshot("teams.direct_routing.network_effectiveness_ratio", semconv.UnitDimensionless,
 		"Fraction of new Teams Direct Routing attempts that answered or reached a busy user, in the latest successful poll", points)
@@ -116,12 +116,12 @@ func (c *poller) trunkLabel(raw string) string {
 }
 
 func classify(attrs telemetry.Attrs) (outcome, sipClass string) {
-	code, _ := attrs["final_sip_code"].(float64)
+	code, _ := attrs[semconv.AttrFinalSIPCode].(float64)
 	sipClass = "unknown"
 	if code >= 100 && code <= 699 && float64(int(code)) == code {
 		sipClass = strconv.Itoa(int(code)/100) + "xx"
 	}
-	success, hasSuccess := attrs["successful_call"].(bool)
+	success, hasSuccess := attrs[semconv.AttrSuccessfulCall].(bool)
 	switch {
 	case success:
 		outcome = "answered"

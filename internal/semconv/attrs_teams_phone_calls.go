@@ -1,0 +1,30 @@
+package semconv
+
+// Attribute keys for Teams PSTN and Direct Routing records and aggregates.
+const (
+	AttrCallEndSubReason   = "call_end_sub_reason"
+	AttrCallId             = "call_id"
+	AttrCallType           = "call_type"
+	AttrCalleeNumber       = "callee_number"
+	AttrCallerNumber       = "caller_number"
+	AttrCharge             = "charge"
+	AttrConferenceId       = "conference_id"
+	AttrCurrency           = "currency"
+	AttrDestinationContext = "destination_context"
+	AttrDestinationName    = "destination_name"
+	AttrDurationSeconds    = "duration_seconds"
+	AttrFailureTime        = "failure_time"
+	AttrFinalSIPCode       = "final_sip_code"
+	AttrFinalSIPCodePhrase = "final_sip_code_phrase"
+	AttrInventoryType      = "inventory_type"
+	AttrInviteTime         = "invite_time"
+	AttrLicenseCapability  = "license_capability"
+	AttrMediaBypassEnabled = "media_bypass_enabled"
+	AttrMediaPathLocation  = "media_path_location"
+	AttrOperator           = "operator"
+	AttrOutcome            = "outcome"
+	AttrSignalingLocation  = "signaling_location"
+	AttrSIPClass           = "sip_class"
+	AttrSuccessfulCall     = "successful_call"
+	AttrTrunkFQDN          = "trunk_fqdn"
+)
