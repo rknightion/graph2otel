@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -85,6 +86,77 @@ func TestGraphPageFetcherDecodesValueAndNextLink(t *testing.T) {
 	}
 	if next != "https://graph.microsoft.com/v1.0/auditLogs/signIns?$skiptoken=abc" {
 		t.Fatalf("nextLink = %q", next)
+	}
+}
+
+func TestUnorderedCollectorRequiresValueArrayOnContinuation(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		wantError  bool
+	}{
+		{"missing value", `{}`, true},
+		{"null value", `{"value":null}`, true},
+		{"empty array", `{"value":[]}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			const (
+				tenant = "test-tenant"
+				path   = "/auditLogs/signIns"
+				next   = "https://graph.microsoft.com/v1.0/auditLogs/signIns?$skiptoken=fixture"
+			)
+			to := time.Now().UTC().Truncate(time.Second)
+			from := to.Add(-2 * time.Hour)
+			prefix, err := json.Marshal(graphPage{
+				Value:    []map[string]any{{"id": "prefix", "createdDateTime": from.Add(time.Hour).Format(time.RFC3339)}},
+				NextLink: next,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			previousTransport := http.DefaultTransport
+			http.DefaultTransport = graphAdapterRoundTripperFunc(func(req *http.Request) (*http.Response, error) {
+				var body string
+				switch {
+				case req.URL.String() == next:
+					body = tc.body
+				case req.URL.Host == "graph.microsoft.com" && req.URL.Path == "/v1.0"+path:
+					body = string(prefix)
+				default:
+					return nil, fmt.Errorf("unexpected test request %s", req.URL)
+				}
+				return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: req}, nil
+			})
+			t.Cleanup(func() { http.DefaultTransport = previousTransport })
+			client, err := graphclient.NewClient(t.Context(), &auth.TenantAuth{TenantID: tenant, Cred: fakeCredential{}}, graphclient.Options{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			store := checkpoint.NewStore(t.TempDir())
+			original, err := store.Load(tenant, path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			original.Watermark = from
+			if err := store.Save(original); err != nil {
+				t.Fatal(err)
+			}
+			c := NewLogCollector("test.window", time.Minute, 0, tenant, EndpointConfig{
+				Path: path, TimeField: "createdDateTime", Map: mapByID,
+			}, NewGraphPageFetcher(client), store)
+			rec := telemetrytest.New()
+			hw, collectErr := c.CollectWindow(t.Context(), from, to, rec.Emitter(), nil)
+			persisted, err := store.Load(tenant, path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantError {
+				if collectErr == nil || !hw.Equal(from) || !reflect.DeepEqual(persisted, original) || len(rec.LogRecords()) != 0 {
+					t.Fatalf("incomplete page committed: err=%v hw=%s checkpoint=%+v logs=%d", collectErr, hw, persisted, len(rec.LogRecords()))
+				}
+			} else if collectErr != nil || !persisted.Watermark.After(from) || !persisted.SeenIDs.Has("prefix") || len(rec.LogRecords()) != 1 {
+				t.Fatalf("empty terminal array did not complete: err=%v checkpoint=%+v logs=%d", collectErr, persisted, len(rec.LogRecords()))
+			}
+		})
 	}
 }
 
