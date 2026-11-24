@@ -5,7 +5,7 @@
 // telemetry — instead of a human opening the admin portal outside the alerting
 // path.
 //
-// Both shapes come from ONE request: healthOverviews?$expand=issues folds the
+// The snapshot signals come from one request: healthOverviews?$expand=issues folds the
 // service list and the issue list into a single response (live-verified
 // 2026-07-18, #119 — 29 services + their issues, no paging). From it:
 //
@@ -28,7 +28,9 @@
 //
 // No delta query and no time filter exist on either collection, so this is a
 // snapshot read, not a WindowCollector; endDateTime is null on unresolved issues,
-// so no duration is ever computed from it.
+// so no duration is ever computed from it. In the Teams profile the same
+// expanded snapshot confirms closures of Teams issues previously seen open.
+// See lifecycle.go for the resolution contract.
 //
 // # Service-health timeline posts (#367)
 //
@@ -165,12 +167,16 @@ type issue struct {
 	FeatureGroup         string `json:"featureGroup"`
 	Origin               string `json:"origin"`
 	ImpactDescription    string `json:"impactDescription"`
-	IsResolved           bool   `json:"isResolved"`
+	IsResolved           *bool  `json:"isResolved"`
 	StartDateTime        string `json:"startDateTime"`
 	EndDateTime          string `json:"endDateTime"`
 	LastModifiedDateTime string `json:"lastModifiedDateTime"`
 	Posts                []post `json:"posts"`
 }
+
+// resolved preserves the legacy snapshot treatment of a missing isResolved.
+// Lifecycle tracking separately requires an explicit false to establish an open.
+func (i issue) resolved() bool { return i.IsResolved != nil && *i.IsResolved }
 
 // post is one serviceHealthIssuePost carried inline on an issue's posts
 // array. It has NO id of its own — exactly three keys are observed on the
@@ -195,12 +201,13 @@ type postDescription struct {
 
 // Collector polls the service-announcement health surface.
 type Collector struct {
-	g        collectors.GraphClient
-	baseURL  string
-	logger   *slog.Logger
-	store    *checkpoint.Store
-	tenantID string
-	// now is the priming fallback clock (see primePosts), overridable in tests.
+	g              collectors.GraphClient
+	baseURL        string
+	logger         *slog.Logger
+	store          *checkpoint.Store
+	tenantID       string
+	teamsLifecycle bool
+	// now is the priming fallback and lifecycle retention clock, overridable in tests.
 	now func() time.Time
 }
 
@@ -239,8 +246,8 @@ func (c *Collector) RequiredPermissions() []string {
 	return []string{"ServiceHealth.Read.All"}
 }
 
-// Collect fetches the one folded request and emits the three bounded gauges plus
-// one log per unresolved issue.
+// Collect fetches the expanded snapshot and emits the gauges, open issue
+// twins, new posts and (in the Teams profile) observed Teams closures.
 func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	raws, err := collectors.GetAllValuesRecorded(ctx, c.g, c.baseURL+overviewsPath, nil, outcomes)
 	if err != nil {
@@ -254,6 +261,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *
 	issuesByClassStatus := map[[2]string]int64{}
 	seenIssues := map[string]bool{}
 	var postCandidates []postCandidate
+	var teamsIssues []issue
 
 	for i, raw := range raws {
 		var ov overview
@@ -276,8 +284,11 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *
 			}
 			seenIssues[is.ID] = true
 			issuesByClassStatus[[2]string{is.Classification, is.Status}]++
-			if !is.IsResolved {
+			if !is.resolved() {
 				e.LogEvent(issueTwin(is))
+			}
+			if c.teamsLifecycle && is.IsResolved != nil && is.Service == teamsService && is.ID != "" {
+				teamsIssues = append(teamsIssues, is)
 			}
 			// Posts ride every issue regardless of resolution — a resolved
 			// issue can still gain a final post (e.g. a PIR publication) — so
@@ -310,17 +321,16 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *
 		})
 	}
 	e.GaugeSnapshot(metricIssuesTotal, "{issue}", "Count of M365 service-health issues by classification and status.", issuePoints)
+	if c.teamsLifecycle && c.store != nil && c.tenantID != "" {
+		return c.processTeamsLifecycle(e, outcomes, teamsIssues)
+	}
 	return nil
 }
 
-// issueTwin renders one unresolved service-health issue as an OTLP log record.
-//
-// Timestamp is left zero ("now", i.e. poll time), not startDateTime: this is a
-// snapshot twin re-emitted every cycle while the issue stays open, so stamping it
-// with the incident start would pile every repeat onto one instant. The start /
-// last-modified times are preserved as attributes. endDateTime is emitted only
-// when present (SetStr omits it) — null on an unresolved issue, and no duration is
-// derived from it.
+// issueTwin renders the shared service-health issue event. For an open issue
+// Timestamp is left zero (poll time): stamping a repeated snapshot with its
+// start would pile all repeats onto one instant. resolutionTwin sets the actual
+// end as its event time. Source timestamps are also preserved as attributes.
 func issueTwin(is issue) telemetry.Event {
 	attrs := telemetry.Attrs{}
 	telemetry.SetStr(attrs, semconv.AttrId, is.ID)
@@ -335,7 +345,7 @@ func issueTwin(is issue) telemetry.Event {
 	telemetry.SetStr(attrs, semconv.AttrStartDateTime, is.StartDateTime)
 	telemetry.SetStr(attrs, semconv.AttrEndDateTime, is.EndDateTime)
 	telemetry.SetStr(attrs, semconv.AttrLastModifiedDateTime, is.LastModifiedDateTime)
-	telemetry.SetBool(attrs, semconv.AttrIsResolved, is.IsResolved)
+	telemetry.SetBool(attrs, semconv.AttrIsResolved, is.resolved())
 
 	return telemetry.Event{
 		Name:     eventIssue,
@@ -358,7 +368,9 @@ func severityFor(is issue) telemetry.Severity {
 
 func init() {
 	collectors.Register(func(d collectors.Deps) collector.SnapshotCollector {
-		return New(d.Graph, d.Store, d.TenantID, d.Logger)
+		c := New(d.Graph, d.Store, d.TenantID, d.Logger)
+		c.teamsLifecycle = d.Profiles&collector.ProfileTeams != 0
+		return c
 	})
 }
 
@@ -544,6 +556,17 @@ func (c *Collector) emitNewPosts(e telemetry.Emitter, outcomes *recordoutcome.Re
 func postTwin(issueID string, p post, t time.Time) telemetry.Event {
 	attrs := telemetry.Attrs{}
 	telemetry.SetStr(attrs, semconv.AttrIssueId, issueID)
+	addPostContent(attrs, p)
+	return telemetry.Event{
+		Name:      eventPost,
+		Body:      fmt.Sprintf("Service-health post on issue %s (%s)", issueID, p.PostType),
+		Severity:  telemetry.SeverityInfo,
+		Timestamp: t,
+		Attrs:     attrs,
+	}
+}
+
+func addPostContent(attrs telemetry.Attrs, p post) {
 	telemetry.SetStr(attrs, semconv.AttrPostType, p.PostType)
 	telemetry.SetStr(attrs, semconv.AttrContentType, p.Description.ContentType)
 
@@ -557,14 +580,6 @@ func postTwin(issueID string, p post, t time.Time) telemetry.Event {
 	telemetry.SetBool(attrs, semconv.AttrBodyTruncated, truncated)
 	if truncated {
 		attrs[semconv.AttrDescriptionOriginalLength] = float64(originalLen)
-	}
-
-	return telemetry.Event{
-		Name:      eventPost,
-		Body:      fmt.Sprintf("Service-health post on issue %s (%s)", issueID, p.PostType),
-		Severity:  telemetry.SeverityInfo,
-		Timestamp: t,
-		Attrs:     attrs,
 	}
 }
 

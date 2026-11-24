@@ -70,6 +70,17 @@ type Checkpoint struct {
 	// as InFlight. It is deliberately NOT evicted with SeenIDs: it must survive
 	// however long a pipeline stays silent.
 	ParseHealth *ParseHealth `json:"parse_health,omitempty"`
+	// TeamsServiceHealth remembers only Teams issues previously seen open.
+	// The service-health collector owns expiry and the entry limit.
+	TeamsServiceHealth map[string]ServiceHealthIssueState `json:"teams_service_health,omitempty"`
+}
+
+// ServiceHealthIssueState records a previously observed open issue. Resolved
+// keeps a stale open snapshot from re-arming an already reported closure.
+type ServiceHealthIssueState struct {
+	LastSeen  time.Time `json:"last_seen"`
+	StartTime time.Time `json:"start_time,omitzero"`
+	Resolved  bool      `json:"resolved,omitempty"`
 }
 
 // ParseHealth carries the mdca.discovery_parse collector's parse-health cursor

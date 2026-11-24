@@ -33,7 +33,12 @@
     {
       "EventName": "m365.service_health_issue",
       "AttrKeys": [
+        "body_truncated",
         "classification",
+        "content_type",
+        "created_date_time",
+        "description",
+        "end_date_time",
         "feature",
         "feature_group",
         "id",
@@ -41,6 +46,7 @@
         "is_resolved",
         "last_modified_date_time",
         "origin",
+        "post_type",
         "service",
         "start_date_time",
         "status",

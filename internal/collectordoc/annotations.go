@@ -743,7 +743,7 @@ var annotations = map[string]Annotation{
 		Source:   "`/teams`, `/teams/{id}?$select=summary,isArchived`, `/beta/teams/{id}/installedApps`, `/beta/teams/{id}/channels`",
 	},
 	"m365.servicehealth": {
-		Collects: "M365 service health, so \"is this us or Microsoft?\" is answerable in-band. From ONE `?$expand=issues` fetch: service count by health status, a numeric status enum per service (mapping in `docs/signals.md`), open-issue count by classification+status, and a log twin (`m365.service_health_issue`) per UNRESOLVED issue carrying id/title/impactDescription/service/timestamps — resolved history is covered by the aggregate counts, not re-twinned every cycle. Snapshot, not a window collector (no delta/time filter); `endDateTime` is null while open, so no duration is derived",
+		Collects: "M365 service health, so \"is this us or Microsoft?\" is answerable in-band. One expanded snapshot returns service counts by health status, a numeric status per service, issue counts by classification and status, and an `m365.service_health_issue` log twin for each open issue. In the Teams profile the same event with `is_resolved=true` records a checkpointed closure of a previously observed open issue, timestamped at `endDateTime` with the final post. The exact service label is `Microsoft Teams` (live-measured 2026-11-24, #666). Neither absence nor retained resolved history emits a closure",
 		Source:   "`/admin/serviceAnnouncement/healthOverviews?$expand=issues`",
 	},
 	"m365.servicemessages": {

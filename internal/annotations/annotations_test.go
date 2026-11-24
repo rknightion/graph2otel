@@ -498,6 +498,31 @@ func TestServiceHealthIssueOpenAndResolvedAreTwoMarkers(t *testing.T) {
 	}
 }
 
+func TestTeamsServiceHealthResolutionAnnotatesFirstRunAtEndTime(t *testing.T) {
+	rec, sink := newTestRecorder(t, testConfig(), t.TempDir())
+	ev := serviceHealth("teams-example", true)
+	ev.Attrs["service"] = "Microsoft Teams"
+	ev.Attrs["title"] = "Example interruption"
+	ev.Attrs["end_date_time"] = fixedNow.Add(-time.Hour).Format(time.RFC3339)
+	ev.Attrs["description"] = "POST-BODY-MUST-STAY-IN-LOKI"
+	ev.Timestamp = fixedNow.Add(-time.Hour)
+	rec.ObserveEvent(rec.BeginRun(testTenant, "m365.servicehealth"), ev)
+	got := sink.all()
+	if len(got) != 1 {
+		t.Fatalf("published %d markers, want 1 on the first run", len(got))
+	}
+	if got[0].RuleID != "m365.service_health_issue_resolved" || !got[0].Time.Equal(ev.Timestamp) {
+		t.Errorf("marker rule/time = %q/%v, want resolution at %v", got[0].RuleID, got[0].Time, ev.Timestamp)
+	}
+	if !strings.Contains(got[0].Text, ev.Attrs["end_date_time"].(string)) || strings.Contains(got[0].Text, "POST-BODY-MUST-STAY-IN-LOKI") {
+		t.Errorf("annotation should include end time, not the raw post: %q", got[0].Text)
+	}
+	rec.ObserveEvent(rec.BeginRun(testTenant, "m365.servicehealth"), ev)
+	if got := sink.all(); len(got) != 1 {
+		t.Errorf("repeated resolution published another marker: %+v", got)
+	}
+}
+
 // TestOnlyAllowListedAttributesReachTheAnnotationText is the content guard: a
 // field added to a source record later must not silently ride out to Grafana.
 func TestOnlyAllowListedAttributesReachTheAnnotationText(t *testing.T) {
