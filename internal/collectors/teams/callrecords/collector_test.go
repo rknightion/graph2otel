@@ -223,7 +223,7 @@ func TestRetryLateAndOpaquePages(t *testing.T) {
 		peopleNext  = absolutePath + "/late/participants_v2?$skiptoken=P%2Bm%3D"
 	)
 	phase := "anchor"
-	var retryGets, completedGets int
+	var retryGets, completedGets, suffixGets int
 	d := syntheticDetail(t, "late", 2, start) // the list is still advertising v1
 	d["sessions"+"@odata.nextLink"] = sessionNext
 	g := fakeGraph(func(address, prefer string) ([]byte, error) {
@@ -232,7 +232,7 @@ func TestRetryLateAndOpaquePages(t *testing.T) {
 			if prefer != "odata.maxpagesize=60" {
 				t.Fatal("list continuation lost page-size header")
 			}
-			return collection(t, "", listEntry("late", 1, start)), nil
+			return collection(t, "", listEntry("late", 1, start), listEntry("suffix", 1, start.Add(time.Minute))), nil
 		case absolutePath + "/late?$expand=sessions($expand=segments)":
 			retryGets++
 			return encoded(t, d), nil
@@ -250,8 +250,11 @@ func TestRetryLateAndOpaquePages(t *testing.T) {
 		case absolutePath + "/first?$expand=sessions($expand=segments)":
 			completedGets++
 			return encoded(t, syntheticDetail(t, "first", 1, start.Add(-time.Minute))), nil
-		case absolutePath + "/first/participants_v2":
+		case absolutePath + "/first/participants_v2", absolutePath + "/suffix/participants_v2":
 			return collection(t, ""), nil
+		case absolutePath + "/suffix?$expand=sessions($expand=segments)":
+			suffixGets++
+			return encoded(t, syntheticDetail(t, "suffix", 1, start.Add(time.Minute))), nil
 		default:
 			filter := assertList(t, address, prefer)
 			if phase == "anchor" {
@@ -278,13 +281,17 @@ func TestRetryLateAndOpaquePages(t *testing.T) {
 		t.Fatal(err)
 	}
 	phase = "failure"
-	hw, err := c.CollectWindow(t.Context(), anchor, now.Add(5*time.Minute), rec.Emitter(), nil)
+	outcomes := recordoutcome.NewRecorder()
+	hw, err := c.CollectWindow(t.Context(), anchor, now.Add(5*time.Minute), rec.Emitter(), outcomes)
 	if err == nil || !strings.Contains(err.Error(), "synthetic participants GET failure") || !hw.Equal(anchor) {
 		t.Fatalf("failed auxiliary GET moved watermark or disappeared: %v; %v", hw, err)
 	}
 	logs := rec.LogRecords()
-	if len(logs) != 3 || logs[0].Attrs["call_id"] != "first" {
-		t.Fatalf("only the fully hydrated first record may emit before failure, got %+v", logs)
+	if len(logs) != 6 || logs[0].Attrs["call_id"] != "first" || logs[3].Attrs["call_id"] != "suffix" {
+		t.Fatalf("fully hydrated calls on both sides of the failure must emit, got %+v", logs)
+	}
+	if got := outcomes.Snapshot(); got.Counts != (recordoutcome.Counts{Fetched: 3, Mapped: 2, Emitted: 2, Errored: 1}) || got.Validate() != nil {
+		t.Fatalf("prepare failure miscounted independent rows: %+v", got)
 	}
 	phase = "retry"
 	c = newC()
@@ -302,8 +309,8 @@ func TestRetryLateAndOpaquePages(t *testing.T) {
 	phase = "seen"
 	c = newC()
 	rec = telemetrytest.New()
-	if _, err := c.CollectWindow(t.Context(), hw, now.Add(10*time.Minute), rec.Emitter(), nil); err != nil || len(rec.LogRecords()) != 0 || retryGets != 2 || completedGets != 1 {
-		t.Fatalf("checkpoint did not remember authoritative version and completed prior item: detail late=%d first=%d logs=%d err=%v", retryGets, completedGets, len(rec.LogRecords()), err)
+	if _, err := c.CollectWindow(t.Context(), hw, now.Add(10*time.Minute), rec.Emitter(), nil); err != nil || len(rec.LogRecords()) != 0 || retryGets != 2 || completedGets != 1 || suffixGets != 1 {
+		t.Fatalf("checkpoint did not remember the authoritative version and completed independent calls: late=%d first=%d suffix=%d logs=%d err=%v", retryGets, completedGets, suffixGets, len(rec.LogRecords()), err)
 	}
 }
 

@@ -400,12 +400,25 @@ func Poll(
 			b, _ := recordTime(rawRecords[j], cfg.TimeField)
 			return a.Before(b)
 		})
+		var firstPrepareErr error
 		for i, rec := range rawRecords {
 			if err := ingestPrepared(ctx, cfg, &working, rec, e, outcomes); err != nil {
-				cp.SeenIDs = working.SeenIDs
-				failFetchedRecords(outcomes, uint64(len(rawRecords[i:])), fetchFailureCause(err))
-				return cp.Watermark, fmt.Errorf("logpipeline: %s: prepare row: %w", cfg.Path, err)
+				if firstPrepareErr == nil {
+					firstPrepareErr = err
+				}
+				cause := fetchFailureCause(err)
+				if ctx.Err() != nil {
+					failFetchedRecords(outcomes, uint64(len(rawRecords[i:])), cause)
+					break
+				}
+				failFetchedRecords(outcomes, 1, cause)
 			}
+		}
+		if firstPrepareErr != nil {
+			// Commit only the completed keys so one failed row is retried
+			// without blocking or replaying other calls in the window.
+			cp.SeenIDs = working.SeenIDs
+			return cp.Watermark, fmt.Errorf("logpipeline: %s: prepare row: %w", cfg.Path, firstPrepareErr)
 		}
 		// Retention can expire during an outage. If the whole scheduler slice
 		// is unavailable, skip straight to the edge of the available range.
