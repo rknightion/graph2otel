@@ -78,8 +78,9 @@ type Checkpoint struct {
 // ServiceHealthIssueState records a previously observed open issue. Resolved
 // keeps a stale open snapshot from re-arming an already reported closure.
 type ServiceHealthIssueState struct {
-	LastSeen time.Time `json:"last_seen"`
-	Resolved bool      `json:"resolved,omitempty"`
+	LastSeen  time.Time `json:"last_seen"`
+	StartTime time.Time `json:"start_time,omitzero"`
+	Resolved  bool      `json:"resolved,omitempty"`
 }
 
 // ParseHealth carries the mdca.discovery_parse collector's parse-health cursor

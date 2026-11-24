@@ -41,8 +41,12 @@ func (c *Collector) processTeamsLifecycle(e telemetry.Emitter, outcomes *recordo
 	previousLen := len(state)
 	now := c.now().UTC()
 	cutoff := now.Add(-teamsLifecycleRetention)
+	present := make(map[string]bool, len(issues))
+	for _, is := range issues {
+		present[is.ID] = true
+	}
 	for id, item := range state {
-		if item.LastSeen.Before(cutoff) {
+		if !present[id] && item.LastSeen.Before(cutoff) {
 			delete(state, id)
 		}
 	}
@@ -57,10 +61,13 @@ func (c *Collector) processTeamsLifecycle(e telemetry.Emitter, outcomes *recordo
 				skipped++
 				continue
 			}
+			if start, ok := parsePostTime(is.StartDateTime); !item.Resolved && ok && !start.IsZero() {
+				item.StartTime = start
+			}
 		case !tracked:
 			continue // cold-start history is neither emitted nor remembered
 		case !item.Resolved:
-			if event, ok := resolutionTwin(is, now); ok {
+			if event, ok := resolutionTwin(is, item.StartTime, now); ok {
 				e.LogEvent(event)
 				outcomes.Add(recordoutcome.OutcomeFetched, 1)
 				outcomes.Add(recordoutcome.OutcomeMapped, 1)
@@ -93,12 +100,20 @@ func (c *Collector) processTeamsLifecycle(e telemetry.Emitter, outcomes *recordo
 // issue event. Dashboards distinguish it by is_resolved=true, use the event
 // timestamp for the end marker, and join to starts by tenant and id. The post's
 // created_date_time describes the final update, not when the issue closed.
-func resolutionTwin(is issue, now time.Time) (telemetry.Event, bool) {
+func resolutionTwin(is issue, observedStart, now time.Time) (telemetry.Event, bool) {
 	end, ok := parsePostTime(is.EndDateTime)
 	if !ok || end.IsZero() || end.After(now) {
 		return telemetry.Event{}, false
 	}
-	if start, ok := parsePostTime(is.StartDateTime); ok && end.Before(start) {
+	start, ok := parsePostTime(is.StartDateTime)
+	if !ok || start.IsZero() {
+		start = observedStart
+		is.StartDateTime = ""
+		if !start.IsZero() {
+			is.StartDateTime = start.Format(time.RFC3339Nano)
+		}
+	}
+	if !start.IsZero() && end.Before(start) {
 		return telemetry.Event{}, false
 	}
 	ev := issueTwin(is)

@@ -140,6 +140,41 @@ func TestTeamsResolutionRequiresPositiveEvidence(t *testing.T) {
 	}
 }
 
+func TestTeamsResolutionKeepsPresentIssuesAfterLongOutage(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{overviewsURL: teamsOverview(openTeamsRow)}}
+	dir := t.TempDir()
+	before := newLifecycleCollector(t, collector.ProfileTeams, g, dir)
+	resolvedTwins(t, before)
+	// The exporter was down longer than the absent-ID expiry interval,
+	// but the issue ended recently and is still in the returned snapshot.
+	now := before.now().Add(8 * 24 * time.Hour)
+	end := now.Add(-time.Hour)
+	g.bodies[overviewsURL] = teamsOverview(strings.Replace(closedTeamsRow, "2026-11-24T13:04:53.0000002Z", end.Format(time.RFC3339Nano), 1))
+	after := newLifecycleCollector(t, collector.ProfileTeams, g, dir)
+	after.now = func() time.Time { return now }
+	got := resolvedTwins(t, after)
+	if len(got) != 1 || got[0].Attrs["id"] != "TEST-1" || !got[0].Timestamp.Equal(end) {
+		t.Fatalf("recent closure must survive downtime: %+v", got)
+	}
+}
+
+func TestTeamsResolutionChecksRememberedStartWhenClosingRowOmitsIt(t *testing.T) {
+	g := &fakeGraph{bodies: map[string]string{overviewsURL: teamsOverview(openTeamsRow)}}
+	dir := t.TempDir()
+	restart := func() *Collector { return newLifecycleCollector(t, collector.ProfileTeams, g, dir) }
+	resolvedTwins(t, restart())
+	withoutStart := strings.Replace(closedTeamsRow, `"startDateTime":"2026-11-24T09:00:00Z",`, "", 1)
+	badEnd := strings.Replace(withoutStart, "2026-11-24T13:04:53.0000002Z", "2026-11-24T08:30:00Z", 1)
+	g.bodies[overviewsURL] = teamsOverview(badEnd)
+	if got := resolvedTwins(t, restart()); len(got) != 0 {
+		t.Fatalf("end before remembered start must not emit a closure: %+v", got)
+	}
+	g.bodies[overviewsURL] = teamsOverview(withoutStart)
+	if got := resolvedTwins(t, restart()); len(got) != 1 || got[0].Attrs["start_date_time"] != "2026-11-24T09:00:00Z" {
+		t.Fatalf("valid correction must use remembered start and still emit: %+v", got)
+	}
+}
+
 func TestTeamsResolutionKeepsValidEndWithoutAnUsableFinalPost(t *testing.T) {
 	g := &fakeGraph{bodies: map[string]string{overviewsURL: teamsOverview(openTeamsRow)}}
 	dir := t.TempDir()
