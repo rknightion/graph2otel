@@ -180,7 +180,8 @@
                 "purview.sensitivity_labels",
                 "teams.call_records",
                 "teams.direct_routing_calls",
-                "teams.pstn_calls"
+                "teams.pstn_calls",
+                "teams.voice_apps"
             ]
         },
         "collectorOverride": {
@@ -452,6 +453,15 @@
                                         "type": "array",
                                         "items": {
                                             "type": "string"
+                                        }
+                                    },
+                                    "vaac": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "enabled": { "type": "boolean" },
+                                            "username_file": { "type": "string" },
+                                            "password_file": { "type": "string" }
                                         }
                                     }
                                 }

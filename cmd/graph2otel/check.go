@@ -333,10 +333,14 @@ func o365ManualPrerequisites(contentTypes []string) []string {
 // declaration rather than collector names, so a future EXO-backed window
 // collector inherits the same proof boundary automatically.
 func transportManualPrerequisites(c collector.Collector) []string {
-	if collector.TransportOf(c) != telemetry.TransportExchangeOnline {
+	switch collector.TransportOf(c) {
+	case telemetry.TransportExchangeOnline:
+		return []string{exchangeOnlineManualPrerequisite}
+	case telemetry.TransportVAAC:
+		return []string{"VAAC user sign-in and permission to access AA/CQ or CQD cannot be proven from a Graph token"}
+	default:
 		return nil
 	}
-	return []string{exchangeOnlineManualPrerequisite}
 }
 
 // preflightEXOClient is construction-only. A WindowFactory only needs a

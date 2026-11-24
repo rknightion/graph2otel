@@ -19,10 +19,10 @@ import (
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
-func TestCollectorOverrideInventoryHas172LogicalNamesAcrossAllSevenPaths(t *testing.T) {
+func TestCollectorOverrideInventoryHas174LogicalNamesAcrossAllSevenPaths(t *testing.T) {
 	known, _ := collectorOverrideInventory()
 
-	if got, want := len(known), 173; got != want {
+	if got, want := len(known), 174; got != want {
 		t.Fatalf("logical collector names = %d, want %d", got, want)
 	}
 	for path, name := range map[string]string{
@@ -436,7 +436,15 @@ func TestRunAndCheckValidateTenantTeamsConfigBeforeConstructors(t *testing.T) {
 			t.Fatal(err)
 		}
 		const otherTenant = "11111111-1111-1111-1111-111111111111"
-		path := writeTempConfig(t, base+fmt.Sprintf("    teams:\n      sites_file: %q\n      internal_domains: [example.com, '*.example.com']\n  - tenant_id: %s\n", csv, otherTenant))
+		path := writeTempConfig(t, base+fmt.Sprintf(`    teams:
+      sites_file: %q
+      internal_domains: [example.com, '*.example.com']
+      vaac:
+        enabled: true
+        username_file: /synthetic/no-such-username
+        password_file: /synthetic/no-such-password
+  - tenant_id: %s
+`, csv, otherTenant))
 		var stdout, stderr bytes.Buffer
 		code := run(context.Background(), []string{"-config", path}, &stdout, &stderr)
 		// Reaching the injected constructor proves the config was accepted; it
@@ -456,6 +464,9 @@ func TestRunAndCheckValidateTenantTeamsConfigBeforeConstructors(t *testing.T) {
 		}
 		if !domains.IsInternal("user@sub.example.com") {
 			t.Error("configured tenant's wildcard did not match")
+		}
+		if !receivedConfig.TenantVAAC("00000000-0000-0000-0000-000000000000").Enabled || receivedConfig.TenantVAAC(otherTenant).Enabled {
+			t.Fatal("VAAC opt-in was lost or inherited by an unconfigured tenant")
 		}
 		if file, domains := receivedConfig.TeamsSiteInputs(otherTenant); file != nil || domains.IsInternal("user@sub.example.com") {
 			t.Error("unconfigured tenant inherited another tenant's Teams enrichment")

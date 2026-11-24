@@ -47,11 +47,33 @@ func validateYAMLNode(node *yaml.Node, typ reflect.Type, path string) error {
 	case reflect.Struct:
 		isTeams := typ == reflect.TypeFor[TeamsConfig]()
 		isThresholds := typ == reflect.TypeFor[quality.Thresholds]()
+		if typ == reflect.TypeFor[VAACConfig]() {
+			// Do not let the weak typed decoder format a pasted credential in
+			// a shape error or coerce a string into an opt-in.
+			if node.Kind != yaml.MappingNode {
+				return fmt.Errorf("%s: expected a mapping", path)
+			}
+			for i := 0; i+1 < len(node.Content); i += 2 {
+				key, value := node.Content[i].Value, dereferenceAlias(node.Content[i+1])
+				switch key {
+				case "enabled":
+					if value.Kind != yaml.ScalarNode || value.Tag != "!!bool" {
+						return fmt.Errorf("%s.enabled: expected a boolean", path)
+					}
+				case "username_file", "password_file":
+					if value.Kind != yaml.ScalarNode || value.Tag != "!!str" {
+						return fmt.Errorf("%s.%s: expected a file path string", path, key)
+					}
+				default:
+					return fmt.Errorf("%s: unknown key; only enabled, username_file and password_file are accepted", path)
+				}
+			}
+		}
 		if node.Kind != yaml.MappingNode {
 			if isTeams || isThresholds || typ == reflect.TypeFor[TeamsQualityConfig]() {
 				return fmt.Errorf("%s: expected a mapping", path)
 			}
-			return nil // typed decode owns value-shape diagnostics
+			return nil // typed decode owns other value-shape diagnostics
 		}
 		fields := yamlStructFields(typ)
 		for i := 0; i+1 < len(node.Content); i += 2 {

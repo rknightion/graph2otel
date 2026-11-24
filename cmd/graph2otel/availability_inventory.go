@@ -350,8 +350,11 @@ func availabilityTransportConfigured(
 	case availabilityFamilyHunt:
 		return tenantHuntingConfig(cfg, tenantID).Enabled
 	case availabilityFamilyWindow:
-		if candidate.Transport == telemetry.TransportExchangeOnline {
+		switch candidate.Transport {
+		case telemetry.TransportExchangeOnline:
 			return tenantEXOConfig(cfg, tenantID).Enabled
+		case telemetry.TransportVAAC:
+			return cfg.TenantVAAC(tenantID).Enabled
 		}
 	case availabilityFamilySnapshot:
 		if candidate.Name == "graph2otel.blob_categories" {

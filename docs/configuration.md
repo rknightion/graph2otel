@@ -121,7 +121,7 @@ warning for that tenant. A configured `client_id` alone is never proof.
 
 #### Per-tenant ingest and direct-API sources
 
-The shipped registry has 173 logical collectors across 7 registration paths. These
+The shipped registry has 174 logical collectors across 7 registration paths. These
 tenant blocks enable or configure the non-default source paths; they are file-only because
 the environment layer does not bind into the `tenants[]` slice:
 
@@ -179,9 +179,9 @@ collectors retain their direct API shapes.
 
 #### Teams site mapping and internal domains
 
-The optional `tenants[].teams` block is YAML-only and does not enable any
-collector or change Teams inventory. These settings prepare enrichment for
-Teams call records; configuring them alone does not emit call records.
+The optional `tenants[].teams.sites_file` and `internal_domains` settings are
+YAML-only. They prepare enrichment for Teams call records but do not enable
+a collector or change Teams inventory.
 
 ```yaml
 tenants:
@@ -220,6 +220,20 @@ back, atomically replace the file at the configured path with a valid CSV. Do no
 truncate and rewrite it in place; a partly written file can look valid. A valid
 header-only file clears the mapping on the next reload. The last good snapshot
 is held in memory only; an invalid file still prevents a restart.
+
+#### Teams voice application analytics
+
+`tenants[].teams.vaac.enabled` is a separate opt-in, off even with the Teams
+profile or an explicit collector override. The collector must also be selected.
+The `username_file` and `password_file` settings point to distinct absolute paths
+on a trusted, read-only secret mount. Helm can use `extraVolumes` and
+`extraVolumeMounts` for an existing Secret. Do not put credential values in
+Helm values, the config file or environment variables. VAAC paths are not part
+of the startup fingerprint.
+
+This unsupported integration signs in with a user password. It is incompatible
+with MFA and some Conditional Access policies, and the logs can carry caller
+and agent identities. Graph preflight cannot verify access to this feed.
 
 ### `otlp`
 

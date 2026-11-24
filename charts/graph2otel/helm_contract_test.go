@@ -456,8 +456,8 @@ func TestCollectorOverrideSchemaHasBoundedNamesAndSourceEnum(t *testing.T) {
 
 	names := schemaObject(t, definitions, "collectorName")
 	gotNames := schemaStrings(t, names, "enum")
-	if len(gotNames) != 173 {
-		t.Fatalf("collector name inventory has %d entries, want 173", len(gotNames))
+	if len(gotNames) != 174 {
+		t.Fatalf("collector name inventory has %d entries, want 174", len(gotNames))
 	}
 	if !slices.IsSorted(gotNames) {
 		t.Error("collector name inventory is not sorted")
@@ -476,10 +476,42 @@ func TestCollectorOverrideSchemaHasBoundedNamesAndSourceEnum(t *testing.T) {
 		"mdca.discovery_parse",
 		"purview.sensitivity_labels",
 		"teams.call_records",
+		"teams.voice_apps",
 	} {
 		if _, found := slices.BinarySearch(gotNames, name); !found {
 			t.Errorf("collector name inventory is missing %q", name)
 		}
+	}
+}
+
+func TestHelmComposesTeamsSitesAndVAACFileSettings(t *testing.T) {
+	const settings = `config:
+  tenants:
+    - tenant_id: "00000000-0000-0000-0000-000000000001"
+      collectors:
+        teams.voice_apps:
+          enabled: true
+      teams:
+        sites_file: /synthetic/sites.csv
+        internal_domains: [example.test]
+        vaac:
+          enabled: true
+          username_file: /synthetic/username
+          password_file: /synthetic/password
+`
+	rendered, err := runHelm(t, "template", "test", ".", "-f", writeValues(t, settings))
+	if err != nil {
+		t.Fatalf("helm template rejected combined Teams settings: %v\n%s", err, rendered)
+	}
+	for _, field := range []string{"sites_file:", "internal_domains:", "vaac:", "username_file:", "password_file:", "teams.voice_apps:"} {
+		if !strings.Contains(string(rendered), field) {
+			t.Errorf("helm template dropped %s", field)
+		}
+	}
+	invalid := settings + "          password: synthetic-plaintext\n"
+	output, err := runHelm(t, "template", "test", ".", "-f", writeValues(t, invalid))
+	if err == nil || !strings.Contains(string(output), "password") {
+		t.Fatal("helm template did not reject inline VAAC password key")
 	}
 }
 
