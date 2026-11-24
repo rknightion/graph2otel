@@ -171,9 +171,11 @@ type EndpointConfig struct {
 	Map func(record map[string]any) (id string, ev telemetry.Event)
 	// Prepare is the alternative to Map for a list row that needs additional
 	// reads before it can be emitted. It may return several events for one
-	// source row. An error holds the watermark and leaves that row retryable.
-	// Prepared endpoints drain list pages before starting the auxiliary reads.
+	// source row. An error holds the watermark unless Deferred retains a valid
+	// ref. Prepared endpoints drain list pages before hydrating discovery rows.
 	Prepare PrepareRecord
+	// Deferred optionally separates discovery progress from delivery retries.
+	Deferred *DeferredPolicy
 	// NotBefore is an optional source retention floor, set for this poll. It
 	// also retains prepared keys back to that floor, independently of overlap,
 	// so an out-of-band fetch can share dedupe with the window.
@@ -229,8 +231,8 @@ func cloneCheckpoint(cp *checkpoint.Checkpoint) checkpoint.Checkpoint {
 // does NOT persist them — the caller owns persistence (checkpoint.Store.Save),
 // so Poll stays testable without a filesystem. Reliable ordered pages stream
 // before that commit and may therefore replay after a later-page failure.
-// Prepared endpoints can commit completed keys alone on auxiliary failure,
-// leaving the window watermark unchanged.
+// Prepared endpoints can commit completed keys and deferred delivery state
+// on failure, leaving the window watermark unchanged.
 // LogCollector.CollectWindow (collector.go) is the convenience that Loads,
 // Polls, and Saves for a WindowCollector.
 func Poll(
@@ -248,6 +250,27 @@ func Poll(
 	// Name the transport once per cycle rather than per record: every record
 	// drained below is a direct Graph poll by construction (#141).
 	e = telemetry.WithTransport(e, telemetry.TransportGraph)
+
+	var queue *deferredQueue
+	if cfg.Deferred != nil {
+		queue, err = openDeferred(cfg, working.DeferredRecords)
+		if err != nil {
+			outcomes.Cause(recordoutcome.CauseSourceError)
+			return cp.Watermark, err
+		}
+		defer func() {
+			// Retry rotation and completed keys can be saved even when a list
+			// or an unrecordable failure holds discovery. Use the same atomic
+			// checkpoint as discovery, never a separate delivery cursor.
+			cp.DeferredRecords = queue.checkpoint()
+			cp.SeenIDs = working.SeenIDs
+			if !queue.failed && len(queue.pending) > 0 {
+				// The retry budget may not reach every known failure this tick.
+				outcomes.Cause(recordoutcome.CauseSourceError)
+			}
+		}()
+		queue.retry(ctx, cfg, &working, e, outcomes)
+	}
 
 	type drainedRecord struct {
 		id string
@@ -400,25 +423,29 @@ func Poll(
 			b, _ := recordTime(rawRecords[j], cfg.TimeField)
 			return a.Before(b)
 		})
-		var firstPrepareErr error
-		for i, rec := range rawRecords {
-			if err := ingestPrepared(ctx, cfg, &working, rec, e, outcomes); err != nil {
-				if firstPrepareErr == nil {
-					firstPrepareErr = err
-				}
-				cause := fetchFailureCause(err)
-				if ctx.Err() != nil {
-					failFetchedRecords(outcomes, uint64(len(rawRecords[i:])), cause)
-					break
-				}
-				failFetchedRecords(outcomes, 1, cause)
+		if queue != nil {
+			if err := queue.discover(ctx, cfg, &working, rawRecords, e, outcomes); err != nil {
+				return cp.Watermark, fmt.Errorf("logpipeline: %s: prepare discovery row: %w", cfg.Path, err)
 			}
-		}
-		if firstPrepareErr != nil {
-			// Commit only the completed keys so one failed row is retried
-			// without blocking or replaying other calls in the window.
-			cp.SeenIDs = working.SeenIDs
-			return cp.Watermark, fmt.Errorf("logpipeline: %s: prepare row: %w", cfg.Path, firstPrepareErr)
+		} else {
+			var firstPrepareErr error
+			for i, rec := range rawRecords {
+				if _, err := ingestPrepared(ctx, cfg, &working, rec, e, outcomes); err != nil {
+					if firstPrepareErr == nil {
+						firstPrepareErr = err
+					}
+					cause := fetchFailureCause(err)
+					if ctx.Err() != nil {
+						failFetchedRecords(outcomes, uint64(len(rawRecords[i:])), cause)
+						break
+					}
+					failFetchedRecords(outcomes, 1, cause)
+				}
+			}
+			if firstPrepareErr != nil {
+				cp.SeenIDs = working.SeenIDs
+				return cp.Watermark, fmt.Errorf("logpipeline: %s: prepare row: %w", cfg.Path, firstPrepareErr)
+			}
 		}
 		// Retention can expire during an outage. If the whole scheduler slice
 		// is unavailable, skip straight to the edge of the available range.

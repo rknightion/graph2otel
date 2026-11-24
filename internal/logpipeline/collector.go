@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
@@ -124,16 +125,20 @@ func (c *LogCollector) CollectWindow(
 		resumeFrom = cp.Watermark.Add(-cfg.Overlap)
 	}
 
-	seenBefore := len(cp.SeenIDs)
+	durableWatermark := cp.Watermark
+	seenBefore, deferredBefore := len(cp.SeenIDs), cp.DeferredRecords
 	hw, err := Poll(ctx, cfg, cp, resumeFrom, to, c.Fetcher, e, outcomes)
 	if err != nil {
-		if cfg.Prepare != nil && len(cp.SeenIDs) > seenBefore {
-			err = errors.Join(err, c.Store.Save(cp)) // completed keys, unchanged watermark
+		if cfg.Prepare != nil && (len(cp.SeenIDs) > seenBefore || !slices.Equal(cp.DeferredRecords, deferredBefore)) {
+			err = errors.Join(err, c.Store.Save(cp)) // delivery progress only, unchanged watermark
 		}
-		return cp.Watermark, fmt.Errorf("logpipeline: %s: poll: %w", c.NameField, err)
+		return durableWatermark, fmt.Errorf("logpipeline: %s: poll: %w", c.NameField, err)
 	}
 
 	if err := c.Store.Save(cp); err != nil {
+		if cfg.Deferred != nil {
+			hw = durableWatermark
+		}
 		return hw, fmt.Errorf("logpipeline: %s: save checkpoint: %w", c.NameField, err)
 	}
 	return hw, nil
@@ -153,9 +158,18 @@ func (c *LogCollector) CollectRecord(ctx context.Context, row map[string]any, e 
 		return err
 	}
 	outcomes.Add(recordoutcome.OutcomeFetched, 1)
-	if err := ingestPrepared(ctx, cfg, cp, row, telemetry.WithTransport(e, telemetry.TransportGraph), outcomes); err != nil {
+	rec, err := ingestPrepared(ctx, cfg, cp, row, telemetry.WithTransport(e, telemetry.TransportGraph), outcomes)
+	if err != nil {
 		failFetchedRecords(outcomes, 1, fetchFailureCause(err))
 		return err
+	}
+	if cfg.Deferred != nil && rec.SourceVersion > 0 && cp.SeenIDs.Has(rec.Key) {
+		// Do not later report a retention drop for a ref the direct path
+		// already delivered. A lower version does not discharge the ref.
+		id, _ := row["id"].(string)
+		cp.DeferredRecords = slices.DeleteFunc(cp.DeferredRecords, func(ref checkpoint.DeferredRecord) bool {
+			return ref.ID == id && ref.Version <= rec.SourceVersion
+		})
 	}
 	if !cfg.NotBefore.IsZero() {
 		cp.SeenIDs.Evict(cfg.NotBefore)

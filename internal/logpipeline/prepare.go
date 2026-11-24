@@ -13,7 +13,8 @@ import (
 
 // PrepareRecord hydrates a list row. seen is read-only and can avoid auxiliary
 // reads for a known key. Return the authoritative key and timestamp, not a
-// provisional key read from a list index. No output is used on error.
+// provisional key read from a list index. On error no output is delivered;
+// a deferred poll can retain the source version and time learned so far.
 type PrepareRecord func(ctx context.Context, row map[string]any, seen func(string) bool) (PreparedRecord, error)
 
 // PreparedRecord holds a source row ready for delivery. Deliver runs only for
@@ -24,6 +25,10 @@ type PreparedRecord struct {
 	Key     string
 	Time    time.Time
 	Deliver func(telemetry.Emitter)
+	// SourceVersion is the authoritative version when known. If an auxiliary
+	// read fails after it is known, a deferred poll keeps it and Time as the
+	// new retry reference. Neither field permits delivery on error.
+	SourceVersion int64
 }
 
 type datedEmitter struct {
@@ -39,13 +44,13 @@ func (e datedEmitter) LogEvent(ev telemetry.Event) {
 	e.Emitter.LogEvent(ev)
 }
 
-func ingestPrepared(ctx context.Context, cfg EndpointConfig, cp *checkpoint.Checkpoint, row map[string]any, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+func ingestPrepared(ctx context.Context, cfg EndpointConfig, cp *checkpoint.Checkpoint, row map[string]any, e telemetry.Emitter, outcomes *recordoutcome.Recorder) (PreparedRecord, error) {
 	if err := ctx.Err(); err != nil {
-		return err
+		return PreparedRecord{}, err
 	}
 	rec, err := cfg.Prepare(ctx, row, cp.SeenIDs.Has)
 	if err != nil {
-		return err
+		return rec, err
 	}
 	missingTime := func() {
 		outcomes.Cause(recordoutcome.CauseMissingEventTime)
@@ -62,7 +67,7 @@ func ingestPrepared(ctx context.Context, cfg EndpointConfig, cp *checkpoint.Chec
 		outcomes.Add(recordoutcome.OutcomeFiltered, 1)
 	default:
 		if rec.Deliver == nil {
-			return errors.New("logpipeline: new prepared row has no delivery function")
+			return rec, errors.New("logpipeline: new prepared row has no delivery function")
 		}
 		outcomes.Add(recordoutcome.OutcomeMapped, 1)
 		rec.Deliver(datedEmitter{Emitter: e, missingTime: missingTime})
@@ -71,7 +76,7 @@ func ingestPrepared(ctx context.Context, cfg EndpointConfig, cp *checkpoint.Chec
 			cp.SeenIDs.Add(rec.Key, rec.Time)
 		}
 	}
-	return nil
+	return rec, nil
 }
 
 func later(a, b time.Time) time.Time {

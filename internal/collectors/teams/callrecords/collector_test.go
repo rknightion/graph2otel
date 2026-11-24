@@ -260,7 +260,10 @@ func TestRetryLateAndOpaquePages(t *testing.T) {
 			if phase == "anchor" {
 				return collection(t, ""), nil
 			}
-			lower := now.Add(-time.Minute - 32*time.Hour - 30*time.Minute)
+			lower := now.Add(-time.Minute - maxCallDuration - arrivalAllowance)
+			if phase == "retry" {
+				lower = lower.Add(5 * time.Minute) // discovery already committed
+			}
 			if !strings.HasPrefix(filter, "startDateTime ge "+stamp(lower)+" and ") && phase != "seen" {
 				t.Fatalf("late call fell out of overlap: %q", filter)
 			}
@@ -283,20 +286,23 @@ func TestRetryLateAndOpaquePages(t *testing.T) {
 	phase = "failure"
 	outcomes := recordoutcome.NewRecorder()
 	hw, err := c.CollectWindow(t.Context(), anchor, now.Add(5*time.Minute), rec.Emitter(), outcomes)
-	if err == nil || !strings.Contains(err.Error(), "synthetic participants GET failure") || !hw.Equal(anchor) {
-		t.Fatalf("failed auxiliary GET moved watermark or disappeared: %v; %v", hw, err)
+	if err != nil || !hw.Equal(now.Add(5*time.Minute-lag)) {
+		t.Fatalf("recordable auxiliary failure must not pin discovery: %v; %v", hw, err)
 	}
+	assertDeferred(t, c, checkpoint.DeferredRecord{ID: "late", Version: 2, SourceTime: start})
+	anchor = hw
 	logs := rec.LogRecords()
 	if len(logs) != 6 || logs[0].Attrs["call_id"] != "first" || logs[3].Attrs["call_id"] != "suffix" {
 		t.Fatalf("fully hydrated calls on both sides of the failure must emit, got %+v", logs)
 	}
-	if got := outcomes.Snapshot(); got.Counts != (recordoutcome.Counts{Fetched: 3, Mapped: 2, Emitted: 2, Errored: 1}) || got.Validate() != nil {
+	if got := outcomes.Snapshot(); got.Counts != (recordoutcome.Counts{Fetched: 3, Mapped: 2, Emitted: 2, Errored: 1}) || got.Validate() != nil ||
+		got.Summarize(nil, false).Cause != recordoutcome.CauseSourceError {
 		t.Fatalf("prepare failure miscounted independent rows: %+v", got)
 	}
 	phase = "retry"
 	c = newC()
 	rec = telemetrytest.New()
-	hw, err = c.CollectWindow(t.Context(), anchor, now.Add(5*time.Minute), rec.Emitter(), nil)
+	hw, err = c.CollectWindow(t.Context(), anchor, now.Add(6*time.Minute), rec.Emitter(), nil)
 	if err != nil || !hw.After(anchor) {
 		t.Fatalf("retry did not finish: %v; %v", hw, err)
 	}
@@ -387,9 +393,14 @@ func TestTraversalLimitAndMissingTime(t *testing.T) {
 				})
 				c := collectorForTest(t, collectors.WindowDeps{Graph: g, Store: checkpoint.NewStore(t.TempDir()), TenantID: "synthetic-tenant"})
 				rec := telemetrytest.New()
-				if hw, err := c.CollectWindow(t.Context(), now.Add(-2*time.Hour), now, rec.Emitter(), nil); err == nil || !hw.IsZero() || aux != tc.gets || len(rec.LogRecords()) != 0 {
-					t.Fatalf("pagination failure did not stop the call: gets=%d hw=%v err=%v", aux, hw, err)
+				outcomes := recordoutcome.NewRecorder()
+				hw, err := c.CollectWindow(t.Context(), now.Add(-2*time.Hour), now, rec.Emitter(), outcomes)
+				got := outcomes.Snapshot()
+				if err != nil || !hw.Equal(now.Add(-lag)) || aux != tc.gets || len(rec.LogRecords()) != 0 ||
+					got.Counts != (recordoutcome.Counts{Fetched: 1, Errored: 1}) || got.Summarize(err, false).Cause != recordoutcome.CauseSourceError {
+					t.Fatalf("auxiliary pagination failure did not stop delivery: gets=%d hw=%v err=%v outcome=%+v", aux, hw, err, got)
 				}
+				assertDeferred(t, c, checkpoint.DeferredRecord{ID: "bounded", Version: 1, SourceTime: now.Add(-time.Hour)})
 			})
 		}
 	})
@@ -409,7 +420,7 @@ func TestTraversalLimitAndMissingTime(t *testing.T) {
 	})
 }
 
-func TestStaleOrMissingExpansionDoesNotAdvance(t *testing.T) {
+func TestStaleOrMissingExpansionDefersDelivery(t *testing.T) {
 	for _, tc := range []struct{ name, detail, want string }{
 		{"stale detail", `"version":1,"sessions":[]`, "stale ID/version"},
 		{"omitted sessions", `"version":2`, "sessions: expected expanded collection was absent"},
@@ -430,9 +441,20 @@ func TestStaleOrMissingExpansionDoesNotAdvance(t *testing.T) {
 			})
 			c := collectorForTest(t, collectors.WindowDeps{Graph: g, Store: checkpoint.NewStore(t.TempDir()), TenantID: "synthetic-tenant"})
 			rec := telemetrytest.New()
-			hw, err := c.CollectWindow(t.Context(), now.Add(-2*time.Hour), now, rec.Emitter(), nil)
-			if err == nil || !strings.Contains(err.Error(), tc.want) || !hw.IsZero() || c.CheckpointState().SeenIDs != 0 || len(rec.LogRecords()) != 0 {
-				t.Fatalf("incomplete version was accepted: %v; %v", hw, err)
+			outcomes := recordoutcome.NewRecorder()
+			hw, err := c.CollectWindow(t.Context(), now.Add(-2*time.Hour), now, rec.Emitter(), outcomes)
+			got := outcomes.Snapshot()
+			if err != nil || !hw.Equal(now.Add(-lag)) || c.CheckpointState().SeenIDs != 0 || len(rec.LogRecords()) != 0 ||
+				got.Counts != (recordoutcome.Counts{Fetched: 1, Errored: 1}) || got.Summarize(err, false).Cause != recordoutcome.CauseSourceError {
+				t.Fatalf("incomplete version was not durably deferred: %v; %v; %+v", hw, err, got)
+			}
+			assertDeferred(t, c, checkpoint.DeferredRecord{ID: "incomplete", Version: 2, SourceTime: start})
+			// The direct seam has no list version hint. The stale response is
+			// instead covered by the queued hint and the zero emitted/seen keys.
+			if tc.name != "stale detail" {
+				if err := c.CollectCall(t.Context(), "incomplete", rec.Emitter(), nil); err == nil || !strings.Contains(err.Error(), tc.want) {
+					t.Fatalf("direct hydration lost the reason expansion was incomplete: %v", err)
+				}
 			}
 		})
 	}

@@ -42,8 +42,9 @@ type Checkpoint struct {
 	// (e.g. "/auditLogs/signIns"), forming the namespace key together with
 	// TenantID.
 	Endpoint string `json:"endpoint"`
-	// Watermark is the last fully-processed event timestamp, minus a safety
-	// lag applied by the caller (#13). On restart, polling resumes from
+	// Watermark is the last fully-processed event timestamp (or discovery
+	// progress for a poller with DeferredRecords), minus a safety lag
+	// applied by the caller (#13). On restart, polling resumes from
 	// Watermark - OverlapWindow rather than from Watermark itself, so an
 	// event that was still landing out of order at the last poll is not
 	// missed.
@@ -73,6 +74,18 @@ type Checkpoint struct {
 	// TeamsServiceHealth remembers only Teams issues previously seen open.
 	// The service-health collector owns expiry and the entry limit.
 	TeamsServiceHealth map[string]ServiceHealthIssueState `json:"teams_service_health,omitempty"`
+	// DeferredRecords holds validated source references whose discovery is
+	// complete but whose delivery needs retry. FIFO order is durable and the
+	// opting-in poller owns validation, expiry and the entry limit.
+	DeferredRecords []DeferredRecord `json:"deferred_records,omitempty"`
+}
+
+// DeferredRecord identifies a source row retrievable by ID. Version is the
+// minimum known version (zero if unknown); SourceTime bounds source retention.
+type DeferredRecord struct {
+	ID         string    `json:"id"`
+	Version    int64     `json:"version"`
+	SourceTime time.Time `json:"source_time"`
 }
 
 // ServiceHealthIssueState records a previously observed open issue. Resolved

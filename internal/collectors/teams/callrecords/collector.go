@@ -34,6 +34,10 @@ const (
 	interval  = 5 * time.Minute
 	lag       = time.Minute
 	maxWindow = 6 * time.Hour
+	// Both bounds are per tenant. Retrying two calls can add at most two
+	// detail reads and two sets of maxContinuationPages auxiliary reads.
+	maxDeferred    = 64
+	retriesPerPoll = 2
 )
 
 // Collector owns the hydrated call path. Window ownership, record keys and
@@ -55,6 +59,7 @@ func newCollector(deps collectors.WindowDeps) collectors.RegisteredWindow {
 	cfg := logpipeline.EndpointConfig{
 		Path: path, CheckpointKey: Name, TimeField: "startDateTime", PageSize: -1,
 		CollectorName: Name, SafetyLag: lag, Overlap: overlap,
+		Deferred: &logpipeline.DeferredPolicy{Capacity: maxDeferred, RetriesPerPoll: retriesPerPoll, ValidID: validID},
 	}
 	logger := deps.Logger
 	if logger == nil {
@@ -154,6 +159,7 @@ func (c *Collector) prepare(table *sites.Table, floor time.Time) logpipeline.Pre
 			return result, errors.New("missing, mismatched or stale ID/version in Teams call detail")
 		}
 		result.Key = versionKey(id, version)
+		result.SourceVersion = version
 		result.Time = parseTime(d.Start)
 		if seen(result.Key) || result.Time.IsZero() || result.Time.Before(floor) {
 			return result, nil
