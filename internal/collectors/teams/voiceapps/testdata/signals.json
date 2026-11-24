@@ -1,0 +1,102 @@
+{
+  "Metrics": [
+    {
+      "Name": "teams.auto_attendant.calls",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Auto attendant call legs by bounded outcome.",
+      "AttrKeys": [
+        "auto_attendant",
+        "voice_outcome"
+      ]
+    },
+    {
+      "Name": "teams.call_queue.abandon_rate",
+      "Unit": "1",
+      "Kind": "gauge",
+      "Description": "Share of newly seen queue legs with known results that abandoned.",
+      "AttrKeys": [
+        "queue"
+      ]
+    },
+    {
+      "Name": "teams.call_queue.answer_rate",
+      "Unit": "1",
+      "Kind": "gauge",
+      "Description": "Share of newly seen queue legs with known results that were answered.",
+      "AttrKeys": [
+        "queue"
+      ]
+    },
+    {
+      "Name": "teams.call_queue.wait_time",
+      "Unit": "s",
+      "Kind": "histogram",
+      "Description": "Time a call leg waited in the Teams queue.",
+      "AttrKeys": [
+        "queue"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "teams.auto_attendant_call",
+      "AttrKeys": [
+        "auto_attendant",
+        "auto_attendant_call_flow",
+        "auto_attendant_caller_action_counts",
+        "auto_attendant_chain_duration_seconds",
+        "auto_attendant_chain_index",
+        "auto_attendant_chain_start_time",
+        "auto_attendant_count",
+        "auto_attendant_directory_search_method",
+        "auto_attendant_identity",
+        "auto_attendant_transfer_action",
+        "average_auto_attendant_chain_duration_seconds",
+        "average_call_duration",
+        "call_count",
+        "call_duration",
+        "conference_id",
+        "end_date_time",
+        "first_is_caller",
+        "first_upn",
+        "ingest_transport",
+        "pstn_call_duration",
+        "pstn_call_type",
+        "pstn_connectivity_type",
+        "record_timestamp",
+        "result",
+        "start_date_time",
+        "total_audio_stream_duration"
+      ]
+    },
+    {
+      "EventName": "teams.call_queue_call",
+      "AttrKeys": [
+        "agent_name",
+        "call_count",
+        "call_duration",
+        "call_queue_agent_count",
+        "call_queue_agent_opt_in_count",
+        "call_queue_duration_seconds",
+        "call_queue_final_state_action",
+        "call_queue_identity",
+        "call_queue_target_type",
+        "conference_id",
+        "dialog_id",
+        "end_date_time",
+        "first_is_caller",
+        "first_upn",
+        "ingest_transport",
+        "pstn_call_duration",
+        "pstn_call_type",
+        "pstn_connectivity_type",
+        "queue",
+        "record_timestamp",
+        "result",
+        "second_upn",
+        "start_date_time"
+      ]
+    }
+  ]
+}

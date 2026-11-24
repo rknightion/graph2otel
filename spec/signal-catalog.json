@@ -1,5 +1,5 @@
 {
-  "package_count": 179,
+  "package_count": 180,
   "domains": [
     "defender",
     "entra",
@@ -6351,6 +6351,67 @@
       ]
     },
     {
+      "name": "teams.auto_attendant.calls",
+      "prometheus_name": "teams_auto_attendant_calls_total",
+      "unit": "1",
+      "kind": "sum",
+      "description": "Auto attendant call legs by bounded outcome.",
+      "additive": true,
+      "domain": "teams",
+      "attr_keys": [
+        "auto_attendant",
+        "voice_outcome"
+      ],
+      "packages": [
+        "internal/collectors/teams/voiceapps"
+      ]
+    },
+    {
+      "name": "teams.call_queue.abandon_rate",
+      "prometheus_name": "teams_call_queue_abandon_rate_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "description": "Share of newly seen queue legs with known results that abandoned.",
+      "additive": false,
+      "domain": "teams",
+      "attr_keys": [
+        "queue"
+      ],
+      "packages": [
+        "internal/collectors/teams/voiceapps"
+      ]
+    },
+    {
+      "name": "teams.call_queue.answer_rate",
+      "prometheus_name": "teams_call_queue_answer_rate_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "description": "Share of newly seen queue legs with known results that were answered.",
+      "additive": false,
+      "domain": "teams",
+      "attr_keys": [
+        "queue"
+      ],
+      "packages": [
+        "internal/collectors/teams/voiceapps"
+      ]
+    },
+    {
+      "name": "teams.call_queue.wait_time",
+      "prometheus_name": "teams_call_queue_wait_time_seconds",
+      "unit": "s",
+      "kind": "histogram",
+      "description": "Time a call leg waited in the Teams queue.",
+      "additive": true,
+      "domain": "teams",
+      "attr_keys": [
+        "queue"
+      ],
+      "packages": [
+        "internal/collectors/teams/voiceapps"
+      ]
+    },
+    {
       "name": "teams.direct_routing.calls",
       "prometheus_name": "teams_direct_routing_calls_total",
       "unit": "{call}",
@@ -10527,6 +10588,41 @@
       ]
     },
     {
+      "event_name": "teams.auto_attendant_call",
+      "domain": "teams",
+      "attr_keys": [
+        "auto_attendant",
+        "auto_attendant_call_flow",
+        "auto_attendant_caller_action_counts",
+        "auto_attendant_chain_duration_seconds",
+        "auto_attendant_chain_index",
+        "auto_attendant_chain_start_time",
+        "auto_attendant_count",
+        "auto_attendant_directory_search_method",
+        "auto_attendant_identity",
+        "auto_attendant_transfer_action",
+        "average_auto_attendant_chain_duration_seconds",
+        "average_call_duration",
+        "call_count",
+        "call_duration",
+        "conference_id",
+        "end_date_time",
+        "first_is_caller",
+        "first_upn",
+        "ingest_transport",
+        "pstn_call_duration",
+        "pstn_call_type",
+        "pstn_connectivity_type",
+        "record_timestamp",
+        "result",
+        "start_date_time",
+        "total_audio_stream_duration"
+      ],
+      "packages": [
+        "internal/collectors/teams/voiceapps"
+      ]
+    },
+    {
       "event_name": "teams.call",
       "domain": "teams",
       "attr_keys": [
@@ -10554,6 +10650,38 @@
       ],
       "packages": [
         "internal/collectors/teams/callrecords"
+      ]
+    },
+    {
+      "event_name": "teams.call_queue_call",
+      "domain": "teams",
+      "attr_keys": [
+        "agent_name",
+        "call_count",
+        "call_duration",
+        "call_queue_agent_count",
+        "call_queue_agent_opt_in_count",
+        "call_queue_duration_seconds",
+        "call_queue_final_state_action",
+        "call_queue_identity",
+        "call_queue_target_type",
+        "conference_id",
+        "dialog_id",
+        "end_date_time",
+        "first_is_caller",
+        "first_upn",
+        "ingest_transport",
+        "pstn_call_duration",
+        "pstn_call_type",
+        "pstn_connectivity_type",
+        "queue",
+        "record_timestamp",
+        "result",
+        "second_upn",
+        "start_date_time"
+      ],
+      "packages": [
+        "internal/collectors/teams/voiceapps"
       ]
     },
     {

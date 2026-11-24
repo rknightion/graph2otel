@@ -169,4 +169,5 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/teams/callrecords"
 	_ "github.com/rknightion/graph2otel/internal/collectors/teams/directroutingcalls"
 	_ "github.com/rknightion/graph2otel/internal/collectors/teams/pstncalls"
+	_ "github.com/rknightion/graph2otel/internal/collectors/teams/voiceapps"
 )

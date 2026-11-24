@@ -30,6 +30,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/mdcaclient"
 	"github.com/rknightion/graph2otel/internal/o365activityclient"
 	"github.com/rknightion/graph2otel/internal/telemetry"
+	"github.com/rknightion/graph2otel/internal/vaacclient"
 )
 
 // runtimeFactoryVisitor owns the runtime view of every collector registration
@@ -598,6 +599,19 @@ func setupTenantWithGraphAndLicenseBuilders(
 		TeamsInternalDomains: teamsDomains,
 	}
 	selfIdentity.applyWindow(&wdeps)
+	for _, static := range inventory {
+		if static.Transport != telemetry.TransportVAAC || !availabilityStaticActive(static) {
+			continue
+		}
+		v := cfg.TenantVAAC(ta.TenantID)
+		client, err := vaacclient.New(ta.TenantID, v.UsernameFile, v.PasswordFile, nil)
+		if err != nil {
+			return admin.CollectorSource{}, fmt.Errorf("configure VAAC: %w", err)
+		}
+		wdeps.VAAC = client
+		tlog.Warn("Teams VAAC uses an unsupported Power BI Desktop query and user password sign-in (ROPC), incompatible with MFA and some Conditional Access policies; voice analytics can include end-user identities")
+		break
+	}
 	for _, wf := range paths.window {
 		expected := newAvailabilityCandidate(
 			wf(snapshotWindowDeps()).Collector,
@@ -1579,6 +1593,9 @@ func collectorGate(c collector.Collector, cfg *config.Config, tenantID string, c
 		return 0, false, "disabled by config"
 	case availability.ReasonProfileNotSelected:
 		return 0, false, "profile not selected"
+	}
+	if collector.TransportOf(c) == telemetry.TransportVAAC && !cfg.TenantVAAC(tenantID).Enabled {
+		return 0, false, "teams.vaac.enabled not set"
 	}
 	if ok, requiredCap, _ := license.ShouldRun(c, caps); !ok {
 		return 0, false, fmt.Sprintf("requires %s", requiredCap)
