@@ -24,7 +24,7 @@ type ProfileDeclarer interface {
 
 // HighVolumeProfileDefaults is an explicit exception to the high-volume opt-in
 // when Teams is selected. A collector must also declare Teams membership and be
-// HighVolume. This never bypasses the experimental, licence or transport gates.
+// HighVolume. Experimental, capability and transport gates still apply.
 type HighVolumeProfileDefaults interface {
 	HighVolumeDefaultProfiles() ProfileSet
 }

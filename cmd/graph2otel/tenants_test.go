@@ -66,7 +66,7 @@ func TestTeamsHighVolumeDefaultDoesNotBypassOtherGates(t *testing.T) {
 		{name: "graph still requires opt-in", profiles: []string{"graph"}, defaultWithTeams: true},
 		{name: "teams does not adopt unrelated high-volume collectors", profiles: []string{"teams"}},
 		{name: "beta still requires opt-in", profiles: []string{"teams"}, defaultWithTeams: true, experimental: true},
-		{name: "licence still required", profiles: []string{"teams"}, defaultWithTeams: true, missingLicence: true},
+		{name: "capability still required", profiles: []string{"teams"}, defaultWithTeams: true, missingLicence: true},
 		{name: "explicit disable wins", profiles: []string{"teams"}, defaultWithTeams: true, override: new(false)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
