@@ -163,7 +163,7 @@ func assessCall(c *Call, q quality.Thresholds) {
 		}
 		m := s.Metrics
 		rollup.worstRTT = largest(rollup.worstRTT, m.MaxRTTMs, m.AverageRTTMs)
-		rollup.worstJitter = largest(rollup.worstJitter, m.MaxJitterMs, m.AverageJitterMs)
+		rollup.worstJitter = largest(rollup.worstJitter, m.MaxJitterMs, m.AverageJitterMs, m.MaxAudioJitterMs, m.AverageAudioJitterMs)
 		rollup.worstLoss = largest(rollup.worstLoss, m.MaxLoss, m.AverageLoss, m.VideoPacketLoss)
 		// Each stream votes at most once per observed protocol. If its two
 		// endpoints disagree, both observations count; neither wins a tie.

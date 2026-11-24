@@ -110,7 +110,7 @@ func TestQualityEventsThroughPollAndDirect(t *testing.T) {
 					"calleeNetwork":{"connectionType":"wifi","networkTransportProtocol":"tcp","reflexiveIPAddress":"2001:0db8::1"},
 					"callerDevice":{"cpuInsufficentEventRatio":0.1,"deviceGlitchEventRatio":0,"lowSpeechLevelEventRatio":0.02},
 					"calleeDevice":{"deviceGlitchEventRatio":0.01},
-					"streams":[{"streamId":"poor-audio","streamDirection":"calleeToCaller","packetUtilization":501,"averageRoundTripTime":"PT0S","averageJitter":"PT0.031S","maxJitter":"PT0.060S","averagePacketLossRate":0}]
+					"streams":[{"streamId":"poor-audio","streamDirection":"calleeToCaller","packetUtilization":501,"averageRoundTripTime":"PT0S","averageJitter":"PT0.031S","maxJitter":"PT0.060S","maxAudioNetworkJitter":"PT0.070S","averagePacketLossRate":0}]
 				},{"label":"main-appsharing","callerNetwork":{"connectionType":"wifi","networkTransportProtocol":"tcp"},
 					"calleeDevice":{"cpuInsufficentEventRatio":0,"lowSpeechLevelEventRatio":0},
 					"streams":[{"streamId":"rdp","streamDirection":"callerToCallee","averageRoundTripTime":"PT0.6S"}]
@@ -139,7 +139,7 @@ func TestQualityEventsThroughPollAndDirect(t *testing.T) {
 			t.Fatalf("got %d records, want one call and two streams", len(logs))
 		}
 		assertAttrs(t, logs[0], map[string]string{
-			"call_health": "poor", "poor_stream_count": "1", "worst_rtt_ms": "600", "worst_jitter_ms": "60",
+			"call_health": "poor", "poor_stream_count": "1", "worst_rtt_ms": "600", "worst_jitter_ms": "70",
 			"worst_packet_loss_rate": "0", "dominant_transport": "tcp", "shared_reflexive_ip": "true",
 		})
 		assertAttrs(t, logs[1], map[string]string{
