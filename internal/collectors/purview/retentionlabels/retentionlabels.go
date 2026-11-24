@@ -227,6 +227,9 @@ func NewRetention(g collectors.GraphClient, logger *slog.Logger) *RetentionColle
 // Name implements collector.Collector.
 func (c *RetentionCollector) Name() string { return retentionName }
 
+// Profiles declares this collector's profile membership.
+func (*RetentionCollector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. Both catalogs drift slowly.
 func (c *RetentionCollector) DefaultInterval() time.Duration { return time.Hour }
 

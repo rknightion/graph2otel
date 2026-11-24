@@ -39,6 +39,9 @@ type blobCollector struct {
 	*blobpipeline.BlobCollector
 }
 
+// Profiles declares this collector's profile membership.
+func (*blobCollector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // newBlobCollector builds the blob-sourced provisioning collector, sharing the
 // polled collector's name so `source: graph|blob` selects between them.
 func newBlobCollector(d collectors.BlobDeps) collector.SnapshotCollector {

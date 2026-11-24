@@ -225,6 +225,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.SnapshotCollector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.SnapshotCollector. Policy/config
 // lists are small (bounded by admin-configured policy count) and cheap, but
 // the managedAppRegistrations paging can be the heaviest fetch in this

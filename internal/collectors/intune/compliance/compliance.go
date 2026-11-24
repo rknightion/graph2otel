@@ -75,6 +75,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. The tenant-wide state
 // summary alone is cheap enough to poll every few minutes, but this
 // collector also fans out two overview requests per compliance policy plus

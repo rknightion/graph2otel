@@ -354,6 +354,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. Autopilot device
 // registration and deployment-profile configuration both drift slowly.
 func (c *Collector) DefaultInterval() time.Duration { return 30 * time.Minute }

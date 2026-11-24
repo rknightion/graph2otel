@@ -96,6 +96,9 @@ func NewCases(g collectors.GraphClient, logger *slog.Logger) *CasesCollector {
 // Name implements collector.Collector.
 func (c *CasesCollector) Name() string { return casesName }
 
+// Profiles declares this collector's profile membership.
+func (*CasesCollector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. eDiscovery cases are created
 // and closed by humans and drift slowly; an hourly poll is ample.
 func (c *CasesCollector) DefaultInterval() time.Duration { return time.Hour }

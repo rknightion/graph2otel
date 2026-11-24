@@ -159,6 +159,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. The app catalog and its
 // configuration policies are small, device-independent, and cheap to poll
 // fully (per issue #55), and both drift slowly, so a longer cadence than the

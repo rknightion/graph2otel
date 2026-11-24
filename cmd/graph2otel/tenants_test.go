@@ -23,6 +23,7 @@ type gateTestCollector struct {
 	highVolume   bool
 }
 
+func (gateTestCollector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
 func (c gateTestCollector) Name() string                 { return c.name }
 func (gateTestCollector) DefaultInterval() time.Duration { return time.Minute }
 func (c gateTestCollector) Experimental() bool           { return c.experimental }
@@ -34,6 +35,65 @@ type premiumGateTestCollector struct {
 }
 
 func (c premiumGateTestCollector) RequiredCapability() license.Capability { return c.capability }
+
+type teamsVolumeGateCollector struct {
+	premiumGateTestCollector
+	defaultWithTeams bool
+}
+
+func (teamsVolumeGateCollector) Profiles() collector.ProfileSet {
+	return collector.ProfileGraph | collector.ProfileTeams
+}
+
+func (c teamsVolumeGateCollector) HighVolumeDefaultProfiles() collector.ProfileSet {
+	if c.defaultWithTeams {
+		return collector.ProfileTeams
+	}
+	return 0
+}
+
+func TestTeamsHighVolumeDefaultDoesNotBypassOtherGates(t *testing.T) {
+	for _, test := range []struct {
+		name                           string
+		profiles                       []string
+		defaultWithTeams, experimental bool
+		missingLicence                 bool
+		override                       *bool
+		want                           bool
+	}{
+		{name: "teams adopts the declared default", profiles: []string{"teams"}, defaultWithTeams: true, want: true},
+		{name: "combined adopts the declared default", profiles: []string{"graph", "teams"}, defaultWithTeams: true, want: true},
+		{name: "graph still requires opt-in", profiles: []string{"graph"}, defaultWithTeams: true},
+		{name: "teams does not adopt unrelated high-volume collectors", profiles: []string{"teams"}},
+		{name: "beta still requires opt-in", profiles: []string{"teams"}, defaultWithTeams: true, experimental: true},
+		{name: "capability still required", profiles: []string{"teams"}, defaultWithTeams: true, missingLicence: true},
+		{name: "explicit disable wins", profiles: []string{"teams"}, defaultWithTeams: true, override: new(false)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			const name = "teams.synthetic_calls"
+			cfg := &config.Config{
+				Profiles:   test.profiles,
+				Collectors: map[string]config.CollectorConfig{name: {Enabled: test.override}},
+			}
+			c := teamsVolumeGateCollector{
+				premiumGateTestCollector: premiumGateTestCollector{
+					gateTestCollector: gateTestCollector{name: name, highVolume: true, experimental: test.experimental},
+					capability:        license.CapEntraP2,
+				},
+				defaultWithTeams: test.defaultWithTeams,
+			}
+			candidate := newAvailabilityCandidate(c, availabilityFamilyWindow)
+			caps := license.Capabilities{license.CapEntraP2: !test.missingLicence}
+			if _, enabled, reason := collectorGate(c, cfg, "tenant-a", caps); enabled != test.want {
+				t.Errorf("runtime enabled = %v (%s), want %v", enabled, reason, test.want)
+			}
+			state := resolveAvailabilityStatic(cfg, "tenant-a", candidate, caps, true, false, false)
+			if availabilityStaticActive(state) != test.want {
+				t.Errorf("availability = %s/%s, want active = %v", state.State, state.Reason, test.want)
+			}
+		})
+	}
+}
 
 var _ collector.Collector = gateTestCollector{}
 var _ collectors.Experimental = gateTestCollector{}

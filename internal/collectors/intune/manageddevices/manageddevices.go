@@ -494,6 +494,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.SnapshotCollector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.SnapshotCollector. A full-fleet page
 // walk plus the overview singleton is the most expensive M4 poll cycle (no
 // delta query, Elevated Devices throttle tier), and fleet compliance/OS

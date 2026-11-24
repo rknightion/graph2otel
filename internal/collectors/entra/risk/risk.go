@@ -120,6 +120,9 @@ func New(g collectors.GraphClient, caps license.Capabilities, logger *slog.Logge
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. Both endpoints share
 // Identity Protection's very low throttle bucket (1 request/second per
 // tenant, across every app using it, with no Retry-After — see the

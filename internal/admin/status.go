@@ -836,7 +836,8 @@ func availabilitySkipCategory(point availability.Point) string {
 		return skipCatExperimental
 	case availability.ReasonTransportNotConfigured,
 		availability.ReasonHighVolumeNotEnabled,
-		availability.ReasonDisabledByConfig:
+		availability.ReasonDisabledByConfig,
+		availability.ReasonProfileNotSelected:
 		return skipCatDisabled
 	default:
 		return ""

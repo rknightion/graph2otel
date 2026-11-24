@@ -113,6 +113,9 @@ func New(export exportjob.Runner, store *checkpoint.Store, tenantID string, logg
 
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 func (c *Collector) IngestTransport() telemetry.Transport {
 	return telemetry.TransportReportExport
 }

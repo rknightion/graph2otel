@@ -55,6 +55,9 @@ type blobCollector struct {
 	*blobpipeline.BlobCollector
 }
 
+// Profiles declares this collector's profile membership.
+func (blobCollector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // newCollector builds the OperationalLogs (Intune compliance alerts) blob
 // collector for a tenant.
 func newCollector(d collectors.BlobDeps) collector.SnapshotCollector {

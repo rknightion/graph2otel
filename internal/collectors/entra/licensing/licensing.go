@@ -169,6 +169,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. License consumption drifts
 // slowly and subscribedSkus has no delta/filter support (a full read every
 // cycle), so a longer interval than the directory counts is appropriate.

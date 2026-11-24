@@ -130,6 +130,9 @@ func New(g collectors.GraphClient, allowlist []string, logger *slog.Logger) *Col
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. Matches entra/groups'
 // cadence: privileged-group population drifts slowly, and up to
 // config.MaxPrivilegedGroupAllowlist (50) cheap $count calls per tick is

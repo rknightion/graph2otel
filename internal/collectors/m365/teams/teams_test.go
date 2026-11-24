@@ -252,10 +252,10 @@ func TestNameAndPermissions(t *testing.T) {
 		t.Errorf("Name = %q", c.Name())
 	}
 	want := map[string]bool{
-		"Team.ReadBasic.All":            true,
-		"TeamSettings.Read.All":         true,
-		"TeamsAppInstallation.Read.All": true,
-		"Channel.ReadBasic.All":         true,
+		"Team.ReadBasic.All":                   true,
+		"TeamSettings.Read.All":                true,
+		"TeamsAppInstallation.ReadForTeam.All": true,
+		"Channel.ReadBasic.All":                true,
 	}
 	for _, p := range c.RequiredPermissions() {
 		if !want[p] {

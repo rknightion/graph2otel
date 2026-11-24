@@ -8,12 +8,14 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/collectordoc"
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/config"
+	"github.com/rknightion/graph2otel/internal/license"
 )
 
 // updateCollectorDoc regenerates the committed docs/collectors.md golden file
 // instead of asserting it, mirroring internal/config's -update flag. Run:
 // go test ./cmd/graph2otel -run TestCollectorReferenceDocInSync -update
-var updateCollectorDoc = flag.Bool("update", false, "rewrite generated golden files (docs/collectors.md)")
+var updateCollectorDoc = flag.Bool("update", false, "rewrite generated collector and profile permission docs")
 
 // These gates live in package main, and that placement is the point (#139).
 //
@@ -192,8 +194,6 @@ func TestEveryCollectorNameIsUnique(t *testing.T) {
 // collector that became Experimental — since those need no new annotation.
 // Regenerate with `scripts/regen-generated.sh collectordoc`.
 func TestCollectorReferenceDocInSync(t *testing.T) {
-	docPath := filepath.Join("..", "..", "docs", "collectors.md")
-
 	snapshot, window, blob, o365, mdca, exo, hunt := registrySnapshot()
 	root := filepath.Join("..", "..")
 	rows, err := collectordoc.Rows(snapshot, window, blob, o365, mdca, exo, hunt, root)
@@ -204,25 +204,44 @@ func TestCollectorReferenceDocInSync(t *testing.T) {
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
+	t.Run("collectors", func(t *testing.T) {
+		syncCollectorDoc(t, filepath.Join(root, "docs", "collectors.md"), func(doc string) (string, error) {
+			return collectordoc.Splice(doc, block)
+		})
+	})
+	t.Run("teams_permissions", func(t *testing.T) {
+		const tenantID = "docs-tenant"
+		cfg := &config.Config{Profiles: []string{"teams"}, Tenants: []config.TenantConfig{{TenantID: tenantID}}}
+		reqs, err := requiredCollectorPermissions(cfg, tenantID, license.Capabilities{})
+		if err != nil {
+			t.Fatalf("prepare default Teams preflight: %v", err)
+		}
+		syncCollectorDoc(t, filepath.Join(root, "docs", "permissions.md"), func(doc string) (string, error) {
+			return collectordoc.SpliceTeamsPermissions(doc, reqs)
+		})
+	})
+}
+
+func syncCollectorDoc(t *testing.T, docPath string, splice func(string) (string, error)) {
+	t.Helper()
 	current, err := os.ReadFile(docPath)
 	if err != nil {
-		t.Fatalf("read docs/collectors.md: %v", err)
+		t.Fatalf("read %s: %v", docPath, err)
 	}
-	want, err := collectordoc.Splice(string(current), block)
+	want, err := splice(string(current))
 	if err != nil {
 		t.Fatalf("splice: %v", err)
 	}
 
 	if *updateCollectorDoc {
 		if err := os.WriteFile(docPath, []byte(want), 0o644); err != nil { //nolint:gosec // G306: generated docs file is intentionally world-readable
-			t.Fatalf("write docs/collectors.md: %v", err)
+			t.Fatalf("write %s: %v", docPath, err)
 		}
 		t.Logf("regenerated %s", docPath)
 		return
 	}
 	if want != string(current) {
-		t.Errorf("docs/collectors.md is out of date with the collector registry — regenerate with " +
-			"`scripts/regen-generated.sh collectordoc` (or `go test ./cmd/graph2otel -run TestCollectorReferenceDocInSync -update`) and commit the result")
+		t.Errorf("%s is out of date with the collector registry: regenerate with `scripts/regen-generated.sh collectordoc`", docPath)
 	}
 }
 

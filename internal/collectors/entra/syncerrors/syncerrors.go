@@ -114,6 +114,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. Sync conflicts are resolved by
 // a human editing on-prem AD, not in minutes, and the full-user page-walk is not
 // cheap — six hours is ample and keeps this a negligible share of the directory

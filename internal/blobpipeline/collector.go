@@ -31,6 +31,8 @@ type BlobCollector struct {
 	// NameField is returned by Name() — the stable collector identifier used in
 	// self-obs attributes and as the config key.
 	NameField string
+	// ProfileMembership is set by registering collectors that use this adapter directly.
+	ProfileMembership collector.ProfileSet
 	// Interval is returned by DefaultInterval().
 	Interval time.Duration
 	// TenantID is the tenant this collector serves; also the tenant component
@@ -70,6 +72,9 @@ func NewBlobCollector(
 
 // Name implements collector.Collector.
 func (c *BlobCollector) Name() string { return c.NameField }
+
+// Profiles implements collector.ProfileDeclarer for direct registrations.
+func (c *BlobCollector) Profiles() collector.ProfileSet { return c.ProfileMembership }
 
 // DerivesMetrics reports whether this collector emits metrics as well as logs,
 // i.e. whether its ContainerConfig sets Derive.

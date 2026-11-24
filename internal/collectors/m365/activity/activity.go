@@ -238,6 +238,9 @@ type collectorImpl struct {
 	contentTypes []o365activityclient.ContentType
 }
 
+// Profiles declares this collector's profile membership.
+func (*collectorImpl) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // ConflictsWith declares m365.unified_audit: the two are one signal over two
 // transports, emitting the same event name with the same record Id, so enabling
 // both ships every M365 audit record twice into one stream (#144).

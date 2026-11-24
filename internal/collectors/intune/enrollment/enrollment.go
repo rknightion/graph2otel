@@ -134,6 +134,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. Enrollment configuration is
 // an admin-set object with no delta query and no per-device throttle
 // pressure; it drifts rarely, so fifteen minutes matches this exporter's

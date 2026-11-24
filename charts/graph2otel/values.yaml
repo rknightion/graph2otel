@@ -149,16 +149,18 @@ secret:
 config:
   # -- Log verbosity: debug | info | warn | error.
   log_level: info
+  # -- Default collector profiles for all tenants: graph, teams, or both.
+  profiles: [graph]
 
   # -- Tenants graph2otel polls. At least one entry is required unless
-  # otlp.protocol is "stdout". A flat env var cannot express a list of
-  # structs, so this list is file/values-only (no G2O_TENANTS__<index>__*
-  # env equivalent) — use --set/-f to override it.
+  # otlp.protocol is "stdout". Define tenants in values; only their profiles
+  # can be overridden by index from the environment.
   tenants:
     - # -- Hyphenated Entra directory GUID only. Verified domains and arbitrary names are rejected.
       tenant_id: "00000000-0000-0000-0000-000000000000"
       # -- Optional expected application ID. A non-secret consistency assertion only; never credential selection.
       client_id: ""
+      # profiles: [teams] # Replace the global list for this tenant.
       # Optional per-tenant collector overrides, layered on top of `collectors`
       # below (field-by-field), e.g.:
       # collectors:

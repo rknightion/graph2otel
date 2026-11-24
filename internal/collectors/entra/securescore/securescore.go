@@ -118,6 +118,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. Microsoft publishes at most
 // one new secure score per day and the control-profile catalog barely
 // changes; an hourly poll is ample and trivially cheap on the security

@@ -7,6 +7,7 @@ import (
 
 	"github.com/rknightion/graph2otel/internal/availability"
 	"github.com/rknightion/graph2otel/internal/blobpipeline"
+	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -22,6 +23,7 @@ type fakeSnapshot struct {
 
 func (f fakeSnapshot) Name() string                   { return f.name }
 func (f fakeSnapshot) DefaultInterval() time.Duration { return f.iv }
+func (fakeSnapshot) Profiles() collector.ProfileSet   { return collector.ProfileGraph }
 
 // fakeFull implements every optional interface.
 type fakeFull struct{ fakeSnapshot }
@@ -54,13 +56,33 @@ type embeddedBlob struct{ *blobpipeline.BlobCollector }
 
 func newBlob(name, container, cursorKey string) *blobpipeline.BlobCollector {
 	return &blobpipeline.BlobCollector{
-		NameField: name,
-		Interval:  5 * time.Minute,
+		NameField:         name,
+		ProfileMembership: collector.ProfileGraph,
+		Interval:          5 * time.Minute,
 		Config: blobpipeline.ContainerConfig{
 			Container: container,
 			CursorKey: cursorKey,
 			Map:       func(map[string]any) (telemetry.Event, bool) { return telemetry.Event{}, false },
 		},
+	}
+}
+
+type noProfiles struct{ fakeSnapshot }
+
+// Name and DefaultInterval alone are not enough to join any profile.
+func (noProfiles) Profiles() {}
+
+func TestRowForRejectsUndeclaredProfiles(t *testing.T) {
+	c := noProfiles{fakeSnapshot{name: "entra.unprofiled", iv: time.Hour}}
+	b := newBlob("entra.unprofiled", "insights-logs-cat", "")
+	b.ProfileMembership = 0
+	for _, candidate := range []struct {
+		c    any
+		kind Kind
+	}{{c, KindSnapshot}, {b, KindBlob}} {
+		if _, err := RowFor(candidate.c, candidate.kind, Annotation{}); err == nil || !strings.Contains(err.Error(), "entra.unprofiled") || !strings.Contains(err.Error(), "profiles") {
+			t.Errorf("RowFor(%T) returned %v, want a named missing profile error", candidate.c, err)
+		}
 	}
 }
 

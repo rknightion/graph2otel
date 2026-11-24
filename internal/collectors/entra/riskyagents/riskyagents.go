@@ -106,6 +106,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. The endpoint shares Identity
 // Protection's low throttle bucket (1 req/s per tenant, shared, no Retry-After),
 // and current agent-risk state is not a sub-minute signal, so a conservative

@@ -79,7 +79,9 @@ func newCollector(d collectors.BlobDeps) collector.SnapshotCollector {
 		Derive:        newActivityDeriver().derive,
 		RecencyWindow: d.MetricRecencyWindow,
 	}
-	return blobpipeline.NewBlobCollector(collectorName, blobpipeline.MetricDerivingInterval, d.TenantID, cfg, d.Source, d.Store, d.Logger)
+	c := blobpipeline.NewBlobCollector(collectorName, blobpipeline.MetricDerivingInterval, d.TenantID, cfg, d.Source, d.Store, d.Logger)
+	c.ProfileMembership = collector.ProfileGraph
+	return c
 }
 
 // deriveActivity emits the bounded request counter for one MGAL record. Only

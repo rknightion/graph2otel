@@ -174,6 +174,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. This collector pages the
 // full applications and servicePrincipals collections (unlike a cheap
 // $count), so it runs on a longer cadence than the directory-summary

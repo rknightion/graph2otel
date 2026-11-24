@@ -90,6 +90,9 @@ type collectorImpl struct {
 	*logpipeline.LogCollector
 }
 
+// Profiles declares this collector's profile membership.
+func (*collectorImpl) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // RequiredPermissions declares the least-privilege Graph application scope. A
 // read-only scope exists (SecurityIncident.Read.All) — verified live — so this
 // is a plain read scope, not a write-for-read exception.

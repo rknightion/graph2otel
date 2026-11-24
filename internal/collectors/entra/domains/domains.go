@@ -95,6 +95,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. Domain posture changes
 // rarely; fifteen minutes is ample for a free-tier, tiny-collection signal.
 func (c *Collector) DefaultInterval() time.Duration { return 15 * time.Minute }

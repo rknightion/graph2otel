@@ -93,6 +93,9 @@ type blobCollector struct {
 	*blobpipeline.BlobCollector
 }
 
+// Profiles declares this collector's profile membership.
+func (*blobCollector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 func newBlobDevices(d collectors.BlobDeps) collector.SnapshotCollector {
 	cfg := blobpipeline.ContainerConfig{
 		Container:     blobDevicesContainer,

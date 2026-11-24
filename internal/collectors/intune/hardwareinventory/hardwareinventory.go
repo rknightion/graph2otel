@@ -236,6 +236,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval is 24h, not the 1h the other device-posture snapshot collectors
 // use. Intune refreshes device hardware inventory on a multi-day cycle, so a
 // shorter interval spends this collector's 1 + ceil(N/20) requests per cycle —

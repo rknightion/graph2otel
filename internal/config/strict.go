@@ -66,6 +66,9 @@ func validateYAMLNode(node *yaml.Node, typ reflect.Type, path string) error {
 		}
 	case reflect.Slice, reflect.Array:
 		if node.Kind != yaml.SequenceNode {
+			if path == "profiles" || (strings.HasPrefix(path, "tenants[") && strings.HasSuffix(path, "].profiles")) {
+				return fmt.Errorf("%s: expected a list of profiles", path)
+			}
 			return nil
 		}
 		for i, item := range node.Content {

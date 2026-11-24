@@ -86,6 +86,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. Message-center content changes
 // on the order of hours-to-days; a slow cadence keeps the (potentially hundreds
 // of messages) twin volume sane.

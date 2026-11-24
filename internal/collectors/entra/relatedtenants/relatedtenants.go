@@ -249,6 +249,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. Microsoft's own aggregation
 // watermarks move daily (live-measured: watermarkDateTime on a midnight
 // boundary, updateDateTime once a day), so nothing here changes faster than

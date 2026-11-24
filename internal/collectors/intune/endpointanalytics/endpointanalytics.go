@@ -676,6 +676,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. This is the heaviest M4
 // poll cycle after intune.devices - up to six Graph fetches, three of them
 // paged over fleet-scale collections - and endpoint-analytics scores drift

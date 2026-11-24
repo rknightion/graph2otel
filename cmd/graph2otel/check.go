@@ -228,13 +228,15 @@ func requiredCollectorPermissions(cfg *config.Config, tenantID string, caps lice
 		manual[c.Name()] = append(manual[c.Name()], prerequisite...)
 	}
 
-	deps := collectors.Deps{TenantID: tenantID, Logger: logger, Caps: caps}
+	deps := collectors.Deps{Profiles: cfg.SelectedProfiles(tenantID), TenantID: tenantID, Logger: logger, Caps: caps}
 	polledNames := map[string]bool{}
 	for _, factory := range paths.snapshot {
 		c := factory(deps)
 		polledNames[c.Name()] = true
-		if c.Name() == "graph2otel.blob_categories" && tenant.BlobIngest.AccountURL != "" {
-			add(c, "ARM diagnostic-settings read access and Azure Storage category configuration cannot be proven from a Graph token")
+		if c.Name() == "graph2otel.blob_categories" {
+			if tenant.BlobIngest.AccountURL != "" {
+				add(c, "ARM diagnostic-settings read access and Azure Storage category configuration cannot be proven from a Graph token")
+			}
 			continue
 		}
 		add(c)

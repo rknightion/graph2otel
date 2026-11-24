@@ -119,6 +119,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. Recycle-bin census is a
 // slow-moving state signal — a 30-day window changes by minutes-to-hours, not
 // seconds — and these are directory reads sharing the general Graph budget, so a

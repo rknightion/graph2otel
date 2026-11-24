@@ -75,6 +75,9 @@ type collectorImpl struct {
 	*logpipeline.LogCollector
 }
 
+// Profiles declares this collector's profile membership.
+func (*collectorImpl) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // RequiredCapability declares that this collector needs Entra ID P2 (full
 // risk-detection detail): P1 downgrades every detection to generic-only, so
 // the composition root skips this collector below P2 rather than run it

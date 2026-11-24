@@ -133,6 +133,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. This is posture/config, not an
 // event stream — GSA onboarding and its profiles change on the order of
 // hours-to-days, so a six-hourly poll is ample and trivially cheap.

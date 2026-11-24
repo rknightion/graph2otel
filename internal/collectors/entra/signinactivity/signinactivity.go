@@ -159,6 +159,9 @@ func New(g collectors.GraphClient, caps license.Capabilities, logger *slog.Logge
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. Usage insights update daily;
 // a long cadence keeps well clear of the shared reporting throttle bucket.
 func (c *Collector) DefaultInterval() time.Duration { return time.Hour }

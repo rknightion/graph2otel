@@ -59,10 +59,12 @@ const (
 type Config struct {
 	LogLevel string         `yaml:"log_level"`
 	Tenants  []TenantConfig `yaml:"tenants"`
-	OTLP     OTLPConfig     `yaml:"otlp"`
+	// Profiles is the global collector profile list, inherited by tenants without their own list.
+	Profiles []string   `yaml:"profiles"`
+	OTLP     OTLPConfig `yaml:"otlp"`
 	// Collectors holds global per-collector overrides keyed by collector name.
-	// A collector absent from this map runs with its built-in defaults
-	// (enabled, default interval). Per-tenant overrides on TenantConfig layer
+	// A collector absent from this map uses its profile and built-in defaults.
+	// Per-tenant overrides on TenantConfig layer
 	// on top of these (see CollectorSettings).
 	Collectors map[string]CollectorConfig `yaml:"collectors"`
 	// Admin configures the operator health/status endpoint (#12).
@@ -94,9 +96,8 @@ type Config struct {
 // both globally (Config.Collectors) and per-tenant (TenantConfig.Collectors),
 // with the tenant layer winning field-by-field over the global one.
 type CollectorConfig struct {
-	// Enabled toggles the collector. A nil pointer means "unset" — inherit the
-	// lower layer, ultimately defaulting to true — which is deliberately
-	// distinct from an explicit false (disable).
+	// Enabled overrides profile selection. A nil pointer inherits the lower
+	// layer, distinct from an explicit false (disable).
 	Enabled *bool `yaml:"enabled"`
 	// Interval overrides the collector's poll cadence. Zero means "unset" —
 	// inherit the lower layer, ultimately the collector's DefaultInterval
@@ -249,6 +250,8 @@ type TenantConfig struct {
 	// TenantID is the hyphenated Entra directory GUID. Verified domains and other
 	// names are rejected because their tenant binding cannot be proved locally.
 	TenantID string `yaml:"tenant_id"`
+	// Profiles replaces the global list when set; it is not merged with it.
+	Profiles []string `yaml:"profiles"`
 	// ClientID optionally asserts the expected app registration (application) ID.
 	// It never selects or overrides DefaultAzureCredential. When set, startup
 	// warns if it disagrees with the authenticated token's appid; the
@@ -511,15 +514,17 @@ func (c *Config) BlobInterval(tenantID string) time.Duration {
 // DefaultInterval" (the scheduler applies that fallback at registration). The
 // returned enabled flag defaults to true when neither layer sets it.
 func (c *Config) CollectorSettings(tenantID, collectorName string) (enabled bool, interval time.Duration) {
-	enabled = true // default when unset at every layer
+	override, interval := c.CollectorOverrides(tenantID, collectorName)
+	return override == nil || *override, interval
+}
 
-	if gc, ok := c.Collectors[collectorName]; ok {
-		if gc.Enabled != nil {
-			enabled = *gc.Enabled
-		}
-		if gc.Interval > 0 {
-			interval = gc.Interval
-		}
+// CollectorOverrides resolves explicit tenant and global overrides. A nil
+// enabled value leaves the decision to profile selection and collector defaults.
+func (c *Config) CollectorOverrides(tenantID, collectorName string) (enabled *bool, interval time.Duration) {
+	gc := c.Collectors[collectorName]
+	enabled = gc.Enabled
+	if gc.Interval > 0 {
+		interval = gc.Interval
 	}
 
 	for i := range c.Tenants {
@@ -528,7 +533,7 @@ func (c *Config) CollectorSettings(tenantID, collectorName string) (enabled bool
 		}
 		if tc, ok := c.Tenants[i].Collectors[collectorName]; ok {
 			if tc.Enabled != nil {
-				enabled = *tc.Enabled
+				enabled = tc.Enabled
 			}
 			if tc.Interval > 0 {
 				interval = tc.Interval
@@ -547,20 +552,8 @@ func (c *Config) CollectorSettings(tenantID, collectorName string) (enabled bool
 // explicit value wins over a global one; an explicit false at either layer
 // means "not explicitly enabled".
 func (c *Config) CollectorExplicitlyEnabled(tenantID, collectorName string) bool {
-	explicit := false
-	if gc, ok := c.Collectors[collectorName]; ok && gc.Enabled != nil {
-		explicit = *gc.Enabled
-	}
-	for i := range c.Tenants {
-		if c.Tenants[i].TenantID != tenantID {
-			continue
-		}
-		if tc, ok := c.Tenants[i].Collectors[collectorName]; ok && tc.Enabled != nil {
-			explicit = *tc.Enabled
-		}
-		break
-	}
-	return explicit
+	enabled, _ := c.CollectorOverrides(tenantID, collectorName)
+	return enabled != nil && *enabled
 }
 
 // CollectorSource resolves the ingest transport for a collector, applying the
@@ -619,6 +612,7 @@ type GrafanaCloudConfig struct {
 func Default() *Config {
 	return &Config{
 		LogLevel: "info",
+		Profiles: []string{"graph"},
 		OTLP: OTLPConfig{
 			Protocol: "http",
 			Endpoint: "https://otlp-gateway-prod-us-central-0.grafana.net/otlp",
@@ -666,7 +660,7 @@ func Default() *Config {
 func Load(path string) (*Config, error) {
 	k := koanf.New(keyDelim)
 
-	collectorEnv, err := strictEnvironment()
+	overrides, err := strictEnvironment()
 	if err != nil {
 		return nil, err
 	}
@@ -725,7 +719,11 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("decode config: %w", err)
 	}
 
-	if err := applyCollectorEnvironment(&cfg, collectorEnv); err != nil {
+	if err := applyCollectorEnvironment(&cfg, overrides.collectors); err != nil {
+		return nil, err
+	}
+
+	if err := applyTenantProfileEnvironment(&cfg, overrides.tenantProfiles); err != nil {
 		return nil, err
 	}
 
@@ -768,8 +766,14 @@ func (c *Config) Validate() error {
 			"(only otlp.protocol=stdout may run with no tenants configured)", c.OTLP.Protocol)
 	}
 
+	if err := validateProfiles(c.Profiles, "profiles"); err != nil {
+		return err
+	}
 	seen := make(map[string]bool, len(c.Tenants))
 	for i, t := range c.Tenants {
+		if err := validateProfiles(t.Profiles, fmt.Sprintf("tenants[%d].profiles", i)); err != nil {
+			return err
+		}
 		if t.TenantID == "" {
 			return fmt.Errorf("tenants[%d].tenant_id: required", i)
 		}

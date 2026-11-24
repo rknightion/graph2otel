@@ -234,6 +234,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. Hourly, not the 15 minutes
 // most Entra posture collectors use, because this one is not like them: it is
 // the only posture collector that pages ONE ROW PER USER. entra.licensing and

@@ -20,12 +20,10 @@
 // the first header cell ("Report Refresh Date" becomes a BOM-prefixed
 // variant of it) and silently break every row["Report Refresh Date"] lookup.
 //
-// Three reports are fetched independently and DEGRADE independently — a
-// SharePoint fetch failure must not lose Teams or OneDrive, mirroring
-// storage.go's per-report best-effort handling. Only ALL THREE reports
-// failing is a collector failure (the #240 "100% success on zero data" trap);
-// a single report failing is non-fatal, and a report that succeeds with zero
-// rows (a legitimately empty tenant/window) is a success, not a failure.
+// Teams-only configuration fetches just the Teams report. The Graph profile
+// fetches all three, independently. A collector tick fails only if every
+// selected report fails. A successful report with zero rows still counts as
+// a success.
 //
 // Cardinality (#112): per-user identity (User Principal Name, and Teams' User
 // Id) rides the log twin (m365.collaboration_activity_user) only, never a
@@ -200,17 +198,14 @@ var (
 	}
 )
 
-// reportCount is the number of usage reports Collect fetches; all of them
-// failing is the #240-shaped total-failure condition storage.go established.
-const reportCount = 3
-
 var errReportDecode = errors.New("decode usage report")
 
 // Collector polls the M365 collaboration-activity usage reports.
 type Collector struct {
-	g       collectors.GraphClient
-	baseURL string
-	logger  *slog.Logger
+	g         collectors.GraphClient
+	baseURL   string
+	logger    *slog.Logger
+	teamsOnly bool
 }
 
 // New builds the collaboration-activity collector. A nil logger falls back to
@@ -224,6 +219,11 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
+
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet {
+	return collector.ProfileGraph | collector.ProfileTeams
+}
 
 // DefaultInterval implements collector.Collector. The usage reports refresh at
 // most daily (the live Report Refresh Date trails today by ~2 days), so a 6h
@@ -245,14 +245,13 @@ type reportResult struct {
 	err  error
 }
 
-// Collect fetches the three usage reports and emits bounded aggregates + one
-// per-user log twin per row. Each report is independent and best-effort: only
-// ALL THREE failing is a collector failure (#240-shaped).
+// Collect fetches the selected usage reports and emits bounded aggregates and
+// one log twin per row. Each report is independent: only failure of every
+// selected report fails the collector.
 func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
-	results := []reportResult{
-		{rep: teamsReport},
-		{rep: spReport},
-		{rep: odReport},
+	results := []reportResult{{rep: teamsReport}}
+	if !c.teamsOnly {
+		results = append(results, reportResult{rep: spReport}, reportResult{rep: odReport})
 	}
 	for i := range results {
 		results[i].rows, results[i].err = c.fetch(ctx, results[i].rep)
@@ -334,7 +333,7 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, outcomes *
 	// #240-shaped: every report failing is a fabricated "nobody is using
 	// anything" grid unless surfaced explicitly as a collector failure. A
 	// partial failure (1 or 2 of 3) stays best-effort/non-fatal.
-	if len(fetchErrs) == reportCount {
+	if len(fetchErrs) == len(results) {
 		return fmt.Errorf("m365.collaboration_activity: all usage reports failed: %w", errors.Join(fetchErrs...))
 	}
 	return nil
@@ -544,7 +543,9 @@ func parseOptionalNum(s string) optionalNum {
 
 func init() {
 	collectors.Register(func(d collectors.Deps) collector.SnapshotCollector {
-		return New(d.Graph, d.Logger)
+		c := New(d.Graph, d.Logger)
+		c.teamsOnly = d.Profiles == collector.ProfileTeams
+		return c
 	})
 }
 

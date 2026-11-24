@@ -370,6 +370,9 @@ func New(export exportjob.Runner, logger *slog.Logger) *Collector {
 // Name implements collector.SnapshotCollector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // IngestTransport reports the transport this collector ingests over — the same
 // telemetry.Transport Collect stamps onto every record via telemetry.WithTransport
 // (#141), so the admin status page (#178) and the log records agree by construction.

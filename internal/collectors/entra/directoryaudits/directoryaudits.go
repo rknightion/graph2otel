@@ -56,6 +56,9 @@ type collectorImpl struct {
 	*logpipeline.LogCollector
 }
 
+// Profiles declares this collector's profile membership.
+func (*collectorImpl) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // RequiredPermissions declares the least-privilege Graph application scope.
 func (c *collectorImpl) RequiredPermissions() []string { return []string{"AuditLog.Read.All"} }
 

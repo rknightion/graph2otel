@@ -7,6 +7,37 @@ gotchas that catch most first-run setups. For the per-collector scope list, see
 [`collectors.md`](./collectors.md); for the config schema those collectors are toggled from, see
 [`configuration.md`](./configuration.md).
 
+## Collector profiles
+
+Grant only the application scopes for collectors enabled for your tenant. For
+`[graph]` or `[graph, teams]`, use the profile and scope columns in the
+[collector reference](collectors.md) as a starting point and run `graph2otel check`
+for your exact selection, including explicit overrides and licence gates.
+
+For a base-tier `[teams]` tenant with no overrides or optional transports,
+the minimum Microsoft Graph application permissions for the default collectors are:
+
+<!-- BEGIN GENERATED TEAMS PROFILE SCOPES -->
+
+- `Channel.ReadBasic.All`
+- `Reports.Read.All`
+- `ServiceHealth.Read.All`
+- `Team.ReadBasic.All`
+- `TeamSettings.Read.All`
+- `TeamsAppInstallation.ReadForTeam.All`
+
+<!-- END GENERATED TEAMS PROFILE SCOPES -->
+
+For installed apps, use `TeamsAppInstallation.ReadForTeam.All` for new grants.
+An existing `TeamsAppInstallation.Read.All` grant also satisfies preflight;
+do not grant both. The narrower role is documented for team-installed apps
+but was not verified with a narrow-only live tenant in this change.
+
+The separate subscribed-SKU probe is best effort. With only the Teams scopes
+above, a warning from that probe is expected; startup and preflight fall back
+to base-tier selection. Do not add an organisation-wide permission solely to
+silence the warning unless you need licence discovery.
+
 ## 1. Register the app
 
 1. In the Entra admin center (or `az ad app create`), create an app registration in each tenant

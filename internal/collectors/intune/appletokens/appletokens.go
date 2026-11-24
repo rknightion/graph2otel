@@ -102,6 +102,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. Apple integration tokens
 // live for roughly a year; a daily poll is more than enough, so this uses a
 // long cadence rather than the minutes-scale interval of the inventory

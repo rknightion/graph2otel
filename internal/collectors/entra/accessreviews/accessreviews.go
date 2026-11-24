@@ -418,6 +418,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. A review definition is
 // governance configuration: it is created once and its status moves at the pace
 // of a quarterly cadence, so an hourly read is already far faster than the thing

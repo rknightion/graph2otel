@@ -156,6 +156,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval is 6h. An RBAC catalog changes on a human timescale, and
 // the fetch fans out one request per role definition — a shorter cadence would
 // buy detection latency nobody needs at a cost that scales with the number of

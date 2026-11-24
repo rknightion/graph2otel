@@ -503,7 +503,8 @@ func setupTenantWithGraphAndLicenseBuilders(
 	// tuning) just reduces the reuse rate, never correctness.
 	fleet := collectors.NewCachingFleetFetcher(gc, "https://graph.microsoft.com/v1.0", 30*time.Minute)
 	deps := collectors.Deps{
-		Graph: gc, TenantID: ta.TenantID, Logger: tlog, Caps: caps,
+		Profiles: cfg.SelectedProfiles(ta.TenantID),
+		Graph:    gc, TenantID: ta.TenantID, Logger: tlog, Caps: caps,
 		Export: exporter, Fleet: fleet, Store: store,
 		PrivilegedGroupAllowlist: tenantPrivilegedGroupIDs(cfg, ta.TenantID),
 	}
@@ -524,9 +525,14 @@ func setupTenantWithGraphAndLicenseBuilders(
 	// Gauges are unaffected. Computed BEFORE the factory loop so every polled
 	// collector reads a stable set. Unlike the log-only source: graph|blob swap
 	// (#135-D), here the polled collector keeps running for its gauges.
+	activeBlobNames := map[string]bool{}
+	for _, row := range inventory {
+		if row.Transport == telemetry.TransportBlob && availabilityStaticActive(row) {
+			activeBlobNames[row.Collector] = true
+		}
+	}
 	deps.SuppressedTwins = collectors.SuppressedTwins(blobConfigured, func(name string) bool {
-		enabled, _ := cfg.CollectorSettings(ta.TenantID, name)
-		return enabled
+		return activeBlobNames[name]
 	})
 	// The blob-category census (#238) reads the aadiam diagnostic-settings object
 	// on the ARM control plane (authorized by the poller's Entra roles, not Azure
@@ -1564,18 +1570,27 @@ func collectorEnabledForConfig(c collector.Collector, cfg *config.Config, tenant
 // collectorGate is the shared, side-effect-free runtime selection rule. The
 // scheduler records its skip reason; preflight only needs the selected bit.
 func collectorGate(c collector.Collector, cfg *config.Config, tenantID string, caps license.Capabilities) (time.Duration, bool, string) {
+	profiles, volumeDefaults, err := collector.ProfilePolicy(c)
+	if err != nil {
+		return 0, false, err.Error()
+	}
+	selection := selectCollector(cfg, tenantID, c.Name(), profiles, volumeDefaults)
+	switch selection.disabled {
+	case availability.ReasonDisabledByConfig:
+		return 0, false, "disabled by config"
+	case availability.ReasonProfileNotSelected:
+		return 0, false, "profile not selected"
+	}
 	if ok, requiredCap, _ := license.ShouldRun(c, caps); !ok {
 		return 0, false, fmt.Sprintf("requires %s", requiredCap)
 	}
-	enabled, interval := cfg.CollectorSettings(tenantID, c.Name())
-	if !enabled {
-		return 0, false, "disabled by config"
-	}
-	if exp, ok := c.(collectors.Experimental); ok && exp.Experimental() && !cfg.CollectorExplicitlyEnabled(tenantID, c.Name()) {
+	exp, _ := c.(collectors.Experimental)
+	hv, _ := c.(collectors.HighVolume)
+	switch selection.optInReason(exp != nil && exp.Experimental(), hv != nil && hv.HighVolume()) {
+	case availability.ReasonExperimentalNotEnabled:
 		return 0, false, "beta; enable explicitly to opt in"
-	}
-	if hv, ok := c.(collectors.HighVolume); ok && hv.HighVolume() && !cfg.CollectorExplicitlyEnabled(tenantID, c.Name()) {
+	case availability.ReasonHighVolumeNotEnabled:
 		return 0, false, "high volume; enable explicitly to opt in"
 	}
-	return interval, true, ""
+	return selection.interval, true, ""
 }

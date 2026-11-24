@@ -67,6 +67,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. Directory sizes drift slowly;
 // five minutes is ample and trivially cheap on the RU budget.
 func (c *Collector) DefaultInterval() time.Duration { return 5 * time.Minute }

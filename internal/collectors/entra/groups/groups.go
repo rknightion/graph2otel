@@ -102,6 +102,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. Group population drifts
 // slowly; five minutes matches the directory-counts collector's cadence and
 // is trivially cheap on the directory-objects RU budget (11 $count calls/tick).

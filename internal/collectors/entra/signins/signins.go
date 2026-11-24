@@ -104,6 +104,9 @@ type collectorImpl struct {
 	beta bool
 }
 
+// Profiles declares this collector's profile membership.
+func (*collectorImpl) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // RequiredCapability declares that every sign-in stream needs Entra ID P1 (the
 // sign-in logs are unavailable on Free); the composition root skips the
 // collector on an insufficient tier. Implements license.CapabilityRequirer.
