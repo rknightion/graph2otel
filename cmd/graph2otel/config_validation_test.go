@@ -410,6 +410,27 @@ func TestRunAndCheckValidateTenantTeamsConfigBeforeConstructors(t *testing.T) {
 		})
 	}
 
+	t.Run("singleton mapping validates before constructors", func(t *testing.T) {
+		singleton := strings.Replace(base, "  - tenant_id:", "  tenant_id:", 1)
+		path := writeTempConfig(t, singleton+"  teams:\n    internal_domains: 123\n")
+		for _, prefix := range [][]string{nil, {"check"}} {
+			var stdout, stderr bytes.Buffer
+			code := dispatch(context.Background(), append(prefix, "-config", path), &stdout, &stderr)
+			if code != 1 || !strings.Contains(stderr.String(), "tenants[0].teams.internal_domains: expected a list") {
+				t.Errorf("dispatch(%v) = %d, stderr=%q; want singleton tenant field validation", prefix, code, stderr.String())
+			}
+		}
+		valid := writeTempConfig(t, singleton+"  teams:\n    internal_domains: [example.com]\n")
+		cfg, err := config.Load(valid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, domains := cfg.TeamsSiteInputs("00000000-0000-0000-0000-000000000000")
+		if !domains.IsInternal("user@example.com") {
+			t.Fatal("valid singleton form did not supply its site's domain rules")
+		}
+	})
+
 	t.Run("valid config reaches startup", func(t *testing.T) {
 		if err := os.WriteFile(csv, []byte("subnet,location,country,latitude,longitude\n192.0.2.0/24,Test site,ZZ,0,0\n"), 0o600); err != nil {
 			t.Fatal(err)

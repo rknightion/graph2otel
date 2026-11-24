@@ -76,6 +76,11 @@ func validateYAMLNode(node *yaml.Node, typ reflect.Type, path string) error {
 			}
 		}
 	case reflect.Slice, reflect.Array:
+		// Weak decode accepts a singleton tenant mapping as a one-element
+		// list. Walk that element too, so no supported form skips validation.
+		if path == "tenants" && node.Kind == yaml.MappingNode {
+			return validateYAMLNode(node, typ.Elem(), "tenants[0]")
+		}
 		if node.Kind != yaml.SequenceNode {
 			if path == "profiles" || (strings.HasPrefix(path, "tenants[") && strings.HasSuffix(path, "].profiles")) {
 				return fmt.Errorf("%s: expected a list of profiles", path)
