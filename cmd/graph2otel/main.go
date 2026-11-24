@@ -24,6 +24,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/config"
 	"github.com/rknightion/graph2otel/internal/profiling"
 	"github.com/rknightion/graph2otel/internal/startupevent"
+	"github.com/rknightion/graph2otel/internal/teams/geoip"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/version"
 )
@@ -240,6 +241,18 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 	logger := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: parseLevel(cfg.LogLevel)}))
 
+	geoIPReaders, err := openTeamsGeoIP(cfg, geoip.Open)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	// All tenant workers drain before run returns, including on startup errors.
+	defer func() {
+		if err := geoIPReaders.close(); err != nil {
+			logger.Warn("closing Teams GeoIP databases", "error", err)
+		}
+	}()
+
 	logger.Info("graph2otel starting",
 		"version", version.String(), "otlp_protocol", cfg.OTLP.Protocol, "tenants", len(cfg.Tenants))
 
@@ -357,7 +370,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	// canceling would leave them polling Graph while the process exits.
 	tenantCtx, cancelTenants := context.WithCancel(ctx)
 	defer cancelTenants()
-	sources, skips, limiter, waitTenants, err := startTenants(tenantCtx, cfg, provider, logger)
+	sources, skips, limiter, waitTenants, err := startTenants(tenantCtx, cfg, provider, logger, geoIPReaders)
 	if err != nil {
 		// A collector config that must not run (#144). Fatal on purpose: this
 		// state ships every record twice while every collector reports healthy,

@@ -111,8 +111,9 @@ func startTenants(
 	cfg *config.Config,
 	provider *telemetry.Provider,
 	logger *slog.Logger,
+	geoIPReaders tenantGeoIPReaders,
 ) (sources []admin.CollectorSource, skips map[admin.SkipKey]string, limiter *graphclient.WorkloadLimiter, wait func(), err error) {
-	return startTenantsWithBuilders(ctx, cfg, provider, logger, auth.NewTenantAuth, setupTenant)
+	return startTenantsWithBuilders(ctx, cfg, provider, logger, auth.NewTenantAuth, geoIPReaders.setupTenant)
 }
 
 // startTenantsWithBuilders is the injectable composition-root seam for tenant
@@ -343,7 +344,7 @@ func validateRuntimeRegistryCensus(
 // configuration that must not run at all, so the caller aborts startup rather
 // than continuing without this tenant. See the conflict check below for why
 // that distinction exists.
-func setupTenant(
+func (readers tenantGeoIPReaders) setupTenant(
 	ctx context.Context,
 	ta *auth.TenantAuth,
 	cfg *config.Config,
@@ -353,7 +354,7 @@ func setupTenant(
 	skips map[admin.SkipKey]string,
 	wg *sync.WaitGroup,
 ) (admin.CollectorSource, error) {
-	return setupTenantWithGraphAndLicenseBuilders(
+	return readers.setupTenantWithGraphAndLicenseBuilders(
 		ctx, ta, cfg, provider, logger, limiter, skips, wg,
 		graphclient.NewClient,
 		func(ctx context.Context, client *graphclient.Client) (license.Capabilities, error) {
@@ -373,7 +374,7 @@ func setupTenantWithGraphClientBuilder(
 	wg *sync.WaitGroup,
 	buildGraphClient tenantGraphClientBuilder,
 ) (admin.CollectorSource, error) {
-	return setupTenantWithGraphAndLicenseBuilders(
+	return tenantGeoIPReaders(nil).setupTenantWithGraphAndLicenseBuilders(
 		ctx, ta, cfg, provider, logger, limiter, skips, wg,
 		buildGraphClient,
 		func(ctx context.Context, client *graphclient.Client) (license.Capabilities, error) {
@@ -382,7 +383,7 @@ func setupTenantWithGraphClientBuilder(
 	)
 }
 
-func setupTenantWithGraphAndLicenseBuilders(
+func (readers tenantGeoIPReaders) setupTenantWithGraphAndLicenseBuilders(
 	ctx context.Context,
 	ta *auth.TenantAuth,
 	cfg *config.Config,
@@ -596,6 +597,7 @@ func setupTenantWithGraphAndLicenseBuilders(
 		JobClient:              jobClient,
 		Store:                  store,
 		TeamsSites:             teamsSites,
+		TeamsGeoIP:             readers[ta.TenantID],
 		TeamsInternalDomains:   teamsDomains,
 		TeamsQualityThresholds: &cfg.Teams.QualityThresholds,
 	}

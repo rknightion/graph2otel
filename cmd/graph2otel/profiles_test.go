@@ -190,7 +190,7 @@ func setupProfileTestTenant(t *testing.T, cfg *config.Config) admin.CollectorSou
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	var wg sync.WaitGroup
-	source, err := setupTenantWithGraphAndLicenseBuilders(
+	source, err := tenantGeoIPReaders(nil).setupTenantWithGraphAndLicenseBuilders(
 		ctx, startupTenantAuth(profileTestTenant), cfg, provider,
 		slog.New(slog.NewTextHandler(io.Discard, nil)), graphclient.NewWorkloadLimiter(), map[admin.SkipKey]string{}, &wg,
 		func(context.Context, *auth.TenantAuth, graphclient.Options) (*graphclient.Client, error) {

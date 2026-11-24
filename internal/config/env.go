@@ -37,6 +37,9 @@ func envTransform(name, value string) (string, any) {
 	if _, ok := parseTenantProfileEnvIndex(name); ok {
 		return "", nil // koanf would replace the YAML tenant slice with a map
 	}
+	if _, ok := parseTenantGeoIPEnvName(name); ok {
+		return "", nil // apply after typed decode, preserving the tenant slice
+	}
 	key := envKey(name)
 	if listEnvKeys[key] {
 		return key, splitEnvironmentList(value)
@@ -60,6 +63,7 @@ type tenantProfileEnvOverride struct {
 type environmentOverrides struct {
 	collectors     []collectorEnvOverride
 	tenantProfiles []tenantProfileEnvOverride
+	teamsGeoIP     []tenantGeoIPEnvOverride
 }
 
 func strictEnvironment() (environmentOverrides, error) {
@@ -80,6 +84,11 @@ func strictEnvironment() (environmentOverrides, error) {
 		}
 		if index, ok := parseTenantProfileEnvIndex(name); ok {
 			overrides.tenantProfiles = append(overrides.tenantProfiles, tenantProfileEnvOverride{index, name, value})
+			continue
+		}
+		if override, ok := parseTenantGeoIPEnvName(name); ok {
+			override.value = value
+			overrides.teamsGeoIP = append(overrides.teamsGeoIP, override)
 			continue
 		}
 		if name == envVarName(removedCardinalityMetricLimit) {
@@ -139,8 +148,12 @@ func parseTenantProfileEnvIndex(name string) (int, bool) {
 	if len(parts) != 3 || parts[0] != EnvPrefix+"TENANTS" || parts[2] != "PROFILES" {
 		return 0, false
 	}
-	index, err := strconv.Atoi(parts[1])
-	return index, err == nil && index >= 0 && strconv.Itoa(index) == parts[1]
+	return parseTenantEnvIndex(parts[1])
+}
+
+func parseTenantEnvIndex(raw string) (int, bool) {
+	index, err := strconv.Atoi(raw)
+	return index, err == nil && index >= 0 && strconv.Itoa(index) == raw
 }
 
 func splitEnvironmentList(value string) []string {

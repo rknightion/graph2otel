@@ -74,7 +74,7 @@ func TestSetupTenantTokenProofFailureRetainsBoundedStartupFailure(t *testing.T) 
 	}
 	var wg sync.WaitGroup
 	var logOutput bytes.Buffer
-	source, err := setupTenantWithGraphAndLicenseBuilders(
+	source, err := tenantGeoIPReaders(nil).setupTenantWithGraphAndLicenseBuilders(
 		context.Background(),
 		&auth.TenantAuth{
 			TenantID: "tenant-a",
@@ -440,7 +440,7 @@ func TestSetupTenantLicenseProbeFailureOnlyFailsCapabilityDependentAvailability(
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	var wg sync.WaitGroup
-	source, err := setupTenantWithGraphAndLicenseBuilders(
+	source, err := tenantGeoIPReaders(nil).setupTenantWithGraphAndLicenseBuilders(
 		ctx,
 		startupTenantAuth("tenant-a"),
 		&config.Config{CheckpointDir: t.TempDir()},
@@ -524,7 +524,7 @@ func TestSetupTenantInvalidO365ConfigurationRecomputesCoverage(t *testing.T) {
 	}
 	var wg sync.WaitGroup
 	skips := map[admin.SkipKey]string{}
-	source, err := setupTenantWithGraphAndLicenseBuilders(
+	source, err := tenantGeoIPReaders(nil).setupTenantWithGraphAndLicenseBuilders(
 		ctx,
 		startupTenantAuth("tenant-a"),
 		cfg,
@@ -592,7 +592,7 @@ func TestSetupTenantWithoutBlobConfigurationDoesNotRegisterBlobCategories(t *tes
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	var wg sync.WaitGroup
-	source, err := setupTenantWithGraphAndLicenseBuilders(
+	source, err := tenantGeoIPReaders(nil).setupTenantWithGraphAndLicenseBuilders(
 		ctx,
 		startupTenantAuth("tenant-a"),
 		&config.Config{CheckpointDir: t.TempDir()},
@@ -651,7 +651,7 @@ func TestSetupTenantEmitsExpectedIntervalPerRegisteredCollector(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	var wg sync.WaitGroup
-	source, err := setupTenantWithGraphAndLicenseBuilders(
+	source, err := tenantGeoIPReaders(nil).setupTenantWithGraphAndLicenseBuilders(
 		ctx,
 		startupTenantAuth("tenant-a"),
 		&config.Config{CheckpointDir: t.TempDir()},
@@ -807,7 +807,7 @@ func TestSetupTenantBlobInitializationFailureRecomputesCoverage(t *testing.T) {
 	}
 	var wg sync.WaitGroup
 	skips := map[admin.SkipKey]string{}
-	source, err := setupTenantWithGraphAndLicenseBuilders(
+	source, err := tenantGeoIPReaders(nil).setupTenantWithGraphAndLicenseBuilders(
 		ctx,
 		startupTenantAuth("tenant-a"),
 		cfg,

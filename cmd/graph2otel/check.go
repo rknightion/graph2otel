@@ -18,6 +18,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/mdcaclient"
 	"github.com/rknightion/graph2otel/internal/preflight"
+	"github.com/rknightion/graph2otel/internal/teams/geoip"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -49,6 +50,15 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	cfg, err := loadValidatedConfig(*configPath)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	readers, err := openTeamsGeoIP(cfg, geoip.Open)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	if err := readers.close(); err != nil {
+		fmt.Fprintf(stderr, "closing Teams GeoIP databases: %v\n", err)
 		return 1
 	}
 	tenantAuths, err := buildTenantAuths(cfg.Tenants)
