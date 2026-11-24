@@ -1,5 +1,5 @@
 {
-  "package_count": 176,
+  "package_count": 178,
   "domains": [
     "defender",
     "entra",
@@ -7,7 +7,8 @@
     "intune",
     "m365",
     "mdca",
-    "purview"
+    "purview",
+    "teams"
   ],
   "metrics": [
     {
@@ -6347,6 +6348,67 @@
       "packages": [
         "internal/collectors/purview/retentionlabels"
       ]
+    },
+    {
+      "name": "teams.direct_routing.calls",
+      "prometheus_name": "teams_direct_routing_calls_total",
+      "unit": "{call}",
+      "kind": "sum",
+      "description": "New Teams Direct Routing attempts",
+      "additive": true,
+      "domain": "teams",
+      "attr_keys": [
+        "outcome",
+        "sip_class",
+        "trunk_fqdn"
+      ],
+      "packages": [
+        "internal/collectors/teams/directroutingcalls"
+      ]
+    },
+    {
+      "name": "teams.direct_routing.network_effectiveness_ratio",
+      "prometheus_name": "teams_direct_routing_network_effectiveness_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "description": "Fraction of new Teams Direct Routing attempts that answered or reached a busy user, in the latest successful poll",
+      "additive": false,
+      "domain": "teams",
+      "attr_keys": [
+        "trunk_fqdn"
+      ],
+      "packages": [
+        "internal/collectors/teams/directroutingcalls"
+      ]
+    },
+    {
+      "name": "teams.pstn.calls",
+      "prometheus_name": "teams_pstn_calls_total",
+      "unit": "{call}",
+      "kind": "sum",
+      "description": "New Teams PSTN calls",
+      "additive": true,
+      "domain": "teams",
+      "attr_keys": [
+        "call_type",
+        "connectivity_type"
+      ],
+      "packages": [
+        "internal/collectors/teams/pstncalls"
+      ]
+    },
+    {
+      "name": "teams.pstn.minutes",
+      "prometheus_name": "teams_pstn_minutes_total",
+      "unit": "min",
+      "kind": "sum",
+      "description": "Connected minutes of new Teams PSTN calls",
+      "additive": true,
+      "domain": "teams",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/teams/pstncalls"
+      ]
     }
   ],
   "logs": [
@@ -10455,6 +10517,67 @@
       ],
       "packages": [
         "internal/collectors/purview/sensitivitylabels"
+      ]
+    },
+    {
+      "event_name": "teams.direct_routing_call",
+      "domain": "teams",
+      "attr_keys": [
+        "call_end_sub_reason",
+        "call_type",
+        "callee_number",
+        "caller_number",
+        "correlation_id",
+        "duration_seconds",
+        "end_time",
+        "failure_time",
+        "final_sip_code",
+        "final_sip_code_phrase",
+        "id",
+        "ingest_transport",
+        "invite_time",
+        "media_bypass_enabled",
+        "media_path_location",
+        "signaling_location",
+        "start_time",
+        "successful_call",
+        "trunk_fqdn",
+        "user_display_name",
+        "user_id",
+        "user_principal_name"
+      ],
+      "packages": [
+        "internal/collectors/teams/directroutingcalls"
+      ]
+    },
+    {
+      "event_name": "teams.pstn_call",
+      "domain": "teams",
+      "attr_keys": [
+        "call_id",
+        "call_type",
+        "callee_number",
+        "caller_number",
+        "charge",
+        "conference_id",
+        "connectivity_type",
+        "currency",
+        "destination_context",
+        "destination_name",
+        "duration_seconds",
+        "end_time",
+        "id",
+        "ingest_transport",
+        "inventory_type",
+        "license_capability",
+        "operator",
+        "start_time",
+        "user_display_name",
+        "user_id",
+        "user_principal_name"
+      ],
+      "packages": [
+        "internal/collectors/teams/pstncalls"
       ]
     }
   ]

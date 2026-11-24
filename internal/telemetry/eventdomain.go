@@ -86,6 +86,7 @@ var eventDomains = []string{
 	"m365",
 	"mdca",
 	"purview",
+	"teams",
 	EventDomainOther,
 }
 

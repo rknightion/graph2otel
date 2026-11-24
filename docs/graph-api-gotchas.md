@@ -10,6 +10,26 @@ essentially every load-bearing detail on this project's path — **wire over doc
 Before adding an entry: state the current truth positively, tag the evidence, link the
 issue. Do not record correction narratives here — those live on the issues.
 
+## Teams Phone report functions
+
+- **PSTN and Direct Routing** `[docs-only]` use v1.0 function arguments, not a
+  `$filter`. The lower bound is inclusive; the documented upper bound is
+  inclusive for PSTN and exclusive for Direct Routing. The service pages at
+  1,000 rows, and next links must be replayed unchanged. Keep each request
+  below 90 days. The collectors also respect `backfill.initial_lookback` and
+  the shorter OTLP event horizon, rather than trying to ingest all of Graph's
+  retained call history on startup.
+- **Dedicated `teams-phone` budget** `[docs-only]`: Microsoft's
+  [PSTN call records limits](https://learn.microsoft.com/graph/throttling-limits#pstn-call-records-limits)
+  give 200 requests per minute per app per tenant and 50 per minute per
+  collection. A shared client bucket of 50 per minute with a burst of one
+  keeps either function, including pagination, within both budgets.
+- The one-day overlap is a provisional replay budget, not a measured lag.
+  The synthetic fixtures prove paging and late arrival handling, not the
+  tenant's licensing, returned values or completeness. The optional beta
+  SMS, blocked-user and meeting dial-out functions are not polled: neither
+  GA collector needs them.
+
 ## Query mechanics (all workloads)
 
 - **URL-encode every `$filter` value** `[live, M2]`. A raw `$filter=appId eq '<guid>'`

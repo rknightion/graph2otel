@@ -35,6 +35,8 @@ const (
 	// tightest Intune ceiling: documented 48 requests / minute per app, limited
 	// client-side to 24/min burst 4 (see workloadRates).
 	WorkloadIntuneExport Workload = "intune-export"
+	// WorkloadTeamsPhone is the distinct Graph PSTN call records workload.
+	WorkloadTeamsPhone Workload = "teams-phone"
 	// WorkloadUnknown is anything not matched by the table below. It gets no
 	// client-side limiter (a generous, permissive default) rather than being
 	// forced into one of the tuned ceilings above.
@@ -92,6 +94,8 @@ var classifyRules = []workloadMatch{
 	// without this entry the per-team summary fan-out would classify as
 	// WorkloadUnknown and bypass the limiter entirely.
 	{"/teams", WorkloadDirectory},
+	{"/communications/callRecords/getPstnCalls(", WorkloadTeamsPhone},
+	{"/communications/callRecords/getDirectRoutingCalls(", WorkloadTeamsPhone},
 }
 
 // ClassifyWorkload maps a request's URL path to the Graph throttling workload

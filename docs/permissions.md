@@ -19,6 +19,7 @@ the minimum Microsoft Graph application permissions for the default collectors a
 
 <!-- BEGIN GENERATED TEAMS PROFILE SCOPES -->
 
+- `CallRecords.Read.All`
 - `Channel.ReadBasic.All`
 - `Reports.Read.All`
 - `ServiceHealth.Read.All`

@@ -32,6 +32,9 @@ func TestClassifyWorkload(t *testing.T) {
 		{"/directoryRoles", WorkloadDirectory},
 		{"/teams", WorkloadDirectory},
 		{"/teams/00000000-0000-0000-0000-000000000000", WorkloadDirectory},
+		{"/v1.0/communications/callRecords/getPstnCalls(fromDateTime=2026-01-01T00:00:00Z,toDateTime=2026-01-02T00:00:00Z)", Workload("teams-phone")},
+		{"/v1.0/communications/callRecords/getDirectRoutingCalls(from=2026-01-01,to=2026-01-02)", Workload("teams-phone")},
+		{"/v1.0/communications/callRecords", WorkloadUnknown},
 		{"/something/entirely/unrelated", WorkloadUnknown},
 	}
 	for _, tt := range tests {

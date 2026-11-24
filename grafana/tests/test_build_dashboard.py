@@ -945,7 +945,7 @@ class TestDomainAvailabilityPresentation(unittest.TestCase):
     DOMAIN_PATTERNS = {
         "Intune": r"intune\..+",
         "Entra": r"entra\..+",
-        "M365": r"m365\..+",
+        "M365": r"(?:m365|teams)\..+",
         "Defender": r"(?:defender|mdca)\..+",
         "Purview": r"purview\..+",
     }

@@ -29,6 +29,9 @@ import (
 //     of firing 48 back to back. Half is a safety margin, not a measured
 //     ceiling; exportjob's concurrency cap (3 jobs) is the primary burst control,
 //     and graph2otel.throttle.count{workload="intune-export"} is the check.
+//   - teams-phone: Microsoft documents 200/min per app per tenant and
+//     50/min per collection. A shared 50/min bucket with a burst of one
+//     keeps either collection below both limits, including page requests.
 //   - unknown:        no limiter (permissive default).
 var workloadRates = map[Workload]struct {
 	every rate.Limit
@@ -40,6 +43,7 @@ var workloadRates = map[Workload]struct {
 	WorkloadIntuneGeneral: {every: rate.Every(20 * time.Second / 1000), burst: 1000},
 	WorkloadIntuneDevices: {every: rate.Every(20 * time.Second / 2000), burst: 2000},
 	WorkloadIntuneExport:  {every: rate.Every(time.Minute / 24), burst: 4},
+	WorkloadTeamsPhone:    {every: rate.Every(time.Minute / 50), burst: 1},
 }
 
 // limiterKey identifies one token bucket. Every workload is keyed per
