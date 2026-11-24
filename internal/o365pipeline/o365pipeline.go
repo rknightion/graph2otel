@@ -107,6 +107,9 @@ type EndpointConfig struct {
 	// EventName is the OTEL EventName applied to any Event whose Map left Name
 	// empty.
 	EventName string
+	// IncludeRecord, if set, selects which fetched records reach Map. Records
+	// it rejects count as filtered, not dropped. Blobs still advance the cursor.
+	IncludeRecord func(rec map[string]any) bool
 	// Map turns one raw audit record into its immutable id — used for
 	// record-level dedupe — and the OTLP log Event to emit. Returning ok=false
 	// drops the record.
@@ -144,10 +147,8 @@ type EndpointConfig struct {
 	//     with the blob's contentCreated — that is the #135 trap exactly.
 	//
 	// So a mapper should return a stable id wherever the record has one, and
-	// ok=false ONLY for the un-dateable case. ok=false must never be used to
-	// filter records the collector merely does not want: ship those with ok=true
-	// and let LogQL filter (#112). The engine cannot enforce that, so it is the
-	// mapper's discipline.
+	// ok=false ONLY for the un-dateable case. An explicit operator filter
+	// belongs in IncludeRecord, not in Map.
 	//
 	// In practice both Id and CreationTime are mandatory in the Common Schema,
 	// so neither path should ever fire — they are specified because a contract
@@ -392,6 +393,10 @@ func (c *Collector) consume(
 
 	for _, raw := range records {
 		outcomes.Add(recordoutcome.OutcomeFetched, 1)
+		if c.cfg.IncludeRecord != nil && !c.cfg.IncludeRecord(raw) {
+			outcomes.Add(recordoutcome.OutcomeFiltered, 1)
+			continue
+		}
 		id, ev, ok, panicked := mapRecord(c.cfg.Map, raw)
 		if panicked {
 			outcomes.Add(recordoutcome.OutcomeErrored, 1)

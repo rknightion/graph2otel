@@ -76,6 +76,23 @@ func TestLoadRejectsUnknownYAMLKeys(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsInvalidO365RecordTypeAllowList(t *testing.T) {
+	for _, tc := range []struct{ name, value, pathSuffix string }{
+		{"scalar", "25", ""},
+		{"fraction", "[25.5]", "[0]"},
+		{"nonpositive", "[25, 0]", "[1]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			const prefix = "tenants:\n  - tenant_id: example\n    o365_activity:\n      record_type_allow_list: "
+			_, err := config.Load(writeTemp(t, prefix+tc.value+"\n"))
+			want := "tenants[0].o365_activity.record_type_allow_list" + tc.pathSuffix + ": expected"
+			if err == nil || !strings.Contains(err.Error(), want) {
+				t.Errorf("Load error = %v, want diagnostic at %s", err, want)
+			}
+		})
+	}
+}
+
 func TestLoadRejectsUnknownEnvironmentVariables(t *testing.T) {
 	tests := []struct {
 		name  string

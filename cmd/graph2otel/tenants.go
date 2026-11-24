@@ -1015,7 +1015,7 @@ func registerO365Collectors(
 	inventory []availability.Static,
 	failures *[]availabilityStartupFailure,
 ) availability.Reason {
-	types, err := tenantO365ContentTypes(cfg, ta.TenantID)
+	types, recordTypeIDs, err := tenantO365Selection(cfg, ta.TenantID)
 	if err != nil {
 		tlog.Error("o365 activity disabled: invalid content_types", "error", err)
 		recordO365Skips(
@@ -1053,11 +1053,12 @@ func registerO365Collectors(
 	}
 
 	odeps := collectors.O365Deps{
-		Client:       client,
-		ContentTypes: types,
-		TenantID:     ta.TenantID,
-		Logger:       tlog,
-		Store:        store,
+		Client:              client,
+		ContentTypes:        types,
+		RecordTypeAllowList: recordTypeIDs,
+		TenantID:            ta.TenantID,
+		Logger:              tlog,
+		Store:               store,
 	}
 	for _, of := range o365Factories {
 		expected := newAvailabilityCandidate(
@@ -1400,30 +1401,25 @@ func recordO365Skips(
 	}
 }
 
-// tenantO365ContentTypes resolves and validates the tenant's configured content
-// types. A nil result means "unset" — the collector then uses its own default.
-//
-// Validation is here rather than in the collector so a typo fails loudly at
-// startup instead of becoming a silent 400 on every tick.
-func tenantO365ContentTypes(cfg *config.Config, tenantID string) ([]o365activityclient.ContentType, error) {
+// tenantO365Selection resolves the tenant's subscriptions and local record
+// filter. Empty content types use the collector's own defaults. Validate the
+// subscription names here so a typo fails at startup rather than on every tick.
+func tenantO365Selection(cfg *config.Config, tenantID string) ([]o365activityclient.ContentType, []int64, error) {
 	for _, t := range cfg.Tenants {
 		if t.TenantID != tenantID {
 			continue
 		}
-		if len(t.O365Activity.ContentTypes) == 0 {
-			return nil, nil
-		}
-		out := make([]o365activityclient.ContentType, 0, len(t.O365Activity.ContentTypes))
+		var types []o365activityclient.ContentType
 		for _, s := range t.O365Activity.ContentTypes {
 			ct := o365activityclient.ContentType(s)
 			if !ct.Valid() {
-				return nil, fmt.Errorf("unknown content type %q (valid: %v)", s, o365activityclient.ContentTypes())
+				return nil, nil, fmt.Errorf("unknown content type %q (valid: %v)", s, o365activityclient.ContentTypes())
 			}
-			out = append(out, ct)
+			types = append(types, ct)
 		}
-		return out, nil
+		return types, t.O365Activity.RecordTypeAllowList, nil
 	}
-	return nil, nil
+	return nil, nil, nil
 }
 
 // tenantBlobAccountURL returns the storage account URL configured for tenantID,

@@ -462,6 +462,13 @@
                                         "items": {
                                             "type": "string"
                                         }
+                                    },
+                                    "record_type_allow_list": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "integer",
+                                            "minimum": 1
+                                        }
                                     }
                                 }
                             },

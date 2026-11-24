@@ -66,14 +66,11 @@
 // when m365.unified_audit is retired — which is deliberately not part of this
 // change, so the two can coexist while this one is proven live.
 //
-// # Ship everything fetched
+// # Record selection
 //
-// No record-type include-list. m365.unified_audit filters server-side because
-// the query API can; this API has NO server-side filtering at all, so filtering
-// here would mean fetching per-entity rows and discarding them — a bug under
-// #112's hard rule. record_type and workload are attributes; consumers filter
-// in LogQL. Volume is instead controlled at the SUBSCRIPTION, by choosing which
-// content types to enable (config), which is a real server-side choice.
+// By default every mapped record ships. A tenant can opt into a record-type
+// allow-list to save downstream ingest. Unlike m365.unified_audit's server-side
+// filter, it runs after fetching each blob and does not reduce API traffic.
 //
 // # Namespace and cardinality
 //
@@ -166,11 +163,8 @@ const (
 
 // defaultContentTypes is what a default deployment subscribes to.
 //
-// This API has NO server-side filtering, so the subscription is the only place
-// volume can be controlled — which makes this a cost decision taken on other
-// operators' behalf, not a technical one. graph2otel is public OSS and other
-// operators pay per GB; Loki being free on the verification tenant is not a
-// reason to ship everyone a firehose.
+// This API has no server-side record filtering, so subscriptions determine
+// how much data is fetched. Do not opt operators into a firehose by default.
 //
 // Deliberately excluded, each for its own reason:
 //
@@ -191,9 +185,6 @@ const (
 //     exclusion is wider than #100 assumed. Subscribing also requires the
 //     tenant to grant ActivityFeed.ReadDlp, which this collector declares only
 //     when DLP.All is configured.
-//
-// Once enabled, a content type ships EVERY record it carries — no record-type
-// include-list. #112: fetching per-entity rows and discarding them is a bug.
 var defaultContentTypes = []o365activityclient.ContentType{
 	o365activityclient.ContentExchange,
 	o365activityclient.ContentSharePoint,
@@ -334,12 +325,38 @@ func newCollector(d collectors.O365Deps) *collectorImpl {
 		ContentTypes:  contentTypes,
 		CheckpointKey: checkpointKey,
 		EventName:     eventName,
+		IncludeRecord: recordTypeFilter(d.RecordTypeAllowList),
 		Map:           mapRecord,
 	}
 	return &collectorImpl{
 		ActivityCollector: o365pipeline.NewActivityCollector(
 			collectorName, interval, lag, d.Client, d.Store, cfg),
 		contentTypes: contentTypes,
+	}
+}
+
+// recordTypeFilter uses the wire ID, not the display name. The existing name
+// table is incomplete; an explicit numeric ID can select even an unnamed type.
+func recordTypeFilter(ids []int64) func(map[string]any) bool {
+	if len(ids) == 0 {
+		return nil
+	}
+	allowed := make(map[int64]struct{}, len(ids))
+	for _, id := range ids {
+		allowed[id] = struct{}{}
+	}
+	return func(rec map[string]any) bool {
+		id, ok := num(rec, "RecordType")
+		if !ok {
+			return false
+		}
+		// FetchContent decodes JSON numbers as float64. Do not let num's
+		// conversion turn a fractional wire value into a matching integer ID.
+		if raw, floating := rec["RecordType"].(float64); floating && raw != float64(id) {
+			return false
+		}
+		_, match := allowed[id]
+		return match
 	}
 }
 
