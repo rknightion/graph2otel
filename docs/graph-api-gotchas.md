@@ -30,6 +30,14 @@ issue. Do not record correction narratives here — those live on the issues.
   SMS, blocked-user and meeting dial-out functions are not polled: neither
   GA collector needs them.
 
+## Teams call records
+
+- **General call records use a separate workload** `[docs-only]` from the two
+  phone report functions. The client shares a provisional 30 requests per 20
+  seconds, burst one, across list, detail and child-page reads. Microsoft's
+  [call records limits](https://learn.microsoft.com/graph/throttling-limits#call-records-limits)
+  document 40 per 20 seconds for list and per-record requests.
+
 ## Query mechanics (all workloads)
 
 - **URL-encode every `$filter` value** `[live, M2]`. A raw `$filter=appId eq '<guid>'`

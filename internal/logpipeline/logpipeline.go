@@ -4,7 +4,7 @@
 // auditEvents, ...). None of those endpoints support a delta query or a
 // reliable server-side cursor, so this package owns, once, the mechanics
 // every one of them would otherwise hand-roll: build a time-window $filter,
-// follow @odata.nextLink to exhaustion, dedupe by immutable id against the
+// follow @odata.nextLink to exhaustion, dedupe by record key against the
 // checkpoint's overlap window, emit each record as an OTLP log, and advance
 // the watermark. An M3/M5 collector becomes a thin EndpointConfig plus a
 // Map function; it does not re-implement pagination, dedupe, or watermark
@@ -131,7 +131,8 @@ type EndpointConfig struct {
 	// defaults to DefaultOverlap when zero.
 	Overlap time.Duration
 	// PageSize is the requested $top page size; defaults to
-	// DefaultPageSize when zero.
+	// DefaultPageSize when zero. Negative omits $top for endpoints that
+	// negotiate page size through a Prefer header instead.
 	PageSize int
 	// ExcludeSelf, when true, drops a record whose actor appId (as read by
 	// SelfAppID) equals SelfClientID — this tenant's own poller — before it is
@@ -168,6 +169,15 @@ type EndpointConfig struct {
 	// guidance. Map need not set Event.Timestamp: Poll parses TimeField from
 	// the raw record and fills it in when left zero.
 	Map func(record map[string]any) (id string, ev telemetry.Event)
+	// Prepare is the alternative to Map for a list row that needs additional
+	// reads before it can be emitted. It may return several events for one
+	// source row. An error holds the watermark and leaves that row retryable.
+	// Prepared endpoints drain list pages before starting the auxiliary reads.
+	Prepare PrepareRecord
+	// NotBefore is an optional source retention floor, set for this poll. It
+	// also retains prepared keys back to that floor, independently of overlap,
+	// so an out-of-band fetch can share dedupe with the window.
+	NotBefore time.Time
 }
 
 // withDefaults returns a copy of cfg with zero-valued tuning fields replaced
@@ -179,7 +189,7 @@ func (cfg EndpointConfig) withDefaults() EndpointConfig {
 	if cfg.Overlap <= 0 {
 		cfg.Overlap = DefaultOverlap
 	}
-	if cfg.PageSize <= 0 {
+	if cfg.PageSize == 0 {
 		cfg.PageSize = DefaultPageSize
 	}
 	return cfg
@@ -219,6 +229,8 @@ func cloneCheckpoint(cp *checkpoint.Checkpoint) checkpoint.Checkpoint {
 // does NOT persist them — the caller owns persistence (checkpoint.Store.Save),
 // so Poll stays testable without a filesystem. Reliable ordered pages stream
 // before that commit and may therefore replay after a later-page failure.
+// Prepared endpoints can commit completed keys alone on auxiliary failure,
+// leaving the window watermark unchanged.
 // LogCollector.CollectWindow (collector.go) is the convenience that Loads,
 // Polls, and Saves for a WindowCollector.
 func Poll(
@@ -327,12 +339,17 @@ func Poll(
 		all = append(all, d)
 	}
 
+	streamPages := cfg.OrderByReliable && cfg.Prepare == nil
+	from = later(from, cfg.NotBefore)
 	pageURL := buildFirstURL(cfg, from, to)
+	if !cfg.NotBefore.IsZero() && to.Before(from) {
+		pageURL = ""
+	}
 	seenURLs := make(map[string]struct{})
 	pages := 0
 	for pageURL != "" {
 		if _, seen := seenURLs[pageURL]; seen {
-			if cfg.OrderByReliable {
+			if streamPages {
 				outcomes.Cause(recordoutcome.CauseSourceError)
 			} else {
 				failFetchedRecords(outcomes, fetched, recordoutcome.CauseSourceError)
@@ -341,7 +358,7 @@ func Poll(
 		}
 		seenURLs[pageURL] = struct{}{}
 		if pages >= maxPages {
-			if cfg.OrderByReliable {
+			if streamPages {
 				outcomes.Cause(recordoutcome.CauseSourceError)
 			} else {
 				failFetchedRecords(outcomes, fetched, recordoutcome.CauseSourceError)
@@ -356,7 +373,7 @@ func Poll(
 		outcomes.Add(recordoutcome.OutcomeFetched, n)
 		if ferr != nil {
 			cause := fetchFailureCause(ferr)
-			if cfg.OrderByReliable {
+			if streamPages {
 				outcomes.Add(recordoutcome.OutcomeErrored, n)
 				outcomes.Cause(cause)
 			} else {
@@ -364,7 +381,7 @@ func Poll(
 			}
 			return cp.Watermark, fmt.Errorf("logpipeline: %s: fetch page: %w", cfg.Path, ferr)
 		}
-		if cfg.OrderByReliable {
+		if streamPages {
 			for _, rec := range records {
 				processRecord(rec, true)
 			}
@@ -374,7 +391,26 @@ func Poll(
 		pageURL = next
 	}
 
-	if !cfg.OrderByReliable {
+	if cfg.Prepare != nil {
+		// The list walk is complete. Deliver one fully hydrated row at a time,
+		// without holding the expanded window in memory. Remember only rows
+		// that finished, even if another row's auxiliary reads fail later.
+		sort.SliceStable(rawRecords, func(i, j int) bool {
+			a, _ := recordTime(rawRecords[i], cfg.TimeField)
+			b, _ := recordTime(rawRecords[j], cfg.TimeField)
+			return a.Before(b)
+		})
+		for i, rec := range rawRecords {
+			if err := ingestPrepared(ctx, cfg, &working, rec, e, outcomes); err != nil {
+				cp.SeenIDs = working.SeenIDs
+				failFetchedRecords(outcomes, uint64(len(rawRecords[i:])), fetchFailureCause(err))
+				return cp.Watermark, fmt.Errorf("logpipeline: %s: prepare row: %w", cfg.Path, err)
+			}
+		}
+		// Retention can expire during an outage. If the whole scheduler slice
+		// is unavailable, skip straight to the edge of the available range.
+		to = later(to, cfg.NotBefore)
+	} else if !cfg.OrderByReliable {
 		// Map only after the complete page walk succeeds. Client-sorted
 		// endpoints deliberately buffer before emission/checkpoint mutation;
 		// deferring mapping to the same commit point means a later-page failure
@@ -421,7 +457,11 @@ func Poll(
 
 	working.Watermark = highWater
 	working.OverlapWindow = cfg.Overlap
-	working.EvictStale()
+	if cfg.Prepare != nil && !cfg.NotBefore.IsZero() {
+		working.SeenIDs.Evict(cfg.NotBefore)
+	} else {
+		working.EvictStale()
+	}
 	*cp = working
 
 	return highWater, nil
@@ -481,7 +521,9 @@ func buildFirstURL(cfg EndpointConfig, from, to time.Time) string {
 	if cfg.OrderByReliable {
 		q.Set("$orderby", cfg.TimeField+" asc")
 	}
-	q.Set("$top", strconv.Itoa(cfg.PageSize))
+	if cfg.PageSize > 0 {
+		q.Set("$top", strconv.Itoa(cfg.PageSize))
+	}
 	base := graphV1BaseURL
 	if cfg.BaseURLOverride != "" {
 		base = cfg.BaseURLOverride

@@ -32,18 +32,21 @@ import (
 //   - teams-phone: Microsoft documents 200/min per app per tenant and
 //     50/min per collection. A shared 50/min bucket with a burst of one
 //     keeps either collection below both limits, including page requests.
+//   - teams-call-records: provisional shared budget of 30 requests / 20s,
+//     burst one, below Microsoft's documented 40 / 20s list and per-record limits.
 //   - unknown:        no limiter (permissive default).
 var workloadRates = map[Workload]struct {
 	every rate.Limit
 	burst int
 }{
-	WorkloadReporting:     {every: rate.Every(10 * time.Second / 5), burst: 5},
-	WorkloadIPC:           {every: rate.Every(time.Second), burst: 1},
-	WorkloadDirectory:     {every: rate.Every(10 * time.Second / 50), burst: 50},
-	WorkloadIntuneGeneral: {every: rate.Every(20 * time.Second / 1000), burst: 1000},
-	WorkloadIntuneDevices: {every: rate.Every(20 * time.Second / 2000), burst: 2000},
-	WorkloadIntuneExport:  {every: rate.Every(time.Minute / 24), burst: 4},
-	WorkloadTeamsPhone:    {every: rate.Every(time.Minute / 50), burst: 1},
+	WorkloadReporting:        {every: rate.Every(10 * time.Second / 5), burst: 5},
+	WorkloadIPC:              {every: rate.Every(time.Second), burst: 1},
+	WorkloadDirectory:        {every: rate.Every(10 * time.Second / 50), burst: 50},
+	WorkloadIntuneGeneral:    {every: rate.Every(20 * time.Second / 1000), burst: 1000},
+	WorkloadIntuneDevices:    {every: rate.Every(20 * time.Second / 2000), burst: 2000},
+	WorkloadIntuneExport:     {every: rate.Every(time.Minute / 24), burst: 4},
+	WorkloadTeamsPhone:       {every: rate.Every(time.Minute / 50), burst: 1},
+	WorkloadTeamsCallRecords: {every: rate.Every(20 * time.Second / 30), burst: 1},
 }
 
 // limiterKey identifies one token bucket. Every workload is keyed per

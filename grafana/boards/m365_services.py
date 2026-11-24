@@ -143,6 +143,12 @@ LOGS = [
      "by": ["sender_address", "status"],
      "desc": "One record per message per recipient — the rate scales with traffic, not "
              "tenant size. Empty unless the collector is explicitly enabled."},
+    {"kind": "logs", "event": "teams.call", "title": "Teams calls by detail version",
+     "desc": "One log per call version. Use call_id to match call and stream records; "
+             "a new version is not a new call."},
+    {"kind": "logs", "event": "teams.call_stream", "title": "Teams media stream evidence",
+     "desc": "Directional media, network and site evidence. Caller and callee identify "
+             "segment sides; direction identifies the sender and receiver when available."},
     {"kind": "logs", "event": "teams.pstn_call", "title": "Teams PSTN call records",
      "desc": "Per-call detail, including caller and callee numbers. Requires the Teams Phone feed."},
     {"kind": "logs", "event": "teams.direct_routing_call", "title": "Teams Direct Routing call records",

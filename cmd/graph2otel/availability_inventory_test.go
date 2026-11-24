@@ -20,8 +20,8 @@ func TestAvailabilityCandidatesCoverCompleteSevenPathCensus(t *testing.T) {
 	if !slices.IsSortedFunc(first, compareAvailabilityCandidates) {
 		t.Fatal("availabilityCandidates() is not sorted by logical name and family")
 	}
-	if len(first) != 175 {
-		t.Fatalf("availabilityCandidates() count = %d, want 175 registration-path candidates", len(first))
+	if len(first) != 176 {
+		t.Fatalf("availabilityCandidates() count = %d, want 176 registration-path candidates", len(first))
 	}
 
 	wantFamilies := map[availabilityFamily]bool{
@@ -68,8 +68,8 @@ func TestAvailabilityCandidatesCoverCompleteSevenPathCensus(t *testing.T) {
 			t.Errorf("seven-path census did not visit family %q", family)
 		}
 	}
-	if len(byName) != 172 {
-		t.Fatalf("availability logical-name count = %d, want 172", len(byName))
+	if len(byName) != 173 {
+		t.Fatalf("availability logical-name count = %d, want 173", len(byName))
 	}
 	for _, candidate := range first {
 		for _, peer := range candidate.ConflictsWith {
@@ -144,8 +144,8 @@ func TestResolveAvailabilityInventoryIsCompleteBoundedAndDeterministic(t *testin
 	if !reflect.DeepEqual(first, second) {
 		t.Fatal("resolveAvailabilityInventory() is not deterministic across calls")
 	}
-	if len(first) != 172 {
-		t.Fatalf("inventory count = %d, want 172 logical collectors", len(first))
+	if len(first) != 173 {
+		t.Fatalf("inventory count = %d, want 173 logical collectors", len(first))
 	}
 	if !slices.IsSortedFunc(first, func(a, b availability.Static) int {
 		return compareStrings(a.Collector, b.Collector)

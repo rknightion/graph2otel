@@ -96,6 +96,9 @@ config:
       enabled: true
       interval: 10m
       source: blob
+    teams.call_records:
+      enabled: true
+      interval: 5m
   tenants:
     - tenant_id: 00000000-0000-0000-0000-000000000000
       client_id: ""
@@ -453,8 +456,8 @@ func TestCollectorOverrideSchemaHasBoundedNamesAndSourceEnum(t *testing.T) {
 
 	names := schemaObject(t, definitions, "collectorName")
 	gotNames := schemaStrings(t, names, "enum")
-	if len(gotNames) != 172 {
-		t.Fatalf("collector name inventory has %d entries, want 172", len(gotNames))
+	if len(gotNames) != 173 {
+		t.Fatalf("collector name inventory has %d entries, want 173", len(gotNames))
 	}
 	if !slices.IsSorted(gotNames) {
 		t.Error("collector name inventory is not sorted")
@@ -472,6 +475,7 @@ func TestCollectorOverrideSchemaHasBoundedNamesAndSourceEnum(t *testing.T) {
 		"m365.activity",
 		"mdca.discovery_parse",
 		"purview.sensitivity_labels",
+		"teams.call_records",
 	} {
 		if _, found := slices.BinarySearch(gotNames, name); !found {
 			t.Errorf("collector name inventory is missing %q", name)
