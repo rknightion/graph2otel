@@ -284,6 +284,8 @@ type TenantConfig struct {
 	// global Config.Collectors — a tenant may disable a globally-enabled
 	// collector or tune its interval. See CollectorSettings.
 	Collectors map[string]CollectorConfig `yaml:"collectors"`
+	// Teams holds optional YAML-only inputs for Teams call-record enrichment.
+	Teams *TeamsConfig `yaml:"teams" json:",omitempty"`
 	// BlobIngest configures the read-only Azure Storage blob consumer (#89),
 	// the one place graph2otel reads from outside Graph. Off unless an account
 	// URL is set.
@@ -734,6 +736,9 @@ func Load(path string) (*Config, error) {
 	// inline value from any layer (YAML or the G2O_* environment) participates
 	// in the value-XOR-file check.
 	if err := cfg.resolveSecretFiles(); err != nil {
+		return nil, err
+	}
+	if err := cfg.resolveTeamsSites(); err != nil {
 		return nil, err
 	}
 

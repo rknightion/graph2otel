@@ -82,14 +82,18 @@ func TestLoadRejectsInvalidO365RecordTypeAllowList(t *testing.T) {
 		{"fraction", "[25.5]", "[0]"},
 		{"nonpositive", "[25, 0]", "[1]"},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			const prefix = "tenants:\n  - tenant_id: example\n    o365_activity:\n      record_type_allow_list: "
-			_, err := config.Load(writeTemp(t, prefix+tc.value+"\n"))
-			want := "tenants[0].o365_activity.record_type_allow_list" + tc.pathSuffix + ": expected"
-			if err == nil || !strings.Contains(err.Error(), want) {
-				t.Errorf("Load error = %v, want diagnostic at %s", err, want)
-			}
-		})
+		for name, prefix := range map[string]string{
+			"sequence":  "tenants:\n  - tenant_id: example\n    o365_activity:\n      record_type_allow_list: ",
+			"singleton": "tenants:\n  tenant_id: example\n  o365_activity:\n    record_type_allow_list: ",
+		} {
+			t.Run(tc.name+"/"+name, func(t *testing.T) {
+				_, err := config.Load(writeTemp(t, prefix+tc.value+"\n"))
+				want := "tenants[0].o365_activity.record_type_allow_list" + tc.pathSuffix + ": expected"
+				if err == nil || !strings.Contains(err.Error(), want) {
+					t.Errorf("Load error = %v, want diagnostic at %s", err, want)
+				}
+			})
+		}
 	}
 }
 

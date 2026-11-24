@@ -177,6 +177,50 @@ Graph window polling, async export jobs, Azure diagnostic blobs, and the O365 Ma
 Activity subscription/content-blob flow. Snapshot, MDCA, Exchange Online, and Hunt
 collectors retain their direct API shapes.
 
+#### Teams site mapping and internal domains
+
+The optional `tenants[].teams` block is YAML-only and does not enable any
+collector or change Teams inventory. These settings prepare enrichment for
+Teams call records; configuring them alone does not emit call records.
+
+```yaml
+tenants:
+  - tenant_id: "00000000-0000-0000-0000-000000000000"
+    teams:
+      sites_file: /etc/graph2otel/teams-sites.csv
+      internal_domains: ["example.test", "*.example.test"]
+```
+
+- `sites_file` is optional. Start with the [synthetic CSV sample](teams-sites.example.csv).
+  Mount the file where graph2otel can read it; relative paths are relative to the
+  process working directory. Use the header `subnet,location,country,latitude,longitude`
+  in that order (an optional UTF-8 BOM is accepted). Each row needs an IPv4 or IPv6
+  CIDR, a non-empty location other than `unmapped`, and a non-empty country (not
+  necessarily a country code). Latitude and longitude must be finite, in `[-90, 90]`
+  and `[-180, 180]` respectively. Duplicate networks are rejected even if their
+  host bits differ.
+- Site lookup uses the longest configured prefix covering the whole reported
+  subnet. A matching subnet takes precedence over the endpoint IP. Without a
+  usable matching subnet, lookup tries the endpoint IP; without a match, the
+  result is `unmapped`. An omitted file leaves all sites unmapped.
+- `internal_domains` classifies the domain of a participant's user principal name
+  (UPN). `example.test` matches only that domain; `*.example.test` matches its
+  proper subdomains at any depth, not the domain itself. Use both to cover both.
+  Matching is case-insensitive and ignores a trailing DNS dot. Use ASCII DNS names
+  (punycode for internationalised names). Missing or malformed UPNs, and UPNs
+  with no matching rule, are not marked internal. This classification does not
+  filter records. Changing the rules requires a restart.
+
+An unreadable or invalid configured CSV, or a malformed domain rule, stops startup
+before a tenant starts. When a Teams call-record poll uses site mapping, it checks
+for changed CSV contents once per poll and uses one snapshot for both sides of
+all streams in that poll. An invalid or unreadable replacement keeps the last
+valid snapshot and reports an error; it does not stop polling. To update or roll
+back, atomically replace the file at the configured path with a valid CSV. Do not
+truncate and rewrite it in place; a partly written file can look valid. A valid
+header-only file clears the mapping on the next reload. The last good snapshot
+is held in memory only; an invalid file still prevents a restart.
+
 ### `otlp`
 
 ```yaml
