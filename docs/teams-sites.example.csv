@@ -1,0 +1,4 @@
+subnet,location,country,latitude,longitude
+192.0.2.0/24,Example Campus,GB,0,0
+192.0.2.128/25,Example Annex,GB,0,1
+2001:db8:200::/48,Example IPv6 Site,AU,0,-1

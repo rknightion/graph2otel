@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"maps"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -365,6 +367,100 @@ func TestRunAndCheckRejectCollectorSourcesBeforeConstructors(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestRunAndCheckValidateTenantTeamsConfigBeforeConstructors(t *testing.T) {
+	const base = "otlp:\n  protocol: stdout\ntenants:\n  - tenant_id: 00000000-0000-0000-0000-000000000000\n"
+	csv := filepath.Join(t.TempDir(), "sites.csv")
+	if err := os.WriteFile(csv, []byte("wrong,header\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	originalTelemetry, originalAuth := buildTelemetryProvider, buildTenantAuths
+	var receivedConfig *config.Config
+	buildTelemetryProvider = func(_ context.Context, cfg *config.Config, _ io.Writer) (*telemetry.Provider, error) {
+		receivedConfig = cfg
+		return nil, errors.New("unexpected telemetry constructor")
+	}
+	buildTenantAuths = func([]config.TenantConfig) ([]*auth.TenantAuth, error) {
+		return nil, errors.New("unexpected credential constructor")
+	}
+	t.Cleanup(func() { buildTelemetryProvider, buildTenantAuths = originalTelemetry, originalAuth })
+
+	for _, tc := range []struct {
+		name, yaml, field, reason string
+	}{
+		{"missing CSV", fmt.Sprintf("sites_file: %q", csv+".missing"), "sites_file", "read Teams sites file"},
+		{"invalid CSV", fmt.Sprintf("sites_file: %q", csv), "sites_file", "expected CSV header"},
+		{"invalid domain", `internal_domains: ["*example.test"]`, "internal_domains", "expected a DNS domain"},
+		{"scalar domains", `internal_domains: example.test`, "internal_domains", "expected a list"},
+		{"numeric domain", `internal_domains: [123]`, "internal_domains[0]", "expected a string"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeTempConfig(t, base+"    teams:\n      "+tc.yaml+"\n")
+			for _, prefix := range [][]string{nil, {"check"}} {
+				var stdout, stderr bytes.Buffer
+				code := dispatch(context.Background(), append(prefix, "-config", path), &stdout, &stderr)
+				diagnostic := stderr.String()
+				if code != 1 || !strings.Contains(diagnostic, "tenants[0].teams."+tc.field) ||
+					!strings.Contains(diagnostic, tc.reason) || strings.Contains(diagnostic, "unexpected") {
+					t.Errorf("dispatch(%v) = %d, stderr=%q; want tenant field and %q before constructors", prefix, code, diagnostic, tc.reason)
+				}
+			}
+		})
+	}
+
+	t.Run("singleton mapping validates before constructors", func(t *testing.T) {
+		singleton := strings.Replace(base, "  - tenant_id:", "  tenant_id:", 1)
+		path := writeTempConfig(t, singleton+"  teams:\n    internal_domains: 123\n")
+		for _, prefix := range [][]string{nil, {"check"}} {
+			var stdout, stderr bytes.Buffer
+			code := dispatch(context.Background(), append(prefix, "-config", path), &stdout, &stderr)
+			if code != 1 || !strings.Contains(stderr.String(), "tenants[0].teams.internal_domains: expected a list") {
+				t.Errorf("dispatch(%v) = %d, stderr=%q; want singleton tenant field validation", prefix, code, stderr.String())
+			}
+		}
+		valid := writeTempConfig(t, singleton+"  teams:\n    internal_domains: [example.com]\n")
+		cfg, err := config.Load(valid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, domains := cfg.TeamsSiteInputs("00000000-0000-0000-0000-000000000000")
+		if !domains.IsInternal("user@example.com") {
+			t.Fatal("valid singleton form did not supply its site's domain rules")
+		}
+	})
+
+	t.Run("valid config reaches startup", func(t *testing.T) {
+		if err := os.WriteFile(csv, []byte("subnet,location,country,latitude,longitude\n192.0.2.0/24,Test site,ZZ,0,0\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		const otherTenant = "11111111-1111-1111-1111-111111111111"
+		path := writeTempConfig(t, base+fmt.Sprintf("    teams:\n      sites_file: %q\n      internal_domains: [example.com, '*.example.com']\n  - tenant_id: %s\n", csv, otherTenant))
+		var stdout, stderr bytes.Buffer
+		code := run(context.Background(), []string{"-config", path}, &stdout, &stderr)
+		// Reaching the injected constructor proves the config was accepted; it
+		// stops the CLI before any side effects or tenant credential use.
+		if code != 1 || !strings.Contains(stderr.String(), "unexpected telemetry constructor") || receivedConfig == nil {
+			t.Fatalf("run() = %d, stderr=%q; want valid config to reach the constructor", code, stderr.String())
+		}
+		if err := os.Remove(csv); err != nil {
+			t.Fatal(err)
+		}
+		file, domains := receivedConfig.TeamsSiteInputs("00000000-0000-0000-0000-000000000000")
+		if file == nil {
+			t.Fatal("configured tenant has no prepared site file")
+		}
+		if got := file.Snapshot().Lookup("", "192.0.2.5"); got.Name != "Test site" || got.Country != "ZZ" {
+			t.Errorf("prepared lookup = %+v, want Test site in ZZ", got)
+		}
+		if !domains.IsInternal("user@sub.example.com") {
+			t.Error("configured tenant's wildcard did not match")
+		}
+		if file, domains := receivedConfig.TeamsSiteInputs(otherTenant); file != nil || domains.IsInternal("user@sub.example.com") {
+			t.Error("unconfigured tenant inherited another tenant's Teams enrichment")
+		}
+	})
 }
 
 func assertSourceValidationDiagnostic(t *testing.T, diagnostic, collectorName string) {

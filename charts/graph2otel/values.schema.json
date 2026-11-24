@@ -438,6 +438,21 @@
                             "collectors": {
                                 "$ref": "#/definitions/collectorOverrides"
                             },
+                            "teams": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                    "sites_file": {
+                                        "type": "string"
+                                    },
+                                    "internal_domains": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            },
                             "blob_ingest": {
                                 "type": "object",
                                 "additionalProperties": false,

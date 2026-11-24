@@ -9,6 +9,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/jobpipeline"
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
+	"github.com/rknightion/graph2otel/internal/teams/sites"
 )
 
 // WindowDeps is everything a WindowFactory needs to construct a window
@@ -79,6 +80,12 @@ type WindowDeps struct {
 	// configured client_id never supplies it. Empty disables the filter even when
 	// ExcludeSelf is true — there is no proved "self" to match.
 	SelfClientID string
+	// TeamsSites is the tenant's already-loaded site file, nil when disabled.
+	// The Teams call-record poll should reload it once per batch, report any
+	// error and use the resulting snapshot for both sides of every stream.
+	TeamsSites *sites.File
+	// TeamsInternalDomains classifies participant UPNs without filtering records.
+	TeamsInternalDomains sites.Domains
 }
 
 // RegisteredWindow bundles a constructed window collector with the schedule
