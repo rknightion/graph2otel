@@ -78,6 +78,16 @@ type Checkpoint struct {
 	// complete but whose delivery needs retry. FIFO order is durable and the
 	// opting-in poller owns validation, expiry and the entry limit.
 	DeferredRecords []DeferredRecord `json:"deferred_records,omitempty"`
+	// VAACScan resumes an unfinished Teams voice analytics overlap sweep
+	// without advancing Watermark or evicting its dedupe entries.
+	VAACScan *VAACScan `json:"vaac_scan,omitempty"`
+}
+
+// VAACScan records the inclusive prefix drained by both analytics streams
+// and the pinned end of the sweep. It is saved atomically with SeenIDs.
+type VAACScan struct {
+	Through time.Time `json:"through"`
+	Target  time.Time `json:"target"`
 }
 
 // DeferredRecord identifies a source row retrievable by ID. Version is the

@@ -96,20 +96,34 @@ type Row map[string]any
 // has no page cursor. A saturated response is not complete: split it by time
 // and retry, or fail without returning partial rows when the budget is spent.
 func (c *Client) Fetch(ctx context.Context, kind Kind, from, to time.Time) ([]Row, error) {
+	rows, _, err := c.FetchPrefix(ctx, kind, from, to)
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// FetchPrefix returns rows only from the contiguous, complete prefix of an
+// EndTime interval, together with its inclusive end. An error means the rest
+// was not read; a zero end means no complete prefix. All subqueries share the
+// same per-stream request and row budgets, including saturated attempts in the
+// request budget. The caller may commit the complete prefix and retry at its end.
+func (c *Client) FetchPrefix(ctx context.Context, kind Kind, from, to time.Time) ([]Row, time.Time, error) {
 	if kind != AutoAttendant && kind != CallQueue {
-		return nil, errors.New("invalid VAAC stream")
+		return nil, time.Time{}, errors.New("invalid VAAC stream")
 	}
 	if from.IsZero() || to.Before(from) || to.Sub(from) > maxWindow {
-		return nil, errors.New("invalid VAAC query window")
+		return nil, time.Time{}, errors.New("invalid VAAC query window")
 	}
 	from, to = from.Truncate(time.Second), to.Truncate(time.Second)
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	token, err := c.accessToken(ctx)
 	if err != nil {
-		return nil, err
+		return nil, time.Time{}, err
 	}
 	var rows []Row
+	var through time.Time
 	budget := maxQueries
 	var fill func(time.Time, time.Time) error
 	fill = func(lo, hi time.Time) error {
@@ -135,20 +149,19 @@ func (c *Client) Fetch(ctx context.Context, kind Kind, from, to time.Time) ([]Ro
 			return errors.New("VAAC query window exceeded row limit")
 		}
 		rows = append(rows, part...)
+		through = hi
 		return nil
 	}
-	if err := fill(from, to); err != nil {
-		var status statusError
-		if errors.As(err, &status) && status.code == http.StatusUnauthorized {
-			c.mu.Lock()
-			if c.token == token {
-				c.token = ""
-			}
-			c.mu.Unlock()
+	err = fill(from, to)
+	var status statusError
+	if errors.As(err, &status) && status.code == http.StatusUnauthorized {
+		c.mu.Lock()
+		if c.token == token {
+			c.token = ""
 		}
-		return nil, err
+		c.mu.Unlock()
 	}
-	return rows, nil
+	return rows, through, err
 }
 
 func (c *Client) fetch(ctx context.Context, token string, kind Kind, from, to time.Time) ([]Row, bool, error) {

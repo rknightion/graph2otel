@@ -78,36 +78,74 @@ func (c *voiceApps) CollectWindow(ctx context.Context, from, to time.Time, e tel
 	if err != nil {
 		return time.Time{}, fmt.Errorf("load VAAC checkpoint: %w", err)
 	}
-	// The source uses whole-second filter values. Persist that exact drained
-	// boundary. The first read starts without a trailing overlap.
+	// The source uses whole-second filter values. Resume at the inclusive
+	// boundary, including any calls at that instant that arrived since the
+	// previous read. SeenIDs covers the shared boundary across restarts.
 	lo, hi := from.Truncate(time.Second), to.Truncate(time.Second)
-	if !cp.Watermark.IsZero() {
-		lo = lo.Add(-overlap)
+	if cp.VAACScan != nil {
+		lo, hi = cp.VAACScan.Through, cp.VAACScan.Target
+	} else if !cp.Watermark.IsZero() {
+		if !hi.After(cp.Watermark) {
+			return cp.Watermark, nil // the scheduler may not have saved its own copy
+		}
+		lo = cp.Watermark.Add(-overlap)
+		if limit := cp.Watermark.Add(maxWindow); hi.After(limit) {
+			hi = limit
+		}
 	}
-	aa, err := c.client.Fetch(ctx, vaacclient.AutoAttendant, lo, hi)
-	if err != nil {
+
+	batch, readErr := c.readPrefix(ctx, lo, hi)
+	if readErr != nil {
 		outcomes.Cause(recordoutcome.CauseSourceError)
-		return time.Time{}, fmt.Errorf("read auto attendant analytics: %w", err)
+		if !batch.through.After(lo) {
+			return time.Time{}, readErr
+		}
 	}
-	cq, err := c.client.Fetch(ctx, vaacclient.CallQueue, lo, hi)
-	if err != nil {
-		outcomes.Cause(recordoutcome.CauseSourceError)
-		return time.Time{}, fmt.Errorf("read call queue analytics: %w", err)
-	}
-	// Neither stream emits before both reads have drained. A cap, malformed
-	// response or auth error leaves the retryable checkpoint untouched.
+	// Publish only what both streams drained. Hold the scheduler watermark and
+	// the dedupe horizon until the pinned overlap sweep reaches its end.
 	e = telemetry.WithTransport(e, telemetry.TransportVAAC)
 	queues := make(map[string]queueCounts)
-	c.emitRows(e, outcomes, cp, aaEvent, aa, lo, hi, queues)
-	c.emitRows(e, outcomes, cp, cqEvent, cq, lo, hi, queues)
-	cp.Watermark, cp.OverlapWindow = hi, overlap
-	cp.EvictStale()
+	c.emitRows(e, outcomes, cp, aaEvent, batch.aa, lo, batch.through, queues)
+	c.emitRows(e, outcomes, cp, cqEvent, batch.cq, lo, batch.through, queues)
+	if batch.through.Equal(hi) {
+		cp.VAACScan = nil
+		cp.Watermark, cp.OverlapWindow = hi, overlap
+		cp.EvictStale()
+	} else {
+		cp.VAACScan = &checkpoint.VAACScan{Through: batch.through, Target: hi}
+	}
 	if err := c.store.Save(cp); err != nil {
 		outcomes.Cause(recordoutcome.CauseSourceError)
 		return time.Time{}, fmt.Errorf("save VAAC checkpoint: %w", err)
 	}
 	emitRates(e, queues)
+	if readErr != nil {
+		// A successful CollectWindow (even with a partial watermark) can clear
+		// the scheduler's cold-start target. Report the incomplete read until
+		// the entire sweep is durable.
+		return time.Time{}, readErr
+	}
 	return hi, nil
+}
+
+type prefix struct {
+	aa, cq  []vaacclient.Row
+	through time.Time
+}
+
+func (c *voiceApps) readPrefix(ctx context.Context, lo, hi time.Time) (prefix, error) {
+	aa, aaEnd, aaErr := c.client.FetchPrefix(ctx, vaacclient.AutoAttendant, lo, hi)
+	if aaErr != nil {
+		aaErr = fmt.Errorf("read auto attendant analytics: %w", aaErr)
+		if !aaEnd.After(lo) {
+			return prefix{}, aaErr
+		}
+	}
+	cq, through, cqErr := c.client.FetchPrefix(ctx, vaacclient.CallQueue, lo, aaEnd)
+	if cqErr != nil {
+		cqErr = fmt.Errorf("read call queue analytics: %w", cqErr)
+	}
+	return prefix{aa: aa, cq: cq, through: through}, errors.Join(aaErr, cqErr)
 }
 
 func (c *voiceApps) emitRows(e telemetry.Emitter, outcomes *recordoutcome.Recorder, cp *checkpoint.Checkpoint,
