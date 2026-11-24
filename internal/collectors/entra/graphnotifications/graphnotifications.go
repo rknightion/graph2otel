@@ -63,6 +63,9 @@ type blobCollector struct {
 	*blobpipeline.BlobCollector
 }
 
+// Profiles declares this collector's profile membership.
+func (blobCollector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // newCollector builds the GraphNotificationsActivityLogs blob collector for a
 // tenant. It is NOT experimental — it registers whenever blob ingest is
 // configured.

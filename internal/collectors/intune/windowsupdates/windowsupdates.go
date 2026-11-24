@@ -172,6 +172,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval matches the other Intune configuration-posture collectors:
 // update policies and deployments change on an administrator's timescale, not a
 // minute one.

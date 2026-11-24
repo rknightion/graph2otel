@@ -38,6 +38,7 @@ import (
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/blobpipeline"
+	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
@@ -64,14 +65,16 @@ func Prefix(tenantID string) string {
 // the subpackage by reflection — it adds no behavior (it used to add
 // Experimental(); #183 removed that). This constructor owns the ContainerConfig
 // assembly every table shares.
-func New(name, table string, mapFn func(map[string]any) (telemetry.Event, bool), d collectors.BlobDeps) *blobpipeline.BlobCollector {
+func New(name, table string, profiles collector.ProfileSet, mapFn func(map[string]any) (telemetry.Event, bool), d collectors.BlobDeps) *blobpipeline.BlobCollector {
 	cfg := blobpipeline.ContainerConfig{
 		Container:     Container(table),
 		Prefix:        Prefix(d.TenantID),
 		Map:           mapFn,
 		CollectorName: name,
 	}
-	return blobpipeline.NewBlobCollector(name, d.BlobInterval(), d.TenantID, cfg, d.Source, d.Store, d.Logger)
+	c := blobpipeline.NewBlobCollector(name, d.BlobInterval(), d.TenantID, cfg, d.Source, d.Store, d.Logger)
+	c.ProfileMembership = profiles
+	return c
 }
 
 // Props returns the advanced-hunting record's inner `properties` object — the

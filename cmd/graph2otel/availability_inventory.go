@@ -29,6 +29,8 @@ type availabilityCandidate struct {
 	Name                string
 	Family              availabilityFamily
 	Transport           telemetry.Transport
+	Profiles            collector.ProfileSet
+	HighVolumeDefaults  collector.ProfileSet
 	Experimental        bool
 	HighVolume          bool
 	Capability          license.Capability
@@ -104,7 +106,13 @@ func availabilityCandidates() []availabilityCandidate {
 }
 
 func newAvailabilityCandidate(c collector.Collector, family availabilityFamily) availabilityCandidate {
+	profiles, volumeDefaults, err := collector.ProfilePolicy(c)
+	if err != nil {
+		panic(fmt.Sprintf("availability inventory: %v", err))
+	}
 	candidate := availabilityCandidate{
+		Profiles:            profiles,
+		HighVolumeDefaults:  volumeDefaults,
 		Name:                c.Name(),
 		Family:              family,
 		Transport:           collector.TransportOf(c),
@@ -228,10 +236,10 @@ func resolveAvailabilityStatic(
 		Transport: candidate.Transport,
 	}
 
-	enabled, _ := cfg.CollectorSettings(tenantID, candidate.Name)
-	if !enabled {
+	selection := selectCollector(cfg, tenantID, candidate.Name, candidate.Profiles, candidate.HighVolumeDefaults)
+	if selection.disabled != "" {
 		static.State = availability.StateDisabled
-		static.Reason = availability.ReasonDisabledByConfig
+		static.Reason = selection.disabled
 		return static
 	}
 	if !availabilityTransportConfigured(cfg, tenantID, candidate, blobConfigured) {
@@ -239,14 +247,9 @@ func resolveAvailabilityStatic(
 		static.Reason = availability.ReasonTransportNotConfigured
 		return static
 	}
-	if candidate.Experimental && !cfg.CollectorExplicitlyEnabled(tenantID, candidate.Name) {
+	if reason := selection.optInReason(candidate.Experimental, candidate.HighVolume); reason != "" {
 		static.State = availability.StateDisabled
-		static.Reason = availability.ReasonExperimentalNotEnabled
-		return static
-	}
-	if candidate.HighVolume && !cfg.CollectorExplicitlyEnabled(tenantID, candidate.Name) {
-		static.State = availability.StateDisabled
-		static.Reason = availability.ReasonHighVolumeNotEnabled
+		static.Reason = reason
 		return static
 	}
 
@@ -310,7 +313,7 @@ func applyAvailabilityCoverage(
 			if !ok {
 				panic(fmt.Sprintf("availability inventory: %q declares unknown conflict peer %q", candidate.Name, peer))
 			}
-			if active[peerIndex] {
+			if active[peerIndex] || statics[peerIndex].Reason == availability.ReasonProfileNotSelected {
 				continue
 			}
 			statics[peerIndex].Transport = candidate.Transport

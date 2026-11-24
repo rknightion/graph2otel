@@ -5,12 +5,18 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
+	lognoop "go.opentelemetry.io/otel/log/noop"
+	metricnoop "go.opentelemetry.io/otel/metric/noop"
+
+	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/semconv"
+	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
@@ -63,6 +69,51 @@ func liveFake(t *testing.T) *fakeGraph {
 		teams:      readTestdata(t, "teams_activity.csv"),
 		sharepoint: readTestdata(t, "sharepoint_activity.csv"),
 		onedrive:   readTestdata(t, "onedrive_activity.csv"),
+	}
+}
+
+type profileReportGraph struct {
+	fakeGraph
+	requested []string
+}
+
+func (f *profileReportGraph) RawGet(ctx context.Context, url string) ([]byte, error) {
+	_, report, _ := strings.Cut(url, "/reports/")
+	f.requested = append(f.requested, report)
+	return f.fakeGraph.RawGet(ctx, url)
+}
+
+func TestRegisteredCollectorRequestsOnlySelectedProfileWorkloads(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		profiles collector.ProfileSet
+		want     []string
+	}{
+		{"teams only", collector.ProfileTeams, []string{teamsReport.fn}},
+		{"combined", collector.ProfileGraph | collector.ProfileTeams, []string{teamsReport.fn, spReport.fn, odReport.fn}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// An empty successful response is enough to observe the actual report requests.
+			g := &profileReportGraph{}
+			var c collector.SnapshotCollector
+			for _, factory := range collectors.All() {
+				candidate := factory(collectors.Deps{Graph: g, Profiles: tc.profiles})
+				if candidate.Name() == collectorName {
+					c = candidate
+					break
+				}
+			}
+			if c == nil {
+				t.Fatal("collaboration collector is not registered")
+			}
+			emitter := telemetry.NewEmitter(metricnoop.NewMeterProvider().Meter(t.Name()), lognoop.NewLoggerProvider().Logger(t.Name()))
+			if err := c.Collect(t.Context(), emitter, nil); err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(g.requested, tc.want) {
+				t.Errorf("report requests = %v, want %v", g.requested, tc.want)
+			}
+		})
 	}
 }
 

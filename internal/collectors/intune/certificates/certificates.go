@@ -359,6 +359,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.SnapshotCollector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.SnapshotCollector. Certificate
 // issuance/expiry composition drifts slowly; a longer cadence is fine.
 func (c *Collector) DefaultInterval() time.Duration { return 30 * time.Minute }

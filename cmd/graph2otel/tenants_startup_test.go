@@ -988,6 +988,9 @@ type conditionalRuntimeSnapshotCollector struct {
 }
 
 func (c conditionalRuntimeSnapshotCollector) Name() string { return c.name }
+func (conditionalRuntimeSnapshotCollector) Profiles() collector.ProfileSet {
+	return collector.ProfileGraph
+}
 func (conditionalRuntimeSnapshotCollector) DefaultInterval() time.Duration {
 	return time.Minute
 }
@@ -1008,6 +1011,9 @@ type conditionalRuntimeWindowCollector struct {
 }
 
 func (c conditionalRuntimeWindowCollector) Name() string { return c.name }
+func (conditionalRuntimeWindowCollector) Profiles() collector.ProfileSet {
+	return collector.ProfileGraph
+}
 func (conditionalRuntimeWindowCollector) DefaultInterval() time.Duration {
 	return time.Minute
 }

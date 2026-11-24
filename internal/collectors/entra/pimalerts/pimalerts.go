@@ -151,6 +151,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval matches the sibling entra.pim_role_policies: Microsoft
 // recomputes these findings on its own multi-hour scan cycle
 // (lastScannedDateTime moves a few times a day), so polling faster only

@@ -176,6 +176,9 @@ func New(g collectors.GraphClient, store *checkpoint.Store, tenantID string, log
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. DLP policy definitions change
 // rarely (an admin edit), so an hourly poll is ample; the parse-skip makes the
 // unchanged cycles cheap.

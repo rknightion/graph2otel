@@ -225,6 +225,7 @@ running two.
 | config.otlp.grafana_cloud.token | string | `""` | Grafana Cloud OTLP token. DO NOT set here — this key is informational only; provide it via G2O_OTLP__GRAFANA_CLOUD__TOKEN in extraEnv sourced from a Secret, since it never belongs in a ConfigMap-rendered config.yaml. |
 | config.otlp.grafana_cloud.token_file | string | `""` | Path to a file holding the OTLP token, as an alternative to the env var — e.g. a mounted k8s Secret. value XOR token, never both. Safe to render into the ConfigMap since it is only a path, not the credential. |
 | config.otlp.protocol | string | `"http"` | Export protocol: http | grpc | stdout (stdout = local debug). |
+| config.profiles | list | `["graph"]` | Default collector profiles for all tenants: graph, teams, or both. |
 | config.profiling | object | `{"block_profile_rate":100000,"mutex_profile_fraction":5,"pyroscope":{"basic_auth_password":"","basic_auth_password_file":"","basic_auth_user":"","enabled":false,"server_address":"","tags":{},"tenant_id":"","upload_rate":"15s"}}` | Optional Grafana Pyroscope continuous profiling (default off). Has no effect on the exporter's core job and a failure to reach Pyroscope is non-fatal. basic_auth_password is a credential — do NOT set it here; provide it via G2O_PROFILING__PYROSCOPE__BASIC_AUTH_PASSWORD in extraEnv from a Secret. The mutex/block sampling knobs are applied only while the Pyroscope push is enabled, so they cost nothing when profiling is off. |
 | config.profiling.block_profile_rate | int | `100000` | runtime.SetBlockProfileRate in ns, 100µs (0 = disabled). |
 | config.profiling.mutex_profile_fraction | int | `5` | runtime.SetMutexProfileFraction (0 = disabled). |
@@ -235,7 +236,7 @@ running two.
 | config.profiling.pyroscope.tags | object | `{}` | Extra static profile tags; service_version is always set and cannot be overridden. |
 | config.profiling.pyroscope.tenant_id | string | `""` | X-Scope-OrgID for multi-tenant Pyroscope servers; leave empty for Grafana Cloud. |
 | config.profiling.pyroscope.upload_rate | string | `"15s"` | How often profiles are flushed; 0/omit uses the pyroscope default. |
-| config.tenants | list | `[{"client_id":"","tenant_id":"00000000-0000-0000-0000-000000000000"}]` | Tenants graph2otel polls. At least one entry is required unless otlp.protocol is "stdout". A flat env var cannot express a list of structs, so this list is file/values-only (no G2O_TENANTS__<index>__* env equivalent) — use --set/-f to override it. |
+| config.tenants | list | `[{"client_id":"","tenant_id":"00000000-0000-0000-0000-000000000000"}]` | Tenants graph2otel polls. At least one entry is required unless otlp.protocol is "stdout". Define tenants in values; only their profiles can be overridden by index from the environment. |
 | config.tenants[0].client_id | string | `""` | Optional expected application ID. A non-secret consistency assertion only; never credential selection. |
 | config.tenants[0].tenant_id | string | `"00000000-0000-0000-0000-000000000000"` | Hyphenated Entra directory GUID only. Verified domains and arbitrary names are rejected. |
 | existingSecret | string | `""` | Name of a pre-created Secret exposing the AZURE_* env keys below. When set, no Secret is rendered. |

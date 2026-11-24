@@ -195,6 +195,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.SnapshotCollector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.SnapshotCollector. Script inventory
 // and run-state rollups drift on the device check-in cadence, not
 // real-time, so a mid-range Intune polling interval is appropriate.

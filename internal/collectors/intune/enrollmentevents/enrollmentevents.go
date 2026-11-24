@@ -73,6 +73,9 @@ type collectorImpl struct {
 	*logpipeline.LogCollector
 }
 
+// Profiles declares this collector's profile membership.
+func (*collectorImpl) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // RequiredCapability declares that this collector needs an active Intune
 // license: the composition root skips it entirely rather than poll an
 // endpoint that 4xxs without one. Implements license.CapabilityRequirer.

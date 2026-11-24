@@ -128,6 +128,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. Agreements and their
 // acceptance posture drift slowly and there is no delta query for either
 // endpoint (a full read every cycle), so a longer interval matches this

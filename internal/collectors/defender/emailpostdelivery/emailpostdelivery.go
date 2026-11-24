@@ -259,7 +259,7 @@ func (c blobCollector) Collect(ctx context.Context, e telemetry.Emitter, outcome
 
 func newBlobCollector(d collectors.BlobDeps) collector.SnapshotCollector {
 	w := &watcher{r: wirecheck.New(name, d.Logger)}
-	return blobCollector{BlobCollector: defender.New(name, table, w.mapRecord, d), watch: w}
+	return blobCollector{BlobCollector: defender.New(name, table, collector.ProfileGraph, w.mapRecord, d), watch: w}
 }
 
 func init() { collectors.RegisterBlob(newBlobCollector) }

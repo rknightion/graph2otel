@@ -481,7 +481,7 @@
         "spec": {
           "id": 3,
           "title": "Signal availability",
-          "description": "Current collector state from graph2otel.collector.availability. Intentional absence is disabled (transport_not_configured, experimental_not_enabled, high_volume_not_enabled, disabled_by_config) or covered (covered_by_alternative). healthy_empty/empty is a successful zero-row source response. limited/partial_license is non-failure; blocked/license_unavailable identifies a missing entitlement, while blocked/permission_denied requires access. degraded and failed (including source_error) describe completed runtime outcomes; startup_failed describes initialization failure. An empty table is unknown, never evidence of disabled.",
+          "description": "Current collector state from graph2otel.collector.availability. Intentional absence is disabled (transport_not_configured, experimental_not_enabled, high_volume_not_enabled, disabled_by_config, profile_not_selected) or covered (covered_by_alternative). healthy_empty/empty is a successful zero-row source response. limited/partial_license is non-failure; blocked/license_unavailable identifies a missing entitlement, while blocked/permission_denied requires access. degraded and failed (including source_error) describe completed runtime outcomes; startup_failed describes initialization failure. An empty table is unknown, never evidence of disabled.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -631,6 +631,9 @@
                               },
                               "disabled_by_config": {
                                 "text": "Disabled by configuration"
+                              },
+                              "profile_not_selected": {
+                                "text": "Profile not selected"
                               },
                               "permission_denied": {
                                 "text": "Permission denied"
@@ -10639,7 +10642,7 @@
         "spec": {
           "id": 131,
           "title": "Signal availability",
-          "description": "Current collector state from graph2otel.collector.availability. Intentional absence is disabled (transport_not_configured, experimental_not_enabled, high_volume_not_enabled, disabled_by_config) or covered (covered_by_alternative). healthy_empty/empty is a successful zero-row source response. limited/partial_license is non-failure; blocked/license_unavailable identifies a missing entitlement, while blocked/permission_denied requires access. degraded and failed (including source_error) describe completed runtime outcomes; startup_failed describes initialization failure. An empty table is unknown, never evidence of disabled.",
+          "description": "Current collector state from graph2otel.collector.availability. Intentional absence is disabled (transport_not_configured, experimental_not_enabled, high_volume_not_enabled, disabled_by_config, profile_not_selected) or covered (covered_by_alternative). healthy_empty/empty is a successful zero-row source response. limited/partial_license is non-failure; blocked/license_unavailable identifies a missing entitlement, while blocked/permission_denied requires access. degraded and failed (including source_error) describe completed runtime outcomes; startup_failed describes initialization failure. An empty table is unknown, never evidence of disabled.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -10789,6 +10792,9 @@
                               },
                               "disabled_by_config": {
                                 "text": "Disabled by configuration"
+                              },
+                              "profile_not_selected": {
+                                "text": "Profile not selected"
                               },
                               "permission_denied": {
                                 "text": "Permission denied"
@@ -22259,7 +22265,7 @@
         "spec": {
           "id": 271,
           "title": "Signal availability",
-          "description": "Current collector state from graph2otel.collector.availability. Intentional absence is disabled (transport_not_configured, experimental_not_enabled, high_volume_not_enabled, disabled_by_config) or covered (covered_by_alternative). healthy_empty/empty is a successful zero-row source response. limited/partial_license is non-failure; blocked/license_unavailable identifies a missing entitlement, while blocked/permission_denied requires access. degraded and failed (including source_error) describe completed runtime outcomes; startup_failed describes initialization failure. An empty table is unknown, never evidence of disabled.",
+          "description": "Current collector state from graph2otel.collector.availability. Intentional absence is disabled (transport_not_configured, experimental_not_enabled, high_volume_not_enabled, disabled_by_config, profile_not_selected) or covered (covered_by_alternative). healthy_empty/empty is a successful zero-row source response. limited/partial_license is non-failure; blocked/license_unavailable identifies a missing entitlement, while blocked/permission_denied requires access. degraded and failed (including source_error) describe completed runtime outcomes; startup_failed describes initialization failure. An empty table is unknown, never evidence of disabled.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -22409,6 +22415,9 @@
                               },
                               "disabled_by_config": {
                                 "text": "Disabled by configuration"
+                              },
+                              "profile_not_selected": {
+                                "text": "Profile not selected"
                               },
                               "permission_denied": {
                                 "text": "Permission denied"
@@ -26369,7 +26378,7 @@
         "spec": {
           "id": 326,
           "title": "Signal availability",
-          "description": "Current collector state from graph2otel.collector.availability. Intentional absence is disabled (transport_not_configured, experimental_not_enabled, high_volume_not_enabled, disabled_by_config) or covered (covered_by_alternative). healthy_empty/empty is a successful zero-row source response. limited/partial_license is non-failure; blocked/license_unavailable identifies a missing entitlement, while blocked/permission_denied requires access. degraded and failed (including source_error) describe completed runtime outcomes; startup_failed describes initialization failure. An empty table is unknown, never evidence of disabled.",
+          "description": "Current collector state from graph2otel.collector.availability. Intentional absence is disabled (transport_not_configured, experimental_not_enabled, high_volume_not_enabled, disabled_by_config, profile_not_selected) or covered (covered_by_alternative). healthy_empty/empty is a successful zero-row source response. limited/partial_license is non-failure; blocked/license_unavailable identifies a missing entitlement, while blocked/permission_denied requires access. degraded and failed (including source_error) describe completed runtime outcomes; startup_failed describes initialization failure. An empty table is unknown, never evidence of disabled.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -26519,6 +26528,9 @@
                               },
                               "disabled_by_config": {
                                 "text": "Disabled by configuration"
+                              },
+                              "profile_not_selected": {
+                                "text": "Profile not selected"
                               },
                               "permission_denied": {
                                 "text": "Permission denied"
@@ -31106,7 +31118,7 @@
         "spec": {
           "id": 382,
           "title": "Signal availability",
-          "description": "Current collector state from graph2otel.collector.availability. Intentional absence is disabled (transport_not_configured, experimental_not_enabled, high_volume_not_enabled, disabled_by_config) or covered (covered_by_alternative). healthy_empty/empty is a successful zero-row source response. limited/partial_license is non-failure; blocked/license_unavailable identifies a missing entitlement, while blocked/permission_denied requires access. degraded and failed (including source_error) describe completed runtime outcomes; startup_failed describes initialization failure. An empty table is unknown, never evidence of disabled.",
+          "description": "Current collector state from graph2otel.collector.availability. Intentional absence is disabled (transport_not_configured, experimental_not_enabled, high_volume_not_enabled, disabled_by_config, profile_not_selected) or covered (covered_by_alternative). healthy_empty/empty is a successful zero-row source response. limited/partial_license is non-failure; blocked/license_unavailable identifies a missing entitlement, while blocked/permission_denied requires access. degraded and failed (including source_error) describe completed runtime outcomes; startup_failed describes initialization failure. An empty table is unknown, never evidence of disabled.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -31256,6 +31268,9 @@
                               },
                               "disabled_by_config": {
                                 "text": "Disabled by configuration"
+                              },
+                              "profile_not_selected": {
+                                "text": "Profile not selected"
                               },
                               "permission_denied": {
                                 "text": "Permission denied"
@@ -39947,7 +39962,7 @@
         "spec": {
           "id": 501,
           "title": "Signal availability",
-          "description": "Current collector state from graph2otel.collector.availability. Intentional absence is disabled (transport_not_configured, experimental_not_enabled, high_volume_not_enabled, disabled_by_config) or covered (covered_by_alternative). healthy_empty/empty is a successful zero-row source response. limited/partial_license is non-failure; blocked/license_unavailable identifies a missing entitlement, while blocked/permission_denied requires access. degraded and failed (including source_error) describe completed runtime outcomes; startup_failed describes initialization failure. An empty table is unknown, never evidence of disabled.",
+          "description": "Current collector state from graph2otel.collector.availability. Intentional absence is disabled (transport_not_configured, experimental_not_enabled, high_volume_not_enabled, disabled_by_config, profile_not_selected) or covered (covered_by_alternative). healthy_empty/empty is a successful zero-row source response. limited/partial_license is non-failure; blocked/license_unavailable identifies a missing entitlement, while blocked/permission_denied requires access. degraded and failed (including source_error) describe completed runtime outcomes; startup_failed describes initialization failure. An empty table is unknown, never evidence of disabled.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -40097,6 +40112,9 @@
                               },
                               "disabled_by_config": {
                                 "text": "Disabled by configuration"
+                              },
+                              "profile_not_selected": {
+                                "text": "Profile not selected"
                               },
                               "permission_denied": {
                                 "text": "Permission denied"

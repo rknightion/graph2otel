@@ -142,6 +142,7 @@ AVAILABILITY_REASONS = {
     "experimental_not_enabled": {"text": "Experimental collector not enabled"},
     "high_volume_not_enabled": {"text": "High-volume collector not enabled"},
     "disabled_by_config": {"text": "Disabled by configuration"},
+    "profile_not_selected": {"text": "Profile not selected"},
     "permission_denied": {"text": "Permission denied"},
     "license_unavailable": {"text": "Required licence unavailable"},
     "covered_by_alternative": {"text": "Covered by another transport"},
@@ -532,7 +533,7 @@ class Builder:
             "Current collector state from graph2otel.collector.availability. "
             "Intentional absence is disabled "
             "(transport_not_configured, experimental_not_enabled, "
-            "high_volume_not_enabled, disabled_by_config) or covered "
+            "high_volume_not_enabled, disabled_by_config, profile_not_selected) or covered "
             "(covered_by_alternative). healthy_empty/empty is a successful "
             "zero-row source response. limited/partial_license is non-failure; "
             "blocked/license_unavailable identifies a missing entitlement, while "

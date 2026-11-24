@@ -139,6 +139,9 @@ type collectorImpl struct {
 	*logpipeline.LogCollector
 }
 
+// Profiles declares this collector's profile membership.
+func (*collectorImpl) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // RequiredPermissions declares the least-privilege Graph application scope.
 // graph2otel-poller already holds it (live-verified 2026-07-23 and again
 // 2026-07-29), so this collector needed no new grant. Do NOT widen this to the

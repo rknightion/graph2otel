@@ -215,6 +215,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. The consent surface
 // changes rarely (new app registrations / admin consent events, not routine
 // directory churn), and application-side scanning fans out across a couple

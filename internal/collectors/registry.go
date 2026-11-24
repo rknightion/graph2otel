@@ -47,6 +47,10 @@ type ARMReader interface {
 
 // Deps is everything a Factory needs to construct a collector for one tenant.
 type Deps struct {
+	// Profiles is the tenant's selected set. A shared collector may use it to
+	// narrow its workloads; its Profiles() membership must not depend on this.
+	// Zero denotes an inert construction for registry tooling or a unit test.
+	Profiles collector.ProfileSet
 	// Graph is the per-tenant Graph client the collector polls through.
 	Graph GraphClient
 	// TenantID is the tenant this collector instance serves. It is for the
@@ -142,13 +146,10 @@ type Experimental interface {
 
 // HighVolume is optionally implemented by a collector whose signal is a
 // firehose — one record per message, per request, per transaction — rather than
-// a bounded inventory. Such a collector is OPT-IN on exactly the same mechanism
-// as Experimental: the composition root registers it only when config
-// explicitly enables it, so enabling graph2otel can never silently multiply a
-// deployment's log bill.
+// a bounded inventory. Such a collector is opt-in unless it deliberately opts
+// into a profile default with collector.HighVolumeProfileDefaults.
 //
-// It is deliberately NOT the Experimental interface, even though the gate is
-// identical. #183 reserved Experimental for genuine Graph BETA surfaces, and
+// It is deliberately NOT the Experimental interface. #183 reserved Experimental for genuine Graph BETA surfaces, and
 // conflating the two lies in both directions: it would tell an operator that a
 // GA, schema-stable endpoint is beta, and it would hide the one fact they
 // actually need to decide — that the volume scales with mail traffic, not with

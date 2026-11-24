@@ -55,6 +55,9 @@ type blobCollector struct {
 	*blobpipeline.BlobCollector
 }
 
+// Profiles declares this collector's profile membership.
+func (*blobCollector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // newBlobRiskyUsers builds the blob-sourced risky-users collector.
 func newBlobRiskyUsers(d collectors.BlobDeps) collector.SnapshotCollector {
 	cfg := blobpipeline.ContainerConfig{

@@ -130,6 +130,9 @@ type blobCollectorImpl struct {
 	conflicts []string
 }
 
+// Profiles declares this collector's profile membership.
+func (*blobCollectorImpl) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // RequiredCapability declares Entra ID P1, matching the polled streams.
 //
 // The blob path does not touch Graph, so this is not an API-availability gate:

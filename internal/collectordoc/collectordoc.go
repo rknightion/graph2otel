@@ -104,12 +104,14 @@ type Annotation struct {
 // Row is one collector's fully resolved reference entry: registry facts plus
 // its Annotation.
 type Row struct {
-	Name         string
-	Domain       string
-	Kind         Kind
-	Interval     time.Duration
-	Lag          time.Duration // window collectors only
-	Experimental bool
+	Name               string
+	Profiles           collector.ProfileSet
+	HighVolumeDefaults collector.ProfileSet
+	Domain             string
+	Kind               Kind
+	Interval           time.Duration
+	Lag                time.Duration // window collectors only
+	Experimental       bool
 	// HighVolume is the registry-declared firehose opt-in. Like Experimental it
 	// is generated from the constructed collector, never a list of names in docs.
 	HighVolume bool
@@ -136,19 +138,16 @@ var domains = map[string]string{
 	"entra":      "Entra ID",
 	"intune":     "Intune",
 	"m365":       "M365",
+	"teams":      "Teams",
 	"purview":    "Purview",
 	"defender":   "Defender",
 	"mdca":       "Defender for Cloud Apps",
 	"graph2otel": "Self-observability",
 }
 
-// collectorFacts is the mandatory interface every collector satisfies
-// (collector.Collector). It is restated here so this package does not depend on
-// internal/collector just to read two methods.
-type collectorFacts interface {
-	Name() string
-	DefaultInterval() time.Duration
-}
+// collectorFacts is the base shape. Profile membership is validated separately
+// so the gate can diagnose a missing declaration by collector name.
+type collectorFacts = collector.Collector
 
 // RowFor reads every registry-knowable fact off a constructed collector and
 // merges in its hand-written annotation.
@@ -173,13 +172,19 @@ func RowFor(c any, kind Kind, ann Annotation) (Row, error) {
 		return Row{}, fmt.Errorf("collectordoc: collector %q has unknown domain prefix %q — add it to collectordoc.domains and give it a section", name, prefix)
 	}
 
+	profiles, volumeDefaults, err := collector.ProfilePolicy(facts)
+	if err != nil {
+		return Row{}, fmt.Errorf("collectordoc: %w", err)
+	}
 	row := Row{
-		Name:      name,
-		Domain:    domain,
-		Kind:      kind,
-		Interval:  facts.DefaultInterval(),
-		Transport: collector.TransportOf(facts),
-		Ann:       ann,
+		Name:               name,
+		Profiles:           profiles,
+		HighVolumeDefaults: volumeDefaults,
+		Domain:             domain,
+		Kind:               kind,
+		Interval:           facts.DefaultInterval(),
+		Transport:          collector.TransportOf(facts),
+		Ann:                ann,
 	}
 
 	// Optional interfaces, asserted exactly as the composition root asserts
@@ -377,6 +382,8 @@ var sections = []section{
 	{"Intune", KindBlob, "Intune — logs (blob collectors)"},
 	{"M365", KindWindow, "M365 — logs (window collectors)"},
 	{"M365", KindSnapshot, "M365 — metrics (snapshot collectors)"},
+	{"Teams", KindWindow, "Teams - logs (window collectors)"},
+	{"Teams", KindSnapshot, "Teams - metrics (snapshot collectors)"},
 	{"Purview", KindSnapshot, "Purview — metrics (snapshot collectors)"},
 	{"Purview", KindWindow, "Purview — logs (window collectors)"},
 	{"Defender", KindBlob, "Defender — logs (blob collectors)"},
@@ -400,9 +407,9 @@ var sections = []section{
 // no Graph endpoint, declare no Graph scope, and emit no metrics (#128), so
 // Graph-shaped columns would be three blanks and a lie.
 var headers = map[Kind][]string{
-	KindSnapshot: {"Collector", "Collects", "Intrinsic transport", "Graph endpoint(s)", "Required scope(s)", "License / beta / volume", "Interval", "Metric namespace"},
-	KindWindow:   {"Collector", "Collects", "Intrinsic transport", "Graph endpoint(s)", "Required scope(s)", "License / beta / volume", "Interval", "Lag", "Log event"},
-	KindBlob:     {"Collector", "Collects", "Intrinsic transport", "Container (diagnostic category)", "Cursor key", "Required role", "License / beta / volume", "Interval", "Log event"},
+	KindSnapshot: {"Collector", "Profiles", "Collects", "Intrinsic transport", "Graph endpoint(s)", "Required scope(s)", "License / beta / volume", "Interval", "Metric namespace"},
+	KindWindow:   {"Collector", "Profiles", "Collects", "Intrinsic transport", "Graph endpoint(s)", "Required scope(s)", "License / beta / volume", "Interval", "Lag", "Log event"},
+	KindBlob:     {"Collector", "Profiles", "Collects", "Intrinsic transport", "Container (diagnostic category)", "Cursor key", "Required role", "License / beta / volume", "Interval", "Log event"},
 }
 
 // Render turns rows into the generated block: one markdown table per non-empty
@@ -447,22 +454,14 @@ func sectionKey(domain string, kind Kind) string { return fmt.Sprintf("%s/%d", d
 
 // cellsFor renders one row against its kind's column set.
 func cellsFor(r Row) ([]string, error) {
+	base := []string{code(r.Name), scopes(r.Profiles.Names()), esc(r.Ann.Collects), code(string(r.Transport))}
 	switch r.Kind {
 	case KindSnapshot:
-		return []string{
-			code(r.Name), esc(r.Ann.Collects), code(string(r.Transport)), esc(or(r.Ann.Source, "—")),
-			scopes(r.Permissions), gatingCell(r), dur(r.Interval), esc(or(signalCell(r), "—")),
-		}, nil
+		return append(base, esc(or(r.Ann.Source, "—")), scopes(r.Permissions), gatingCell(r), dur(r.Interval), esc(or(signalCell(r), "—"))), nil
 	case KindWindow:
-		return []string{
-			code(r.Name), esc(r.Ann.Collects), code(string(r.Transport)), esc(or(r.Ann.Source, "—")),
-			scopes(r.Permissions), gatingCell(r), dur(r.Interval), dur(r.Lag), esc(or(signalCell(r), "—")),
-		}, nil
+		return append(base, esc(or(r.Ann.Source, "—")), scopes(r.Permissions), gatingCell(r), dur(r.Interval), dur(r.Lag), esc(or(signalCell(r), "—"))), nil
 	case KindBlob:
-		return []string{
-			code(r.Name), esc(r.Ann.Collects), code(string(r.Transport)), containerCell(r), code(r.CursorKey),
-			"`Storage Blob Data Reader`", gatingCell(r), dur(r.Interval), esc(or(signalCell(r), "—")),
-		}, nil
+		return append(base, containerCell(r), code(r.CursorKey), "`Storage Blob Data Reader`", gatingCell(r), dur(r.Interval), esc(or(signalCell(r), "—"))), nil
 	}
 	return nil, fmt.Errorf("collectordoc: collector %q has unknown kind %d", r.Name, r.Kind)
 }
@@ -497,7 +496,11 @@ func gatingCell(r Row) string {
 		facts = append(facts, "`beta`")
 	}
 	if r.HighVolume {
-		facts = append(facts, "`high-volume opt-in`")
+		if r.HighVolumeDefaults != 0 {
+			facts = append(facts, "`high volume, default on with teams`")
+		} else {
+			facts = append(facts, "`high-volume opt-in`")
+		}
 	}
 	note := esc(r.Ann.Gating)
 	switch {
@@ -595,10 +598,35 @@ func esc(s string) string {
 // error rather than an append: silently bolting a table onto the end of a
 // hand-written page is worse than failing.
 func Splice(doc, block string) (string, error) {
-	start := strings.Index(doc, beginMarker)
-	end := strings.Index(doc, endMarker)
-	if start < 0 || end < 0 || end < start {
-		return "", fmt.Errorf("collectordoc: generated-block markers not found (expected %q ... %q)", beginMarker, endMarker)
+	return spliceBlock(doc, block, beginMarker, endMarker)
+}
+
+// SpliceTeamsPermissions replaces the generated minimum-scope list from the
+// same requirements that preflight computes for a default Teams-only tenant.
+func SpliceTeamsPermissions(doc string, reqs []preflight.CollectorReq) (string, error) {
+	seen := map[string]bool{}
+	var perms []string
+	for _, req := range reqs {
+		for _, perm := range req.Permissions {
+			if !seen[perm] {
+				perms = append(perms, perm)
+				seen[perm] = true
+			}
+		}
 	}
-	return doc[:start] + beginMarker + "\n\n" + block + "\n\n" + doc[end:], nil
+	sort.Strings(perms)
+	for i, perm := range perms {
+		perms[i] = "- " + code(perm)
+	}
+	return spliceBlock(doc, strings.Join(perms, "\n"),
+		"<!-- BEGIN GENERATED TEAMS PROFILE SCOPES -->", "<!-- END GENERATED TEAMS PROFILE SCOPES -->")
+}
+
+func spliceBlock(doc, block, begin, end string) (string, error) {
+	start := strings.Index(doc, begin)
+	stop := strings.Index(doc, end)
+	if start < 0 || stop < start {
+		return "", fmt.Errorf("collectordoc: generated-block markers not found (expected %q ... %q)", begin, end)
+	}
+	return doc[:start] + begin + "\n\n" + block + "\n\n" + doc[stop:], nil
 }

@@ -67,6 +67,14 @@ func envReferenceRows(exampleYAML []byte) ([]envRow, error) {
 				continue
 			}
 			rows = append(rows, leafRow(key, k, v, inherited))
+			if key == "tenants" && listEnvKeys[tenantProfilesEnvKey] {
+				rows = append(rows, envRow{
+					Key:     tenantProfilesEnvKey,
+					EnvVar:  strings.ReplaceAll(envVarName(tenantProfilesEnvKey), "<N>", "<n>"),
+					Default: "inherits profiles", List: true,
+					Desc: "Replace the profile list for tenant at zero-based YAML index `<n>` (for example `G2O_TENANTS__0__PROFILES`).",
+				})
+			}
 		}
 	}
 	walk("", "", doc.Content[0])

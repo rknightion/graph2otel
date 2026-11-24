@@ -346,6 +346,9 @@ type collectorImpl struct {
 	watch *watcher
 }
 
+// Profiles declares this collector's profile membership.
+func (*collectorImpl) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // CollectWindow binds the window's emitter for the duration of the poll, so
 // findings raised inside the mapper reach the counter, then delegates to the
 // generic collector. See the watcher type for why the emitter has to travel this

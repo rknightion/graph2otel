@@ -49,6 +49,9 @@ type blobCollector struct {
 	*blobpipeline.BlobCollector
 }
 
+// Profiles declares this collector's profile membership.
+func (*blobCollector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // newBlobCollector builds the blob-sourced directory-audits collector. It shares
 // the polled collector's name so `source: graph|blob` selects between them; the
 // cursor namespace defaults to the container.

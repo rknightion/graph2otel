@@ -75,7 +75,7 @@ type blobCollector struct {
 }
 
 func newBlobCollector(d collectors.BlobDeps) collector.SnapshotCollector {
-	return blobCollector{defender.New(name, table, mapRecord, d)}
+	return blobCollector{defender.New(name, table, collector.ProfileGraph, mapRecord, d)}
 }
 
 func init() { collectors.RegisterBlob(newBlobCollector) }

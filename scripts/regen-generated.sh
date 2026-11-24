@@ -8,6 +8,7 @@
 #   docs/collectors.md  <- the collector registry     (TestCollectorReferenceDocInSync -update)
 #                          + internal/collectordoc/annotations.go
 #                          + internal/collectors/*/*/testdata/signals.json (#140)
+#   docs/permissions.md  <- default Teams preflight's selected Graph scopes
 #   internal/**/testdata/signals.json
 #                       <- what each gated package's tests really emit
 #   spec/signal-catalog.json
@@ -47,7 +48,7 @@
 # Usage:
 #   scripts/regen-generated.sh              # regenerate everything
 #   scripts/regen-generated.sh envref       # just docs/env-vars.md
-#   scripts/regen-generated.sh collectordoc # just docs/collectors.md
+#   scripts/regen-generated.sh collectordoc # collectors and profile permissions
 #   scripts/regen-generated.sh signals      # just the emitted-signal captures
 #   scripts/regen-generated.sh catalog    # just spec/signal-catalog.json
 #
@@ -77,10 +78,10 @@ regen_envref() {
 
 regen_collectordoc() {
   if ! command -v go >/dev/null 2>&1; then
-    skip "go not installed -> docs/collectors.md not regenerated (CI will gate it)"
+    skip "go not installed -> collector and profile permission docs not regenerated (CI will gate them)"
     return 0
   fi
-  note "docs/collectors.md (collector reference)"
+  note "docs/collectors.md and docs/permissions.md (collector reference and Teams scopes)"
   go test -C "$ROOT" ./cmd/graph2otel -run TestCollectorReferenceDocInSync -update -count=1 >/dev/null
 }
 

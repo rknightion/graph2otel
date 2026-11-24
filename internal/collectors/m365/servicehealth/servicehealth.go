@@ -222,6 +222,11 @@ func New(g collectors.GraphClient, store *checkpoint.Store, tenantID string, log
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet {
+	return collector.ProfileGraph | collector.ProfileTeams
+}
+
 // DefaultInterval implements collector.Collector. Both collections are small and
 // change on the order of minutes-to-hours; 15m keeps the (unresolved-only) twin
 // volume sane while still surfacing a new incident promptly.

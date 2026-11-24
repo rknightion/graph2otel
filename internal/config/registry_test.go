@@ -10,8 +10,8 @@ import (
 // stringSliceFieldPaths walks the Config struct and returns the dotted yaml-key
 // path of every []string field. These are exactly the scalar-list fields whose
 // environment value would have to be comma-split, so the result must equal the
-// listEnvKeys registry. Slices of structs (tenants) and maps (collectors,
-// profiling.pyroscope.tags) are file-only and deliberately excluded.
+// listEnvKeys registry. The tenant list itself and nested tenant sections
+// remain file-only; only direct tenant list fields are indexed exceptions.
 func stringSliceFieldPaths(t reflect.Type, prefix string, out map[string]bool) {
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
@@ -29,10 +29,15 @@ func stringSliceFieldPaths(t reflect.Type, prefix string, out map[string]bool) {
 		}
 		switch f.Type.Kind() {
 		case reflect.Struct:
-			stringSliceFieldPaths(f.Type, path, out)
+			if !strings.HasSuffix(prefix, ".<n>") {
+				stringSliceFieldPaths(f.Type, path, out)
+			}
 		case reflect.Slice:
-			if f.Type.Elem().Kind() == reflect.String {
+			switch f.Type.Elem().Kind() {
+			case reflect.String:
 				out[path] = true
+			case reflect.Struct:
+				stringSliceFieldPaths(f.Type.Elem(), path+".<n>", out)
 			}
 		}
 	}
@@ -41,7 +46,7 @@ func stringSliceFieldPaths(t reflect.Type, prefix string, out map[string]bool) {
 // TestListEnvKeysMatchesStringSliceFields guards that listEnvKeys (the registry
 // the env-var-reference generator consults to decide which sequence keys are
 // comma-separated env vars rather than file-only) stays in sync with the actual
-// []string fields on Config. graph2otel has none today, so both sides are empty.
+// []string fields on Config, including indexed overrides on tenant items.
 // Add a []string config field without registering it here and this fails with
 // the exact offending key — the reminder to both register it AND teach
 // envTransform to comma-split its value; register a key that matches no []string

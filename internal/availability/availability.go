@@ -35,6 +35,7 @@ const (
 	ReasonExperimentalNotEnabled          Reason = "experimental_not_enabled"
 	ReasonHighVolumeNotEnabled            Reason = "high_volume_not_enabled"
 	ReasonDisabledByConfig                Reason = "disabled_by_config"
+	ReasonProfileNotSelected              Reason = "profile_not_selected"
 	ReasonPermissionDenied                Reason = Reason(recordoutcome.CausePermissionDenied)
 	ReasonLicenseUnavailable              Reason = "license_unavailable"
 	ReasonCoveredByAlternative            Reason = "covered_by_alternative"
@@ -133,6 +134,7 @@ var reasons = []Reason{
 	ReasonExperimentalNotEnabled,
 	ReasonHighVolumeNotEnabled,
 	ReasonDisabledByConfig,
+	ReasonProfileNotSelected,
 	ReasonPermissionDenied,
 	ReasonLicenseUnavailable,
 	ReasonCoveredByAlternative,
@@ -187,6 +189,7 @@ var allowedPairs = map[pair]struct{}{
 	{StateDisabled, ReasonExperimentalNotEnabled}:               {},
 	{StateDisabled, ReasonHighVolumeNotEnabled}:                 {},
 	{StateDisabled, ReasonDisabledByConfig}:                     {},
+	{StateDisabled, ReasonProfileNotSelected}:                   {},
 	{StateBlocked, ReasonPermissionDenied}:                      {},
 	{StateBlocked, ReasonLicenseUnavailable}:                    {},
 	{StateCovered, ReasonCoveredByAlternative}:                  {},

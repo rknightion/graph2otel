@@ -289,6 +289,9 @@ func NewHealth(g collectors.GraphClient, logger *slog.Logger) *HealthCollector {
 // Name implements collector.Collector.
 func (c *HealthCollector) Name() string { return healthName }
 
+// Profiles declares this collector's profile membership.
+func (*HealthCollector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. eDiscovery case health
 // drifts slowly and every child route is expensive (see the package doc); an
 // hourly poll is ample and keeps the per-cycle cost bounded.

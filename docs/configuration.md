@@ -193,6 +193,20 @@ otlp:
   credential and must be set via `G2O_OTLP__GRAFANA_CLOUD__TOKEN`, never written into
   YAML** — it's documented here only to name the key.
 
+### `profiles`
+
+`profiles: [graph]` is the default and keeps the existing collector roster,
+including configured non-Graph transports. Use `[teams]` for Teams inventory,
+service health and Teams usage only, or `[graph, teams]` for both profiles.
+In Teams-only mode, `m365.collaboration_activity` skips its SharePoint and
+OneDrive reports. Combined mode keeps all three reports.
+
+Set `profiles` on a tenant to replace the global list. Omit it to inherit.
+The list must be non-empty and use distinct names. `G2O_PROFILES=graph,teams`
+sets the global list; `G2O_TENANTS__0__PROFILES=teams` replaces the first YAML
+tenant's list without changing the tenant list itself. See
+[permissions by profile](permissions.md#collector-profiles).
+
 ### `collectors`
 
 Global per-collector overrides, keyed by collector name, applied across every tenant:
@@ -204,11 +218,11 @@ collectors:
     interval: "5m" # duration string: "30s", "5m", "168h" (minimum 1s)
 ```
 
-A collector absent from this map runs **enabled at its built-in default interval**.
-`enabled` unset means "default true", which is distinct from an explicit `false` — the
-config layer tracks that difference so a lower layer's explicit disable isn't silently
-overridden by a higher layer's absence of an opinion. `interval` unset (or `0`) means
-"use the collector's built-in default". Collector names must match the generated
+When `enabled` is unset at both layers, a collector runs only if a selected
+profile includes it and its usual gates allow it. An explicit `true` adds a
+collector even outside the selected profiles; an explicit `false` disables it.
+Neither setting bypasses a transport or licence requirement. `interval` unset
+(or `0`) means "use the collector's built-in default". Collector names must match the generated
 [collector reference](collectors.md) exactly.
 
 `source` selects the ingest transport for the current source-switchable collectors:
@@ -228,7 +242,8 @@ The same `CollectorConfig` shape (`enabled` / `interval` / `source`) appears at 
 (`collectors:`, applied to every tenant) and per-tenant (`tenants[].collectors:`).
 Resolution order, field-by-field:
 
-**per-tenant override > global `collectors:` > collector's built-in default**
+For `enabled`: **explicit tenant value > explicit global value > profile membership > collector default**.
+For `interval` and `source`: **tenant override > global override > built-in default**.
 
 So one tenant can disable a collector — or retune its poll interval — that the rest of
 the fleet keeps at its default, without touching the global block.
@@ -243,6 +258,10 @@ at all. Setting `enabled: false` (or leaving a collector unmentioned) both mean 
 explicitly enabled" for this purpose; only an explicit `true` opts in. This is a
 deliberate stability gate: a beta Graph endpoint can change shape or disappear without
 the same compatibility guarantees as `v1.0`.
+
+High-volume collectors also require explicit opt-in, except those marked as
+on by default when `teams` is selected. This exception never enables beta
+collectors without explicit opt-in.
 
 ### `admin`
 

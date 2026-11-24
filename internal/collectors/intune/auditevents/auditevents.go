@@ -98,6 +98,9 @@ type collectorImpl struct {
 	*logpipeline.LogCollector
 }
 
+// Profiles declares this collector's profile membership.
+func (*collectorImpl) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // RequiredPermissions declares the Graph application scope this collector
 // needs. DeviceManagementApps.Read.All is the documented scope for this
 // endpoint despite being a surprising name for an audit log — verify live

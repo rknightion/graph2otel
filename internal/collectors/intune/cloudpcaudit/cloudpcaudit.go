@@ -219,6 +219,9 @@ type blobCollector struct {
 	*blobpipeline.BlobCollector
 }
 
+// Profiles declares this collector's profile membership.
+func (*blobCollector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // newBlobCollector builds the Windows 365 audit blob collector. It is read-only
 // Azure Storage ingest (not Experimental — that is reserved for beta Graph APIs,
 // #183); setting blob_ingest.account_url plus streaming the Windows365AuditLogs

@@ -299,6 +299,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. Discovery aggregates update
 // only when a stream ingests new log data, and the per-stream app fan-out is
 // the expensive part of this poll (up to 1+maxAppsPerStream/pagesize requests

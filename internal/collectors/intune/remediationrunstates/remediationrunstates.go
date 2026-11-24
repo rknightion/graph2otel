@@ -99,6 +99,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 func (c *Collector) DefaultInterval() time.Duration { return time.Hour }
 
 func (c *Collector) Experimental() bool { return true }

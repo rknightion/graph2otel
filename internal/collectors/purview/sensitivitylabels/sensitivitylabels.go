@@ -168,6 +168,9 @@ func NewSensitivity(g collectors.GraphClient, logger *slog.Logger) *SensitivityC
 // Name implements collector.Collector.
 func (c *SensitivityCollector) Name() string { return sensitivityName }
 
+// Profiles declares this collector's profile membership.
+func (*SensitivityCollector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. The label catalog drifts
 // slowly; an hourly poll is ample.
 func (c *SensitivityCollector) DefaultInterval() time.Duration { return time.Hour }

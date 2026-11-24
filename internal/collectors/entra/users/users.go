@@ -146,6 +146,9 @@ func New(g collectors.GraphClient, caps license.Capabilities, logger *slog.Logge
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. User population and
 // sign-in staleness drift slowly; 15 minutes keeps both the directory-object
 // $count budget and the licensed signInActivity queries cheap.

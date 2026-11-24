@@ -113,6 +113,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 // Name implements collector.Collector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval implements collector.Collector. Policy/intent/baseline
 // inventory and their compliance summaries drift slowly, and this collector
 // fans out one deviceStateSummary call per intent/baseline on top of the

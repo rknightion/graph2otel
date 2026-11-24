@@ -38,6 +38,8 @@ never in committed YAML.
 | Environment variable | Default | Description |
 | --- | --- | --- |
 | `G2O_LOG_LEVEL` | `info` | debug \| info \| warn \| error |
+| `G2O_PROFILES` | `[graph]` | Default collector profiles for all tenants: graph, teams, or both. _(comma-separated list)_ |
+| `G2O_TENANTS__<n>__PROFILES` | `inherits profiles` | Replace the profile list for tenant at zero-based YAML index `<n>` (for example `G2O_TENANTS__0__PROFILES`). _(comma-separated list)_ |
 | `G2O_OTLP__PROTOCOL` | `http` | grpc \| http \| stdout (stdout = print signals to the console for local debug, no backend) |
 | `G2O_OTLP__ENDPOINT` | `https://otlp-gateway-prod-us-central-0.grafana.net/otlp` | OTLP base URL (the exporter appends /v1/metrics and /v1/logs itself) |
 | `G2O_OTLP__GRAFANA_CLOUD__INSTANCE_ID` | `""` | Grafana Cloud OTLP instance ID |

@@ -116,6 +116,9 @@ func New(export exportjob.Runner, logger *slog.Logger) *Collector {
 // Name implements collector.SnapshotCollector.
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // IngestTransport reports the transport this collector ingests over (#141): the
 // same telemetry.Transport Collect stamps onto every record.
 func (c *Collector) IngestTransport() telemetry.Transport { return telemetry.TransportReportExport }

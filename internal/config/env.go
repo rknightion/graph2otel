@@ -10,15 +10,11 @@ import (
 	"time"
 )
 
-// listEnvKeys are the config keys whose environment value would be a
-// comma-separated list (the scalar []string fields). graph2otel's config
-// surface currently has NO []string field, so this registry is empty and the
-// env-var-reference generator classifies every sequence node (tenants) as
-// file-only. It exists so that a future []string field has an obvious home and
-// so TestListEnvKeysMatchesStringSliceFields can fail loudly if one is added
-// without registering it here — at which point envTransform must also be taught
-// to comma-split that variable's value.
-var listEnvKeys = map[string]bool{}
+const tenantProfilesEnvKey = "tenants.<n>.profiles"
+
+// listEnvKeys registers comma-separated []string values. <n> names a
+// zero-based index into the YAML tenant list, not a dotted koanf key.
+var listEnvKeys = map[string]bool{"profiles": true, tenantProfilesEnvKey: true}
 
 // envKey maps a G2O_* environment variable name to its dotted config key:
 // strip the prefix, lowercase, and turn the "__" nesting delimiter into ".".
@@ -29,12 +25,8 @@ func envKey(name string) string {
 	return strings.ReplaceAll(k, envNestDelim, keyDelim)
 }
 
-// envTransform is the koanf env-provider callback: it converts the variable
-// name to a config key. graph2otel's scaffold config has no scalar-list
-// ([]string) or list-of-struct ([]TenantConfig) fields that are meaningfully
-// settable via a single flat env var, so unlike larger donor configs this
-// transform does no value splitting — every value passes through as a plain
-// string for mapstructure to decode.
+// envTransform maps fixed environment variables into the koanf key tree.
+// Dynamic collector keys and indexed tenant overrides are applied after typed decode.
 func envTransform(name, value string) (string, any) {
 	if _, ok := parseCollectorEnvName(name); ok {
 		// Collector names may contain dots, which are koanf's path delimiter.
@@ -42,7 +34,14 @@ func envTransform(name, value string) (string, any) {
 		// remains one literal map key.
 		return "", nil
 	}
-	return envKey(name), value
+	if _, ok := parseTenantProfileEnvIndex(name); ok {
+		return "", nil // koanf would replace the YAML tenant slice with a map
+	}
+	key := envKey(name)
+	if listEnvKeys[key] {
+		return key, splitEnvironmentList(value)
+	}
+	return key, value
 }
 
 type collectorEnvOverride struct {
@@ -52,12 +51,23 @@ type collectorEnvOverride struct {
 	value    string
 }
 
-func strictEnvironment() ([]collectorEnvOverride, error) {
+type tenantProfileEnvOverride struct {
+	index    int
+	variable string
+	value    string
+}
+
+type environmentOverrides struct {
+	collectors     []collectorEnvOverride
+	tenantProfiles []tenantProfileEnvOverride
+}
+
+func strictEnvironment() (environmentOverrides, error) {
 	validFixed := scalarEnvNames(reflect.TypeOf(Config{}), "")
 	environ := os.Environ()
 	sort.Strings(environ)
 
-	var overrides []collectorEnvOverride
+	var overrides environmentOverrides
 	for _, entry := range environ {
 		name, value, _ := strings.Cut(entry, "=")
 		if !strings.HasPrefix(name, EnvPrefix) {
@@ -65,14 +75,18 @@ func strictEnvironment() ([]collectorEnvOverride, error) {
 		}
 		if override, ok := parseCollectorEnvName(name); ok {
 			override.value = value
-			overrides = append(overrides, override)
+			overrides.collectors = append(overrides.collectors, override)
+			continue
+		}
+		if index, ok := parseTenantProfileEnvIndex(name); ok {
+			overrides.tenantProfiles = append(overrides.tenantProfiles, tenantProfileEnvOverride{index, name, value})
 			continue
 		}
 		if name == envVarName(removedCardinalityMetricLimit) {
 			continue // retained for Load's targeted migration diagnostic
 		}
 		if !validFixed[name] {
-			return nil, fmt.Errorf("unknown configuration environment variable %s", name)
+			return environmentOverrides{}, fmt.Errorf("unknown configuration environment variable %s", name)
 		}
 	}
 	return overrides, nil
@@ -109,15 +123,46 @@ func collectScalarEnvNames(typ reflect.Type, prefix string, out map[string]bool)
 		}
 		switch fieldType.Kind() {
 		case reflect.Map, reflect.Slice, reflect.Array:
-			// Structured collections are file-only. The sole exception is the
-			// dynamic global collector override form handled separately.
-			continue
+			if listEnvKeys[path] {
+				out[envVarName(path)] = true
+			}
 		case reflect.Struct:
 			collectScalarEnvNames(fieldType, path, out)
 		default:
 			out[envVarName(path)] = true
 		}
 	}
+}
+
+func parseTenantProfileEnvIndex(name string) (int, bool) {
+	parts := strings.Split(name, envNestDelim)
+	if len(parts) != 3 || parts[0] != EnvPrefix+"TENANTS" || parts[2] != "PROFILES" {
+		return 0, false
+	}
+	index, err := strconv.Atoi(parts[1])
+	return index, err == nil && index >= 0 && strconv.Itoa(index) == parts[1]
+}
+
+func splitEnvironmentList(value string) []string {
+	parts := strings.Split(value, ",")
+	for i := range parts {
+		parts[i] = strings.TrimSpace(parts[i])
+	}
+	return parts
+}
+
+func applyTenantProfileEnvironment(cfg *Config, overrides []tenantProfileEnvOverride) error {
+	for _, override := range overrides {
+		if override.index >= len(cfg.Tenants) {
+			return fmt.Errorf("%s: tenant index out of range (tenants are configured in YAML)", override.variable)
+		}
+		profiles := splitEnvironmentList(override.value)
+		if err := validateProfiles(profiles, override.variable); err != nil {
+			return err
+		}
+		cfg.Tenants[override.index].Profiles = profiles
+	}
+	return nil
 }
 
 func parseCollectorEnvName(name string) (collectorEnvOverride, bool) {

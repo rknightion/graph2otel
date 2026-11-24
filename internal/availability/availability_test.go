@@ -287,7 +287,7 @@ func TestAvailabilityContract(t *testing.T) {
 func expectedPair(state State, reason Reason) bool {
 	switch state {
 	case StateDisabled:
-		return reason == ReasonTransportNotConfigured || reason == ReasonExperimentalNotEnabled || reason == ReasonHighVolumeNotEnabled || reason == ReasonDisabledByConfig
+		return reason == ReasonTransportNotConfigured || reason == ReasonExperimentalNotEnabled || reason == ReasonHighVolumeNotEnabled || reason == ReasonDisabledByConfig || reason == ReasonProfileNotSelected
 	case StateBlocked:
 		return reason == ReasonPermissionDenied || reason == ReasonLicenseUnavailable
 	case StateCovered:

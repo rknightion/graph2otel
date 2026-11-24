@@ -189,6 +189,9 @@ func New(g collectors.GraphClient, logger *slog.Logger) *Collector {
 
 func (c *Collector) Name() string { return collectorName }
 
+// Profiles declares this collector's profile membership.
+func (*Collector) Profiles() collector.ProfileSet { return collector.ProfileGraph }
+
 // DefaultInterval is 12h. A CA expiry is months away when it starts to matter,
 // so detection latency is not the constraint; the leaf twin volume is — one
 // record per issued certificate including retained expired and revoked ones.
