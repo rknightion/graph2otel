@@ -10442,6 +10442,31 @@
       ]
     },
     {
+      "event_name": "m365.teams_device_usage",
+      "domain": "m365",
+      "attr_keys": [
+        "deleted_date",
+        "is_deleted",
+        "is_licensed",
+        "last_activity_date",
+        "report_period",
+        "report_refresh_date",
+        "used_android_phone",
+        "used_chrome_os",
+        "used_ios",
+        "used_linux",
+        "used_mac",
+        "used_web",
+        "used_windows",
+        "used_windows_phone",
+        "user_id",
+        "user_principal_name"
+      ],
+      "packages": [
+        "internal/collectors/m365/teamsusage"
+      ]
+    },
+    {
       "event_name": "mdca.discovered_app",
       "domain": "mdca",
       "attr_keys": [

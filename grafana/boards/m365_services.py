@@ -170,4 +170,7 @@ LOGS = [
      "desc": "Call flow and outcome per attendant leg. Requires the VAAC opt-in."},
     {"kind": "logs", "event": "teams.call_queue_call", "title": "Teams call queue calls",
      "desc": "Queue outcome, wait and participant details per leg. Requires the VAAC opt-in."},
+    {"kind": "logs", "event": "m365.teams_device_usage", "title": "Teams client usage by user (D7)",
+     "desc": "One snapshot per dated report row, not one record per action. Widen the time range "
+             "to include the report refresh date. Concealed identifiers may not match directory users."},
 ]

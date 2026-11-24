@@ -33,8 +33,8 @@ spec:
     description: "The durable checkpoint watermark for collector={{ $labels.collector }}, tenant {{ $labels.tenant_id }} has stopped advancing: it is more than 20x that COLLECTOR'S OWN effective poll interval behind wall-clock. This is the #417 fingerprint — a livelocked window poller that re-fetches one frozen range every tick, dedupes it, and reports a perfectly healthy scrape. Expect graph2otel_scrape_success_ratio to be 1, availability to read healthy, and graph2otel_record_outcomes_total to show fetched == mapped == deduped with NO emitted series at all; none of that is evidence against this alert, it is the shape of the fault. PAUSED, and the threshold is a placeholder. The unblock condition is a MEASUREMENT that cannot be taken until this metric has shipped: observe (time() - graph2otel_collector_watermark_timestamp_seconds) / graph2otel_collector_expected_interval_seconds across every window collector for at least one full week on a live tenant, take the per-collector maximum over that week, and set the threshold above the largest of them. 20x is a guess chosen to clear the per-collector SafetyLag (which is subtracted from the watermark and is NOT exported, so it inflates this ratio by an unknown amount that hurts the fastest collectors most) — it is not a measured bound. Enabling it before that measurement risks firing on correct data, which is the specific failure #422 names: an alert that fires on correct data trains the reader to ignore the signal, and that is how the next 11-day freeze goes unnoticed."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-collector-watermark-stalled"
     __dashboardUid__: "graph2otel"
-    __panelId__: "456"
-    dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=456"
+    __panelId__: "457"
+    dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=457"
   expressions:
     A:
       model:

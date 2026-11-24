@@ -104,6 +104,7 @@ func TestCollectTeamsReports(t *testing.T) {
 	}
 
 	logs := rec.LogRecords()
+	logs = slices.DeleteFunc(logs, func(log telemetrytest.LogRecord) bool { return log.EventName != "m365.team_activity" })
 	if len(logs) != 2 {
 		t.Fatalf("logs = %+v, want two dated team twins", logs)
 	}
@@ -117,6 +118,90 @@ func TestCollectTeamsReports(t *testing.T) {
 	if second := logs[1]; second.Attrs["id"] != "192.0.2.12" || second.Attrs["active_users_count"] != "0" ||
 		second.Attrs["is_deleted"] != "true" || second.Attrs["meetings_organized_count"] != "" || second.Attrs["active_channels_count"] != "" {
 		t.Errorf("second twin = %+v; want blank and invalid optional counts omitted", second)
+	}
+}
+
+func TestCollectDeviceUsageTwins(t *testing.T) {
+	header, _, _ := strings.Cut(devicesCSV, "\n")
+	g := &graphStub{bodies: map[string]string{
+		devicesPath: header + ",Additional Column\n" +
+			"2026-11-23,concealed-id,concealed-upn,2026-11-18,true,2026-11-19,Yes,No,No,,No,Yes,Yes,No,Yes,7,not-for-export\n" +
+			"2026-11-23,,,2026-11-21,false,,No,Yes,,No,Yes,No,No,Yes,No,7,not-for-export\n" +
+			",undated-id,,2026-11-21,false,,Yes,No,No,Yes,No,Yes,No,No,,7,not-for-export\n",
+		teamsPath:   strings.SplitN(teamsCSV, "\n", 2)[0] + "\n",
+		trendPath:   strings.SplitN(trendCSV, "\n", 2)[0] + "\n",
+		settingPath: `{"displayConcealedNames":true}`,
+	}}
+	rec, outcomes := telemetrytest.New(), recordoutcome.NewRecorder()
+	if err := New(g).Collect(t.Context(), rec.Emitter(), outcomes); err != nil {
+		t.Fatal(err)
+	}
+	logs := rec.LogRecords()
+	if len(logs) != 2 {
+		t.Fatalf("got %d logs, want two dated device usage twins", len(logs))
+	}
+	for i, want := range []map[string]string{
+		{
+			"user_id": "concealed-id", "user_principal_name": "concealed-upn", "last_activity_date": "2026-11-18",
+			"report_refresh_date": "2026-11-23", "report_period": "7", "is_deleted": "true", "deleted_date": "2026-11-19",
+			"used_web": "true", "used_windows_phone": "false", "used_ios": "false", "used_android_phone": "false",
+			"used_windows": "true", "used_chrome_os": "true", "used_linux": "false", "is_licensed": "true",
+		},
+		{
+			"last_activity_date": "2026-11-21", "report_refresh_date": "2026-11-23", "report_period": "7", "is_deleted": "false",
+			"used_web": "false", "used_windows_phone": "true", "used_mac": "false", "used_android_phone": "true",
+			"used_windows": "false", "used_chrome_os": "false", "used_linux": "true", "is_licensed": "false",
+		},
+	} {
+		got := logs[i]
+		if got.EventName != "m365.teams_device_usage" || !got.Timestamp.Equal(time.Date(2026, 11, 23, 0, 0, 0, 0, time.UTC)) {
+			t.Errorf("log %d: event = %q, timestamp = %v; want device usage at report refresh", i, got.EventName, got.Timestamp)
+		}
+		if !maps.Equal(got.Attrs, want) {
+			t.Errorf("log %d attrs = %v, want %v", i, got.Attrs, want)
+		}
+	}
+	gauges := map[string]float64{}
+	for _, pt := range rec.MetricPoints("teams.device_usage.users") {
+		gauges[pt.Attrs["platform"]] = pt.Value
+	}
+	wantGauges := map[string]float64{"web": 2, "android": 1, "windows": 2, "chrome_os": 1, "linux": 1}
+	if !maps.Equal(gauges, wantGauges) {
+		t.Errorf("platforms = %v, want %v (including the undated row, but excluding unknown counts)", gauges, wantGauges)
+	}
+	snap := outcomes.Snapshot()
+	wantCounts := recordoutcome.Counts{Fetched: 3, Mapped: 3, Emitted: 3}
+	if got := snap.Summarize(nil, false); got.Result != recordoutcome.ResultPartial || got.Counts != wantCounts ||
+		!slices.Contains(snap.Causes, recordoutcome.CauseMissingEventTime) {
+		t.Errorf("outcomes = %+v, causes = %v; want partial with all rows used and missing log date reported", got, snap.Causes)
+	}
+}
+
+func TestDeviceUsageWithoutRefreshColumnKeepsGauges(t *testing.T) {
+	devices := strings.ReplaceAll(devicesCSV, "2026-11-23,", "")
+	devices = strings.Replace(devices, "Report Refresh Date,", "", 1)
+	g := &graphStub{bodies: map[string]string{
+		devicesPath: devices,
+		teamsPath:   strings.SplitN(teamsCSV, "\n", 2)[0] + "\n",
+		trendPath:   strings.SplitN(trendCSV, "\n", 2)[0] + "\n",
+	}}
+	rec, outcomes := telemetrytest.New(), recordoutcome.NewRecorder()
+	if err := New(g).Collect(t.Context(), rec.Emitter(), outcomes); err != nil {
+		t.Fatal(err)
+	}
+	if got := rec.LogRecords(); len(got) != 0 {
+		t.Errorf("got %d logs without a report refresh date, want none", len(got))
+	}
+	if got := rec.MetricPoints("teams.device_usage.users"); len(got) != 7 {
+		t.Errorf("got %d complete platform gauges, want seven", len(got))
+	}
+	want := recordoutcome.Summary{
+		Result: recordoutcome.ResultPartial,
+		Cause:  recordoutcome.CauseMissingEventTime,
+		Counts: recordoutcome.Counts{Fetched: 2, Mapped: 2, Emitted: 2},
+	}
+	if got := outcomes.Snapshot().Summarize(nil, false); got != want {
+		t.Errorf("summary = %+v, want %+v", got, want)
 	}
 }
 

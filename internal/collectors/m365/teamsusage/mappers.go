@@ -11,15 +11,26 @@ import (
 )
 
 // The labels key on fixed CSV headers, not a wire enum. Windows Phone is
-// outside the platform mix requested for this signal.
-var platforms = []column{
-	{"Used Web", "web"},
-	{"Used Windows", "windows"},
-	{"Used Mac", "mac"},
-	{"Used iOS", "ios"},
-	{"Used Android Phone", "android"},
-	{"Used Linux", "linux"},
-	{"Used  Chrome OS", "chrome_os"}, // Graph sends two spaces after Used.
+// part of the source row but outside the gauge's established platform mix.
+var platforms = []struct{ header, label, attr string }{
+	{"Used Web", "web", semconv.AttrUsedWeb},
+	{"Used Windows", "windows", semconv.AttrUsedWindows},
+	{"Used Mac", "mac", semconv.AttrUsedMac},
+	{"Used iOS", "ios", semconv.AttrUsedIOS},
+	{"Used Android Phone", "android", semconv.AttrUsedAndroidPhone},
+	{"Used Linux", "linux", semconv.AttrUsedLinux},
+	{"Used  Chrome OS", "chrome_os", semconv.AttrUsedChromeOS}, // Graph sends two spaces after Used.
+	{"Used Windows Phone", "", semconv.AttrUsedWindowsPhone},
+}
+
+func requiredPlatformHeaders() []string {
+	var headers []string
+	for _, platform := range platforms {
+		if platform.label != "" {
+			headers = append(headers, platform.header)
+		}
+	}
+	return headers
 }
 
 var teamCounts = []column{
@@ -47,20 +58,59 @@ var activities = []column{
 	{"Other Actions", "other_actions"},
 }
 
-func emitPlatforms(e telemetry.Emitter, o *recordoutcome.Recorder, t table) {
+func emitDeviceUsage(e telemetry.Emitter, o *recordoutcome.Recorder, t table) {
+	hasGauges := emitPlatformGauges(e, o, t)
+	for _, row := range t.rows {
+		refresh := t.cell(row, "Report Refresh Date")
+		date, err := time.Parse(time.DateOnly, refresh)
+		if err != nil || date.IsZero() {
+			o.Cause(recordoutcome.CauseMissingEventTime)
+			if hasGauges {
+				// This row still contributes to every complete platform count.
+				emitted(o, 1)
+			} else {
+				o.Add(recordoutcome.OutcomeDropped, 1)
+			}
+			continue
+		}
+		attrs := telemetry.Attrs{semconv.AttrReportRefreshDate: refresh}
+		// Preserve the report's identifiers as supplied, even when concealed.
+		telemetry.SetStr(attrs, semconv.AttrUserId, t.cell(row, "User Id"))
+		telemetry.SetStr(attrs, semconv.AttrUserPrincipalName, t.cell(row, "User Principal Name"))
+		telemetry.SetStr(attrs, semconv.AttrLastActivityDate, t.cell(row, "Last Activity Date"))
+		telemetry.SetStr(attrs, semconv.AttrDeletedDate, t.cell(row, "Deleted Date"))
+		telemetry.SetStr(attrs, semconv.AttrReportPeriod, t.cell(row, "Report Period"))
+		if v, err := strconv.ParseBool(t.cell(row, "Is Deleted")); err == nil {
+			attrs[semconv.AttrIsDeleted] = v
+		}
+		if v, ok := parseYesNo(t.cell(row, "Is Licensed")); ok {
+			attrs[semconv.AttrIsLicensed] = v
+		}
+		for _, platform := range platforms {
+			if v, ok := parseYesNo(t.cell(row, platform.header)); ok {
+				attrs[platform.attr] = v
+			}
+		}
+		e.LogEvent(telemetry.Event{Name: eventDeviceUsage, Body: "Teams device usage summary", Timestamp: date, Attrs: attrs})
+		emitted(o, 1)
+	}
+}
+
+func emitPlatformGauges(e telemetry.Emitter, o *recordoutcome.Recorder, t table) bool {
 	points := make([]telemetry.GaugePoint, 0, len(platforms))
 	for _, platform := range platforms {
+		if platform.label == "" {
+			continue
+		}
 		users, known := 0, true
 		for _, row := range t.rows {
-			switch strings.ToLower(strings.TrimSpace(t.cell(row, platform.header))) {
-			case "yes":
-				users++
-			case "no":
-			default:
+			used, ok := parseYesNo(t.cell(row, platform.header))
+			if !ok {
 				known = false
-			}
-			if !known {
 				break
+			}
+			if used {
+				users++
 			}
 		}
 		if !known {
@@ -68,13 +118,20 @@ func emitPlatforms(e telemetry.Emitter, o *recordoutcome.Recorder, t table) {
 			o.Cause(recordoutcome.CauseMappingError)
 			continue
 		}
-		points = append(points, telemetry.GaugePoint{Value: float64(users), Attrs: telemetry.Attrs{semconv.AttrPlatform: platform.key}})
+		points = append(points, telemetry.GaugePoint{Value: float64(users), Attrs: telemetry.Attrs{semconv.AttrPlatform: platform.label}})
 	}
 	e.GaugeSnapshot(metricPlatform, unitUserCohort, platformDesc, points)
-	if len(points) == 0 {
-		o.Add(recordoutcome.OutcomeErrored, uint64(len(t.rows)))
-	} else {
-		emitted(o, uint64(len(t.rows)))
+	return len(points) > 0
+}
+
+func parseYesNo(cell string) (value, known bool) {
+	switch strings.ToLower(strings.TrimSpace(cell)) {
+	case "yes":
+		return true, true
+	case "no":
+		return false, true
+	default:
+		return false, false
 	}
 }
 

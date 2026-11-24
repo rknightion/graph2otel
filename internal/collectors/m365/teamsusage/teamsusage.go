@@ -24,6 +24,7 @@ const (
 	metricActivity    = "m365.teams_usage.activity.users"
 	metricConcealment = "m365.teams_usage.names_concealed"
 	eventTeamActivity = "m365.team_activity"
+	eventDeviceUsage  = "m365.teams_device_usage"
 	unitUserCohort    = "{overlapping_user_count}"
 
 	platformDesc  = "Users who used each Teams client platform in the D7 report. A user can use more than one platform."
@@ -74,8 +75,8 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, o *recordo
 		mapRows  func(table)
 		clear    func()
 	}{
-		{"getTeamsDeviceUsageUserDetail(period='D7')", platforms, nil,
-			func(t table) { emitPlatforms(e, o, t) }, func() { e.GaugeSnapshot(metricPlatform, unitUserCohort, platformDesc, nil) }},
+		{"getTeamsDeviceUsageUserDetail(period='D7')", nil, requiredPlatformHeaders(),
+			func(t table) { emitDeviceUsage(e, o, t) }, func() { e.GaugeSnapshot(metricPlatform, unitUserCohort, platformDesc, nil) }},
 		{"getTeamsTeamActivityDetail(period='D7')", teamCounts, []string{"Team Id", "Report Refresh Date"},
 			func(t table) { emitTeams(e, o, t, concealed) }, nil},
 		{"getTeamsUserActivityUserCounts(period='D30')", activities, []string{"Report Date"},

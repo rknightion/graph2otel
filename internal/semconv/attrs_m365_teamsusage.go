@@ -15,4 +15,13 @@ const (
 	AttrMentionsCount             = "mentions_count"
 	AttrActiveSharedChannelsCount = "active_shared_channels_count"
 	AttrActiveExternalUsersCount  = "active_external_users_count"
+	AttrIsLicensed                = "is_licensed"
+	AttrUsedWeb                   = "used_web"
+	AttrUsedWindows               = "used_windows"
+	AttrUsedMac                   = "used_mac"
+	AttrUsedIOS                   = "used_ios"
+	AttrUsedAndroidPhone          = "used_android_phone"
+	AttrUsedLinux                 = "used_linux"
+	AttrUsedChromeOS              = "used_chrome_os"
+	AttrUsedWindowsPhone          = "used_windows_phone"
 )
