@@ -30,6 +30,32 @@ issue. Do not record correction narratives here — those live on the issues.
   SMS, blocked-user and meeting dial-out functions are not polled: neither
   GA collector needs them.
 
+## Teams call records
+
+- **General call records use a separate workload** `[docs-only]` from the two
+  phone report functions. The client shares a provisional 30 requests per 20
+  seconds, burst one, across list, detail and child-page reads. Microsoft's
+  [call records limits](https://learn.microsoft.com/graph/throttling-limits#call-records-limits)
+  document 40 per 20 seconds for list and per-record requests.
+- **Discovery is not delivery** `[synthetic, #657 (Teams call records)]`.
+  After a complete list, the poller can advance discovery while a call's
+  detail or child read still fails, but only if the same atomic tenant
+  checkpoint saves a valid ID, minimum known version and source time for
+  retry. The queue holds up to 64 IDs and retries up to two per poll in FIFO
+  order, rotating failures behind other pending calls. A list row for an
+  already queued ID can raise the minimum version without taking another
+  retry slot. Detail fetches are by ID, not by historical version.
+- **An incomplete list, an unrecordable row failure or a failed checkpoint
+  save stalls discovery.** This includes list pagination and deferred queue
+  limits. Failed retries (including auxiliary read limits) are counted as
+  errors even when discovery can advance. An undelivered reference that
+  ages past the provisional Graph source retention floor is counted as a
+  drop, not a successful empty poll. The separate OTLP event horizon still
+  applies to recovered events. Do not roll back to a binary that ignores
+  deferred references while the queue is non-empty; that binary cannot tell
+  discovery progress from completed delivery. Synthetic tests cover these
+  local behaviours, not Graph retention, volume or recovery in a live tenant.
+
 ## Query mechanics (all workloads)
 
 - **URL-encode every `$filter` value** `[live, M2]`. A raw `$filter=appId eq '<guid>'`

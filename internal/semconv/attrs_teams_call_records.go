@@ -1,0 +1,42 @@
+package semconv
+
+// Attribute keys for Teams call and media stream evidence. Shared keys such
+// as CallId, Version, Direction and StartTime use the existing constants.
+const (
+	AttrParticipantCount    = "participant_count"
+	AttrParticipantUsers    = "participant_users"
+	AttrParticipantGuests   = "participant_guests"
+	AttrParticipantPSTN     = "participant_pstn"
+	AttrParticipantApps     = "participant_apps"
+	AttrParticipantDevices  = "participant_devices"
+	AttrParticipantUnknown  = "participant_unknown"
+	AttrJoinWebUrl          = "join_web_url"
+	AttrModalities          = "modalities"
+	AttrTextFieldsTruncated = "text_fields_truncated"
+
+	AttrMedia                       = "media"
+	AttrSegmentId                   = "segment_id"
+	AttrMediaLabel                  = "media_label"
+	AttrAudioCodec                  = "audio_codec"
+	AttrVideoCodec                  = "video_codec"
+	AttrAverageRTTMs                = "average_rtt_ms"
+	AttrMaxRTTMs                    = "max_rtt_ms"
+	AttrAverageJitterMs             = "average_jitter_ms"
+	AttrMaxJitterMs                 = "max_jitter_ms"
+	AttrAverageAudioNetworkJitterMs = "average_audio_network_jitter_ms"
+	AttrMaxAudioNetworkJitterMs     = "max_audio_network_jitter_ms"
+	AttrAveragePacketLossRate       = "average_packet_loss_rate"
+	AttrMaxPacketLossRate           = "max_packet_loss_rate"
+	AttrPostFECPacketLossRate       = "post_fec_packet_loss_rate"
+	AttrVideoFrameRate              = "video_frame_rate"
+	AttrReceivedFrameRate           = "received_frame_rate"
+	AttrVideoFrameLossPercent       = "video_frame_loss_percent"
+	AttrVideoPacketLossRate         = "video_packet_loss_rate"
+	AttrAverageAudioDegradation     = "average_audio_degradation"
+	AttrLowFrameRateRatio           = "low_frame_rate_ratio"
+	AttrPacketUtilization           = "packet_utilization"
+	AttrSessionFailureStage         = "session_failure_stage"
+	AttrSessionFailureReason        = "session_failure_reason"
+	AttrSegmentFailureStage         = "segment_failure_stage"
+	AttrSegmentFailureReason        = "segment_failure_reason"
+)

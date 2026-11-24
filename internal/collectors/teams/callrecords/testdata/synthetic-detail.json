@@ -1,0 +1,76 @@
+{
+  "id": "CALL_ID",
+  "version": 1,
+  "type": "groupCall",
+  "modalities": ["audio", "video"],
+  "startDateTime": "CALL_START",
+  "endDateTime": "CALL_END",
+  "joinWebUrl": "https://example.com/join/synthetic",
+  "organizer": {"user":{"id":"legacy-do-not-read"}},
+  "organizer_v2": {"id":"person-1","identity":{"user":{"id":"person-1","displayName":"Synthetic Caller"}}},
+  "sessions": [
+    {
+      "id": "session-1",
+      "failureInfo": {"stage":"midcall","reason":"synthetic-session-failure"},
+      "caller": {
+        "@odata.type":"#microsoft.graph.callRecords.participantEndpoint",
+        "associatedIdentity":{"id":"person-1"},
+        "name":"Synthetic machine",
+        "userAgent":{"@odata.type":"#microsoft.graph.callRecords.clientUserAgent","headerValue":"SyntheticAgent","platform":"windows","productFamily":"teams","applicationVersion":"0.0.1"},
+        "feedback":{"rating":"poor","tokens":{"Noisy":true,"Echo":false},"text":"Synthetic feedback"}
+      },
+      "callee": {
+        "@odata.type":"#microsoft.graph.callRecords.serviceEndpoint",
+        "associatedIdentity":{"id":"guest-1"},
+        "userAgent":{"@odata.type":"#microsoft.graph.callRecords.serviceUserAgent","role":"customBot","applicationId":"synthetic-app","headerValue":"Synthetic Service"}
+      },
+      "segments": [
+        {
+          "id":"segment-1",
+          "startDateTime":"SEGMENT_START",
+          "endDateTime":"CALL_END",
+          "failureInfo":{"stage":"midcall","reason":"synthetic-segment-failure"},
+          "media": [
+            {
+              "label":"main-audio",
+              "callerNetwork":{
+                "ipAddress":"198.51.100.3","subnet":"192.0.2.0","reflexiveIPAddress":"203.0.113.1","relayIPAddress":"192.0.2.10",
+                "connectionType":"wifi","networkTransportProtocol":"tcp","bandwidthLowEventRatio":0,"delayEventRatio":0.01,
+                "sentQualityEventRatio":0.02,"receivedQualityEventRatio":0.03,
+                "wifiBand":"frequency50GHz","wifiRadioType":"wifi80211ax","wifiChannel":36,"wifiSignalStrength":80,"wifiBatteryCharge":100,
+                "basicServiceSetIdentifier":"synthetic-wifi","wifiMicrosoftDriver":"Synthetic","wifiMicrosoftDriverVersion":"1.0",
+                "wifiVendorDriver":"Synthetic","wifiVendorDriverVersion":"1.0",
+                "traceRouteHops":[{"hopCount":1,"ipAddress":"192.0.2.11","roundTripTime":"PT0.005S"}]
+              },
+              "calleeNetwork":{"ipAddress":"203.0.113.4","relayIPAddress":"0.0.0.0","connectionType":"wired","networkTransportProtocol":"udp"},
+              "callerDevice":{"cpuInsufficentEventRatio":0.1,"deviceGlitchEventRatio":0,"receivedSignalLevel":-15,"receivedNoiseLevel":-70},
+              "streams":[
+                {
+                  "streamId":"audio-nosip","streamDirection":"callerToCallee","audioCodec":"opus",
+                  "averageRoundTripTime":"PT0.075S","maxRoundTripTime":"PT0.9S","averageJitter":"PT0.016S","maxJitter":"PT0.0315S",
+                  "averageAudioNetworkJitter":"PT0.02S","maxAudioNetworkJitter":"PT0.04S","averagePacketLossRate":0,"maxPacketLossRate":0.15,
+                  "packetUtilization":650,"averageAudioDegradation":1.5
+                },
+                {
+                  "streamId":"audio-bad-time","streamDirection":"calleeToCaller","startDateTime":"invalid"
+                }
+              ]
+            },
+            {
+              "label":"main-video",
+              "calleeNetwork":{"ipAddress":"2001:db8::10","connectionType":"wired","networkTransportProtocol":"udp"},
+              "streams":[
+                {
+                  "streamId":"video-sip","streamDirection":"calleeToCaller","videoCodec":"h264",
+                  "startDateTime":"STREAM_START","endDateTime":"CALL_END","averageVideoFrameRate":30,
+                  "averageVideoFrameLossPercentage":0.5,"averageReceivedFrameRate":29,"averageVideoPacketLossRate":0.01,
+                  "postForwardErrorCorrectionPacketLossRate":0.02,"lowFrameRateRatio":0
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

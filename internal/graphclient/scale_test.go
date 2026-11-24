@@ -80,6 +80,7 @@ func TestScaleLimiterBudgetsMatchDocumentedCeilings(t *testing.T) {
 		// the documented ceiling 429s under the 6h export-tick burst.
 		{WorkloadIntuneExport, rate.Every(time.Minute / 24), 4, "intune-export 24/min burst 4"},
 		{WorkloadTeamsPhone, rate.Every(time.Minute / 50), 1, "teams-phone 50/min burst 1"},
+		{WorkloadTeamsCallRecords, rate.Every(20 * time.Second / 30), 1, "teams-call-records 30/20s burst 1"},
 	}
 	for _, tc := range cases {
 		spec, ok := workloadRates[tc.wl]

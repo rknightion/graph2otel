@@ -2,7 +2,9 @@ package logpipeline
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/checkpoint"
@@ -123,13 +125,54 @@ func (c *LogCollector) CollectWindow(
 		resumeFrom = cp.Watermark.Add(-cfg.Overlap)
 	}
 
+	durableWatermark := cp.Watermark
+	seenBefore, deferredBefore := len(cp.SeenIDs), cp.DeferredRecords
 	hw, err := Poll(ctx, cfg, cp, resumeFrom, to, c.Fetcher, e, outcomes)
 	if err != nil {
-		return cp.Watermark, fmt.Errorf("logpipeline: %s: poll: %w", c.NameField, err)
+		if cfg.Prepare != nil && (len(cp.SeenIDs) > seenBefore || !slices.Equal(cp.DeferredRecords, deferredBefore)) {
+			err = errors.Join(err, c.Store.Save(cp)) // delivery progress only, unchanged watermark
+		}
+		return durableWatermark, fmt.Errorf("logpipeline: %s: poll: %w", c.NameField, err)
 	}
 
 	if err := c.Store.Save(cp); err != nil {
+		if cfg.Deferred != nil {
+			hw = durableWatermark
+		}
 		return hw, fmt.Errorf("logpipeline: %s: save checkpoint: %w", c.NameField, err)
 	}
 	return hw, nil
+}
+
+// CollectRecord prepares one row outside the window, using the same durable
+// key set as CollectWindow without advancing its watermark. It requires a
+// Prepare hook. The caller must serialize it with CollectWindow and with other
+// calls for the same tenant and endpoint across the entire load/emit/save cycle.
+func (c *LogCollector) CollectRecord(ctx context.Context, row map[string]any, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
+	cfg := c.Config.withDefaults()
+	if cfg.Prepare == nil {
+		return errors.New("logpipeline: CollectRecord requires Prepare")
+	}
+	cp, err := c.Store.Load(c.TenantID, cfg.checkpointKey())
+	if err != nil {
+		return err
+	}
+	outcomes.Add(recordoutcome.OutcomeFetched, 1)
+	rec, err := ingestPrepared(ctx, cfg, cp, row, telemetry.WithTransport(e, telemetry.TransportGraph), outcomes)
+	if err != nil {
+		failFetchedRecords(outcomes, 1, fetchFailureCause(err))
+		return err
+	}
+	if cfg.Deferred != nil && rec.SourceVersion > 0 && cp.SeenIDs.Has(rec.Key) {
+		// Do not later report a retention drop for a ref the direct path
+		// already delivered. A lower version does not discharge the ref.
+		id, _ := row["id"].(string)
+		cp.DeferredRecords = slices.DeleteFunc(cp.DeferredRecords, func(ref checkpoint.DeferredRecord) bool {
+			return ref.ID == id && ref.Version <= rec.SourceVersion
+		})
+	}
+	if !cfg.NotBefore.IsZero() {
+		cp.SeenIDs.Evict(cfg.NotBefore)
+	}
+	return c.Store.Save(cp)
 }
