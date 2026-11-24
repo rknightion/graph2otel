@@ -584,15 +584,18 @@ func setupTenantWithGraphAndLicenseBuilders(
 	// effective limit at all — so both paths share this instance. It is nil, and
 	// buildErr is nil, for a tenant with no exchange_online block.
 	exoClient, exoBuildErr := tenantEXOClient(cfg, ta, tlog, emitter)
+	teamsSites, teamsDomains := cfg.TeamsSiteInputs(ta.TenantID)
 	wdeps := collectors.WindowDeps{
-		Graph:     gc,
-		EXO:       exoClient,
-		TenantID:  ta.TenantID,
-		Logger:    tlog,
-		Caps:      caps,
-		Fetcher:   fetcher,
-		JobClient: jobClient,
-		Store:     store,
+		Graph:                gc,
+		EXO:                  exoClient,
+		TenantID:             ta.TenantID,
+		Logger:               tlog,
+		Caps:                 caps,
+		Fetcher:              fetcher,
+		JobClient:            jobClient,
+		Store:                store,
+		TeamsSites:           teamsSites,
+		TeamsInternalDomains: teamsDomains,
 	}
 	selfIdentity.applyWindow(&wdeps)
 	for _, wf := range paths.window {

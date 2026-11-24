@@ -44,7 +44,11 @@ func validateYAMLNode(node *yaml.Node, typ reflect.Type, path string) error {
 
 	switch typ.Kind() {
 	case reflect.Struct:
+		isTeams := typ == reflect.TypeFor[TeamsConfig]()
 		if node.Kind != yaml.MappingNode {
+			if isTeams {
+				return fmt.Errorf("%s: expected a mapping", path)
+			}
 			return nil // typed decode owns value-shape diagnostics
 		}
 		fields := yamlStructFields(typ)
@@ -59,6 +63,13 @@ func validateYAMLNode(node *yaml.Node, typ reflect.Type, path string) error {
 					continue
 				}
 				return fmt.Errorf("unknown configuration key %s", fieldPath)
+			}
+			// Koanf uses weak decoding for the environment layer. Do not let
+			// it turn YAML-only Teams numbers or scalars into paths or rules.
+			if isTeams {
+				if err := validateTeamsField(value, fieldType.Kind(), fieldPath); err != nil {
+					return err
+				}
 			}
 			if err := validateYAMLNode(value, fieldType, fieldPath); err != nil {
 				return err
@@ -88,6 +99,26 @@ func validateYAMLNode(node *yaml.Node, typ reflect.Type, path string) error {
 			itemPath := path + "[" + strconv.Quote(key.Value) + "]"
 			if err := validateYAMLNode(value, typ.Elem(), itemPath); err != nil {
 				return err
+			}
+		}
+	}
+	return nil
+}
+
+func validateTeamsField(node *yaml.Node, kind reflect.Kind, path string) error {
+	node = dereferenceAlias(node)
+	switch kind {
+	case reflect.String:
+		if node.ShortTag() != "!!str" {
+			return fmt.Errorf("%s: expected a string", path)
+		}
+	case reflect.Slice:
+		if node.Kind != yaml.SequenceNode {
+			return fmt.Errorf("%s: expected a list of strings", path)
+		}
+		for i, item := range node.Content {
+			if dereferenceAlias(item).ShortTag() != "!!str" {
+				return fmt.Errorf("%s[%d]: expected a string", path, i)
 			}
 		}
 	}

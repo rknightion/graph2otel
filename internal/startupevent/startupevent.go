@@ -105,9 +105,10 @@ const fingerprintHexLen = 16
 //     does (""/"REDACTED" differ), which is the operationally meaningful half of
 //     the change. Tenant auth material (AZURE_CLIENT_SECRET, certificates) is
 //     not on this surface at all — azidentity reads it from the environment.
-//   - Unexported fields, which encoding/json skips. The only one is
-//     collectorEnvOrigins, a diagnostic map of which env var supplied which
-//     dynamic collector override; it changes nothing about behavior.
+//   - Unexported fields, which encoding/json skips. These hold diagnostics
+//     and prepared runtime inputs, not the underlying configuration.
+//   - An omitted tenant Teams block, so tenants that do not configure Teams
+//     enrichment keep their existing fingerprints.
 //
 // # Why it is one-way
 //

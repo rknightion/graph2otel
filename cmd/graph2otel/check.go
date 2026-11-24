@@ -247,8 +247,13 @@ func requiredCollectorPermissions(cfg *config.Config, tenantID string, caps lice
 		exo = preflightEXOClient{}
 	}
 	store := checkpoint.NewStore("")
+	teamsSites, teamsDomains := cfg.TeamsSiteInputs(tenantID)
+	wdeps := collectors.WindowDeps{
+		TenantID: tenantID, Logger: logger, Caps: caps, EXO: exo, Store: store,
+		TeamsSites: teamsSites, TeamsInternalDomains: teamsDomains,
+	}
 	for _, factory := range paths.window {
-		rw := factory(collectors.WindowDeps{TenantID: tenantID, Logger: logger, Caps: caps, EXO: exo, Store: store})
+		rw := factory(wdeps)
 		if rw.Collector == nil {
 			continue
 		}
