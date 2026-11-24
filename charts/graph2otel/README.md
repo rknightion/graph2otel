@@ -244,7 +244,7 @@ running two.
 | config.teams.quality_thresholds.video_frame_loss_percent | int | `50` | Video is poor above this average frame loss percentage (0 to 100). |
 | config.teams.quality_thresholds.video_frame_rate_fps | int | `7` | Video is poor below this average frame rate if frame loss is missing. |
 | config.teams.quality_thresholds.video_post_fec_loss_ratio | float | `0.15` | Video is poor above this post-FEC ratio if frame loss and fps are missing. |
-| config.tenants | list | `[{"client_id":"","tenant_id":"00000000-0000-0000-0000-000000000000"}]` | Tenants graph2otel polls. At least one entry is required unless otlp.protocol is "stdout". Define tenants in values; only their profiles can be overridden by index from the environment. |
+| config.tenants | list | `[{"client_id":"","tenant_id":"00000000-0000-0000-0000-000000000000"}]` | Tenants graph2otel polls. At least one entry is required unless otlp.protocol is "stdout". Profiles and Teams GeoIP database paths can also be overridden by tenant index from the environment. Mount MMDB files read-only with extraVolumes and extraVolumeMounts. |
 | config.tenants[0].client_id | string | `""` | Optional expected application ID. A non-secret consistency assertion only; never credential selection. |
 | config.tenants[0].tenant_id | string | `"00000000-0000-0000-0000-000000000000"` | Hyphenated Entra directory GUID only. Verified domains and arbitrary names are rejected. |
 | existingSecret | string | `""` | Name of a pre-created Secret exposing the AZURE_* env keys below. When set, no Secret is rendered. |

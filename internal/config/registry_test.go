@@ -10,8 +10,8 @@ import (
 // stringSliceFieldPaths walks the Config struct and returns the dotted yaml-key
 // path of every []string field. These are exactly the scalar-list fields whose
 // environment value would have to be comma-split, so the result must equal the
-// listEnvKeys registry. The tenant list itself and nested tenant sections
-// remain file-only; only direct tenant list fields are indexed exceptions.
+// listEnvKeys registry. Nested tenant lists remain file-only; the indexed
+// Teams GeoIP overrides are scalar paths, not list fields.
 func stringSliceFieldPaths(t reflect.Type, prefix string, out map[string]bool) {
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)

@@ -153,14 +153,19 @@ config:
   profiles: [graph]
 
   # -- Tenants graph2otel polls. At least one entry is required unless
-  # otlp.protocol is "stdout". Define tenants in values; only their profiles
-  # can be overridden by index from the environment.
+  # otlp.protocol is "stdout". Profiles and Teams GeoIP database paths can also
+  # be overridden by tenant index from the environment. Mount MMDB files read-only
+  # with extraVolumes and extraVolumeMounts.
   tenants:
     - # -- Hyphenated Entra directory GUID only. Verified domains and arbitrary names are rejected.
       tenant_id: "00000000-0000-0000-0000-000000000000"
       # -- Optional expected application ID. A non-secret consistency assertion only; never credential selection.
       client_id: ""
       # profiles: [teams] # Replace the global list for this tenant.
+      # teams:
+      #   geoip:
+      #     asn_db: /etc/graph2otel/geoip/GeoLite2-ASN.mmdb
+      #     city_db: /etc/graph2otel/geoip/GeoLite2-City.mmdb
       # Optional per-tenant collector overrides, layered on top of `collectors`
       # below (field-by-field), e.g.:
       # collectors:

@@ -125,7 +125,7 @@ func TestVAACStartupRegistersAndWarnsOnlyAfterOptIn(t *testing.T) {
 			cancel()
 			var wg sync.WaitGroup
 			var logs bytes.Buffer
-			source, err := setupTenantWithGraphAndLicenseBuilders(ctx, startupTenantAuth(vaacTenantFixture), cfg, provider,
+			source, err := tenantGeoIPReaders(nil).setupTenantWithGraphAndLicenseBuilders(ctx, startupTenantAuth(vaacTenantFixture), cfg, provider,
 				slog.New(slog.NewTextHandler(&logs, nil)), graphclient.NewWorkloadLimiter(), map[admin.SkipKey]string{}, &wg,
 				func(context.Context, *auth.TenantAuth, graphclient.Options) (*graphclient.Client, error) {
 					return &graphclient.Client{TenantID: vaacTenantFixture}, nil

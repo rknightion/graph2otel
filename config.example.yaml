@@ -34,12 +34,17 @@ log_level: info # debug | info | warn | error
 profiles: [graph] # Default collector profiles for all tenants: graph, teams, or both.
 
 # tenants lists every Entra tenant graph2otel polls. At least one entry is
-# required unless otlp.protocol is "stdout". Define tenants in YAML. Only
-# their profiles can be overridden by index from the environment.
+# required unless otlp.protocol is "stdout". Define tenants in YAML. Profiles
+# and Teams GeoIP paths can be overridden by index from the environment.
 tenants:
   - tenant_id: "00000000-0000-0000-0000-000000000000" # hyphenated Entra directory GUID only
     client_id: "" # optional expected app ID; an assertion, not credential selection
     # profiles: [teams] # Replace the global profile list for this tenant.
+    # Optional offline enrichment of Teams call-stream logs; mount your own MMDBs.
+    # teams:
+    #   geoip:
+    #     asn_db: /etc/graph2otel/geoip/GeoLite2-ASN.mmdb
+    #     city_db: /etc/graph2otel/geoip/GeoLite2-City.mmdb
     # Opt-in, default-off: drop graph2otel's OWN polling exhaust — records whose
     # appId matches the application identity proved from this tenant's Graph
     # access token. A TENANT-level flag because "self" spans transports: it drives

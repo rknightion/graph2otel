@@ -45,7 +45,7 @@ func validateYAMLNode(node *yaml.Node, typ reflect.Type, path string) error {
 
 	switch typ.Kind() {
 	case reflect.Struct:
-		isTeams := typ == reflect.TypeFor[TeamsConfig]()
+		isTeams := typ == reflect.TypeFor[TeamsConfig]() || typ == reflect.TypeFor[TeamsGeoIPConfig]()
 		isThresholds := typ == reflect.TypeFor[quality.Thresholds]()
 		if typ == reflect.TypeFor[VAACConfig]() {
 			// Do not let the weak typed decoder format a pasted credential in
@@ -89,7 +89,7 @@ func validateYAMLNode(node *yaml.Node, typ reflect.Type, path string) error {
 				return fmt.Errorf("unknown configuration key %s", fieldPath)
 			}
 			// Koanf uses weak decoding for the environment layer. Do not let
-			// it turn YAML-only Teams numbers or scalars into paths or rules.
+			// it turn Teams YAML numbers or scalars into paths or rules.
 			if isTeams {
 				if err := validateTeamsField(value, fieldType.Kind(), fieldPath); err != nil {
 					return err

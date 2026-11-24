@@ -463,6 +463,14 @@
                                             "username_file": { "type": "string" },
                                             "password_file": { "type": "string" }
                                         }
+                                    },
+                                    "geoip": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "asn_db": {"type": "string"},
+                                            "city_db": {"type": "string"}
+                                        }
                                     }
                                 }
                             },

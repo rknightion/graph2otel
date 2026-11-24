@@ -75,6 +75,15 @@ func envReferenceRows(exampleYAML []byte) ([]envRow, error) {
 					Desc: "Replace the profile list for tenant at zero-based YAML index `<n>` (for example `G2O_TENANTS__0__PROFILES`).",
 				})
 			}
+			if key == "tenants" {
+				for _, field := range teamsGeoIPFields {
+					key := tenantTeamsGeoIPEnvPrefix + field
+					rows = append(rows, envRow{
+						Key: key, EnvVar: strings.ReplaceAll(envVarName(key), "<N>", "<n>"), Default: `""`,
+						Desc: "Override the tenant's local Teams GeoIP database path at zero-based YAML index `<n>`. An empty value disables this database.",
+					})
+				}
+			}
 		}
 	}
 	walk("", "", doc.Content[0])

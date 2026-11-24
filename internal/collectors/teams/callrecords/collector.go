@@ -16,6 +16,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
 	"github.com/rknightion/graph2otel/internal/recordoutcome"
+	"github.com/rknightion/graph2otel/internal/teams/geoip"
 	"github.com/rknightion/graph2otel/internal/teams/quality"
 	"github.com/rknightion/graph2otel/internal/teams/sites"
 	"github.com/rknightion/graph2otel/internal/telemetry"
@@ -48,6 +49,7 @@ type Collector struct {
 	graph      collectors.GraphClient
 	sitesFile  *sites.File
 	domains    sites.Domains
+	geoIP      *geoip.Reader
 	thresholds quality.Thresholds
 	logger     *slog.Logger
 	now        func() time.Time
@@ -74,7 +76,7 @@ func newCollector(deps collectors.WindowDeps) collectors.RegisteredWindow {
 	return collectors.RegisteredWindow{
 		Collector: &Collector{
 			LogCollector: logpipeline.NewLogCollector(Name, interval, lag, deps.TenantID, cfg, listFetcher{deps.Graph}, deps.Store),
-			graph:        deps.Graph, sitesFile: deps.TeamsSites, domains: deps.TeamsInternalDomains,
+			graph:        deps.Graph, sitesFile: deps.TeamsSites, domains: deps.TeamsInternalDomains, geoIP: deps.TeamsGeoIP,
 			thresholds: thresholds, logger: logger, now: time.Now, permit: make(chan struct{}, 1),
 		},
 		InitialLookback: overlap,
@@ -176,7 +178,7 @@ func (c *Collector) prepare(table *sites.Table, floor time.Time) logpipeline.Pre
 		}
 		call := mapCall(d, version, sessions, people, table, c.domains)
 		assessCall(&call, c.thresholds)
-		result.Deliver = func(e telemetry.Emitter) { emitCall(e, call) }
+		result.Deliver = func(e telemetry.Emitter) { c.emitCall(e, call) }
 		return result, nil
 	}
 }
