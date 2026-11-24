@@ -10,7 +10,10 @@
 // built from anything — a real collector registry, or a fixture in a test.
 package preflight
 
-import "sort"
+import (
+	"slices"
+	"sort"
+)
 
 // PermissionRequirer is optionally implemented by a collector to declare the
 // Microsoft Graph application permissions it needs. It is checked via a type
@@ -22,6 +25,13 @@ type PermissionRequirer interface {
 	RequiredPermissions() []string
 }
 
+// AlternativePermissionRequirer lets a collector name other explicit Graph
+// application roles that satisfy a declared requirement. It does not imply a
+// general permission hierarchy or accept delegated grants.
+type AlternativePermissionRequirer interface {
+	PermissionAlternatives() map[string][]string
+}
+
 // CollectorReq is one collector's declared permission requirement, the input
 // Check compares against the granted-permission set.
 type CollectorReq struct {
@@ -31,6 +41,9 @@ type CollectorReq struct {
 	// collector needs. An empty/nil slice means the collector declared no
 	// requirement (or didn't implement PermissionRequirer).
 	Permissions []string
+	// PermissionAlternatives is keyed by the preferred role in Permissions.
+	// Any one listed role satisfies that requirement.
+	PermissionAlternatives map[string][]string
 	// UnverifiablePrereqs are non-Graph prerequisites required by this
 	// collector that a Graph application token cannot prove, such as a static
 	// portal token, a service-side subscription, or a directory role. They are
@@ -44,8 +57,8 @@ type CollectorResult struct {
 	// Required is the collector's declared permission set, echoed for the
 	// report (so OK entries still show what was checked).
 	Required []string
-	// Missing is the subset of Required not present in the granted set, in
-	// the order Required listed them.
+	// Missing is the subset of Required neither granted nor satisfied by
+	// a declared alternative, in the order Required listed them.
 	Missing []string
 	// UnverifiablePrereqs is copied from CollectorReq so the rendered report
 	// keeps the Graph-role proof boundary visible to the operator.
@@ -95,7 +108,9 @@ func Check(granted []string, reqs []CollectorReq) Report {
 			if _, known := ExpectedExceptionScopes[perm]; known {
 				exceptionSet[perm] = true
 			}
-			if !grantedSet[perm] {
+			if !grantedSet[perm] && !slices.ContainsFunc(req.PermissionAlternatives[perm], func(alternative string) bool {
+				return grantedSet[alternative]
+			}) {
 				missing = append(missing, perm)
 				missingSet[perm] = true
 			}
@@ -135,11 +150,14 @@ func BuildRequirements(collectors map[string]any) []CollectorReq {
 
 	reqs := make([]CollectorReq, 0, len(collectors))
 	for _, name := range names {
-		var perms []string
+		req := CollectorReq{Name: name}
 		if pr, ok := collectors[name].(PermissionRequirer); ok {
-			perms = pr.RequiredPermissions()
+			req.Permissions = pr.RequiredPermissions()
 		}
-		reqs = append(reqs, CollectorReq{Name: name, Permissions: perms})
+		if alternatives, ok := collectors[name].(AlternativePermissionRequirer); ok {
+			req.PermissionAlternatives = alternatives.PermissionAlternatives()
+		}
+		reqs = append(reqs, req)
 	}
 	return reqs
 }

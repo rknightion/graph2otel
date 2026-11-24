@@ -18,7 +18,7 @@ func WriteReport(w io.Writer, tenantID string, r Report) {
 	for _, cr := range r.Collectors {
 		manualOnly := cr.OK && len(cr.Required) == 0 && len(cr.UnverifiablePrereqs) > 0
 		if cr.OK && !manualOnly {
-			fmt.Fprintf(w, "  [OK]      %s (%d permission(s) required, all granted)\n", cr.Name, len(cr.Required))
+			fmt.Fprintf(w, "  [OK]      %s (%d permission requirement(s) satisfied)\n", cr.Name, len(cr.Required))
 		} else if !cr.OK {
 			fmt.Fprintf(w, "  [MISSING] %s: missing %s\n", cr.Name, strings.Join(cr.Missing, ", "))
 		}

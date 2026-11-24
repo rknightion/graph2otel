@@ -24,9 +24,14 @@ the minimum Microsoft Graph application permissions for the default collectors a
 - `ServiceHealth.Read.All`
 - `Team.ReadBasic.All`
 - `TeamSettings.Read.All`
-- `TeamsAppInstallation.Read.All`
+- `TeamsAppInstallation.ReadForTeam.All`
 
 <!-- END GENERATED TEAMS PROFILE SCOPES -->
+
+For installed apps, use `TeamsAppInstallation.ReadForTeam.All` for new grants.
+An existing `TeamsAppInstallation.Read.All` grant also satisfies preflight;
+do not grant both. The narrower role is documented for team-installed apps
+but was not verified with a narrow-only live tenant in this change.
 
 The separate subscribed-SKU probe is best effort. With only the Teams scopes
 above, a warning from that probe is expected; startup and preflight fall back

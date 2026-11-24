@@ -184,18 +184,29 @@ func (c *Collector) DefaultInterval() time.Duration { return defaultInterval }
 // per team via a Teams app manifest), which cannot serve a tenant-wide poller,
 // so TeamSettings.Read.All is the workable app-only scope.
 //
-// TeamsAppInstallation.Read.All backs GET /teams/{id}/installedApps and
-// Channel.ReadBasic.All backs GET /teams/{id}/channels (#247). Both are the
-// documented app-only least-privilege scopes (docs-only — not yet live-verified
-// against m7kni). A team-scoped GET that 403s because these are ungranted is
-// skipped for the cycle, not fatal. See docs/permissions.md.
+// TeamsAppInstallation.ReadForTeam.All backs GET /teams/{id}/installedApps
+// without also granting access to installations in chats or user scopes.
+// See https://learn.microsoft.com/graph/api/team-list-installedapps?view=graph-rest-beta.
+// Channel.ReadBasic.All backs GET /teams/{id}/channels. Denied list calls
+// are still skipped without failing the cycle.
 func (c *Collector) RequiredPermissions() []string {
 	return []string{
 		"Team.ReadBasic.All",
 		"TeamSettings.Read.All",
-		"TeamsAppInstallation.Read.All",
+		teamsAppReadForTeam,
 		"Channel.ReadBasic.All",
 	}
+}
+
+const (
+	teamsAppReadForTeam = "TeamsAppInstallation.ReadForTeam.All"
+	teamsAppReadAll     = "TeamsAppInstallation.Read.All"
+)
+
+// PermissionAlternatives preserves preflight for existing installations
+// whose broader Teams app installation role already covers this endpoint.
+func (*Collector) PermissionAlternatives() map[string][]string {
+	return map[string][]string{teamsAppReadForTeam: {teamsAppReadAll}}
 }
 
 // team is the list-response shape (the four fields /teams actually populates).
@@ -382,7 +393,7 @@ func (c *Collector) collectInstalledApps(ctx context.Context, e telemetry.Emitte
 		if isForbidden(err) {
 			*forbidden = true
 			outcomes.Cause(recordoutcome.CausePermissionDenied)
-			c.logger.Info("skipping installed-apps: TeamsAppInstallation.Read.All not granted", "collector", collectorName)
+			c.logger.Info("skipping installed-apps: app installation read permission denied", "collector", collectorName)
 			return
 		}
 		outcomes.Cause(recordoutcome.CauseSourceError)

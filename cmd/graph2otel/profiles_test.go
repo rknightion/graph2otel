@@ -55,13 +55,28 @@ tenants:
 	if !slices.Equal(got, want) {
 		t.Errorf("preflight collectors = %v, want %v", got, want)
 	}
-	granted := fakePermissionSource{profileTestTenant: {
-		"Domain.Read.All", "Organization.Read.All", "Reports.Read.All", "ServiceHealth.Read.All",
-		"Team.ReadBasic.All", "TeamSettings.Read.All", "TeamsAppInstallation.Read.All", "Channel.ReadBasic.All",
-	}}
-	var output, errs strings.Builder
-	if exit := runCheckCore(t.Context(), cfg, granted, func(string) []preflight.CollectorReq { return reqs }, &output, &errs); exit != 0 {
-		t.Errorf("preflight exit = %d; want success with only selected scopes\n%s\n%s", exit, &output, &errs)
+	for _, tc := range []struct {
+		name, role string
+		wantExit   int
+	}{
+		{"team-only app role", "TeamsAppInstallation.ReadForTeam.All", 0},
+		{"existing broader role", "TeamsAppInstallation.Read.All", 0},
+		{"no app role", "", 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			scopes := []string{
+				"Domain.Read.All", "Organization.Read.All", "Reports.Read.All", "ServiceHealth.Read.All",
+				"Team.ReadBasic.All", "TeamSettings.Read.All", "Channel.ReadBasic.All",
+			}
+			if tc.role != "" {
+				scopes = append(scopes, tc.role)
+			}
+			var output, errs strings.Builder
+			granted := fakePermissionSource{profileTestTenant: scopes}
+			if exit := runCheckCore(t.Context(), cfg, granted, func(string) []preflight.CollectorReq { return reqs }, &output, &errs); exit != tc.wantExit {
+				t.Errorf("preflight exit = %d; want %d\n%s\n%s", exit, tc.wantExit, &output, &errs)
+			}
+		})
 	}
 }
 
