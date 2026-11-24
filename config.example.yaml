@@ -334,6 +334,18 @@ cost:
 backfill:
   initial_lookback: 0s # cold-start backfill window; 0 = each collector's own built-in lookback
 
+# CQD defaults for all Teams call-record collectors. These limits do not enable collection.
+teams:
+  quality_thresholds:
+    min_packets: 500 # audio and video must exceed this packet count
+    audio_rtt_ms: 500 # poor above this average round-trip time in milliseconds
+    audio_packet_loss_ratio: 0.1 # poor above this average packet loss ratio (0 to 1)
+    audio_jitter_ms: 30 # poor above this average jitter in milliseconds
+    video_frame_loss_percent: 50 # poor above this average frame loss percentage (0 to 100)
+    video_frame_rate_fps: 7 # poor below this average frame rate, if frame loss is missing
+    video_post_fec_loss_ratio: 0.15 # poor above this post-FEC ratio if frame loss and fps are missing
+    vbss_frame_rate_fps: 1 # H264S screen sharing is poor below this average frame rate
+
 # checkpoint_dir is where window-log collectors persist their per-(tenant,
 # endpoint) watermarks so a restart resumes rather than re-fetching or dropping.
 # It MUST be writable and persistent: without it every restart re-polls each

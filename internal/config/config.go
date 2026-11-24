@@ -41,6 +41,7 @@ import (
 	"github.com/knadh/koanf/providers/structs"
 	"github.com/knadh/koanf/v2"
 
+	"github.com/rknightion/graph2otel/internal/teams/quality"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -78,6 +79,8 @@ type Config struct {
 	// Backfill tunes how much history a cold-started window collector recovers
 	// (#118).
 	Backfill BackfillConfig `yaml:"backfill"`
+	// Teams configures call quality classification across tenants.
+	Teams TeamsQualityConfig `yaml:"teams"`
 	// GrafanaAnnotations configures the opt-in Grafana annotation writer (#400)
 	// — the ONE authorized second egress path (see the package doc on
 	// internal/annotations). Off unless url is set.
@@ -650,6 +653,7 @@ func Default() *Config {
 		Cost: CostConfig{
 			Period: 30 * 24 * time.Hour,
 		},
+		Teams:              TeamsQualityConfig{QualityThresholds: quality.DefaultThresholds()},
 		GrafanaAnnotations: defaultGrafanaAnnotations(),
 		CheckpointDir:      "./checkpoints",
 	}
@@ -758,6 +762,9 @@ func oneOf(v string, allowed ...string) bool {
 // Validate reports the first configuration error it finds, or nil if the
 // Config is valid.
 func (c *Config) Validate() error {
+	if err := c.Teams.QualityThresholds.Validate(); err != nil {
+		return err
+	}
 	if !oneOf(c.LogLevel, "debug", "info", "warn", "error") {
 		return fmt.Errorf("log_level %q invalid: must be one of debug, info, warn, error", c.LogLevel)
 	}

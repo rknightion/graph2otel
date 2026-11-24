@@ -5,9 +5,15 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/rknightion/graph2otel/internal/teams/quality"
 	"github.com/rknightion/graph2otel/internal/teams/sites"
 	"github.com/rknightion/graph2otel/internal/vaacclient"
 )
+
+// TeamsQualityConfig holds the global settings used by all call record collectors.
+type TeamsQualityConfig struct {
+	QualityThresholds quality.Thresholds `yaml:"quality_thresholds"`
+}
 
 // TeamsConfig holds tenant-local site rules and the separate VAAC opt-in.
 // The site settings do not enable a collector.

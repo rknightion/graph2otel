@@ -39,4 +39,17 @@ const (
 	AttrSessionFailureReason        = "session_failure_reason"
 	AttrSegmentFailureStage         = "segment_failure_stage"
 	AttrSegmentFailureReason        = "segment_failure_reason"
+
+	AttrCallHealth            = "call_health"
+	AttrPoorStreamCount       = "poor_stream_count"
+	AttrWorstRTTMs            = "worst_rtt_ms"
+	AttrWorstJitterMs         = "worst_jitter_ms"
+	AttrWorstPacketLossRate   = "worst_packet_loss_rate"
+	AttrDominantTransport     = "dominant_transport"
+	AttrSharedReflexiveIP     = "shared_reflexive_ip"
+	AttrStreamHealth          = "stream_health"
+	AttrStreamHealthCause     = "stream_health_cause"
+	AttrStreamHealthMetric    = "stream_health_metric"
+	AttrStreamHealthValue     = "stream_health_value"
+	AttrStreamHealthThreshold = "stream_health_threshold"
 )

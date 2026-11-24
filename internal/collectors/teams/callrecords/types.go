@@ -19,6 +19,7 @@ type Call struct {
 	Organizer  Identity
 	Counts     ParticipantCounts
 	Streams    []Stream
+	quality    callQuality
 }
 
 // ParticipantCounts counts distinct participants_v2 entries by their identity
@@ -37,6 +38,7 @@ type Stream struct {
 	Metrics                        StreamMetrics
 	Caller, Callee                 Side
 	SessionFailure, SegmentFailure *Failure
+	quality                        streamQuality
 }
 
 // StreamMetrics preserves missing values as nil. Durations are milliseconds;

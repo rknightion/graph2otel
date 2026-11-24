@@ -310,6 +310,25 @@ config:
     # rejected requests. Raise the emit horizon deliberately if your sink accepts more.
     initial_lookback: 0s
 
+  teams:
+    quality_thresholds:
+      # -- Audio and video must exceed this packet count to be classified.
+      min_packets: 500
+      # -- Audio is poor above this average round-trip time in milliseconds.
+      audio_rtt_ms: 500
+      # -- Audio is poor above this average packet loss ratio (0 to 1).
+      audio_packet_loss_ratio: 0.1
+      # -- Audio is poor above this average jitter in milliseconds.
+      audio_jitter_ms: 30
+      # -- Video is poor above this average frame loss percentage (0 to 100).
+      video_frame_loss_percent: 50
+      # -- Video is poor below this average frame rate if frame loss is missing.
+      video_frame_rate_fps: 7
+      # -- Video is poor above this post-FEC ratio if frame loss and fps are missing.
+      video_post_fec_loss_ratio: 0.15
+      # -- H264S screen sharing is poor below this average frame rate.
+      vbss_frame_rate_fps: 1
+
   # --- Grafana annotation writer (opt-in, #400) ---
   # The ONE authorized second egress path: graph2otel is otherwise
   # OTLP-push-only. Setting url is the whole opt-in; unset registers nothing.

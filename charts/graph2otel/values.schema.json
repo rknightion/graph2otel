@@ -803,6 +803,26 @@
                         }
                     }
                 },
+                "teams": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "quality_thresholds": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                                "min_packets": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+                                "audio_rtt_ms": {"type": "number", "minimum": 0},
+                                "audio_packet_loss_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+                                "audio_jitter_ms": {"type": "number", "minimum": 0},
+                                "video_frame_loss_percent": {"type": "number", "minimum": 0, "maximum": 100},
+                                "video_frame_rate_fps": {"type": "number", "minimum": 0},
+                                "video_post_fec_loss_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+                                "vbss_frame_rate_fps": {"type": "number", "minimum": 0}
+                            }
+                        }
+                    }
+                },
                 "grafana_annotations": {
                     "type": "object",
                     "additionalProperties": false,

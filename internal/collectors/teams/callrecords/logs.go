@@ -38,6 +38,16 @@ func emitCall(e telemetry.Emitter, c Call) {
 	if !c.End.IsZero() && !c.End.Before(c.Start) {
 		a[semconv.AttrDurationSeconds] = c.End.Sub(c.Start).Seconds()
 	}
+	q := c.quality
+	a[semconv.AttrCallHealth] = string(q.health)
+	a[semconv.AttrPoorStreamCount] = q.poorStreams
+	setFloat(a, semconv.AttrWorstRTTMs, q.worstRTT)
+	setFloat(a, semconv.AttrWorstJitterMs, q.worstJitter)
+	setFloat(a, semconv.AttrWorstPacketLossRate, q.worstLoss)
+	setText(a, semconv.AttrDominantTransport, q.dominantTransport, maxTextBytes)
+	if q.sharedReflexiveIP {
+		a[semconv.AttrSharedReflexiveIP] = true
+	}
 	e.LogEvent(telemetry.Event{Name: callEvent, Body: "Teams call", Timestamp: c.Start, Attrs: a})
 	for _, s := range c.Streams {
 		e.LogEvent(streamLog(c, s))
@@ -69,6 +79,7 @@ func streamLog(c Call, s Stream) telemetry.Event {
 	setInt(a, semconv.AttrPacketUtilization, m.PacketUtilization)
 	setSide(a, "caller_", s.Caller)
 	setSide(a, "callee_", s.Callee)
+	setStreamQuality(a, s)
 	if f := s.SessionFailure; f != nil {
 		setTexts(a, "", semconv.AttrSessionFailureStage, f.Stage, semconv.AttrSessionFailureReason, f.Reason)
 	}
@@ -76,6 +87,52 @@ func streamLog(c Call, s Stream) telemetry.Event {
 		setTexts(a, "", semconv.AttrSegmentFailureStage, f.Stage, semconv.AttrSegmentFailureReason, f.Reason)
 	}
 	return telemetry.Event{Name: streamEvent, Body: "Teams call media stream", Timestamp: s.Start, Attrs: a}
+}
+
+func setStreamQuality(a telemetry.Attrs, s Stream) {
+	q := s.quality
+	a[semconv.AttrStreamHealth] = string(q.health)
+	setText(a, semconv.AttrStreamHealthCause, string(q.cause), maxTextBytes)
+	if v := q.evidence; v != nil {
+		a[semconv.AttrStreamHealthMetric] = v.metric
+		a[semconv.AttrStreamHealthValue] = v.value
+		a[semconv.AttrStreamHealthThreshold] = v.threshold
+	}
+	if q.health == poor {
+		switch s.Direction {
+		case "callerToCallee":
+			a["caller_impact"], a["callee_impact"] = "impacting", "impacted"
+		case "calleeToCaller":
+			a["caller_impact"], a["callee_impact"] = "impacted", "impacting"
+		}
+	}
+	setSideQuality(a, "caller_", s, s.Caller)
+	setSideQuality(a, "callee_", s, s.Callee)
+}
+
+func setSideQuality(a telemetry.Attrs, p string, s Stream, side Side) {
+	transport := transportEvidence(s, side.Network)
+	setText(a, p+"transport_evidence", transport, maxTextBytes)
+	issue := s.quality.health == poor || transport == "expected_udp"
+	for _, flag := range [...]struct {
+		key   string
+		ratio *float64
+	}{
+		{"cpu_insufficient", side.Device.CPUInsufficient},
+		{"device_glitch", side.Device.Glitch},
+		// Graph reports an explicit low-speech detection ratio. Do not turn raw
+		// signal strength or RMS into a low-signal verdict using guessed limits.
+		{"low_speech_signal", side.Device.LowSpeech},
+	} {
+		if flag.ratio != nil {
+			detected := *flag.ratio > 0
+			a[p+flag.key] = detected
+			issue = issue || detected
+		}
+	}
+	if issue && strings.EqualFold(side.Network.ConnectionType, "wifi") {
+		a[p+"wifi_with_issue"] = true
+	}
 }
 
 func setSide(a telemetry.Attrs, p string, s Side) {

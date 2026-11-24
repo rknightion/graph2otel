@@ -16,6 +16,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
 	"github.com/rknightion/graph2otel/internal/recordoutcome"
+	"github.com/rknightion/graph2otel/internal/teams/quality"
 	"github.com/rknightion/graph2otel/internal/teams/sites"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -44,12 +45,13 @@ const (
 // persistence remain in logpipeline.
 type Collector struct {
 	*logpipeline.LogCollector
-	graph     collectors.GraphClient
-	sitesFile *sites.File
-	domains   sites.Domains
-	logger    *slog.Logger
-	now       func() time.Time
-	permit    chan struct{}
+	graph      collectors.GraphClient
+	sitesFile  *sites.File
+	domains    sites.Domains
+	thresholds quality.Thresholds
+	logger     *slog.Logger
+	now        func() time.Time
+	permit     chan struct{}
 }
 
 func init() { collectors.RegisterWindow(newCollector) }
@@ -65,11 +67,15 @@ func newCollector(deps collectors.WindowDeps) collectors.RegisteredWindow {
 	if logger == nil {
 		logger = slog.Default()
 	}
+	thresholds := quality.DefaultThresholds()
+	if deps.TeamsQualityThresholds != nil {
+		thresholds = *deps.TeamsQualityThresholds
+	}
 	return collectors.RegisteredWindow{
 		Collector: &Collector{
 			LogCollector: logpipeline.NewLogCollector(Name, interval, lag, deps.TenantID, cfg, listFetcher{deps.Graph}, deps.Store),
 			graph:        deps.Graph, sitesFile: deps.TeamsSites, domains: deps.TeamsInternalDomains,
-			logger: logger, now: time.Now, permit: make(chan struct{}, 1),
+			thresholds: thresholds, logger: logger, now: time.Now, permit: make(chan struct{}, 1),
 		},
 		InitialLookback: overlap,
 		MaxWindow:       maxWindow,
@@ -169,6 +175,7 @@ func (c *Collector) prepare(table *sites.Table, floor time.Time) logpipeline.Pre
 			return result, err
 		}
 		call := mapCall(d, version, sessions, people, table, c.domains)
+		assessCall(&call, c.thresholds)
 		result.Deliver = func(e telemetry.Emitter) { emitCall(e, call) }
 		return result, nil
 	}

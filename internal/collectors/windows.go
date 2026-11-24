@@ -9,6 +9,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/jobpipeline"
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
+	"github.com/rknightion/graph2otel/internal/teams/quality"
 	"github.com/rknightion/graph2otel/internal/teams/sites"
 	"github.com/rknightion/graph2otel/internal/vaacclient"
 )
@@ -87,6 +88,8 @@ type WindowDeps struct {
 	TeamsSites *sites.File
 	// TeamsInternalDomains classifies participant UPNs without filtering records.
 	TeamsInternalDomains sites.Domains
+	// TeamsQualityThresholds supplies validated limits; nil uses CQD defaults.
+	TeamsQualityThresholds *quality.Thresholds
 	// VAAC is the optional tenant-local Teams voice analytics transport. The
 	// factory still exposes its metadata with a nil client for inventories.
 	VAAC *vaacclient.Client

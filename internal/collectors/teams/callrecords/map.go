@@ -167,9 +167,12 @@ func mediaKind(label string) string {
 		return "audio"
 	case "video", "main-video":
 		return "video"
-	case "applicationsharing", "main-appsharing", "main-applicationsharing", "screensharing", "videobasedscreensharing", "vbss", "main-vbss":
+	case "screensharing":
 		return "sharing"
 	default:
+		if sharingKind(label) != ambiguousSharing {
+			return "sharing"
+		}
 		return "unknown"
 	}
 }
