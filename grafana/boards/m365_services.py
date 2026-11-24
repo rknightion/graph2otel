@@ -97,6 +97,11 @@ SECTIONS = [
          ["teams.direct_routing.calls"]),
         ("Direct Routing network effectiveness by trunk (0 to 1)",
          ["teams.direct_routing.network_effectiveness_ratio"]),
+        ("Call queue answer and abandon ratios by queue",
+         ["teams.call_queue.answer_rate", "teams.call_queue.abandon_rate"],
+         {"viz": "timeseries"}),
+        ("Call queue wait time by queue", ["teams.call_queue.wait_time"]),
+        ("Auto attendant call rate by attendant and outcome", ["teams.auto_attendant.calls"]),
     ]),
     ("Service health", [
         "m365.service_health.issues.total",
@@ -153,4 +158,8 @@ LOGS = [
      "desc": "Per-call detail, including caller and callee numbers. Requires the Teams Phone feed."},
     {"kind": "logs", "event": "teams.direct_routing_call", "title": "Teams Direct Routing call records",
      "desc": "Per-attempt detail, including the original trunk name and final SIP code."},
+    {"kind": "logs", "event": "teams.auto_attendant_call", "title": "Teams auto attendant calls",
+     "desc": "Call flow and outcome per attendant leg. Requires the VAAC opt-in."},
+    {"kind": "logs", "event": "teams.call_queue_call", "title": "Teams call queue calls",
+     "desc": "Queue outcome, wait and participant details per leg. Requires the VAAC opt-in."},
 ]

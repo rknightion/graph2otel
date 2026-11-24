@@ -124,6 +124,17 @@ tenants:
     #   portal_url: "https://<tenant>.<region>.portal.cloudappsecurity.com"
     #   token_file: "/run/secrets/mdca_token"
 
+    # Teams voice analytics is off by default, including with the Teams profile.
+    # This unsupported API signs in with a user password (ROPC). It cannot use
+    # MFA or some Conditional Access policies, and its log twins include end-user
+    # identities. Mount the username and password in separate secret files; put
+    # only the paths here. This is a commercial-cloud feature.
+    # teams:
+    #   vaac:
+    #     enabled: false
+    #     username_file: "/run/secrets/vaac_username"
+    #     password_file: "/run/secrets/vaac_password"
+
     # exchange_online enables the Defender quarantine queue-depth collector
     # (defender.quarantine). No credential of its own — the tenant's existing
     # DefaultAzureCredential is reused against the Exchange Online audience — but

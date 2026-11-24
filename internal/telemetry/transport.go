@@ -9,7 +9,7 @@ import (
 // Transport names the ingest path that produced a record. It is the value set of
 // the semconv.AttrIngestTransport attribute (#141).
 //
-// The set is closed and bounded (seven values), which is what makes the attribute
+// The set is closed and bounded, which is what makes the attribute
 // safe under the cardinality rule (#112): it never grows with tenant size.
 type Transport string
 
@@ -48,6 +48,9 @@ const (
 	// state have no Graph API at all, so a record carrying this transport is one
 	// no Graph poll could have produced.
 	TransportExchangeOnline Transport = "exchange_online"
+	// TransportVAAC is Teams voice analytics, fetched with a user token on a
+	// separate audience. It uses the window registration path, not Graph.
+	TransportVAAC Transport = "vaac"
 )
 
 // transportEmitter stamps semconv.AttrIngestTransport onto every log record

@@ -10,6 +10,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
 	"github.com/rknightion/graph2otel/internal/teams/sites"
+	"github.com/rknightion/graph2otel/internal/vaacclient"
 )
 
 // WindowDeps is everything a WindowFactory needs to construct a window
@@ -86,6 +87,9 @@ type WindowDeps struct {
 	TeamsSites *sites.File
 	// TeamsInternalDomains classifies participant UPNs without filtering records.
 	TeamsInternalDomains sites.Domains
+	// VAAC is the optional tenant-local Teams voice analytics transport. The
+	// factory still exposes its metadata with a nil client for inventories.
+	VAAC *vaacclient.Client
 }
 
 // RegisteredWindow bundles a constructed window collector with the schedule

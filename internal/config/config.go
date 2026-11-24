@@ -833,6 +833,11 @@ func (c *Config) Validate() error {
 		if err := t.ExoPerMailbox.validate(); err != nil {
 			return fmt.Errorf("tenants[%d].exo_per_mailbox.%w", i, err)
 		}
+		if t.Teams != nil {
+			if err := t.Teams.VAAC.validate(); err != nil {
+				return fmt.Errorf("tenants[%d].teams.vaac: %w", i, err)
+			}
+		}
 	}
 
 	for name, cc := range c.Collectors {

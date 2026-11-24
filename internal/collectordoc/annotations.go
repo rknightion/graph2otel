@@ -804,4 +804,9 @@ var annotations = map[string]Annotation{
 		Source:   "`GET providers/microsoft.aadiam/diagnosticSettings` (ARM control plane, management.azure.com audience)",
 		Gating:   "runs only when blob ingest is configured (nil ARM otherwise → no-op); access is the poller's Entra roles, not a Graph scope, so RequiredPermissions is empty like defender.quarantine. Capability semantics — 'mapped' means a blob collector for the container is shipped, not that this tenant enabled it",
 	},
+	"teams.voice_apps": {
+		Collects: "Teams auto attendant and call queue call legs, including caller and agent identities in log twins. Metrics use queue or attendant resource GUIDs, never call or participant labels. Queue shares describe newly observed legs with known results, not intervals of event time. Source fixtures are synthetic and docs-derived; no live tenant was used",
+		Source:   "Commercial-cloud Teams VAAC `GET /Teams.VoiceAnalytics/getanalytics`, not Microsoft Graph. Request contract from [Phenisys Collector 2.12.1](https://github.com/Phenisys/microsoft-teams-observability/releases/tag/v2.12.1) and [Microsoft's Voice Applications Historical Reports template 3.3.2](https://www.microsoft.com/download/details.aspx?id=104623)",
+		Gating:   "Off unless `tenants[].teams.vaac.enabled` is true and the collector is selected. Uses file-only user credentials for unsupported password sign-in (ROPC), incompatible with MFA and some Conditional Access policies. Graph preflight cannot verify voice analytics access",
+	},
 }

@@ -1,0 +1,36 @@
+package semconv
+
+// Teams voice analytics attributes. Only the queue, auto attendant and bounded
+// outcome dimensions label metrics; participant and call detail is log-only.
+const (
+	AttrQueue                                    = "queue"
+	AttrAutoAttendant                            = "auto_attendant"
+	AttrVoiceOutcome                             = "voice_outcome"
+	AttrDialogId                                 = "dialog_id"
+	AttrCallDuration                             = "call_duration"
+	AttrRecordTimestamp                          = "record_timestamp"
+	AttrFirstIsCaller                            = "first_is_caller"
+	AttrFirstUPN                                 = "first_upn"
+	AttrSecondUPN                                = "second_upn"
+	AttrPSTNCallType                             = "pstn_call_type"
+	AttrPSTNConnectivityType                     = "pstn_connectivity_type"
+	AttrPSTNCallDuration                         = "pstn_call_duration"
+	AttrAutoAttendantIdentity                    = "auto_attendant_identity"
+	AttrAutoAttendantCallFlow                    = "auto_attendant_call_flow"
+	AttrAutoAttendantCallerActionCounts          = "auto_attendant_caller_action_counts"
+	AttrAutoAttendantChainDurationSeconds        = "auto_attendant_chain_duration_seconds"
+	AttrAutoAttendantChainIndex                  = "auto_attendant_chain_index"
+	AttrAutoAttendantChainStartTime              = "auto_attendant_chain_start_time"
+	AttrAutoAttendantCount                       = "auto_attendant_count"
+	AttrAutoAttendantDirectorySearchMethod       = "auto_attendant_directory_search_method"
+	AttrAutoAttendantTransferAction              = "auto_attendant_transfer_action"
+	AttrCallQueueIdentity                        = "call_queue_identity"
+	AttrCallQueueDurationSeconds                 = "call_queue_duration_seconds"
+	AttrCallQueueAgentCount                      = "call_queue_agent_count"
+	AttrCallQueueAgentOptInCount                 = "call_queue_agent_opt_in_count"
+	AttrCallQueueFinalStateAction                = "call_queue_final_state_action"
+	AttrCallQueueTargetType                      = "call_queue_target_type"
+	AttrAverageAutoAttendantChainDurationSeconds = "average_auto_attendant_chain_duration_seconds"
+	AttrAverageCallDuration                      = "average_call_duration"
+	AttrTotalAudioStreamDuration                 = "total_audio_stream_duration"
+)

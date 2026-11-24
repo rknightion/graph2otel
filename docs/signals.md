@@ -66,6 +66,10 @@ convention.
 - **`mdca.*`** — Microsoft Defender for Cloud Apps Cloud Discovery parse health over
   the legacy MDCA portal API. This is neither Graph nor the Entra poller credential;
   see [MDCA Cloud Discovery parse health](#mdca-cloud-discovery-parse-health-ingest_transportmdca).
+- **`teams.*`** - Teams Phone and voice application analytics. Call queue and auto attendant twins use the
+  `vaac` transport, which requires explicit opt-in and a separate user credential. Queue metrics
+  report shares of newly observed legs, not rates over the time when calls happened. See the
+  [collector reference](collectors.md#teams---logs-window-collectors) for the opt-in and risk.
 - **`graph2otel.*`** — self-observability: collector success/duration/staleness,
   export-job health, active series counts, build info, and
   [`graph2otel.api.unexpected`](#graph2otelapiunexpected-when-microsoft-changes-something-under-us)
@@ -78,10 +82,10 @@ attribute set, and the Graph API permission scope each collector needs), see
 
 ## Shipped collector and ingest surface
 
-The generated registry currently exposes **173 logical collectors** through
+The generated registry currently exposes **174 logical collectors** through
 **7 registration paths**: Snapshot, Window, Blob, O365, MDCA, EXO, and Hunt. The generated
 [collector reference](collectors.md) is authoritative; the registration-path inventory
-contains 176 registration-path candidates because some logical collectors can register
+contains 177 registration-path candidates because some logical collectors can register
 through more than one transport.
 
 Reusable ingest-engine shapes handle the event and export transports:
@@ -97,7 +101,7 @@ Reusable ingest-engine shapes handle the event and export transports:
 Snapshot collectors and the MDCA, Exchange Online, and advanced-hunting registration
 paths use their direct API shapes around those engines. `ingest_transport` records which
 path produced each log: `graph`, `blob`, `o365_activity`, `audit_query`,
-`report_export`, `mdca`, or `exchange_online`.
+`report_export`, `mdca`, `exchange_online`, or `vaac`.
 
 ## OTLP → Prometheus name normalization
 
