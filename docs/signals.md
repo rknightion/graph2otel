@@ -99,6 +99,49 @@ paths use their direct API shapes around those engines. `ingest_transport` recor
 path produced each log: `graph`, `blob`, `o365_activity`, `audit_query`,
 `report_export`, `mdca`, or `exchange_online`.
 
+## Teams call quality
+
+`teams.call_stream` reports `stream_health` as `good`, `poor` or `unclassified`.
+The classifier uses [Microsoft's CQD rules](https://learn.microsoft.com/en-us/microsoftteams/stream-classification-in-call-quality-dashboard)
+where Graph v1.0 provides matching fields. Set `teams.quality_thresholds` to tune
+those rules across tenants; see the [environment reference](env-vars.md) for units
+and defaults. A threshold crossing is not proof that a participant noticed poor quality.
+
+When several audio limits are crossed, `stream_health_cause` names the first in
+CQD's table order. For video, the first available metric decides the verdict,
+even if its value is zero. `stream_health_metric`, `stream_health_value` and
+`stream_health_threshold` accompany a crossing or a measured packet count at or
+below the minimum. Missing inputs are `no_metrics`, not zero. Good verdicts have
+no cause. For a poor stream with a known direction, `caller_impact` and
+`callee_impact` mark its sender `impacting` and its receiver `impacted`. These
+are stream roles, not a finding about fault.
+
+Only explicitly identified H264S video-based screen sharing (VBSS) supports a
+CQD verdict: its frame-rate rule applies in either direction. For other codecs,
+CQD uses displayed frame loss for inbound VBSS and frame rate for outbound VBSS.
+Graph's `callerToCallee` and `calleeToCaller` values identify endpoints, not CQD's
+inbound/outbound reference point. Legacy application sharing also lacks CQD's
+spoiled tile percentage, RDP tile processing latency and relative one-way delay.
+These unsupported cases are `unclassified` with `unsupported_sharing_stats`.
+Ordinary video loss, RTP frame rates with ambiguous media labels and network RTT
+are not substitutes for those inputs. These mappings are docs-derived, not
+live-measured.
+
+TCP on media that prefers UDP is evidence, not a poor verdict. Legacy RDP TCP
+is expected. A relay address means allocation only; the Graph network projection
+does not establish whether media traversed it. Side flags use measured device
+ratios for CPU insufficiency, device glitches and low speech, not guesses from
+raw signal strength. Wi-Fi is flagged only alongside another issue.
+
+`teams.call` rolls up all streams in the detail version: any poor stream makes
+it `poor`; otherwise at least one good stream makes it `good`. A call without a
+classified stream is `unclassified`. The worst RTT, jitter and packet loss use
+the largest matching reported values, and are absent if not measured. Dominant
+transport counts each reported UDP or TCP protocol once per stream, uses `mixed`
+for a tie and is absent without observations. `shared_reflexive_ip` is positive
+evidence only, emitted when two distinct endpoint identities report the same
+reflexive address. It suggests shared egress, not proof of the media route.
+
 ## OTLP → Prometheus name normalization
 
 graph2otel emits **OTLP**; if your backend (Grafana Cloud, or any Prometheus-remote-write

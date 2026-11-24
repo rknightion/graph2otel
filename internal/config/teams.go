@@ -4,8 +4,14 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/rknightion/graph2otel/internal/teams/quality"
 	"github.com/rknightion/graph2otel/internal/teams/sites"
 )
+
+// TeamsQualityConfig holds the global settings used by all call record collectors.
+type TeamsQualityConfig struct {
+	QualityThresholds quality.Thresholds `yaml:"quality_thresholds"`
+}
 
 // TeamsConfig holds YAML-only site and internal-domain rules for one tenant.
 // Neither setting enables a collector.

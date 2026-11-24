@@ -586,16 +586,17 @@ func setupTenantWithGraphAndLicenseBuilders(
 	exoClient, exoBuildErr := tenantEXOClient(cfg, ta, tlog, emitter)
 	teamsSites, teamsDomains := cfg.TeamsSiteInputs(ta.TenantID)
 	wdeps := collectors.WindowDeps{
-		Graph:                gc,
-		EXO:                  exoClient,
-		TenantID:             ta.TenantID,
-		Logger:               tlog,
-		Caps:                 caps,
-		Fetcher:              fetcher,
-		JobClient:            jobClient,
-		Store:                store,
-		TeamsSites:           teamsSites,
-		TeamsInternalDomains: teamsDomains,
+		Graph:                  gc,
+		EXO:                    exoClient,
+		TenantID:               ta.TenantID,
+		Logger:                 tlog,
+		Caps:                   caps,
+		Fetcher:                fetcher,
+		JobClient:              jobClient,
+		Store:                  store,
+		TeamsSites:             teamsSites,
+		TeamsInternalDomains:   teamsDomains,
+		TeamsQualityThresholds: &cfg.Teams.QualityThresholds,
 	}
 	selfIdentity.applyWindow(&wdeps)
 	for _, wf := range paths.window {

@@ -236,6 +236,14 @@ running two.
 | config.profiling.pyroscope.tags | object | `{}` | Extra static profile tags; service_version is always set and cannot be overridden. |
 | config.profiling.pyroscope.tenant_id | string | `""` | X-Scope-OrgID for multi-tenant Pyroscope servers; leave empty for Grafana Cloud. |
 | config.profiling.pyroscope.upload_rate | string | `"15s"` | How often profiles are flushed; 0/omit uses the pyroscope default. |
+| config.teams.quality_thresholds.audio_jitter_ms | int | `30` | Audio is poor above this average jitter in milliseconds. |
+| config.teams.quality_thresholds.audio_packet_loss_ratio | float | `0.1` | Audio is poor above this average packet loss ratio (0 to 1). |
+| config.teams.quality_thresholds.audio_rtt_ms | int | `500` | Audio is poor above this average round-trip time in milliseconds. |
+| config.teams.quality_thresholds.min_packets | int | `500` | Audio and video must exceed this packet count to be classified. |
+| config.teams.quality_thresholds.vbss_frame_rate_fps | int | `1` | H264S screen sharing is poor below this average frame rate. |
+| config.teams.quality_thresholds.video_frame_loss_percent | int | `50` | Video is poor above this average frame loss percentage (0 to 100). |
+| config.teams.quality_thresholds.video_frame_rate_fps | int | `7` | Video is poor below this average frame rate if frame loss is missing. |
+| config.teams.quality_thresholds.video_post_fec_loss_ratio | float | `0.15` | Video is poor above this post-FEC ratio if frame loss and fps are missing. |
 | config.tenants | list | `[{"client_id":"","tenant_id":"00000000-0000-0000-0000-000000000000"}]` | Tenants graph2otel polls. At least one entry is required unless otlp.protocol is "stdout". Define tenants in values; only their profiles can be overridden by index from the environment. |
 | config.tenants[0].client_id | string | `""` | Optional expected application ID. A non-secret consistency assertion only; never credential selection. |
 | config.tenants[0].tenant_id | string | `"00000000-0000-0000-0000-000000000000"` | Hyphenated Entra directory GUID only. Verified domains and arbitrary names are rejected. |

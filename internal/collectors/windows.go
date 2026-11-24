@@ -9,6 +9,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/jobpipeline"
 	"github.com/rknightion/graph2otel/internal/license"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
+	"github.com/rknightion/graph2otel/internal/teams/quality"
 	"github.com/rknightion/graph2otel/internal/teams/sites"
 )
 
@@ -86,6 +87,8 @@ type WindowDeps struct {
 	TeamsSites *sites.File
 	// TeamsInternalDomains classifies participant UPNs without filtering records.
 	TeamsInternalDomains sites.Domains
+	// TeamsQualityThresholds supplies validated limits; nil uses CQD defaults.
+	TeamsQualityThresholds *quality.Thresholds
 }
 
 // RegisteredWindow bundles a constructed window collector with the schedule

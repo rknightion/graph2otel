@@ -250,7 +250,7 @@ func requiredCollectorPermissions(cfg *config.Config, tenantID string, caps lice
 	teamsSites, teamsDomains := cfg.TeamsSiteInputs(tenantID)
 	wdeps := collectors.WindowDeps{
 		TenantID: tenantID, Logger: logger, Caps: caps, EXO: exo, Store: store,
-		TeamsSites: teamsSites, TeamsInternalDomains: teamsDomains,
+		TeamsSites: teamsSites, TeamsInternalDomains: teamsDomains, TeamsQualityThresholds: &cfg.Teams.QualityThresholds,
 	}
 	for _, factory := range paths.window {
 		rw := factory(wdeps)

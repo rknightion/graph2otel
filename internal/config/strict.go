@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rknightion/graph2otel/internal/teams/quality"
 	"go.yaml.in/yaml/v4"
 )
 
@@ -45,8 +46,9 @@ func validateYAMLNode(node *yaml.Node, typ reflect.Type, path string) error {
 	switch typ.Kind() {
 	case reflect.Struct:
 		isTeams := typ == reflect.TypeFor[TeamsConfig]()
+		isThresholds := typ == reflect.TypeFor[quality.Thresholds]()
 		if node.Kind != yaml.MappingNode {
-			if isTeams {
+			if isTeams || isThresholds || typ == reflect.TypeFor[TeamsQualityConfig]() {
 				return fmt.Errorf("%s: expected a mapping", path)
 			}
 			return nil // typed decode owns value-shape diagnostics
@@ -69,6 +71,18 @@ func validateYAMLNode(node *yaml.Node, typ reflect.Type, path string) error {
 			if isTeams {
 				if err := validateTeamsField(value, fieldType.Kind(), fieldPath); err != nil {
 					return err
+				}
+			}
+			if isThresholds {
+				tag := dereferenceAlias(value).ShortTag()
+				switch {
+				case fieldType.Kind() == reflect.Int64:
+					var count int64
+					if tag != "!!int" || value.Decode(&count) != nil {
+						return fmt.Errorf("%s: expected an integer", fieldPath)
+					}
+				case tag != "!!int" && tag != "!!float":
+					return fmt.Errorf("%s: expected a number", fieldPath)
 				}
 			}
 			if err := validateYAMLNode(value, fieldType, fieldPath); err != nil {

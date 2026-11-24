@@ -71,6 +71,14 @@ never in committed YAML.
 | `G2O_COST__RATES__TRANSMITTED_PAYLOAD_BYTE_MICROUNITS` | `null` | microunits per post-compression OTLP payload byte; explicit nonnegative integer required when enabled |
 | `G2O_COST__BUDGET_MICROUNITS` | `0` | nonnegative projection-period budget; 0 disables comparison |
 | `G2O_BACKFILL__INITIAL_LOOKBACK` | `0s` | cold-start backfill window; 0 = each collector's own built-in lookback |
+| `G2O_TEAMS__QUALITY_THRESHOLDS__MIN_PACKETS` | `500` | audio and video must exceed this packet count |
+| `G2O_TEAMS__QUALITY_THRESHOLDS__AUDIO_RTT_MS` | `500` | poor above this average round-trip time in milliseconds |
+| `G2O_TEAMS__QUALITY_THRESHOLDS__AUDIO_PACKET_LOSS_RATIO` | `0.1` | poor above this average packet loss ratio (0 to 1) |
+| `G2O_TEAMS__QUALITY_THRESHOLDS__AUDIO_JITTER_MS` | `30` | poor above this average jitter in milliseconds |
+| `G2O_TEAMS__QUALITY_THRESHOLDS__VIDEO_FRAME_LOSS_PERCENT` | `50` | poor above this average frame loss percentage (0 to 100) |
+| `G2O_TEAMS__QUALITY_THRESHOLDS__VIDEO_FRAME_RATE_FPS` | `7` | poor below this average frame rate, if frame loss is missing |
+| `G2O_TEAMS__QUALITY_THRESHOLDS__VIDEO_POST_FEC_LOSS_RATIO` | `0.15` | poor above this post-FEC ratio if frame loss and fps are missing |
+| `G2O_TEAMS__QUALITY_THRESHOLDS__VBSS_FRAME_RATE_FPS` | `1` | H264S screen sharing is poor below this average frame rate |
 | `G2O_CHECKPOINT_DIR` | `./checkpoints` | root dir for the file-based CheckpointStore |
 | `G2O_GRAFANA_ANNOTATIONS__URL` | `""` | Grafana base URL, e.g. https://grafana.example.com; setting it IS the opt-in (empty = feature off) |
 | `G2O_GRAFANA_ANNOTATIONS__TOKEN` | `""` | Grafana service-account token; env/file only, never commit it (needs annotations:create only) |

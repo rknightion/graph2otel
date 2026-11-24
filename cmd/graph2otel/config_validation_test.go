@@ -463,6 +463,49 @@ func TestRunAndCheckValidateTenantTeamsConfigBeforeConstructors(t *testing.T) {
 	})
 }
 
+func TestRunAndCheckValidateTeamsQualityThresholds(t *testing.T) {
+	const base = "otlp:\n  protocol: stdout\nteams:\n  quality_thresholds:\n"
+	for _, tc := range []struct{ yaml, diagnostic string }{
+		{"    min_packets: 500.5\n", "teams.quality_thresholds.min_packets: expected an integer"},
+		{"    min_packets: 9223372036854775808\n", "teams.quality_thresholds.min_packets: expected an integer"},
+		{"    video_frame_loss_percent: 101\n", "teams.quality_thresholds.video_frame_loss_percent: expected a percentage"},
+		{"    audio_jitter_ms: .nan\n", "teams.quality_thresholds.audio_jitter_ms: expected a finite non-negative number"},
+		{"    audio_packet_loss_ratio: 1.1\n", "teams.quality_thresholds.audio_packet_loss_ratio: expected a ratio between 0 and 1"},
+		{"    audio_rtt_ms: \"500\"\n", "teams.quality_thresholds.audio_rtt_ms: expected a number"},
+		{"    vid_frame_rate_fps: 7\n", "unknown configuration key teams.quality_thresholds.vid_frame_rate_fps"},
+	} {
+		t.Run(strings.TrimSpace(tc.yaml), func(t *testing.T) {
+			path := writeTempConfig(t, base+tc.yaml)
+			for _, prefix := range [][]string{nil, {"check"}} {
+				var stdout, stderr bytes.Buffer
+				code := dispatch(t.Context(), append(prefix, "-config", path), &stdout, &stderr)
+				if code != 1 || !strings.Contains(stderr.String(), tc.diagnostic) {
+					t.Errorf("dispatch(%v) = %d, stderr=%q; want %q", prefix, code, stderr.String(), tc.diagnostic)
+				}
+			}
+		})
+	}
+	t.Run("YAML and environment overrides reach startup", func(t *testing.T) {
+		t.Setenv("G2O_TEAMS__QUALITY_THRESHOLDS__AUDIO_JITTER_MS", "0")
+		path := writeTempConfig(t, base+"    audio_jitter_ms: 25\n    video_post_fec_loss_ratio: 0.05\n")
+		original := buildTelemetryProvider
+		var got *config.Config
+		buildTelemetryProvider = func(_ context.Context, cfg *config.Config, _ io.Writer) (*telemetry.Provider, error) {
+			got = cfg
+			return nil, errors.New("constructor sentinel")
+		}
+		t.Cleanup(func() { buildTelemetryProvider = original })
+		var stdout, stderr bytes.Buffer
+		if code := dispatch(t.Context(), []string{"-config", path}, &stdout, &stderr); code != 1 || got == nil || !strings.Contains(stderr.String(), "constructor sentinel") {
+			t.Fatalf("dispatch = %d, stderr=%q; expected valid settings to reach the constructor", code, stderr.String())
+		}
+		q := got.Teams.QualityThresholds
+		if q.AudioJitterMs != 0 || q.VideoPostFECLoss != 0.05 || q.MinPackets != 500 {
+			t.Errorf("quality thresholds = %+v; want environment jitter 0, YAML post-FEC loss 0.05, default packets 500", q)
+		}
+	})
+}
+
 func assertSourceValidationDiagnostic(t *testing.T, diagnostic, collectorName string) {
 	t.Helper()
 	wantPath := `collectors["` + collectorName + `"].source`
