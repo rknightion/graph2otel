@@ -158,7 +158,10 @@ class TeamsDashboardTests(unittest.TestCase):
                         if tab == "Service health":
                             self.assertEqual(event, "m365.service_health_issue")
                             self.assertIn('| service=`Microsoft Teams`', expr)
-                            self.assertRegex(expr, r'\| is_resolved=`(true|false)`')
+                            if panel["title"] == "Latest Teams issue observations in range":
+                                self.assertIn('| is_resolved=~`true|false`', expr)
+                            else:
+                                self.assertRegex(expr, r'\| is_resolved=`(true|false)`')
                         if tab == "Calls":
                             self.assertIn('${site:percentencode}', expr)
                             if event == "teams.call":

@@ -1,6 +1,7 @@
 """Separate Teams investigation dashboard, assembled from the signal catalogue."""
 
-from builder import LOKI_DS, NO_LOKI, NO_METRIC, RATE, TENANT_SEL, Builder
+from builder import (AVAILABILITY_REASONS, AVAILABILITY_STATES, LOKI_DS, NO_LOKI, NO_METRIC, RATE,
+                     TENANT_SEL, Builder, _loki_note, _value_mapping)
 from logquery import Raw, f
 import v2
 
@@ -717,20 +718,67 @@ def usage(b):
 def service(b):
     _service_status(b, "Microsoft Teams service status", "stat", 8)
     _service_status(b, "Microsoft Teams service status over time", "state-timeline", 16)
-    b.metric("m365.service_health.issues.total", title="Open service issues by classification (all services)",
-             by=["classification", "status"],
-             desc="Counts every Microsoft 365 service: the issue count carries no service label.")
-    b.metric("m365.service_health.services.total", title="Services by status (all services)", by=["status"])
+
+
+def _latest_labels(candidates, key, conflict_labels):
+    """Keep labels of the newest timestamp per identity, or an explicit conflict."""
+    newest = f"max by ({key}) ({candidates})"
+    latest = f"(({candidates}) == on ({key}) group_left () ({newest}))"
+    tie = f"(count by ({key}) ({latest}) > 1)"
+    conflict = f"(({newest}) and on ({key}) {tie})"
+    for name, value in conflict_labels.items():
+        conflict = f'label_replace({conflict}, "{name}", "{value}", "{name}", "^$")'
+    return f"(({latest} unless on ({key}) {tie}) or {conflict})"
+
+
+def _issue_summary(b, title, expr, columns, value_name, unit, desc, empty):
+    panel = b._viz_panel("table", title, [], unit, desc + _loki_note(), 24, 7)
+    panel["datasource"] = LOKI_DS
+    panel["targets"] = [b._loki_query(expr, query_type="instant")]
+    panel["fieldConfig"]["defaults"]["noValue"] = empty
+    # Loki returns one instant sample per series. Reduce makes a row from
+    # each series and its labels, without joining on display text or nulls.
+    panel["transformations"] = [
+        {"id": "reduce", "options": {"reducers": ["last"], "mode": "seriesToRows", "labelsToFields": True}},
+        {"id": "organize", "options": {"excludeByName": {"Field": True},
+                                       "indexByName": {name: i for i, name in enumerate((*columns, "Last"))},
+                                       "renameByName": {"Last": value_name}}},
+    ]
+    panel["options"]["sortBy"] = [{"displayName": value_name, "desc": True}]
+    if "title" in columns:
+        _override(panel, "title", "custom.wrapText", True)
+    for kind in ("string", "number"):
+        panel["fieldConfig"]["overrides"].append({"matcher": {"id": "byType", "options": kind},
+                                                   "properties": [{"id": "noValue", "value": ""}]})
 
 
 def issues(b):
-    distinct = b.log_table(ISSUE, "Distinct Teams issues observed open in range",
-                           by=["id", "title", "classification", "status"],
-                           filters=[f("service", "eq", "Microsoft Teams"), f("is_resolved", "eq", "false")],
-                           desc="One row per issue and status, with the number of polls that saw it open. "
-                                "Requires the service-health collector.", w=24, h=7)
-    distinct["fieldConfig"]["overrides"].append({"matcher": {"id": "byName", "options": "Total"},
-                                                 "properties": [{"id": "displayName", "value": "Polls seen open"}]})
+    identity = ("tenant_id", "id")
+    key = ", ".join(identity)
+    teams_only = f("service", "eq", "Microsoft Teams")
+    keyed = [teams_only, f("id", "ne", "")]
+    open_only = b._selector(ISSUE, filters=[*keyed, f("is_resolved", "eq", "false"), Raw(
+        f"keep {key}", keys=identity, reason="Discard mutable metadata before counting keyed observations")],
+        by=list(identity))
+    count = f"sum by ({key}) (count_over_time({open_only} [$__range]))"
+    _issue_summary(b, "Distinct Teams issues observed open in range", count, identity,
+                   "Polls seen open", "short",
+                   "One row per tenant and issue ID. Counts stored open observations in the selected range, "
+                   "not currently open issues. Missing IDs are left in the history only.",
+                   "No keyed Teams issues were observed open in this range. Check the Loki datasource and service-health collector.")
+    fields = (*identity, "title", "status", "classification", "is_resolved")
+    grouped = ", ".join(fields)
+    observed = b._selector(ISSUE, filters=[*keyed, f("is_resolved", "re", "true|false"), Raw(
+        f"keep {grouped} | label_format g2o_issue_ms=`{{{{ __timestamp__ | unixEpochMillis }}}}` | unwrap g2o_issue_ms",
+        keys=fields, reason="Compare the log event timestamps while retaining the latest row's display labels")])
+    candidates = f"max_over_time({observed} [$__range]) by ({grouped})"
+    _issue_summary(b, "Latest Teams issue observations in range",
+                   _latest_labels(candidates, key, {"status": "Conflicting observations"}),
+                   fields, "Observation time", "dateTimeAsIso",
+                   "Latest stored event per tenant and issue ID in the selected range. Open rows use poll time; "
+                   "resolutions use Microsoft's end time. If different display details share the latest millisecond, "
+                   "read the dated history below. This is not a current open-issue inventory.",
+                   "No keyed Teams issue observations in this range. This does not show whether any issue is currently open.")
     for title, resolved in (("Teams issue observations while open", "false"), ("Teams resolution events", "true")):
         panel = b.records(ISSUE, title, ("id", "title", "classification", "status", "impact_description",
                           "description", "last_modified_date_time", "end_date_time"),
@@ -738,28 +786,87 @@ def issues(b):
                           desc="Requires the service-health collector. This is history, not a current-state join: "
                                "an open observation can also have a later resolution. No resolution row is not proof an issue remains open.")
         _override(panel, "description", "custom.cellOptions", {"type": "markdown"})
+        for field in ("impact_description", "description"):
+            _override(panel, field, "custom.inspect", True)
         panel["options"]["cellHeight"] = "lg"
+        if resolved == "true":
+            panel["fieldConfig"]["defaults"]["noValue"] = (
+                "No Teams resolution events in this range. A closure is recorded only for a previously observed open issue. "
+                "Check the Loki datasource and service-health collector; no row does not prove the issue is still open.")
+
+
+def _availability(b, selector):
+    metric = b.cat.metric("graph2otel.collector.availability").prom
+    key = "tenant_id, collector, collector_transport"
+    # An instant selector sees the last sample of *each* series, possibly from
+    # a replaced process or state. Compare their real sample timestamps, not
+    # the gauge (always 1) or the instant query's evaluation timestamp.
+    stamp = f"timestamp({metric}{{{TENANT_SEL},{selector}}})"
+    by_state = f"max by ({key}, state, reason) ({stamp})"
+    # Identical state/reason samples collapse above. At exactly equal times a
+    # conflicting tuple has no provable winner, regardless of severity.
+    expr = "1000 * " + _latest_labels(by_state, key, {"state": "unknown", "reason": "timestamp_tie"})
+    panel = b.raw("Signal availability", [expr], viz="table", w=24, h=8,
+                  desc="Newest exported state and reason per tenant, collector and collector transport at the "
+                       "selected end time, within the datasource's instant lookback. Compare these columns with "
+                       "availability.state, availability.reason and availability.transport in the poller's "
+                       "admin /api/status.json. Admin is live; this table can lag the snapshot refresh and export. "
+                       "If the newest samples have the same timestamp but disagree, the state is unknown. "
+                       "Healthy, empty means the run succeeded without fetching rows, not disabled or failed.")
+    panel["fieldConfig"]["defaults"]["noValue"] = (
+        "Availability unknown: no recent snapshot sample at the selected end time. "
+        "Check the tenant, Prometheus datasource and exporter; this is not evidence of a disabled collector.")
+    panel["fieldConfig"]["overrides"] = [
+        _value_mapping("state", {**AVAILABILITY_STATES, "unknown": {"text": "Unknown"}}),
+        _value_mapping("reason", {**AVAILABILITY_REASONS, "timestamp_tie": {"text": "Latest samples disagree"}}),
+    ]
+    _override(panel, "Value", "unit", "dateTimeAsIso")
+    _override(panel, "Value", "displayName", "Last exported sample")
 
 
 def health(b):
-    b.availability(COLLECTORS)
-    selector = f'collector=~`{COLLECTORS}`'
+    selector = f'collector=~`{COLLECTORS}|m365[.]collaboration_activity`'
+    _availability(b, selector)
+    name = b.cat.metric("graph2otel.collector.expected_interval").prom
+    series = f"{name}{{{TENANT_SEL},{selector}}}"
+    stamp = f"timestamp({series})"
+    key = "tenant_id, collector"
+    # Compare the sample times first: a retired instance's longer interval
+    # may still be in lookback. Only agree on a value at the newest time.
+    latest = f"({series} and ({stamp} == on ({key}) group_left () max by ({key}) ({stamp})))"
+    cadence = f"max by ({key}) ({latest}) == min by ({key}) ({latest})"
+    panel = b.raw("Scheduled collector interval", [cadence], viz="table", unit="s", w=24, h=7,
+                  desc="Latest exported scheduler interval (admin interval_seconds), when newest samples agree. "
+                       "Cadence, last success and checkpoint metrics identify only tenant and collector, not transport. "
+                       "Compare against availability, but do not read these metrics as per-transport results.")
+    panel["fieldConfig"]["defaults"]["noValue"] = "No recent interval sample, or newest samples disagree."
     for metric, title in (("graph2otel.collector.watermark_timestamp", "Window watermark lag"),
                           ("graph2otel.scrape.staleness", "Time since last successful scrape")):
         q = _agg(b, metric, keys=("collector",), match=selector, aggregate="max")
         b.raw(title, [f"time() - ({q})" if "watermark" in metric else q],
               unit="s", legends=["{{tenant_id}} · {{collector}}"],
-              desc=("Only window collectors that emit a watermark are shown. Missing is not zero lag."
+              desc=("Age of the durable event-time cursor (admin checkpoint watermark for window collectors). "
+                    "A successful quiet window can still advance its cursor. Missing is not zero lag."
                     if "watermark" in metric else
-                    "Until the first successful run, staleness counts from process start. Missing is not zero staleness."))
-    b.raw("Teams Graph throttle response rate", [_agg(b, "graph2otel.throttle.count", keys=("workload",),
-          match='workload=~"teams-call-records|teams-phone"', op="rate")],
-          legends=["{{tenant_id}} · {{workload}}"],
-          desc="These two Graph workload buckets are Teams-specific. Shared reporting and other Graph workloads cannot be attributed to Teams here.")
-    for metric, title, by in (
-        ("teams.call.metrics_skipped", "Call versions skipped by metrics admission rate", ["reason_bucket"]),
-    ):
-        b.metric(metric, title=title, by=by)
+                    "Compare with the scheduled collector interval. Until the first success this counts from "
+                    "process start. Admin staleness instead measures time since the last attempt. "
+                    "Missing is not zero staleness."))
+    throttle = b.raw("Teams Graph throttle response rate", [_agg(b, "graph2otel.throttle.count", keys=("workload",),
+                     match='workload=~"teams-call-records|teams-phone"', op="rate")],
+                     legends=["{{tenant_id}} · {{workload}}"],
+                     desc="Only the Teams-specific call records and phone workload buckets. Shared reporting "
+                          "and other Graph workloads cannot be attributed to Teams here. An empty plot may mean "
+                          "no throttles or too few samples to calculate a rate; it is not a health verdict.")
+    throttle["fieldConfig"]["defaults"]["noValue"] = (
+        "No Teams throttle rate samples. There may have been no throttle responses, or too few counter samples. "
+        "This does not establish zero throttling or collector health.")
+    skipped = b.metric("teams.call.metrics_skipped", title="Call versions skipped by metrics admission rate",
+                       by=["reason_bucket"],
+                       desc="Rate of versions skipped by metrics admission, not a measure of Graph collection failure. "
+                            "An empty plot may mean no skipped versions, no calls or too few counter samples.")
+    skipped["fieldConfig"]["defaults"]["noValue"] = (
+        "No admission-skip rate samples. There may have been no skipped versions, no calls, or too few "
+        "counter samples. Use Signal availability for the collector's last reported state.")
 
 
 def practices(b):
@@ -793,6 +900,12 @@ def sites_and_network(b):
 def service_health(b):
     service(b)
     issues(b)
+    b.metric("m365.service_health.issues.total", title="Service issues by classification and status (all services)",
+             by=["classification", "status"],
+             desc="Counts expanded issues returned for all Microsoft 365 services, including any resolved rows "
+                  "the source returns. This metric does not carry a service label.")
+    b.metric("m365.service_health.services.total", title="Services by status (all services)", by=["status"],
+             desc="Fleet context across Microsoft 365 services, not limited to Teams.")
 
 
 CALLS_EMPTY = "Teams publishes a call record after the call ends, sometimes hours later."

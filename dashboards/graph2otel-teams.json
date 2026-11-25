@@ -11001,188 +11001,8 @@
         "kind": "Panel",
         "spec": {
           "id": 112,
-          "title": "Open service issues by classification (all services)",
-          "description": "Counts every Microsoft 365 service: the issue count carries no service label.",
-          "links": [],
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "refId": "A",
-                    "hidden": false,
-                    "datasource": {
-                      "type": "prometheus",
-                      "uid": "${datasource}"
-                    },
-                    "query": {
-                      "kind": "DataQuery",
-                      "version": "v0",
-                      "group": "prometheus",
-                      "datasource": {
-                        "name": "${datasource}"
-                      },
-                      "spec": {
-                        "refId": "A",
-                        "expr": "sum by (tenant_id, classification, status) (m365_service_health_issues_total{tenant_id=~\"$tenant\"})",
-                        "editorMode": "code",
-                        "range": true,
-                        "instant": false,
-                        "legendFormat": "{{tenant_id}} {{classification}} {{status}}"
-                      }
-                    }
-                  }
-                }
-              ],
-              "queryOptions": {},
-              "transformations": []
-            }
-          },
-          "vizConfig": {
-            "kind": "VizConfig",
-            "group": "timeseries",
-            "version": "v11.5.0",
-            "spec": {
-              "options": {
-                "legend": {
-                  "displayMode": "table",
-                  "placement": "bottom",
-                  "showLegend": true,
-                  "calcs": [
-                    "lastNotNull",
-                    "max"
-                  ]
-                },
-                "tooltip": {
-                  "mode": "multi",
-                  "sort": "desc"
-                }
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "unit": "short",
-                  "custom": {
-                    "drawStyle": "line",
-                    "lineWidth": 1,
-                    "fillOpacity": 10,
-                    "showPoints": "never",
-                    "spanNulls": true
-                  },
-                  "noValue": "No data yet. Needs the m365.servicehealth collector. No issue rows means no Teams issue was observed in range. Collector health shows whether the source ran.",
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "text",
-                        "value": null
-                      }
-                    ]
-                  }
-                },
-                "overrides": []
-              }
-            }
-          }
-        }
-      },
-      "panel-113": {
-        "kind": "Panel",
-        "spec": {
-          "id": 113,
-          "title": "Services by status (all services)",
-          "description": "Count of M365 services in each health status.",
-          "links": [],
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "refId": "A",
-                    "hidden": false,
-                    "datasource": {
-                      "type": "prometheus",
-                      "uid": "${datasource}"
-                    },
-                    "query": {
-                      "kind": "DataQuery",
-                      "version": "v0",
-                      "group": "prometheus",
-                      "datasource": {
-                        "name": "${datasource}"
-                      },
-                      "spec": {
-                        "refId": "A",
-                        "expr": "sum by (tenant_id, status) (m365_service_health_services_total{tenant_id=~\"$tenant\"})",
-                        "editorMode": "code",
-                        "range": true,
-                        "instant": false,
-                        "legendFormat": "{{tenant_id}} {{status}}"
-                      }
-                    }
-                  }
-                }
-              ],
-              "queryOptions": {},
-              "transformations": []
-            }
-          },
-          "vizConfig": {
-            "kind": "VizConfig",
-            "group": "timeseries",
-            "version": "v11.5.0",
-            "spec": {
-              "options": {
-                "legend": {
-                  "displayMode": "table",
-                  "placement": "bottom",
-                  "showLegend": true,
-                  "calcs": [
-                    "lastNotNull",
-                    "max"
-                  ]
-                },
-                "tooltip": {
-                  "mode": "multi",
-                  "sort": "desc"
-                }
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "unit": "short",
-                  "custom": {
-                    "drawStyle": "line",
-                    "lineWidth": 1,
-                    "fillOpacity": 10,
-                    "showPoints": "never",
-                    "spanNulls": true
-                  },
-                  "noValue": "No data yet. Needs the m365.servicehealth collector. No issue rows means no Teams issue was observed in range. Collector health shows whether the source ran.",
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "text",
-                        "value": null
-                      }
-                    ]
-                  }
-                },
-                "overrides": []
-              }
-            }
-          }
-        }
-      },
-      "panel-114": {
-        "kind": "Panel",
-        "spec": {
-          "id": 114,
           "title": "Distinct Teams issues observed open in range",
-          "description": "One row per issue and status, with the number of polls that saw it open. Requires the service-health collector.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "description": "One row per tenant and issue ID. Counts stored open observations in the selected range, not currently open issues. Missing IDs are left in the history only.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -11206,10 +11026,9 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "topk(20, sum by (tenant_id, id, title, classification, status) (count_over_time({service_name=\"graph2otel\"} | event_name=`m365.service_health_issue` | tenant_id=~\"$tenant\" | service=`Microsoft Teams` | is_resolved=`false` [$__auto])))",
+                        "expr": "sum by (tenant_id, id) (count_over_time({service_name=\"graph2otel\"} | event_name=`m365.service_health_issue` | tenant_id=~\"$tenant\" | service=`Microsoft Teams` | id!=`` | is_resolved=`false` | keep tenant_id, id [$__range]))",
                         "editorMode": "code",
-                        "queryType": "range",
-                        "legendFormat": "{{tenant_id}} {{id}} {{title}} {{classification}} {{status}}"
+                        "queryType": "instant"
                       }
                     }
                   }
@@ -11223,9 +11042,29 @@
                   "spec": {
                     "options": {
                       "reducers": [
-                        "sum"
+                        "last"
                       ],
-                      "mode": "seriesToRows"
+                      "mode": "seriesToRows",
+                      "labelsToFields": true
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Field": true
+                      },
+                      "indexByName": {
+                        "tenant_id": 0,
+                        "id": 1,
+                        "Last": 2
+                      },
+                      "renameByName": {
+                        "Last": "Polls seen open"
+                      }
                     }
                   }
                 }
@@ -11246,13 +11085,165 @@
                     "sum"
                   ],
                   "fields": ""
-                }
+                },
+                "sortBy": [
+                  {
+                    "displayName": "Polls seen open",
+                    "desc": true
+                  }
+                ]
               },
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
                   "custom": {},
-                  "noValue": "No data yet. Needs the m365.servicehealth collector. No issue rows means no Teams issue was observed in range. Collector health shows whether the source ran. Log panels also need the Loki datasource.",
+                  "noValue": "No data yet. No keyed Teams issues were observed open in this range. Check the Loki datasource and service-health collector.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "number"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-113": {
+        "kind": "Panel",
+        "spec": {
+          "id": 113,
+          "title": "Latest Teams issue observations in range",
+          "description": "Latest stored event per tenant and issue ID in the selected range. Open rows use poll time; resolutions use Microsoft's end time. If different display details share the latest millisecond, read the dated history below. This is not a current open-issue inventory.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "((((max_over_time({service_name=\"graph2otel\"} | event_name=`m365.service_health_issue` | tenant_id=~\"$tenant\" | service=`Microsoft Teams` | id!=`` | is_resolved=~`true|false` | keep tenant_id, id, title, status, classification, is_resolved | label_format g2o_issue_ms=`{{ __timestamp__ | unixEpochMillis }}` | unwrap g2o_issue_ms [$__range]) by (tenant_id, id, title, status, classification, is_resolved)) == on (tenant_id, id) group_left () (max by (tenant_id, id) (max_over_time({service_name=\"graph2otel\"} | event_name=`m365.service_health_issue` | tenant_id=~\"$tenant\" | service=`Microsoft Teams` | id!=`` | is_resolved=~`true|false` | keep tenant_id, id, title, status, classification, is_resolved | label_format g2o_issue_ms=`{{ __timestamp__ | unixEpochMillis }}` | unwrap g2o_issue_ms [$__range]) by (tenant_id, id, title, status, classification, is_resolved)))) unless on (tenant_id, id) (count by (tenant_id, id) (((max_over_time({service_name=\"graph2otel\"} | event_name=`m365.service_health_issue` | tenant_id=~\"$tenant\" | service=`Microsoft Teams` | id!=`` | is_resolved=~`true|false` | keep tenant_id, id, title, status, classification, is_resolved | label_format g2o_issue_ms=`{{ __timestamp__ | unixEpochMillis }}` | unwrap g2o_issue_ms [$__range]) by (tenant_id, id, title, status, classification, is_resolved)) == on (tenant_id, id) group_left () (max by (tenant_id, id) (max_over_time({service_name=\"graph2otel\"} | event_name=`m365.service_health_issue` | tenant_id=~\"$tenant\" | service=`Microsoft Teams` | id!=`` | is_resolved=~`true|false` | keep tenant_id, id, title, status, classification, is_resolved | label_format g2o_issue_ms=`{{ __timestamp__ | unixEpochMillis }}` | unwrap g2o_issue_ms [$__range]) by (tenant_id, id, title, status, classification, is_resolved))))) > 1)) or label_replace(((max by (tenant_id, id) (max_over_time({service_name=\"graph2otel\"} | event_name=`m365.service_health_issue` | tenant_id=~\"$tenant\" | service=`Microsoft Teams` | id!=`` | is_resolved=~`true|false` | keep tenant_id, id, title, status, classification, is_resolved | label_format g2o_issue_ms=`{{ __timestamp__ | unixEpochMillis }}` | unwrap g2o_issue_ms [$__range]) by (tenant_id, id, title, status, classification, is_resolved))) and on (tenant_id, id) (count by (tenant_id, id) (((max_over_time({service_name=\"graph2otel\"} | event_name=`m365.service_health_issue` | tenant_id=~\"$tenant\" | service=`Microsoft Teams` | id!=`` | is_resolved=~`true|false` | keep tenant_id, id, title, status, classification, is_resolved | label_format g2o_issue_ms=`{{ __timestamp__ | unixEpochMillis }}` | unwrap g2o_issue_ms [$__range]) by (tenant_id, id, title, status, classification, is_resolved)) == on (tenant_id, id) group_left () (max by (tenant_id, id) (max_over_time({service_name=\"graph2otel\"} | event_name=`m365.service_health_issue` | tenant_id=~\"$tenant\" | service=`Microsoft Teams` | id!=`` | is_resolved=~`true|false` | keep tenant_id, id, title, status, classification, is_resolved | label_format g2o_issue_ms=`{{ __timestamp__ | unixEpochMillis }}` | unwrap g2o_issue_ms [$__range]) by (tenant_id, id, title, status, classification, is_resolved))))) > 1)), \"status\", \"Conflicting observations\", \"status\", \"^$\"))",
+                        "editorMode": "code",
+                        "queryType": "instant"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "reduce",
+                  "spec": {
+                    "options": {
+                      "reducers": [
+                        "last"
+                      ],
+                      "mode": "seriesToRows",
+                      "labelsToFields": true
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Field": true
+                      },
+                      "indexByName": {
+                        "tenant_id": 0,
+                        "id": 1,
+                        "title": 2,
+                        "status": 3,
+                        "classification": 4,
+                        "is_resolved": 5,
+                        "Last": 6
+                      },
+                      "renameByName": {
+                        "Last": "Observation time"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "fields": ""
+                },
+                "sortBy": [
+                  {
+                    "displayName": "Observation time",
+                    "desc": true
+                  }
+                ]
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "dateTimeAsIso",
+                  "custom": {},
+                  "noValue": "No data yet. No keyed Teams issue observations in this range. This does not show whether any issue is currently open.",
                   "thresholds": {
                     "mode": "absolute",
                     "steps": [
@@ -11267,12 +11258,36 @@
                   {
                     "matcher": {
                       "id": "byName",
-                      "options": "Total"
+                      "options": "title"
                     },
                     "properties": [
                       {
-                        "id": "displayName",
-                        "value": "Polls seen open"
+                        "id": "custom.wrapText",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "number"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
                       }
                     ]
                   }
@@ -11282,10 +11297,10 @@
           }
         }
       },
-      "panel-115": {
+      "panel-114": {
         "kind": "Panel",
         "spec": {
-          "id": 115,
+          "id": 114,
           "title": "Teams issue observations while open",
           "description": "Requires the service-health collector. This is history, not a current-state join: an open observation can also have a later resolution. No resolution row is not proof an issue remains open. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -11403,6 +11418,30 @@
                         }
                       }
                     ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "impact_description"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.inspect",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "description"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.inspect",
+                        "value": true
+                      }
+                    ]
                   }
                 ]
               }
@@ -11410,10 +11449,10 @@
           }
         }
       },
-      "panel-116": {
+      "panel-115": {
         "kind": "Panel",
         "spec": {
-          "id": 116,
+          "id": 115,
           "title": "Teams resolution events",
           "description": "Requires the service-health collector. This is history, not a current-state join: an open observation can also have a later resolution. No resolution row is not proof an issue remains open. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -11482,7 +11521,7 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "noValue": "No data yet. Needs the m365.servicehealth collector. No issue rows means no Teams issue was observed in range. Collector health shows whether the source ran. Log panels also need the Loki datasource.",
+                  "noValue": "No data yet. No Teams resolution events in this range. A closure is recorded only for a previously observed open issue. Check the Loki datasource and service-health collector; no row does not prove the issue is still open.",
                   "thresholds": {
                     "mode": "absolute",
                     "steps": [
@@ -11531,6 +11570,30 @@
                         }
                       }
                     ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "impact_description"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.inspect",
+                        "value": true
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "description"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.inspect",
+                        "value": true
+                      }
+                    ]
                   }
                 ]
               }
@@ -11538,12 +11601,12 @@
           }
         }
       },
-      "panel-117": {
+      "panel-116": {
         "kind": "Panel",
         "spec": {
-          "id": 117,
-          "title": "Signal availability",
-          "description": "Current collector state from graph2otel.collector.availability. Intentional absence is disabled (transport_not_configured, experimental_not_enabled, high_volume_not_enabled, disabled_by_config, profile_not_selected) or covered (covered_by_alternative). healthy_empty/empty is a successful zero-row source response. limited/partial_license is non-failure; blocked/license_unavailable identifies a missing entitlement, while blocked/permission_denied requires access. degraded and failed (including source_error) describe completed runtime outcomes; startup_failed describes initialization failure. An empty table is unknown, never evidence of disabled.",
+          "id": 116,
+          "title": "Service issues by classification and status (all services)",
+          "description": "Counts expanded issues returned for all Microsoft 365 services, including any resolved rows the source returns. This metric does not carry a service label.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -11567,7 +11630,187 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)`})",
+                        "expr": "sum by (tenant_id, classification, status) (m365_service_health_issues_total{tenant_id=~\"$tenant\"})",
+                        "editorMode": "code",
+                        "range": true,
+                        "instant": false,
+                        "legendFormat": "{{tenant_id}} {{classification}} {{status}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": true
+                  },
+                  "noValue": "No data yet. Needs the m365.servicehealth collector. No issue rows means no Teams issue was observed in range. Collector health shows whether the source ran.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-117": {
+        "kind": "Panel",
+        "spec": {
+          "id": 117,
+          "title": "Services by status (all services)",
+          "description": "Fleet context across Microsoft 365 services, not limited to Teams.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "sum by (tenant_id, status) (m365_service_health_services_total{tenant_id=~\"$tenant\"})",
+                        "editorMode": "code",
+                        "range": true,
+                        "instant": false,
+                        "legendFormat": "{{tenant_id}} {{status}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": true
+                  },
+                  "noValue": "No data yet. Needs the m365.servicehealth collector. No issue rows means no Teams issue was observed in range. Collector health shows whether the source ran.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-118": {
+        "kind": "Panel",
+        "spec": {
+          "id": 118,
+          "title": "Signal availability",
+          "description": "Newest exported state and reason per tenant, collector and collector transport at the selected end time, within the datasource's instant lookback. Compare these columns with availability.state, availability.reason and availability.transport in the poller's admin /api/status.json. Admin is live; this table can lag the snapshot refresh and export. If the newest samples have the same timestamp but disagree, the state is unknown. Healthy, empty means the run succeeded without fetching rows, not disabled or failed.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "1000 * ((((max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))) == on (tenant_id, collector, collector_transport) group_left () (max by (tenant_id, collector, collector_transport) (max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))))) unless on (tenant_id, collector, collector_transport) (count by (tenant_id, collector, collector_transport) (((max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))) == on (tenant_id, collector, collector_transport) group_left () (max by (tenant_id, collector, collector_transport) (max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})))))) > 1)) or label_replace(label_replace(((max by (tenant_id, collector, collector_transport) (max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})))) and on (tenant_id, collector, collector_transport) (count by (tenant_id, collector, collector_transport) (((max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))) == on (tenant_id, collector, collector_transport) group_left () (max by (tenant_id, collector, collector_transport) (max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})))))) > 1)), \"state\", \"unknown\", \"state\", \"^$\"), \"reason\", \"timestamp_tie\", \"reason\", \"^$\"))",
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
@@ -11613,7 +11856,7 @@
                 "defaults": {
                   "unit": "short",
                   "custom": {},
-                  "noValue": "No data yet. Availability unknown. No availability rows were returned; this does not mean disabled. Verify the Prometheus datasource, tenant selection, and deployment.",
+                  "noValue": "No data yet. Availability unknown: no recent snapshot sample at the selected end time. Check the tenant, Prometheus datasource and exporter; this is not evidence of a disabled collector.",
                   "thresholds": {
                     "mode": "absolute",
                     "steps": [
@@ -11666,6 +11909,9 @@
                               },
                               "startup_failed": {
                                 "text": "Startup failed"
+                              },
+                              "unknown": {
+                                "text": "Unknown"
                               }
                             }
                           }
@@ -11759,10 +12005,37 @@
                               },
                               "graph_client_initialization_failed": {
                                 "text": "Graph client initialization failed"
+                              },
+                              "timestamp_tie": {
+                                "text": "Latest samples disagree"
                               }
                             }
                           }
                         ]
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Value"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "dateTimeAsIso"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Value"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Last exported sample"
                       }
                     ]
                   }
@@ -11772,102 +12045,12 @@
           }
         }
       },
-      "panel-118": {
-        "kind": "Panel",
-        "spec": {
-          "id": 118,
-          "title": "Window watermark lag",
-          "description": "Only window collectors that emit a watermark are shown. Missing is not zero lag.",
-          "links": [],
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "refId": "A",
-                    "hidden": false,
-                    "datasource": {
-                      "type": "prometheus",
-                      "uid": "${datasource}"
-                    },
-                    "query": {
-                      "kind": "DataQuery",
-                      "version": "v0",
-                      "group": "prometheus",
-                      "datasource": {
-                        "name": "${datasource}"
-                      },
-                      "spec": {
-                        "refId": "A",
-                        "expr": "time() - (max by (tenant_id, collector) (graph2otel_collector_watermark_timestamp_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)`}))",
-                        "editorMode": "code",
-                        "range": true,
-                        "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{collector}}"
-                      }
-                    }
-                  }
-                }
-              ],
-              "queryOptions": {},
-              "transformations": []
-            }
-          },
-          "vizConfig": {
-            "kind": "VizConfig",
-            "group": "timeseries",
-            "version": "v11.5.0",
-            "spec": {
-              "options": {
-                "legend": {
-                  "displayMode": "table",
-                  "placement": "bottom",
-                  "showLegend": true,
-                  "calcs": [
-                    "lastNotNull",
-                    "max"
-                  ]
-                },
-                "tooltip": {
-                  "mode": "multi",
-                  "sort": "desc"
-                }
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "unit": "s",
-                  "custom": {
-                    "drawStyle": "line",
-                    "lineWidth": 1,
-                    "fillOpacity": 10,
-                    "showPoints": "never",
-                    "spanNulls": true
-                  },
-                  "noValue": "No data yet. No collector census for this tenant: check that graph2otel is exporting. Collector health shows whether the source ran.",
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "text",
-                        "value": null
-                      }
-                    ]
-                  }
-                },
-                "overrides": []
-              }
-            }
-          }
-        }
-      },
       "panel-119": {
         "kind": "Panel",
         "spec": {
           "id": 119,
-          "title": "Time since last successful scrape",
-          "description": "Until the first successful run, staleness counts from process start. Missing is not zero staleness.",
+          "title": "Scheduled collector interval",
+          "description": "Latest exported scheduler interval (admin interval_seconds), when newest samples agree. Cadence, last success and checkpoint metrics identify only tenant and collector, not transport. Compare against availability, but do not read these metrics as per-transport results.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -11891,51 +12074,53 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "max by (tenant_id, collector) (graph2otel_scrape_staleness_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)`})",
+                        "expr": "max by (tenant_id, collector) ((graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`} and (timestamp(graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}) == on (tenant_id, collector) group_left () max by (tenant_id, collector) (timestamp(graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))))) == min by (tenant_id, collector) ((graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`} and (timestamp(graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}) == on (tenant_id, collector) group_left () max by (tenant_id, collector) (timestamp(graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})))))",
                         "editorMode": "code",
-                        "range": true,
-                        "instant": false,
-                        "legendFormat": "{{tenant_id}} \u00b7 {{collector}}"
+                        "range": false,
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
             "kind": "VizConfig",
-            "group": "timeseries",
+            "group": "table",
             "version": "v11.5.0",
             "spec": {
               "options": {
-                "legend": {
-                  "displayMode": "table",
-                  "placement": "bottom",
-                  "showLegend": true,
-                  "calcs": [
-                    "lastNotNull",
-                    "max"
-                  ]
-                },
-                "tooltip": {
-                  "mode": "multi",
-                  "sort": "desc"
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "fields": ""
                 }
               },
               "fieldConfig": {
                 "defaults": {
                   "unit": "s",
-                  "custom": {
-                    "drawStyle": "line",
-                    "lineWidth": 1,
-                    "fillOpacity": 10,
-                    "showPoints": "never",
-                    "spanNulls": true
-                  },
-                  "noValue": "No data yet. No collector census for this tenant: check that graph2otel is exporting. Collector health shows whether the source ran.",
+                  "custom": {},
+                  "noValue": "No data yet. No recent interval sample, or newest samples disagree.",
                   "thresholds": {
                     "mode": "absolute",
                     "steps": [
@@ -11956,8 +12141,188 @@
         "kind": "Panel",
         "spec": {
           "id": 120,
+          "title": "Window watermark lag",
+          "description": "Age of the durable event-time cursor (admin checkpoint watermark for window collectors). A successful quiet window can still advance its cursor. Missing is not zero lag.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "time() - (max by (tenant_id, collector) (graph2otel_collector_watermark_timestamp_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))",
+                        "editorMode": "code",
+                        "range": true,
+                        "instant": false,
+                        "legendFormat": "{{tenant_id}} \u00b7 {{collector}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": true
+                  },
+                  "noValue": "No data yet. No collector census for this tenant: check that graph2otel is exporting. Collector health shows whether the source ran.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-121": {
+        "kind": "Panel",
+        "spec": {
+          "id": 121,
+          "title": "Time since last successful scrape",
+          "description": "Compare with the scheduled collector interval. Until the first success this counts from process start. Admin staleness instead measures time since the last attempt. Missing is not zero staleness.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "max by (tenant_id, collector) (graph2otel_scrape_staleness_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})",
+                        "editorMode": "code",
+                        "range": true,
+                        "instant": false,
+                        "legendFormat": "{{tenant_id}} \u00b7 {{collector}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": true
+                  },
+                  "noValue": "No data yet. No collector census for this tenant: check that graph2otel is exporting. Collector health shows whether the source ran.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-122": {
+        "kind": "Panel",
+        "spec": {
+          "id": 122,
           "title": "Teams Graph throttle response rate",
-          "description": "These two Graph workload buckets are Teams-specific. Shared reporting and other Graph workloads cannot be attributed to Teams here.",
+          "description": "Only the Teams-specific call records and phone workload buckets. Shared reporting and other Graph workloads cannot be attributed to Teams here. An empty plot may mean no throttles or too few samples to calculate a rate; it is not a health verdict.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -12025,7 +12390,7 @@
                     "showPoints": "never",
                     "spanNulls": true
                   },
-                  "noValue": "No data yet. No collector census for this tenant: check that graph2otel is exporting. Collector health shows whether the source ran.",
+                  "noValue": "No data yet. No Teams throttle rate samples. There may have been no throttle responses, or too few counter samples. This does not establish zero throttling or collector health.",
                   "thresholds": {
                     "mode": "absolute",
                     "steps": [
@@ -12042,12 +12407,12 @@
           }
         }
       },
-      "panel-121": {
+      "panel-123": {
         "kind": "Panel",
         "spec": {
-          "id": 121,
+          "id": 123,
           "title": "Call versions skipped by metrics admission rate",
-          "description": "Completed Teams call versions omitted from call metrics despite log delivery.",
+          "description": "Rate of versions skipped by metrics admission, not a measure of Graph collection failure. An empty plot may mean no skipped versions, no calls or too few counter samples.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -12115,7 +12480,7 @@
                     "showPoints": "never",
                     "spanNulls": true
                   },
-                  "noValue": "No data yet. No collector census for this tenant: check that graph2otel is exporting. Collector health shows whether the source ran.",
+                  "noValue": "No data yet. No admission-skip rate samples. There may have been no skipped versions, no calls, or too few counter samples. Use Signal availability for the collector's last reported state.",
                   "thresholds": {
                     "mode": "absolute",
                     "steps": [
@@ -13882,8 +14247,8 @@
                                 "spec": {
                                   "x": 0,
                                   "y": 8,
-                                  "width": 12,
-                                  "height": 8,
+                                  "width": 24,
+                                  "height": 7,
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-112"
@@ -13893,10 +14258,10 @@
                               {
                                 "kind": "GridLayoutItem",
                                 "spec": {
-                                  "x": 12,
-                                  "y": 8,
-                                  "width": 12,
-                                  "height": 8,
+                                  "x": 0,
+                                  "y": 15,
+                                  "width": 24,
+                                  "height": 7,
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-113"
@@ -13907,9 +14272,9 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 16,
+                                  "y": 22,
                                   "width": 24,
-                                  "height": 7,
+                                  "height": 9,
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-114"
@@ -13920,7 +14285,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 23,
+                                  "y": 31,
                                   "width": 24,
                                   "height": 9,
                                   "element": {
@@ -13933,12 +14298,25 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 32,
-                                  "width": 24,
-                                  "height": 9,
+                                  "y": 40,
+                                  "width": 12,
+                                  "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-116"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 12,
+                                  "y": 40,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-117"
                                   }
                                 }
                               }
@@ -13979,7 +14357,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-117"
+                                    "name": "panel-118"
                                   }
                                 }
                               },
@@ -13988,21 +14366,8 @@
                                 "spec": {
                                   "x": 0,
                                   "y": 8,
-                                  "width": 12,
-                                  "height": 8,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-118"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 12,
-                                  "y": 8,
-                                  "width": 12,
-                                  "height": 8,
+                                  "width": 24,
+                                  "height": 7,
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-119"
@@ -14013,7 +14378,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 16,
+                                  "y": 15,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -14026,12 +14391,38 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 12,
-                                  "y": 16,
+                                  "y": 15,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-121"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 23,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-122"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 12,
+                                  "y": 23,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-123"
                                   }
                                 }
                               }
