@@ -1168,6 +1168,9 @@ def admin_config(b):
     b.metric("teams.call_queue.count", title="Call queues by routing method", by=["routing_method"],
              desc="Queues with a missing or unrecognised routing method count under unknown.")
     b.metric("teams.network_subnet.csv_coverage", title="Teams subnets by sites CSV coverage", by=["coverage"])
+    b.metric("teams.pstn_gateway.count", title="Direct Routing gateways by enabled", by=["enabled"],
+             desc="Configured Direct Routing gateways (SBCs) by whether they are enabled. Per-gateway "
+                  "configuration is in the teams.pstn_gateway log twins.")
 
 
 CALLS_EMPTY = "Teams publishes a call record after the call ends, sometimes hours later."
