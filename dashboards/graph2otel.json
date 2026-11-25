@@ -30786,11 +30786,11 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "avg by (tenant_id, activation_state, assignment_status, capability, number_type) (m365_teams_phone_numbers_total{tenant_id=~\"$tenant\"})",
+                        "expr": "avg by (activation_state, assignment_status, capability, number_type, tenant_id) (m365_teams_phone_numbers_total{tenant_id=~\"$tenant\"})",
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{activation_state}} {{assignment_status}} {{capability}} {{number_type}}",
+                        "legendFormat": "{{activation_state}} {{assignment_status}} {{capability}} {{number_type}} {{tenant_id}}",
                         "format": "table"
                       }
                     }
@@ -30895,27 +30895,34 @@
           },
           "vizConfig": {
             "kind": "VizConfig",
-            "group": "stat",
+            "group": "timeseries",
             "version": "v11.5.0",
             "spec": {
               "options": {
-                "reduceOptions": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
                   "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
+                    "lastNotNull",
+                    "max"
+                  ]
                 },
-                "colorMode": "none",
-                "graphMode": "area",
-                "textMode": "auto",
-                "justifyMode": "auto",
-                "orientation": "auto"
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
               },
               "fieldConfig": {
                 "defaults": {
                   "unit": "short",
-                  "custom": {},
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": true
+                  },
                   "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately.",
                   "thresholds": {
                     "mode": "absolute",
@@ -30962,11 +30969,11 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "sum by (tenant_id, account_type, enterprise_voice_enabled) (m365_teams_user_configuration_users{tenant_id=~\"$tenant\"})",
+                        "expr": "sum by (account_type, enterprise_voice_enabled, tenant_id) (m365_teams_user_configuration_users{tenant_id=~\"$tenant\"})",
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{account_type}} {{enterprise_voice_enabled}}",
+                        "legendFormat": "{{account_type}} {{enterprise_voice_enabled}} {{tenant_id}}",
                         "format": "table"
                       }
                     }
@@ -31055,11 +31062,11 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "sum by (tenant_id, policy_type) (m365_teams_user_configuration_effective_policy_assignments{tenant_id=~\"$tenant\"})",
+                        "expr": "sum by (policy_type, tenant_id) (m365_teams_user_configuration_effective_policy_assignments{tenant_id=~\"$tenant\"})",
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{policy_type}}",
+                        "legendFormat": "{{policy_type}} {{tenant_id}}",
                         "format": "table"
                       }
                     }

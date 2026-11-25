@@ -20,7 +20,8 @@
         "activation_state",
         "assignment_status",
         "capability",
-        "number_type"
+        "number_type",
+        "tenant_id"
       ]
     },
     {
@@ -28,10 +29,21 @@
       "Unit": "{number}",
       "Kind": "gauge",
       "Description": "Teams Phone numbers with unassigned status.",
-      "AttrKeys": []
+      "AttrKeys": [
+        "tenant_id"
+      ]
     }
   ],
   "Logs": [
+    {
+      "EventName": "m365.teams.phone_inventory_snapshot",
+      "AttrKeys": [
+        "collector",
+        "entity_count",
+        "snapshot_id",
+        "tenant_id"
+      ]
+    },
     {
       "EventName": "m365.teams.phone_number",
       "AttrKeys": [
@@ -44,8 +56,10 @@
         "number_source",
         "number_type",
         "operator_id",
+        "snapshot_id",
         "supported_customer_actions",
-        "telephone_number"
+        "telephone_number",
+        "tenant_id"
       ]
     }
   ]

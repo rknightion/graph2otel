@@ -3,14 +3,19 @@
 package inventory
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/recordoutcome"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/wirecheck"
 )
@@ -59,7 +64,12 @@ func DecodeRows[T any](raws []json.RawMessage, outcomes *recordoutcome.Recorder)
 	outcomes.Add(recordoutcome.OutcomeFetched, uint64(len(raws)))
 	rows := make([]T, len(raws))
 	for i, raw := range raws {
-		if err := json.Unmarshal(raw, &rows[i]); err != nil {
+		row := &rows[i]
+		err := json.Unmarshal(raw, &row)
+		if err == nil && row == nil {
+			err = errors.New("null row")
+		}
+		if err != nil {
 			outcomes.Add(recordoutcome.OutcomeErrored, uint64(len(raws)))
 			outcomes.Cause(recordoutcome.CauseDecodeError)
 			return nil, fmt.Errorf("decode Teams Phone inventory row %d: %w", i, err)
@@ -68,8 +78,39 @@ func DecodeRows[T any](raws []json.RawMessage, outcomes *recordoutcome.Recorder)
 	return rows, nil
 }
 
-// RecordTwins accounts for one mapped and emitted log twin per completed row.
-func RecordTwins(outcomes *recordoutcome.Recorder, n uint64) {
-	outcomes.Add(recordoutcome.OutcomeMapped, n)
-	outcomes.Add(recordoutcome.OutcomeEmitted, n)
+// CompletionEvent names a fully fetched and mapped inventory poll.
+const CompletionEvent = "m365.teams.phone_inventory_snapshot"
+
+// Poll identifies the twins and completion from one collection, not one entity.
+type Poll struct {
+	emitter telemetry.Emitter
+	name    string
+	id      string
+	count   uint64
+}
+
+// BeginPoll creates a fixed-size identity after all pages and rows validate.
+func (s Snapshot) BeginPoll(e telemetry.Emitter) *Poll {
+	var id [16]byte
+	_, _ = rand.Read(id[:]) // Always fills the buffer or terminates the process.
+	return &Poll{emitter: e, name: s.name, id: hex.EncodeToString(id[:])}
+}
+
+// LogTwin stamps and emits a mapped row without changing its observation time.
+func (p *Poll) LogTwin(ev telemetry.Event) {
+	ev.Attrs[semconv.AttrInventorySnapshotID] = p.id
+	p.emitter.LogEvent(ev)
+	p.count++
+}
+
+// Complete emits one marker after the twins, even if there were none. It proves
+// source-walk completion, not atomic delivery to Loki. Only twins count as rows.
+func (p *Poll) Complete(outcomes *recordoutcome.Recorder) {
+	p.emitter.LogEvent(telemetry.Event{
+		Name: CompletionEvent, Body: "Teams Phone inventory poll complete", Severity: telemetry.SeverityInfo,
+		Attrs: telemetry.Attrs{semconv.AttrCollector: p.name, semconv.AttrInventorySnapshotID: p.id,
+			semconv.AttrInventoryEntityCount: strconv.FormatUint(p.count, 10)},
+	})
+	outcomes.Add(recordoutcome.OutcomeMapped, p.count)
+	outcomes.Add(recordoutcome.OutcomeEmitted, p.count)
 }

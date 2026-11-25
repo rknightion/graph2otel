@@ -17,7 +17,8 @@
       "Kind": "gauge",
       "Description": "Reported Teams user effective policy assignments by policy type.",
       "AttrKeys": [
-        "policy_type"
+        "policy_type",
+        "tenant_id"
       ]
     },
     {
@@ -27,11 +28,21 @@
       "Description": "Teams users by account type and enterprise voice state.",
       "AttrKeys": [
         "account_type",
-        "enterprise_voice_enabled"
+        "enterprise_voice_enabled",
+        "tenant_id"
       ]
     }
   ],
   "Logs": [
+    {
+      "EventName": "m365.teams.phone_inventory_snapshot",
+      "AttrKeys": [
+        "collector",
+        "entity_count",
+        "snapshot_id",
+        "tenant_id"
+      ]
+    },
     {
       "EventName": "m365.teams.user_configuration",
       "AttrKeys": [
@@ -42,7 +53,9 @@
         "feature_types",
         "id",
         "modified_date_time",
+        "snapshot_id",
         "telephone_numbers",
+        "tenant_id",
         "user_principal_name"
       ]
     }
