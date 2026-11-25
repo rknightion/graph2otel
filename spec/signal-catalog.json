@@ -2143,6 +2143,7 @@
         "internal/collectors/purview/retentionlabels",
         "internal/collectors/purview/sensitivitylabels",
         "internal/collectors/teams/callrecords",
+        "internal/collectors/teams/directroutingcalls",
         "internal/wirecheck"
       ]
     },

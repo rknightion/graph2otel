@@ -1,5 +1,6 @@
-// Package directroutingcalls ingests v1.0 Teams Direct Routing attempts. The
-// resource shape is docs-derived, not measured against a live tenant.
+// Package directroutingcalls ingests v1.0 Teams Direct Routing attempts. A
+// failed attempt carries startDateTime null and an invite and failure time
+// (live-measured), so the event time falls back from start to invite to failure.
 package directroutingcalls
 
 import (
@@ -50,7 +51,21 @@ func init() {
 func mapRow(row map[string]any) (string, telemetry.Event) {
 	attrs := phonewindow.Fields(row, fields)
 	id, _ := attrs[semconv.AttrId].(string)
-	return id, telemetry.Event{Name: "teams.direct_routing_call", Body: "Teams Direct Routing call", Attrs: attrs}
+	return id, telemetry.Event{Name: "teams.direct_routing_call", Body: "Teams Direct Routing call", Attrs: attrs, Timestamp: eventTime(row)}
+}
+
+// eventTime is the attempt's start, or for a failed attempt (startDateTime
+// null) its invite, the attempt's own start, then its failure. A row with
+// none of the three parseable stays zero, so the pipeline drops it rather
+// than stamping arrival time.
+func eventTime(row map[string]any) time.Time {
+	for _, field := range [...]string{"startDateTime", "inviteDateTime", "failureDateTime"} {
+		raw, _ := row[field].(string)
+		if t, err := time.Parse(time.RFC3339Nano, raw); err == nil && !t.IsZero() {
+			return t
+		}
+	}
+	return time.Time{}
 }
 
 type dimensions struct{ trunk, outcome, sipClass string }
