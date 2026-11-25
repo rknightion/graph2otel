@@ -120,7 +120,7 @@ func SetIDs(attrs telemetry.Attrs, key string, ids []string) {
 	cut := ids
 	if len(ids) > MaxIDs {
 		cut = ids[:MaxIDs]
-		attrs[key+"_truncated"] = true
+		telemetry.SetBool(attrs, key+"_truncated", true)
 	}
 	telemetry.SetStrs(attrs, key, slices.Clone(cut))
 }

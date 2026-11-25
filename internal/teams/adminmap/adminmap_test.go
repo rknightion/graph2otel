@@ -131,8 +131,10 @@ func TestSetIDs(t *testing.T) {
 				t.Errorf("len(k) = %d, want %d", len(list), tc.wantList)
 			}
 			trunc, hasTrunc := attrs["k_truncated"]
-			if hasTrunc != tc.truncated || (hasTrunc && trunc != true) {
-				t.Errorf("k_truncated = %v (present %v), want present=%v", trunc, hasTrunc, tc.truncated)
+			// Booleans are the strings "true"/"false" (telemetry.SetBool) so Loki
+			// structured metadata stays queryable and the twin hash stays stable.
+			if hasTrunc != tc.truncated || (hasTrunc && trunc != "true") {
+				t.Errorf("k_truncated = %#v (present %v), want present=%v as the string \"true\"", trunc, hasTrunc, tc.truncated)
 			}
 			if tc.n > 0 && tc.n <= 100 && list[tc.n-1] != "id-"+strconv.Itoa(tc.n-1) {
 				t.Errorf("last kept id = %q", list[tc.n-1])
