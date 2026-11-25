@@ -1,11 +1,11 @@
 """Exercise the shipped Teams health queries against synthetic data."""
 
 import json
-from pathlib import Path
 import shutil
 import subprocess
 import tempfile
 import unittest
+from pathlib import Path
 
 DASHBOARD = Path(__file__).resolve().parents[2] / "dashboards" / "graph2otel-teams.json"
 
@@ -65,7 +65,7 @@ class TeamsHealthTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "cadence.yaml"
             path.write_text(json.dumps(test))
-            run = subprocess.run(["promtool", "test", "rules", str(path)], capture_output=True, text=True, timeout=30)
+            run = subprocess.run(["promtool", "test", "rules", str(path)], capture_output=True, text=True, check=False, timeout=30)
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
 
     @unittest.skipUnless(shutil.which("promtool"), "needs promtool")
@@ -127,5 +127,5 @@ class TeamsHealthTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "availability.yaml"
             path.write_text(json.dumps(test))  # JSON is also YAML.
-            run = subprocess.run(["promtool", "test", "rules", str(path)], capture_output=True, text=True, timeout=30)
+            run = subprocess.run(["promtool", "test", "rules", str(path)], capture_output=True, text=True, check=False, timeout=30)
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)

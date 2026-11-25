@@ -4,17 +4,16 @@ Requires the cached grafana/loki:3.6.7 image. Uses a disposable localhost Loki
 and synthetic structured metadata, never a configured datasource.
 """
 
-from contextlib import ExitStack, contextmanager
 import json
-from pathlib import Path
 import subprocess
 import tempfile
 import time
 import unittest
+from contextlib import ExitStack, contextmanager
+from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import ProxyHandler, Request, build_opener
-
 
 DASHBOARD = Path(__file__).resolve().parents[2] / "dashboards" / "graph2otel-teams.json"
 
@@ -26,7 +25,7 @@ def _docker(*args):
 @contextmanager
 def _loki():
     container = _docker("create", "--pull=never", "-p", "127.0.0.1::3100", "--tmpfs", "/loki:uid=10001",
-                        "--tmpfs", "/tmp:uid=10001", "grafana/loki:3.6.7", "-config.file=/etc/loki/local-config.yaml",
+                        "grafana/loki:3.6.7", "-config.file=/etc/loki/local-config.yaml",
                         "-ingester.min-ready-duration=0s")
     try:
         with tempfile.TemporaryFile() as logs, subprocess.Popen(
@@ -60,7 +59,7 @@ def _loki():
                 _docker("rm", "--force", container)
                 server.wait(timeout=5)
     finally:
-        subprocess.run(["docker", "rm", "--force", container], capture_output=True, timeout=15)
+        subprocess.run(["docker", "rm", "--force", container], capture_output=True, check=False, timeout=15)
 
 
 def _query(title):
