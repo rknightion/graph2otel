@@ -11,7 +11,8 @@ NAME = "graph2otel-teams"
 CALL = "teams.call"
 STREAM = "teams.call_stream"
 ISSUE = "m365.service_health_issue"
-COLLECTORS = (r"teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)"
+COLLECTORS = (r"teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration"
+              r"|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)"
               r"|m365[.](teams|teams_usage|servicehealth)")
 # Every site-labelled metric panel follows the Site dropdown. All is ".*",
 # which also keeps streams that carry no mapped site.
@@ -1209,6 +1210,12 @@ def admin_config(b):
            "configuration from the Teams admin API. Each object is a log twin with a config_sha256 "
            "that changes when its exported configuration changes.",
            title="Teams admin configuration", h=3, w=24)
+    b.metric("teams.call_queue.count", title="Call queues by routing method", by=["routing_method"],
+             desc="Queues with a missing or unrecognised routing method count under unknown.")
+    b.metric("teams.network_subnet.csv_coverage", title="Teams subnets by sites CSV coverage", by=["coverage"])
+    b.metric("teams.pstn_gateway.count", title="Direct Routing gateways by enabled", by=["enabled"],
+             desc="Configured Direct Routing gateways (SBCs) by whether they are enabled. Per-gateway "
+                  "configuration is in the teams.pstn_gateway log twins.")
 
 
 CALLS_EMPTY = "Teams publishes a call record after the call ends, sometimes hours later."

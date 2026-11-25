@@ -1,0 +1,82 @@
+{
+  "Metrics": [
+    {
+      "Name": "graph2otel.api.unexpected",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
+      "AttrKeys": [
+        "collector",
+        "field",
+        "kind"
+      ]
+    },
+    {
+      "Name": "teams.call_queue.count",
+      "Unit": "{call_queue}",
+      "Kind": "gauge",
+      "Description": "Teams call queues by routing method. A queue whose routing method is missing or not a known integer counts under unknown, so the total equals the number of queues.",
+      "AttrKeys": [
+        "routing_method"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "teams.call_queue",
+      "AttrKeys": [
+        "call_queue_agent_alert_time_seconds",
+        "call_queue_agent_ids",
+        "call_queue_agent_ids_count",
+        "call_queue_agent_opt_in_count",
+        "call_queue_agents_capped",
+        "call_queue_agents_in_sync_with_distribution_lists",
+        "call_queue_allow_opt_out",
+        "call_queue_application_instances",
+        "call_queue_application_instances_count",
+        "call_queue_authorized_users",
+        "call_queue_authorized_users_count",
+        "call_queue_conference_mode",
+        "call_queue_distribution_lists_count",
+        "call_queue_enable_wrap_time",
+        "call_queue_id",
+        "call_queue_language_id",
+        "call_queue_name",
+        "call_queue_no_agent_action",
+        "call_queue_no_agent_action_raw",
+        "call_queue_no_agent_apply_to",
+        "call_queue_no_agent_apply_to_raw",
+        "call_queue_no_agent_prompt_file_names_count",
+        "call_queue_no_agent_prompt_texts_count",
+        "call_queue_obo_resource_account_ids_count",
+        "call_queue_overflow_action",
+        "call_queue_overflow_action_raw",
+        "call_queue_overflow_prompt_file_names_count",
+        "call_queue_overflow_prompt_texts_count",
+        "call_queue_overflow_threshold",
+        "call_queue_presence_aware_routing",
+        "call_queue_routing_method",
+        "call_queue_routing_method_raw",
+        "call_queue_timeout_action",
+        "call_queue_timeout_action_raw",
+        "call_queue_timeout_prompt_file_names_count",
+        "call_queue_timeout_prompt_texts_count",
+        "call_queue_timeout_threshold_seconds",
+        "call_queue_use_default_music_on_hold",
+        "call_queue_wrap_time_duration_seconds",
+        "config_hash_version",
+        "config_sha256",
+        "ingest_transport"
+      ]
+    },
+    {
+      "EventName": "teams.call_queue_diagnostic",
+      "AttrKeys": [
+        "call_queue_diagnostic_count",
+        "call_queue_diagnostic_level",
+        "call_queue_diagnostic_message",
+        "ingest_transport"
+      ]
+    }
+  ]
+}

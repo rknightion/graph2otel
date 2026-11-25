@@ -1,0 +1,73 @@
+{
+  "Metrics": [
+    {
+      "Name": "graph2otel.api.unexpected",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
+      "AttrKeys": [
+        "collector",
+        "field",
+        "kind"
+      ]
+    },
+    {
+      "Name": "teams.network_subnet.csv_coverage",
+      "Unit": "{subnet}",
+      "Kind": "gauge",
+      "Description": "Teams tenant network subnets by sites CSV coverage: covered (one CSV prefix contains the whole subnet), uncovered (no such prefix) or no_csv (no teams.sites_file configured).",
+      "AttrKeys": [
+        "coverage"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "teams.network_region",
+      "AttrKeys": [
+        "config_hash_version",
+        "config_sha256",
+        "ingest_transport",
+        "network_region_authority",
+        "network_region_central_site",
+        "network_region_description",
+        "network_region_identity"
+      ]
+    },
+    {
+      "EventName": "teams.network_site",
+      "AttrKeys": [
+        "config_hash_version",
+        "config_sha256",
+        "ingest_transport",
+        "network_site_authority",
+        "network_site_description",
+        "network_site_emergency_call_routing_policy",
+        "network_site_emergency_calling_policy",
+        "network_site_enable_location_based_routing",
+        "network_site_identity",
+        "network_site_location_policy",
+        "network_site_network_region_id",
+        "network_site_network_roaming_policy",
+        "network_site_site_address"
+      ]
+    },
+    {
+      "EventName": "teams.network_subnet",
+      "AttrKeys": [
+        "config_hash_version",
+        "config_sha256",
+        "ingest_transport",
+        "network_subnet_authority",
+        "network_subnet_cidr",
+        "network_subnet_csv_coverage",
+        "network_subnet_csv_site",
+        "network_subnet_description",
+        "network_subnet_identity",
+        "network_subnet_mask_bits",
+        "network_subnet_network_site_id",
+        "network_subnet_subnet_id"
+      ]
+    }
+  ]
+}
