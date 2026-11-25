@@ -765,6 +765,15 @@ var annotations = map[string]Annotation{
 		Gating:   "Teams profile only; no SharePoint or OneDrive report calls. Uses the shared reporting limiter. A failed report clears only its own gauges, and no report emits zero for missing counts.",
 	},
 
+	"teams.phone_numbers": {
+		Collects: "Teams Phone number inventory and an unassigned-number count. Capability buckets overlap because a number can support several capabilities. The per-number log twin preserves the number and assignment detail without inventing an assignment timestamp.",
+		Source:   "`GET /v1.0/admin/teams/telephoneNumberManagement/numberAssignments` (live-measured 2026-11-24, #663: Teams Phone inventory).",
+	},
+	"teams.user_configuration": {
+		Collects: "Teams voice enablement by account type, with one user configuration log twin per row. Telephone-number and effective-policy lists were empty on the observed rows; neither list is mapped and there is no policy count.",
+		Source:   "`GET /v1.0/admin/teams/userConfigurations` (live-measured 2026-11-24, #663: Teams Phone inventory).",
+	},
+
 	// ---- Purview — snapshot collectors ----
 	"purview.dlp_policies": {
 		Collects: "DLP policy inventory + enforcement mode (#246): which policies exist, what mode each is in (audit vs Enforce — the \"did someone quietly downgrade enforcement\" signal), which workloads/actions each rule covers, when it last changed. Bounded gauges by enforcement_mode / workload×action / workload×binding_type + a single max-age gauge; log twins per policy (Warn when not Enforce) and per rule (SIT ids + confidence/count band). content is base64 of UTF-16LE XML; the version hash drives a parse-skip so the 76KB decode runs only on change. Emits policy DEFINITION only — a rule condition VALUE (matched content) is never emitted, guarded by test",

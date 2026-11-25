@@ -39,7 +39,7 @@ tenants:
       entra.users: {enabled: false}
 `)
 	source := setupProfileTestTenant(t, cfg)
-	want := []string{"entra.domains", "entra.organization", "m365.collaboration_activity", "m365.servicehealth", "m365.teams", "m365.teams_usage", "teams.call_records", "teams.direct_routing_calls", "teams.pstn_calls"}
+	want := []string{"entra.domains", "entra.organization", "m365.collaboration_activity", "m365.servicehealth", "m365.teams", "m365.teams_usage", "teams.call_records", "teams.direct_routing_calls", "teams.phone_numbers", "teams.pstn_calls", "teams.user_configuration"}
 	if got := profileTestRegistryNames(source); !slices.Equal(got, want) {
 		t.Errorf("registered collectors = %v, want %v", got, want)
 	}
@@ -71,6 +71,7 @@ tenants:
 			scopes := []string{
 				"Domain.Read.All", "Organization.Read.All", "Reports.Read.All", "ServiceHealth.Read.All",
 				"Team.ReadBasic.All", "TeamSettings.Read.All", "Channel.ReadBasic.All",
+				"TeamsTelephoneNumber.Read.All", "TeamsUserConfiguration.Read.All",
 			}
 			if tc.grantCallScope {
 				scopes = append(scopes, "CallRecords.Read.All")
@@ -127,8 +128,8 @@ func assertProfilesInStatus(t *testing.T, source admin.CollectorSource) {
 }
 
 func TestDefaultGraphProfilePreservesLegacyStartup(t *testing.T) {
-	// Captured from the same startup with all capabilities and no optional
-	// transports on the pre-profile base b538fdd.
+	// Initially captured with all capabilities and no optional transports on
+	// the pre-profile base b538fdd. Append newly introduced Graph defaults.
 	contents, err := os.ReadFile("testdata/graph-default-collectors.txt")
 	if err != nil {
 		t.Fatal(err)
@@ -157,7 +158,7 @@ tenants:
 	if len(cfg.Tenants) != 2 || cfg.Tenants[0].ClientID != "00000000-0000-0000-0000-000000000002" {
 		t.Fatalf("indexed env replaced unrelated YAML tenant configuration: %+v", cfg.Tenants)
 	}
-	want := []string{"m365.collaboration_activity", "m365.servicehealth", "m365.teams", "m365.teams_usage", "teams.call_records", "teams.direct_routing_calls", "teams.pstn_calls"}
+	want := []string{"m365.collaboration_activity", "m365.servicehealth", "m365.teams", "m365.teams_usage", "teams.call_records", "teams.direct_routing_calls", "teams.phone_numbers", "teams.pstn_calls", "teams.user_configuration"}
 	if got := profileTestRegistryNames(setupProfileTestTenant(t, cfg)); !slices.Equal(got, want) {
 		t.Errorf("registered collectors = %v, want %v", got, want)
 	}

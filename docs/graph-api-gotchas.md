@@ -56,6 +56,17 @@ issue. Do not record correction narratives here — those live on the issues.
   discovery progress from completed delivery. Synthetic tests cover these
   local behaviours, not Graph retention, volume or recovery in a live tenant.
 
+## Teams Phone inventory
+
+- The Graph v1.0 number-assignment list and user-configuration list were readable
+  with `TeamsTelephoneNumber.Read.All` and `TeamsUserConfiguration.Read.All`,
+  respectively `[live-measured 2026-11-24, #663 (Teams Phone inventory)]`.
+  This measures API reads, not telemetry delivery.
+- `effectivePolicyAssignments` and `telephoneNumbers` were empty in all six
+  sampled user configurations, including the detail reads. The snapshot maps
+  neither nested list and emits no count by policy type. A non-empty,
+  sanitised sample is needed before mapping either list.
+
 ## Query mechanics (all workloads)
 
 - **URL-encode every `$filter` value** `[live, M2]`. A raw `$filter=appId eq '<guid>'`

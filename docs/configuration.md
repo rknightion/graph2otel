@@ -121,7 +121,7 @@ warning for that tenant. A configured `client_id` alone is never proof.
 
 #### Per-tenant ingest and direct-API sources
 
-The shipped registry has 175 logical collectors across 7 registration paths. These
+The shipped registry has 177 logical collectors across 7 registration paths. These
 tenant blocks enable or configure the non-default source paths; they are file-only because
 the environment layer does not bind into the `tenants[]` slice:
 
@@ -285,9 +285,10 @@ otlp:
 
 ### `profiles`
 
-`profiles: [graph]` is the default and keeps the existing collector roster,
-including configured non-Graph transports. Use `[teams]` for Teams inventory,
-service health and Teams usage only, or `[graph, teams]` for both profiles.
+`profiles: [graph]` is the default and includes configured non-Graph transports.
+Use `[teams]` for Teams inventory, call records, service health and Teams usage,
+or `[graph, teams]` for both profiles. Teams Phone inventory runs in either
+profile and has its own read permissions, separate from call records.
 In Teams-only mode, `m365.collaboration_activity` skips its SharePoint and
 OneDrive reports. Combined mode keeps all three reports.
 

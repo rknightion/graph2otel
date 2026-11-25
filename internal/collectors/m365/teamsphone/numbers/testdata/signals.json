@@ -1,0 +1,52 @@
+{
+  "Metrics": [
+    {
+      "Name": "graph2otel.api.unexpected",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
+      "AttrKeys": [
+        "collector",
+        "field",
+        "kind"
+      ]
+    },
+    {
+      "Name": "m365.teams.phone_numbers.total",
+      "Unit": "{number_capability}",
+      "Kind": "gauge",
+      "Description": "Teams Phone numbers by type, assignment status, activation state and capability. A number can have several capabilities.",
+      "AttrKeys": [
+        "activation_state",
+        "assignment_status",
+        "capability",
+        "number_type"
+      ]
+    },
+    {
+      "Name": "m365.teams.phone_numbers.unassigned",
+      "Unit": "{number}",
+      "Kind": "gauge",
+      "Description": "Teams Phone numbers with unassigned status.",
+      "AttrKeys": []
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.teams.phone_number",
+      "AttrKeys": [
+        "activation_state",
+        "assignment_status",
+        "capabilities",
+        "city",
+        "country_code",
+        "id",
+        "number_source",
+        "number_type",
+        "operator_id",
+        "supported_customer_actions",
+        "telephone_number"
+      ]
+    }
+  ]
+}

@@ -27,6 +27,8 @@ the minimum Microsoft Graph application permissions for the default collectors a
 - `Team.ReadBasic.All`
 - `TeamSettings.Read.All`
 - `TeamsAppInstallation.ReadForTeam.All`
+- `TeamsTelephoneNumber.Read.All`
+- `TeamsUserConfiguration.Read.All`
 
 <!-- END GENERATED TEAMS PROFILE SCOPES -->
 

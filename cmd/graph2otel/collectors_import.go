@@ -157,6 +157,8 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/sharepointsettings"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/storage"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/teams"
+	_ "github.com/rknightion/graph2otel/internal/collectors/m365/teamsphone/numbers"
+	_ "github.com/rknightion/graph2otel/internal/collectors/m365/teamsphone/users"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/teamsusage"
 	_ "github.com/rknightion/graph2otel/internal/collectors/m365/unifiedaudit"
 	_ "github.com/rknightion/graph2otel/internal/collectors/mdca/clouddiscovery"

@@ -1,0 +1,39 @@
+{
+  "Metrics": [
+    {
+      "Name": "graph2otel.api.unexpected",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
+      "AttrKeys": [
+        "collector",
+        "field",
+        "kind"
+      ]
+    },
+    {
+      "Name": "m365.teams.user_configuration.users",
+      "Unit": "{user}",
+      "Kind": "gauge",
+      "Description": "Teams users by account type and enterprise voice state.",
+      "AttrKeys": [
+        "account_type",
+        "enterprise_voice_enabled"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "m365.teams.user_configuration",
+      "AttrKeys": [
+        "account_type",
+        "created_date_time",
+        "enterprise_voice_enabled",
+        "feature_types",
+        "id",
+        "modified_date_time",
+        "user_principal_name"
+      ]
+    }
+  ]
+}

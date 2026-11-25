@@ -56,3 +56,5 @@ m365.storage
 m365.teams
 purview.retention_labels
 purview.sensitivity_labels
+teams.phone_numbers
+teams.user_configuration

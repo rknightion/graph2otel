@@ -73,6 +73,7 @@ var nonCountableAnnotations = map[string]struct{}{
 	"score": {}, "ratio": {}, "percent": {}, "percentage": {},
 	"version": {}, "level": {}, "state": {}, "status": {},
 	"index": {}, "rank": {}, "grade": {}, "age": {},
+	"number_capability":      {}, // a phone number can be in more than one capability bucket
 	"overlapping_user_count": {}, // the same user can be in multiple groups
 }
 
