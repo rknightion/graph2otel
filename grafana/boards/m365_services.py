@@ -91,6 +91,14 @@ SECTIONS = [
         ("Teams governance gaps",
          ["m365.teams.ownerless.total", "m365.teams.with_guests.total"],
          {"viz": "timeseries"}),
+        ("Teams client users by platform (D7)", ["teams.device_usage.users"],
+         {"viz": "table", "by": ["platform"]}),
+        ("Teams report name concealment (0 = off, 1 = on)",
+         ["m365.teams_usage.names_concealed"], {"viz": "table"}),
+        ("Teams daily users by activity (D30)", ["m365.teams_usage.activity.users"],
+         {"viz": "table", "w": 24, "by": ["activity", "days_ago"],
+          "desc": "Days ago is relative to the latest report date, not today. "
+                  "Activity groups overlap; do not sum them into a unique-user count."}),
         ("PSTN call rate by call and connectivity type", ["teams.pstn.calls"]),
         ("PSTN connected minutes per second", ["teams.pstn.minutes"], {"viz": "timeseries"}),
         ("Direct Routing attempt rate by trunk, outcome and SIP class",
@@ -162,4 +170,7 @@ LOGS = [
      "desc": "Call flow and outcome per attendant leg. Requires the VAAC opt-in."},
     {"kind": "logs", "event": "teams.call_queue_call", "title": "Teams call queue calls",
      "desc": "Queue outcome, wait and participant details per leg. Requires the VAAC opt-in."},
+    {"kind": "logs", "event": "m365.teams_device_usage", "title": "Teams client usage by user (D7)",
+     "desc": "One snapshot per dated report row, not one record per action. Widen the time range "
+             "to include the report refresh date. Concealed identifiers may not match directory users."},
 ]

@@ -1,5 +1,5 @@
 {
-  "package_count": 180,
+  "package_count": 181,
   "domains": [
     "defender",
     "entra",
@@ -5998,6 +5998,35 @@
       ]
     },
     {
+      "name": "m365.teams_usage.activity.users",
+      "prometheus_name": "m365_teams_usage_activity_users",
+      "unit": "{overlapping_user_count}",
+      "kind": "gauge",
+      "description": "Daily Teams users per activity in the D30 report, by days before its latest Report Date. Activity groups overlap.",
+      "additive": false,
+      "domain": "m365",
+      "attr_keys": [
+        "activity",
+        "days_ago"
+      ],
+      "packages": [
+        "internal/collectors/m365/teamsusage"
+      ]
+    },
+    {
+      "name": "m365.teams_usage.names_concealed",
+      "prometheus_name": "m365_teams_usage_names_concealed_ratio",
+      "unit": "1",
+      "kind": "gauge",
+      "description": "Whether Microsoft Graph usage reports conceal names (1: on, 0: off, absent: unknown).",
+      "additive": false,
+      "domain": "m365",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/m365/teamsusage"
+      ]
+    },
+    {
       "name": "mdca.cloud_discovery.apps",
       "prometheus_name": "mdca_cloud_discovery_apps",
       "unit": "{app}",
@@ -6409,6 +6438,21 @@
       ],
       "packages": [
         "internal/collectors/teams/voiceapps"
+      ]
+    },
+    {
+      "name": "teams.device_usage.users",
+      "prometheus_name": "teams_device_usage_users",
+      "unit": "{overlapping_user_count}",
+      "kind": "gauge",
+      "description": "Users who used each Teams client platform in the D7 report. A user can use more than one platform.",
+      "additive": false,
+      "domain": "teams",
+      "attr_keys": [
+        "platform"
+      ],
+      "packages": [
+        "internal/collectors/m365/teamsusage"
       ]
     },
     {
@@ -10334,6 +10378,35 @@
       ]
     },
     {
+      "event_name": "m365.team_activity",
+      "domain": "m365",
+      "attr_keys": [
+        "active_channels_count",
+        "active_external_users_count",
+        "active_shared_channels_count",
+        "active_users_count",
+        "channel_messages_count",
+        "display_name",
+        "guests_count",
+        "id",
+        "is_deleted",
+        "last_activity_date",
+        "meetings_organized_count",
+        "mentions_count",
+        "names_concealed",
+        "post_messages_count",
+        "reactions_count",
+        "reply_messages_count",
+        "report_period",
+        "report_refresh_date",
+        "team_type",
+        "urgent_messages_count"
+      ],
+      "packages": [
+        "internal/collectors/m365/teamsusage"
+      ]
+    },
+    {
       "event_name": "m365.team_channel",
       "domain": "m365",
       "attr_keys": [
@@ -10366,6 +10439,31 @@
       ],
       "packages": [
         "internal/collectors/m365/teams"
+      ]
+    },
+    {
+      "event_name": "m365.teams_device_usage",
+      "domain": "m365",
+      "attr_keys": [
+        "deleted_date",
+        "is_deleted",
+        "is_licensed",
+        "last_activity_date",
+        "report_period",
+        "report_refresh_date",
+        "used_android_phone",
+        "used_chrome_os",
+        "used_ios",
+        "used_linux",
+        "used_mac",
+        "used_web",
+        "used_windows",
+        "used_windows_phone",
+        "user_id",
+        "user_principal_name"
+      ],
+      "packages": [
+        "internal/collectors/m365/teamsusage"
       ]
     },
     {

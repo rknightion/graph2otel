@@ -82,10 +82,10 @@ attribute set, and the Graph API permission scope each collector needs), see
 
 ## Shipped collector and ingest surface
 
-The generated registry currently exposes **174 logical collectors** through
+The generated registry currently exposes **175 logical collectors** through
 **7 registration paths**: Snapshot, Window, Blob, O365, MDCA, EXO, and Hunt. The generated
 [collector reference](collectors.md) is authoritative; the registration-path inventory
-contains 177 registration-path candidates because some logical collectors can register
+contains 178 registration-path candidates because some logical collectors can register
 through more than one transport.
 
 Reusable ingest-engine shapes handle the event and export transports:
@@ -808,6 +808,26 @@ facet — two facts follow that a dashboard author must know.
   2026-07-18). graph2otel reads `/admin/reportSettings` to detect it (optional
   `ReportSettings.Read.All`), falling back to a data heuristic (all-zeroed `site_id`) when that
   scope is absent.
+
+## Teams usage reports: snapshots, not activity events
+
+`m365.teams_device_usage` answers which users contributed to the D7 client platform mix.
+Its identity fields are what the report supplied, not directory lookups. Check
+`m365.teams_usage.names_concealed` before relying on identity joins. Blank or unknown
+platform flags are omitted from the twin, not turned into `false`. The Windows Phone flag
+is log-only; it does not change the existing platform gauge.
+
+Like `m365.team_activity`, the device twin is timestamped at UTC midnight on the report
+refresh date. `last_activity_date` describes the row, not when the snapshot happened.
+Polling the same report again can re-emit the same snapshot. Without a usable refresh date,
+there is no twin and the collector records `missing_event_time`, but complete platform counts
+still include the row.
+
+Widen the query to include the report refresh date rather than the last poll. For Grafana
+Cloud, [the backdated log accept window](#backdated-log-records-accepted-to-7-days-but-not-queryable-immediately)
+applies to the refresh date, not the D7 lookback or the last activity date. A stale refresh
+can be rejected; a recent backdated snapshot can also take time to appear. Neither changes
+the platform gauges, and the collector does not move an old event to the time of polling.
 
 ## Multi-tenant labeling
 

@@ -39,7 +39,7 @@ tenants:
       entra.users: {enabled: false}
 `)
 	source := setupProfileTestTenant(t, cfg)
-	want := []string{"entra.domains", "entra.organization", "m365.collaboration_activity", "m365.servicehealth", "m365.teams", "teams.call_records", "teams.direct_routing_calls", "teams.pstn_calls"}
+	want := []string{"entra.domains", "entra.organization", "m365.collaboration_activity", "m365.servicehealth", "m365.teams", "m365.teams_usage", "teams.call_records", "teams.direct_routing_calls", "teams.pstn_calls"}
 	if got := profileTestRegistryNames(source); !slices.Equal(got, want) {
 		t.Errorf("registered collectors = %v, want %v", got, want)
 	}
@@ -56,14 +56,16 @@ tenants:
 		t.Errorf("preflight collectors = %v, want %v", got, want)
 	}
 	for _, tc := range []struct {
-		name, role     string
-		grantCallScope bool
-		wantExit       int
+		name, role       string
+		grantCallScope   bool
+		grantReportScope bool
+		wantExit         int
 	}{
-		{"team-only app role", "TeamsAppInstallation.ReadForTeam.All", true, 0},
-		{"existing broader role", "TeamsAppInstallation.Read.All", true, 0},
-		{"no app role", "", true, 1},
-		{"no call records role", "TeamsAppInstallation.ReadForTeam.All", false, 1},
+		{"team-only app role", "TeamsAppInstallation.ReadForTeam.All", true, true, 0},
+		{"existing broader role", "TeamsAppInstallation.Read.All", true, true, 0},
+		{"no app role", "", true, true, 1},
+		{"no call records role", "TeamsAppInstallation.ReadForTeam.All", false, true, 1},
+		{"no report settings role", "TeamsAppInstallation.ReadForTeam.All", true, false, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			scopes := []string{
@@ -72,6 +74,9 @@ tenants:
 			}
 			if tc.grantCallScope {
 				scopes = append(scopes, "CallRecords.Read.All")
+			}
+			if tc.grantReportScope {
+				scopes = append(scopes, "ReportSettings.Read.All")
 			}
 			if tc.role != "" {
 				scopes = append(scopes, tc.role)
@@ -83,6 +88,9 @@ tenants:
 			}
 			if !tc.grantCallScope && !strings.Contains(output.String(), "[MISSING] teams.call_records: missing CallRecords.Read.All") {
 				t.Errorf("preflight did not report the missing call records scope:\n%s", &output)
+			}
+			if !tc.grantReportScope && !strings.Contains(output.String(), "[MISSING] m365.teams_usage: missing ReportSettings.Read.All") {
+				t.Errorf("preflight did not report the missing report settings scope:\n%s", &output)
 			}
 		})
 	}
@@ -149,7 +157,7 @@ tenants:
 	if len(cfg.Tenants) != 2 || cfg.Tenants[0].ClientID != "00000000-0000-0000-0000-000000000002" {
 		t.Fatalf("indexed env replaced unrelated YAML tenant configuration: %+v", cfg.Tenants)
 	}
-	want := []string{"m365.collaboration_activity", "m365.servicehealth", "m365.teams", "teams.call_records", "teams.direct_routing_calls", "teams.pstn_calls"}
+	want := []string{"m365.collaboration_activity", "m365.servicehealth", "m365.teams", "m365.teams_usage", "teams.call_records", "teams.direct_routing_calls", "teams.pstn_calls"}
 	if got := profileTestRegistryNames(setupProfileTestTenant(t, cfg)); !slices.Equal(got, want) {
 		t.Errorf("registered collectors = %v, want %v", got, want)
 	}

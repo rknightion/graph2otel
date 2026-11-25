@@ -19,7 +19,7 @@ where you go to answer a question, not where a dashboard or an alert rule lives.
 
 **Your own Graph API scripts.** For a handful of specific numbers this is often correct, and
 the whole thing fits in a file you can read. Most of what follows is about what stops being
-true at 174 collectors, several tenants, and a metrics bill.
+true at 175 collectors, several tenants, and a metrics bill.
 
 ## Design choices specific to this exporter
 
@@ -41,7 +41,7 @@ needs no tenant, no app registration and no CI secrets, which is why it can run 
 **The collector inventory is generated, not written.** The
 [collector reference](collectors.md) is checked against the same seven registration paths the
 application itself uses, so the documented inventory and the shipped one cannot disagree. A
-hand-maintained list of 174 collectors is a list that is wrong.
+hand-maintained list of 175 collectors is a list that is wrong.
 
 **OTLP only, deliberately.** Native OTLP metrics and logs, pushed. There is no Prometheus
 endpoint to expose, scrape or firewall — which matters for something reading tenant-wide
@@ -72,7 +72,7 @@ surfaces that exist only in beta.
 
 ## See also
 
-- [Collectors](collectors.md) — the generated inventory of all 174
+- [Collectors](collectors.md) — the generated inventory of all 175
 - [Signals](signals.md) and [Derived Metrics](derived-metrics.md) — what is emitted
 - [Architecture](architecture.md) — how the data plane fits together
 - [Security](security.md) and [Permissions](permissions.md) — scope and least privilege
