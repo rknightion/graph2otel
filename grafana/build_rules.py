@@ -50,6 +50,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import catalog as catalog_mod
 import logquery
 import v2
+from boards import teams_quality
 from logquery import f  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -83,7 +84,7 @@ CAT = catalog_mod.load()
 
 PIPELINE = "graph2otel"
 
-SEVERITY_VALUES = {"critical", "warning"}
+SEVERITY_VALUES = {"critical", "warning", "info"}
 
 SOURCE_VALUES = {
     "entra", "intune", "m365", "purview", "defender", "mdca", "graph2otel",
@@ -96,6 +97,7 @@ CATEGORY_VALUES = {
     # "compliance": these are security signals an operator routes to a security
     # responder, not posture drift routed to the owning team.
     "identity-threat",
+    "teams-quality", "teams-voice", "teams-collection", "teams-service-incident",
 }
 
 # Optional fifth label. Only g2o-intune-apple-token-expiry-critical and
@@ -214,7 +216,7 @@ def _ds(uid: str) -> dict:
     return {"type": "__expr__" if uid == EXPR_UID else "prometheus", "uid": uid}
 
 
-def _query_node(expr: str, lookback: int = 3600) -> dict:
+def _query_node(expr: str, lookback: int = 3600, *, instant: bool = False) -> dict:
     return {
         "refId": "A",
         "relativeTimeRange": {"from": lookback, "to": 0},
@@ -223,8 +225,8 @@ def _query_node(expr: str, lookback: int = 3600) -> dict:
             "datasource": _ds(PROM_UID),
             "editorMode": "code",
             "expr": expr,
-            "instant": False,
-            "range": True,
+            "instant": instant,
+            "range": not instant,
             "intervalMs": 1000,
             "maxDataPoints": 43200,
             "refId": "A",
@@ -271,7 +273,7 @@ def _threshold_node(op: str, params: list) -> dict:
 def _alert(uid: str, title: str, expr: str, op: str, params: list, for_: str,
            labels: dict, summary: str, description: str, is_paused: bool,
            no_data_state: str = "OK", exec_err_state: str = "Error",
-           exec_err_waiver: str = "", component: str = "") -> dict:
+           exec_err_waiver: str = "", component: str = "", *, instant: bool = False) -> dict:
     if exec_err_state == "OK" and not exec_err_waiver.strip():
         raise ValueError(f"{uid}: execErrState OK requires a documented waiver")
     annotations = {"summary": summary, "description": description}
@@ -287,7 +289,7 @@ def _alert(uid: str, title: str, expr: str, op: str, params: list, for_: str,
         "uid": uid,
         "title": title,
         "condition": "C",
-        "data": [_query_node(expr), _reduce_node(), _threshold_node(op, params)],
+        "data": [_query_node(expr, instant=instant), _reduce_node(), _threshold_node(op, params)],
         "noDataState": no_data_state,
         "execErrState": exec_err_state,
         "for": for_,
@@ -883,6 +885,172 @@ def _sel(event: str, *filters, by: str = "") -> str:
 def _count(event: str, *filters, by: str = "") -> str:
     grouping = f" by ({by})" if by else ""
     return f"sum{grouping} (count_over_time({_sel(event, *filters, by=by)} [5m]))"
+
+
+# Teams rules are examples until operators tune them for their own traffic and
+# notification policies. Use instant queries: with range + last, an old result
+# can outlive a volume guard, schedule boundary or confirmed incident closure.
+_TEAMS_TENANT = 'tenant_id!=""'
+
+
+def _teams_growth(metric, dims, matchers, window):
+    return (f'sum by ({dims}) (increase({_m(metric)}'
+            f'{{{_TEAMS_TENANT},{matchers}}}[{window}]))')
+
+
+def _teams_share(numerator, eligible, dims, minimum):
+    # A missing numerator is zero only when the denominator is actually present.
+    return (f'((({numerator}) or on ({dims}) (0 * ({eligible}))) / ({eligible})) '
+            f'and on ({dims}) (({eligible}) >= {minimum})')
+
+
+def _teams_metric(suffix, title, expr, op, limit, category, description, scope=""):
+    where = "Tenant {{ $labels.tenant_id }}" + scope
+    return _alert(
+        f"g2o-teams-{suffix}", title, expr, op, [limit], "10m",
+        {"source": "m365", "severity": "warning", "category": category},
+        f"{where}: {title}.", description, True, instant=True,
+    )
+
+
+def _teams_loki(suffix, title, expr, category, severity, description, tuning, hold):
+    rule = _loki_alert(
+        f"g2o-teams-{suffix}", title, expr, "gt", [0],
+        {"source": "m365", "severity": severity, "category": category},
+        f"Tenant {{{{ $labels.tenant_id }}}}: {title}.", description, tuning,
+    )
+    query = rule["data"][0]
+    query["queryType"] = query["model"]["queryType"] = "instant"
+    rule["for"] = hold
+    return rule
+
+
+def _teams_log_count(selector, dims, window):
+    return f"sum by ({dims}) (count_over_time({selector} [{window}]))"
+
+
+def _teams_stale():
+    calls = _sel("teams.call", f("tenant_id", "ne", ""), by="tenant_id")
+    # With a four-hour horizon, start evaluating four hours into the 08-18 UTC
+    # workday. The long leg supplies positive evidence that this tenant had
+    # records; the short leg excludes tenants whose event time is still fresh.
+    # LogQL has no dateInZone formatter. Use UTC epoch hours and offset
+    # by four because epoch day zero is Thursday (Sunday = 0).
+    work_hours = (' | label_format teams_work_hour=`{{ $h := div (unixEpoch (now)) 3600 }}'
+                  '{{ mod (add (div $h 24) 4) 7 }}-{{ mod $h 24 }}`'
+                  ' | teams_work_hour=~`[1-5]-1[2-7]`'
+                  ' | drop teams_work_hour')
+    seen = _teams_log_count(calls + work_hours, "tenant_id", "12h")
+    fresh = _teams_log_count(calls, "tenant_id", "4h")
+    return f"({seen}) unless on (tenant_id) ({fresh})"
+
+
+def _teams_open_incidents():
+    # Opens are repeated snapshots at poll time; closures are one-shot and
+    # backdated to the actual end. An explicit closure wins even if an old open
+    # snapshot arrived recently, and closes only the matching tenant and id.
+    # Do not filter resolutions out of the data from which state is computed.
+    dims = "tenant_id, id"
+    incident = (f("tenant_id", "ne", ""), f("id", "ne", ""),
+                f("service", "eq", "Microsoft Teams"), f("classification", "eq", "incident"))
+
+    def count_state(resolved, window):
+        selector = _sel("m365.service_health_issue", *incident,
+                        f("is_resolved", "eq", resolved), by=dims)
+        return _teams_log_count(selector, dims, window)
+
+    opens = count_state("false", "30m")
+    closed = count_state("true", "7d")
+    return (f"count by (tenant_id) (({opens}) unless on ({dims}) ({closed})) "
+            f"or on (tenant_id) (0 * count by (tenant_id) ({closed}))")
+
+
+def _teams_rules():
+    call_dims = "tenant_id"
+    site_dims = "tenant_id, site"
+    trunk_dims = "tenant_id, trunk_fqdn"
+    site_scope = ", site {{ $labels.site }}"
+    trunk_scope = ", trunk {{ $labels.trunk_fqdn }}"
+    # Same site exclusions and NPA formula as the merged quality board. No
+    # dashboard variable substitution takes place on the alert path.
+    site = 'site!~"unmapped|overflow|other|"'
+    trunk = 'trunk_fqdn!~"unknown|other|overflow|"'
+    streams = f'{site},direction=~"caller_to_callee|callee_to_caller"'
+    good = _teams_growth("teams.calls", call_dims, 'call_health="good"', "30m")
+    classified = _teams_growth("teams.calls", call_dims, 'call_health=~"good|poor"', "30m")
+    poor = _teams_growth("teams.streams", site_dims, f'{streams},stream_health="poor"', "30m")
+    eligible = _teams_growth("teams.streams", site_dims,
+                             f'{streams},stream_health=~"good|poor"', "30m")
+    npa = teams_quality.compliance(
+        teams_quality.site_queries(CAT, tenant=_TEAMS_TENANT, window="30m"),
+        teams_quality.LOCAL, "<=",
+    )
+    attempts = _teams_growth("teams.direct_routing.calls", trunk_dims, trunk, "30m")
+    sip5xx = _teams_growth("teams.direct_routing.calls", trunk_dims,
+                          f'{trunk},outcome="failed",sip_class="5xx"', "30m")
+    effectiveness = (f'max by ({trunk_dims}) '
+                     f'({_m("teams.direct_routing.network_effectiveness_ratio")}'
+                     f'{{{_TEAMS_TENANT},{trunk}}}) and on ({trunk_dims}) ({attempts} >= 20)')
+    return [
+        _teams_metric(
+            "healthy-call-share-low", "Teams healthy-call share below 90%",
+            _teams_share(good, classified, call_dims, 20), "lt", 0.90, "teams-quality",
+            "Below 90% good among at least 20 classified calls in 30m. Counts only first "
+            "complete versions, never subsequent health transitions. Unclassified calls do "
+            "not count as healthy or unhealthy. No data or low volume does not alert.",
+        ),
+        _teams_metric(
+            "site-network-noncompliant", "Teams site outside local audio network targets",
+            npa, "lt", 1, "teams-quality",
+            "At least one of the shared local audio targets for jitter, RTT, loss or TCP "
+            "share failed over 30m. All four measurements are required. Unknown site and "
+            "overflow traffic do not establish site compliance.", site_scope,
+        ),
+        _teams_metric(
+            "site-poor-stream-share-high", "Teams site poor-stream share above 5%",
+            _teams_share(poor, eligible, site_dims, 20), "gt", 0.05, "teams-quality",
+            "Above 5% poor among at least 20 classified directional streams in 30m. "
+            "Unknown direction, unclassified streams and unmapped or overflow sites are "
+            "not eligible. Streams are attributed to the sender site.", site_scope,
+        ),
+        _teams_metric(
+            "trunk-effectiveness-low", "Teams Direct Routing effectiveness below 90%",
+            effectiveness, "lt", 0.90, "teams-voice",
+            "Latest poll's answered-or-busy fraction is below 90%, with at least 20 "
+            "attempts over 30m on that trunk. No current effectiveness reading or unknown "
+            "trunk does not alert.", trunk_scope,
+        ),
+        _teams_metric(
+            "trunk-sip-5xx-high", "Teams Direct Routing SIP 5xx failures above 10%",
+            _teams_share(sip5xx, attempts, trunk_dims, 20), "gt", 0.10, "teams-voice",
+            "More than 10% of at least 20 attempts in 30m failed with SIP 5xx on a named "
+            "trunk. Other SIP error classes do not count as 5xx evidence.", trunk_scope,
+        ),
+        _teams_loki(
+            "call-records-stale", "Teams call-record event time is stale", _teams_stale(),
+            "teams-collection", "warning",
+            "The newest observed call start is over 4h old, but calls were seen in the "
+            "last 12h. Checks weekdays from 12:00 to 18:00 UTC (four hours into the "
+            "08:00 to 18:00 UTC workday, no daylight-saving shift). Never-seen, missing "
+            "or very quiet traffic is not enough evidence. A quiet afternoon or delayed "
+            "source event time can still look stale; check collector health separately.",
+            "Validate the Loki query, expected traffic, event delay and business hours "
+            "for your tenant before enabling.", "15m",
+        ),
+        _teams_loki(
+            "service-incident-open", "Microsoft Teams service incident is open",
+            _teams_open_incidents(), "teams-service-incident", "info",
+            "A Teams incident was observed open in the last 30m with no confirmed "
+            "resolution twin for that tenant and issue in the last 7d. Advisories do not "
+            "count. Silence is unknown, not a confirmed closure. Send to an informational "
+            "receiver, not an on-call pager.",
+            "Verify open and resolution twins on the Teams profile, validate the Loki "
+            "query and set a separate informational route before enabling.", "0s",
+        ),
+    ]
+
+
+RULES.extend(_teams_rules())
 
 
 DETECTIONS = [
@@ -1775,7 +1943,7 @@ _PROMQL_KEYWORDS = {
 }
 
 _IDENT = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*")
-_GROUPING_CLAUSE = re.compile(r"\b(?:by|without)\s*\([^)]*\)")
+_GROUPING_CLAUSE = re.compile(r"\b(?:by|without|on)\s*\([^)]*\)")
 _LABEL_SELECTOR = re.compile(r"\{[^}]*\}")
 _RANGE_VECTOR = re.compile(r"\[[^\]]*\]")  # [15m], [1h:5m] — duration literals, not metrics
 _OFFSET = re.compile(r"\boffset\s+-?(?:\d+(?:ms|[smhdwy]))+")  # offset 7d — a duration, not a metric
@@ -1784,7 +1952,7 @@ _OFFSET = re.compile(r"\boffset\s+-?(?:\d+(?:ms|[smhdwy]))+")  # offset 7d — a
 def _metric_tokens(expr: str) -> set:
     """Candidate metric-name tokens in a PromQL expr.
 
-    Strips ``by (...)``/``without (...)`` grouping clauses (label names, not
+    Strips ``by (...)``/``without (...)``/``on (...)`` label lists (names, not
     metric names), every ``{...}`` label selector's contents, and every
     ``[...]`` range-vector/subquery duration literal (``15m``'s ``m`` is not a
     metric name) and every ``offset <duration>`` modifier, then returns every remaining bare identifier that is not
@@ -2073,6 +2241,15 @@ DASHBOARD_TARGETS = {
         "Self-obs", "Records dropped as older than the backend accept window"),
     "g2o-otlp-delivery-failing": (
         "Self-obs", "Exporter callback rates by signal"),
+    "g2o-teams-healthy-call-share-low": ("M365", "Call rate by initial health"),
+    "g2o-teams-site-network-noncompliant": ("M365", "Site compliance: local preset"),
+    "g2o-teams-site-poor-stream-share-high": ("M365", "Stream rate by media and health"),
+    "g2o-teams-trunk-effectiveness-low":
+        ("M365", "Direct Routing network effectiveness by trunk (0 to 1)"),
+    "g2o-teams-trunk-sip-5xx-high":
+        ("M365", "Direct Routing attempt rate by trunk, outcome and SIP class"),
+    "g2o-teams-call-records-stale": ("M365", "Teams calls by detail version"),
+    "g2o-teams-service-incident-open": ("M365", "Service health status ladder"),
     "g2o-detect-privileged-directory-change":
         ("Entra", "Top directory audit activities"),
     "g2o-detect-security-alert-unresolved":
@@ -2176,6 +2353,9 @@ def resolve_target(man: dict, tab: str, panel_title: str) -> tuple:
 # is not a gate. An unused entry here fails too, so a waiver cannot outlive the
 # panel that justified it.
 SIGNAL_MATCH_WAIVERS = {
+    "g2o-teams-service-incident-open":
+        "the existing M365 status ladder shows the service-level context; per-issue "
+        "lifecycle twins are in Loki and are not plotted on the merged board",
     "g2o-detect-security-alert-unresolved":
         "no panel plots the entra.security_alert stream; the Defender alert log "
         "panel (defender.alert) is the nearest investigation surface, and the "

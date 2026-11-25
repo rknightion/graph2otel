@@ -613,6 +613,129 @@ named in the label, fix the exporting appliance's format, and watch
 **Defender → Defender for Cloud Apps → Discovery parse tasks** return to
 `is_success="true"`.
 
+## Teams operations (paused examples)
+
+These thresholds are starting points, not measured service levels. Before
+unpausing, compare the query with normal traffic on the intended tenant and
+verify the notification policy. An empty result does not attest health.
+
+### g2o-teams-healthy-call-share-low
+
+Investigate the first complete call cohort. Later versions may revise a verdict,
+but their transitions do not add calls to that cohort.
+
+**No data:** Check call-record collection and the number of classified calls.
+Quiet and unclassified-only windows do not alert.
+
+**Evaluator error:** Check the Prometheus datasource and Teams counter names.
+
+**False positives:** Backfill can concentrate the observations in one window.
+Check call event times before deciding that quality changed just now.
+
+**Remediation:** Inspect the affected calls and group their poor streams by site,
+media and health cause before changing the network.
+
+### g2o-teams-site-network-noncompliant
+
+The site missed at least one of the shared local audio network targets. These
+are not proof of which network route a call used.
+
+**No data:** A site needs measurements for all four targets. Check site mapping,
+measurement coverage and whether the site's traffic was grouped into overflow.
+
+**Evaluator error:** Check the Prometheus datasource and histogram sum/count series.
+
+**False positives:** A few unusual calls can move a mean on a quiet site.
+
+**Remediation:** Find which of jitter, RTT, packet loss or TCP share failed,
+then compare with the affected site's call streams and network configuration.
+
+### g2o-teams-site-poor-stream-share-high
+
+Inspect poor directional streams from this sender site. Unclassified streams
+are not evidence of good quality and do not dilute the denominator.
+
+**No data:** Check site enrichment and eligible stream volume.
+
+**Evaluator error:** Check the Prometheus datasource and stream counter labels.
+
+**False positives:** A shared incident or one busy call can account for many
+streams. The share is not the share of affected calls or users.
+
+**Remediation:** Group by media and health cause. Inspect the calls behind the
+highest contributors before making site-wide changes.
+
+### g2o-teams-trunk-effectiveness-low
+
+The latest measured poll had a low answered-or-busy fraction for this trunk.
+
+**No data:** Check Direct Routing collection, recent attempts and named-trunk
+coverage. A poll without new attempts does not establish effectiveness.
+
+**Evaluator error:** Check the Prometheus datasource and the ratio gauge.
+
+**False positives:** The volume guard covers 30 minutes, not the last poll.
+One lightly used poll can move the gauge sharply.
+
+**Remediation:** Compare SIP outcome counts across several polls. Check the
+session border controller and provider before changing routes.
+
+### g2o-teams-trunk-sip-5xx-high
+
+A high share of attempts on this trunk ended as SIP 5xx failures.
+
+**No data:** Check whether Direct Routing is enabled and has enough attempts.
+A missing 5xx series with measured attempts is a zero share, not missing traffic.
+
+**Evaluator error:** Check the Prometheus datasource and attempt counter.
+
+**False positives:** Imports or retries can concentrate failure observations.
+Compare call times with the evaluation window.
+
+**Remediation:** Inspect Direct Routing events for the final SIP codes and
+compare with session border controller and provider diagnostics.
+
+### g2o-teams-call-records-stale
+
+Check the newest observed call's **start time**, not its arrival time. The
+example evaluates Monday through Friday from 12:00 up to 18:00 UTC, allowing
+four hours from an 08:00 UTC workday start. UTC does not shift with daylight
+saving. Change the schedule and horizon together to match the tenant.
+
+**No data:** A never-seen or very quiet tenant, an out-of-hours query and a missing
+log feed can all produce no result. Start with collector availability and
+OTLP delivery; the freshness rule does not monitor those paths.
+
+**Evaluator error:** Check the Loki datasource and instant query, including
+support for structured metadata and the wall-clock time template.
+
+**False positives:** Quiet afternoons, holidays and late source records can
+look stale even with a moving watermark. It takes a prior record within 12 hours
+and none within four hours to trigger the query.
+
+**Remediation:** Compare recent call starts with collector watermark, scrape
+outcomes and OTLP delivery failures. Then check whether calls actually took place.
+
+### g2o-teams-service-incident-open
+
+This is upstream context, not an on-call page. Send `severity=info` and
+`category=teams-service-incident` to an informational receiver.
+
+**No data:** No recent open snapshot or retained resolution is not evidence of
+closure. Check the Teams profile, `m365.servicehealth` and the Loki feed.
+
+**Evaluator error:** Check Loki's instant query, structured metadata and limits
+for the seven-day closure lookup and intermediate issue series.
+
+**False positives:** A backdated resolution can arrive or become queryable after
+the open snapshot. The latest status is not the row that arrived last. A retained
+confirmed resolution suppresses that tenant and issue even if an old open is replayed.
+
+**Remediation:** Confirm the status in Microsoft 365 service health. Only an explicit
+resolution twin closes the matching issue in this query; it leaves any other open
+issues in the count. An alert can also clear when open evidence ages out, which is
+not a Microsoft resolution.
+
 ## Portable detections (all paused)
 
 These eleven ship in a separate folder and rule group from the health rules
