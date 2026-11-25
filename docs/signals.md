@@ -68,8 +68,8 @@ convention.
   see [MDCA Cloud Discovery parse health](#mdca-cloud-discovery-parse-health-ingest_transportmdca).
 - **`teams.*`** - Teams Phone and voice application analytics. Call queue and auto attendant twins use the
   `vaac` transport, which requires explicit opt-in and a separate user credential. Queue metrics
-  report shares of newly observed legs, not rates over the time when calls happened. See the
-  [collector reference](collectors.md#teams---logs-window-collectors) for the opt-in and risk.
+  report shares of newly observed legs, not rates over the time when calls happened. See
+  [VAAC configuration](configuration.md#teams-voice-application-analytics) for the opt-in and risk.
 - **`graph2otel.*`** — self-observability: collector success/duration/staleness,
   export-job health, active series counts, build info, and
   [`graph2otel.api.unexpected`](#graph2otelapiunexpected-when-microsoft-changes-something-under-us)

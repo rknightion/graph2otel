@@ -198,9 +198,8 @@ so a 403 is a "not granted yet", not a crash.
 
 ## 5. Verify with `graph2otel check`
 
-The `check` subcommand (landed as part of M1, tracked in
-#11) is a read-only, side-effect-free
-permission preflight: it loads your config, reads each configured tenant's granted permission claims
+The `check` subcommand is a read-only, side-effect-free permission preflight.
+It loads your config, reads each configured tenant's granted permission claims
 via a token, and reports what's missing against what your enabled collectors declare —
 surfacing a 403 before you find it at runtime instead of after.
 
