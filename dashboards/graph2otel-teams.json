@@ -91,7 +91,7 @@
               "name": "${datasource}"
             },
             "spec": {
-              "query": "label_values(graph2otel_collector_availability{collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)`}, tenant_id)",
+              "query": "label_values(graph2otel_collector_availability{collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy|sip_devices)|m365[.](teams|teams_usage|servicehealth)`}, tenant_id)",
               "refId": "tenant"
             }
           },
@@ -12853,6 +12853,119 @@
           }
         }
       },
+      "panel-1030": {
+        "kind": "Panel",
+        "spec": {
+          "id": 1030,
+          "title": "SIP device observations",
+          "description": "Hourly beta observations in range, not a live census or a provisioning policy. Not reported is not healthy. Failed health reads are in Collector health. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`m365.teams.sip_device` | tenant_id=~\"$tenant\" | keep tenant_id, device_id, manufacturer, model, health_status, connection_status, software_update_readout, connection_last_modified_date_time, last_modified_date_time",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "maxLines": 250
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "extractFields",
+                  "spec": {
+                    "options": {
+                      "source": "labels",
+                      "format": "json",
+                      "replace": true,
+                      "keepTime": true
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "sortBy": [
+                  {
+                    "displayName": "Time",
+                    "desc": true
+                  }
+                ]
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "No data yet. No observations from the optional teams.sip_devices beta collector.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "number"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
       "panel-105": {
         "kind": "Panel",
         "spec": {
@@ -15095,7 +15208,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "1000 * ((((max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))) == on (tenant_id, collector, collector_transport) group_left () (max by (tenant_id, collector, collector_transport) (max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))))) unless on (tenant_id, collector, collector_transport) (count by (tenant_id, collector, collector_transport) (((max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))) == on (tenant_id, collector, collector_transport) group_left () (max by (tenant_id, collector, collector_transport) (max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})))))) > 1)) or label_replace(label_replace(((max by (tenant_id, collector, collector_transport) (max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})))) and on (tenant_id, collector, collector_transport) (count by (tenant_id, collector, collector_transport) (((max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))) == on (tenant_id, collector, collector_transport) group_left () (max by (tenant_id, collector, collector_transport) (max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})))))) > 1)), \"state\", \"unknown\", \"state\", \"^$\"), \"reason\", \"timestamp_tie\", \"reason\", \"^$\"))",
+                        "expr": "1000 * ((((max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy|sip_devices)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))) == on (tenant_id, collector, collector_transport) group_left () (max by (tenant_id, collector, collector_transport) (max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy|sip_devices)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))))) unless on (tenant_id, collector, collector_transport) (count by (tenant_id, collector, collector_transport) (((max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy|sip_devices)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))) == on (tenant_id, collector, collector_transport) group_left () (max by (tenant_id, collector, collector_transport) (max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy|sip_devices)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})))))) > 1)) or label_replace(label_replace(((max by (tenant_id, collector, collector_transport) (max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy|sip_devices)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})))) and on (tenant_id, collector, collector_transport) (count by (tenant_id, collector, collector_transport) (((max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy|sip_devices)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))) == on (tenant_id, collector, collector_transport) group_left () (max by (tenant_id, collector, collector_transport) (max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy|sip_devices)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})))))) > 1)), \"state\", \"unknown\", \"state\", \"^$\"), \"reason\", \"timestamp_tie\", \"reason\", \"^$\"))",
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
@@ -15359,7 +15472,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "max by (tenant_id, collector) ((graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`} and (timestamp(graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}) == on (tenant_id, collector) group_left () max by (tenant_id, collector) (timestamp(graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))))) == min by (tenant_id, collector) ((graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`} and (timestamp(graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}) == on (tenant_id, collector) group_left () max by (tenant_id, collector) (timestamp(graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})))))",
+                        "expr": "max by (tenant_id, collector) ((graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy|sip_devices)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`} and (timestamp(graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy|sip_devices)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}) == on (tenant_id, collector) group_left () max by (tenant_id, collector) (timestamp(graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy|sip_devices)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))))) == min by (tenant_id, collector) ((graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy|sip_devices)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`} and (timestamp(graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy|sip_devices)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}) == on (tenant_id, collector) group_left () max by (tenant_id, collector) (timestamp(graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy|sip_devices)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})))))",
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
@@ -15451,7 +15564,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "time() - (max by (tenant_id, collector) (graph2otel_collector_watermark_timestamp_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))",
+                        "expr": "time() - (max by (tenant_id, collector) (graph2otel_collector_watermark_timestamp_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy|sip_devices)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))",
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
@@ -15541,7 +15654,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "max by (tenant_id, collector) (graph2otel_scrape_staleness_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})",
+                        "expr": "max by (tenant_id, collector) (graph2otel_scrape_staleness_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy|sip_devices)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})",
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
@@ -17455,6 +17568,19 @@
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-1013"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 64,
+                                  "width": 24,
+                                  "height": 9,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-1030"
                                   }
                                 }
                               }

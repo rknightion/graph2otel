@@ -503,8 +503,8 @@ func TestCollectorOverrideSchemaHasBoundedNamesAndSourceEnum(t *testing.T) {
 
 	names := schemaObject(t, definitions, "collectorName")
 	gotNames := schemaStrings(t, names, "enum")
-	if len(gotNames) != 182 {
-		t.Fatalf("collector name inventory has %d entries, want 182", len(gotNames))
+	if len(gotNames) != 183 {
+		t.Fatalf("collector name inventory has %d entries, want 183", len(gotNames))
 	}
 	if !slices.IsSorted(gotNames) {
 		t.Error("collector name inventory is not sorted")
@@ -523,6 +523,7 @@ func TestCollectorOverrideSchemaHasBoundedNamesAndSourceEnum(t *testing.T) {
 		"mdca.discovery_parse",
 		"purview.sensitivity_labels",
 		"teams.call_records",
+		"teams.sip_devices",
 		"teams.voice_apps",
 	} {
 		if _, found := slices.BinarySearch(gotNames, name); !found {
@@ -538,6 +539,8 @@ func TestHelmComposesTeamsSitesAndVAACFileSettings(t *testing.T) {
       collectors:
         teams.voice_apps:
           enabled: true
+        teams.sip_devices:
+          enabled: true
       teams:
         sites_file: /synthetic/sites.csv
         internal_domains: [example.test]
@@ -552,7 +555,7 @@ func TestHelmComposesTeamsSitesAndVAACFileSettings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("helm template rejected combined Teams settings: %v\n%s", err, rendered)
 	}
-	for _, field := range []string{"sites_file:", "internal_domains:", "vaac:", "username_file:", "password_file:", "admin_api:", "teams.voice_apps:"} {
+	for _, field := range []string{"sites_file:", "internal_domains:", "vaac:", "username_file:", "password_file:", "admin_api:", "teams.voice_apps:", "teams.sip_devices:"} {
 		if !strings.Contains(string(rendered), field) {
 			t.Errorf("helm template dropped %s", field)
 		}

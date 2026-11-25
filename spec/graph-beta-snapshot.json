@@ -430,6 +430,16 @@
       "path": "/teams/{id}/installedApps",
       "type": "microsoft.graph.teamsAppInstallation",
       "resolution": "model"
+    },
+    {
+      "path": "/teamwork/devices",
+      "type": "microsoft.graph.teamworkDevice",
+      "resolution": "model"
+    },
+    {
+      "path": "/teamwork/devices/{id}/health",
+      "type": "microsoft.graph.teamworkDeviceHealth",
+      "resolution": "model"
     }
   ],
   "types": {
@@ -1938,6 +1948,21 @@
         "tpmVersion": "Edm.String",
         "wifiMac": "Edm.String",
         "wiredIPv4Addresses": "Collection(Edm.String)"
+      }
+    },
+    "microsoft.graph.identity": {
+      "kind": "ComplexType",
+      "properties": {
+        "displayName": "Edm.String",
+        "id": "Edm.String"
+      }
+    },
+    "microsoft.graph.identitySet": {
+      "kind": "ComplexType",
+      "properties": {
+        "application": "microsoft.graph.identity",
+        "device": "microsoft.graph.identity",
+        "user": "microsoft.graph.identity"
       }
     },
     "microsoft.graph.incomingTokenType": {
@@ -4143,6 +4168,143 @@
       "kind": "ComplexType",
       "properties": {
         "resourceSpecificPermissions": "Collection(microsoft.graph.teamsAppResourceSpecificPermission)"
+      }
+    },
+    "microsoft.graph.teamworkConnection": {
+      "kind": "ComplexType",
+      "properties": {
+        "connectionStatus": "microsoft.graph.teamworkConnectionStatus",
+        "lastModifiedDateTime": "Edm.DateTimeOffset"
+      }
+    },
+    "microsoft.graph.teamworkDevice": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "activityState": "microsoft.graph.teamworkDeviceActivityState",
+        "companyAssetTag": "Edm.String",
+        "createdBy": "microsoft.graph.identitySet",
+        "createdDateTime": "Edm.DateTimeOffset",
+        "currentUser": "microsoft.graph.teamworkUserIdentity",
+        "deviceType": "microsoft.graph.teamworkDeviceType",
+        "hardwareDetail": "microsoft.graph.teamworkHardwareDetail",
+        "healthStatus": "microsoft.graph.teamworkDeviceHealthStatus",
+        "lastModifiedBy": "microsoft.graph.identitySet",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "notes": "Edm.String"
+      },
+      "navigation_properties": {
+        "activity": "microsoft.graph.teamworkDeviceActivity",
+        "configuration": "microsoft.graph.teamworkDeviceConfiguration",
+        "health": "microsoft.graph.teamworkDeviceHealth",
+        "operations": "Collection(microsoft.graph.teamworkDeviceOperation)"
+      }
+    },
+    "microsoft.graph.teamworkDeviceActivityState": {
+      "kind": "EnumType",
+      "members": [
+        "busy",
+        "idle",
+        "unavailable",
+        "unknown",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.teamworkDeviceHealth": {
+      "kind": "EntityType",
+      "base_type": "microsoft.graph.entity",
+      "properties": {
+        "connection": "microsoft.graph.teamworkConnection",
+        "createdBy": "microsoft.graph.identitySet",
+        "createdDateTime": "Edm.DateTimeOffset",
+        "hardwareHealth": "microsoft.graph.teamworkHardwareHealth",
+        "lastModifiedBy": "microsoft.graph.identitySet",
+        "lastModifiedDateTime": "Edm.DateTimeOffset",
+        "loginStatus": "microsoft.graph.teamworkLoginStatus",
+        "peripheralsHealth": "microsoft.graph.teamworkPeripheralsHealth",
+        "softwareUpdateHealth": "microsoft.graph.teamworkSoftwareUpdateHealth"
+      }
+    },
+    "microsoft.graph.teamworkDeviceHealthStatus": {
+      "kind": "EnumType",
+      "members": [
+        "critical",
+        "healthy",
+        "nonUrgent",
+        "offline",
+        "unknown",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.teamworkDeviceType": {
+      "kind": "EnumType",
+      "members": [
+        "collaborationBar",
+        "ipPhone",
+        "lowCostPhone",
+        "sip",
+        "surfaceHub",
+        "teamsDisplay",
+        "teamsPanel",
+        "teamsRoom",
+        "touchConsole",
+        "unknown",
+        "unknownFutureValue"
+      ]
+    },
+    "microsoft.graph.teamworkHardwareDetail": {
+      "kind": "ComplexType",
+      "properties": {
+        "macAddresses": "Collection(Edm.String)",
+        "manufacturer": "Edm.String",
+        "model": "Edm.String",
+        "serialNumber": "Edm.String",
+        "uniqueId": "Edm.String"
+      }
+    },
+    "microsoft.graph.teamworkHardwareHealth": {
+      "kind": "ComplexType",
+      "properties": {
+        "computeHealth": "microsoft.graph.teamworkPeripheralHealth",
+        "hdmiIngestHealth": "microsoft.graph.teamworkPeripheralHealth"
+      }
+    },
+    "microsoft.graph.teamworkLoginStatus": {
+      "kind": "ComplexType",
+      "properties": {
+        "exchangeConnection": "microsoft.graph.teamworkConnection",
+        "skypeConnection": "microsoft.graph.teamworkConnection",
+        "teamsConnection": "microsoft.graph.teamworkConnection"
+      }
+    },
+    "microsoft.graph.teamworkPeripheralsHealth": {
+      "kind": "ComplexType",
+      "properties": {
+        "communicationSpeakerHealth": "microsoft.graph.teamworkPeripheralHealth",
+        "contentCameraHealth": "microsoft.graph.teamworkPeripheralHealth",
+        "displayHealthCollection": "Collection(microsoft.graph.teamworkPeripheralHealth)",
+        "microphoneHealth": "microsoft.graph.teamworkPeripheralHealth",
+        "roomCameraHealth": "microsoft.graph.teamworkPeripheralHealth",
+        "speakerHealth": "microsoft.graph.teamworkPeripheralHealth"
+      }
+    },
+    "microsoft.graph.teamworkSoftwareUpdateHealth": {
+      "kind": "ComplexType",
+      "properties": {
+        "adminAgentSoftwareUpdateStatus": "microsoft.graph.teamworkSoftwareUpdateStatus",
+        "companyPortalSoftwareUpdateStatus": "microsoft.graph.teamworkSoftwareUpdateStatus",
+        "firmwareSoftwareUpdateStatus": "microsoft.graph.teamworkSoftwareUpdateStatus",
+        "operatingSystemSoftwareUpdateStatus": "microsoft.graph.teamworkSoftwareUpdateStatus",
+        "partnerAgentSoftwareUpdateStatus": "microsoft.graph.teamworkSoftwareUpdateStatus",
+        "teamsClientSoftwareUpdateStatus": "microsoft.graph.teamworkSoftwareUpdateStatus"
+      }
+    },
+    "microsoft.graph.teamworkUserIdentity": {
+      "kind": "ComplexType",
+      "base_type": "microsoft.graph.identity",
+      "properties": {
+        "userIdentityType": "microsoft.graph.teamworkUserIdentityType",
+        "userPrincipalName": "Edm.String"
       }
     },
     "microsoft.graph.tenantGovernanceSetting": {

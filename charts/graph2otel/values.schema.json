@@ -188,6 +188,7 @@
                 "teams.pstn_calls",
                 "teams.pstn_gateways",
                 "teams.sip_device_policy",
+                "teams.sip_devices",
                 "teams.user_configuration",
                 "teams.voice_apps"
             ]

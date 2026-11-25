@@ -765,6 +765,10 @@ var annotations = map[string]Annotation{
 		Gating:   "Teams profile only; no SharePoint or OneDrive report calls. Uses the shared reporting limiter. A failed report clears only its own gauges, and no report emits zero for missing counts.",
 	},
 
+	"teams.sip_devices": {
+		Collects: "One log snapshot per SIP device with its Graph ID, model, device health and connection status. `software_update_readout=not_reported` means all update statuses were null or absent, not that software is healthy. Failed health reads count as collector errors and emit no device observation for that poll. No device metrics, configuration or provisioning-policy inference.",
+		Source:   "`GET /beta/teamwork/devices` (paged), then `GET /beta/teamwork/devices/{id}/health` once per SIP row (live-measured 2026-11-25, #708: Teams observability review). The two sampled devices were `healthy` and `connected`, with all software update statuses null.",
+	},
 	"teams.phone_numbers": {
 		Collects: "Teams Phone number inventory and an unassigned-number count. Capability buckets overlap because a number can support several capabilities. The per-number log twin preserves the number and assignment detail without inventing an assignment timestamp.",
 		Source:   "`GET /v1.0/admin/teams/telephoneNumberManagement/numberAssignments` (live-measured 2026-11-24, #663: Teams Phone inventory).",
