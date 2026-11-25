@@ -1,6 +1,8 @@
 """Microsoft 365 service overview — Exchange, SharePoint/OneDrive, Teams, health."""
 
-from boards import teams_quality
+from builder import TENANT_SEL
+
+from . import teams_quality
 
 DOMAIN = "M365"
 DESCRIPTION = (
@@ -155,8 +157,16 @@ SECTIONS = [
     ]),
 ]
 
-# The call-quality signal/query slice reuses this board's platform and layout.
-extra = teams_quality.add
+def extra(b):
+    teams_quality.add(b)
+    b.row("Teams report freshness")
+    refresh = b.cat.metric("m365.teams_usage.report_refresh_timestamp").prom
+    panel = b.raw("Age of the Teams source report", [
+        f"time() - max by (tenant_id, report_period) ({refresh}{{{TENANT_SEL}}})",
+    ], viz="table", unit="s", panel_id=1020, legends=["{{tenant_id}} · D{{report_period}}"],
+        desc="Time since source refresh midnight UTC for each submitted D7/D30 report, not the last poll.")
+    for target in panel["targets"]:
+        target.update(instant=True, range=False)
 
 LOGS = [
     {"kind": "logs", "event": "m365.audit",

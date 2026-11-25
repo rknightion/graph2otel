@@ -13286,7 +13286,7 @@
             "spec": {
               "options": {
                 "mode": "markdown",
-                "content": "Usage comes from Microsoft's Teams usage reports, which refresh daily and trail the report date. Platform and activity groups overlap: a user can count in several, so never add them into a unique-user total."
+                "content": "Usage comes from Microsoft's daily Teams reports. The source refresh date can trail the poll, and the latest activity day can trail the refresh. Platform and activity groups overlap: never add them into a unique-user total."
               }
             }
           }
@@ -13297,7 +13297,7 @@
         "spec": {
           "id": 110,
           "title": "Teams users by platform (D7)",
-          "description": "From the Teams usage report. A user may appear on several platforms; do not sum them.",
+          "description": "From the Teams device usage report. A user may appear on several platforms; do not sum them.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -13382,11 +13382,95 @@
           }
         }
       },
+      "panel-1020": {
+        "kind": "Panel",
+        "spec": {
+          "id": 1020,
+          "title": "D7 report refresh date",
+          "description": "The source refresh date as at the end of the selected range, in UTC (YYYYMMDD). Not a poll time or an activity date. No date is shown if the report did not establish one. If it is empty: Usage reports refresh daily; the first values follow the first report poll. Collector health shows whether the source ran.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "year(max by (tenant_id) (m365_teams_usage_report_refresh_timestamp_seconds{tenant_id=~\"$tenant\",report_period=\"7\"})) * 10000 + month(max by (tenant_id) (m365_teams_usage_report_refresh_timestamp_seconds{tenant_id=~\"$tenant\",report_period=\"7\"})) * 100 + day_of_month(max by (tenant_id) (m365_teams_usage_report_refresh_timestamp_seconds{tenant_id=~\"$tenant\",report_period=\"7\"}))",
+                        "editorMode": "code",
+                        "range": false,
+                        "instant": true,
+                        "legendFormat": "{{tenant_id}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "colorMode": "none",
+                "graphMode": "none",
+                "textMode": "auto",
+                "justifyMode": "auto",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "custom": {},
+                  "noValue": "No data yet. See panel info.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "decimals": 0
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
       "panel-111": {
         "kind": "Panel",
         "spec": {
           "id": 111,
-          "title": "Users by activity on the latest report day",
+          "title": "Users by activity on the latest report day (D30)",
           "description": "days_ago=0 is the newest report date in the download, not today.",
           "links": [],
           "data": {
@@ -13472,12 +13556,12 @@
           }
         }
       },
-      "panel-112": {
+      "panel-1021": {
         "kind": "Panel",
         "spec": {
-          "id": 112,
-          "title": "Report names concealed",
-          "description": "1 means Microsoft conceals user, group and site names in reports, so identifier joins are not guaranteed. Absent means the setting is unknown. If it is empty: Usage reports refresh daily; the first values follow the first report poll. Collector health shows whether the source ran.",
+          "id": 1021,
+          "title": "D30 report refresh date",
+          "description": "The source refresh date as at the end of the selected range, in UTC (YYYYMMDD). Not a poll time or an activity date. No date is shown if the report did not establish one. If it is empty: Usage reports refresh daily; the first values follow the first report poll. Collector health shows whether the source ran.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -13501,7 +13585,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "max by (tenant_id) (m365_teams_usage_names_concealed_ratio{tenant_id=~\"$tenant\"})",
+                        "expr": "year(max by (tenant_id) (m365_teams_usage_report_refresh_timestamp_seconds{tenant_id=~\"$tenant\",report_period=\"30\"})) * 10000 + month(max by (tenant_id) (m365_teams_usage_report_refresh_timestamp_seconds{tenant_id=~\"$tenant\",report_period=\"30\"})) * 100 + day_of_month(max by (tenant_id) (m365_teams_usage_report_refresh_timestamp_seconds{tenant_id=~\"$tenant\",report_period=\"30\"}))",
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
@@ -13529,14 +13613,152 @@
                   "values": false
                 },
                 "colorMode": "none",
-                "graphMode": "area",
+                "graphMode": "none",
                 "textMode": "auto",
                 "justifyMode": "auto",
                 "orientation": "auto"
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
+                  "unit": "none",
+                  "custom": {},
+                  "noValue": "No data yet. See panel info.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "decimals": 0
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-112": {
+        "kind": "Panel",
+        "spec": {
+          "id": 112,
+          "title": "Report names concealed",
+          "description": "On means Microsoft conceals names in usage reports. Identifier joins are not guaranteed. Unknown means the collector is visible but did not report the setting. No data means neither the setting nor the collector census is visible in this range. If it is empty: Usage reports refresh daily; the first values follow the first report poll. Collector health shows whether the source ran.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "max by (tenant_id) (m365_teams_usage_names_concealed_ratio{tenant_id=~\"$tenant\"}) == 1",
+                        "editorMode": "code",
+                        "range": false,
+                        "instant": true,
+                        "legendFormat": "{{tenant_id}} \u00b7 On"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "B",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "B",
+                        "expr": "max by (tenant_id) (m365_teams_usage_names_concealed_ratio{tenant_id=~\"$tenant\"}) == 0",
+                        "editorMode": "code",
+                        "range": false,
+                        "instant": true,
+                        "legendFormat": "{{tenant_id}} \u00b7 Off"
+                      }
+                    }
+                  }
+                },
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "C",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "C",
+                        "expr": "(max by (tenant_id) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=\"m365.teams_usage\"})) unless on (tenant_id) (max by (tenant_id) (m365_teams_usage_names_concealed_ratio{tenant_id=~\"$tenant\"}))",
+                        "editorMode": "code",
+                        "range": false,
+                        "instant": true,
+                        "legendFormat": "{{tenant_id}} \u00b7 Unknown"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "colorMode": "none",
+                "graphMode": "none",
+                "textMode": "name",
+                "justifyMode": "auto",
+                "orientation": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
                   "custom": {},
                   "noValue": "No data yet. See panel info.",
                   "thresholds": {
@@ -17710,7 +17932,7 @@
                                 "spec": {
                                   "x": 0,
                                   "y": 3,
-                                  "width": 12,
+                                  "width": 16,
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
@@ -17721,13 +17943,13 @@
                               {
                                 "kind": "GridLayoutItem",
                                 "spec": {
-                                  "x": 12,
+                                  "x": 16,
                                   "y": 3,
-                                  "width": 12,
+                                  "width": 8,
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-111"
+                                    "name": "panel-1020"
                                   }
                                 }
                               },
@@ -17736,24 +17958,11 @@
                                 "spec": {
                                   "x": 0,
                                   "y": 11,
-                                  "width": 8,
+                                  "width": 16,
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-112"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 8,
-                                  "y": 11,
-                                  "width": 8,
-                                  "height": 8,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-113"
+                                    "name": "panel-111"
                                   }
                                 }
                               },
@@ -17766,7 +17975,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-114"
+                                    "name": "panel-1021"
                                   }
                                 }
                               },
@@ -17779,7 +17988,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-115"
+                                    "name": "panel-112"
                                   }
                                 }
                               },
@@ -17788,6 +17997,45 @@
                                 "spec": {
                                   "x": 8,
                                   "y": 19,
+                                  "width": 8,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-113"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 16,
+                                  "y": 19,
+                                  "width": 8,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-114"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 27,
+                                  "width": 8,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-115"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 8,
+                                  "y": 27,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -17800,7 +18048,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 27,
+                                  "y": 35,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -17813,7 +18061,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 12,
-                                  "y": 27,
+                                  "y": 35,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -17826,7 +18074,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 35,
+                                  "y": 43,
                                   "width": 12,
                                   "height": 8,
                                   "element": {

@@ -18,6 +18,15 @@
       "AttrKeys": []
     },
     {
+      "Name": "m365.teams_usage.report_refresh_timestamp",
+      "Unit": "s",
+      "Kind": "gauge",
+      "Description": "UTC midnight of the source Report Refresh Date, in Unix seconds, for the D7 device and D30 user activity counts reports. Absent if not established.",
+      "AttrKeys": [
+        "report_period"
+      ]
+    },
+    {
       "Name": "teams.device_usage.users",
       "Unit": "{overlapping_user_count}",
       "Kind": "gauge",

@@ -33811,10 +33811,103 @@
           }
         }
       },
-      "panel-407": {
+      "panel-1020": {
         "kind": "Panel",
         "spec": {
-          "id": 407,
+          "id": 1020,
+          "title": "Age of the Teams source report",
+          "description": "Time since source refresh midnight UTC for each submitted D7/D30 report, not the last poll.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "time() - max by (tenant_id, report_period) (m365_teams_usage_report_refresh_timestamp_seconds{tenant_id=~\"$tenant\"})",
+                        "editorMode": "code",
+                        "range": false,
+                        "instant": true,
+                        "legendFormat": "{{tenant_id}} \u00b7 D{{report_period}}",
+                        "format": "table"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "fields": ""
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "custom": {},
+                  "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-408": {
+        "kind": "Panel",
+        "spec": {
+          "id": 408,
           "title": "Unified audit \u2014 which user, which operation",
           "description": "user_key is the opaque classic UserKey; user_id is usually the UPN but carries sentinels too. Correlate the two M365 audit transports on user_id.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [
@@ -33890,10 +33983,10 @@
           }
         }
       },
-      "panel-408": {
+      "panel-409": {
         "kind": "Panel",
         "spec": {
-          "id": 408,
+          "id": 409,
           "title": "Top audited operations by workload",
           "description": "\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [
@@ -33988,10 +34081,10 @@
           }
         }
       },
-      "panel-409": {
+      "panel-410": {
         "kind": "Panel",
         "spec": {
-          "id": 409,
+          "id": 410,
           "title": "Audit record rate by result status",
           "description": "\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [
@@ -34083,10 +34176,10 @@
           }
         }
       },
-      "panel-410": {
+      "panel-411": {
         "kind": "Panel",
         "spec": {
-          "id": 410,
+          "id": 411,
           "title": "Message trace: top senders (HIGH VOLUME, opt-in)",
           "description": "One record per message per recipient \u2014 the rate scales with traffic, not tenant size. Empty unless the collector is explicitly enabled.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [
@@ -34181,10 +34274,10 @@
           }
         }
       },
-      "panel-411": {
+      "panel-412": {
         "kind": "Panel",
         "spec": {
-          "id": 411,
+          "id": 412,
           "title": "Teams calls by detail version",
           "description": "One log per call version. Use call_id to match call and stream records; a new version is not a new call.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -34254,10 +34347,10 @@
           }
         }
       },
-      "panel-412": {
+      "panel-413": {
         "kind": "Panel",
         "spec": {
-          "id": 412,
+          "id": 413,
           "title": "Teams media stream evidence",
           "description": "Directional media, network and site evidence. Caller and callee identify segment sides; direction identifies the sender and receiver when available.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -34327,10 +34420,10 @@
           }
         }
       },
-      "panel-413": {
+      "panel-414": {
         "kind": "Panel",
         "spec": {
-          "id": 413,
+          "id": 414,
           "title": "Teams PSTN call records",
           "description": "Per-call detail, including caller and callee numbers. Requires the Teams Phone feed.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [
@@ -34406,10 +34499,10 @@
           }
         }
       },
-      "panel-414": {
+      "panel-415": {
         "kind": "Panel",
         "spec": {
-          "id": 414,
+          "id": 415,
           "title": "Teams Direct Routing call records",
           "description": "Per-attempt detail, including the original trunk name and final SIP code.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [
@@ -34485,10 +34578,10 @@
           }
         }
       },
-      "panel-415": {
+      "panel-416": {
         "kind": "Panel",
         "spec": {
-          "id": 415,
+          "id": 416,
           "title": "Teams Phone number inventory records",
           "description": "Current number and assignment details, not a history of assignment changes.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -34558,10 +34651,10 @@
           }
         }
       },
-      "panel-416": {
+      "panel-417": {
         "kind": "Panel",
         "spec": {
-          "id": 416,
+          "id": 417,
           "title": "Teams user voice configuration records",
           "description": "Current per-user voice configuration. Creation and modification dates are attributes, not event times.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [
@@ -34637,10 +34730,10 @@
           }
         }
       },
-      "panel-417": {
+      "panel-418": {
         "kind": "Panel",
         "spec": {
-          "id": 417,
+          "id": 418,
           "title": "Teams auto attendant calls",
           "description": "Call flow and outcome per attendant leg. Requires the VAAC opt-in.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -34710,10 +34803,10 @@
           }
         }
       },
-      "panel-418": {
+      "panel-419": {
         "kind": "Panel",
         "spec": {
-          "id": 418,
+          "id": 419,
           "title": "Teams call queue calls",
           "description": "Queue outcome, wait and participant details per leg. Requires the VAAC opt-in.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -34783,10 +34876,10 @@
           }
         }
       },
-      "panel-419": {
+      "panel-420": {
         "kind": "Panel",
         "spec": {
-          "id": 419,
+          "id": 420,
           "title": "Teams call queue outcomes by saved batch",
           "description": "Expand structured metadata for the denominator and both shares from the same saved batch. Zero known results means no shares. Processing time, not call time.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -34856,10 +34949,10 @@
           }
         }
       },
-      "panel-420": {
+      "panel-421": {
         "kind": "Panel",
         "spec": {
-          "id": 420,
+          "id": 421,
           "title": "Teams client usage by user (D7)",
           "description": "One snapshot per dated report row, not one record per action. Widen the time range to include the report refresh date. Concealed identifiers may not match directory users.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [
@@ -34935,10 +35028,10 @@
           }
         }
       },
-      "panel-421": {
+      "panel-422": {
         "kind": "Panel",
         "spec": {
-          "id": 421,
+          "id": 422,
           "title": "About Purview",
           "description": "",
           "links": [],
@@ -34963,10 +35056,10 @@
           }
         }
       },
-      "panel-423": {
+      "panel-424": {
         "kind": "Panel",
         "spec": {
-          "id": 423,
+          "id": 424,
           "title": "Signal availability",
           "description": "Current collector state from graph2otel.collector.availability. Intentional absence is disabled (transport_not_configured, experimental_not_enabled, high_volume_not_enabled, disabled_by_config, profile_not_selected) or covered (covered_by_alternative). healthy_empty/empty is a successful zero-row source response. limited/partial_license is non-failure; blocked/license_unavailable identifies a missing entitlement, while blocked/permission_denied requires access. degraded and failed (including source_error) describe completed runtime outcomes; startup_failed describes initialization failure. An empty table is unknown, never evidence of disabled.",
           "links": [],
@@ -35197,10 +35290,10 @@
           }
         }
       },
-      "panel-425": {
+      "panel-426": {
         "kind": "Panel",
         "spec": {
-          "id": 425,
+          "id": 426,
           "title": "DLP policies",
           "description": "DLP policies, by enforcement mode (Enforce vs audit/test/disabled).",
           "links": [],
@@ -35287,10 +35380,10 @@
           }
         }
       },
-      "panel-426": {
+      "panel-427": {
         "kind": "Panel",
         "spec": {
-          "id": 426,
+          "id": 427,
           "title": "DLP rules",
           "description": "DLP rules, by target workload and action.",
           "links": [],
@@ -35377,10 +35470,10 @@
           }
         }
       },
-      "panel-427": {
+      "panel-428": {
         "kind": "Panel",
         "spec": {
-          "id": 427,
+          "id": 428,
           "title": "DLP policy bindings",
           "description": "DLP policy bindings, by workload and binding type.",
           "links": [],
@@ -35467,10 +35560,10 @@
           }
         }
       },
-      "panel-428": {
+      "panel-429": {
         "kind": "Panel",
         "spec": {
-          "id": 428,
+          "id": 429,
           "title": "DLP policy last changed age",
           "description": "Seconds since the most recently changed DLP policy (max over whenChangedUtc).",
           "links": [],
@@ -35550,10 +35643,10 @@
           }
         }
       },
-      "panel-430": {
+      "panel-431": {
         "kind": "Panel",
         "spec": {
-          "id": 430,
+          "id": 431,
           "title": "Labels count",
           "description": "Purview sensitivity labels, counted per applicability target (a multi-target label counts in each).",
           "links": [],
@@ -35640,10 +35733,10 @@
           }
         }
       },
-      "panel-431": {
+      "panel-432": {
         "kind": "Panel",
         "spec": {
-          "id": 431,
+          "id": 432,
           "title": "Retention labels count",
           "description": "Purview retention labels, by retention behavior, post-retention action, and trigger.",
           "links": [],
@@ -35730,10 +35823,10 @@
           }
         }
       },
-      "panel-432": {
+      "panel-433": {
         "kind": "Panel",
         "spec": {
-          "id": 432,
+          "id": 433,
           "title": "Retention event types count",
           "description": "Purview retention event types configured for the tenant.",
           "links": [],
@@ -35813,10 +35906,10 @@
           }
         }
       },
-      "panel-434": {
+      "panel-435": {
         "kind": "Panel",
         "spec": {
-          "id": 434,
+          "id": 435,
           "title": "Ediscovery cases",
           "description": "Purview eDiscovery cases, counted per case status.",
           "links": [],
@@ -35903,10 +35996,10 @@
           }
         }
       },
-      "panel-436": {
+      "panel-437": {
         "kind": "Panel",
         "spec": {
-          "id": 436,
+          "id": 437,
           "title": "Ediscovery legal holds",
           "description": "eDiscovery legal holds across every covered case, counted by isEnabled and whether the hold's errors array is non-empty. legalHold.status is null on every hold observed live, so it does not bucket this gauge \u2014 see AttrHoldState on the log twin. Never labeled by case or hold identity (#112).",
           "links": [],
@@ -35993,10 +36086,10 @@
           }
         }
       },
-      "panel-437": {
+      "panel-438": {
         "kind": "Panel",
         "spec": {
-          "id": 437,
+          "id": 438,
           "title": "Ediscovery hold sources",
           "description": "eDiscovery legal-hold data sources (userSources + siteSources) across every covered case, counted by which collection the row came from and its dataSourceHoldStatus. Never labeled by case, hold or source identity (#112).",
           "links": [],
@@ -36083,10 +36176,10 @@
           }
         }
       },
-      "panel-438": {
+      "panel-439": {
         "kind": "Panel",
         "spec": {
-          "id": 438,
+          "id": 439,
           "title": "Ediscovery case operations",
           "description": "eDiscovery case operations across every covered case, counted by action and status. Never labeled by case or operation identity (#112).",
           "links": [],
@@ -36173,10 +36266,10 @@
           }
         }
       },
-      "panel-439": {
+      "panel-440": {
         "kind": "Panel",
         "spec": {
-          "id": 439,
+          "id": 440,
           "title": "Ediscovery custodians",
           "description": "eDiscovery custodians across every covered case \u2014 a plain count, no field mapper. Every case observed live returns zero rows; see the package doc for why no ediscoveryCustodian shape is mapped. Absent entirely when no case's fetch succeeded, so a total read failure never reads as a measured zero (#240).",
           "links": [],
@@ -36256,10 +36349,10 @@
           }
         }
       },
-      "panel-440": {
+      "panel-441": {
         "kind": "Panel",
         "spec": {
-          "id": 440,
+          "id": 441,
           "title": "Ediscovery noncustodial data sources",
           "description": "eDiscovery non-custodial data sources across every covered case \u2014 a plain count, no field mapper. Absent entirely when no case's fetch succeeded (#240).",
           "links": [],
@@ -36339,10 +36432,10 @@
           }
         }
       },
-      "panel-441": {
+      "panel-442": {
         "kind": "Panel",
         "spec": {
-          "id": 441,
+          "id": 442,
           "title": "Ediscovery case health cases covered",
           "description": "eDiscovery cases actually polled for case-health detail this cycle. Compare against purview.ediscovery.case_health.cases_total: covered < total means DefaultMaxCases left part of the tenant's case inventory unpolled this cycle, not that the tenant has few cases.",
           "links": [],
@@ -36422,10 +36515,10 @@
           }
         }
       },
-      "panel-442": {
+      "panel-443": {
         "kind": "Panel",
         "spec": {
-          "id": 442,
+          "id": 443,
           "title": "Ediscovery case health cases total",
           "description": "Total eDiscovery cases this tenant has, per the case list. Always emitted alongside cases_covered so partial coverage is never indistinguishable from a genuinely small tenant.",
           "links": [],
@@ -36505,10 +36598,10 @@
           }
         }
       },
-      "panel-444": {
+      "panel-445": {
         "kind": "Panel",
         "spec": {
-          "id": 444,
+          "id": 445,
           "title": "Sensitivity labels \u2014 which label, what it applies to",
           "description": "The metric counts labels by scope. This names each one, with its priority and description.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -36578,10 +36671,10 @@
           }
         }
       },
-      "panel-445": {
+      "panel-446": {
         "kind": "Panel",
         "spec": {
-          "id": 445,
+          "id": 446,
           "title": "DLP policies by enforcement mode",
           "description": "\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -36670,10 +36763,10 @@
           }
         }
       },
-      "panel-446": {
+      "panel-447": {
         "kind": "Panel",
         "spec": {
-          "id": 446,
+          "id": 447,
           "title": "Retention labels by retention behaviour",
           "description": "\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -36762,10 +36855,10 @@
           }
         }
       },
-      "panel-447": {
+      "panel-448": {
         "kind": "Panel",
         "spec": {
-          "id": 447,
+          "id": 448,
           "title": "eDiscovery legal holds \u2014 which case, enabled, erroring",
           "description": "\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -36854,10 +36947,10 @@
           }
         }
       },
-      "panel-448": {
+      "panel-449": {
         "kind": "Panel",
         "spec": {
-          "id": 448,
+          "id": 449,
           "title": "eDiscovery hold data sources \u2014 who and what is preserved",
           "description": "The metric counts sources by type and hold status. This names each one: the mailbox or site, its hold status, and the hold it belongs to. Source ids are not always GUIDs \u2014 an inactive mailbox arrives as a zero-GUID prefixed with its address.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [
@@ -36933,10 +37026,10 @@
           }
         }
       },
-      "panel-449": {
+      "panel-450": {
         "kind": "Panel",
         "spec": {
-          "id": 449,
+          "id": 450,
           "title": "eDiscovery case operations by action and status",
           "description": "\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -37025,10 +37118,10 @@
           }
         }
       },
-      "panel-450": {
+      "panel-451": {
         "kind": "Panel",
         "spec": {
-          "id": 450,
+          "id": 451,
           "title": "About Self-obs",
           "description": "",
           "links": [],
@@ -37053,10 +37146,10 @@
           }
         }
       },
-      "panel-452": {
+      "panel-453": {
         "kind": "Panel",
         "spec": {
-          "id": 452,
+          "id": 453,
           "title": "What this summary cannot prove",
           "description": "",
           "links": [],
@@ -37081,10 +37174,10 @@
           }
         }
       },
-      "panel-453": {
+      "panel-454": {
         "kind": "Panel",
         "spec": {
-          "id": 453,
+          "id": 454,
           "title": "Current source collection failures",
           "description": "Current runtime, startup and permission failures only. Healthy-empty, configured absence, alternative coverage and subscription limitations are intentionally not failures.",
           "links": [],
@@ -37169,7 +37262,7 @@
                   "links": [
                     {
                       "title": "Open Collector availability failures",
-                      "url": "/d/graph2otel?viewPanel=472&from=${__from}&to=${__to}&${__all_variables}",
+                      "url": "/d/graph2otel?viewPanel=473&from=${__from}&to=${__to}&${__all_variables}",
                       "targetBlank": false
                     }
                   ]
@@ -37180,10 +37273,10 @@
           }
         }
       },
-      "panel-454": {
+      "panel-455": {
         "kind": "Panel",
         "spec": {
-          "id": 454,
+          "id": 455,
           "title": "Known source-to-emitter record loss",
           "description": "Source rows deliberately dropped or lost to decode/processing errors during the selected range. This stops at the emitter boundary.",
           "links": [],
@@ -37268,7 +37361,7 @@
                   "links": [
                     {
                       "title": "Open Dropped / errored source-record rate",
-                      "url": "/d/graph2otel?viewPanel=487&from=${__from}&to=${__to}&${__all_variables}",
+                      "url": "/d/graph2otel?viewPanel=488&from=${__from}&to=${__to}&${__all_variables}",
                       "targetBlank": false
                     }
                   ]
@@ -37279,10 +37372,10 @@
           }
         }
       },
-      "panel-455": {
+      "panel-456": {
         "kind": "Panel",
         "spec": {
-          "id": 455,
+          "id": 456,
           "title": "Current exporter callback degradation",
           "description": "Latest process-local callback state by signal. Success means the exporter accepted the callback; it is not backend retention and not exactly-once delivery evidence.\n\nColour meaning: the emitter's description states this is whether the most recent exporter callback failure remains unrecovered by a subsequent successful export (#268). 1 means the most recent exporter failure has not been followed by a success, so telemetry is being lost now. This is the delivery-degradation state #268 defines, not a rate this repository chose a limit for.",
           "links": [],
@@ -37386,7 +37479,7 @@
                   "links": [
                     {
                       "title": "Open Current exporter degradation by signal",
-                      "url": "/d/graph2otel?viewPanel=462&from=${__from}&to=${__to}&${__all_variables}",
+                      "url": "/d/graph2otel?viewPanel=463&from=${__from}&to=${__to}&${__all_variables}",
                       "targetBlank": false
                     }
                   ]
@@ -37397,10 +37490,10 @@
           }
         }
       },
-      "panel-456": {
+      "panel-457": {
         "kind": "Panel",
         "spec": {
-          "id": 456,
+          "id": 457,
           "title": "Checkpoint persistence failures",
           "description": "Checkpoint writes that failed during the selected range. A nonzero value means restart replay risk even when the collection itself succeeded.",
           "links": [],
@@ -37485,7 +37578,7 @@
                   "links": [
                     {
                       "title": "Open Checkpoint persist error rate",
-                      "url": "/d/graph2otel?viewPanel=483&from=${__from}&to=${__to}&${__all_variables}",
+                      "url": "/d/graph2otel?viewPanel=484&from=${__from}&to=${__to}&${__all_variables}",
                       "targetBlank": false
                     }
                   ]
@@ -37496,10 +37589,10 @@
           }
         }
       },
-      "panel-457": {
+      "panel-458": {
         "kind": "Panel",
         "spec": {
-          "id": 457,
+          "id": 458,
           "title": "Source-event emission lag",
           "description": "P95 source timestamp to graph2otel emission lag by collector and transport. This does not measure backend acceptance or OTLP delivery latency.",
           "links": [],
@@ -37584,7 +37677,7 @@
                   "links": [
                     {
                       "title": "Open Source-event lag at emission",
-                      "url": "/d/graph2otel?viewPanel=488&from=${__from}&to=${__to}&${__all_variables}",
+                      "url": "/d/graph2otel?viewPanel=489&from=${__from}&to=${__to}&${__all_variables}",
                       "targetBlank": false
                     }
                   ]
@@ -37595,10 +37688,10 @@
           }
         }
       },
-      "panel-458": {
+      "panel-459": {
         "kind": "Panel",
         "spec": {
-          "id": 458,
+          "id": 459,
           "title": "Series clipped last interval",
           "description": "Process-wide metric series folded or dropped by the central cardinality limiter during the latest export interval.",
           "links": [],
@@ -37683,7 +37776,7 @@
                   "links": [
                     {
                       "title": "Open Series clipped, by mode (process-wide)",
-                      "url": "/d/graph2otel?viewPanel=505&from=${__from}&to=${__to}&${__all_variables}",
+                      "url": "/d/graph2otel?viewPanel=506&from=${__from}&to=${__to}&${__all_variables}",
                       "targetBlank": false
                     }
                   ]
@@ -37694,10 +37787,10 @@
           }
         }
       },
-      "panel-459": {
+      "panel-460": {
         "kind": "Panel",
         "spec": {
-          "id": 459,
+          "id": 460,
           "title": "Microsoft API assumption violations",
           "description": "Report-only wire values that violated a collector's validated API assumptions during the selected range. Records are not dropped.",
           "links": [],
@@ -37782,7 +37875,7 @@
                   "links": [
                     {
                       "title": "Open Microsoft API drift rate \u2014 a response no longer matches what a collector expects",
-                      "url": "/d/graph2otel?viewPanel=526&from=${__from}&to=${__to}&${__all_variables}",
+                      "url": "/d/graph2otel?viewPanel=527&from=${__from}&to=${__to}&${__all_variables}",
                       "targetBlank": false
                     }
                   ]
@@ -37793,10 +37886,10 @@
           }
         }
       },
-      "panel-460": {
+      "panel-461": {
         "kind": "Panel",
         "spec": {
-          "id": 460,
+          "id": 461,
           "title": "Maximum reported throttle consumption",
           "description": "Maximum currently reported Microsoft Graph throttle-budget consumption. The header is not present on every response, so absence is unknown.",
           "links": [],
@@ -37881,7 +37974,7 @@
                   "links": [
                     {
                       "title": "Open Graph-reported throttle budget consumed",
-                      "url": "/d/graph2otel?viewPanel=511&from=${__from}&to=${__to}&${__all_variables}",
+                      "url": "/d/graph2otel?viewPanel=512&from=${__from}&to=${__to}&${__all_variables}",
                       "targetBlank": false
                     }
                   ]
@@ -37892,10 +37985,10 @@
           }
         }
       },
-      "panel-462": {
+      "panel-463": {
         "kind": "Panel",
         "spec": {
-          "id": 462,
+          "id": 463,
           "title": "Current exporter degradation by signal",
           "description": "Current process-local exporter callback state for metrics and logs. 1 means the latest failure has not been cleared by a later successful export; 0 means it has. This does not change liveness or readiness.\n\nColour meaning: the emitter's description states this is whether the most recent exporter callback failure remains unrecovered by a subsequent successful export (#268). 1 means the most recent exporter failure has not been followed by a success, so telemetry is being lost now. This is the delivery-degradation state #268 defines, not a rate this repository chose a limit for.",
           "links": [],
@@ -38003,10 +38096,10 @@
           }
         }
       },
-      "panel-463": {
+      "panel-464": {
         "kind": "Panel",
         "spec": {
-          "id": 463,
+          "id": 464,
           "title": "Exporter callback rates by signal",
           "description": "Exporter callback attempts, accepted callbacks, and failures for the metrics and logs pipelines independently. These overlapping rates are deliberately unstacked; attempts equal successes plus failures.",
           "links": [],
@@ -38147,10 +38240,10 @@
           }
         }
       },
-      "panel-464": {
+      "panel-465": {
         "kind": "Panel",
         "spec": {
-          "id": 464,
+          "id": 465,
           "title": "Force-flush failure rate by signal",
           "description": "Failed force-flush callbacks by signal. A later successful export clears degradation; an empty successful flush does not claim payload acceptance.",
           "links": [],
@@ -38237,10 +38330,10 @@
           }
         }
       },
-      "panel-465": {
+      "panel-466": {
         "kind": "Panel",
         "spec": {
-          "id": 465,
+          "id": 466,
           "title": "Shutdown failure total by signal",
           "description": "Process-lifetime failed shutdown callbacks by signal. Shutdown failure does not alter dependency-free liveness or readiness semantics.",
           "links": [],
@@ -38327,10 +38420,10 @@
           }
         }
       },
-      "panel-466": {
+      "panel-467": {
         "kind": "Panel",
         "spec": {
-          "id": 466,
+          "id": 467,
           "title": "Exact transmitted OTLP payload rate by signal",
           "description": "Exact post-compression OTLP payload bytes accepted by the client transport on each send. This process-wide measurement excludes HTTP/gRPC framing, TLS, TCP/IP and kernel retransmission.",
           "links": [],
@@ -38417,10 +38510,10 @@
           }
         }
       },
-      "panel-467": {
+      "panel-468": {
         "kind": "Panel",
         "spec": {
-          "id": 467,
+          "id": 468,
           "title": "Exact exporter retry rate by signal",
           "description": "Exact second-and-later exporter retry-loop attempts for metrics and logs. Redirects and transparent connection retries are excluded.",
           "links": [],
@@ -38507,10 +38600,10 @@
           }
         }
       },
-      "panel-469": {
+      "panel-470": {
         "kind": "Panel",
         "spec": {
-          "id": 469,
+          "id": 470,
           "title": "Current collector availability",
           "description": "One current value-1 row per tenant and logical collector. collector_transport is the resolved collector transport, not the log-record ingest_transport.",
           "links": [],
@@ -38599,10 +38692,10 @@
           }
         }
       },
-      "panel-470": {
+      "panel-471": {
         "kind": "Panel",
         "spec": {
-          "id": 470,
+          "id": 471,
           "title": "Collector availability by state",
           "description": "Current logical-collector counts by bounded availability state. This is a snapshot, not a scrape-success or record-throughput count.",
           "links": [],
@@ -38680,10 +38773,10 @@
           }
         }
       },
-      "panel-471": {
+      "panel-472": {
         "kind": "Panel",
         "spec": {
-          "id": 471,
+          "id": 472,
           "title": "Intentional collector absence",
           "description": "Disabled and covered collectors are intentional absence, shown separately from runtime or startup failures.",
           "links": [],
@@ -38772,10 +38865,10 @@
           }
         }
       },
-      "panel-472": {
+      "panel-473": {
         "kind": "Panel",
         "spec": {
-          "id": 472,
+          "id": 473,
           "title": "Collector availability failures",
           "description": "Current permission-denied blocks, degraded runs, failed runs, and startup failures. This is deliberately separate from configured absence and subscription limitations.",
           "links": [],
@@ -38891,10 +38984,10 @@
           }
         }
       },
-      "panel-473": {
+      "panel-474": {
         "kind": "Panel",
         "spec": {
-          "id": 473,
+          "id": 474,
           "title": "Subscription and capability limitations",
           "description": "This non-failure view shows subscription and capability limitations: a partial license can keep a collector running with a reduced capability set, while an unavailable license blocks it. Exact omitted capabilities are available from the admin status, not labels.",
           "links": [],
@@ -39010,10 +39103,10 @@
           }
         }
       },
-      "panel-475": {
+      "panel-476": {
         "kind": "Panel",
         "spec": {
-          "id": 475,
+          "id": 476,
           "title": "Scrape success by collector",
           "description": "1 when the last reconciled run was empty or successful; 0 when it was partial or failed (including a recovered panic). A green tick is not evidence of data: several collectors succeed on an empty collection by design.\n\nColour meaning: the emitter's description states 1 if the last scrape result was empty or success, 0 for partial or failure. 0 is a partial or failed scrape, which is a completed runtime failure the emitter defines. Green starts at 1 so the failing state is the uncoloured one and cannot be mistaken for a threshold this repository invented.",
           "links": [],
@@ -39119,10 +39212,10 @@
           }
         }
       },
-      "panel-476": {
+      "panel-477": {
         "kind": "Panel",
         "spec": {
-          "id": 476,
+          "id": 477,
           "title": "Scrape duration by collector",
           "description": "",
           "links": [],
@@ -39209,10 +39302,10 @@
           }
         }
       },
-      "panel-477": {
+      "panel-478": {
         "kind": "Panel",
         "spec": {
-          "id": 477,
+          "id": 478,
           "title": "Scrape staleness (seconds since last healthy result)",
           "description": "Counts up from process start until the first empty or successful result, so a collector that has never been healthy shows a growing value rather than no series.",
           "links": [],
@@ -39301,10 +39394,10 @@
           }
         }
       },
-      "panel-478": {
+      "panel-479": {
         "kind": "Panel",
         "spec": {
-          "id": 478,
+          "id": 479,
           "title": "Age of the latest completed scrape",
           "description": "Wall-clock age of the latest completed run, whether it succeeded or failed.",
           "links": [],
@@ -39391,10 +39484,10 @@
           }
         }
       },
-      "panel-479": {
+      "panel-480": {
         "kind": "Panel",
         "spec": {
-          "id": 479,
+          "id": 480,
           "title": "Scrape budget (duration / interval)",
           "description": "At or above 1 a scrape takes as long as its own poll interval \u2014 no headroom, risk of overrun.\n\nColour meaning: 1.0 is a scrape consuming its entire poll interval, so it cannot finish before the next one is due. The boundary is the configured poll interval itself, not a chosen number.",
           "links": [],
@@ -39485,10 +39578,10 @@
           }
         }
       },
-      "panel-480": {
+      "panel-481": {
         "kind": "Panel",
         "spec": {
-          "id": 480,
+          "id": 481,
           "title": "Effective expected poll interval per collector",
           "description": "The scheduler's EFFECTIVE interval per collector (#299) \u2014 a clamped or defaulted value, never the raw config override. This is exactly what the collector-staleness alert's staleness/expected-interval ratio compares against, so a collector with a short or long interval gets its own correct multiple instead of one placeholder threshold.",
           "links": [],
@@ -39577,10 +39670,10 @@
           }
         }
       },
-      "panel-481": {
+      "panel-482": {
         "kind": "Panel",
         "spec": {
-          "id": 481,
+          "id": 482,
           "title": "Window watermark age (seconds behind now)",
           "description": "How far behind the clock each window collector's durable cursor sits (#422). This is the direct read of the #417 fault, which every success/staleness signal missed for 11 days: a livelocked collector re-polls one frozen window, dedupes everything it fetches, and reports a healthy scrape forever while this value climbs without bound. A QUIET tenant does NOT climb \u2014 logpipeline advances the watermark to (window end - safety lag) even when the window drained zero records \u2014 so a rising value here means the window itself stopped moving, not that nothing happened. Only window cursors appear: blob consumers track a byte offset with no timestamp, and a collector that has not yet drained a window is absent rather than shown as infinitely stale.",
           "links": [],
@@ -39669,10 +39762,10 @@
           }
         }
       },
-      "panel-482": {
+      "panel-483": {
         "kind": "Panel",
         "spec": {
-          "id": 482,
+          "id": 483,
           "title": "Scrape error rate by error type",
           "description": "",
           "links": [],
@@ -39759,10 +39852,10 @@
           }
         }
       },
-      "panel-483": {
+      "panel-484": {
         "kind": "Panel",
         "spec": {
-          "id": 483,
+          "id": 484,
           "title": "Checkpoint persist error rate",
           "description": "The window succeeded but its high-water mark did not reach disk. The next tick still advances; the window is only re-polled after a restart.",
           "links": [],
@@ -39849,10 +39942,10 @@
           }
         }
       },
-      "panel-485": {
+      "panel-486": {
         "kind": "Panel",
         "spec": {
-          "id": 485,
+          "id": 486,
           "title": "Collector run rate by reconciled result",
           "description": "Separates healthy-empty polls from successful data-bearing polls and from partial or failed runs.",
           "links": [],
@@ -39939,10 +40032,10 @@
           }
         }
       },
-      "panel-486": {
+      "panel-487": {
         "kind": "Panel",
         "spec": {
-          "id": 486,
+          "id": 487,
           "title": "Source-record rate by outcome",
           "description": "One source row counts once at each lifecycle boundary; fetched, mapped, and terminal outcomes overlap and are deliberately unstacked. This is not the number of OTEL metric points or log records.",
           "links": [],
@@ -40029,10 +40122,10 @@
           }
         }
       },
-      "panel-487": {
+      "panel-488": {
         "kind": "Panel",
         "spec": {
-          "id": 487,
+          "id": 488,
           "title": "Dropped / errored source-record rate",
           "description": "Any nonzero value is record loss. `dropped` is a deliberate rejection such as a missing event timestamp; `errored` is decode or processing failure.",
           "links": [],
@@ -40119,10 +40212,10 @@
           }
         }
       },
-      "panel-488": {
+      "panel-489": {
         "kind": "Panel",
         "spec": {
-          "id": 488,
+          "id": 489,
           "title": "Source-event lag at emission",
           "description": "Source timestamp to graph2otel emission. It does not measure backend acceptance or OTLP delivery latency.",
           "links": [],
@@ -40236,10 +40329,10 @@
           }
         }
       },
-      "panel-489": {
+      "panel-490": {
         "kind": "Panel",
         "spec": {
-          "id": 489,
+          "id": 490,
           "title": "Payload type-mismatch rate",
           "description": "Report-only payload drift. Labels contain only source-controlled field names and closed JSON types, never field values.",
           "links": [],
@@ -40328,10 +40421,10 @@
           }
         }
       },
-      "panel-491": {
+      "panel-492": {
         "kind": "Panel",
         "spec": {
-          "id": 491,
+          "id": 492,
           "title": "Exact source-record rate by collector and traffic class",
           "description": "Exact logical source records fetched by completed collector runs. This traffic-class view comes from the same immutable snapshot as record.outcomes{outcome=\"fetched\"}. Normal runtime emits steady_state and cold_start_backfill; manual_replay is reserved and not emitted here.",
           "links": [],
@@ -40418,10 +40511,10 @@
           }
         }
       },
-      "panel-492": {
+      "panel-493": {
         "kind": "Panel",
         "spec": {
-          "id": 492,
+          "id": 493,
           "title": "Exact emitted-point rate by collector, signal and traffic class",
           "description": "Exact metric and log points after the central limiter and handed to the OpenTelemetry SDK. This is not backend acceptance or retention.",
           "links": [],
@@ -40508,10 +40601,10 @@
           }
         }
       },
-      "panel-493": {
+      "panel-494": {
         "kind": "Panel",
         "spec": {
-          "id": 493,
+          "id": 494,
           "title": "Estimated projected collector cost (configured period)",
           "description": "Estimate, not invoice. Present only when cost.enabled is true, using the operator-supplied rates and configured projection period. This projects recurring steady_state rows from cumulative process-lifetime observations; exceptional interval cost remains in the admin view. Logical record and point components are exact; the collector payload-byte allocation is estimated. A configured budget is display-only and never changes collector behavior.",
           "links": [],
@@ -40601,10 +40694,10 @@
           }
         }
       },
-      "panel-495": {
+      "panel-496": {
         "kind": "Panel",
         "spec": {
-          "id": 495,
+          "id": 496,
           "title": "Build info (process-wide)",
           "description": "One series for the graph2otel process. Tenant selection does not apply: duplicating build identity per tenant would create misleading copies of the same process fact.",
           "links": [],
@@ -40693,10 +40786,10 @@
           }
         }
       },
-      "panel-496": {
+      "panel-497": {
         "kind": "Panel",
         "spec": {
-          "id": 496,
+          "id": 497,
           "title": "Detected license tier by tenant",
           "description": "",
           "links": [],
@@ -40785,10 +40878,10 @@
           }
         }
       },
-      "panel-498": {
+      "panel-499": {
         "kind": "Panel",
         "spec": {
-          "id": 498,
+          "id": 499,
           "title": "Export job rate by result",
           "description": "",
           "links": [],
@@ -40875,10 +40968,10 @@
           }
         }
       },
-      "panel-499": {
+      "panel-500": {
         "kind": "Panel",
         "spec": {
-          "id": 499,
+          "id": 500,
           "title": "Export job duration",
           "description": "",
           "links": [],
@@ -40965,10 +41058,10 @@
           }
         }
       },
-      "panel-500": {
+      "panel-501": {
         "kind": "Panel",
         "spec": {
-          "id": 500,
+          "id": 501,
           "title": "Export polls to terminal state",
           "description": "",
           "links": [],
@@ -41055,10 +41148,10 @@
           }
         }
       },
-      "panel-501": {
+      "panel-502": {
         "kind": "Panel",
         "spec": {
-          "id": 501,
+          "id": 502,
           "title": "Downloaded export size",
           "description": "",
           "links": [],
@@ -41145,10 +41238,10 @@
           }
         }
       },
-      "panel-502": {
+      "panel-503": {
         "kind": "Panel",
         "spec": {
-          "id": 502,
+          "id": 503,
           "title": "Exports ended by exhausted throttle budget",
           "description": "Export calls that ended on a 429 because the in-tick retry budget ran out, so that tick's data was not fetched. Absorbed 429s do not count here; they are in the Throttle (429) rate panel. The g2o-export-throttle-exhausted alert fires on this.",
           "links": [],
@@ -41235,10 +41328,10 @@
           }
         }
       },
-      "panel-504": {
+      "panel-505": {
         "kind": "Panel",
         "spec": {
-          "id": 504,
+          "id": 505,
           "title": "Active series by source metric (process-wide)",
           "description": "Distinct series emitted per source metric across the shared process AFTER limiting \u2014 the series actually billed. Tenant selection does not apply.",
           "links": [],
@@ -41327,10 +41420,10 @@
           }
         }
       },
-      "panel-505": {
+      "panel-506": {
         "kind": "Panel",
         "spec": {
-          "id": 505,
+          "id": 506,
           "title": "Series clipped, by mode (process-wide)",
           "description": "mode=folded were summed into the `other` bucket; mode=dropped were discarded because the metric is not additive and a synthetic aggregate would be worse than the loss. Counts cover the shared process; tenant selection does not apply.",
           "links": [],
@@ -41416,10 +41509,10 @@
           }
         }
       },
-      "panel-506": {
+      "panel-507": {
         "kind": "Panel",
         "spec": {
-          "id": 506,
+          "id": 507,
           "title": "Total active series (process-wide)",
           "description": "Total distinct active series across the shared process during the last export interval. Tenant selection does not apply.",
           "links": [],
@@ -41498,10 +41591,10 @@
           }
         }
       },
-      "panel-507": {
+      "panel-508": {
         "kind": "Panel",
         "spec": {
-          "id": 507,
+          "id": 508,
           "title": "Configured per-metric series limit (process-wide)",
           "description": "One process-wide cardinality policy. Tenant selection does not apply.",
           "links": [],
@@ -41580,10 +41673,10 @@
           }
         }
       },
-      "panel-509": {
+      "panel-510": {
         "kind": "Panel",
         "spec": {
-          "id": 509,
+          "id": 510,
           "title": "Throttle (429) rate by workload",
           "description": "",
           "links": [],
@@ -41670,10 +41763,10 @@
           }
         }
       },
-      "panel-510": {
+      "panel-511": {
         "kind": "Panel",
         "spec": {
-          "id": 510,
+          "id": 511,
           "title": "Adaptive limiter effective rate (requests per minute)",
           "description": "Current client-side request rate of an adaptive workload limiter (intune-export only). It halves on a 429 down to a floor, and recovers in steps after a quiet period.",
           "links": [],
@@ -41760,10 +41853,10 @@
           }
         }
       },
-      "panel-511": {
+      "panel-512": {
         "kind": "Panel",
         "spec": {
-          "id": 511,
+          "id": 512,
           "title": "Graph-reported throttle budget consumed",
           "description": "From the x-ms-throttle-limit-percentage response header, which is not sent on every 429 or every workload \u2014 an absent series does NOT mean the budget is healthy.",
           "links": [],
@@ -41850,10 +41943,10 @@
           }
         }
       },
-      "panel-512": {
+      "panel-513": {
         "kind": "Panel",
         "spec": {
-          "id": 512,
+          "id": 513,
           "title": "Outbound Graph request latency (p95)",
           "description": "",
           "links": [],
@@ -41940,10 +42033,10 @@
           }
         }
       },
-      "panel-513": {
+      "panel-514": {
         "kind": "Panel",
         "spec": {
-          "id": 513,
+          "id": 514,
           "title": "Outbound Graph 4xx / 5xx rate by workload",
           "description": "",
           "links": [],
@@ -42057,10 +42150,10 @@
           }
         }
       },
-      "panel-515": {
+      "panel-516": {
         "kind": "Panel",
         "spec": {
-          "id": 515,
+          "id": 516,
           "title": "Exchange Online request latency (p95)",
           "description": "",
           "links": [],
@@ -42147,10 +42240,10 @@
           }
         }
       },
-      "panel-516": {
+      "panel-517": {
         "kind": "Panel",
         "spec": {
-          "id": 516,
+          "id": 517,
           "title": "Exchange Online error and throttle rate",
           "description": "",
           "links": [],
@@ -42291,10 +42384,10 @@
           }
         }
       },
-      "panel-517": {
+      "panel-518": {
         "kind": "Panel",
         "spec": {
-          "id": 517,
+          "id": 518,
           "title": "Teams admin API request latency (p95)",
           "description": "",
           "links": [],
@@ -42381,10 +42474,10 @@
           }
         }
       },
-      "panel-518": {
+      "panel-519": {
         "kind": "Panel",
         "spec": {
-          "id": 518,
+          "id": 519,
           "title": "Teams admin API error and throttle rate",
           "description": "",
           "links": [],
@@ -42525,10 +42618,10 @@
           }
         }
       },
-      "panel-519": {
+      "panel-520": {
         "kind": "Panel",
         "spec": {
-          "id": 519,
+          "id": 520,
           "title": "Advanced hunting request latency (p95)",
           "description": "",
           "links": [],
@@ -42615,10 +42708,10 @@
           }
         }
       },
-      "panel-520": {
+      "panel-521": {
         "kind": "Panel",
         "spec": {
-          "id": 520,
+          "id": 521,
           "title": "Advanced hunting error and throttle rate",
           "description": "",
           "links": [],
@@ -42759,10 +42852,10 @@
           }
         }
       },
-      "panel-521": {
+      "panel-522": {
         "kind": "Panel",
         "spec": {
-          "id": 521,
+          "id": 522,
           "title": "MDCA request latency (p95)",
           "description": "",
           "links": [],
@@ -42849,10 +42942,10 @@
           }
         }
       },
-      "panel-522": {
+      "panel-523": {
         "kind": "Panel",
         "spec": {
-          "id": 522,
+          "id": 523,
           "title": "MDCA error and throttle rate",
           "description": "",
           "links": [],
@@ -42993,10 +43086,10 @@
           }
         }
       },
-      "panel-523": {
+      "panel-524": {
         "kind": "Panel",
         "spec": {
-          "id": 523,
+          "id": 524,
           "title": "O365 Activity request latency (p95)",
           "description": "",
           "links": [],
@@ -43083,10 +43176,10 @@
           }
         }
       },
-      "panel-524": {
+      "panel-525": {
         "kind": "Panel",
         "spec": {
-          "id": 524,
+          "id": 525,
           "title": "O365 Activity error and throttle rate",
           "description": "",
           "links": [],
@@ -43227,10 +43320,10 @@
           }
         }
       },
-      "panel-526": {
+      "panel-527": {
         "kind": "Panel",
         "spec": {
-          "id": 526,
+          "id": 527,
           "title": "Microsoft API drift rate \u2014 a response no longer matches what a collector expects",
           "description": "Report-only wire values outside a collector's mapped assumptions. Unexpected values do not drop records.",
           "links": [],
@@ -43317,10 +43410,10 @@
           }
         }
       },
-      "panel-528": {
+      "panel-529": {
         "kind": "Panel",
         "spec": {
-          "id": 528,
+          "id": 529,
           "title": "Records dropped as older than the backend accept window",
           "description": "Any nonzero value is data loss, and it is EXPECTED on a blob-derived stream: those replay historical records, so a record can age past the backend's 7-day accept window before it is ever read (#401). graph2otel drops it rather than sending a record the gateway rejects per-entry, because the loss is identical either way and only this way is it countable. Pair with 'Source-event lag at emission' above: a rising p95 there is the leading indicator of this counter starting to move. Note that record_outcomes counts these as emitted, so this counter \u2014 not that one \u2014 is the authoritative statement that they did not land.",
           "links": [],
@@ -43407,10 +43500,10 @@
           }
         }
       },
-      "panel-530": {
+      "panel-531": {
         "kind": "Panel",
         "spec": {
-          "id": 530,
+          "id": 531,
           "title": "Records whose attributes were clipped to fit the backend size limit",
           "description": "A nonzero value is CONTENT loss, not record loss: the record landed, but one or more attribute values were shortened to keep the entry under Loki's 64 KiB structured-metadata limit, which refuses an oversized entry per-entry and loses it outright (#419). The record itself carries attrs_truncated=\"true\", attrs_truncated_bytes, and attrs_truncated_keys naming the fields that were shortened \u2014 query '{service_name=\"graph2otel\"} | attrs_truncated = \"true\"' to see which shape is oversized. A collector appearing here consistently is one whose source field genuinely does not fit and may want a cap at the mapper instead.",
           "links": [],
@@ -43497,10 +43590,10 @@
           }
         }
       },
-      "panel-532": {
+      "panel-533": {
         "kind": "Panel",
         "spec": {
-          "id": 532,
+          "id": 533,
           "title": "Blob categories",
           "description": "Azure diagnostic-settings categories on the aadiam provider, by census state: consumed / enabled_unread (billed but read by no collector) / mapped_but_disabled (a collector polls a container that is never written) / disabled.",
           "links": [],
@@ -43587,10 +43680,10 @@
           }
         }
       },
-      "panel-533": {
+      "panel-534": {
         "kind": "Panel",
         "spec": {
-          "id": 533,
+          "id": 534,
           "title": "Blob endpoint paths",
           "description": "Distinct normalized Graph endpoint paths seen by this collector \u2014 headroom against the path cap (#185).",
           "links": [],
@@ -43677,10 +43770,10 @@
           }
         }
       },
-      "panel-534": {
+      "panel-535": {
         "kind": "Panel",
         "spec": {
-          "id": 534,
+          "id": 535,
           "title": "Blob event age",
           "description": "Freshest blob event age this tick \u2014 the metric propagation floor (#128).",
           "links": [],
@@ -43767,10 +43860,10 @@
           }
         }
       },
-      "panel-535": {
+      "panel-536": {
         "kind": "Panel",
         "spec": {
-          "id": 535,
+          "id": 536,
           "title": "Blob records dropped rate",
           "description": "Blob records dropped because they had no parseable event time (#275).",
           "links": [],
@@ -43857,10 +43950,10 @@
           }
         }
       },
-      "panel-536": {
+      "panel-537": {
         "kind": "Panel",
         "spec": {
-          "id": 536,
+          "id": 537,
           "title": "Blob self excluded rate",
           "description": "Blob records dropped by exclude_self because their appId matched the poller's proved authenticated application ID (#154).",
           "links": [],
@@ -43947,10 +44040,10 @@
           }
         }
       },
-      "panel-537": {
+      "panel-538": {
         "kind": "Panel",
         "spec": {
-          "id": 537,
+          "id": 538,
           "title": "Blob record rate: emitted as metrics vs gated",
           "description": "",
           "links": [],
@@ -44064,10 +44157,10 @@
           }
         }
       },
-      "panel-538": {
+      "panel-539": {
         "kind": "Panel",
         "spec": {
-          "id": 538,
+          "id": 539,
           "title": "Logpipeline self excluded rate",
           "description": "Graph-polled records dropped by exclude_self because their appId matched the poller's proved authenticated application ID (#176).",
           "links": [],
@@ -44154,10 +44247,10 @@
           }
         }
       },
-      "panel-540": {
+      "panel-541": {
         "kind": "Panel",
         "spec": {
-          "id": 540,
+          "id": 541,
           "title": "Annotation degraded",
           "description": "Whether the most recent Grafana annotation write failed and has not been recovered by a later success.",
           "links": [],
@@ -44236,10 +44329,10 @@
           }
         }
       },
-      "panel-541": {
+      "panel-542": {
         "kind": "Panel",
         "spec": {
-          "id": 541,
+          "id": 542,
           "title": "Annotation outcome rate: published vs dropped",
           "description": "",
           "links": [],
@@ -44353,10 +44446,10 @@
           }
         }
       },
-      "panel-543": {
+      "panel-544": {
         "kind": "Panel",
         "spec": {
-          "id": 543,
+          "id": 544,
           "title": "Blob diagnostic categories \u2014 which container, mapped or not",
           "description": "One record per diagnostic category found in the storage account, saying whether graph2otel has a mapper for it. An unmapped category is data arriving that nothing reads.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -44426,10 +44519,10 @@
           }
         }
       },
-      "panel-544": {
+      "panel-545": {
         "kind": "Panel",
         "spec": {
-          "id": 544,
+          "id": 545,
           "title": "Starts, versions and configuration fingerprints",
           "description": "One record per configured tenant on every process start, carrying the version, the Go runtime version and a one-way configuration fingerprint. This is the detail behind the deploy annotations on every time axis. A configuration change is two consecutive records whose config.fingerprint differs \u2014 the fingerprint is a hash, so it says THAT the configuration changed and never what it changed to. It is deliberately over-sensitive: it covers the whole configuration, so a change that does not alter behaviour can still move it. A rotated credential does not, because credentials are redacted by type before hashing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -44499,10 +44592,10 @@
           }
         }
       },
-      "panel-546": {
+      "panel-547": {
         "kind": "Panel",
         "spec": {
-          "id": 546,
+          "id": 547,
           "title": "Signal availability",
           "description": "Current collector state from graph2otel.collector.availability. Intentional absence is disabled (transport_not_configured, experimental_not_enabled, high_volume_not_enabled, disabled_by_config, profile_not_selected) or covered (covered_by_alternative). healthy_empty/empty is a successful zero-row source response. limited/partial_license is non-failure; blocked/license_unavailable identifies a missing entitlement, while blocked/permission_denied requires access. degraded and failed (including source_error) describe completed runtime outcomes; startup_failed describes initialization failure. An empty table is unknown, never evidence of disabled.",
           "links": [],
@@ -44733,10 +44826,10 @@
           }
         }
       },
-      "panel-547": {
+      "panel-548": {
         "kind": "Panel",
         "spec": {
-          "id": 547,
+          "id": 548,
           "title": "Read this before writing your own query",
           "description": "",
           "links": [],
@@ -44761,10 +44854,10 @@
           }
         }
       },
-      "panel-548": {
+      "panel-549": {
         "kind": "Panel",
         "spec": {
-          "id": 548,
+          "id": 549,
           "title": "Investigate one entity",
           "description": "",
           "links": [],
@@ -44789,10 +44882,10 @@
           }
         }
       },
-      "panel-549": {
+      "panel-550": {
         "kind": "Panel",
         "spec": {
-          "id": 549,
+          "id": 550,
           "title": "Which signals name this device",
           "description": "**Which of graph2otel's log signals name it, and how often.** This device's compliance, configuration, certificate, encryption, startup, logon and vulnerability records.\n\n**Identifier:** the device the record is ABOUT \u2014 the managed or onboarded device the source system names, never the device that observed the event.\n\n**Queried keys:** `device_id` (44 log events), `device_name` (38 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `aad_device_id`, `serial_number`, `device_serial_number`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\n**Read this first:** `device_id` is source-scoped. On `intune.*` it is Intune's managed-device id; on `defender.*` it is Defender's machine id. They are different id namespaces for the same physical machine and graph2otel does not map between them, so pivoting on an Intune id will not reach Defender rows. `device_name` is usually what bridges the two, and is usually what an alert quotes.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -44907,10 +45000,10 @@
           }
         }
       },
-      "panel-550": {
+      "panel-551": {
         "kind": "Panel",
         "spec": {
-          "id": 550,
+          "id": 551,
           "title": "Every record naming this device",
           "description": "**Every record that names it, newest first.** This device's compliance, configuration, certificate, encryption, startup, logon and vulnerability records.\n\n**Identifier:** the device the record is ABOUT \u2014 the managed or onboarded device the source system names, never the device that observed the event.\n\n**Queried keys:** `device_id` (44 log events), `device_name` (38 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `aad_device_id`, `serial_number`, `device_serial_number`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\n**Read this first:** `device_id` is source-scoped. On `intune.*` it is Intune's managed-device id; on `defender.*` it is Defender's machine id. They are different id namespaces for the same physical machine and graph2otel does not map between them, so pivoting on an Intune id will not reach Defender rows. `device_name` is usually what bridges the two, and is usually what an alert quotes.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -45005,10 +45098,10 @@
           }
         }
       },
-      "panel-551": {
+      "panel-552": {
         "kind": "Panel",
         "spec": {
-          "id": 551,
+          "id": 552,
           "title": "Which signals name this application or service principal",
           "description": "**Which of graph2otel's log signals name it, and how often.** This app's sign-ins, credential and federated-credential state, consent and permission grants, risk detections and graph activity.\n\n**Identifier:** the application the record is about. `app_id` is the Entra application (client) id, `service_principal_id` the directory object id of its service principal, and `application_id` the same app as other products name it. One app registration has all three and they are different values.\n\n**Queried keys:** `app_id` (15 log events), `service_principal_id` (5 log events), `application_id` (4 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `app_display_name`, `app_object_id`, `oauth_app_id`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -45149,10 +45242,10 @@
           }
         }
       },
-      "panel-552": {
+      "panel-553": {
         "kind": "Panel",
         "spec": {
-          "id": 552,
+          "id": 553,
           "title": "Every record naming this application or service principal",
           "description": "**Every record that names it, newest first.** This app's sign-ins, credential and federated-credential state, consent and permission grants, risk detections and graph activity.\n\n**Identifier:** the application the record is about. `app_id` is the Entra application (client) id, `service_principal_id` the directory object id of its service principal, and `application_id` the same app as other products name it. One app registration has all three and they are different values.\n\n**Queried keys:** `app_id` (15 log events), `service_principal_id` (5 log events), `application_id` (4 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `app_display_name`, `app_object_id`, `oauth_app_id`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -45272,10 +45365,10 @@
           }
         }
       },
-      "panel-553": {
+      "panel-554": {
         "kind": "Panel",
         "spec": {
-          "id": 553,
+          "id": 554,
           "title": "Which signals name this account",
           "description": "**Which of graph2otel's log signals name it, and how often.** This account's sign-ins, risk detections, registration state, privilege elevations, certificates and mailbox records.\n\n**Identifier:** the account named on the record, as a user principal name. Three attribute names carry the same UPN value \u2014 Entra writes `user_principal_name`, Intune writes `upn`, Defender writes `account_upn` \u2014 so all three are queried and one input covers them.\n\n**Queried keys:** `user_principal_name` (21 log events), `upn` (13 log events), `account_upn` (6 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `user_id`, `account_object_id`, `account_name`, `user_display_name`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\n**Read this first:** Object-id keys are a different value shape from a UPN, so they are not folded into this input: pasting a UPN into an object-id filter would match nothing and the empty result would look like a verdict.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -45416,10 +45509,10 @@
           }
         }
       },
-      "panel-554": {
+      "panel-555": {
         "kind": "Panel",
         "spec": {
-          "id": 554,
+          "id": 555,
           "title": "Every record naming this account",
           "description": "**Every record that names it, newest first.** This account's sign-ins, risk detections, registration state, privilege elevations, certificates and mailbox records.\n\n**Identifier:** the account named on the record, as a user principal name. Three attribute names carry the same UPN value \u2014 Entra writes `user_principal_name`, Intune writes `upn`, Defender writes `account_upn` \u2014 so all three are queried and one input covers them.\n\n**Queried keys:** `user_principal_name` (21 log events), `upn` (13 log events), `account_upn` (6 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `user_id`, `account_object_id`, `account_name`, `user_display_name`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\n**Read this first:** Object-id keys are a different value shape from a UPN, so they are not folded into this input: pasting a UPN into an object-id filter would match nothing and the empty result would look like a verdict.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -45539,10 +45632,10 @@
           }
         }
       },
-      "panel-555": {
+      "panel-556": {
         "kind": "Panel",
         "spec": {
-          "id": 555,
+          "id": 556,
           "title": "Which signals name this email message",
           "description": "**Which of graph2otel's log signals name it, and how often.** This message's delivery verdict, attachments, urls and clicks, quarantine state and transport trace.\n\n**Identifier:** the message the record is about. `network_message_id` is Microsoft's per-tenant id used across the Defender for Office 365 tables; `internet_message_id` is the RFC 5322 Message-ID from the header \u2014 the one an end user or an external system can quote.\n\n**Queried keys:** `network_message_id` (7 log events), `internet_message_id` (4 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `message_trace_id`, `email_cluster_id`, `message_id`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -45657,10 +45750,10 @@
           }
         }
       },
-      "panel-556": {
+      "panel-557": {
         "kind": "Panel",
         "spec": {
-          "id": 556,
+          "id": 557,
           "title": "Every record naming this email message",
           "description": "**Every record that names it, newest first.** This message's delivery verdict, attachments, urls and clicks, quarantine state and transport trace.\n\n**Identifier:** the message the record is about. `network_message_id` is Microsoft's per-tenant id used across the Defender for Office 365 tables; `internet_message_id` is the RFC 5322 Message-ID from the header \u2014 the one an end user or an external system can quote.\n\n**Queried keys:** `network_message_id` (7 log events), `internet_message_id` (4 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Deliberately not queried:** `message_trace_id`, `email_cluster_id`, `message_id`. They name the same entity in a different value shape or a narrower namespace, and folding them into one input would make an empty result ambiguous \u2014 query them directly when you hold one.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -45755,10 +45848,10 @@
           }
         }
       },
-      "panel-557": {
+      "panel-558": {
         "kind": "Panel",
         "spec": {
-          "id": 557,
+          "id": 558,
           "title": "Which signals name this security alert",
           "description": "**Which of graph2otel's log signals name it, and how often.** This alert's evidence rows and the graph security-alert record that reports it.\n\n**Identifier:** the alert the record is about. `alert_id` is the source product's own alert id \u2014 Defender XDR's on the advanced-hunting alert tables, PIM's on its own alerts, which are different namespaces \u2014 and `provider_alert_id` is the originating provider's id carried on the Graph security alert.\n\n**Queried keys:** `alert_id` (3 log events), `provider_alert_id` (1 log events). An input matching any one of them matches; an empty input matches nothing.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [
@@ -45879,10 +45972,10 @@
           }
         }
       },
-      "panel-558": {
+      "panel-559": {
         "kind": "Panel",
         "spec": {
-          "id": 558,
+          "id": 559,
           "title": "Every record naming this security alert",
           "description": "**Every record that names it, newest first.** This alert's evidence rows and the graph security-alert record that reports it.\n\n**Identifier:** the alert the record is about. `alert_id` is the source product's own alert id \u2014 Defender XDR's on the advanced-hunting alert tables, PIM's on its own alerts, which are different namespaces \u2014 and `provider_alert_id` is the originating provider's id carried on the Graph security alert.\n\n**Queried keys:** `alert_id` (3 log events), `provider_alert_id` (1 log events). An input matching any one of them matches; an empty input matches nothing.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [
@@ -45983,10 +46076,10 @@
           }
         }
       },
-      "panel-559": {
+      "panel-560": {
         "kind": "Panel",
         "spec": {
-          "id": 559,
+          "id": 560,
           "title": "Which signals name this security incident",
           "description": "**Which of graph2otel's log signals name it, and how often.** Every alert graph2otel has recorded under this incident.\n\n**Identifier:** the incident that groups one or more alerts, as Microsoft's Graph security API reports it on each alert it contains.\n\n**Queried keys:** `incident_id` (1 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Read this first:** Exactly one cataloged log signal carries `incident_id` today (`entra.security_alert`), so this pivot lists the alerts in the incident and nothing else. Pivot from each alert id for its evidence.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -46075,10 +46168,10 @@
           }
         }
       },
-      "panel-560": {
+      "panel-561": {
         "kind": "Panel",
         "spec": {
-          "id": 560,
+          "id": 561,
           "title": "Every record naming this security incident",
           "description": "**Every record that names it, newest first.** Every alert graph2otel has recorded under this incident.\n\n**Identifier:** the incident that groups one or more alerts, as Microsoft's Graph security API reports it on each alert it contains.\n\n**Queried keys:** `incident_id` (1 log events). An input matching any one of them matches; an empty input matches nothing.\n\n**Read this first:** Exactly one cataloged log signal carries `incident_id` today (`entra.security_alert`), so this pivot lists the alerts in the incident and nothing else. Pivot from each alert id for its evidence.\n\nThis is navigation, **not a join** and not a correlation verdict: rows here are records that name the same identifier, which is not proof they describe the same real-world thing.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -46179,7 +46272,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-546"
+                                    "name": "panel-547"
                                   }
                                 }
                               },
@@ -46192,7 +46285,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-547"
+                                    "name": "panel-548"
                                   }
                                 }
                               },
@@ -46205,7 +46298,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-548"
+                                    "name": "panel-549"
                                   }
                                 }
                               }
@@ -46233,7 +46326,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-549"
+                                    "name": "panel-550"
                                   }
                                 }
                               },
@@ -46246,7 +46339,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-550"
+                                    "name": "panel-551"
                                   }
                                 }
                               }
@@ -46273,7 +46366,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-551"
+                                    "name": "panel-552"
                                   }
                                 }
                               },
@@ -46286,7 +46379,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-552"
+                                    "name": "panel-553"
                                   }
                                 }
                               }
@@ -46313,7 +46406,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-553"
+                                    "name": "panel-554"
                                   }
                                 }
                               },
@@ -46326,7 +46419,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-554"
+                                    "name": "panel-555"
                                   }
                                 }
                               }
@@ -46353,7 +46446,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-555"
+                                    "name": "panel-556"
                                   }
                                 }
                               },
@@ -46366,7 +46459,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-556"
+                                    "name": "panel-557"
                                   }
                                 }
                               }
@@ -46393,7 +46486,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-557"
+                                    "name": "panel-558"
                                   }
                                 }
                               },
@@ -46406,7 +46499,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-558"
+                                    "name": "panel-559"
                                   }
                                 }
                               }
@@ -46433,7 +46526,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-559"
+                                    "name": "panel-560"
                                   }
                                 }
                               },
@@ -46446,7 +46539,7 @@
                                   "height": 10,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-560"
+                                    "name": "panel-561"
                                   }
                                 }
                               }
@@ -52598,6 +52691,47 @@
                     {
                       "kind": "TabsLayoutTab",
                       "spec": {
+                        "title": "Teams report freshness",
+                        "layout": {
+                          "kind": "RowsLayout",
+                          "spec": {
+                            "rows": [
+                              {
+                                "kind": "RowsLayoutRow",
+                                "spec": {
+                                  "title": "",
+                                  "collapse": false,
+                                  "layout": {
+                                    "kind": "GridLayout",
+                                    "spec": {
+                                      "items": [
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
+                                            "x": 0,
+                                            "y": 0,
+                                            "width": 12,
+                                            "height": 8,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-1020"
+                                            }
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "hideHeader": true
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "kind": "TabsLayoutTab",
+                      "spec": {
                         "title": "Logs \u2014 which one, not how many (#162)",
                         "layout": {
                           "kind": "RowsLayout",
@@ -52621,19 +52755,6 @@
                                             "height": 12,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-407"
-                                            }
-                                          }
-                                        },
-                                        {
-                                          "kind": "GridLayoutItem",
-                                          "spec": {
-                                            "x": 0,
-                                            "y": 12,
-                                            "width": 12,
-                                            "height": 8,
-                                            "element": {
-                                              "kind": "ElementReference",
                                               "name": "panel-408"
                                             }
                                           }
@@ -52641,7 +52762,7 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 12,
+                                            "x": 0,
                                             "y": 12,
                                             "width": 12,
                                             "height": 8,
@@ -52654,8 +52775,8 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 0,
-                                            "y": 20,
+                                            "x": 12,
+                                            "y": 12,
                                             "width": 12,
                                             "height": 8,
                                             "element": {
@@ -52668,9 +52789,9 @@
                                           "kind": "GridLayoutItem",
                                           "spec": {
                                             "x": 0,
-                                            "y": 28,
-                                            "width": 24,
-                                            "height": 10,
+                                            "y": 20,
+                                            "width": 12,
+                                            "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
                                               "name": "panel-411"
@@ -52681,7 +52802,7 @@
                                           "kind": "GridLayoutItem",
                                           "spec": {
                                             "x": 0,
-                                            "y": 38,
+                                            "y": 28,
                                             "width": 24,
                                             "height": 10,
                                             "element": {
@@ -52694,7 +52815,7 @@
                                           "kind": "GridLayoutItem",
                                           "spec": {
                                             "x": 0,
-                                            "y": 48,
+                                            "y": 38,
                                             "width": 24,
                                             "height": 10,
                                             "element": {
@@ -52707,7 +52828,7 @@
                                           "kind": "GridLayoutItem",
                                           "spec": {
                                             "x": 0,
-                                            "y": 58,
+                                            "y": 48,
                                             "width": 24,
                                             "height": 10,
                                             "element": {
@@ -52720,7 +52841,7 @@
                                           "kind": "GridLayoutItem",
                                           "spec": {
                                             "x": 0,
-                                            "y": 68,
+                                            "y": 58,
                                             "width": 24,
                                             "height": 10,
                                             "element": {
@@ -52733,7 +52854,7 @@
                                           "kind": "GridLayoutItem",
                                           "spec": {
                                             "x": 0,
-                                            "y": 78,
+                                            "y": 68,
                                             "width": 24,
                                             "height": 10,
                                             "element": {
@@ -52746,7 +52867,7 @@
                                           "kind": "GridLayoutItem",
                                           "spec": {
                                             "x": 0,
-                                            "y": 88,
+                                            "y": 78,
                                             "width": 24,
                                             "height": 10,
                                             "element": {
@@ -52759,7 +52880,7 @@
                                           "kind": "GridLayoutItem",
                                           "spec": {
                                             "x": 0,
-                                            "y": 98,
+                                            "y": 88,
                                             "width": 24,
                                             "height": 10,
                                             "element": {
@@ -52772,7 +52893,7 @@
                                           "kind": "GridLayoutItem",
                                           "spec": {
                                             "x": 0,
-                                            "y": 108,
+                                            "y": 98,
                                             "width": 24,
                                             "height": 10,
                                             "element": {
@@ -52785,12 +52906,25 @@
                                           "kind": "GridLayoutItem",
                                           "spec": {
                                             "x": 0,
-                                            "y": 118,
+                                            "y": 108,
                                             "width": 24,
                                             "height": 10,
                                             "element": {
                                               "kind": "ElementReference",
                                               "name": "panel-420"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
+                                            "x": 0,
+                                            "y": 118,
+                                            "width": 24,
+                                            "height": 10,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-421"
                                             }
                                           }
                                         }
@@ -52869,7 +53003,7 @@
                                             "height": 4,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-421"
+                                              "name": "panel-422"
                                             }
                                           }
                                         },
@@ -52882,7 +53016,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-423"
+                                              "name": "panel-424"
                                             }
                                           }
                                         }
@@ -52923,7 +53057,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-425"
+                                              "name": "panel-426"
                                             }
                                           }
                                         },
@@ -52936,7 +53070,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-426"
+                                              "name": "panel-427"
                                             }
                                           }
                                         },
@@ -52949,7 +53083,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-427"
+                                              "name": "panel-428"
                                             }
                                           }
                                         },
@@ -52962,7 +53096,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-428"
+                                              "name": "panel-429"
                                             }
                                           }
                                         }
@@ -53003,7 +53137,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-430"
+                                              "name": "panel-431"
                                             }
                                           }
                                         },
@@ -53016,7 +53150,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-431"
+                                              "name": "panel-432"
                                             }
                                           }
                                         },
@@ -53029,7 +53163,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-432"
+                                              "name": "panel-433"
                                             }
                                           }
                                         }
@@ -53070,7 +53204,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-434"
+                                              "name": "panel-435"
                                             }
                                           }
                                         }
@@ -53111,7 +53245,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-436"
+                                              "name": "panel-437"
                                             }
                                           }
                                         },
@@ -53124,19 +53258,6 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-437"
-                                            }
-                                          }
-                                        },
-                                        {
-                                          "kind": "GridLayoutItem",
-                                          "spec": {
-                                            "x": 0,
-                                            "y": 8,
-                                            "width": 12,
-                                            "height": 8,
-                                            "element": {
-                                              "kind": "ElementReference",
                                               "name": "panel-438"
                                             }
                                           }
@@ -53144,7 +53265,7 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 12,
+                                            "x": 0,
                                             "y": 8,
                                             "width": 12,
                                             "height": 8,
@@ -53157,8 +53278,8 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 0,
-                                            "y": 16,
+                                            "x": 12,
+                                            "y": 8,
                                             "width": 12,
                                             "height": 8,
                                             "element": {
@@ -53170,7 +53291,7 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 12,
+                                            "x": 0,
                                             "y": 16,
                                             "width": 12,
                                             "height": 8,
@@ -53183,13 +53304,26 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
+                                            "x": 12,
+                                            "y": 16,
+                                            "width": 12,
+                                            "height": 8,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-442"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
                                             "x": 0,
                                             "y": 24,
                                             "width": 12,
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-442"
+                                              "name": "panel-443"
                                             }
                                           }
                                         }
@@ -53230,19 +53364,6 @@
                                             "height": 10,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-444"
-                                            }
-                                          }
-                                        },
-                                        {
-                                          "kind": "GridLayoutItem",
-                                          "spec": {
-                                            "x": 0,
-                                            "y": 10,
-                                            "width": 12,
-                                            "height": 8,
-                                            "element": {
-                                              "kind": "ElementReference",
                                               "name": "panel-445"
                                             }
                                           }
@@ -53250,7 +53371,7 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 12,
+                                            "x": 0,
                                             "y": 10,
                                             "width": 12,
                                             "height": 8,
@@ -53263,8 +53384,8 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 0,
-                                            "y": 18,
+                                            "x": 12,
+                                            "y": 10,
                                             "width": 12,
                                             "height": 8,
                                             "element": {
@@ -53277,12 +53398,25 @@
                                           "kind": "GridLayoutItem",
                                           "spec": {
                                             "x": 0,
+                                            "y": 18,
+                                            "width": 12,
+                                            "height": 8,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-448"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
+                                            "x": 0,
                                             "y": 26,
                                             "width": 24,
                                             "height": 10,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-448"
+                                              "name": "panel-449"
                                             }
                                           }
                                         },
@@ -53295,7 +53429,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-449"
+                                              "name": "panel-450"
                                             }
                                           }
                                         }
@@ -53374,7 +53508,7 @@
                                             "height": 4,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-450"
+                                              "name": "panel-451"
                                             }
                                           }
                                         },
@@ -53387,19 +53521,6 @@
                                             "height": 5,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-452"
-                                            }
-                                          }
-                                        },
-                                        {
-                                          "kind": "GridLayoutItem",
-                                          "spec": {
-                                            "x": 0,
-                                            "y": 9,
-                                            "width": 6,
-                                            "height": 6,
-                                            "element": {
-                                              "kind": "ElementReference",
                                               "name": "panel-453"
                                             }
                                           }
@@ -53407,7 +53528,7 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 6,
+                                            "x": 0,
                                             "y": 9,
                                             "width": 6,
                                             "height": 6,
@@ -53420,7 +53541,7 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 12,
+                                            "x": 6,
                                             "y": 9,
                                             "width": 6,
                                             "height": 6,
@@ -53433,7 +53554,7 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 18,
+                                            "x": 12,
                                             "y": 9,
                                             "width": 6,
                                             "height": 6,
@@ -53446,8 +53567,8 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 0,
-                                            "y": 15,
+                                            "x": 18,
+                                            "y": 9,
                                             "width": 6,
                                             "height": 6,
                                             "element": {
@@ -53459,7 +53580,7 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 6,
+                                            "x": 0,
                                             "y": 15,
                                             "width": 6,
                                             "height": 6,
@@ -53472,7 +53593,7 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 12,
+                                            "x": 6,
                                             "y": 15,
                                             "width": 6,
                                             "height": 6,
@@ -53485,13 +53606,26 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 18,
+                                            "x": 12,
                                             "y": 15,
                                             "width": 6,
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
                                               "name": "panel-460"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
+                                            "x": 18,
+                                            "y": 15,
+                                            "width": 6,
+                                            "height": 6,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-461"
                                             }
                                           }
                                         }
@@ -53532,7 +53666,7 @@
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-462"
+                                              "name": "panel-463"
                                             }
                                           }
                                         },
@@ -53545,19 +53679,6 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-463"
-                                            }
-                                          }
-                                        },
-                                        {
-                                          "kind": "GridLayoutItem",
-                                          "spec": {
-                                            "x": 0,
-                                            "y": 14,
-                                            "width": 12,
-                                            "height": 6,
-                                            "element": {
-                                              "kind": "ElementReference",
                                               "name": "panel-464"
                                             }
                                           }
@@ -53565,7 +53686,7 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 12,
+                                            "x": 0,
                                             "y": 14,
                                             "width": 12,
                                             "height": 6,
@@ -53578,13 +53699,26 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
+                                            "x": 12,
+                                            "y": 14,
+                                            "width": 12,
+                                            "height": 6,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-466"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
                                             "x": 0,
                                             "y": 20,
                                             "width": 12,
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-466"
+                                              "name": "panel-467"
                                             }
                                           }
                                         },
@@ -53597,7 +53731,7 @@
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-467"
+                                              "name": "panel-468"
                                             }
                                           }
                                         }
@@ -53638,19 +53772,6 @@
                                             "height": 12,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-469"
-                                            }
-                                          }
-                                        },
-                                        {
-                                          "kind": "GridLayoutItem",
-                                          "spec": {
-                                            "x": 0,
-                                            "y": 12,
-                                            "width": 12,
-                                            "height": 7,
-                                            "element": {
-                                              "kind": "ElementReference",
                                               "name": "panel-470"
                                             }
                                           }
@@ -53658,7 +53779,7 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 12,
+                                            "x": 0,
                                             "y": 12,
                                             "width": 12,
                                             "height": 7,
@@ -53671,13 +53792,26 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
+                                            "x": 12,
+                                            "y": 12,
+                                            "width": 12,
+                                            "height": 7,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-472"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
                                             "x": 0,
                                             "y": 19,
                                             "width": 12,
                                             "height": 7,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-472"
+                                              "name": "panel-473"
                                             }
                                           }
                                         },
@@ -53690,7 +53824,7 @@
                                             "height": 7,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-473"
+                                              "name": "panel-474"
                                             }
                                           }
                                         }
@@ -53731,7 +53865,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-475"
+                                              "name": "panel-476"
                                             }
                                           }
                                         },
@@ -53744,19 +53878,6 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-476"
-                                            }
-                                          }
-                                        },
-                                        {
-                                          "kind": "GridLayoutItem",
-                                          "spec": {
-                                            "x": 0,
-                                            "y": 8,
-                                            "width": 12,
-                                            "height": 8,
-                                            "element": {
-                                              "kind": "ElementReference",
                                               "name": "panel-477"
                                             }
                                           }
@@ -53764,7 +53885,7 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 12,
+                                            "x": 0,
                                             "y": 8,
                                             "width": 12,
                                             "height": 8,
@@ -53777,8 +53898,8 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 0,
-                                            "y": 16,
+                                            "x": 12,
+                                            "y": 8,
                                             "width": 12,
                                             "height": 8,
                                             "element": {
@@ -53790,7 +53911,7 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 12,
+                                            "x": 0,
                                             "y": 16,
                                             "width": 12,
                                             "height": 8,
@@ -53803,8 +53924,8 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 0,
-                                            "y": 24,
+                                            "x": 12,
+                                            "y": 16,
                                             "width": 12,
                                             "height": 8,
                                             "element": {
@@ -53816,7 +53937,7 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 12,
+                                            "x": 0,
                                             "y": 24,
                                             "width": 12,
                                             "height": 8,
@@ -53829,13 +53950,26 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
+                                            "x": 12,
+                                            "y": 24,
+                                            "width": 12,
+                                            "height": 8,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-483"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
                                             "x": 0,
                                             "y": 32,
                                             "width": 12,
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-483"
+                                              "name": "panel-484"
                                             }
                                           }
                                         }
@@ -53876,7 +54010,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-485"
+                                              "name": "panel-486"
                                             }
                                           }
                                         },
@@ -53889,19 +54023,6 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-486"
-                                            }
-                                          }
-                                        },
-                                        {
-                                          "kind": "GridLayoutItem",
-                                          "spec": {
-                                            "x": 0,
-                                            "y": 8,
-                                            "width": 12,
-                                            "height": 8,
-                                            "element": {
-                                              "kind": "ElementReference",
                                               "name": "panel-487"
                                             }
                                           }
@@ -53909,7 +54030,7 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 12,
+                                            "x": 0,
                                             "y": 8,
                                             "width": 12,
                                             "height": 8,
@@ -53922,13 +54043,26 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
+                                            "x": 12,
+                                            "y": 8,
+                                            "width": 12,
+                                            "height": 8,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-489"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
                                             "x": 0,
                                             "y": 16,
                                             "width": 12,
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-489"
+                                              "name": "panel-490"
                                             }
                                           }
                                         }
@@ -53969,7 +54103,7 @@
                                             "height": 7,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-491"
+                                              "name": "panel-492"
                                             }
                                           }
                                         },
@@ -53982,7 +54116,7 @@
                                             "height": 7,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-492"
+                                              "name": "panel-493"
                                             }
                                           }
                                         },
@@ -53995,7 +54129,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-493"
+                                              "name": "panel-494"
                                             }
                                           }
                                         }
@@ -54036,7 +54170,7 @@
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-495"
+                                              "name": "panel-496"
                                             }
                                           }
                                         },
@@ -54049,7 +54183,7 @@
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-496"
+                                              "name": "panel-497"
                                             }
                                           }
                                         }
@@ -54090,7 +54224,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-498"
+                                              "name": "panel-499"
                                             }
                                           }
                                         },
@@ -54103,7 +54237,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-499"
+                                              "name": "panel-500"
                                             }
                                           }
                                         },
@@ -54116,7 +54250,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-500"
+                                              "name": "panel-501"
                                             }
                                           }
                                         },
@@ -54129,7 +54263,7 @@
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-501"
+                                              "name": "panel-502"
                                             }
                                           }
                                         },
@@ -54142,7 +54276,7 @@
                                             "height": 6,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-502"
+                                              "name": "panel-503"
                                             }
                                           }
                                         }
@@ -54183,7 +54317,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-504"
+                                              "name": "panel-505"
                                             }
                                           }
                                         },
@@ -54196,7 +54330,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-505"
+                                              "name": "panel-506"
                                             }
                                           }
                                         },
@@ -54209,7 +54343,7 @@
                                             "height": 4,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-506"
+                                              "name": "panel-507"
                                             }
                                           }
                                         },
@@ -54222,7 +54356,7 @@
                                             "height": 4,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-507"
+                                              "name": "panel-508"
                                             }
                                           }
                                         }
@@ -54263,7 +54397,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-509"
+                                              "name": "panel-510"
                                             }
                                           }
                                         },
@@ -54276,7 +54410,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-510"
+                                              "name": "panel-511"
                                             }
                                           }
                                         },
@@ -54289,7 +54423,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-511"
+                                              "name": "panel-512"
                                             }
                                           }
                                         },
@@ -54302,7 +54436,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-512"
+                                              "name": "panel-513"
                                             }
                                           }
                                         },
@@ -54315,7 +54449,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-513"
+                                              "name": "panel-514"
                                             }
                                           }
                                         }
@@ -54356,7 +54490,7 @@
                                             "height": 7,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-515"
+                                              "name": "panel-516"
                                             }
                                           }
                                         },
@@ -54369,19 +54503,6 @@
                                             "height": 7,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-516"
-                                            }
-                                          }
-                                        },
-                                        {
-                                          "kind": "GridLayoutItem",
-                                          "spec": {
-                                            "x": 0,
-                                            "y": 7,
-                                            "width": 12,
-                                            "height": 7,
-                                            "element": {
-                                              "kind": "ElementReference",
                                               "name": "panel-517"
                                             }
                                           }
@@ -54389,7 +54510,7 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 12,
+                                            "x": 0,
                                             "y": 7,
                                             "width": 12,
                                             "height": 7,
@@ -54402,8 +54523,8 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 0,
-                                            "y": 14,
+                                            "x": 12,
+                                            "y": 7,
                                             "width": 12,
                                             "height": 7,
                                             "element": {
@@ -54415,7 +54536,7 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 12,
+                                            "x": 0,
                                             "y": 14,
                                             "width": 12,
                                             "height": 7,
@@ -54428,8 +54549,8 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 0,
-                                            "y": 21,
+                                            "x": 12,
+                                            "y": 14,
                                             "width": 12,
                                             "height": 7,
                                             "element": {
@@ -54441,7 +54562,7 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 12,
+                                            "x": 0,
                                             "y": 21,
                                             "width": 12,
                                             "height": 7,
@@ -54454,13 +54575,26 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
+                                            "x": 12,
+                                            "y": 21,
+                                            "width": 12,
+                                            "height": 7,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-523"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
                                             "x": 0,
                                             "y": 28,
                                             "width": 12,
                                             "height": 7,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-523"
+                                              "name": "panel-524"
                                             }
                                           }
                                         },
@@ -54473,7 +54607,7 @@
                                             "height": 7,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-524"
+                                              "name": "panel-525"
                                             }
                                           }
                                         }
@@ -54514,7 +54648,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-526"
+                                              "name": "panel-527"
                                             }
                                           }
                                         }
@@ -54555,7 +54689,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-528"
+                                              "name": "panel-529"
                                             }
                                           }
                                         }
@@ -54596,7 +54730,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-530"
+                                              "name": "panel-531"
                                             }
                                           }
                                         }
@@ -54637,7 +54771,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-532"
+                                              "name": "panel-533"
                                             }
                                           }
                                         },
@@ -54650,19 +54784,6 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-533"
-                                            }
-                                          }
-                                        },
-                                        {
-                                          "kind": "GridLayoutItem",
-                                          "spec": {
-                                            "x": 0,
-                                            "y": 8,
-                                            "width": 12,
-                                            "height": 8,
-                                            "element": {
-                                              "kind": "ElementReference",
                                               "name": "panel-534"
                                             }
                                           }
@@ -54670,7 +54791,7 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 12,
+                                            "x": 0,
                                             "y": 8,
                                             "width": 12,
                                             "height": 8,
@@ -54683,8 +54804,8 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 0,
-                                            "y": 16,
+                                            "x": 12,
+                                            "y": 8,
                                             "width": 12,
                                             "height": 8,
                                             "element": {
@@ -54696,7 +54817,7 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
-                                            "x": 12,
+                                            "x": 0,
                                             "y": 16,
                                             "width": 12,
                                             "height": 8,
@@ -54709,13 +54830,26 @@
                                         {
                                           "kind": "GridLayoutItem",
                                           "spec": {
+                                            "x": 12,
+                                            "y": 16,
+                                            "width": 12,
+                                            "height": 8,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-538"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
                                             "x": 0,
                                             "y": 24,
                                             "width": 12,
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-538"
+                                              "name": "panel-539"
                                             }
                                           }
                                         }
@@ -54756,7 +54890,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-540"
+                                              "name": "panel-541"
                                             }
                                           }
                                         },
@@ -54769,7 +54903,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-541"
+                                              "name": "panel-542"
                                             }
                                           }
                                         }
@@ -54810,7 +54944,7 @@
                                             "height": 10,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-543"
+                                              "name": "panel-544"
                                             }
                                           }
                                         },
@@ -54823,7 +54957,7 @@
                                             "height": 10,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-544"
+                                              "name": "panel-545"
                                             }
                                           }
                                         }

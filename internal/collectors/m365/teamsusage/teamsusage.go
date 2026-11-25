@@ -14,6 +14,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/graphclient"
 	"github.com/rknightion/graph2otel/internal/recordoutcome"
+	"github.com/rknightion/graph2otel/internal/semconv"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
 
@@ -23,6 +24,7 @@ const (
 	metricPlatform    = "teams.device_usage.users"
 	metricActivity    = "m365.teams_usage.activity.users"
 	metricConcealment = "m365.teams_usage.names_concealed"
+	metricRefresh     = "m365.teams_usage.report_refresh_timestamp"
 	eventTeamActivity = "m365.team_activity"
 	eventDeviceUsage  = "m365.teams_device_usage"
 	unitUserCohort    = "{overlapping_user_count}"
@@ -30,6 +32,7 @@ const (
 	platformDesc  = "Users who used each Teams client platform in the D7 report. A user can use more than one platform."
 	activityDesc  = "Daily Teams users per activity in the D30 report, by days before its latest Report Date. Activity groups overlap."
 	concealedDesc = "Whether Microsoft Graph usage reports conceal names (1: on, 0: off, absent: unknown)."
+	refreshDesc   = "UTC midnight of the source Report Refresh Date, in Unix seconds, for the D7 device and D30 user activity counts reports. Absent if not established."
 )
 
 // Collector polls the Teams usage reports without fetching other workloads.
@@ -70,19 +73,21 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, o *recordo
 
 	reports := []struct {
 		function string
+		period   string // Non-empty only for the reports behind the usage plots.
 		columns  []column
 		require  []string
 		mapRows  func(table)
 		clear    func()
 	}{
-		{"getTeamsDeviceUsageUserDetail(period='D7')", nil, requiredPlatformHeaders(),
+		{"getTeamsDeviceUsageUserDetail(period='D7')", "7", nil, requiredPlatformHeaders(),
 			func(t table) { emitDeviceUsage(e, o, t) }, func() { e.GaugeSnapshot(metricPlatform, unitUserCohort, platformDesc, nil) }},
-		{"getTeamsTeamActivityDetail(period='D7')", teamCounts, []string{"Team Id", "Report Refresh Date"},
+		{"getTeamsTeamActivityDetail(period='D7')", "", teamCounts, []string{"Team Id", "Report Refresh Date"},
 			func(t table) { emitTeams(e, o, t, concealed) }, nil},
-		{"getTeamsUserActivityUserCounts(period='D30')", activities, []string{"Report Date"},
+		{"getTeamsUserActivityUserCounts(period='D30')", "30", activities, []string{"Report Date"},
 			func(t table) { emitActivity(e, o, t) }, func() { e.GaugeSnapshot(metricActivity, unitUserCohort, activityDesc, nil) }},
 	}
 	var errs []error
+	var freshness []telemetry.GaugePoint
 	for _, report := range reports {
 		t, err := c.readReport(ctx, o, report.function, report.columns, report.require)
 		if err != nil {
@@ -94,11 +99,37 @@ func (c *Collector) Collect(ctx context.Context, e telemetry.Emitter, o *recordo
 		}
 		o.Add(recordoutcome.OutcomeFetched, uint64(len(t.rows)))
 		report.mapRows(t)
+		if report.period != "" {
+			if point, ok := refreshPoint(t, report.period); ok {
+				freshness = append(freshness, point)
+			}
+		}
 	}
+	e.GaugeSnapshot(metricRefresh, semconv.UnitSeconds, refreshDesc, freshness)
 	if len(errs) == len(reports) {
 		return fmt.Errorf("%s: all Teams usage reports failed: %w", name, errors.Join(errs...))
 	}
 	return nil
+}
+
+// A single date is meaningful only when all rows agree on the refresh and
+// match the requested report period. Missing metadata does not invalidate
+// the usage counts or change how individual log twins are timed.
+func refreshPoint(t table, period string) (telemetry.GaugePoint, bool) {
+	if len(t.rows) == 0 {
+		return telemetry.GaugePoint{}, false
+	}
+	refresh := t.cell(t.rows[0], "Report Refresh Date")
+	date, err := time.Parse(time.DateOnly, refresh)
+	if err != nil || date.IsZero() {
+		return telemetry.GaugePoint{}, false
+	}
+	for _, row := range t.rows {
+		if t.cell(row, "Report Refresh Date") != refresh || t.cell(row, "Report Period") != period {
+			return telemetry.GaugePoint{}, false
+		}
+	}
+	return telemetry.GaugePoint{Value: float64(date.Unix()), Attrs: telemetry.Attrs{semconv.AttrReportPeriod: period}}, true
 }
 
 func (c *Collector) readConcealment(ctx context.Context) *bool {

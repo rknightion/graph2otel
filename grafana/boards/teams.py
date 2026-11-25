@@ -201,9 +201,9 @@ def _share(numer, denom, *keys):
     return f"((({numer}) or {join} (0 * ({denom}))) / ({denom})) and {join} (({denom}) > 0)"
 
 
-def _stat(b, title, query, desc, unit="short", *, w=8, about=""):
+def _stat(b, title, query, desc, unit="short", *, w=8, about="", panel_id=None):
     panel = b.raw(title, [query], viz="stat", unit=unit, desc=desc, w=w,
-                  legends=["{{tenant_id}}"], about=about)
+                  legends=["{{tenant_id}}"], about=about, panel_id=panel_id)
     panel["targets"][0].update(instant=True, range=False)
     return panel
 
@@ -1135,19 +1135,43 @@ def inventory(b):
 
 
 def usage(b):
-    b.text("Usage comes from Microsoft's Teams usage reports, which refresh daily and trail the report date. "
-           "Platform and activity groups overlap: a user can count in several, so never add them into a "
-           "unique-user total.", title="Reading usage", h=3)
+    def refresh_date(period, panel_id):
+        epoch = _agg(b, "m365.teams_usage.report_refresh_timestamp",
+                     match=f'report_period="{period}"', aggregate="max")
+        # PromQL calendar functions use UTC. Show the source's calendar date
+        # without converting UTC midnight to the viewer's previous local day.
+        date = f"year({epoch}) * 10000 + month({epoch}) * 100 + day_of_month({epoch})"
+        panel = _stat(b, f"D{period} report refresh date", date,
+                      "The source refresh date as at the end of the selected range, in UTC (YYYYMMDD). "
+                      "Not a poll time or an activity date. No date is shown if the report did not establish one.",
+                      unit="none", panel_id=panel_id)
+        panel["fieldConfig"]["defaults"]["decimals"] = 0
+        panel["options"]["graphMode"] = "none"
+
+    b.text("Usage comes from Microsoft's daily Teams reports. The source refresh date can trail the poll, "
+           "and the latest activity day can trail the refresh. Platform and activity groups overlap: "
+           "never add them into a unique-user total.", title="Reading usage", h=3)
     activity = b.cat.metric("m365.teams_usage.activity.users").prom
-    b.metric("teams.device_usage.users", title="Teams users by platform (D7)", by=["platform"],
-             desc="From the Teams usage report. A user may appear on several platforms; do not sum them.")
-    b.raw("Users by activity on the latest report day", [
+    b.metric("teams.device_usage.users", title="Teams users by platform (D7)", by=["platform"], w=16,
+             desc="From the Teams device usage report. A user may appear on several platforms; do not sum them.")
+    refresh_date(7, 1020)
+    b.raw("Users by activity on the latest report day (D30)", [
         f'sum by (tenant_id, activity) ({activity}{{{TENANT_SEL},days_ago="0"}})'],
-        legends=["{{tenant_id}} · {{activity}}"],
+        legends=["{{tenant_id}} · {{activity}}"], w=16,
         desc="days_ago=0 is the newest report date in the download, not today.")
-    _stat(b, "Report names concealed", _agg(b, "m365.teams_usage.names_concealed", aggregate="max"),
-          "1 means Microsoft conceals user, group and site names in reports, so identifier joins are not guaranteed. "
-          "Absent means the setting is unknown.")
+    refresh_date(30, 1021)
+
+    known = _agg(b, "m365.teams_usage.names_concealed", aggregate="max")
+    census = _agg(b, "graph2otel.collector.availability", match='collector="m365.teams_usage"', aggregate="max")
+    concealed = b.raw("Report names concealed", [f"{known} == 1", f"{known} == 0",
+                      f"({census}) unless on (tenant_id) ({known})"], viz="stat", w=8, unit="none",
+                      legends=[f"{{{{tenant_id}}}} · {state}" for state in ("On", "Off", "Unknown")],
+                      desc="On means Microsoft conceals names in usage reports. Identifier joins are not guaranteed. "
+                           "Unknown means the collector is visible but did not report the setting. No data means "
+                           "neither the setting nor the collector census is visible in this range.")
+    concealed["options"].update(textMode="name", graphMode="none")
+    for target in concealed["targets"]:
+        target.update(instant=True, range=False)
     _stat(b, "Teams in the tenant", _agg(b, "m365.teams.total"), "All teams, any visibility.")
     _stat(b, "Ownerless teams", _agg(b, "m365.teams.ownerless.total"),
           "Teams with no owner, excluding archived teams.")
