@@ -545,9 +545,9 @@ def unapplied(man: dict) -> list:
     return found
 
 
-def manifest_violations(man: dict) -> list:
-    """Every presentation dishonesty visible in the shipped manifest."""
-    found = list(unapplied(man))
+def manifest_violations(man: dict, *, check_registry: bool = True) -> list:
+    """Check panel presentation. Only the Graph board must apply the whole registry."""
+    found = unapplied(man) if check_registry else []
     panels = panel_presentation(man)
     for p in panels:
         title = p["title"] or p["element"]

@@ -1,18 +1,25 @@
 # Authoring graph2otel's dashboards
 
-`dashboards/graph2otel.json` is **generated**. Do not edit it — `just grafana-check`
+The JSON in `dashboards/` is **generated**. Do not edit it - `just grafana-check`
 fails on a hand-edited file. Edit `grafana/boards/*.py` and run `just dashboard`.
 
-The whole estate is ONE Grafana **v2 dynamic dashboard** (`dashboard.grafana.app/v2`,
+The Graph board is a Grafana **v2 dynamic dashboard** (`dashboard.grafana.app/v2`,
 Grafana 13+): a root `TabsLayout` of seven tabs, each domain tab a nested `TabsLayout`
 of leaf tabs. You do not author any of that shape. **One `b.row()` call becomes one leaf
 tab**, and its panels are packed into a 24-column grid — so a board module still just
 declares rows of panels and never writes a coordinate, a tab, or a layout kind.
 
 ```sh
-just dashboard       # regenerate dashboards/graph2otel.json
+just dashboard       # regenerate both v2 dashboards
 just grafana-check   # the gate: coverage + log coverage + freshness + structure
 ```
+
+`boards/teams.py` builds a separate, unconditional Teams dashboard so a Teams-only
+install need not open the Graph board. It uses the same catalogue and schema, but
+its own tabs and variables. The gate requires every `teams` metric on a placed
+Teams panel even if the Graph board already shows it. Site and call links carry
+the row tenant rather than reusing a multi-tenant selection. Use structured
+metadata, not metric labels, for individual call or stream IDs.
 
 Pure standard-library `python3`. Nothing to install, which is why the CI job has no
 `setup-python` step.

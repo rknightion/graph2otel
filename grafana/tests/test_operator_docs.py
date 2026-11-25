@@ -63,10 +63,8 @@ class TestOperatorObservabilityInventory(unittest.TestCase):
         with open(os.path.join(REPO, "README.md"), encoding="utf-8") as f:
             readme = f.read()
 
-        # One v2 dashboard covers the whole estate (#399), so this count is 1 and
-        # the sentence has to read "1 dashboard" — an f-string that always says
-        # "dashboards" would force the docs to say "1 dashboards".
-        dashboard_count = 1
+        dashboard_files = sorted(os.listdir(os.path.join(REPO, "dashboards")))
+        dashboard_count = len(dashboard_files)
         alert_count = len(build_rules.RULES)
         noun = "dashboard" if dashboard_count == 1 else "dashboards"
         detection_count = len(build_rules.DETECTIONS)
@@ -81,12 +79,10 @@ class TestOperatorObservabilityInventory(unittest.TestCase):
             f"| `dashboards/` | {dashboard_count} {noun} (**generated**)",
             docs,
         )
-        # The generator really does emit exactly that many files, so the prose
-        # cannot drift from the build.
-        self.assertEqual(
-            sorted(os.listdir(os.path.join(REPO, "dashboards"))),
-            ["graph2otel.json"],
-        )
+        # Both stable dashboard identities must remain documented.
+        self.assertEqual(dashboard_files, ["graph2otel-teams.json", "graph2otel.json"])
+        for filename in dashboard_files:
+            self.assertIn(f"`dashboards/{filename}`", docs)
         # v2 needs Grafana 13+, and the docs must say so rather than leaving an
         # operator to discover it from a broken import.
         self.assertIn(v2.MIN_GRAFANA_VERSION, docs)

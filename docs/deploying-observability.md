@@ -2,40 +2,38 @@
 
 graph2otel ships two kinds of Grafana asset, each in its own top-level
 directory. The generated inventory is drift-gated at
-**1 dashboard, 19 alert rules, and 11 paused detection examples**:
+**2 dashboards, 19 alert rules, and 11 paused detection examples**:
 
 | Directory | Assets | Format | Target Grafana Cloud folder |
 | --- | --- | --- | --- |
-| `dashboards/` | 1 dashboard (**generated**) | Grafana **v2 dynamic dashboard** resource (`dashboard.grafana.app/v2`) | folder of your choice |
+| `dashboards/` | 2 dashboards (**generated**) | Grafana **v2 dynamic dashboard** resource (`dashboard.grafana.app/v2`) | folder of your choice |
 | `alerts/rules/` | 19 alert rules (**generated**) | Grafana **App Platform** `AlertRule` (`rules.alerting.grafana.app/v0alpha1`) | `graph2otel` |
 | `alerts/rules/` | 11 detection examples (**generated**, all **paused**) | same, separate rule group | `graph2otel detections` |
 
-The `gcx` CLI is the reproducible deploy path documented here. There is **no
-GitSync flow in this repo today** — if one is later adopted, document its repo
-and path in this file so a successor can reproduce the production deploy.
+The `gcx` CLI is the manual import path. The repository-managed GitSync copy
+and alert deployment are separate jobs in `.github/workflows/grafana-sync.yml`.
 
 > `gcx` targets whichever Grafana Cloud stack its context points at. Select it
 > first (`gcx config` / `gcx context`); the m7kni reference deploy uses the
 > `m7kni` context. All the commands below are stack-scoped by that context.
 
-## The dashboard
+## Dashboards
 
-**Requires Grafana 13.0.0 or newer.** `dashboards/graph2otel.json` is a Grafana
-**v2 dynamic dashboard** (`apiVersion: dashboard.grafana.app/v2`), which uses tab
-layouts and conditional rendering. Those do not exist in earlier Grafana, and the
-minimum version is asserted by a test rather than only stated here.
+**Requires Grafana 13.0.0 or newer.** Both manifests are **v2 dynamic dashboards**
+(`apiVersion: dashboard.grafana.app/v2`). `metadata.name` is the stable identity
+of a dashboard; a v2 resource has no top-level `uid`.
 
-One dashboard covers the whole estate. `metadata.name` is its identity — a v2
-resource has no top-level `uid`:
-
-| File | `metadata.name` | Top-level tabs |
+| File | `metadata.name` | Use |
 | --- | --- | --- |
-| `dashboards/graph2otel.json` | `graph2otel` | Overview · Entra · Intune · Defender · M365 · Purview · Self-obs |
+| `dashboards/graph2otel.json` | `graph2otel` | Graph-wide posture and investigation |
+| `dashboards/graph2otel-teams.json` | `graph2otel-teams` | Teams calls, networking and service health without the other Graph domains |
 
-Each domain tab holds nested leaf tabs, one per section, so the estate is 60 leaf
-tabs rather than six separate dashboards to keep in sync.
+The Graph dashboard nests feature tabs under domain tabs. The Teams dashboard
+keeps its investigation tabs visible even when a collector has no data. Click a
+site or call ID in a table to carry the row's tenant and the selected time range
+into the investigation.
 
-Push it with `gcx dashboards` (`metadata.name` is the update key):
+Import either with `gcx dashboards` (`metadata.name` is the update key):
 
 ```bash
 # First time — create by file:
@@ -45,8 +43,8 @@ gcx dashboards create -f dashboards/graph2otel.json
 gcx dashboards update graph2otel -f dashboards/graph2otel.json
 ```
 
-You can also import it in the Grafana UI: **Dashboards → New → Import**, upload
-the JSON.
+Use the corresponding filename and name for the Teams dashboard. To import
+in the Grafana UI, use **Dashboards → New → Import** and upload the JSON.
 
 ### Deep links
 
@@ -76,7 +74,7 @@ reason.
 
 ### They are GENERATED — do not hand-edit them
 
-`dashboards/graph2otel.json` is built by `grafana/build_dashboard.py` from
+The manifests are built by `grafana/build_dashboard.py` from
 `grafana/boards/*.py` and `spec/signal-catalog.json`, and `just grafana-check`
 (a required CI leg) fails on a hand-edited file. To change a panel, edit the
 board module and run `just dashboard`. See
@@ -402,7 +400,7 @@ own template-variable "All" token (`$__all`) to match the `tenant` variable's
 
 ### Per-tab measurement is NOT possible today — what this lane measures instead
 
-The v2 estate is one dashboard with 7 top-level tabs and 60 leaf tabs, reached
+The Graph dashboard has nested tabs, reached
 by the `dtab` / `<Domain-Slug>-dtab` URL query parameters described under
 [Deep links](#deep-links) above. `gcx dashboards snapshot --help` was checked
 directly (`gcx version v0.6.0`) for a way to pass them through: its only
@@ -469,9 +467,8 @@ every `just grafana-check`, with the largest leaf currently at 18.
 
 Offline tests for this half also run under `just grafana-check`.
 
-## If GitSync is adopted later
+## GitSync and manual imports
 
-This repo has no GitSync (git-to-Grafana) flow today; the `gcx` commands above
-are the deploy path. If a GitSync repo is later adopted for these assets,
-document its repository and the target paths for the dashboards and alert rules
-here, so the production deploy stays reproducible from this file alone.
+Use the manual commands for a stack you manage independently. Do not use them
+to overwrite a dashboard that Grafana manages through GitSync; update its
+generated file and let the sync job carry the change instead.

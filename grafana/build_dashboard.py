@@ -43,7 +43,7 @@ import catalog as catalog_mod  # noqa: E402
 import pivots  # noqa: E402
 import presentation  # noqa: E402
 import v2  # noqa: E402
-from boards import common  # noqa: E402
+from boards import common, teams  # noqa: E402
 from builder import (  # noqa: E402
     CENSUS_SENTINEL,
     DASHBOARD_NAME,
@@ -55,6 +55,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 OUT_DIR = os.path.join(REPO, "dashboards")
 OUT_FILE = f"{DASHBOARD_NAME}.json"
+TEAMS_OUT_FILE = f"{teams.NAME}.json"
 WAIVERS = os.path.join(HERE, "waivers.json")
 
 # One dashboard, one tab per board module, in tab order (#399). Self-obs last:
@@ -296,19 +297,36 @@ def main() -> int:
     cat = catalog_mod.load(args.catalog)
     waivers = load_waivers()
     b, manifest, log_domains = build(cat)
-    covered = b._covered
+    teams_builder, teams_manifest = teams.build(cat)
+    covered = b.covered | teams_builder.covered
 
-    violations = gate_violations(cat, b, manifest)
+    violations = (gate_violations(cat, b, manifest)
+                  + teams_builder.violations
+                  + v2.manifest_violations(teams_manifest)
+                  + presentation.manifest_violations(teams_manifest, check_registry=False)
+                  + leaf_budget_violations(teams_manifest, {})
+                  + teams.coverage_violations(cat, teams_manifest))
     if violations:
         print("dashboard build violations:", file=sys.stderr)
         for v in violations:
             print(f"  - {v}", file=sys.stderr)
         return 1
 
+    outputs = {OUT_FILE: manifest, TEAMS_OUT_FILE: teams_manifest}
     if not args.check and args.catalog == catalog_mod.CATALOGUE:
         os.makedirs(OUT_DIR, exist_ok=True)
-        with open(os.path.join(OUT_DIR, OUT_FILE), "w") as f:
-            f.write(dumps(manifest))
+        for filename, dashboard in outputs.items():
+            with open(os.path.join(OUT_DIR, filename), "w") as f:
+                f.write(dumps(dashboard))
+    elif args.catalog == catalog_mod.CATALOGUE:
+        for filename, dashboard in outputs.items():
+            path = os.path.join(OUT_DIR, filename)
+            if os.path.isfile(path):
+                with open(path) as f:
+                    if f.read() == dumps(dashboard):
+                        continue
+            print(f"{path} is missing or stale; run just dashboard", file=sys.stderr)
+            return 1
 
     missing, stale, reasonless = coverage(cat, covered, waivers)
     domains_without_logs = log_coverage(cat, log_domains)
@@ -319,8 +337,10 @@ def main() -> int:
                  if t["spec"]["layout"]["kind"] == "TabsLayout" else 1
                  for t in manifest["spec"]["layout"]["spec"]["tabs"])
     print(f"coverage: {len(covered)}/{total} catalog metrics on a panel "
-          f"({len(waivers)} waived, {len(placed)} panels placed across "
+          f"({len(waivers)} waived, Graph: {len(placed)} panels across "
           f"{len(manifest['spec']['layout']['spec']['tabs'])} tabs and {leaves} leaves, "
+          f"Teams: {len(v2.placed_element_names(teams_manifest))} panels across "
+          f"{len(leaf_panel_counts(teams_manifest))} tabs, "
           f"{len(cat.logs)} log events over {len(log_domains)} log-panelled domains, "
           f"largest leaf {max(leaf_panel_counts(manifest).values())}/"
           f"{LEAF_PANEL_CEILING} panels)",
