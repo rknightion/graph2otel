@@ -81,6 +81,24 @@ type Checkpoint struct {
 	// VAACScan resumes an unfinished Teams voice analytics overlap sweep
 	// without advancing Watermark or evicting its dedupe entries.
 	VAACScan *VAACScan `json:"vaac_scan,omitempty"`
+	// TeamsCallMetrics is the call-quality admission state. It is saved with
+	// the delivered log keys, before releasing any metric observations.
+	TeamsCallMetrics *TeamsCallMetrics `json:"teams_call_metrics,omitempty"`
+}
+
+// TeamsCallMetrics holds the monotone source floor, the per-call high versions
+// inside it, and the sticky tenant site slots. The collector owns the limits.
+type TeamsCallMetrics struct {
+	Floor time.Time                       `json:"floor"`
+	Calls map[string]TeamsCallMetricState `json:"calls,omitempty"`
+	Sites map[string]bool                 `json:"sites,omitempty"`
+}
+
+// TeamsCallMetricState remembers the latest accepted health, not a raw record.
+type TeamsCallMetricState struct {
+	Start   time.Time `json:"start"`
+	Version int64     `json:"version"`
+	Health  string    `json:"health"`
 }
 
 // VAACScan records the inclusive prefix drained by both analytics streams

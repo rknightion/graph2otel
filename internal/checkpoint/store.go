@@ -117,7 +117,14 @@ func (s *Store) Load(tenantID, endpoint string) (*Checkpoint, error) {
 // Save persists cp atomically: it writes a temp file in the same directory
 // then renames it over the target, so a crash mid-write can never leave a
 // corrupt or partial checkpoint in place of the last good one.
-func (s *Store) Save(cp *Checkpoint) error {
+func (s *Store) Save(cp *Checkpoint) error { return s.save(cp, false) }
+
+// SaveDurable syncs the new checkpoint and the directory rename before
+// returning success. Use it when releasing a non-replayable side effect after
+// Save. If directory sync fails after rename, delivery must still be withheld.
+func (s *Store) SaveDurable(cp *Checkpoint) error { return s.save(cp, true) }
+
+func (s *Store) save(cp *Checkpoint, durable bool) error {
 	key := fileKey(cp.TenantID, cp.Endpoint)
 	lock := s.keyLock(key)
 	lock.Lock()
@@ -135,7 +142,7 @@ func (s *Store) Save(cp *Checkpoint) error {
 		return fmt.Errorf("encode checkpoint: %w", err)
 	}
 
-	return s.writeAtomic(s.path(key), data)
+	return s.writeCheckpoint(s.path(key), data, durable)
 }
 
 // writeAtomic writes data to path via a temp file in the same directory
@@ -143,6 +150,10 @@ func (s *Store) Save(cp *Checkpoint) error {
 // partial file in place of the last good one. It creates the store's directory
 // on first use. Callers must hold the key's lock.
 func (s *Store) writeAtomic(path string, data []byte) error {
+	return s.writeCheckpoint(path, data, false)
+}
+
+func (s *Store) writeCheckpoint(path string, data []byte, durable bool) error {
 	if err := os.MkdirAll(s.dir, 0o750); err != nil {
 		return fmt.Errorf("create checkpoint dir %s: %w", s.dir, err)
 	}
@@ -150,10 +161,29 @@ func (s *Store) writeAtomic(path string, data []byte) error {
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return fmt.Errorf("write temp checkpoint %s: %w", tmp, err)
 	}
+	if durable {
+		if err := syncPath(tmp); err != nil {
+			return fmt.Errorf("sync temp checkpoint: %w", err)
+		}
+	}
 	if err := os.Rename(tmp, path); err != nil {
 		return fmt.Errorf("rename checkpoint %s to %s: %w", tmp, path, err)
 	}
+	if durable {
+		if err := syncPath(s.dir); err != nil {
+			return fmt.Errorf("sync checkpoint directory: %w", err)
+		}
+	}
 	return nil
+}
+
+func syncPath(path string) error {
+	f, err := os.Open(path) //nolint:gosec // called only with our checkpoint temp path or configured directory
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return f.Sync()
 }
 
 func (s *Store) path(key string) string {

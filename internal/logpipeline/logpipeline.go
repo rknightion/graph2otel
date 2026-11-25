@@ -180,6 +180,10 @@ type EndpointConfig struct {
 	// also retains prepared keys back to that floor, independently of overlap,
 	// so an out-of-band fetch can share dedupe with the window.
 	NotBefore time.Time
+	// MaintainCheckpoint updates optional endpoint state on load. Changes are
+	// persisted at the same boundary as the prepared record keys.
+	MaintainCheckpoint func(*checkpoint.Checkpoint)
+	stage              func(func(*checkpoint.Checkpoint, telemetry.Emitter) func(), telemetry.Emitter)
 }
 
 // withDefaults returns a copy of cfg with zero-valued tuning fields replaced
