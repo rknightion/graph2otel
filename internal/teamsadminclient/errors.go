@@ -49,7 +49,7 @@ func (e *APIError) Error() string {
 	}
 	switch {
 	case e.StatusCode == http.StatusForbidden:
-		b.WriteString(": the poller's service principal needs an Entra directory role the Teams admin API accepts (Global Reader measured sufficient)")
+		b.WriteString(": the poller's service principal needs an Entra directory role the Teams admin API accepts (Teams Reader is the least-privileged role measured; Global Reader also works)")
 	case e.StatusCode == http.StatusUnauthorized:
 		b.WriteString(": the Teams admin API rejected the token or its audience")
 	case e.StatusCode >= 300 && e.StatusCode < 400:

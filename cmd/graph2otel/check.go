@@ -372,7 +372,7 @@ func addPreflightSnapshotCollectors(
 	return polledNames
 }
 
-const teamsAdminManualPrerequisite = "the Teams admin API needs an Entra directory role on the poller (Global Reader measured sufficient); a Graph token cannot prove it"
+const teamsAdminManualPrerequisite = "the Teams admin API needs an Entra directory role on the poller (Teams Reader is the least-privileged role measured; Global Reader also works); a Graph token cannot prove it"
 
 // preflightEXOClient is construction-only. A WindowFactory only needs a
 // non-nil EXO seam to declare its collector; the preflight never invokes it.

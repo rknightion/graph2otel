@@ -256,8 +256,8 @@ validation rejects unknown keys under `admin_api` and a non-boolean value.
 
 The transport carries no secret and needs no app permission. It reuses the
 poller's credential on the "Skype and Teams Tenant Admin API" audience, and
-access comes from an Entra directory role on the poller; Global Reader was
-measured sufficient. Graph preflight cannot verify that role, so `check` lists
+access comes from an Entra directory role on the poller. Teams Reader is the
+least-privileged role measured to work, and Global Reader also works. Graph preflight cannot verify that role, so `check` lists
 it as a manual prerequisite. See [Teams admin API](teams-admin-api.md) for the
 wire facts.
 

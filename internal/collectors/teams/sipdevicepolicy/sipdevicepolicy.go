@@ -121,7 +121,7 @@ func (*Collector) DefaultInterval() time.Duration { return interval }
 func (*Collector) IngestTransport() telemetry.Transport { return telemetry.TransportTeamsAdmin }
 
 // RequiredPermissions is nil: access is an Entra directory role on the poller
-// (Global Reader measured sufficient), not a Graph scope.
+// (Teams Reader is the least-privileged role measured; Global Reader also works), not a Graph scope.
 func (*Collector) RequiredPermissions() []string { return nil }
 
 // Collect emits one twin per fetched object. A failing resource records its
