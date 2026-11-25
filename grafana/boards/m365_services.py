@@ -1,7 +1,8 @@
 """Microsoft 365 service overview — Exchange, SharePoint/OneDrive, Teams, health."""
 
-from boards import teams_quality
 from builder import TENANT_SEL
+
+from . import teams_quality
 
 DOMAIN = "M365"
 DESCRIPTION = (
