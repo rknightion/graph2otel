@@ -2,8 +2,8 @@
 // (#712): the twin change hash, integer enum mapping with wirecheck reporting,
 // capped ID lists and the attribute naming rule.
 //
-// SEAM FROZEN FOR PARALLEL LANES (#719): exported names and signatures are the
-// contract; the implementation lane fills the bodies.
+// The exported names and signatures are the contract the teams_admin collector
+// packages build on.
 package adminmap
 
 import (
@@ -35,8 +35,8 @@ const MaxIDs = 100
 var hashExcluded = map[string]struct{}{
 	semconv.AttrConfigSHA256:      {},
 	semconv.AttrConfigHashVersion: {},
-	"tenant_id":                   {},
-	"ingest_transport":            {},
+	semconv.AttrTenantID:          {},
+	semconv.AttrIngestTransport:   {},
 }
 
 // Hash returns the hex SHA-256 of attrs: keys sorted, each value JSON-encoded,

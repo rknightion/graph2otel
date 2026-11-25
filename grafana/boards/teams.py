@@ -795,6 +795,13 @@ def service_health(b):
     issues(b)
 
 
+def admin_config(b):
+    b.text("Auto attendant, call queue, network topology, Direct Routing gateway and IP phone "
+           "configuration from the Teams admin API. Each object is a log twin with a config_sha256 "
+           "that changes when its exported configuration changes.",
+           title="Teams admin configuration", h=3, w=24)
+
+
 CALLS_EMPTY = "Teams publishes a call record after the call ends, sometimes hours later."
 TABS = (
     ("Overview", overview, CALLS_EMPTY),
@@ -808,6 +815,7 @@ TABS = (
      "PSTN and Direct Routing records appear after calls end; healthy_empty means the source answered with no rows."),
     ("Auto attendant and call queue", voice_apps, "Needs the optional teams.voice_apps collector, off by default."),
     ("Phone inventory", inventory, "Needs the teams.phone_numbers and teams.user_configuration collectors."),
+    ("Configuration", admin_config, "Needs tenants[].teams.admin_api.enabled, off by default."),
     ("Usage", usage, "Usage reports refresh daily; the first values follow the first report poll."),
     ("Service health", service_health,
      "Needs the m365.servicehealth collector. No issue rows means no Teams issue was observed in range."),

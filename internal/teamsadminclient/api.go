@@ -2,9 +2,8 @@
 // REST API behind the MicrosoftTeams PowerShell Get-Cs* cmdlets (#712). The wire
 // facts it relies on are recorded in docs/teams-admin-api.md.
 //
-// SEAM FROZEN FOR PARALLEL LANES (#719): the exported names and signatures in
-// this file are the contract internal/collectors and cmd/graph2otel build on.
-// The implementation lane may move them between files but must not change them.
+// The exported names and signatures in this file are the contract
+// internal/collectors and cmd/graph2otel build on.
 package teamsadminclient
 
 import (
