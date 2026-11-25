@@ -32,6 +32,15 @@ the minimum Microsoft Graph application permissions for the default collectors a
 
 <!-- END GENERATED TEAMS PROFILE SCOPES -->
 
+The optional Teams admin API transport (`teams.admin_api.enabled`) needs no Graph
+permission. It needs an Entra **directory role** on the app's service principal
+instead. **Teams Reader** is the least-privileged role measured to work; Global
+Reader also works, and the Teams Communications Support roles do not. Without a
+role, every call returns HTTP 403. See
+[Teams admin API](teams-admin-api.md#directory-roles). The scopes above plus Teams
+Reader were run together as a separate app registration, and every default `teams`
+collector and all five `teams_admin` collectors succeeded. *(live-measured 2026-11-25)*
+
 For installed apps, use `TeamsAppInstallation.ReadForTeam.All` for new grants.
 An existing `TeamsAppInstallation.Read.All` grant also satisfies preflight;
 do not grant both. The narrower role is documented for team-installed apps

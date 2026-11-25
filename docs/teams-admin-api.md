@@ -41,6 +41,28 @@ The MicrosoftTeams 8.1.0 module's debug trace names the paths (live-measured 202
   Authorization comes from the Entra directory roles in the token's `wids` claim.
   The poller already held Global Reader, so no grant was made. *(live-measured 2026-11-25)*
 
+### Directory roles
+
+Each role below was assigned alone to a separate test app registration that held
+no other directory role, and every endpoint in "Paths" except the two out-of-scope
+ones was read with a fresh token. A role appeared in `wids` within 30 seconds of
+assignment; each failing role was re-read for ten minutes before it was recorded as
+failing. *(live-measured 2026-11-25)*
+
+| Directory role | `Teams.VoiceApps` | `Skype.Policy/configurations` |
+| --- | --- | --- |
+| None | 403 `Access Denied.` | 403 `Access Denied.` |
+| Teams Communications Support Specialist | 403 `Access Denied.` | 403 `errorCode` 40301 |
+| Teams Communications Support Engineer | 403 `Access Denied.` | 403 `errorCode` 40301 |
+| **Teams Reader** | **200** | **200** |
+| Global Reader | 200 | 200 |
+
+**Teams Reader is the least-privileged role that works**: every resource returned
+the same counts as the poller's Global Reader read, on the first read after the
+role reached the token. Removing the role restored the 403 at once. A token with no
+sufficient role gets a **403, never a 200 with empty lists**, so a missing role
+cannot pass for an empty tenant.
+
 ## Response shapes
 
 - `Skype.Policy/configurations/*` returns a bare JSON array. Its enumerations are
@@ -88,6 +110,12 @@ Errors come in two envelopes (live-measured 2026-11-25):
   configuration name gives HTTP 400 with `errorCode` 40001.
 - `{"Error": {"Code","Message"}}`: a bad number-management query gives HTTP 400.
 
+A missing directory role gives HTTP 403 with `"code": "Forbidden"` and one of two
+messages: `Access Denied.` with no `errorCode` when no accepted role is present,
+or `You are not authorized to perform this action` with `errorCode` 40301 on
+`Skype.Policy/configurations` when the token holds a Teams Communications support
+role. Both name no role. *(live-measured 2026-11-25)*
+
 No `Retry-After` or rate-limit header was seen. *(live-measured 2026-11-25)*
 
 ## Enum tables
@@ -112,10 +140,6 @@ through the `wirecheck` watchdog; it is never dropped.
 
 These were not measured and must not be asserted:
 
-- The least-privileged Entra directory role. Global Reader works; whether Teams
-  Reader or Teams Communications Support Engineer is enough is unknown.
-- The response to a token with no sufficient directory role (403, or 200 with empty
-  lists).
 - Throttling: the status code, any header, and any rate limit.
 - Redirect behaviour. The client refuses redirects so a bearer token cannot follow
   one to another host.
@@ -127,3 +151,27 @@ These were not measured and must not be asserted:
   and `Type`.
 - Sovereign clouds. The base URL and scope are the commercial-cloud values.
 - `Get-CsOnlineUser` and `Get-CsPhoneNumberAssignment` at scale (out of scope).
+- Paging of `Teams.User/users` beyond one page (see "Users").
+
+## Users (out of scope)
+
+`Get-CsOnlineUser` calls `/Teams.User/users?$top=<n>&$skipuserpolicies=False&defaultpropertyset=Extended`
+(#725). It was measured to decide whether a per-user policy collector would add
+anything to `teams.user_configuration`; it does not, so no collector reads it.
+*(live-measured 2026-11-25)*
+
+- **The response depends on a header.** Without `X-MS-CmdletName: Get-CsOnlineUser`
+  the same URL returns 14 directory fields per user and no policy data at all. With
+  it, 47 fields including `effectivePolicyAssignments`, `teamsCallingPolicy`,
+  `onlineVoiceRoutingPolicy`, `teamsUpgradeEffectiveMode` and `lineUri`.
+- `effectivePolicyAssignments` is a list of `{policyType, policyAssignment:
+  {policyId, displayName, assignmentType, authority}}`. For all 27 lab users its
+  policy types match what the cmdlet returns and what Graph's
+  `/admin/teams/userConfigurations` returns, user for user.
+- `$top` is honoured and `First` is ignored. `$skip` gives HTTP 400 "Skip query
+  parameter is not supported". `$top=0` and an absent `$top` return everyone. A
+  bad `$skiptoken` gives 400. No continuation token appeared in the body or the
+  headers on a `$top=5` page of 27 users, so how the service pages a large tenant
+  is unknown.
+- 27 users came to 112 KB (919 to 7,888 bytes per user) in one call of about
+  570 ms.

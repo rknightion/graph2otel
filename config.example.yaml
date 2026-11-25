@@ -147,7 +147,8 @@ tenants:
     # API behind the Teams PowerShell Get-Cs* cmdlets. It needs no credential and
     # no app permission: the poller's existing credential is used on a different
     # audience, and access comes from an Entra DIRECTORY role on the poller
-    # (Global Reader measured sufficient; assign it in the Entra portal). Graph
+    # (Teams Reader is the least-privileged role measured; Global Reader also
+    # works; assign it in the Entra portal). Graph
     # preflight cannot verify that role. Commercial cloud only.
     # teams:
     #   admin_api:
