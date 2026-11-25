@@ -58,7 +58,7 @@ jobs:
       # failure here is infrastructure, not the commit.
       - name: Mint a scoped release token
         id: bao
-        uses: rknightion/.github/.github/actions/broker-token@0bb3cc94c03a011b4ba8c86d9716898211de2d2b # v1.32.4
+        uses: rknightion/.github/.github/actions/broker-token@20533b678728ec119e52401c1e48b31f3c8b83c4 # v1.32.5
         with:
           permission-set: release-please-graph2otel
           tailscale-client-id: ${{ secrets.TS_WIF_CLIENT_ID }}
@@ -120,7 +120,7 @@ jobs:
     # Pinned past v1.4.3 for the checksums-locate fix (the attest step was nondeterministically
     # handed the cosign .sigstore.json bundle instead of SHA256SUMS). Renovate will repin this to
     # the tag once the shared repo cuts its next release.
-    uses: rknightion/.github/.github/workflows/binaries.yml@0bb3cc94c03a011b4ba8c86d9716898211de2d2b # v1.32.4
+    uses: rknightion/.github/.github/workflows/binaries.yml@20533b678728ec119e52401c1e48b31f3c8b83c4 # v1.32.5
     with:
       release-tag: ${{ needs.release-please.outputs.tag_name }}
       install-cosign: true
