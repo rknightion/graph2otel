@@ -19,27 +19,41 @@ issue. Do not record correction narratives here — those live on the issues.
   below 90 days. The collectors also respect `backfill.initial_lookback` and
   the shorter OTLP event horizon, rather than trying to ingest all of Graph's
   retained call history on startup.
-- **A failed Direct Routing attempt has no start time**
+- **A failed Direct Routing attempt can have no start time**
   `[live-measured 2026-11-25, #675 (PSTN and Direct Routing live check)]`.
-  `getDirectRoutingCalls` returns `startDateTime: null` and `endDateTime: null` on
-  every failed attempt, with `inviteDateTime` and `failureDateTime` set and
-  `duration` 0. The collector times a row by start, then invite, then failure,
-  and drops it only when none parses. `mediaPathLocation` can be an empty
-  string; it is treated as absent. Whether `getPstnCalls` returns failed calls
-  at all is not yet measured, and its row has no invite or failure time.
+  Four source rows had null start and end, with invite and failure times set.
+  All four Loki event timestamps matched invite time. The collector uses
+  start, then invite, then failure, and drops the row only when none parses.
+  A source-success row
+  carried SIP 403; the source flag and SIP outcome must remain separate.
+  `mediaPathLocation` can be empty and is then treated as absent. It remains
+  unmeasured whether `getPstnCalls` returns failed calls.
 - **Dedicated `teams-phone` budget** `[docs-only]`: Microsoft's
   [PSTN call records limits](https://learn.microsoft.com/graph/throttling-limits#pstn-call-records-limits)
   give 200 requests per minute per app per tenant and 50 per minute per
   collection. A shared client bucket of 50 per minute with a burst of one
   keeps either function, including pagination, within both budgets.
-- The one-day overlap is a provisional replay budget, not a measured lag.
-  The synthetic fixtures prove paging and late arrival handling, not the
-  tenant's licensing, returned values or completeness. The optional beta
-  SMS, blocked-user and meeting dial-out functions are not polled: neither
-  GA collector needs them.
+- **Source publication is not collector delivery**
+  `[live-measured 2026-11-25, #675 (PSTN and Direct Routing live check)]`.
+  Nine Direct Routing rows first appeared in a complete five-minute source read
+  within about five minutes of the recorded end or failure. This short sample
+  does not measure the slow tail. Two historical PSTN rows matched by ID and
+  start time; the polling interval used for the Direct Routing check had no new
+  PSTN rows to bracket. Keep the one-day overlap as a replay budget, not a
+  measured latency guarantee. The optional beta SMS, blocked-user and meeting
+  dial-out functions are not polled by these collectors.
 
 ## Teams call records
 
+- **The record becomes visible after the call ends**
+  `[live-measured 2026-11-25, #674 (Teams call records live check)]`.
+  Five-minute poller list reads bracketed first visibility for ten ended calls;
+  the brackets together span roughly 17 to 35 minutes after source end time.
+  Separately, 24 expanded detail responses were about 6.5 to 108 kB, with
+  latest versions from 1 to 4. A dated Loki window for 25 call IDs held
+  33 distinct ID/version pairs, all timed at the Graph start. These are
+  sample bounds, not a publication guarantee or a reason to shorten overlap.
+  Publication, collector observation and Loki indexing are different clocks.
 - **General call records use a separate workload** `[docs-only]` from the two
   phone report functions. The client shares a provisional 30 requests per 20
   seconds, burst one, across list, detail and child-page reads. Microsoft's
