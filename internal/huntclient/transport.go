@@ -24,9 +24,6 @@ const (
 	metricHTTPClient5xx      = "graph2otel.hunt.http_5xx"
 	metricThrottleCount      = "graph2otel.hunt.throttle.count"
 
-	attrHTTPMethod     = adminhttp.AttrHTTPMethod
-	attrServerAddress  = adminhttp.AttrServerAddress
-	attrHTTPStatusCode = adminhttp.AttrHTTPStatusCode
 	// attrQueryLabel is the code-supplied query label. It is bounded by
 	// construction: the value comes from graph2otel's own collector code, never
 	// from tenant data or a response, so the series count is the number of

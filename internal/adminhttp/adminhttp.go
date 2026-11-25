@@ -89,8 +89,7 @@ func LabelFromRequest(req *http.Request) string {
 // NewClient assembles instrumentedTransport -> rateLimitTransport ->
 // http.DefaultTransport.
 func NewClient(cfg Config) *http.Client {
-	var base http.RoundTripper = http.DefaultTransport
-	base = &rateLimitTransport{next: base, cfg: cfg}
+	base := http.RoundTripper(&rateLimitTransport{next: http.DefaultTransport, cfg: cfg})
 	base = &instrumentedTransport{next: base, cfg: cfg}
 
 	client := &http.Client{Transport: base, Timeout: cfg.Timeout}
