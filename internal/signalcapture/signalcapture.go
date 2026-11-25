@@ -254,6 +254,7 @@ var perEntityKeys = map[string]string{
 	"service_principal_id":   "identifies a service principal; grows with tenant size",
 	"service_principal_name": "identifies a service principal; grows with tenant size",
 	"thumbprint":             "identifies one certificate; grows with cert count",
+	"participant_id":         "identifies a Teams roster row; grows with call traffic",
 }
 
 // selfObsPrefix marks the one metric namespace whose labels are exempt: the

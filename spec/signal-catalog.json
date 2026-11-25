@@ -11084,6 +11084,25 @@
       ]
     },
     {
+      "event_name": "teams.call_participant",
+      "domain": "teams",
+      "attr_keys": [
+        "call_id",
+        "display_name",
+        "id",
+        "identity_kind",
+        "ingest_transport",
+        "participant_id",
+        "tenant_id",
+        "text_fields_truncated",
+        "user_principal_name",
+        "version"
+      ],
+      "packages": [
+        "internal/collectors/teams/callrecords"
+      ]
+    },
+    {
       "event_name": "teams.call_queue_call",
       "domain": "teams",
       "attr_keys": [

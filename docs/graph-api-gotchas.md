@@ -45,6 +45,12 @@ issue. Do not record correction narratives here — those live on the issues.
   seconds, burst one, across list, detail and child-page reads. Microsoft's
   [call records limits](https://learn.microsoft.com/graph/throttling-limits#call-records-limits)
   document 40 per 20 seconds for list and per-record requests.
+- **`participants_v2` is roster evidence** `[live-measured 2026-11-25,
+  #708 (Teams observability review)]`. The poller's reads completed with HTTP
+  200 for 18 collections with 67 rows: 51 user and 16 phone identities. All
+  source roster IDs were present and unique within each collection. This does
+  not establish ID stability across versions, a match to a media endpoint or
+  a fleet-wide volume bound.
 - **Discovery is not delivery** `[synthetic, #657 (Teams call records)]`.
   After a complete list, the poller can advance discovery while a call's
   detail or child read still fails, but only if the same atomic tenant

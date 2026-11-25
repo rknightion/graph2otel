@@ -99,8 +99,8 @@ func TestQualityMetricsAcrossIngressAndRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	points = rec.MetricPoints(metricSkipped)
-	if len(points) != 1 || points[0].Value != 1 || points[0].Attrs["reason_bucket"] != "source_time_changed" || len(rec.LogRecords()) != 3 {
-		t.Fatalf("metric admission must refuse a moved start without dropping logs: %+v", points)
+	if len(points) != 1 || points[0].Value != 1 || points[0].Attrs["reason_bucket"] != "source_time_changed" || len(rec.LogRecords()) != 8 {
+		t.Fatalf("metric admission must refuse a moved start without dropping call, stream or roster logs: %+v", points)
 	}
 }
 
@@ -128,8 +128,8 @@ func TestQualityMetricsCheckpointFailureAndExpiry(t *testing.T) {
 	c := restart()
 	rec := telemetrytest.New()
 	collect := func() error { return c.CollectCall(t.Context(), "replay", rec.Emitter(), nil) }
-	if err := collect(); err != nil || len(rec.LogRecords()) != 3 || len(rec.MetricPoints(metricCalls)) != 0 {
-		t.Fatalf("incomplete call must keep raw logs but not count: %v", err)
+	if err := collect(); err != nil || len(rec.LogRecords()) != 8 || len(rec.MetricPoints(metricCalls)) != 0 {
+		t.Fatalf("a call with no end time must keep call, stream and roster logs but not count: %v", err)
 	}
 	withEnd, version = true, 3
 	files, err := os.ReadDir(dir)

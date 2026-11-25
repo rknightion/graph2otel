@@ -19,9 +19,16 @@ type Call struct {
 	Organizer  Identity
 	Counts     ParticipantCounts
 	Streams    []Stream
+	roster     []rosterParticipant
 	failures   []Failure
 	clients    []Agent
 	quality    callQuality
+}
+
+// rosterParticipant keeps the collection row ID separate from its identity ID.
+type rosterParticipant struct {
+	id       string
+	identity Identity
 }
 
 // ParticipantCounts counts distinct participants_v2 entries by their identity

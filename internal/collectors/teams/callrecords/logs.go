@@ -1,7 +1,10 @@
 package callrecords
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -12,11 +15,12 @@ import (
 )
 
 const (
-	callEvent    = "teams.call"
-	streamEvent  = "teams.call_stream"
-	maxHops      = 32
-	maxJSONBytes = 2048
-	maxTextBytes = 512
+	callEvent        = "teams.call"
+	streamEvent      = "teams.call_stream"
+	participantEvent = "teams.call_participant"
+	maxHops          = 32
+	maxJSONBytes     = 2048
+	maxTextBytes     = 512
 )
 
 // emitCall is the typed delivery seam shared by the poll and direct fetch.
@@ -51,6 +55,34 @@ func (collector *Collector) emitCall(e telemetry.Emitter, c Call) {
 	e.LogEvent(telemetry.Event{Name: callEvent, Body: "Teams call", Timestamp: c.Start, Attrs: a})
 	for _, s := range c.Streams {
 		e.LogEvent(collector.streamLog(c, s))
+	}
+	collector.emitRoster(e, c)
+}
+
+func (collector *Collector) emitRoster(e telemetry.Emitter, c Call) {
+	if len(c.roster) == 0 {
+		return
+	}
+	// Loki can coalesce the same line at the same time even when metadata
+	// differs. The body must follow the source row, not its position in a
+	// reordered replay. Keep an ordinal only within identical unkeyed evidence.
+	digest := sha256.Sum256([]byte(strconv.Quote(collector.TenantID) + ":" + versionKey(c.ID, c.Version)))
+	prefix := "Teams call participant " + hex.EncodeToString(digest[:16]) + "/"
+	unkeyed := make(map[[32]byte]int)
+	for _, p := range c.roster {
+		a := telemetry.Attrs{semconv.AttrVersion: c.Version}
+		setTexts(a, "", semconv.AttrCallId, c.ID, semconv.AttrParticipantId, p.id)
+		setIdentity(a, "", p.identity)
+		key := sha256.Sum256([]byte("row:" + p.id))
+		ordinal := 1
+		if p.id == "" {
+			data, _ := json.Marshal(a) // roster attributes are JSON scalars
+			key = sha256.Sum256(append([]byte("observation:"), data...))
+			unkeyed[key]++
+			ordinal = unkeyed[key]
+		}
+		body := prefix + hex.EncodeToString(key[:16]) + "/" + strconv.Itoa(ordinal)
+		e.LogEvent(telemetry.Event{Name: participantEvent, Body: body, Timestamp: c.Start, Attrs: a})
 	}
 }
 
@@ -208,7 +240,7 @@ func setSide(a telemetry.Attrs, p string, s Side) {
 
 func setIdentity(a telemetry.Attrs, p string, id Identity) {
 	setTexts(a, p, semconv.AttrId, id.ID, semconv.AttrDisplayName, id.DisplayName,
-		semconv.AttrUserPrincipalName, id.UPN, "identity_kind", id.Kind)
+		semconv.AttrUserPrincipalName, id.UPN, semconv.AttrIdentityKind, id.Kind)
 }
 
 func setTimes(a telemetry.Attrs, start, end time.Time) {
