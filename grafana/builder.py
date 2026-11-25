@@ -321,9 +321,9 @@ class Builder:
         # row and the staleness gate would fire on an unchanged board.
         self._panels.append({"row": True, "title": title, "id": self._next_id()})
 
-    def text(self, content: str, title: str = "", h: int = 4, w: int = 24):
+    def text(self, content: str, title: str = "", h: int = 4, w: int = 24, *, panel_id: int | None = None):
         return self._add({
-            "id": self._next_id(), "type": "text", "title": title,
+            "id": self._next_id() if panel_id is None else panel_id, "type": "text", "title": title,
             "gridPos": {}, "options": {"mode": "markdown", "content": content},
         }, w, h)
 

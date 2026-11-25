@@ -71,6 +71,7 @@ func (c users) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recor
 	if err != nil {
 		return err
 	}
+	poll := c.BeginPoll(e)
 	counts := map[userBucket]int{}
 	// A complete empty poll must supersede old samples still in the
 	// backend lookback. Emit zero for the fixed buckets, not for entity IDs.
@@ -89,7 +90,7 @@ func (c users) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recor
 				policies[c.Bucket(e, "effectivePolicyAssignments.policyType", row.PolicyType, policyTypes)]++
 			}
 		}
-		e.LogEvent(u.twin())
+		poll.LogTwin(u.twin())
 	}
 	points := make([]telemetry.GaugePoint, 0, len(counts))
 	for k, v := range counts {
@@ -103,7 +104,7 @@ func (c users) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recor
 		policyPoints = append(policyPoints, telemetry.GaugePoint{Value: float64(count), Attrs: telemetry.Attrs{semconv.AttrPolicyType: kind}})
 	}
 	e.GaugeSnapshot("m365.teams.user_configuration.effective_policy_assignments", "{policy}", "Reported Teams user effective policy assignments by policy type.", policyPoints)
-	inventory.RecordTwins(outcomes, uint64(len(rows)))
+	poll.Complete(outcomes)
 	return nil
 }
 

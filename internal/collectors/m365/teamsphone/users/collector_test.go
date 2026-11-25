@@ -37,8 +37,8 @@ func TestUserConfigurationsFromGraph(t *testing.T) {
 		t.Errorf("user counts = %v, want %v", got, want)
 	}
 	twins := rec.LogRecords()
-	if len(twins) != 3 {
-		t.Fatalf("user twins = %+v, want three", twins)
+	if len(twins) != 4 {
+		t.Fatalf("user records = %+v, want three twins and a completion", twins)
 	}
 	if twins[0].EventName != "m365.teams.user_configuration" || !twins[0].Timestamp.IsZero() || !twins[1].Timestamp.IsZero() || !twins[2].Timestamp.IsZero() ||
 		twins[0].Attrs["modified_date_time"] != "2026-11-20T13:05:00.1234567Z" || twins[1].Attrs["created_date_time"] != "2026-11-03T00:00:00Z" ||

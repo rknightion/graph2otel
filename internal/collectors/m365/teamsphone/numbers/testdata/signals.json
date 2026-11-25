@@ -33,6 +33,14 @@
   ],
   "Logs": [
     {
+      "EventName": "m365.teams.phone_inventory_snapshot",
+      "AttrKeys": [
+        "collector",
+        "entity_count",
+        "snapshot_id"
+      ]
+    },
+    {
       "EventName": "m365.teams.phone_number",
       "AttrKeys": [
         "activation_state",
@@ -44,6 +52,7 @@
         "number_source",
         "number_type",
         "operator_id",
+        "snapshot_id",
         "supported_customer_actions",
         "telephone_number"
       ]
