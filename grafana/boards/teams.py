@@ -914,32 +914,65 @@ def voice_apps(b):
 
 
 def inventory(b):
-    numbers = b.cat.metric("m365.teams.phone_numbers.total").prom
-    users = b.cat.metric("m365.teams.user_configuration.users").prom
-    _stat(b, "Unassigned phone numbers", _agg(b, "m365.teams.phone_numbers.unassigned"),
-          "Numbers in the tenant inventory with no user or voice application assignment.")
-    _stat(b, "Enterprise Voice enabled users", f'sum by (tenant_id) ({users}{{{TENANT_SEL},enterprise_voice_enabled="true"}})',
-          "Teams user configurations with Enterprise Voice enabled.")
-    _stat(b, "Teams user configurations", _agg(b, "m365.teams.user_configuration.users"),
-          "All configurations returned, including resource accounts and ineligible users.")
-    keys = ("capability", "number_type", "assignment_status", "activation_state")
+    def selector(metric, match=""):
+        return f'{b.cat.metric(metric).prom}{{{TENANT_SEL}{match}}}'
+
+    def latest(metric, match=""):
+        # OTLP can stop exporting a bucket without a Prometheus stale marker.
+        # Compare with the full tenant batch *before* filtering by state, so
+        # lookback cannot resurrect a bucket from an older export.
+        values = selector(metric, match)
+        batch = f"max by (tenant_id) (timestamp({selector(metric)}))"
+        return f"({values} and (timestamp({values}) == on (tenant_id) group_left {batch}))"
+
+    numbers = "m365.teams.phone_numbers.total"
+    users = "m365.teams.user_configuration.users"
+    unassigned = "m365.teams.phone_numbers.unassigned"
+    enabled = latest(users, ',enterprise_voice_enabled="true"')
+    disabled = latest(users, ',enterprise_voice_enabled="false"')
+    at_end = "Latest metric export visible at the selected range end, per tenant. "
+    _stat(b, "Unassigned phone numbers", f"sum by (tenant_id) ({latest(unassigned)})",
+          at_end + "Numbers with Graph's unassigned status.")
+    _stat(b, "Enterprise Voice enabled users", f"sum by (tenant_id) ({enabled}) or 0 * sum by (tenant_id) ({disabled})",
+          at_end + "Counts only confirmed enablement. Zero means no enabled configuration was reported "
+          "and at least one was explicitly disabled. Unknown states are not counted.")
+    _stat(b, "Teams user configurations", f"sum by (tenant_id) ({latest(users)})",
+          at_end + "All configurations returned, including resource accounts and ineligible users.")
+    keys = "capability, number_type, assignment_status, activation_state"
     b.raw("Phone numbers by capability and assignment", [
-        f"sum by (tenant_id, {', '.join(keys)}) ({numbers}{{{TENANT_SEL}}})"], viz="table",
-        desc="A number can support several capabilities, so do not add the capability rows together.")
+        f"sum by (tenant_id, {keys}) ({latest(numbers)})"], viz="table",
+        desc=at_end + "A number can support several capabilities, so do not add the capability rows together.")
     b.raw("User configurations by account type", [
-        f"sum by (tenant_id, account_type, enterprise_voice_enabled) ({users}{{{TENANT_SEL}}})"], viz="table",
-        desc="Voice enablement by Teams account type. Telephone numbers and effective policies are not mapped.")
-    b.metric("m365.teams.phone_numbers.total", title="Phone numbers over time by assignment",
-             by=["assignment_status", "number_type"],
-             desc="Summed across capability buckets, which overlap: read the trend, not the total.")
-    b.metric("m365.teams.phone_numbers.unassigned", title="Unassigned phone numbers over time", viz="timeseries")
-    b.records("m365.teams.phone_number", "Phone number inventory", (
+        f"sum by (tenant_id, account_type, enterprise_voice_enabled) ({latest(users)})"], viz="table",
+        desc=at_end + "Voice enablement by Teams account type. See the log rows for assignment details.")
+    policies = "m365.teams.user_configuration.effective_policy_assignments"
+    b.raw("Reported effective policy assignments", [f"sum by (tenant_id, policy_type) ({latest(policies)})"],
+          viz="table", desc=at_end + "Counts assignments returned by Graph, not distinct users or policy definitions. "
+          "Policy types outside the known set are counted as unknown and kept verbatim in the logs.")
+    collectors = ',collector=~"teams[.](phone_numbers|user_configuration)"'
+    finished = selector("graph2otel.scrape.last_timestamp", collectors)
+    success = selector("graph2otel.scrape.success", collectors)
+    successful = f"({finished} and ({success} == 1))"
+    # A failure may overwrite the last-attempt gauges. Recover confirmed
+    # successes from the selected range, not the scheduler's startup fallback.
+    in_range = f"{successful} or max_over_time({successful}[$__range:30s])"
+    b.raw("Last successful inventory poll", [f"(({in_range}) * 1000) >= ${{__from}}"], viz="table",
+          unit="dateTimeAsIso", desc="Last successful poll finish observed in the selected range, per tenant and "
+          "collector. Empty successful polls count; failed attempts do not. Blank means no success was observed here.")
+    b.raw("Phone numbers over time by capability and assignment", [
+        f"sum by (tenant_id, capability, number_type, assignment_status) ({latest(numbers)})"],
+        legends=["{{tenant_id}} · {{capability}} · {{number_type}} · {{assignment_status}}"],
+        desc="Each series counts numbers for one capability. Capabilities overlap, so do not add them together.")
+    b.metric(unassigned, title="Unassigned phone numbers over time", viz="timeseries")
+    b.records("m365.teams.phone_number", "Phone number inventory history", (
         "telephone_number", "number_type", "assignment_status", "activation_state", "capabilities",
         "city", "country_code", "number_source",
-    ), desc="One row per number per poll; the newest poll is first.")
-    b.records("m365.teams.user_configuration", "Teams user configurations", (
+    ), desc="Observations from all polls in range, including older assignments and numbers later removed.")
+    b.records("m365.teams.user_configuration", "Teams user configuration history", (
         "user_principal_name", "account_type", "enterprise_voice_enabled", "feature_types", "modified_date_time",
-    ), desc="One row per user configuration per poll; the newest poll is first.")
+        "effective_policy_assignments", "telephone_numbers",
+    ), desc="Observations from all polls in range, including configurations later changed or removed. "
+         "Blank assignment cells mean no assignments were reported on that row.")
 
 
 def usage(b):

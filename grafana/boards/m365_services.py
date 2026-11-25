@@ -114,6 +114,9 @@ SECTIONS = [
         ("Unassigned Teams Phone numbers", ["m365.teams.phone_numbers.unassigned"]),
         ("Teams users by account type and enterprise voice state",
          ["m365.teams.user_configuration.users"], {"viz": "table"}),
+        ("Teams effective voice policy assignments by type",
+         ["m365.teams.user_configuration.effective_policy_assignments"], {"viz": "table",
+          "desc": "Returned assignments by policy type, not distinct users or defined policies."}),
         ("Call queue share gauges by queue (export diagnostics)",
          ["teams.call_queue.answer_rate", "teams.call_queue.abandon_rate"],
          {"viz": "timeseries", "desc": "Independent gauges can be stale or clipped. Use saved-batch logs "

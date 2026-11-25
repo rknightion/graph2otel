@@ -1,7 +1,9 @@
 package users
 
 import (
+	"encoding/json"
 	"maps"
+	"os"
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors/m365/teamsphone/internal/phonefixture"
@@ -9,8 +11,7 @@ import (
 
 const userURL = "https://graph.microsoft.com/v1.0/admin/teams/userConfigurations"
 
-// The two nested lists were empty on the wire. These fixtures deliberately
-// retain that shape and do not claim coverage for populated policy objects.
+// The original #663 (Teams Phone inventory) rows had empty arrays.
 const voiceUser = `{"id":"example-user-1","userPrincipalName":"voice@example.com","accountType":"user","isEnterpriseVoiceEnabled":true,"createdDateTime":"2026-11-01T11:00:00Z","modifiedDateTime":"2026-11-20T13:05:00.1234567Z","featureTypes":["Teams","CallingPlan"],"effectivePolicyAssignments":[],"telephoneNumbers":[],"tenantId":"example-tenant"}`
 
 func TestUserConfigurationsFromGraph(t *testing.T) {
@@ -43,5 +44,47 @@ func TestUserConfigurationsFromGraph(t *testing.T) {
 		twins[1].Attrs["enterprise_voice_enabled"] != "false" || twins[2].Attrs["enterprise_voice_enabled"] != "" ||
 		twins[2].Attrs["account_type"] != "example-new-type" {
 		t.Errorf("user twins = %+v", twins)
+	}
+}
+
+func TestUserConfigurationsPreserveObservedAssignments(t *testing.T) {
+	// Minimal subset of the live-measured 2026-11-25 response for #708
+	// (Teams observability review), with synthetic identifiers and one future policy type.
+	body, err := os.ReadFile("testdata/populated.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := phonefixture.Collect(t, "teams.user_configuration", phonefixture.Graph{userURL: string(body)})
+	twins := rec.LogRecords()
+	var policies []struct {
+		PolicyType       string
+		PolicyAssignment struct{ AssignmentType, DisplayName, PolicyID string }
+	}
+	if err := json.Unmarshal([]byte(twins[0].Attrs["effective_policy_assignments"]), &policies); err != nil {
+		t.Errorf("decode policy list on user twin: %v", err)
+	} else if len(policies) != 1 || policies[0].PolicyType != "TeamsCallingPolicy" ||
+		policies[0].PolicyAssignment.AssignmentType != "direct" || policies[0].PolicyAssignment.PolicyID != "example-policy-1" ||
+		policies[0].PolicyAssignment.DisplayName != "Example policy" {
+		t.Errorf("log did not preserve the nested policy assignment: %+v", policies)
+	}
+	var numbers []struct{ AssignmentCategory, TelephoneNumber string }
+	if err := json.Unmarshal([]byte(twins[0].Attrs["telephone_numbers"]), &numbers); err != nil {
+		t.Errorf("decode number list on user twin: %v", err)
+	} else if len(numbers) != 1 || numbers[0].AssignmentCategory != "primary" || numbers[0].TelephoneNumber != "+12025550100" {
+		t.Errorf("log did not preserve the number assignment: %+v", numbers)
+	}
+	if twins[1].Attrs["effective_policy_assignments"] != "" || twins[1].Attrs["telephone_numbers"] != "" ||
+		twins[2].Attrs["telephone_numbers"] != "" {
+		t.Errorf("empty arrays produced assignment evidence: %+v", twins[1:3])
+	}
+	got := map[string]float64{}
+	for _, p := range rec.MetricPoints("m365.teams.user_configuration.effective_policy_assignments") {
+		if len(p.Attrs) != 1 {
+			t.Errorf("unexpected policy metric labels: %+v", p)
+		}
+		got[p.Attrs["policy_type"]] += p.Value
+	}
+	if want := (map[string]float64{"TeamsCallingPolicy": 1, "OnlineVoiceRoutingPolicy": 1, "unknown": 1}); !maps.Equal(got, want) {
+		t.Errorf("policy counts = %v, want %v", got, want)
 	}
 }
