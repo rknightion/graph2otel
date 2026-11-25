@@ -22,4 +22,6 @@ const (
 	AttrTelephoneNumber            = "telephone_number"
 	AttrTelephoneNumbers           = "telephone_numbers"
 	AttrEffectivePolicyAssignments = "effective_policy_assignments"
+	AttrInventorySnapshotID        = "snapshot_id"
+	AttrInventoryEntityCount       = "entity_count"
 )

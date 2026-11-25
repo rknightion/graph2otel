@@ -967,13 +967,24 @@ def inventory(b):
     b.metric(unassigned, title="Unassigned phone numbers over time", viz="timeseries")
     b.records("m365.teams.phone_number", "Phone number inventory history", (
         "telephone_number", "number_type", "assignment_status", "activation_state", "capabilities",
-        "city", "country_code", "number_source",
+        "city", "country_code", "number_source", "snapshot_id",
     ), desc="Observations from all polls in range, including older assignments and numbers later removed.")
     b.records("m365.teams.user_configuration", "Teams user configuration history", (
         "user_principal_name", "account_type", "enterprise_voice_enabled", "feature_types", "modified_date_time",
-        "effective_policy_assignments", "telephone_numbers",
+        "effective_policy_assignments", "telephone_numbers", "snapshot_id",
     ), desc="Observations from all polls in range, including configurations later changed or removed. "
          "Blank assignment cells mean no assignments were reported on that row.")
+    b.records("m365.teams.phone_inventory_snapshot", "Inventory completion history", (
+        "collector", "snapshot_id", "entity_count",
+    ), panel_id=1012, desc="One marker per fully collected poll. Zero means the source poll was empty. "
+          "A marker does not prove delivery of its detail rows. A missing marker proves nothing.")
+    b.text(f"The tables above are **history, not verified current detail**. Each requests up to {RECORD_LIMIT} "
+           "records across the selected tenants. The cap can hide an entire poll or part of one. "
+           "Do not take the newest row per entity or join these tables. "
+           "Use the [Loki read-back steps](https://github.com/rknightion/graph2otel/blob/main/docs/signals.md"
+           "#reading-a-complete-teams-phone-inventory) to select a separate completion per tenant and collector "
+           "and check its exact rows. If the check fails, the inventory is **not proven complete**.",
+           title="Checking complete inventory details", h=5, panel_id=1013)
 
 
 def usage(b):

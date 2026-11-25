@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rknightion/graph2otel/internal/collectors"
+	"github.com/rknightion/graph2otel/internal/collectors/m365/teamsphone/internal/inventory"
 	"github.com/rknightion/graph2otel/internal/recordoutcome"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
@@ -41,7 +42,13 @@ func Collect(t *testing.T, poller string, pages Graph) *telemetrytest.Recorder {
 		if err := c.Collect(t.Context(), rec.Emitter(), counts); err != nil {
 			t.Fatalf("collect %s: %v", poller, err)
 		}
-		if got := counts.Snapshot().Summarize(nil, false); got.Result != recordoutcome.ResultSuccess || got.Counts.Fetched != uint64(len(rec.LogRecords())) || got.Counts.Fetched != got.Counts.Emitted {
+		var twins uint64
+		for _, log := range rec.LogRecords() {
+			if log.EventName != inventory.CompletionEvent {
+				twins++
+			}
+		}
+		if got := counts.Snapshot().Summarize(nil, false); got.Result != recordoutcome.ResultSuccess || got.Counts.Fetched != twins || got.Counts.Fetched != got.Counts.Emitted {
 			t.Errorf("outcomes do not reconcile with twins: %+v", got)
 		}
 		return rec

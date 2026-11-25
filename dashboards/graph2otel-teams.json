@@ -11511,7 +11511,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "{service_name=\"graph2otel\"} | event_name=`m365.teams.phone_number` | tenant_id=~\"$tenant\" | keep tenant_id, telephone_number, number_type, assignment_status, activation_state, capabilities, city, country_code, number_source",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`m365.teams.phone_number` | tenant_id=~\"$tenant\" | keep tenant_id, telephone_number, number_type, assignment_status, activation_state, capabilities, city, country_code, number_source, snapshot_id",
                         "editorMode": "code",
                         "queryType": "range",
                         "maxLines": 250
@@ -11624,7 +11624,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "{service_name=\"graph2otel\"} | event_name=`m365.teams.user_configuration` | tenant_id=~\"$tenant\" | keep tenant_id, user_principal_name, account_type, enterprise_voice_enabled, feature_types, modified_date_time, effective_policy_assignments, telephone_numbers",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`m365.teams.user_configuration` | tenant_id=~\"$tenant\" | keep tenant_id, user_principal_name, account_type, enterprise_voice_enabled, feature_types, modified_date_time, effective_policy_assignments, telephone_numbers, snapshot_id",
                         "editorMode": "code",
                         "queryType": "range",
                         "maxLines": 250
@@ -11703,6 +11703,147 @@
                     ]
                   }
                 ]
+              }
+            }
+          }
+        }
+      },
+      "panel-1012": {
+        "kind": "Panel",
+        "spec": {
+          "id": 1012,
+          "title": "Inventory completion history",
+          "description": "One marker per fully collected poll. Zero means the source poll was empty. A marker does not prove delivery of its detail rows. A missing marker proves nothing. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`m365.teams.phone_inventory_snapshot` | tenant_id=~\"$tenant\" | keep tenant_id, collector, snapshot_id, entity_count",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "maxLines": 250
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "extractFields",
+                  "spec": {
+                    "options": {
+                      "source": "labels",
+                      "format": "json",
+                      "replace": true,
+                      "keepTime": true
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "sortBy": [
+                  {
+                    "displayName": "Time",
+                    "desc": true
+                  }
+                ]
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "No data yet. Needs the teams.phone_numbers and teams.user_configuration collectors. Collector health shows whether the source ran. Log panels also need the Loki datasource.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "number"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "panel-1013": {
+        "kind": "Panel",
+        "spec": {
+          "id": 1013,
+          "title": "Checking complete inventory details",
+          "description": "",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "text",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "mode": "markdown",
+                "content": "The tables above are **history, not verified current detail**. Each requests up to 250 records across the selected tenants. The cap can hide an entire poll or part of one. Do not take the newest row per entity or join these tables. Use the [Loki read-back steps](https://github.com/rknightion/graph2otel/blob/main/docs/signals.md#reading-a-complete-teams-phone-inventory) to select a separate completion per tenant and collector and check its exact rows. If the check fails, the inventory is **not proven complete**."
               }
             }
           }
@@ -16271,6 +16412,32 @@
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-104"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 50,
+                                  "width": 24,
+                                  "height": 9,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-1012"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 59,
+                                  "width": 24,
+                                  "height": 5,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-1013"
                                   }
                                 }
                               }

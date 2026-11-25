@@ -260,6 +260,66 @@ uses shorter measurement intervals and does not publish a TCP-share target in
 that table. Applying it to call-stream averages is a comparison, not evidence
 that the stream used that route or passed Microsoft's active network test.
 
+## Reading a complete Teams Phone inventory
+
+A Teams Phone inventory poll observes a set, not a stream of changes. Taking the newest
+row per number or user keeps entities removed since that row was emitted. The Phone
+inventory tab shows **history only**: each Loki table requests 250 recent records across
+the selected tenants. A table can miss part of a poll or an entire poll. A Grafana join
+runs after those limits and cannot prove either input complete. The scheduler's last
+successful poll and the Prometheus aggregate panels do not verify detail delivery.
+
+Both v1.0 collectors stamp their detail rows with a log-only `snapshot_id` of 32 lowercase
+hex characters.
+After reading all pages and mapping all rows, each collector emits one
+`m365.teams.phone_inventory_snapshot` marker with `collector`, `snapshot_id` and
+`entity_count`. A poll that returned no rows still writes a marker with count zero.
+A failed or unparseable poll does not write a marker. These logs use observation time;
+source dates, when present, remain detail attributes. The marker records completion of
+one Graph walk, not a transaction with Loki or an atomic view across Graph pages.
+
+For verified detail at a fixed time, use the Loki `GET /loki/api/v1/query_range` endpoint
+with the **same absolute `start` and `end`** in Unix nanoseconds for both steps. Repeat for
+each tenant and collector; there is no combined inventory snapshot. Use an exact
+`tenant_id`, or `tenant_id=""` for an unlabelled single-tenant deployment. Do not use the
+dashboard's `All` matcher. These queries require Loki to expose the OTLP event name as
+`event_name` structured metadata, the same prerequisite as the dashboard's log panels.
+
+1. Set `direction=backward` and `limit=2` for the marker lookup. Use the result with the
+   newest timestamp across the returned streams. If there is no marker, the newest timestamp
+   is tied, or the newest marker lacks a valid ID or non-negative integer count, say **not
+   proven complete**. Do not pick an older marker. Use `teams.user_configuration` in place of
+   `teams.phone_numbers` for user configurations.
+
+   ```logql
+   {service_name="graph2otel"} | event_name="m365.teams.phone_inventory_snapshot" | tenant_id="example-tenant" | collector="teams.phone_numbers"
+   ```
+
+2. Fetch the corresponding detail event with that marker's exact, non-empty `snapshot_id`.
+   Use `m365.teams.user_configuration` for the user collector. Request `entity_count + 1`
+   rows, including `limit=1` for a zero marker. If the endpoint cannot accept that limit,
+   report **over the read-back limit; not proven complete** rather than publishing a subset.
+   A 251-row budget, for example, can verify up to 250 entities. Do not apply entity or status
+   filters until *after* checking the full result.
+
+   ```logql
+   {service_name="graph2otel"} | event_name="m365.teams.phone_number" | tenant_id="example-tenant" | snapshot_id="0123456789abcdef0123456789abcdef"
+   ```
+
+   Verify that the query succeeded, the total number of entries in `data.result[].values`
+   equals `entity_count`, all row `id` values are present and distinct, and no row has
+   `attrs_truncated="true"`. In the default response encoding, each result's `stream` object
+   includes the structured metadata for its rows. Any error, duplicate, clipped detail or
+   count mismatch is **not proven complete**. A short read can
+   be a range boundary, delayed indexing, retention or export loss; retry the same lookup
+   with an adequate window rather than borrowing older rows. Count zero with no matching rows
+   is a verified empty inventory for that poll, even when history still has older rows.
+
+The result is complete for the **latest visible completion in the queried window**, not
+proof that every later poll or marker reached Loki. Before this marker was introduced,
+only history is available. Widen the range if the last poll falls outside it, and check
+collector health and export health before interpreting an old completion as recent.
+
 ## OTLP → Prometheus name normalization
 
 graph2otel emits **OTLP**; if your backend (Grafana Cloud, or any Prometheus-remote-write

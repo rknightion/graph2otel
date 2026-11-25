@@ -70,6 +70,7 @@ func (c numbers) Collect(ctx context.Context, e telemetry.Emitter, outcomes *rec
 	if err != nil {
 		return err
 	}
+	poll := c.BeginPoll(e)
 	counts := map[numberBucket]int{}
 	unused := 0
 	for _, n := range rows {
@@ -95,7 +96,7 @@ func (c numbers) Collect(ctx context.Context, e telemetry.Emitter, outcomes *rec
 				counts[key]++
 			}
 		}
-		e.LogEvent(n.twin())
+		poll.LogTwin(n.twin())
 	}
 	points := make([]telemetry.GaugePoint, 0, len(counts))
 	for k, v := range counts {
@@ -106,7 +107,7 @@ func (c numbers) Collect(ctx context.Context, e telemetry.Emitter, outcomes *rec
 	}
 	e.GaugeSnapshot("m365.teams.phone_numbers.total", "{number_capability}", "Teams Phone numbers by type, assignment status, activation state and capability. A number can have several capabilities.", points)
 	e.GaugeSnapshot("m365.teams.phone_numbers.unassigned", "{number}", "Teams Phone numbers with unassigned status.", []telemetry.GaugePoint{{Value: float64(unused)}})
-	inventory.RecordTwins(outcomes, uint64(len(rows)))
+	poll.Complete(outcomes)
 	return nil
 }
 
