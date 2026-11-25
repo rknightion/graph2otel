@@ -538,6 +538,7 @@ func mapRecord(rec map[string]any) (string, telemetry.Event, bool) {
 	// silently drops one entire workload, and on the live sample the dropped
 	// one would have been Exchange, 1 record in 8.
 	addDLPAttrs(attrs, rec)
+	addTeamsAttrs(attrs, rec)
 
 	// Severity uses the same predicate as unifiedaudit.mapRecord, so the same
 	// event cannot arrive INFO from one transport and WARN from the other. The
