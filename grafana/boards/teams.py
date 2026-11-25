@@ -822,27 +822,78 @@ def phone(b):
 
 
 def voice_apps(b):
-    b.text("This tab needs the optional **teams.voice_apps** collector, which reads Teams voice analytics and is "
-           "off unless enabled for the tenant. Queue and attendant labels are resource GUIDs. Queue shares describe "
-           "newly observed legs with known results, not intervals of event time.", title="Before you read this tab", h=3)
-    b.metric("teams.call_queue.answer_rate", title="Call queue answer share", by=["queue"])
-    b.metric("teams.call_queue.abandon_rate", title="Call queue abandon share", by=["queue"])
-    wait = counter_increase(f'{b.cat.metric("teams.call_queue.wait_time").prom}_bucket{{{TENANT_SEL}}}', "$__interval")
-    for q in ("0.95", "0.5"):
-        _slots(b.raw(f"Call queue wait time p{q[2:].ljust(2, '0')}", [
-            f"histogram_quantile({q}, sum by (le, tenant_id, queue) ({wait}))"], unit="s",
-            legends=["{{tenant_id}} · {{queue}}"],
-            desc="Time callers waited in the queue, as a bucketed quantile across newly observed legs. " + SLOT_NOTE))
+    b.text("This tab needs the optional **teams.voice_apps** collector. Queue and attendant labels are resource GUIDs. "
+           "The Loki summaries use event time. The share, denominator and wait panels use processing time. "
+           "An unkeyed queue observation can repeat across polls; it is evidence, not a distinct leg.",
+           title="Before you read this tab", h=4)
+    cq = "teams.call_queue_call"
+    vaac = [f("ingest_transport", "eq", "vaac")]
+    keyed = [*vaac, f("queue", "ne", ""), f("dialog_id", "ne", "")]
+    unkeyed = [*vaac, Raw("queue=`` or dialog_id=``", keys=["queue", "dialog_id"],
+                         reason="Either missing part makes a queue observation unkeyed")]
+    queue_legend = "{{tenant_id}} · {{queue}}"
+
+    def log_count(title, filters, keys, legend, desc, *, distinct=False):
+        keep = Raw("keep " + ", ".join(keys), keys=keys,
+                   reason="Discard unrelated per-record labels before counting")
+        sel = b._selector(cq, [*filters, keep], by=keys)
+        expr = f"sum by ({', '.join(keys)}) (count_over_time({sel} [$__range]))"
+        if distinct:
+            expr = f"count by (tenant_id, queue) ({expr})"
+        panel = b._viz_panel("stat", title, [], "short", desc + " Requires the Loki datasource.", 12, 5)
+        panel["datasource"] = LOKI_DS
+        panel["targets"] = [b._loki_query(expr, legend=legend, query_type="instant")]
+        panel["options"].update(graphMode="none", textMode="value_and_name")
+        panel["fieldConfig"]["defaults"]["noValue"] = NO_LOKI
+
+    log_count("Distinct keyed queue legs in range", keyed, ("tenant_id", "queue", "dialog_id"), queue_legend,
+              "One leg per tenant, queue ID and dialog ID in the selected event-time range. "
+              "Includes keys with unknown results. Shorten the range if Loki reaches its series limit.", distinct=True)
+    log_count("Call queue observations in range", vaac, ("tenant_id",), "{{tenant_id}}",
+              "Counts stored Loki observations, including unkeyed rows that can repeat across polls. "
+              "This is not a count of calls or distinct legs.")
+
+    shares = ("answer_share", "abandon_share")
+    counts = ("known_result_legs", "answered_legs", "abandoned_legs")
+    panel = b.records("teams.call_queue_batch", "Call queue outcomes by saved batch", ("queue", *counts, *shares),
+                      filters=vaac, desc="Counts and shares come from a single saved batch per queue. "
+                      "Zero known results means both shares are undefined. No row means no saved observation "
+                      "is visible, not zero calls. Dates show processing time, not call time.")
+    panel["transformations"].append(_convert((*counts, *shares), "number"))
+    for share in shares:
+        _override(panel, share, "unit", "percentunit")
+
+    wait = b.cat.metric("teams.call_queue.wait_time").prom
+    buckets = counter_increase(f'{wait}_bucket{{{TENANT_SEL}}}', "$__interval")
+    samples = counter_increase(f'{wait}_count{{{TENANT_SEL}}}', "$__interval")
+    for percentile, q in ((50, 0.5), (95, 0.95)):
+        _slots(b.raw(f"Call queue wait time p{percentile}", [
+            f"histogram_quantile({q}, sum by (le, tenant_id, queue) ({buckets}))"], unit="s", w=8,
+            legends=[queue_legend],
+            desc="Bucketed quantile of admitted queue waits. Read the observation count beside it. " + SLOT_NOTE))
+    _slots(b.raw("Admitted queue wait observations", [f"sum by (tenant_id, queue) ({samples})"], unit="short", w=8,
+                 legends=[queue_legend], desc="Sample count from the same histogram and interval as p50 and p95. "
+                 "Estimated from scraped counter samples, not from Loki rows. " + SLOT_NOTE))
     _bars(b, "Auto attendant call legs by outcome", "teams.auto_attendant.calls", ("auto_attendant", "voice_outcome"),
           "Auto attendant call legs by bounded outcome.")
-    b.records("teams.call_queue_call", "Call queue legs", (
-        "queue", "call_queue_identity", "result", "call_queue_final_state_action", "call_queue_duration_seconds",
-        "call_queue_agent_count", "agent_name", "start_date_time", "end_date_time",
-    ), desc="Caller and agent identities are kept in the log rows only.")
+    queue_fields = ("queue", "dialog_id", "call_queue_identity", "result", "call_queue_final_state_action",
+                    "call_queue_duration_seconds", "call_queue_agent_count", "agent_name", "start_date_time", "end_date_time")
+    b.records(cq, "Keyed call queue observations", queue_fields, filters=keyed,
+              desc="Rows with both a queue ID and a dialog ID. The summary above counts distinct keys.")
+    b.records(cq, "Unkeyed call queue observations", queue_fields, filters=unkeyed,
+              desc="The queue ID, dialog ID or both are absent or invalid. These rows can repeat across polls "
+                   "and do not count as legs.")
     b.records("teams.auto_attendant_call", "Auto attendant legs", (
         "auto_attendant", "auto_attendant_identity", "result", "auto_attendant_transfer_action",
         "auto_attendant_call_flow", "auto_attendant_chain_duration_seconds", "start_date_time", "end_date_time",
     ))
+    diagnostic = b.raw("Call queue share gauges (export diagnostics)", [
+        f'{b.cat.metric(f"teams.call_queue.{outcome}_rate").prom}{{{TENANT_SEL}}}'
+        for outcome in ("answer", "abandon")
+    ], unit="percentunit", w=24, h=5, legends=[f"{outcome} · {queue_legend}" for outcome in ("Answer", "Abandon")],
+       desc="Independent gauge series can be stale or clipped. Use the saved batches above for shares with "
+            "their matching denominator.")
+    diagnostic["fieldConfig"]["defaults"].update(min=0, max=1)
 
 
 def inventory(b):

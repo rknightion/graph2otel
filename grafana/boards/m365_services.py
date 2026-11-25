@@ -114,9 +114,10 @@ SECTIONS = [
         ("Unassigned Teams Phone numbers", ["m365.teams.phone_numbers.unassigned"]),
         ("Teams users by account type and enterprise voice state",
          ["m365.teams.user_configuration.users"], {"viz": "table"}),
-        ("Call queue answer and abandon ratios by queue",
+        ("Call queue share gauges by queue (export diagnostics)",
          ["teams.call_queue.answer_rate", "teams.call_queue.abandon_rate"],
-         {"viz": "timeseries"}),
+         {"viz": "timeseries", "desc": "Independent gauges can be stale or clipped. Use saved-batch logs "
+          "for shares with their matching denominator."}),
         ("Call queue wait time by queue", ["teams.call_queue.wait_time"]),
         ("Auto attendant call rate by attendant and outcome", ["teams.auto_attendant.calls"]),
     ]),
@@ -186,6 +187,9 @@ LOGS = [
      "desc": "Call flow and outcome per attendant leg. Requires the VAAC opt-in."},
     {"kind": "logs", "event": "teams.call_queue_call", "title": "Teams call queue calls",
      "desc": "Queue outcome, wait and participant details per leg. Requires the VAAC opt-in."},
+    {"kind": "logs", "event": "teams.call_queue_batch", "title": "Teams call queue outcomes by saved batch",
+     "desc": "Expand structured metadata for the denominator and both shares from the same saved batch. "
+             "Zero known results means no shares. Processing time, not call time."},
     {"kind": "logs", "event": "m365.teams_device_usage", "title": "Teams client usage by user (D7)",
      "desc": "One snapshot per dated report row, not one record per action. Widen the time range "
              "to include the report refresh date. Concealed identifiers may not match directory users."},
