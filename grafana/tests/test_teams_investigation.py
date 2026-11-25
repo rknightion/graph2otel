@@ -197,8 +197,10 @@ class TeamsInvestigationLogQLTests(unittest.TestCase):
                 targets = query_models(spec)
                 self.assertTrue(all(q["queryType"] == "range" and q["maxLines"] == 250 for q in targets))
 
-                def results(tenant, **filters):
-                    return [self.query(q, rows, columns, tenant=tenant, **filters) for q in targets]
+                def results(tenant, *, fixture=(rows, columns, targets), **filters):
+                    fixture_rows, fixture_columns, fixture_targets = fixture
+                    return [self.query(q, fixture_rows, fixture_columns, tenant=tenant, **filters)
+                            for q in fixture_targets]
 
                 matches = results(".*", **inputs)
                 self.assertCountEqual([row for frame in matches for row in frame], [
