@@ -106,19 +106,6 @@ is its contract. Run one test or package locally.
 The runtime image uses distroless Debian 13 for the patched eMudhra trust store; the Debian 12
 base remains unsuitable. Refresh the builder CA package before dependency downloads.
 
-## Cursor Cloud specific instructions
-
-The [Cursor environment](.cursor/environment.json) runs `just cloud-bootstrap` to install the
-pinned source gate tools and warm all four Go modules. Build compiles test binaries without
-running them and starts no services.
-
-- Run `go test -race ./cmd/graph2otel -run '^TestRun_VersionUsesCanonicalBuildVersion$' </dev/null`
-  for a focused check.
-- Run `just check </dev/null` for the full source gate. Use hosted CI for the Docker smoke and
-  GoReleaser snapshot checks.
-- Live tenant probes, Graph beta drift, live Grafana reconciliation and production verification
-  require a separate authorized environment. Use synthetic data for local source checks.
-
 ## Working rules
 
 - **Validate a task's premise against the live tenant before implementing**, probing as
