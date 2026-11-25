@@ -2,12 +2,12 @@
 
 graph2otel ships two kinds of Grafana asset, each in its own top-level
 directory. The generated inventory is drift-gated at
-**2 dashboards, 19 alert rules, and 11 paused detection examples**:
+**2 dashboards, 26 alert rules, and 11 paused detection examples**:
 
 | Directory | Assets | Format | Target Grafana Cloud folder |
 | --- | --- | --- | --- |
 | `dashboards/` | 2 dashboards (**generated**) | Grafana **v2 dynamic dashboard** resource (`dashboard.grafana.app/v2`) | folder of your choice |
-| `alerts/rules/` | 19 alert rules (**generated**) | Grafana **App Platform** `AlertRule` (`rules.alerting.grafana.app/v0alpha1`) | `graph2otel` |
+| `alerts/rules/` | 26 alert rules (**generated**) | Grafana **App Platform** `AlertRule` (`rules.alerting.grafana.app/v0alpha1`) | `graph2otel` |
 | `alerts/rules/` | 11 detection examples (**generated**, all **paused**) | same, separate rule group | `graph2otel detections` |
 
 The `gcx` CLI is the manual import path. The repository-managed GitSync copy
@@ -244,9 +244,9 @@ on (#296):
 | Label | Mandatory? | Values | Meaning |
 | --- | --- | --- | --- |
 | `pipeline` | yes | `graph2otel` (constant) | Ownership. Every rule this repository generates carries it, so a route can be scoped to "graph2otel and nothing else" without matching on anything more fragile. |
-| `severity` | yes | `critical`, `warning` | Paging urgency. |
+| `severity` | yes | `critical`, `warning`, `info` | Notification urgency. `info` is for situational awareness, not paging. |
 | `source` | yes | `entra`, `intune`, `m365`, `purview`, `defender`, `mdca`, `graph2otel` | The Microsoft workload the rule is about (or `graph2otel` for the exporter's own self-observability, throttle, and record-integrity signals) — route a whole domain to the team that owns it. |
-| `category` | yes | `credential-expiry`, `compliance`, `self-observability`, `record-integrity`, `throttle`, `mdca-discovery`, `identity-threat` | The failure class within a domain. **`identity-threat` is carried by every one of the 11 paused detections** and by no health rule, so it is the single matcher that separates security content from exporter health — route it to a security responder, not to whoever owns graph2otel. This value was missing from this table while the detections already carried it. |
+| `category` | yes | `credential-expiry`, `compliance`, `self-observability`, `record-integrity`, `throttle`, `mdca-discovery`, `identity-threat`, `teams-quality`, `teams-voice`, `teams-collection`, `teams-service-incident` | The failure class within a domain. **`identity-threat` is carried by every one of the 11 paused detections** and by no health rule, so it is the single matcher that separates security content from exporter health — route it to a security responder, not to whoever owns graph2otel. This value was missing from this table while the detections already carried it. |
 | `component` | **no** | `apple-token`, `certificate` | A finer distinction than `source` allows, present **only** on the two Intune credential-expiry rules that need it: `g2o-intune-apple-token-expiry-critical` and `g2o-intune-cert-expiry-critical`. Absent on every other rule — do not write a route that assumes it exists. |
 
 A worked example — a child route under your existing policy tree that sends

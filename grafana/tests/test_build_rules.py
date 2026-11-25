@@ -57,6 +57,13 @@ EXPECTED_PAUSED = {
     "g2o-record-attrs-truncated": False,             # default-enabled, doc block 7
     "g2o-record-over-horizon": True,                 # companion, doc block 7
     "g2o-otlp-delivery-failing": False,              # default-enabled, doc block 8
+    "g2o-teams-healthy-call-share-low": True,
+    "g2o-teams-site-network-noncompliant": True,
+    "g2o-teams-site-poor-stream-share-high": True,
+    "g2o-teams-trunk-effectiveness-low": True,
+    "g2o-teams-trunk-sip-5xx-high": True,
+    "g2o-teams-call-records-stale": True,
+    "g2o-teams-service-incident-open": True,
 }
 
 
@@ -73,8 +80,8 @@ class TestRuleIdentity(unittest.TestCase):
         actual = {r["uid"]: r["isPaused"] for r in build_rules.RULES}
         self.assertEqual(actual, EXPECTED_PAUSED)
 
-    def test_nineteen_alert_rules_and_no_recording_rules(self):
-        self.assertEqual(len(build_rules.RULES), 19)
+    def test_twenty_six_alert_rules_and_no_recording_rules(self):
+        self.assertEqual(len(build_rules.RULES), 26)
 
 
 class TestPipelineShape(unittest.TestCase):
@@ -84,7 +91,9 @@ class TestPipelineShape(unittest.TestCase):
             self.assertEqual(ref_ids, ["A", "B", "C"], r["uid"])
             self.assertEqual(r["condition"], "C", r["uid"])
             a, b, c = r["data"]
-            self.assertEqual(a["model"]["datasource"]["type"], "prometheus", r["uid"])
+            ds = r["uid"] in {"g2o-teams-call-records-stale", "g2o-teams-service-incident-open"}
+            self.assertEqual(a["model"]["datasource"]["type"],
+                             "loki" if ds else "prometheus", r["uid"])
             self.assertEqual(b["model"]["type"], "reduce", r["uid"])
             self.assertEqual(b["model"]["expression"], "A", r["uid"])
             self.assertEqual(c["model"]["type"], "threshold", r["uid"])

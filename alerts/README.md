@@ -43,6 +43,23 @@ default-enabled rules instead, since neither covers the other's failure mode
 `tailscale2otel` repo's `deploy/alerts/tailscale2otel.grafana-rules.yaml`:
 enable a companion in the Grafana UI once you've decided it fits your tenant.
 
+## Teams operations
+
+The Teams rules ship paused. Check the runbooks and tune the sample thresholds
+for your tenant before enabling them. They use bounded tenant, named-site or
+named-trunk scopes, not call IDs, people or incident IDs. The working-hours check
+uses UTC, not the Grafana browser timezone. It needs positive evidence of earlier
+call records and cannot distinguish every quiet period from delayed delivery.
+
+Route `source=m365`, `category=teams-service-incident`, `severity=info` to a
+separate informational receiver. An open Teams service incident is upstream
+context, not a page about your trunks, sites or exporter. A confirmed resolution
+cancels only the matching issue; missing lifecycle data is not a resolution.
+
+Offline synthetic PromQL firing proof: `python3 grafana/tests/teams_promtool.py`
+with `promtool` on `PATH`. This does not test Loki, Grafana's expression engine
+or notification delivery.
+
 ## Metric naming: OTLP → Prometheus normalization
 
 graph2otel emits **OTLP** metrics. Grafana Cloud (Mimir) normalizes names on
