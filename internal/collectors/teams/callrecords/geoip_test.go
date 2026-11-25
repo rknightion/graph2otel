@@ -70,8 +70,8 @@ func TestCallStreamGeoIP(t *testing.T) {
 				t.Fatal(err)
 			}
 			logs := rec.LogRecords()
-			if len(logs) != 3 {
-				t.Fatalf("want call and two streams, got %d records", len(logs))
+			if len(logs) != 8 {
+				t.Fatalf("want one call, two streams and five roster entries, got %d records", len(logs))
 			}
 			for _, log := range logs {
 				prefix := ""

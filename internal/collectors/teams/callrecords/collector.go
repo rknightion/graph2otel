@@ -1,7 +1,7 @@
 // Package callrecords collects Teams call records over Microsoft Graph v1.0.
-// The wire projections are synthetic and docs-derived; arrival, version churn
-// and volume are not live-measured. Log versions and first-version metrics use
-// the same hydrated Call and tenant checkpoint.
+// Wire projections use docs and de-identified live evidence where noted.
+// Call, roster and stream logs share the hydrated Call and tenant checkpoint
+// with the first-version metrics.
 package callrecords
 
 import (

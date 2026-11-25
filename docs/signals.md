@@ -103,6 +103,33 @@ paths use their direct API shapes around those engines. `ingest_transport` recor
 path produced each log: `graph`, `blob`, `o365_activity`, `audit_query`,
 `report_export`, `mdca`, `exchange_online`, or `vaac`.
 
+## Teams call roster
+
+`teams.call_participant` is the `participants_v2` roster for an accepted call
+version, not the set of endpoints that sent or received media. Filter Loki
+structured metadata by `tenant_id`, `call_id` and `version` to see the roster
+read for that accepted detail version. Graph serves detail and roster pages
+separately; this does not prove an atomic source snapshot.
+`participant_id` is the source roster row ID; `id` is the projected identity ID.
+They are not interchangeable. Neither substitutes for the other when missing.
+The row is still emitted when an ID or known identity projection is missing.
+If the same non-empty roster ID repeats within one collection, the first row
+is kept, as for participant counts.
+
+Roster logs are timed at the enclosing call's start, not at participant join
+time. They say nothing about join or leave times, physical location or quality
+impact. Do not use a roster ID as a media endpoint key or assume the ID stays
+the same across versions. An opaque suffix in each log body keeps Loki from
+collapsing rows at the same time; it is not a participant ID or a join key.
+
+This adds one SIEM log per roster entry per accepted version, not just the first
+version. The [live sample](graph-api-gotchas.md#teams-call-records) had 67 rows
+across 18 complete collections (about 3.7 extra logs per version), not a fleet
+throughput estimate. A roster uses the reads already required by the collector
+and does not add source-record counts or metric labels. Failed paging emits no
+partial roster. Versions already saved in the checkpoint do not emit again;
+a failed checkpoint save can still replay the logs, as for calls and streams.
+
 ## Teams call quality
 
 `teams.call_stream` reports `stream_health` as `good`, `poor` or `unclassified`.

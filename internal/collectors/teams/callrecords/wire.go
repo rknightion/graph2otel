@@ -11,7 +11,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/collectors"
 )
 
-// docs-derived from Graph v1.0, not a captured tenant response:
+// Graph v1.0 request shapes and bounds are docs-derived:
 // https://learn.microsoft.com/graph/api/callrecords-cloudcommunications-list-callrecords
 // https://learn.microsoft.com/graph/api/callrecords-callrecord-get
 // https://learn.microsoft.com/graph/api/callrecords-callrecord-list-participants_v2
@@ -96,6 +96,7 @@ type endpoint struct {
 	Name     string    `json:"name"`
 }
 
+// User and phone roster rows are live-measured 2026-11-25, #708 (Teams observability review).
 type participant struct {
 	ID         string      `json:"id"`
 	Identities identitySet `json:"identity"`

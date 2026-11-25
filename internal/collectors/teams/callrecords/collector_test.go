@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -181,17 +182,19 @@ func TestCallVersionsAndSites(t *testing.T) {
 		return collectorForTest(t, collectors.WindowDeps{Graph: g, Store: checkpoint.NewStore(dir), TenantID: "synthetic-tenant", TeamsSites: file, TeamsInternalDomains: domains})
 	}
 	c := newC()
+	bodies := make(map[string]struct{})
 	for _, want := range []struct {
 		version, logCount int
 		restart           bool
-	}{{1, 3, false}, {1, 0, false}, {1, 0, true}, {2, 3, false}, {2, 0, true}} {
+	}{{1, 8, false}, {1, 0, false}, {1, 0, true}, {2, 8, false}, {2, 0, true}} {
 		v = want.version
 		if want.restart {
 			c = newC()
 		}
 		rec := telemetrytest.New()
 		outcomes := recordoutcome.NewRecorder()
-		if _, err := c.CollectWindow(t.Context(), now.Add(-2*time.Hour), now, rec.Emitter(), outcomes); err != nil {
+		e := telemetry.WithAttributeBudget(rec.Emitter(), telemetry.MaxAttributeBytes, Name, c.TenantID, telemetry.TransportGraph)
+		if _, err := c.CollectWindow(t.Context(), now.Add(-2*time.Hour), now, e, outcomes); err != nil {
 			t.Fatal(err)
 		}
 		if err := outcomes.Snapshot().Validate(); err != nil {
@@ -208,6 +211,24 @@ func TestCallVersionsAndSites(t *testing.T) {
 			t.Fatalf("expected call start, audio segment start, and SIP video start (no invalid event), got %+v", logs)
 		}
 		assertAttrs(t, logs[0], map[string]string{"version": strconv.Itoa(v), "call_id": "call-a", "duration_seconds": "60", "organizer_id": "person-1", "organizer_user_principal_name": "caller@corp.example.com", "participant_count": "5", "participant_users": "1", "participant_guests": "1", "participant_pstn": "1", "participant_apps": "1", "participant_devices": "1", "join_web_url": "https://example.com/join/synthetic", "ingest_transport": "graph"})
+		for _, log := range logs[3:] {
+			if log.EventName != "teams.call_participant" || !log.Timestamp.Equal(start) {
+				t.Fatalf("expected roster evidence at the call start, got %q at %v", log.EventName, log.Timestamp)
+			}
+			assertAttrs(t, log, map[string]string{"version": strconv.Itoa(v), "call_id": "call-a"})
+			if _, ok := bodies[log.Body]; ok {
+				t.Fatalf("roster bodies at the same event time must differ within and across versions; repeated %q at v%d", log.Body, v)
+			}
+			bodies[log.Body] = struct{}{}
+			if len(log.Body) > 96 || log.Attrs["attrs.truncated"] != "" {
+				t.Fatalf("roster log exceeds the evidence budget: %+v", log)
+			}
+			for _, raw := range []string{c.TenantID, log.Attrs["call_id"], log.Attrs["participant_id"], log.Attrs["user_principal_name"]} {
+				if raw != "" && strings.Contains(log.Body, raw) {
+					t.Fatalf("roster log body contains a raw identifier: %q", log.Body)
+				}
+			}
+		}
 		site, calleeScope := "PollSnapshot", "external"
 		if v == 2 {
 			site, calleeScope = "NextPoll", "unknown"
@@ -229,6 +250,61 @@ func TestCallVersionsAndSites(t *testing.T) {
 	}
 	if detailGets != 2 || participantGets != 2 {
 		t.Fatalf("unchanged versions should not fan out again: %d details, %d participants", detailGets, participantGets)
+	}
+}
+
+func TestRosterReplayKeepsBodyWithItsObservation(t *testing.T) {
+	start := now.Add(-time.Hour)
+	rows := []any{
+		json.RawMessage(`{"id":"roster-a","identity":{"user":{"id":"identity-a"}}}`),
+		json.RawMessage(`{"identity":{"phone":{"id":"unkeyed-phone"}}}`),
+		json.RawMessage(`{"identity":null}`),
+		json.RawMessage(`{"id":"roster-b","identity":{"user":{"id":"identity-b"}}}`),
+		json.RawMessage(`{"identity":null}`),
+	}
+	read := func(rows []any) map[string]string {
+		t.Helper()
+		g := fakeGraph(func(address, _ string) ([]byte, error) {
+			switch address {
+			case absolutePath + "/replay?$expand=sessions($expand=segments)":
+				return encoded(t, syntheticDetail(t, "replay", 1, start)), nil
+			case absolutePath + "/replay/participants_v2":
+				return collection(t, "", rows...), nil
+			default:
+				t.Fatalf("unexpected fixture request: %s", address)
+				return nil, nil
+			}
+		})
+		// A fresh or missing checkpoint can replay the same source version.
+		c := collectorForTest(t, collectors.WindowDeps{Graph: g, Store: checkpoint.NewStore(t.TempDir()), TenantID: "synthetic-tenant"})
+		rec := telemetrytest.New()
+		if err := c.CollectCall(t.Context(), "replay", rec.Emitter(), nil); err != nil {
+			t.Fatal(err)
+		}
+		bodies := make(map[string]string)
+		for _, log := range rec.LogRecords() {
+			if log.EventName != "teams.call_participant" {
+				continue
+			}
+			if !log.Timestamp.Equal(start) {
+				t.Fatalf("roster row lost its event time: %+v", log)
+			}
+			if _, exists := bodies[log.Body]; exists {
+				t.Fatalf("observations in one read share a body: %+v", log)
+			}
+			bodies[log.Body] = log.Attrs["participant_id"] + "/" + log.Attrs["id"]
+		}
+		if len(bodies) != len(rows) {
+			t.Fatalf("roster emitted %d of %d observations", len(bodies), len(rows))
+		}
+		return bodies
+	}
+	first := read(rows)
+	for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
+		rows[i], rows[j] = rows[j], rows[i]
+	}
+	if replay := read(rows); !maps.Equal(first, replay) {
+		t.Fatalf("reordered replay reassigned bodies to different observations: before %v, after %v", first, replay)
 	}
 }
 
@@ -259,12 +335,20 @@ func TestRetryLateAndOpaquePages(t *testing.T) {
 		case segmentNext:
 			return collection(t, "", map[string]any{"id": "segment-page-2", "startDateTime": stamp(start.Add(5 * time.Second)), "media": []any{map[string]any{"label": "main-audio", "streams": []any{map[string]any{"streamId": "continued"}}}}}), nil
 		case absolutePath + "/late/participants_v2":
-			return collection(t, peopleNext, map[string]any{"id": "person-1", "identity": map[string]any{"user": map[string]any{"id": "person-1"}}}), nil
+			// User and phone shapes follow the de-identified live-measured
+			// participants_v2 sample. Missing and repeated IDs are synthetic.
+			return collection(t, peopleNext, json.RawMessage(`{"id":"roster-user","identity":{"phone":null,"user":{"id":"user-identity","displayName":"Example participant","userPrincipalName":"participant@example.com"}}}`)), nil
 		case peopleNext:
 			if phase == "failure" {
 				return nil, errors.New("synthetic participants GET failure")
 			}
-			return collection(t, "", map[string]any{"id": "phone-2", "identity": map[string]any{"phone": map[string]any{"id": "phone-2"}}}), nil
+			return collection(t, "",
+				json.RawMessage(`{"id":"roster-phone","identity":{"phone":{"displayName":null,"id":"opaque-phone"},"user":null}}`),
+				json.RawMessage(`{"id":"roster-user","identity":{"user":{"id":"user-identity","displayName":"Example participant","userPrincipalName":"participant@example.com"}}}`),
+				json.RawMessage(`{"id":"roster-unknown","identity":{"futureType":{"id":"unmapped"}}}`),
+				json.RawMessage(`{"id":"roster-no-identity-id","identity":{"user":{"displayName":"`+strings.Repeat("λ", 257)+`","userPrincipalName":""}}}`),
+				json.RawMessage(`{"identity":null}`),
+			), nil
 		case absolutePath + "/first?$expand=sessions($expand=segments)":
 			completedGets++
 			return encoded(t, syntheticDetail(t, "first", 1, start.Add(-time.Minute))), nil
@@ -320,16 +404,51 @@ func TestRetryLateAndOpaquePages(t *testing.T) {
 	phase = "retry"
 	c = newC()
 	rec = telemetrytest.New()
-	hw, err = c.CollectWindow(t.Context(), anchor, now.Add(6*time.Minute), rec.Emitter(), nil)
+	outcomes = recordoutcome.NewRecorder()
+	hw, err = c.CollectWindow(t.Context(), anchor, now.Add(6*time.Minute), telemetry.WithTenant(rec.Emitter(), "synthetic-tenant"), outcomes)
 	if err != nil || !hw.After(anchor) {
 		t.Fatalf("retry did not finish: %v; %v", hw, err)
 	}
 	logs = rec.LogRecords()
-	if len(logs) != 4 {
-		t.Fatalf("retry emitted %d logs; want one late call and three streams", len(logs))
+	roster := map[string]map[string]string{
+		"roster-user":           {"id": "user-identity", "identity_kind": "user", "display_name": "Example participant", "user_principal_name": "participant@example.com"},
+		"roster-phone":          {"id": "opaque-phone", "identity_kind": "pstn"},
+		"roster-unknown":        {},
+		"roster-no-identity-id": {"identity_kind": "user", "display_name": strings.Repeat("λ", 256), "text_fields_truncated": "1"},
+		"":                      {},
 	}
-	assertAttrs(t, logs[0], map[string]string{"call_id": "late", "version": "2", "participant_count": "2", "participant_pstn": "1"})
+	for _, log := range logs {
+		if log.EventName != "teams.call_participant" {
+			continue
+		}
+		id := log.Attrs["participant_id"]
+		want, ok := roster[id]
+		if !ok {
+			t.Fatalf("unexpected or repeated roster participant: %+v", log)
+		}
+		delete(roster, id)
+		if !log.Timestamp.Equal(start) {
+			t.Errorf("participant %q timestamp = %v, want call start %v", id, log.Timestamp, start)
+		}
+		if id != "" {
+			want["participant_id"] = id
+		}
+		want["call_id"], want["version"], want["tenant_id"], want["ingest_transport"] = "late", "2", "synthetic-tenant", "graph"
+		if !maps.Equal(log.Attrs, want) {
+			t.Errorf("participant %q attrs = %v, want %v", id, log.Attrs, want)
+		}
+	}
+	if len(roster) != 0 {
+		t.Fatalf("complete retry missing roster participants: %v", roster)
+	}
+	if len(logs) != 9 {
+		t.Fatalf("retry emitted %d logs; want one late call, three streams and five roster entries", len(logs))
+	}
+	assertAttrs(t, logs[0], map[string]string{"call_id": "late", "version": "2", "participant_count": "5", "participant_pstn": "1", "participant_unknown": "2"})
 	assertAttrs(t, logs[3], map[string]string{"session_id": "session-page-2", "segment_id": "segment-page-2", "stream_id": "continued"})
+	if got := outcomes.Snapshot(); got.Counts != (recordoutcome.Counts{Fetched: 4, Mapped: 3, Emitted: 1, Deduped: 2, Filtered: 1}) || got.Validate() != nil {
+		t.Fatalf("roster fan-out changed source record accounting: %+v", got)
+	}
 	phase = "seen"
 	c = newC()
 	rec = telemetrytest.New()
@@ -363,8 +482,13 @@ func TestSharedCheckpointAndRetentionFloor(t *testing.T) {
 	c := newC()
 	rec := telemetrytest.New()
 	emitter := telemetry.WithTenant(rec.Emitter(), "synthetic-tenant")
-	if err := c.CollectCall(t.Context(), id, emitter, nil); err != nil || len(rec.LogRecords()) != 3 {
-		t.Fatalf("direct call did not use the log path: logs=%d err=%v", len(rec.LogRecords()), err)
+	if err := c.CollectCall(t.Context(), id, emitter, nil); err != nil || len(rec.LogRecords()) != 8 {
+		t.Fatalf("direct call did not emit call, stream and roster logs: logs=%d err=%v", len(rec.LogRecords()), err)
+	}
+	for _, log := range rec.LogRecords()[3:] {
+		if log.EventName != "teams.call_participant" || !log.Timestamp.Equal(start) {
+			t.Fatalf("direct call did not emit dated roster evidence: %+v", log)
+		}
 	}
 	if cp := c.CheckpointState(); !cp.Watermark.IsZero() || cp.SeenIDs != 1 {
 		t.Fatalf("direct call moved polling checkpoint or did not save its key: %+v", cp)
@@ -506,8 +630,8 @@ func TestTraceRouteFitsOTLPBudget(t *testing.T) {
 		t.Fatal(err)
 	}
 	logs := rec.LogRecords()
-	if len(logs) != 3 {
-		t.Fatalf("got %d records, want one call and two valid streams", len(logs))
+	if len(logs) != 8 {
+		t.Fatalf("got %d records, want one call, two valid streams and five roster entries", len(logs))
 	}
 	a := logs[1].Attrs
 	var bounded []Hop
