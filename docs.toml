@@ -28,6 +28,9 @@ Home = "index.md"
 "Getting Started" = "getting-started.md"
 
 [[site.nav]]
+"Teams Observability" = "teams-observability.md"
+
+[[site.nav]]
 Configuration = "configuration.md"
 
 [[site.nav]]
