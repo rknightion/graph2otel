@@ -9,7 +9,6 @@ import unittest
 from pathlib import Path
 from urllib.parse import quote
 
-
 DASHBOARD = Path(__file__).resolve().parents[2] / "dashboards" / "graph2otel-teams.json"
 
 
@@ -80,9 +79,10 @@ class TeamsInvestigationTests(unittest.TestCase):
                 renames = next(t["spec"]["options"]["renameByName"]
                                for t in summary["data"]["spec"]["transformations"] if t["group"] == "organize")
 
-                def series(tenant, verdict, value, site="selected"):
-                    scope = "" if noun == "call" else f',site="{site}"'
-                    return {"series": f'{metric}{{tenant_id="{tenant}",{health}="{verdict}"{scope}}}',
+                def series(tenant, verdict, value, site="selected", *, population=(noun, metric, health)):
+                    entity, metric_name, verdict_label = population
+                    scope = "" if entity == "call" else f',site="{site}"'
+                    return {"series": f'{metric_name}{{tenant_id="{tenant}",{verdict_label}="{verdict}"{scope}}}',
                             "values": f"_x10 {value}x4"}
 
                 input_series = [series("mixed", "good", 4), series("mixed", "poor", 4),
