@@ -947,7 +947,8 @@ def inventory(b):
         desc=at_end + "Voice enablement by Teams account type. See the log rows for assignment details.")
     policies = "m365.teams.user_configuration.effective_policy_assignments"
     b.raw("Reported effective policy assignments", [f"sum by (tenant_id, policy_type) ({latest(policies)})"],
-          viz="table", desc=at_end + "Counts assignments returned by Graph, not distinct users or policy definitions. "
+          viz="table", panel_id=1010,
+          desc=at_end + "Counts assignments returned by Graph, not distinct users or policy definitions. "
           "Policy types outside the known set are counted as unknown and kept verbatim in the logs.")
     collectors = ',collector=~"teams[.](phone_numbers|user_configuration)"'
     finished = selector("graph2otel.scrape.last_timestamp", collectors)
@@ -956,7 +957,7 @@ def inventory(b):
     # A failure may overwrite the last-attempt gauges. Recover confirmed
     # successes from the selected range, not the scheduler's startup fallback.
     in_range = f"{successful} or max_over_time({successful}[$__range:30s])"
-    b.raw("Last successful inventory poll", [f"(({in_range}) * 1000) >= ${{__from}}"], viz="table",
+    b.raw("Last successful inventory poll", [f"(({in_range}) * 1000) >= ${{__from}}"], viz="table", panel_id=1011,
           unit="dateTimeAsIso", desc="Last successful poll finish observed in the selected range, per tenant and "
           "collector. Empty successful polls count; failed attempts do not. Blank means no success was observed here.")
     b.raw("Phone numbers over time by capability and assignment", [

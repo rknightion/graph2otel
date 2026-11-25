@@ -331,7 +331,7 @@ class Builder:
 
     def metric(self, name: str, title: str = None, by: list = None,
                viz: str = None, desc: str = "", w: int = 12, h: int = 8,
-               quantile: float = 0.95):
+               quantile: float = 0.95, *, panel_id: int | None = None):
         """Panel one cataloged metric, with everything derived from the catalog.
 
         The aggregation comes from ``additive``: a non-additive metric (a score,
@@ -342,11 +342,11 @@ class Builder:
         """
         return self.metrics([name], title=title or titleize(name), by=by, viz=viz,
                             desc=desc, w=w, h=h, quantile=quantile,
-                            derive_rate_title=title is None)
+                            derive_rate_title=title is None, panel_id=panel_id)
 
     def metrics(self, names: list, title: str, by: list = None, viz: str = None,
                 desc: str = "", w: int = 12, h: int = 8, quantile: float = 0.95,
-                legends: list = None, derive_rate_title: bool = False):
+                legends: list = None, derive_rate_title: bool = False, *, panel_id: int | None = None):
         """Panel several related metrics together on one set of axes.
 
         Units, value mappings and thresholds come from the presentation registry
@@ -398,11 +398,11 @@ class Builder:
         if derive_rate_title and any(
                 self.cat.metric(n).kind == "sum" for n in names) and not any_hist:
             title = presentation.rate_title(title)
-        return self._viz_panel(viz, title, queries, unit, desc, w, h, entry=entry)
+        return self._viz_panel(viz, title, queries, unit, desc, w, h, entry=entry, panel_id=panel_id)
 
     def raw(self, title: str, exprs: list, viz: str = "timeseries", unit: str = None,
             desc: str = "", w: int = 12, h: int = 8, legends: list = None,
-            about: str = ""):
+            about: str = "", *, panel_id: int | None = None):
         """Panel a hand-written PromQL expression.
 
         Coverage still comes from reading the expression, not from a claim, so a
@@ -425,7 +425,7 @@ class Builder:
         if unit is None:
             unit = (entry.unit if entry and entry.unit
                     else self._derived_unit(exprs))
-        return self._viz_panel(viz, title, queries, unit, desc, w, h, entry=entry)
+        return self._viz_panel(viz, title, queries, unit, desc, w, h, entry=entry, panel_id=panel_id)
 
     def _derived_unit(self, exprs: list) -> str:
         """The unit a hand-written expression really produces.
@@ -462,7 +462,7 @@ class Builder:
         return f"{agg}({inner})"
 
     def _viz_panel(self, viz: str, title: str, queries: list, unit: str,
-                   desc: str, w: int, h: int, entry=None):
+                   desc: str, w: int, h: int, entry=None, *, panel_id: int | None = None):
         # Thresholds are ALWAYS written. Omitting them is not neutral: Grafana
         # substitutes a green base with a red step at 80, which is how a neutral
         # inventory count of 95 devices rendered as an alarm (#304).
@@ -517,7 +517,7 @@ class Builder:
                        "color": {"mode": "scheme", "scheme": "Oranges", "steps": 64},
                        "yAxis": {"unit": unit}}
         panel = {
-            "id": self._next_id(), "type": viz, "title": title,
+            "id": self._next_id() if panel_id is None else panel_id, "type": viz, "title": title,
             "description": desc, "gridPos": {}, "datasource": PROM_DS,
             "fieldConfig": field_config, "options": options, "targets": queries,
         }

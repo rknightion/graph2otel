@@ -11118,10 +11118,10 @@
           }
         }
       },
-      "panel-101": {
+      "panel-1010": {
         "kind": "Panel",
         "spec": {
-          "id": 101,
+          "id": 1010,
           "title": "Reported effective policy assignments",
           "description": "Latest metric export visible at the selected range end, per tenant. Counts assignments returned by Graph, not distinct users or policy definitions. Policy types outside the known set are counted as unknown and kept verbatim in the logs.",
           "links": [],
@@ -11210,10 +11210,10 @@
           }
         }
       },
-      "panel-102": {
+      "panel-1011": {
         "kind": "Panel",
         "spec": {
-          "id": 102,
+          "id": 1011,
           "title": "Last successful inventory poll",
           "description": "Last successful poll finish observed in the selected range, per tenant and collector. Empty successful polls count; failed attempts do not. Blank means no success was observed here.",
           "links": [],
@@ -11302,10 +11302,10 @@
           }
         }
       },
-      "panel-103": {
+      "panel-101": {
         "kind": "Panel",
         "spec": {
-          "id": 103,
+          "id": 101,
           "title": "Phone numbers over time by capability and assignment",
           "description": "Each series counts numbers for one capability. Capabilities overlap, so do not add them together.",
           "links": [],
@@ -11392,10 +11392,10 @@
           }
         }
       },
-      "panel-104": {
+      "panel-102": {
         "kind": "Panel",
         "spec": {
-          "id": 104,
+          "id": 102,
           "title": "Unassigned phone numbers over time",
           "description": "Teams Phone numbers with unassigned status.",
           "links": [],
@@ -11482,10 +11482,10 @@
           }
         }
       },
-      "panel-105": {
+      "panel-103": {
         "kind": "Panel",
         "spec": {
-          "id": 105,
+          "id": 103,
           "title": "Phone number inventory history",
           "description": "Observations from all polls in range, including older assignments and numbers later removed. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -11595,10 +11595,10 @@
           }
         }
       },
-      "panel-106": {
+      "panel-104": {
         "kind": "Panel",
         "spec": {
-          "id": 106,
+          "id": 104,
           "title": "Teams user configuration history",
           "description": "Observations from all polls in range, including configurations later changed or removed. Blank assignment cells mean no assignments were reported on that row. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -11708,10 +11708,10 @@
           }
         }
       },
-      "panel-107": {
+      "panel-105": {
         "kind": "Panel",
         "spec": {
-          "id": 107,
+          "id": 105,
           "title": "Reading usage",
           "description": "",
           "links": [],
@@ -11736,10 +11736,10 @@
           }
         }
       },
-      "panel-108": {
+      "panel-106": {
         "kind": "Panel",
         "spec": {
-          "id": 108,
+          "id": 106,
           "title": "Teams users by platform (D7)",
           "description": "From the Teams usage report. A user may appear on several platforms; do not sum them.",
           "links": [],
@@ -11826,10 +11826,10 @@
           }
         }
       },
-      "panel-109": {
+      "panel-107": {
         "kind": "Panel",
         "spec": {
-          "id": 109,
+          "id": 107,
           "title": "Users by activity on the latest report day",
           "description": "days_ago=0 is the newest report date in the download, not today.",
           "links": [],
@@ -11916,10 +11916,10 @@
           }
         }
       },
-      "panel-110": {
+      "panel-108": {
         "kind": "Panel",
         "spec": {
-          "id": 110,
+          "id": 108,
           "title": "Report names concealed",
           "description": "1 means Microsoft conceals user, group and site names in reports, so identifier joins are not guaranteed. Absent means the setting is unknown. If it is empty: Usage reports refresh daily; the first values follow the first report poll. Collector health shows whether the source ran.",
           "links": [],
@@ -11999,10 +11999,10 @@
           }
         }
       },
-      "panel-111": {
+      "panel-109": {
         "kind": "Panel",
         "spec": {
-          "id": 111,
+          "id": 109,
           "title": "Teams in the tenant",
           "description": "All teams, any visibility. If it is empty: Usage reports refresh daily; the first values follow the first report poll. Collector health shows whether the source ran.",
           "links": [],
@@ -12082,10 +12082,10 @@
           }
         }
       },
-      "panel-112": {
+      "panel-110": {
         "kind": "Panel",
         "spec": {
-          "id": 112,
+          "id": 110,
           "title": "Ownerless teams",
           "description": "Teams with no owner, excluding archived teams. If it is empty: Usage reports refresh daily; the first values follow the first report poll. Collector health shows whether the source ran.",
           "links": [],
@@ -12165,10 +12165,10 @@
           }
         }
       },
-      "panel-113": {
+      "panel-111": {
         "kind": "Panel",
         "spec": {
-          "id": 113,
+          "id": 111,
           "title": "Teams with guests",
           "description": "Teams with at least one guest member. If it is empty: Usage reports refresh daily; the first values follow the first report poll. Collector health shows whether the source ran.",
           "links": [],
@@ -12248,10 +12248,10 @@
           }
         }
       },
-      "panel-114": {
+      "panel-112": {
         "kind": "Panel",
         "spec": {
-          "id": 114,
+          "id": 112,
           "title": "Teams by visibility",
           "description": "Total Teams by visibility.",
           "links": [],
@@ -12338,10 +12338,10 @@
           }
         }
       },
-      "panel-115": {
+      "panel-113": {
         "kind": "Panel",
         "spec": {
-          "id": 115,
+          "id": 113,
           "title": "Team memberships by role",
           "description": "Tenant-wide Teams membership count by role.",
           "links": [],
@@ -12428,10 +12428,10 @@
           }
         }
       },
-      "panel-116": {
+      "panel-114": {
         "kind": "Panel",
         "spec": {
-          "id": 116,
+          "id": 114,
           "title": "Channels by membership type",
           "description": "Teams channels by membership type and archived state.",
           "links": [],
@@ -12518,10 +12518,10 @@
           }
         }
       },
-      "panel-117": {
+      "panel-115": {
         "kind": "Panel",
         "spec": {
-          "id": 117,
+          "id": 115,
           "title": "Installed apps by distribution",
           "description": "Teams installed apps by distribution method and whether they hold RSC grants.",
           "links": [],
@@ -12608,10 +12608,10 @@
           }
         }
       },
-      "panel-118": {
+      "panel-116": {
         "kind": "Panel",
         "spec": {
-          "id": 118,
+          "id": 116,
           "title": "Microsoft Teams service status",
           "description": "Microsoft's declared status for the Microsoft Teams service, from the service-health collector.\n\nColour meaning: severity ladder defined by statusEnum in internal/collectors/m365/servicehealth/servicehealth.go, which maps Microsoft's microsoftServiceHealthStatus values onto 0-5 with -1 for an unmapped value. A level Microsoft adds beyond 5 renders as its bare number, which is visible rather than mislabelled. levels 4 and 5 are Microsoft's own serviceDegradation and serviceInterruption: the service is impaired, which is a state Microsoft defines rather than one this repository picked. Levels 1-3 are recovery and investigation, which are not impairment, so they are not coloured. If it is empty: Needs the m365.servicehealth collector. No issue rows means no Teams issue was observed in range. Collector health shows whether the source ran.",
           "links": [],
@@ -12730,10 +12730,10 @@
           }
         }
       },
-      "panel-119": {
+      "panel-117": {
         "kind": "Panel",
         "spec": {
-          "id": 119,
+          "id": 117,
           "title": "Microsoft Teams service status over time",
           "description": "Microsoft's declared status for the Microsoft Teams service, from the service-health collector.\n\nColour meaning: severity ladder defined by statusEnum in internal/collectors/m365/servicehealth/servicehealth.go, which maps Microsoft's microsoftServiceHealthStatus values onto 0-5 with -1 for an unmapped value. A level Microsoft adds beyond 5 renders as its bare number, which is visible rather than mislabelled. levels 4 and 5 are Microsoft's own serviceDegradation and serviceInterruption: the service is impaired, which is a state Microsoft defines rather than one this repository picked. Levels 1-3 are recovery and investigation, which are not impairment, so they are not coloured.",
           "links": [],
@@ -12839,10 +12839,10 @@
           }
         }
       },
-      "panel-120": {
+      "panel-118": {
         "kind": "Panel",
         "spec": {
-          "id": 120,
+          "id": 118,
           "title": "Distinct Teams issues observed open in range",
           "description": "One row per tenant and issue ID. Counts stored open observations in the selected range, not currently open issues. Missing IDs are left in the history only.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -12981,10 +12981,10 @@
           }
         }
       },
-      "panel-121": {
+      "panel-119": {
         "kind": "Panel",
         "spec": {
-          "id": 121,
+          "id": 119,
           "title": "Latest Teams issue observations in range",
           "description": "Latest stored event per tenant and issue ID in the selected range. Open rows use poll time; resolutions use Microsoft's end time. If different display details share the latest millisecond, read the dated history below. This is not a current open-issue inventory.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -13139,10 +13139,10 @@
           }
         }
       },
-      "panel-122": {
+      "panel-120": {
         "kind": "Panel",
         "spec": {
-          "id": 122,
+          "id": 120,
           "title": "Teams issue observations while open",
           "description": "Requires the service-health collector. This is history, not a current-state join: an open observation can also have a later resolution. No resolution row is not proof an issue remains open. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -13291,10 +13291,10 @@
           }
         }
       },
-      "panel-123": {
+      "panel-121": {
         "kind": "Panel",
         "spec": {
-          "id": 123,
+          "id": 121,
           "title": "Teams resolution events",
           "description": "Requires the service-health collector. This is history, not a current-state join: an open observation can also have a later resolution. No resolution row is not proof an issue remains open. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -13443,10 +13443,10 @@
           }
         }
       },
-      "panel-124": {
+      "panel-122": {
         "kind": "Panel",
         "spec": {
-          "id": 124,
+          "id": 122,
           "title": "Service issues by classification and status (all services)",
           "description": "Counts expanded issues returned for all Microsoft 365 services, including any resolved rows the source returns. This metric does not carry a service label.",
           "links": [],
@@ -13533,10 +13533,10 @@
           }
         }
       },
-      "panel-125": {
+      "panel-123": {
         "kind": "Panel",
         "spec": {
-          "id": 125,
+          "id": 123,
           "title": "Services by status (all services)",
           "description": "Fleet context across Microsoft 365 services, not limited to Teams.",
           "links": [],
@@ -13623,10 +13623,10 @@
           }
         }
       },
-      "panel-126": {
+      "panel-124": {
         "kind": "Panel",
         "spec": {
-          "id": 126,
+          "id": 124,
           "title": "Signal availability",
           "description": "Newest exported state and reason per tenant, collector and collector transport at the selected end time, within the datasource's instant lookback. Compare these columns with availability.state, availability.reason and availability.transport in the poller's admin /api/status.json. Admin is live; this table can lag the snapshot refresh and export. If the newest samples have the same timestamp but disagree, the state is unknown. Healthy, empty means the run succeeded without fetching rows, not disabled or failed.",
           "links": [],
@@ -13887,10 +13887,10 @@
           }
         }
       },
-      "panel-127": {
+      "panel-125": {
         "kind": "Panel",
         "spec": {
-          "id": 127,
+          "id": 125,
           "title": "Scheduled collector interval",
           "description": "Latest exported scheduler interval (admin interval_seconds), when newest samples agree. Cadence, last success and checkpoint metrics identify only tenant and collector, not transport. Compare against availability, but do not read these metrics as per-transport results.",
           "links": [],
@@ -13979,10 +13979,10 @@
           }
         }
       },
-      "panel-128": {
+      "panel-126": {
         "kind": "Panel",
         "spec": {
-          "id": 128,
+          "id": 126,
           "title": "Window watermark lag",
           "description": "Age of the durable event-time cursor (admin checkpoint watermark for window collectors). A successful quiet window can still advance its cursor. Missing is not zero lag.",
           "links": [],
@@ -14069,10 +14069,10 @@
           }
         }
       },
-      "panel-129": {
+      "panel-127": {
         "kind": "Panel",
         "spec": {
-          "id": 129,
+          "id": 127,
           "title": "Time since last successful scrape",
           "description": "Compare with the scheduled collector interval. Until the first success this counts from process start. Admin staleness instead measures time since the last attempt. Missing is not zero staleness.",
           "links": [],
@@ -14159,10 +14159,10 @@
           }
         }
       },
-      "panel-130": {
+      "panel-128": {
         "kind": "Panel",
         "spec": {
-          "id": 130,
+          "id": 128,
           "title": "Teams Graph throttle response rate",
           "description": "Only the Teams-specific call records and phone workload buckets. Shared reporting and other Graph workloads cannot be attributed to Teams here. An empty plot may mean no throttles or too few samples to calculate a rate; it is not a health verdict.",
           "links": [],
@@ -14249,10 +14249,10 @@
           }
         }
       },
-      "panel-131": {
+      "panel-129": {
         "kind": "Panel",
         "spec": {
-          "id": 131,
+          "id": 129,
           "title": "Call versions skipped by metrics admission rate",
           "description": "Rate of versions skipped by metrics admission, not a measure of Graph collection failure. An empty plot may mean no skipped versions, no calls or too few counter samples.",
           "links": [],
@@ -15907,7 +15907,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-101"
+                                    "name": "panel-1010"
                                   }
                                 }
                               },
@@ -15920,7 +15920,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-102"
+                                    "name": "panel-1011"
                                   }
                                 }
                               },
@@ -15933,7 +15933,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-103"
+                                    "name": "panel-101"
                                   }
                                 }
                               },
@@ -15946,7 +15946,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-104"
+                                    "name": "panel-102"
                                   }
                                 }
                               },
@@ -15959,7 +15959,7 @@
                                   "height": 9,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-105"
+                                    "name": "panel-103"
                                   }
                                 }
                               },
@@ -15972,7 +15972,7 @@
                                   "height": 9,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-106"
+                                    "name": "panel-104"
                                   }
                                 }
                               }
@@ -16013,7 +16013,7 @@
                                   "height": 3,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-107"
+                                    "name": "panel-105"
                                   }
                                 }
                               },
@@ -16026,7 +16026,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-108"
+                                    "name": "panel-106"
                                   }
                                 }
                               },
@@ -16039,7 +16039,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-109"
+                                    "name": "panel-107"
                                   }
                                 }
                               },
@@ -16052,7 +16052,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-110"
+                                    "name": "panel-108"
                                   }
                                 }
                               },
@@ -16065,7 +16065,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-111"
+                                    "name": "panel-109"
                                   }
                                 }
                               },
@@ -16078,7 +16078,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-112"
+                                    "name": "panel-110"
                                   }
                                 }
                               },
@@ -16091,7 +16091,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-113"
+                                    "name": "panel-111"
                                   }
                                 }
                               },
@@ -16104,7 +16104,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-114"
+                                    "name": "panel-112"
                                   }
                                 }
                               },
@@ -16117,7 +16117,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-115"
+                                    "name": "panel-113"
                                   }
                                 }
                               },
@@ -16130,7 +16130,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-116"
+                                    "name": "panel-114"
                                   }
                                 }
                               },
@@ -16143,7 +16143,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-117"
+                                    "name": "panel-115"
                                   }
                                 }
                               }
@@ -16184,7 +16184,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-118"
+                                    "name": "panel-116"
                                   }
                                 }
                               },
@@ -16197,7 +16197,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-119"
+                                    "name": "panel-117"
                                   }
                                 }
                               },
@@ -16210,7 +16210,7 @@
                                   "height": 7,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-120"
+                                    "name": "panel-118"
                                   }
                                 }
                               },
@@ -16223,7 +16223,7 @@
                                   "height": 7,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-121"
+                                    "name": "panel-119"
                                   }
                                 }
                               },
@@ -16236,7 +16236,7 @@
                                   "height": 9,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-122"
+                                    "name": "panel-120"
                                   }
                                 }
                               },
@@ -16249,7 +16249,7 @@
                                   "height": 9,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-123"
+                                    "name": "panel-121"
                                   }
                                 }
                               },
@@ -16262,7 +16262,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-124"
+                                    "name": "panel-122"
                                   }
                                 }
                               },
@@ -16275,7 +16275,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-125"
+                                    "name": "panel-123"
                                   }
                                 }
                               }
@@ -16316,7 +16316,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-126"
+                                    "name": "panel-124"
                                   }
                                 }
                               },
@@ -16329,7 +16329,7 @@
                                   "height": 7,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-127"
+                                    "name": "panel-125"
                                   }
                                 }
                               },
@@ -16338,6 +16338,32 @@
                                 "spec": {
                                   "x": 0,
                                   "y": 15,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-126"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 12,
+                                  "y": 15,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-127"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 23,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
@@ -16350,38 +16376,12 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 12,
-                                  "y": 15,
+                                  "y": 23,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-129"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 0,
-                                  "y": 23,
-                                  "width": 12,
-                                  "height": 8,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-130"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 12,
-                                  "y": 23,
-                                  "width": 12,
-                                  "height": 8,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-131"
                                   }
                                 }
                               }
