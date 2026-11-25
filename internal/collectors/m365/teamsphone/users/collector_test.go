@@ -17,6 +17,14 @@ const userURL = "https://graph.microsoft.com/v1.0/admin/teams/userConfigurations
 // The original #663 (Teams Phone inventory) rows had empty arrays.
 const voiceUser = `{"id":"example-user-1","userPrincipalName":"voice@example.com","accountType":"user","isEnterpriseVoiceEnabled":true,"createdDateTime":"2026-11-01T11:00:00Z","modifiedDateTime":"2026-11-20T13:05:00.1234567Z","featureTypes":["Teams","CallingPlan"],"effectivePolicyAssignments":[],"telephoneNumbers":[],"tenantId":"example-tenant"}`
 
+func TestUserInventoryCompletionTracksEachFullPoll(t *testing.T) {
+	phonefixture.CheckCompletion(t, phonefixture.CompletionCase{
+		Name: usersName, URL: userURL, Event: "m365.teams.user_configuration", State: "enterprise_voice_enabled",
+		Before: `"isEnterpriseVoiceEnabled":false`, After: `"isEnterpriseVoiceEnabled":true`,
+		OldState: "false", NewState: "true",
+	})
+}
+
 func TestUserConfigurationsFromGraph(t *testing.T) {
 	next := userURL + "?$skiptoken=example"
 	rec := phonefixture.Collect(t, "teams.user_configuration", phonefixture.Graph{
@@ -64,8 +72,9 @@ func TestSuccessfulEmptyPolicyPollPublishesZeroForEachBoundedBucket(t *testing.T
 			if err := c.Collect(t.Context(), rec.Emitter(), recordoutcome.NewRecorder()); err != nil {
 				t.Fatal(err)
 			}
-			if len(rec.LogRecords()) != tc.twins {
-				t.Fatalf("got %d user twins; want %d", len(rec.LogRecords()), tc.twins)
+			logs := rec.LogRecords()
+			if len(logs) != tc.twins+1 || logs[len(logs)-1].EventName != inventory.CompletionEvent {
+				t.Fatalf("want %d user twins then a completion; got %d records", tc.twins, len(logs))
 			}
 			points := rec.MetricPoints("m365.teams.user_configuration.effective_policy_assignments")
 			want := map[string]float64{"TeamsCallingPolicy": 0, "OnlineVoiceRoutingPolicy": 0, "unknown": 0}

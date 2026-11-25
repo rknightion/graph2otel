@@ -20,7 +20,8 @@
         "activation_state",
         "assignment_status",
         "capability",
-        "number_type"
+        "number_type",
+        "tenant_id"
       ]
     },
     {
@@ -28,7 +29,9 @@
       "Unit": "{number}",
       "Kind": "gauge",
       "Description": "Teams Phone numbers with unassigned status.",
-      "AttrKeys": []
+      "AttrKeys": [
+        "tenant_id"
+      ]
     }
   ],
   "Logs": [
@@ -37,7 +40,8 @@
       "AttrKeys": [
         "collector",
         "entity_count",
-        "snapshot_id"
+        "snapshot_id",
+        "tenant_id"
       ]
     },
     {
@@ -54,7 +58,8 @@
         "operator_id",
         "snapshot_id",
         "supported_customer_actions",
-        "telephone_number"
+        "telephone_number",
+        "tenant_id"
       ]
     }
   ]

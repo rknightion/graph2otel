@@ -16,6 +16,14 @@ const numberURL = "https://graph.microsoft.com/v1.0/admin/teams/telephoneNumberM
 // are from Graph's numberAssignment docs and numbers are reserved examples.
 const numberRow = `{"id":"example-line-1","telephoneNumber":"+12025550101","activationState":"activated","assignmentStatus":"unassigned","assignmentCategory":null,"assignmentTargetId":null,"capabilities":["userAssignment","conferenceAssignment"],"city":"Example City","civicAddressId":null,"isoCountryCode":"US","locationId":null,"networkSiteId":null,"numberSource":"online","numberType":"callingPlan","operatorId":"example-operator","portInStatus":null,"reverseNumberLookupOptions":[],"supportedCustomerActions":["locationUpdate"]}`
 
+func TestNumberInventoryCompletionTracksEachFullPoll(t *testing.T) {
+	phonefixture.CheckCompletion(t, phonefixture.CompletionCase{
+		Name: "teams.phone_numbers", URL: numberURL, Event: "m365.teams.phone_number", State: "assignment_status",
+		Before: `"assignmentStatus":"unassigned"`, After: `"assignmentStatus":"userAssigned"`,
+		OldState: "unassigned", NewState: "userAssigned",
+	})
+}
+
 func TestPhoneNumbersFromGraph(t *testing.T) {
 	next := numberURL + "&$skiptoken=example"
 	rec := phonefixture.Collect(t, "teams.phone_numbers", phonefixture.Graph{

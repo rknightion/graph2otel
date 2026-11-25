@@ -6086,7 +6086,8 @@
         "activation_state",
         "assignment_status",
         "capability",
-        "number_type"
+        "number_type",
+        "tenant_id"
       ],
       "packages": [
         "internal/collectors/m365/teamsphone/numbers"
@@ -6100,7 +6101,9 @@
       "description": "Teams Phone numbers with unassigned status.",
       "additive": true,
       "domain": "m365",
-      "attr_keys": [],
+      "attr_keys": [
+        "tenant_id"
+      ],
       "packages": [
         "internal/collectors/m365/teamsphone/numbers"
       ]
@@ -6129,7 +6132,8 @@
       "additive": true,
       "domain": "m365",
       "attr_keys": [
-        "policy_type"
+        "policy_type",
+        "tenant_id"
       ],
       "packages": [
         "internal/collectors/m365/teamsphone/users"
@@ -6145,7 +6149,8 @@
       "domain": "m365",
       "attr_keys": [
         "account_type",
-        "enterprise_voice_enabled"
+        "enterprise_voice_enabled",
+        "tenant_id"
       ],
       "packages": [
         "internal/collectors/m365/teamsphone/users"
@@ -10804,7 +10809,8 @@
       "attr_keys": [
         "collector",
         "entity_count",
-        "snapshot_id"
+        "snapshot_id",
+        "tenant_id"
       ],
       "packages": [
         "internal/collectors/m365/teamsphone/numbers",
@@ -10826,7 +10832,8 @@
         "operator_id",
         "snapshot_id",
         "supported_customer_actions",
-        "telephone_number"
+        "telephone_number",
+        "tenant_id"
       ],
       "packages": [
         "internal/collectors/m365/teamsphone/numbers"
@@ -10845,6 +10852,7 @@
         "modified_date_time",
         "snapshot_id",
         "telephone_numbers",
+        "tenant_id",
         "user_principal_name"
       ],
       "packages": [
