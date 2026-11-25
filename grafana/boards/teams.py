@@ -4,7 +4,7 @@ from builder import LOKI_DS, NO_LOKI, NO_METRIC, RATE, TENANT_SEL, Builder
 from logquery import Raw, f
 import v2
 
-from .teams_quality import LOCAL, compliance, site_queries
+from .teams_quality import LOCAL, compliance, counter_increase, site_queries
 
 NAME = "graph2otel-teams"
 CALL = "teams.call"
@@ -24,6 +24,11 @@ COUNT_NOTE = ("Prometheus estimates the counter increase over the selected range
 FIRST = "Health counts the first accepted complete version and is not rewritten by later versions."
 RECORD_LIMIT = 250
 ROW_NOTE = f" Up to {RECORD_LIMIT} recent records in the selected time range, not a census."
+# Call records arrive in sparse batches, so per-second rates over a scrape-sized
+# window are mostly zero. Volume panels count per slot of at least this width.
+SLOT = "15m"
+SLOT_NOTE = f"Counted per interval of at least {SLOT}, by processing time."
+STAT_NO_VALUE = "No data yet. See panel info."
 
 
 class TeamsBuilder(Builder):
@@ -62,6 +67,11 @@ class TeamsBuilder(Builder):
                 defaults["noValue"] = note + loki
             else:
                 defaults["noValue"] = "No data yet. " + defaults["noValue"]
+            if panel["type"] == "stat":
+                # A stat panel shrinks a long sentence until it is unreadable.
+                panel["description"] = (panel.get("description", "") + " If it is empty: "
+                                        + defaults["noValue"].removeprefix("No data yet. ")).strip()
+                defaults["noValue"] = STAT_NO_VALUE
         return v2.leaf(title, [v2.rowspec("", self._panels[start:])])
 
     def records(self, event, title, fields, *, filters=(), desc="", h=9):
@@ -78,6 +88,13 @@ class TeamsBuilder(Builder):
             {"id": "extractFields", "options": {"source": "labels", "format": "json",
                                                "replace": True, "keepTime": True}},
         ]
+        # The panel note is for an empty result. A row that lacks one attribute
+        # shows a blank cell, not the panel note.
+        for kind in ("string", "number"):
+            panel["fieldConfig"]["overrides"].append({
+                "matcher": {"id": "byType", "options": kind},
+                "properties": [{"id": "noValue", "value": ""}],
+            })
         return panel
 
 
@@ -141,9 +158,34 @@ def _agg(b, metric, *, keys=(), match="", op="", window=RATE, aggregate="sum"):
     name = b.cat.metric(metric).prom
     expr = f'{{{TENANT_SEL}{"," + match if match else ""}}}'
     term = name + expr
-    if op:
+    if op == "increase":
+        term = counter_increase(term, window)
+    elif op:
         term = f"{op}({term}[{window}])"
     return f"{aggregate} by ({', '.join(('tenant_id', *keys))}) ({term})"
+
+
+def _count(b, metric, **kw):
+    """Whole events counted in the selected range."""
+    return f"round({_agg(b, metric, op='increase', window='$__range', **kw)})"
+
+
+def _slots(panel, *, bars=False, share=False):
+    for target in panel["targets"]:
+        target["interval"] = SLOT
+    custom = panel["fieldConfig"]["defaults"].setdefault("custom", {})
+    if bars:
+        custom.update(drawStyle="bars", fillOpacity=80, lineWidth=1, stacking={"mode": "normal", "group": "A"})
+    if share:
+        panel["fieldConfig"]["defaults"].update(min=0, max=1)
+    return panel
+
+
+def _bars(b, title, metric, keys, desc, *, match=""):
+    legend = " · ".join(["{{tenant_id}}", *("{{" + key + "}}" for key in keys)])
+    panel = b.raw(title, [f"round({_agg(b, metric, keys=keys, match=match, op='increase', window='$__interval')})"],
+                  unit="short", legends=[legend], desc=f"{desc} {SLOT_NOTE}".strip())
+    return _slots(panel, bars=True)
 
 
 def _share(numer, denom, *keys):
@@ -172,7 +214,7 @@ def _service_status(b, title, viz, w):
     desc = "Microsoft's declared status for the Microsoft Teams service, from the service-health collector."
     if viz == "stat":
         return _stat(b, title, expr, desc, None, w=w, about="m365.service_health.status")
-    return b.raw(title, [expr], unit=None, desc=desc, w=w, legends=["{{tenant_id}}"],
+    return b.raw(title, [expr], viz=viz, unit=None, desc=desc, w=w, legends=["{{tenant_id}}"],
                  about="m365.service_health.status")
 
 
@@ -184,20 +226,31 @@ def overview(b):
            "A panel that says **No data yet** is not a health verdict: check **Collector health**.",
            title="Teams call quality", h=4)
     increase = {"op": "increase", "window": "$__range"}
-    total = _agg(b, "teams.calls", **increase)
     good = _agg(b, "teams.calls", match='call_health="good"', **increase)
     classified = _agg(b, "teams.calls", match='call_health=~"good|poor"', **increase)
-    _stat(b, "Calls counted in range", total, FIRST + " " + COUNT_NOTE, w=6)
+    _stat(b, "Calls counted in range", _count(b, "teams.calls"), FIRST + " " + COUNT_NOTE, w=6)
     _stat(b, "Good share of classified calls", _share(good, classified),
           FIRST + " Unclassified calls are excluded. No classified observations means no percentage.",
           "percentunit", w=6)
-    _stat(b, "Direct Routing attempts in range", _agg(b, "teams.direct_routing.calls", **increase),
+    _stat(b, "Direct Routing attempts in range", _count(b, "teams.direct_routing.calls"),
           "Attempts through your own session border controllers. " + COUNT_NOTE, w=6)
     _service_status(b, "Microsoft Teams service status", "stat", 6)
-    b.metric("teams.calls", title="Call rate by initial health", by=["call_health"], desc=FIRST)
-    b.metric("teams.call.health_transitions", title="Later call health transition rate",
-             by=["from_health", "to_health"],
-             desc="Changes between successive accepted versions. Not a signed correction to the initial counts.")
+    _bars(b, "Calls by initial health", "teams.calls", ("call_health",), FIRST)
+    _pie(b, "Calls by type in range", [_count(b, "teams.calls", keys=("type",))], ["{{tenant_id}} · {{type}}"],
+         FIRST + " " + COUNT_NOTE, donut=True)
+    flags = b.raw("Calls with PSTN, video or sharing in range", [
+        _count(b, "teams.calls", match=f'{flag}="true"') for flag in ("has_pstn", "has_video", "has_sharing")
+    ], viz="bargauge", unit="short", legends=["{{tenant_id}} · PSTN", "{{tenant_id}} · video", "{{tenant_id}} · sharing"],
+        desc=FIRST + " A call can count in several bars. " + COUNT_NOTE)
+    for target in flags["targets"]:
+        target.update(instant=True, range=False)
+    platforms = b.raw("Recently ended calls by client platform", [
+        f'sum by (tenant_id, platform) ({b.cat.metric("teams.client_versions").prom}{{{TENANT_SEL}}})'],
+        viz="bargauge", unit="short", legends=["{{tenant_id}} · {{platform}}"],
+        desc="First accepted calls with a client on that platform, in the latest 60 call-end minutes since "
+             "process start. A call with several clients counts once per platform, so do not add the bars.")
+    _bars(b, "Later call health transitions", "teams.call.health_transitions", ("from_health", "to_health"),
+          "Changes between successive accepted versions. Not a signed correction to the initial counts.")
 
 
 def _measure(b, metric):
@@ -212,36 +265,49 @@ def quality(b):
     span = {"op": "increase", "window": "$__range"}
     poor = _agg(b, "teams.streams", match=f'{SITES},stream_health="poor"', **span)
     classified = _agg(b, "teams.streams", match=f'{SITES},stream_health=~"good|poor"', **span)
-    _stat(b, "Directional streams counted in range", _agg(b, "teams.streams", match=SITES, **span),
-          FIRST + " " + COUNT_NOTE)
+    _stat(b, "Directional streams counted in range", _count(b, "teams.streams", match=SITES),
+          FIRST + " " + COUNT_NOTE, w=4)
     _stat(b, "Poor share of classified streams", _share(poor, classified),
           FIRST + " Unclassified streams are excluded. No classified streams means no percentage.",
-          "percentunit")
-    _stat(b, "Calls with failure evidence in range", _agg(b, "teams.call.failures", **span),
-          "Calls whose sessions or segments reported a failure stage. " + COUNT_NOTE)
-    b.raw("Stream verdict rate by media", [_agg(b, "teams.streams", keys=("media", "stream_health"),
-          match=SITES, op="rate")], legends=["{{tenant_id}} · {{media}} · {{stream_health}}"],
-          desc="Directional streams by verdict. " + FIRST)
-    rate = {"keys": ("media",), "op": "increase", "window": RATE}
-    b.raw("Poor-stream share by media", [_share(
-        _agg(b, "teams.streams", match=f'{SITES},stream_health="poor"', **rate),
-        _agg(b, "teams.streams", match=f'{SITES},stream_health=~"good|poor"', **rate), "media")],
+          "percentunit", w=4)
+    _stat(b, "Calls with failure evidence in range", _count(b, "teams.call.failures"),
+          "Calls whose sessions or segments reported a failure stage. " + COUNT_NOTE, w=4)
+    # Range-wide means over every audio stream, mapped site or not. These stay
+    # readable when calls are too sparse for the per-interval quantiles below.
+    tenant = site_queries(b.cat, grown=True, window="$__range", site=SITES, group="tenant_id", mapped_only=False)
+    for key, name, unit in (("rtt", "Mean audio round-trip time", "s"), ("jitter", "Mean audio jitter", "s"),
+                            ("loss", "Mean audio packet loss", "percentunit")):
+        _stat(b, f"{name} in range", tenant[key],
+              "Mean of the per-stream averages over every audio stream in range, including streams with no "
+              "mapped site. Taken from the histogram sum and count, so bucket edges do not bound it.", unit, w=4)
+    _bars(b, "Directional streams by media and verdict", "teams.streams", ("media", "stream_health"),
+          "Directional streams by verdict. " + FIRST, match=SITES)
+    slot = {"keys": ("media",), "op": "increase", "window": "$__interval"}
+    _slots(b.raw("Poor-stream share by media", [_share(
+        _agg(b, "teams.streams", match=f'{SITES},stream_health="poor"', **slot),
+        _agg(b, "teams.streams", match=f'{SITES},stream_health=~"good|poor"', **slot), "media")],
           unit="percentunit", legends=["{{tenant_id}} · {{media}}"],
-          desc="Poor among classified streams in each interval. Gaps mean no classified stream, not zero.")
+          desc="Poor among classified streams in each interval. Gaps mean no classified stream, not zero. "
+               + SLOT_NOTE), share=True)
     for metric, name, unit in (("teams.stream.rtt", "Round-trip time", "s"),
                                ("teams.stream.jitter", "Jitter", "s"),
                                ("teams.stream.packet_loss", "Packet loss", "percentunit")):
         bucket = _measure(b, metric)
-        b.raw(f"{name} p50 and p95 by media", [
-            f"histogram_quantile({q}, sum by (le, tenant_id, media) (rate({bucket}[{RATE}])))" for q in ("0.5", "0.95")
+        grown = counter_increase(bucket, "$__interval")
+        _slots(b.raw(f"{name} p50 and p95 by media", [
+            f"histogram_quantile({q}, sum by (le, tenant_id, media) ({grown}))" for q in ("0.5", "0.95")
         ], unit=unit, legends=["{{tenant_id}} · {{media}} · p50", "{{tenant_id}} · {{media}} · p95"],
-              desc="Per-stream averages reported by the endpoints, as bucketed quantiles across streams.")
-        heat = b.raw(f"{name} distribution", [f"sum by (le) (increase({bucket}[{RATE}]))"], viz="heatmap",
+              desc="Per-stream averages reported by the endpoints, as bucketed quantiles across streams. " + SLOT_NOTE))
+        heat = b.raw(f"{name} distribution", [f"sum by (le) ({grown})"], viz="heatmap",
                      unit=unit, legends=["{{le}}"],
-                     desc="How many directional streams fell in each bucket per interval, across the selected tenants.")
+                     desc="How many directional streams fell in each bucket per interval, across the selected tenants. "
+                          + SLOT_NOTE)
         heat["targets"][0]["format"] = "heatmap"
-    b.metric("teams.stream.feedback", title="Endpoint feedback rate", by=["media", "rating"])
-    b.metric("teams.call.failures", title="Call failure evidence rate", by=["failure_stage", "reason_bucket"])
+        _slots(heat)
+    _bars(b, "Endpoint feedback", "teams.stream.feedback", ("media", "rating"),
+          "Ratings users gave at the end of a call, per directional stream.")
+    _bars(b, "Calls with failure evidence", "teams.call.failures", ("failure_stage", "reason_bucket"),
+          "Calls whose sessions or segments reported a failure stage, once per stage and reason bucket.")
     _pie(b, "Poor stream causes", [_agg(b, "teams.streams", keys=("stream_health_cause",),
          match=f'{SITES},stream_health="poor"', op="increase", window="$__range")],
          ["{{tenant_id}} · {{stream_health_cause}}"],
@@ -252,15 +318,59 @@ def quality(b):
 
 
 def _site_link(panel):
-    panel["transformations"] = [
-        {"id": "labelsToFields", "options": {"mode": "columns"}},
-        {"id": "merge", "options": {}},
-    ]
     _link(panel, "site", "Calls", "site")
 
 
+def _site_inventory(b):
+    q = site_queries(b.cat, grown=True, window="$__range", site=SITES, mapped_only=False)
+    span = {"keys": ("site",), "op": "increase", "window": "$__range", "match": SITES}
+    streams = _agg(b, "teams.streams", **span)
+    poor = _agg(b, "teams.streams", **{**span, "match": f'{SITES},stream_health="poor"'})
+    measured = _agg(b, "teams.streams", **{**span, "match": f'{SITES},stream_health=~"good|poor"'})
+    columns = (("Directional streams", f"round({streams})"), ("Poor share", _share(poor, measured, "site")),
+               ("Mean RTT", q["rtt"]), ("Mean jitter", q["jitter"]), ("Mean loss", q["loss"]),
+               ("TCP share", q["tcp"]))
+    panel = b.raw("Site inventory", [expr for _, expr in columns], viz="table", unit="short", w=24, h=9,
+                  desc="Every site value seen on a stream in range, including unmapped, overflow and other buckets. "
+                       "Poor share counts classified streams; means are audio-only. A blank cell means no evidence. "
+                       + FIRST)
+    for target in panel["targets"]:
+        target["format"] = "table"
+    refs = [target["refId"] for target in panel["targets"]]
+    panel["transformations"] = [
+        {"id": "merge", "options": {}},
+        {"id": "organize", "options": {
+            "excludeByName": {"Time": True},
+            "renameByName": {f"Value #{ref}": name for ref, (name, _) in zip(refs, columns)},
+            "indexByName": {"tenant_id": 0, "site": 1},
+        }},
+    ]
+    panel["options"]["sortBy"] = [{"displayName": "Directional streams", "desc": True}]
+    for name, unit in (("Poor share", "percentunit"), ("Mean RTT", "s"), ("Mean jitter", "s"),
+                       ("Mean loss", "percentunit"), ("TCP share", "percentunit")):
+        _override(panel, name, "unit", unit)
+    _link(panel, "site", "Calls", "site")
+
+
+def _network_kpis(b):
+    q = site_queries(b.cat, grown=True, window="$__range", site=SITES, group="tenant_id", mapped_only=False)
+    wifi = _agg(b, "teams.streams", match=f'{SITES},connection_type="wifi"', op="increase", window="$__range")
+    known = _agg(b, "teams.streams", match=f'{SITES},connection_type=~"wired|wifi|mobile|tunnel"',
+                 op="increase", window="$__range")
+    mapped = site_queries(b.cat, grown=True, window="$__range", site=SITES)
+    note = " Every audio stream in range, including streams with no mapped site."
+    _stat(b, "Sites with audio measurements", f"count by (tenant_id) ({mapped['rtt']})",
+          "Mapped sites with at least one measured audio stream in range. Not the configured site count.", w=4)
+    for key, name, unit in (("rtt", "Mean audio round-trip time", "s"), ("jitter", "Mean audio jitter", "s"),
+                            ("loss", "Mean audio packet loss", "percentunit"), ("tcp", "Audio TCP share", "percentunit")):
+        _stat(b, name, q[key], name + "." + note, unit, w=4)
+    _stat(b, "Wi-Fi share of streams", _share(wifi, known),
+          "Directional streams on Wi-Fi among known connection types." + note, "percentunit", w=4)
+
+
 def sites(b):
-    queries = site_queries(b.cat, window="$__range", site=SITES)
+    _network_kpis(b)
+    queries = site_queries(b.cat, grown=True, window="$__range", site=SITES)
     status = compliance(queries, LOCAL, "<=")
     status_note = ("Local preset: mean audio jitter ≤ 30 ms, round-trip time ≤ 200 ms, "
                    "loss ≤ 2% and TCP share ≤ 1%. Only sites with all four measurements are evaluated. "
@@ -279,6 +389,7 @@ def sites(b):
                       viz="table", unit="percentunit",
                       desc="Directional streams from initial versions. Unclassified streams and metric overflow sites are excluded.")
     _site_link(attention)
+    _site_inventory(b)
     for side in ("caller", "callee"):
         site = f"{side}_site"
         lat, lon = f"{site}_latitude", f"{site}_longitude"
@@ -312,7 +423,7 @@ def calls(b):
     general_calls = _require(f'{{{{if and .call_id (eq {site} "")}}}}yes{{{{end}}}}', ["call_id"],
                              "Show call-level rows only when a site search is not active")
     panel = b.records(CALL, "Call records", (
-        "call_id", "version", "call_health", "call_type", "modalities",
+        "call_id", "version", "call_health", "call_type", "modalities", "participant_count",
         "organizer_user_principal_name", "duration_seconds", "start_time", "end_time",
     ), filters=[general_calls, _matches("health", "call_health"), _matches("call_type", "call_type"),
                 _matches("modality", "modalities", json_list=True),
@@ -357,13 +468,17 @@ def detail(b):
                          filters=[*selected, f("start_time", "ne", ""), f("end_time", "ne", "")],
                          desc="Whole-stream labels, not changing verdicts within the stream.")
     timeline["type"] = "state-timeline"
-    timeline["options"] = {"mergeValues": False, "showValue": "auto"}
+    timeline["options"] = {"mergeValues": False, "showValue": "auto", "rowHeight": 0.8}
     timeline["transformations"][0]["options"]["keepTime"] = False
     timeline["transformations"].extend([
         _convert(("start_time", "end_time"), "time"),
         {"id": "organize", "options": {"indexByName": {"start_time": 0, "end_time": 1, "stream_health": 2}}},
         {"id": "partitionByValues", "options": {"fields": ["tenant_id", *keys], "keepFields": False}},
     ])
+    # Name each row by what tells streams apart, not by every partition label.
+    timeline["fieldConfig"]["defaults"]["displayName"] = (
+        "v${__field.labels.version} ${__field.labels.direction} stream ${__field.labels.stream_id}")
+    timeline["description"] += " Narrow the time picker to the call to see the intervals."
     for side, extra in (("caller", ("platform", "product_family", "client_version", "device_name")), ("callee", ())):
         b.records(STREAM, f"Reported {side} endpoint", ("version", "stream_id", "direction", *(
             f"{side}_{key}" for key in (*extra, "device", "cpu_insufficient", "device_glitch",
@@ -410,10 +525,11 @@ def phone(b):
                           ("teams.pstn.minutes", "PSTN connected minutes in range"),
                           ("teams.direct_routing.calls", "Direct Routing attempts in range")):
         _stat(b, title, _agg(b, metric, op="increase", window="$__range"), COUNT_NOTE)
-    b.metric("teams.direct_routing.calls", title="Direct Routing attempt rate by trunk and SIP outcome",
-             by=["trunk_fqdn", "sip_class", "outcome"])
-    b.metric("teams.direct_routing.network_effectiveness_ratio", title="Trunk effectiveness in latest successful poll",
-             by=["trunk_fqdn"], desc="Share of new attempts that answered or reached a busy user in the latest successful poll.")
+    _bars(b, "Direct Routing attempts by trunk and SIP outcome", "teams.direct_routing.calls",
+          ("trunk_fqdn", "sip_class", "outcome"), "Attempts through your own session border controllers.")
+    trunk = b.metric("teams.direct_routing.network_effectiveness_ratio", title="Trunk effectiveness in latest successful poll",
+                     by=["trunk_fqdn"], desc="Share of new attempts that answered or reached a busy user in the latest successful poll.")
+    trunk["fieldConfig"]["defaults"].update(unit="percentunit", min=0, max=1)
     b.records("teams.pstn_call", "PSTN call records", ("id", "call_id", "call_type", "connectivity_type",
               "duration_seconds", "start_time", "end_time"),
               desc="Phone log IDs are not assumed to name Graph call detail records.")
@@ -428,9 +544,14 @@ def voice_apps(b):
            "newly observed legs with known results, not intervals of event time.", title="Before you read this tab", h=3)
     b.metric("teams.call_queue.answer_rate", title="Call queue answer share", by=["queue"])
     b.metric("teams.call_queue.abandon_rate", title="Call queue abandon share", by=["queue"])
-    b.metric("teams.call_queue.wait_time", title="Call queue wait time p95", by=["queue"])
-    b.metric("teams.call_queue.wait_time", title="Call queue wait time p50", by=["queue"], quantile=0.5)
-    b.metric("teams.auto_attendant.calls", by=["auto_attendant", "voice_outcome"])
+    wait = counter_increase(f'{b.cat.metric("teams.call_queue.wait_time").prom}_bucket{{{TENANT_SEL}}}', "$__interval")
+    for q in ("0.95", "0.5"):
+        _slots(b.raw(f"Call queue wait time p{q[2:].ljust(2, '0')}", [
+            f"histogram_quantile({q}, sum by (le, tenant_id, queue) ({wait}))"], unit="s",
+            legends=["{{tenant_id}} · {{queue}}"],
+            desc="Time callers waited in the queue, as a bucketed quantile across newly observed legs. " + SLOT_NOTE))
+    _bars(b, "Auto attendant call legs by outcome", "teams.auto_attendant.calls", ("auto_attendant", "voice_outcome"),
+          "Auto attendant call legs by bounded outcome.")
     b.records("teams.call_queue_call", "Call queue legs", (
         "queue", "call_queue_identity", "result", "call_queue_final_state_action", "call_queue_duration_seconds",
         "call_queue_agent_count", "agent_name", "start_date_time", "end_date_time",
@@ -451,14 +572,12 @@ def inventory(b):
     _stat(b, "Teams user configurations", _agg(b, "m365.teams.user_configuration.users"),
           "All configurations returned, including resource accounts and ineligible users.")
     keys = ("capability", "number_type", "assignment_status", "activation_state")
-    table = b.raw("Phone numbers by capability and assignment", [
+    b.raw("Phone numbers by capability and assignment", [
         f"sum by (tenant_id, {', '.join(keys)}) ({numbers}{{{TENANT_SEL}}})"], viz="table",
         desc="A number can support several capabilities, so do not add the capability rows together.")
-    table["transformations"] = [{"id": "labelsToFields", "options": {"mode": "columns"}}]
-    table = b.raw("User configurations by account type", [
+    b.raw("User configurations by account type", [
         f"sum by (tenant_id, account_type, enterprise_voice_enabled) ({users}{{{TENANT_SEL}}})"], viz="table",
         desc="Voice enablement by Teams account type. Telephone numbers and effective policies are not mapped.")
-    table["transformations"] = [{"id": "labelsToFields", "options": {"mode": "columns"}}]
     b.metric("m365.teams.phone_numbers.total", title="Phone numbers over time by assignment",
              by=["assignment_status", "number_type"],
              desc="Summed across capability buckets, which overlap: read the trend, not the total.")
@@ -499,7 +618,7 @@ def usage(b):
 
 def service(b):
     _service_status(b, "Microsoft Teams service status", "stat", 8)
-    _service_status(b, "Microsoft Teams service status over time", "timeseries", 16)
+    _service_status(b, "Microsoft Teams service status over time", "state-timeline", 16)
     b.metric("m365.service_health.issues.total", title="Open service issues by classification (all services)",
              by=["classification", "status"],
              desc="Counts every Microsoft 365 service: the issue count carries no service label.")
@@ -507,6 +626,13 @@ def service(b):
 
 
 def issues(b):
+    distinct = b.log_table(ISSUE, "Distinct Teams issues observed open in range",
+                           by=["id", "title", "classification", "status"],
+                           filters=[f("service", "eq", "Microsoft Teams"), f("is_resolved", "eq", "false")],
+                           desc="One row per issue and status, with the number of polls that saw it open. "
+                                "Requires the service-health collector.", w=24, h=7)
+    distinct["fieldConfig"]["overrides"].append({"matcher": {"id": "byName", "options": "Total"},
+                                                 "properties": [{"id": "displayName", "value": "Polls seen open"}]})
     for title, resolved in (("Teams issue observations while open", "false"), ("Teams resolution events", "true")):
         panel = b.records(ISSUE, title, ("id", "title", "classification", "status", "impact_description",
                           "description", "last_modified_date_time", "end_date_time"),
@@ -539,25 +665,26 @@ def health(b):
 
 
 def practices(b):
-    q = site_queries(b.cat, site=SITES)
+    q = site_queries(b.cat, grown=True, window="$__interval", site=SITES)
     label = ["{{tenant_id}} · {{site}}"]
-    b.raw("Audio TCP share by site", [q["tcp"]], unit="percentunit", legends=label,
-          desc="Observed sender TCP among known TCP or UDP audio streams. TCP can be expected; "
-               "a high share is a prompt to check, not proof of blocked ports.")
+    _slots(b.raw("Audio TCP share by site", [q["tcp"]], unit="percentunit", legends=label,
+           desc="Observed sender TCP among known TCP or UDP audio streams. TCP can be expected; "
+                "a high share is a prompt to check, not proof of blocked ports. " + SLOT_NOTE), share=True)
     b.text("Check the [Microsoft Teams network guidance](https://learn.microsoft.com/microsoftteams/prepare-network) "
            "and allow Microsoft’s documented Teams UDP ports where required. "
            "Version buckets do not establish whether a client is outdated. No bounded poor-device or relay-use "
            "share is emitted. The endpoint matrix shows observed CPU and glitch flags, and relay allocation is not use.",
            title="What the signals can establish", h=5, w=12)
-    for key, name, unit in (("jitter", "Mean audio jitter", "s"), ("rtt", "Mean audio round-trip time", "s"),
-                             ("loss", "Mean audio loss fraction", "percentunit")):
-        b.raw(name, [q[key]], unit=unit, legends=label)
-    dims = {"keys": ("site",), "op": "increase"}
+    for key, name, unit in (("jitter", "Mean audio jitter by site", "s"), ("rtt", "Mean audio round-trip time by site", "s"),
+                             ("loss", "Mean audio loss fraction by site", "percentunit")):
+        _slots(b.raw(name, [q[key]], unit=unit, legends=label, desc="Mapped sites only. " + SLOT_NOTE))
+    dims = {"keys": ("site",), "op": "increase", "window": "$__interval"}
     wifi = _agg(b, "teams.streams", match=f'{SITES},connection_type="wifi"', **dims)
     known = _agg(b, "teams.streams", match=f'{SITES},connection_type=~"wired|wifi|mobile|tunnel"', **dims)
-    b.raw("Wi-Fi share of observed connection types", [_share(wifi, known, "site")],
-          unit="percentunit", legends=label,
-          desc="Directional streams from first accepted versions, not a share of users or calls. Unknown connection types are excluded.")
+    _slots(b.raw("Wi-Fi share of observed connection types by site", [_share(wifi, known, "site")],
+           unit="percentunit", legends=label,
+           desc="Directional streams from first accepted versions, not a share of users or calls. "
+                "Unknown connection types are excluded. " + SLOT_NOTE), share=True)
 
 
 def sites_and_network(b):

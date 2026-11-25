@@ -3,12 +3,16 @@
 import json
 from pathlib import Path
 import re
+import shutil
+import subprocess
+import tempfile
 import unittest
 from urllib.parse import parse_qs, quote, urlsplit
 
 import catalog
 import v2
 from boards import teams
+from boards.teams_quality import counter_increase
 
 
 DASHBOARDS = Path(__file__).resolve().parents[2] / "dashboards"
@@ -95,8 +99,9 @@ class TeamsDashboardTests(unittest.TestCase):
                             continue
                         self.assertEqual(query["group"], "loki")
                         self.assertEqual(query["datasource"]["name"], "${loki_datasource}")
-                        match = re.match(
-                            r'^\{service_name="graph2otel"\} \| event_name=`([^`]+)` \| tenant_id=~"\$tenant"', expr)
+                        # A metric query wraps the selector; the selector itself is the contract.
+                        match = re.search(
+                            r'(?:^|\()\{service_name="graph2otel"\} \| event_name=`([^`]+)` \| tenant_id=~"\$tenant"', expr)
                         self.assertIsNotNone(match, expr)
                         event = match[1]
                         self.assertTrue(event.startswith("teams.") or event in {
@@ -169,6 +174,91 @@ class TeamsDashboardTests(unittest.TestCase):
                     note = panel["vizConfig"]["spec"]["fieldConfig"]["defaults"]["noValue"]
                     self.assertTrue(note.startswith("No data yet."), note)
                     self.assertGreater(len(note), len("No data yet. "))
+
+    def test_teams_counts_keep_the_first_value_of_a_new_counter_series(self):
+        # Plain increase() drops the first sample of a series born in the window,
+        # which on a sparse Teams counter is most of the data.
+        counters = {m.prom for m in catalog.load().metrics.values()
+                    if m.domain == "teams" and m.kind in ("sum", "histogram")}
+        checked = 0
+        for tab in self.panels_by_tab():
+            for expr in self.prom_exprs(tab):
+                for name in re.findall(r"\bincrease\(([a-z_]+)\{", expr):
+                    base = re.sub(r"_(bucket|sum|count)$", "", name)
+                    if base not in counters and name not in counters:
+                        continue
+                    checked += 1
+                    with self.subTest(tab=tab, metric=name):
+                        self.assertRegex(expr, r"unless " + name + r"\{[^}]*\} offset ")
+                if tab != "Collector health":
+                    with self.subTest(tab=tab, expr=expr[:80]):
+                        self.assertNotRegex(expr, r"\brate\(teams_", "sparse Teams counters are counted, not rated")
+        self.assertGreater(checked, 30)
+
+    @unittest.skipUnless(shutil.which("promtool"), "needs promtool")
+    def test_counter_increase_counts_a_series_born_inside_the_window(self):
+        expr = f'round(sum by (k) ({counter_increase("m", "10m")}))'
+        test = {
+            "evaluation_interval": "1m",
+            "tests": [{
+                "interval": "1m",
+                "input_series": [
+                    {"series": 'm{k="born"}', "values": "_x10 1 1 2 2 2"},
+                    {"series": 'm{k="single"}', "values": "_x14 3"},
+                    {"series": 'm{k="old"}', "values": "5x9 6 6 7 7 7"},
+                    {"series": 'm{k="reset"}', "values": "4x9 1 1 2 2 2"},
+                ],
+                "promql_expr_test": [{"expr": expr, "eval_time": "14m", "exp_samples": [
+                    {"labels": '{k="born"}', "value": 2},
+                    {"labels": '{k="single"}', "value": 3},
+                    {"labels": '{k="old"}', "value": 2},
+                    {"labels": '{k="reset"}', "value": 2},
+                ]}],
+            }],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "counter_test.yaml"
+            path.write_text(json.dumps(test))  # JSON is valid YAML
+            run = subprocess.run(["promtool", "test", "rules", str(path)], capture_output=True, text=True)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
+    def test_empty_notes_stay_readable(self):
+        for tab, panels in self.panels_by_tab().items():
+            for panel in panels:
+                group = panel["vizConfig"]["group"]
+                field_config = panel["vizConfig"]["spec"].get("fieldConfig", {})
+                with self.subTest(tab=tab, panel=panel["title"]):
+                    if group == "stat":
+                        # A long sentence shrinks to illegible text in a stat.
+                        self.assertEqual(field_config["defaults"]["noValue"], teams.STAT_NO_VALUE)
+                        self.assertIn("If it is empty:", panel["description"])
+                    loki = any(q["spec"]["query"]["group"] == "loki" for q in panel["data"]["spec"]["queries"])
+                    if group == "table" and loki and not any(
+                            t["group"] == "reduce" for t in panel["data"]["spec"]["transformations"]):
+                        # A missing attribute is a blank cell, not the empty-panel note.
+                        blank = {o["matcher"]["options"] for o in field_config["overrides"]
+                                 if o["matcher"]["id"] == "byType"
+                                 and {"id": "noValue", "value": ""} in o["properties"]}
+                        self.assertEqual(blank, {"string", "number"})
+
+    def test_prometheus_tables_are_one_frame(self):
+        graph = json.loads((DASHBOARDS / "graph2otel.json").read_text())
+        seen = 0
+        for manifest in (self.manifest, graph):
+            for element in manifest["spec"]["elements"].values():
+                panel = element["spec"]
+                if panel["vizConfig"]["group"] != "table":
+                    continue
+                for target in panel["data"]["spec"]["queries"]:
+                    query = target["spec"]["query"]
+                    if query["group"] != "prometheus":
+                        continue
+                    seen += 1
+                    with self.subTest(panel=panel["title"]):
+                        # Without format=table each series is a frame behind a picker.
+                        self.assertEqual(query["spec"].get("format"), "table")
+                        self.assertTrue(query["spec"]["instant"])
+        self.assertGreater(seen, 20)
 
     def test_coverage_fails_if_a_real_team_metric_has_no_placed_team_panel(self):
         cat = catalog.load()
