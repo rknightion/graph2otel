@@ -141,6 +141,18 @@ tenants:
     #     username_file: "/run/secrets/vaac_username"
     #     password_file: "/run/secrets/vaac_password"
 
+    # Teams admin API (teams_admin) is off by default, including with the Teams
+    # profile. It reads auto attendant and call queue configuration, Direct
+    # Routing gateways, the network topology and SIP device policy from the REST
+    # API behind the Teams PowerShell Get-Cs* cmdlets. It needs no credential and
+    # no app permission: the poller's existing credential is used on a different
+    # audience, and access comes from an Entra DIRECTORY role on the poller
+    # (Global Reader measured sufficient; assign it in the Entra portal). Graph
+    # preflight cannot verify that role. Commercial cloud only.
+    # teams:
+    #   admin_api:
+    #     enabled: false
+
     # exchange_online enables the Defender quarantine queue-depth collector
     # (defender.quarantine). No credential of its own — the tenant's existing
     # DefaultAzureCredential is reused against the Exchange Online audience — but
