@@ -1,5 +1,7 @@
 """Microsoft 365 service overview — Exchange, SharePoint/OneDrive, Teams, health."""
 
+from boards import teams_quality
+
 DOMAIN = "M365"
 DESCRIPTION = (
     "Exchange Online configuration and mail flow, SharePoint/OneDrive sharing and "
@@ -138,6 +140,9 @@ SECTIONS = [
         "m365.message_trace.bytes",
     ]),
 ]
+
+# The call-quality signal/query slice reuses this board's platform and layout.
+extra = teams_quality.add
 
 LOGS = [
     {"kind": "logs", "event": "m365.audit",

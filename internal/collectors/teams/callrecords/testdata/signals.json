@@ -11,6 +11,142 @@
         "kind",
         "tenant_id"
       ]
+    },
+    {
+      "Name": "teams.call.failures",
+      "Unit": "{call}",
+      "Kind": "sum",
+      "Description": "Teams calls with session or segment failure evidence, once per stage and reason bucket.",
+      "AttrKeys": [
+        "failure_stage",
+        "reason_bucket",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "teams.call.health_transitions",
+      "Unit": "{transition}",
+      "Kind": "sum",
+      "Description": "Health changes between successive accepted versions of an already counted Teams call.",
+      "AttrKeys": [
+        "from_health",
+        "tenant_id",
+        "to_health"
+      ]
+    },
+    {
+      "Name": "teams.call.metrics_skipped",
+      "Unit": "{call}",
+      "Kind": "sum",
+      "Description": "Completed Teams call versions omitted from call metrics despite log delivery.",
+      "AttrKeys": [
+        "reason_bucket",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "teams.calls",
+      "Unit": "{call}",
+      "Kind": "sum",
+      "Description": "Teams calls by health and modalities in their first accepted complete version.",
+      "AttrKeys": [
+        "call_health",
+        "has_pstn",
+        "has_sharing",
+        "has_video",
+        "tenant_id",
+        "type"
+      ]
+    },
+    {
+      "Name": "teams.client_versions",
+      "Unit": "{call}",
+      "Kind": "gauge",
+      "Description": "First accepted Teams calls since process start with a client in the bucket, in the latest 60 call-end minutes.",
+      "AttrKeys": [
+        "platform",
+        "product_family",
+        "tenant_id",
+        "version_bucket"
+      ]
+    },
+    {
+      "Name": "teams.stream.feedback",
+      "Unit": "{rating}",
+      "Kind": "sum",
+      "Description": "Teams endpoint feedback once per session side and media in a first accepted call version.",
+      "AttrKeys": [
+        "media",
+        "rating",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "teams.stream.jitter",
+      "Unit": "s",
+      "Kind": "histogram",
+      "Description": "Distribution of observed Teams stream average jitter.",
+      "AttrKeys": [
+        "connection_type",
+        "direction",
+        "media",
+        "site",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "teams.stream.packet_loss",
+      "Unit": "1",
+      "Kind": "histogram",
+      "Description": "Distribution of observed Teams stream average packet loss fractions.",
+      "AttrKeys": [
+        "connection_type",
+        "direction",
+        "media",
+        "site",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "teams.stream.rtt",
+      "Unit": "s",
+      "Kind": "histogram",
+      "Description": "Distribution of observed Teams stream average round-trip time.",
+      "AttrKeys": [
+        "connection_type",
+        "direction",
+        "media",
+        "site",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "teams.stream.transport",
+      "Unit": "{stream}",
+      "Kind": "sum",
+      "Description": "Dated Teams audio streams with observed sender TCP or UDP, for site transport share.",
+      "AttrKeys": [
+        "site",
+        "tenant_id",
+        "transport"
+      ]
+    },
+    {
+      "Name": "teams.streams",
+      "Unit": "{stream}",
+      "Kind": "sum",
+      "Description": "Dated directional Teams media streams from first accepted call versions.",
+      "AttrKeys": [
+        "connection_type",
+        "direction",
+        "media",
+        "platform",
+        "site",
+        "stream_health",
+        "stream_health_cause",
+        "tenant_id",
+        "transport"
+      ]
     }
   ],
   "Logs": [

@@ -146,6 +146,93 @@ for a tie and is absent without observations. `shared_reflexive_ip` is positive
 evidence only, emitted when two distinct endpoint identities report the same
 reflexive address. It suggests shared egress, not proof of the media route.
 
+### Counting call metrics
+
+A call contributes to `teams.calls` and the stream, feedback, failure and client
+observations only at its first accepted complete detail version. Complete means
+all required children were hydrated, the call has a valid start and end, and it
+is within the source retention floor. Missing dimensions do not make the whole
+call incomplete: unsupported classification remains `unclassified`, absent or
+unknown enum inputs use `unknown`, and unknown direction never chooses an endpoint.
+Modality flags are `true` for positive evidence, `false` for known absence and
+`unknown` otherwise. PSTN is based on participant or endpoint identity evidence,
+not on transport. Only dated streams contribute stream-level observations.
+
+The shared polling and direct-fetch checkpoint stores the highest considered
+version and last accepted health per call, along with the raw-log version keys
+and deferred hydration queue. Older or duplicate versions cannot change the
+metrics. A newer complete version can contribute one `teams.call.health_transitions`
+increment (`from_health`, `to_health`), never another call, a negative counter
+increment or a new stream sample. The original distribution measures first
+observations, not the latest health of every call. Transitions are changes seen
+by the collector, not a reconstruction of versions Graph no longer serves. Raw
+logs keep their original version and source timestamp behaviour.
+
+Observations are released only after the local checkpoint has been atomically
+saved and synced. On a write failure the metrics have not escaped; a replay can
+try again. If the process dies after the save but before the SDK or OTLP backend
+receives the sample, it can be lost, not replayed. Checkpoint and OTLP are not a
+transaction. Keep a persistent volume and do not reset or roll back the checkpoint
+format mid-rollout: an older binary does not preserve the new state. Expiry is
+based on the source start time and a non-decreasing, 30-day floor. A changed
+start on an active ID is refused. After expiry, this rule assumes Graph does
+not reuse the ID or move its start back into scope. At the 250,000 active-ID safety limit
+per tenant, raw logs still flow and `teams.call.metrics_skipped` reports the loss;
+active IDs are never evicted early to create room. Counts are attributed to
+collection time, not retroactively added to the historical call interval.
+
+The first sixteen distinct eligible, observed location names reserve a tenant's
+metric site slots. The reservation stays in the checkpoint across reloads and
+restarts, so renaming the CSV cannot create an unbounded succession of series.
+Use short location names (at most 48 ASCII characters, starting with a letter;
+letters, digits, spaces, `_` and `-` are accepted). Do not configure site labels
+that identify people or individual devices. No match is `unmapped`; invalid,
+reserved or over-budget names become `overflow`. This policy affects metrics
+only; the site lookup and logs still use the full configured table. All metrics
+also go through the central limiter, which folds rejected synchronous points for
+this family into a single `other` series without site attribution per tenant and
+metric. The client snapshot uses the ordinary central gauge limiter.
+
+| OTLP metric | Maximum label sets per tenant before central clipping | Observation |
+| --- | ---: | --- |
+| `teams.calls` | 243 | Type × three health values × three values for each modality flag |
+| `teams.call.health_transitions` | 6 | Distinct ordered pairs of the three health values |
+| `teams.call.metrics_skipped` | 2 | Capacity or changed source start |
+| `teams.streams` | 356,400 | Media × direction × valid health/cause pairs × transport × connection × platform × site |
+| `teams.stream.rtt`, `teams.stream.jitter`, `teams.stream.packet_loss` | 1,080 each | Media × direction × site × connection; classic Mimir histogram uses up to 15 series per set for duration or 13 for loss |
+| `teams.stream.transport` | 36 | Site × known TCP/UDP; audio only |
+| `teams.stream.feedback` | 24 | Media × rating; one per session side and media, excluding `notRated` |
+| `teams.call.failures` | 6 | Distinct failure stage and reason bucket per call, even when no stream was returned. Free text only distinguishes `other` from `unspecified` |
+| `teams.client_versions` | 1,100 | Platform × product family × version bucket. Each recent call contributes once per bucket, not once per user or stream |
+
+The client gauge covers the current UTC minute and the previous 59, using call
+end time and only first observations since this process started. It is not a
+client census; it warms up again after a restart. Version buckets are closed:
+one-digit majors, `20xxx` through `29xxx` for five-digit majors, `other` and
+`unknown`. A bucket describes version syntax, not client support status.
+Wire-value checks for these metrics come from the projection maps; free text,
+versions and configured sites are not wire enums.
+
+### Site network measurements
+
+The Mimir site queries use dated audio streams with an explicit Graph sender
+and a named sender site. They do not infer CQD direction or a network route.
+The duration histograms store seconds; packet loss stores a fraction in `[0,1]`.
+Missing or invalid measurements contribute nothing; reported zero contributes a
+real sample. Each mean divides the histogram's `_sum` increase by its own
+`_count` increase, with the same labels and window. TCP share divides the TCP
+increase by the TCP plus UDP increase for the same tenant, site and window. No TCP with observed UDP
+means zero; no known transport is absent. Neither a missing denominator nor an
+unmapped or clipped site is a passing result. Check metric clipping and skipped
+versions before interpreting a result as covering all observed traffic.
+
+The local preset allows up to 30 ms jitter, 200 ms RTT, 2% loss and 1% TCP share.
+The [published Microsoft client-to-network-edge optimal targets](https://learn.microsoft.com/skypeforbusiness/optimizing-your-network/network-performance-requirements)
+form a stricter reference: under 3 ms jitter, 60 ms RTT and 0.5% loss. Microsoft
+uses shorter measurement intervals and does not publish a TCP-share target in
+that table. Applying it to call-stream averages is a comparison, not evidence
+that the stream used that route or passed Microsoft's active network test.
+
 ## OTLP → Prometheus name normalization
 
 graph2otel emits **OTLP**; if your backend (Grafana Cloud, or any Prometheus-remote-write

@@ -38,7 +38,9 @@ func mapCall(d detail, version int64, sessions []hydratedSession, people []parti
 		call.Organizer = fillIdentity(d.Organizer.identity(), identityByID)
 	}
 	for _, session := range sessions {
+		call.observe(session.Failure, session.Caller.Agent, session.Callee.Agent)
 		for _, segment := range session.segments {
+			call.observe(segment.Failure, segment.Caller.Agent, segment.Callee.Agent)
 			for _, m := range segment.Media {
 				caller := mapSide(segment.Caller, session.Caller, m.CallerNetwork, m.CallerDevice, identityByID, table, domains)
 				callee := mapSide(segment.Callee, session.Callee, m.CalleeNetwork, m.CalleeDevice, identityByID, table, domains)
@@ -49,6 +51,17 @@ func mapCall(d detail, version int64, sessions []hydratedSession, people []parti
 		}
 	}
 	return call
+}
+
+func (c *Call) observe(failure *Failure, agents ...Agent) {
+	if failure != nil {
+		c.failures = append(c.failures, *failure)
+	}
+	for _, a := range agents {
+		if a.Platform != "" || a.ProductFamily != "" || a.Version != "" {
+			c.clients = append(c.clients, a)
+		}
+	}
 }
 
 func (p participant) identity() Identity {
@@ -161,21 +174,7 @@ func mapStream(s streamWire, label string, session session, segment segment, cal
 	}
 }
 
-func mediaKind(label string) string {
-	switch strings.ToLower(label) {
-	case "audio", "main-audio":
-		return "audio"
-	case "video", "main-video":
-		return "video"
-	case "screensharing":
-		return "sharing"
-	default:
-		if sharingKind(label) != ambiguousSharing {
-			return "sharing"
-		}
-		return "unknown"
-	}
-}
+func mediaKind(label string) string { return mediaLabels.project(label) }
 
 var durationUnits = strings.NewReplacer("H", "h", "M", "m", "S", "s")
 

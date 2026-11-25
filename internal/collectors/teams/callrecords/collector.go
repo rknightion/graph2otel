@@ -1,6 +1,7 @@
 // Package callrecords collects Teams call records over Microsoft Graph v1.0.
-// The wire projections are docs-derived; arrival, version churn and volume are
-// not live-measured. Only logs are emitted; no wire enum keys a metric label.
+// The wire projections are synthetic and docs-derived; arrival, version churn
+// and volume are not live-measured. Log versions and first-version metrics use
+// the same hydrated Call and tenant checkpoint.
 package callrecords
 
 import (
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rknightion/graph2otel/internal/checkpoint"
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/collectors"
 	"github.com/rknightion/graph2otel/internal/logpipeline"
@@ -54,6 +56,7 @@ type Collector struct {
 	logger     *slog.Logger
 	now        func() time.Time
 	permit     chan struct{}
+	versions   versionWindow // shared by poll and direct ingestion under permit
 }
 
 func init() { collectors.RegisterWindow(newCollector) }
@@ -103,8 +106,11 @@ func (c *Collector) CollectWindow(ctx context.Context, from, to time.Time, e tel
 		return from, err
 	}
 	defer c.release()
-	poll := c.run()
-	return poll.CollectWindow(ctx, from, to, e, outcomes)
+	observedAt := c.now().UTC()
+	poll := c.run(observedAt)
+	hw, err := poll.CollectWindow(ctx, from, to, e, outcomes)
+	c.versions.publish(e, c.now().UTC())
+	return hw, err
 }
 
 // CollectCall ingests a call by ID without moving the polling watermark. A
@@ -116,8 +122,11 @@ func (c *Collector) CollectCall(ctx context.Context, id string, e telemetry.Emit
 		return err
 	}
 	defer c.release()
-	poll := c.run()
-	return poll.CollectRecord(ctx, map[string]any{"id": id}, e, outcomes)
+	observedAt := c.now().UTC()
+	poll := c.run(observedAt)
+	err := poll.CollectRecord(ctx, map[string]any{"id": id}, e, outcomes)
+	c.versions.publish(e, c.now().UTC())
+	return err
 }
 
 func (c *Collector) acquire(ctx context.Context) error {
@@ -131,7 +140,7 @@ func (c *Collector) acquire(ctx context.Context) error {
 
 func (c *Collector) release() { <-c.permit }
 
-func (c *Collector) run() logpipeline.LogCollector {
+func (c *Collector) run(observedAt time.Time) logpipeline.LogCollector {
 	var table *sites.Table
 	if c.sitesFile != nil {
 		if err := c.sitesFile.Reload(); err != nil {
@@ -140,8 +149,10 @@ func (c *Collector) run() logpipeline.LogCollector {
 		table = c.sitesFile.Snapshot()
 	}
 	poll := *c.LogCollector
-	poll.Config.NotBefore = c.now().UTC().Add(-retention).Truncate(time.Second)
-	poll.Config.Prepare = c.prepare(table, poll.Config.NotBefore)
+	floor := observedAt.Add(-retention).Truncate(time.Second)
+	poll.Config.NotBefore = floor
+	poll.Config.MaintainCheckpoint = func(cp *checkpoint.Checkpoint) { maintainMetrics(cp, floor) }
+	poll.Config.Prepare = c.prepare(table, floor)
 	return poll
 }
 
@@ -179,6 +190,9 @@ func (c *Collector) prepare(table *sites.Table, floor time.Time) logpipeline.Pre
 		call := mapCall(d, version, sessions, people, table, c.domains)
 		assessCall(&call, c.thresholds)
 		result.Deliver = func(e telemetry.Emitter) { c.emitCall(e, call) }
+		result.Stage = func(cp *checkpoint.Checkpoint, e telemetry.Emitter) func() {
+			return c.stageMetrics(cp, e, call, c.now().UTC())
+		}
 		return result, nil
 	}
 }

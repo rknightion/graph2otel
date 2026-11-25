@@ -29,6 +29,10 @@ type PreparedRecord struct {
 	// read fails after it is known, a deferred poll keeps it and Time as the
 	// new retry reference. Neither field permits delivery on error.
 	SourceVersion int64
+	// Stage can update collector-owned checkpoint state for a new key and
+	// return a callback to release its observations after a successful Save.
+	// Unlike logs, those observations must never be replayed on a save error.
+	Stage func(*checkpoint.Checkpoint, telemetry.Emitter) func()
 }
 
 type datedEmitter struct {
@@ -71,6 +75,9 @@ func ingestPrepared(ctx context.Context, cfg EndpointConfig, cp *checkpoint.Chec
 		}
 		outcomes.Add(recordoutcome.OutcomeMapped, 1)
 		rec.Deliver(datedEmitter{Emitter: e, missingTime: missingTime})
+		if rec.Stage != nil && cfg.stage != nil {
+			cfg.stage(rec.Stage, e)
+		}
 		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 		if rec.Key != "" {
 			cp.SeenIDs.Add(rec.Key, rec.Time)

@@ -6396,6 +6396,56 @@
       ]
     },
     {
+      "name": "teams.call.failures",
+      "prometheus_name": "teams_call_failures_total",
+      "unit": "{call}",
+      "kind": "sum",
+      "description": "Teams calls with session or segment failure evidence, once per stage and reason bucket.",
+      "additive": true,
+      "domain": "teams",
+      "attr_keys": [
+        "failure_stage",
+        "reason_bucket",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/collectors/teams/callrecords"
+      ]
+    },
+    {
+      "name": "teams.call.health_transitions",
+      "prometheus_name": "teams_call_health_transitions_total",
+      "unit": "{transition}",
+      "kind": "sum",
+      "description": "Health changes between successive accepted versions of an already counted Teams call.",
+      "additive": true,
+      "domain": "teams",
+      "attr_keys": [
+        "from_health",
+        "tenant_id",
+        "to_health"
+      ],
+      "packages": [
+        "internal/collectors/teams/callrecords"
+      ]
+    },
+    {
+      "name": "teams.call.metrics_skipped",
+      "prometheus_name": "teams_call_metrics_skipped_total",
+      "unit": "{call}",
+      "kind": "sum",
+      "description": "Completed Teams call versions omitted from call metrics despite log delivery.",
+      "additive": true,
+      "domain": "teams",
+      "attr_keys": [
+        "reason_bucket",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/collectors/teams/callrecords"
+      ]
+    },
+    {
       "name": "teams.call_queue.abandon_rate",
       "prometheus_name": "teams_call_queue_abandon_rate_ratio",
       "unit": "1",
@@ -6438,6 +6488,44 @@
       ],
       "packages": [
         "internal/collectors/teams/voiceapps"
+      ]
+    },
+    {
+      "name": "teams.calls",
+      "prometheus_name": "teams_calls_total",
+      "unit": "{call}",
+      "kind": "sum",
+      "description": "Teams calls by health and modalities in their first accepted complete version.",
+      "additive": true,
+      "domain": "teams",
+      "attr_keys": [
+        "call_health",
+        "has_pstn",
+        "has_sharing",
+        "has_video",
+        "tenant_id",
+        "type"
+      ],
+      "packages": [
+        "internal/collectors/teams/callrecords"
+      ]
+    },
+    {
+      "name": "teams.client_versions",
+      "prometheus_name": "teams_client_versions",
+      "unit": "{call}",
+      "kind": "gauge",
+      "description": "First accepted Teams calls since process start with a client in the bucket, in the latest 60 call-end minutes.",
+      "additive": true,
+      "domain": "teams",
+      "attr_keys": [
+        "platform",
+        "product_family",
+        "tenant_id",
+        "version_bucket"
+      ],
+      "packages": [
+        "internal/collectors/teams/callrecords"
       ]
     },
     {
@@ -6514,6 +6602,120 @@
       "attr_keys": [],
       "packages": [
         "internal/collectors/teams/pstncalls"
+      ]
+    },
+    {
+      "name": "teams.stream.feedback",
+      "prometheus_name": "teams_stream_feedback_total",
+      "unit": "{rating}",
+      "kind": "sum",
+      "description": "Teams endpoint feedback once per session side and media in a first accepted call version.",
+      "additive": true,
+      "domain": "teams",
+      "attr_keys": [
+        "media",
+        "rating",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/collectors/teams/callrecords"
+      ]
+    },
+    {
+      "name": "teams.stream.jitter",
+      "prometheus_name": "teams_stream_jitter_seconds",
+      "unit": "s",
+      "kind": "histogram",
+      "description": "Distribution of observed Teams stream average jitter.",
+      "additive": true,
+      "domain": "teams",
+      "attr_keys": [
+        "connection_type",
+        "direction",
+        "media",
+        "site",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/collectors/teams/callrecords"
+      ]
+    },
+    {
+      "name": "teams.stream.packet_loss",
+      "prometheus_name": "teams_stream_packet_loss",
+      "unit": "1",
+      "kind": "histogram",
+      "description": "Distribution of observed Teams stream average packet loss fractions.",
+      "additive": true,
+      "domain": "teams",
+      "attr_keys": [
+        "connection_type",
+        "direction",
+        "media",
+        "site",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/collectors/teams/callrecords"
+      ]
+    },
+    {
+      "name": "teams.stream.rtt",
+      "prometheus_name": "teams_stream_rtt_seconds",
+      "unit": "s",
+      "kind": "histogram",
+      "description": "Distribution of observed Teams stream average round-trip time.",
+      "additive": true,
+      "domain": "teams",
+      "attr_keys": [
+        "connection_type",
+        "direction",
+        "media",
+        "site",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/collectors/teams/callrecords"
+      ]
+    },
+    {
+      "name": "teams.stream.transport",
+      "prometheus_name": "teams_stream_transport_total",
+      "unit": "{stream}",
+      "kind": "sum",
+      "description": "Dated Teams audio streams with observed sender TCP or UDP, for site transport share.",
+      "additive": true,
+      "domain": "teams",
+      "attr_keys": [
+        "site",
+        "tenant_id",
+        "transport"
+      ],
+      "packages": [
+        "internal/collectors/teams/callrecords"
+      ]
+    },
+    {
+      "name": "teams.streams",
+      "prometheus_name": "teams_streams_total",
+      "unit": "{stream}",
+      "kind": "sum",
+      "description": "Dated directional Teams media streams from first accepted call versions.",
+      "additive": true,
+      "domain": "teams",
+      "attr_keys": [
+        "connection_type",
+        "direction",
+        "media",
+        "platform",
+        "site",
+        "stream_health",
+        "stream_health_cause",
+        "tenant_id",
+        "transport"
+      ],
+      "packages": [
+        "internal/collectors/teams/callrecords"
       ]
     }
   ],

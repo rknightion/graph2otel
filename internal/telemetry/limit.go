@@ -454,7 +454,7 @@ func argmaxKey(counts map[string]map[string]struct{}) string {
 // Returns the attributes to emit with, and false when the point must be dropped
 // (a non-additive metric, where folding several entities' last values into one
 // series yields whichever wrote last).
-func (st *metricState) admitSync(attrs Attrs, limit int, additive bool) (Attrs, bool) {
+func (st *metricState) admitSync(attrs Attrs, limit int, additive, wholeSeriesOverflow bool) (Attrs, bool) {
 	fp := fingerprint(attrs)
 
 	st.mu.Lock()
@@ -470,6 +470,18 @@ func (st *metricState) admitSync(attrs Attrs, limit int, additive bool) (Attrs, 
 	}
 	if !additive {
 		return nil, false
+	}
+	if wholeSeriesOverflow {
+		out := make(Attrs, len(attrs))
+		for key, value := range attrs {
+			if key != semconv.AttrTenantID {
+				value = otherBucket
+			}
+			out[key] = value
+		}
+		// Not an admitted fingerprint: preserve the slot count for real
+		// series if global arbitration later raises the limit.
+		return out, true
 	}
 	if st.clip == "" {
 		st.clip = argmaxKey(st.keyValues)
@@ -510,7 +522,7 @@ func (e *limiterEmitter) syncAttrs(name, unit, kind string, attrs Attrs) (Attrs,
 	}
 	st := e.lim.state(name, tenantOf(attrs))
 	additive := semconv.MetricAdditive(unit, kind)
-	out, ok := st.admitSync(attrs, limit, additive)
+	out, ok := st.admitSync(attrs, limit, additive, semconv.WholeSeriesOverflow(name))
 	if !ok {
 		e.lim.noteClipped(name, "dropped", 1)
 		e.lim.announceClipping(st, name, "dropped", limit, limit+1)

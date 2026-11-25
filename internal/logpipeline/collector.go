@@ -120,6 +120,7 @@ func (c *LogCollector) CollectWindow(
 		return from, fmt.Errorf("logpipeline: %s: load checkpoint: %w", c.NameField, err)
 	}
 
+	commit := cfg.stageCheckpoint(cp, c.Store)
 	resumeFrom := from
 	if !cp.Watermark.IsZero() {
 		resumeFrom = cp.Watermark.Add(-cfg.Overlap)
@@ -130,12 +131,12 @@ func (c *LogCollector) CollectWindow(
 	hw, err := Poll(ctx, cfg, cp, resumeFrom, to, c.Fetcher, e, outcomes)
 	if err != nil {
 		if cfg.Prepare != nil && (len(cp.SeenIDs) > seenBefore || !slices.Equal(cp.DeferredRecords, deferredBefore)) {
-			err = errors.Join(err, c.Store.Save(cp)) // delivery progress only, unchanged watermark
+			err = errors.Join(err, commit()) // delivery progress only, unchanged watermark
 		}
 		return durableWatermark, fmt.Errorf("logpipeline: %s: poll: %w", c.NameField, err)
 	}
 
-	if err := c.Store.Save(cp); err != nil {
+	if err := commit(); err != nil {
 		if cfg.Deferred != nil {
 			hw = durableWatermark
 		}
@@ -157,6 +158,7 @@ func (c *LogCollector) CollectRecord(ctx context.Context, row map[string]any, e 
 	if err != nil {
 		return err
 	}
+	commit := cfg.stageCheckpoint(cp, c.Store)
 	outcomes.Add(recordoutcome.OutcomeFetched, 1)
 	rec, err := ingestPrepared(ctx, cfg, cp, row, telemetry.WithTransport(e, telemetry.TransportGraph), outcomes)
 	if err != nil {
@@ -174,5 +176,32 @@ func (c *LogCollector) CollectRecord(ctx context.Context, row map[string]any, e 
 	if !cfg.NotBefore.IsZero() {
 		cp.SeenIDs.Evict(cfg.NotBefore)
 	}
-	return c.Store.Save(cp)
+	return commit()
+}
+
+// Stage against the loaded checkpoint, not Poll's temporary watermark state.
+// Poll deliberately preserves the prepared keys on partial delivery failure.
+func (cfg *EndpointConfig) stageCheckpoint(cp *checkpoint.Checkpoint, store *checkpoint.Store) func() error {
+	if cfg.MaintainCheckpoint != nil {
+		cfg.MaintainCheckpoint(cp)
+	}
+	var afterSave []func()
+	cfg.stage = func(stage func(*checkpoint.Checkpoint, telemetry.Emitter) func(), e telemetry.Emitter) {
+		if release := stage(cp, e); release != nil {
+			afterSave = append(afterSave, release)
+		}
+	}
+	return func() error {
+		save := store.Save
+		if cfg.MaintainCheckpoint != nil || len(afterSave) != 0 {
+			save = store.SaveDurable
+		}
+		if err := save(cp); err != nil {
+			return err
+		}
+		for _, release := range afterSave {
+			release()
+		}
+		return nil
+	}
 }

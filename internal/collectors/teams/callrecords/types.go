@@ -19,6 +19,8 @@ type Call struct {
 	Organizer  Identity
 	Counts     ParticipantCounts
 	Streams    []Stream
+	failures   []Failure
+	clients    []Agent
 	quality    callQuality
 }
 
