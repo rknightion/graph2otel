@@ -1,0 +1,21 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "m365.teams.sip_device",
+      "AttrKeys": [
+        "connection_last_modified_date_time",
+        "connection_status",
+        "device_id",
+        "device_type",
+        "health_status",
+        "ingest_transport",
+        "last_modified_date_time",
+        "manufacturer",
+        "model",
+        "software_update_readout",
+        "tenant_id"
+      ]
+    }
+  ]
+}

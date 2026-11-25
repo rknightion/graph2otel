@@ -176,5 +176,6 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/teams/pstncalls"
 	_ "github.com/rknightion/graph2otel/internal/collectors/teams/pstngateways"
 	_ "github.com/rknightion/graph2otel/internal/collectors/teams/sipdevicepolicy"
+	_ "github.com/rknightion/graph2otel/internal/collectors/teams/sipdevices"
 	_ "github.com/rknightion/graph2otel/internal/collectors/teams/voiceapps"
 )

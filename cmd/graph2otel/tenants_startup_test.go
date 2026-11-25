@@ -168,7 +168,7 @@ func TestStartTenantsCredentialFailureRetainsCompleteBoundedAvailability(t *test
 	}
 
 	points := sources[0].Availability.Snapshot()
-	if got, want := len(points), 182; got != want {
+	if got, want := len(points), 183; got != want {
 		t.Fatalf("availability point count = %d, want %d", got, want)
 	}
 	for _, point := range points {
@@ -396,7 +396,7 @@ func TestSetupTenantWithGraphClientBuilderSanitizesConstructionFailure(t *testin
 		t.Fatal("failed tenant has nil availability tracker")
 	}
 	points := source.Availability.Snapshot()
-	if got, want := len(points), 182; got != want {
+	if got, want := len(points), 183; got != want {
 		t.Fatalf("availability point count = %d, want %d", got, want)
 	}
 	for _, point := range points {

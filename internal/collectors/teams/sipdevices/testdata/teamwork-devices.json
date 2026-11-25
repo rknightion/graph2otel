@@ -1,0 +1,116 @@
+[
+  {
+    "device": {
+      "activityState": "unknown",
+      "createdDateTime": "2026-01-02T00:00:00Z",
+      "currentUser": {
+        "displayName": "Example",
+        "id": "64bc388d-90d1-4bfd-91de-0faf3ad4bf04",
+        "userIdentityType": "example"
+      },
+      "deviceType": "sip",
+      "hardwareDetail": {
+        "macAddresses": [
+          "02:00:00:00:00:11"
+        ],
+        "manufacturer": "Example",
+        "model": "Example",
+        "serialNumber": null,
+        "uniqueId": "87b28be8-1f1a-40a3-bf44-3169da294682"
+      },
+      "healthStatus": "healthy",
+      "id": "228bd6e5-2f19-4edd-a615-81b17b6e39eb",
+      "lastModifiedDateTime": "2026-01-02T00:00:00Z"
+    },
+    "health": {
+      "connection": {
+        "connectionStatus": "connected",
+        "lastModifiedDateTime": "2026-01-02T00:00:00Z"
+      },
+      "createdDateTime": "2026-01-02T00:00:00Z",
+      "hardwareHealth": null,
+      "id": "228bd6e5-2f19-4edd-a615-81b17b6e39eb",
+      "lastModifiedDateTime": "2026-01-02T00:00:00Z",
+      "loginStatus": {
+        "exchangeConnection": {
+          "connectionStatus": "unknown",
+          "lastModifiedDateTime": null
+        },
+        "skypeConnection": {
+          "connectionStatus": "unknown",
+          "lastModifiedDateTime": null
+        },
+        "teamsConnection": {
+          "connectionStatus": "unknown",
+          "lastModifiedDateTime": null
+        }
+      },
+      "peripheralsHealth": null,
+      "softwareUpdateHealth": {
+        "adminAgentSoftwareUpdateStatus": null,
+        "companyPortalSoftwareUpdateStatus": null,
+        "firmwareSoftwareUpdateStatus": null,
+        "operatingSystemSoftwareUpdateStatus": null,
+        "partnerAgentSoftwareUpdateStatus": null,
+        "teamsClientSoftwareUpdateStatus": null
+      }
+    }
+  },
+  {
+    "device": {
+      "activityState": "unknown",
+      "createdDateTime": "2026-01-02T00:00:00Z",
+      "currentUser": {
+        "displayName": "Example",
+        "id": "5af929eb-5ef3-4db9-bd6d-aa9cf5c36b5b",
+        "userIdentityType": "example"
+      },
+      "deviceType": "sip",
+      "hardwareDetail": {
+        "macAddresses": [
+          "02:00:00:00:00:11"
+        ],
+        "manufacturer": "Example",
+        "model": "Example",
+        "serialNumber": null,
+        "uniqueId": "e01c03e6-e858-47eb-a092-035f21f2cebc"
+      },
+      "healthStatus": "healthy",
+      "id": "88080e2b-a309-4c43-82e4-7ff20c9ff14b",
+      "lastModifiedDateTime": "2026-01-02T00:00:00Z"
+    },
+    "health": {
+      "connection": {
+        "connectionStatus": "connected",
+        "lastModifiedDateTime": "2026-01-02T00:00:00Z"
+      },
+      "createdDateTime": "2026-01-02T00:00:00Z",
+      "hardwareHealth": null,
+      "id": "88080e2b-a309-4c43-82e4-7ff20c9ff14b",
+      "lastModifiedDateTime": "2026-01-02T00:00:00Z",
+      "loginStatus": {
+        "exchangeConnection": {
+          "connectionStatus": "unknown",
+          "lastModifiedDateTime": null
+        },
+        "skypeConnection": {
+          "connectionStatus": "unknown",
+          "lastModifiedDateTime": null
+        },
+        "teamsConnection": {
+          "connectionStatus": "unknown",
+          "lastModifiedDateTime": null
+        }
+      },
+      "peripheralsHealth": null,
+      "softwareUpdateHealth": {
+        "adminAgentSoftwareUpdateStatus": null,
+        "companyPortalSoftwareUpdateStatus": null,
+        "firmwareSoftwareUpdateStatus": null,
+        "operatingSystemSoftwareUpdateStatus": null,
+        "partnerAgentSoftwareUpdateStatus": null,
+        "teamsClientSoftwareUpdateStatus": null
+      }
+    }
+  }
+]

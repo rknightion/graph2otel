@@ -12,7 +12,7 @@ CALL = "teams.call"
 STREAM = "teams.call_stream"
 ISSUE = "m365.service_health_issue"
 COLLECTORS = (r"teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration"
-              r"|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)"
+              r"|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy|sip_devices)"
               r"|m365[.](teams|teams_usage|servicehealth)")
 # Every site-labelled metric panel follows the Site dropdown. All is ".*",
 # which also keeps streams that carry no mapped site.
@@ -1126,6 +1126,12 @@ def inventory(b):
            "#reading-a-complete-teams-phone-inventory) to select a separate completion per tenant and collector "
            "and check its exact rows. If the check fails, the inventory is **not proven complete**.",
            title="Checking complete inventory details", h=5, panel_id=1013)
+    devices = b.records("m365.teams.sip_device", "SIP device observations", (
+        "device_id", "manufacturer", "model", "health_status", "connection_status",
+        "software_update_readout", "connection_last_modified_date_time", "last_modified_date_time",
+    ), panel_id=1030, desc="Hourly beta observations in range, not a live census or a provisioning policy. "
+            "Not reported is not healthy. Failed health reads are in Collector health.")
+    devices["fieldConfig"]["defaults"]["noValue"] = "No observations from the optional teams.sip_devices beta collector."
 
 
 def usage(b):

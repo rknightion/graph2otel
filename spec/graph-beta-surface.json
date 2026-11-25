@@ -500,6 +500,20 @@
       ]
     },
     {
+      "package": "internal/collectors/teams/sipdevices",
+      "collectors": [
+        "teams.sip_devices"
+      ],
+      "operations": [
+        {
+          "path": "/teamwork/devices"
+        },
+        {
+          "path": "/teamwork/devices/{id}/health"
+        }
+      ]
+    },
+    {
       "package": "internal/collectors/entra/serviceactivity",
       "collectors": [
         "entra.service_activity"
