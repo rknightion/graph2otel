@@ -1,0 +1,254 @@
+{
+  "AutoAttendants": [
+    {
+      "Id": "00000000-0000-4000-8000-000000000001",
+      "Name": "Teams Lab Attendant",
+      "TenantId": "00000000-0000-4000-8000-000000000002",
+      "LanguageId": "en-GB",
+      "VoiceId": "Male",
+      "TimeZoneId": "GMT Standard Time",
+      "DefaultCallFlow": {
+        "Id": "00000000-0000-4000-8000-000000000003",
+        "Name": "Business hours",
+        "Greetings": [
+          {
+            "ActiveType": "TextToSpeech",
+            "TextToSpeechPrompt": "Thank you for calling the Teams lab.",
+            "AudioFilePrompt": null
+          }
+        ],
+        "Menu": {
+          "Name": "Business hours menu",
+          "Prompts": [
+            {
+              "ActiveType": "TextToSpeech",
+              "TextToSpeechPrompt": "For sales, press 1. For support, press 2. To speak to the operator, press 0.",
+              "AudioFilePrompt": null
+            }
+          ],
+          "MenuOptions": [
+            {
+              "Action": "TransferCallToTarget",
+              "DtmfResponse": "Tone1",
+              "VoiceResponses": [
+                "Sales"
+              ],
+              "CallTarget": {
+                "Id": "00000000-0000-4000-8000-000000000004",
+                "Type": "ApplicationEndpoint",
+                "DisplayName": null,
+                "EnableTranscription": false,
+                "EnableSharedVoicemailSystemPromptSuppression": false,
+                "CallPriority": 3,
+                "ConfigurationEndpointType": null,
+                "SharedVoicemailHistoryTemplateId": null
+              },
+              "Prompt": null,
+              "Description": null,
+              "MainlineAttendantTarget": null,
+              "AgentTargetType": null,
+              "AgentTarget": null,
+              "AgentTargetTagTemplateId": null
+            },
+            {
+              "Action": "TransferCallToTarget",
+              "DtmfResponse": "Tone2",
+              "VoiceResponses": [
+                "Support"
+              ],
+              "CallTarget": {
+                "Id": "00000000-0000-4000-8000-000000000005",
+                "Type": "ApplicationEndpoint",
+                "DisplayName": null,
+                "EnableTranscription": false,
+                "EnableSharedVoicemailSystemPromptSuppression": false,
+                "CallPriority": 3,
+                "ConfigurationEndpointType": null,
+                "SharedVoicemailHistoryTemplateId": null
+              },
+              "Prompt": null,
+              "Description": null,
+              "MainlineAttendantTarget": null,
+              "AgentTargetType": null,
+              "AgentTarget": null,
+              "AgentTargetTagTemplateId": null
+            },
+            {
+              "Action": "TransferCallToTarget",
+              "DtmfResponse": "Tone0",
+              "VoiceResponses": [
+                "Operator"
+              ],
+              "CallTarget": {
+                "Id": "00000000-0000-4000-8000-000000000006",
+                "Type": "User",
+                "DisplayName": null,
+                "EnableTranscription": false,
+                "EnableSharedVoicemailSystemPromptSuppression": false,
+                "ConfigurationEndpointType": null,
+                "SharedVoicemailHistoryTemplateId": null
+              },
+              "Prompt": null,
+              "Description": null,
+              "MainlineAttendantTarget": null,
+              "AgentTargetType": null,
+              "AgentTarget": null,
+              "AgentTargetTagTemplateId": null
+            }
+          ],
+          "DialByNameEnabled": false,
+          "DirectorySearchMethod": "None"
+        },
+        "ForceListenMenuEnabled": false,
+        "RingResourceAccountDelegates": false,
+        "TimeoutThreshold": null,
+        "TimeoutDisconnectPromptType": null,
+        "TimeoutDisconnectPromptCustomText": null,
+        "AiDisclaimerType": null,
+        "AiDisclaimerCustomText": null
+      },
+      "CallFlows": [
+        {
+          "Id": "00000000-0000-4000-8000-000000000007",
+          "Name": "After hours",
+          "Greetings": [
+            {
+              "ActiveType": "TextToSpeech",
+              "TextToSpeechPrompt": "The Teams lab is closed. Our hours are eight until eight, Monday to Saturday. Goodbye.",
+              "AudioFilePrompt": null
+            }
+          ],
+          "Menu": {
+            "Name": "After hours menu",
+            "Prompts": [],
+            "MenuOptions": [
+              {
+                "Action": "DisconnectCall",
+                "DtmfResponse": "Automatic",
+                "VoiceResponses": [],
+                "CallTarget": null,
+                "Prompt": null,
+                "Description": null,
+                "MainlineAttendantTarget": null,
+                "AgentTargetType": null,
+                "AgentTarget": null,
+                "AgentTargetTagTemplateId": null
+              }
+            ],
+            "DialByNameEnabled": false,
+            "DirectorySearchMethod": "None"
+          },
+          "ForceListenMenuEnabled": false,
+          "RingResourceAccountDelegates": false,
+          "TimeoutThreshold": null,
+          "TimeoutDisconnectPromptType": null,
+          "TimeoutDisconnectPromptCustomText": null,
+          "AiDisclaimerType": null,
+          "AiDisclaimerCustomText": null
+        }
+      ],
+      "Schedules": [
+        {
+          "Id": "00000000-0000-4000-8000-000000000008",
+          "Name": "Teams lab hours",
+          "Type": "WeeklyRecurrence",
+          "WeeklyRecurrentSchedule": {
+            "MondayHours": [
+              {
+                "Start": "08:00:00",
+                "End": "20:00:00"
+              }
+            ],
+            "TuesdayHours": [
+              {
+                "Start": "08:00:00",
+                "End": "20:00:00"
+              }
+            ],
+            "WednesdayHours": [
+              {
+                "Start": "08:00:00",
+                "End": "20:00:00"
+              }
+            ],
+            "ThursdayHours": [
+              {
+                "Start": "08:00:00",
+                "End": "20:00:00"
+              }
+            ],
+            "FridayHours": [
+              {
+                "Start": "08:00:00",
+                "End": "20:00:00"
+              }
+            ],
+            "SaturdayHours": [
+              {
+                "Start": "08:00:00",
+                "End": "20:00:00"
+              }
+            ],
+            "SundayHours": [],
+            "IsComplemented": true,
+            "RecurrenceRange": null
+          },
+          "FixedSchedule": null,
+          "AssociatedConfigurationIds": [
+            "00000000-0000-4000-8000-000000000001"
+          ]
+        }
+      ],
+      "CallHandlingAssociations": [
+        {
+          "ScheduleId": "00000000-0000-4000-8000-000000000008",
+          "CallFlowId": "00000000-0000-4000-8000-000000000007",
+          "Type": "AfterHours",
+          "Enabled": true,
+          "Priority": 1
+        }
+      ],
+      "VoiceResponseEnabled": true,
+      "DialByNameResourceId": null,
+      "DirectoryLookupScope": {
+        "InclusionScope": {
+          "Type": "Default",
+          "GroupDialScope": null
+        },
+        "ExclusionScope": {
+          "Type": "Default",
+          "GroupDialScope": null
+        }
+      },
+      "Operator": {
+        "Id": "00000000-0000-4000-8000-000000000006",
+        "Type": "User",
+        "DisplayName": null,
+        "EnableTranscription": false,
+        "EnableSharedVoicemailSystemPromptSuppression": false,
+        "ConfigurationEndpointType": null,
+        "SharedVoicemailHistoryTemplateId": null
+      },
+      "OperatorSharedVoicemail": null,
+      "ApplicationInstances": [
+        "00000000-0000-4000-8000-000000000009"
+      ],
+      "GreetingsSettingAuthorizedUsers": [],
+      "AuthorizedUsers": [
+        "00000000-0000-4000-8000-000000000010"
+      ],
+      "HideAuthorizedUsers": [],
+      "Status": null,
+      "UserNameExtension": "None",
+      "MainlineAttendantEnabled": false,
+      "MainlineAttendantAgentVoiceId": "None",
+      "SpamDetectionTemplateId": null,
+      "AutoRecordingTemplateId": null,
+      "AutoRecordingThread": null,
+      "AutoRecordingLibraryId": null,
+      "AutoRecordingLibraryDriveResourceId": null,
+      "SharedVoicemailTriageSettingsId": null
+    }
+  ],
+  "Diagnostics": []
+}

@@ -459,7 +459,7 @@ func TestRunAndCheckValidateTenantTeamsConfigBeforeConstructors(t *testing.T) {
 		if file == nil {
 			t.Fatal("configured tenant has no prepared site file")
 		}
-		if got := file.Snapshot().Lookup("", "192.0.2.5"); got.Name != "Test site" || got.Country != "ZZ" {
+		if got, _ := file.Snapshot().Lookup("", "192.0.2.5", ""); got.Name != "Test site" || got.Country != "ZZ" {
 			t.Errorf("prepared lookup = %+v, want Test site in ZZ", got)
 		}
 		if !domains.IsInternal("user@sub.example.com") {

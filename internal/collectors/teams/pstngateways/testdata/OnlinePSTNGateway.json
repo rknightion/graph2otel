@@ -1,0 +1,32 @@
+[
+  {
+    "InboundTeamsNumberTranslationRules": [],
+    "InboundPstnNumberTranslationRules": [],
+    "OutbundTeamsNumberTranslationRules": [],
+    "OutboundPstnNumberTranslationRules": [],
+    "Fqdn": "sbc.example.com",
+    "SipSignalingPort": 5061,
+    "FailoverTimeSeconds": 10,
+    "ForwardCallHistory": true,
+    "ForwardPai": true,
+    "SendSipOptions": true,
+    "MaxConcurrentSessions": 10,
+    "Enabled": true,
+    "MediaBypass": false,
+    "GatewaySiteId": null,
+    "GatewaySiteLbrEnabled": false,
+    "GatewayLbrEnabledUserOverride": false,
+    "FailoverResponseCodes": "408,503,504",
+    "PidfLoSupported": false,
+    "MediaRelayRoutingLocationOverride": null,
+    "ProxySbc": null,
+    "BypassMode": "None",
+    "Description": null,
+    "IPAddressVersion": "IPv4",
+    "InviteWithReplaces": "OptimisticallySupported",
+    "Identity": "sbc.example.com",
+    "ConfigMetadata": {
+      "Authority": "Tenant"
+    }
+  }
+]

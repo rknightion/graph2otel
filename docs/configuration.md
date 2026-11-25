@@ -201,8 +201,17 @@ tenants:
   host bits differ.
 - Site lookup uses the longest configured prefix covering the whole reported
   subnet. A matching subnet takes precedence over the endpoint IP. Without a
-  usable matching subnet, lookup tries the endpoint IP; without a match, the
-  result is `unmapped`. An omitted file leaves all sites unmapped.
+  usable matching subnet, lookup tries the endpoint IP, then the public reflexive
+  IP (the address Microsoft saw after NAT); without a match, the result is
+  `unmapped`. Browser clients report no subnet or endpoint IP, so a row for a
+  site's public egress address is what maps them. Graph masks the last octet of
+  some IPv4 reflexive addresses (`192.0.2.x`); a masked address only matches a
+  row of `/24` or shorter, so give egress rows a `/24` when that is accurate
+  enough. A user on a full-tunnel VPN or proxy maps to the site of that egress,
+  not to where they sit. A private or shared reflexive address is a
+  Microsoft-internal hop and never matches. The stream log's `caller_site_match` and `callee_site_match`
+  name the field that matched: `subnet`, `ip_address` or
+  `reflexive_ip_address`. An omitted file leaves all sites unmapped.
 - `internal_domains` classifies the domain of a participant's user principal name
   (UPN). `example.test` matches only that domain; `*.example.test` matches its
   proper subdomains at any depth, not the domain itself. Use both to cover both.
@@ -234,6 +243,23 @@ of the startup fingerprint.
 This unsupported integration signs in with a user password. It is incompatible
 with MFA and some Conditional Access policies, and the logs can carry caller
 and agent identities. Graph preflight cannot verify access to this feed.
+
+#### Teams admin API
+
+`tenants[].teams.admin_api.enabled` (default `false`) turns on the `teams_admin`
+transport: the REST API behind the Teams PowerShell `Get-Cs*` cmdlets, which has
+no Graph equivalent. With the key off, every collector on that transport is
+disabled with the reason `teams.admin_api.enabled not set`, even when the
+`teams` profile is selected or a collector is named in `collectors`. The key
+is file-only, like `teams.vaac`, because tenants are a YAML list. Strict
+validation rejects unknown keys under `admin_api` and a non-boolean value.
+
+The transport carries no secret and needs no app permission. It reuses the
+poller's credential on the "Skype and Teams Tenant Admin API" audience, and
+access comes from an Entra directory role on the poller; Global Reader was
+measured sufficient. Graph preflight cannot verify that role, so `check` lists
+it as a manual prerequisite. See [Teams admin API](teams-admin-api.md) for the
+wire facts.
 
 #### Teams offline ASN and GeoIP
 

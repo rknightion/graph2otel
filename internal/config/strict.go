@@ -69,6 +69,20 @@ func validateYAMLNode(node *yaml.Node, typ reflect.Type, path string) error {
 				}
 			}
 		}
+		if typ == reflect.TypeFor[AdminAPIConfig]() {
+			if node.Kind != yaml.MappingNode {
+				return fmt.Errorf("%s: expected a mapping", path)
+			}
+			for i := 0; i+1 < len(node.Content); i += 2 {
+				key, value := node.Content[i].Value, dereferenceAlias(node.Content[i+1])
+				if key != "enabled" {
+					return fmt.Errorf("%s: unknown key; only enabled is accepted", path)
+				}
+				if value.Kind != yaml.ScalarNode || value.Tag != "!!bool" {
+					return fmt.Errorf("%s.enabled: expected a boolean", path)
+				}
+			}
+		}
 		if node.Kind != yaml.MappingNode {
 			if isTeams || isThresholds || typ == reflect.TypeFor[TeamsQualityConfig]() {
 				return fmt.Errorf("%s: expected a mapping", path)

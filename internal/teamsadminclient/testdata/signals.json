@@ -1,0 +1,50 @@
+{
+  "Metrics": [
+    {
+      "Name": "graph2otel.teams_admin.http.client.request.duration",
+      "Unit": "s",
+      "Kind": "histogram",
+      "Description": "Duration of an outbound Teams admin API request.",
+      "AttrKeys": [
+        "http.request.method",
+        "http.response.status_code",
+        "server.address",
+        "teams_admin.resource",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.teams_admin.http_4xx",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Count of 4xx responses graph2otel received from its own outbound Teams admin API calls.",
+      "AttrKeys": [
+        "http.response.status_code",
+        "teams_admin.resource",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.teams_admin.http_5xx",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Count of 5xx responses graph2otel received from its own outbound Teams admin API calls.",
+      "AttrKeys": [
+        "http.response.status_code",
+        "teams_admin.resource",
+        "tenant_id"
+      ]
+    },
+    {
+      "Name": "graph2otel.teams_admin.throttle.count",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Count of 429 throttle responses observed from the Teams admin API.",
+      "AttrKeys": [
+        "teams_admin.resource",
+        "tenant_id"
+      ]
+    }
+  ],
+  "Logs": null
+}

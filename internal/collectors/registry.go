@@ -18,6 +18,8 @@ import (
 	"github.com/rknightion/graph2otel/internal/collector"
 	"github.com/rknightion/graph2otel/internal/exportjob"
 	"github.com/rknightion/graph2otel/internal/license"
+	"github.com/rknightion/graph2otel/internal/teams/sites"
+	"github.com/rknightion/graph2otel/internal/teamsadminclient"
 )
 
 // GraphClient is the narrow Graph-fetch seam every collector depends on. It is
@@ -43,6 +45,17 @@ type ARMReader interface {
 	// RawGet performs an authenticated GET against an absolute ARM URL (the
 	// management.azure.com audience) and returns the raw response body.
 	RawGet(ctx context.Context, url string) ([]byte, error)
+}
+
+// TeamsAdminClient is the narrow seam the teams_admin snapshot collectors
+// (#712) read the Teams admin REST API through. It is satisfied by
+// *teamsadminclient.Client; collectors depend on this interface so each is
+// testable against a fake returning decoded fixtures.
+type TeamsAdminClient interface {
+	// Configurations reads /Skype.Policy/configurations/{name}.
+	Configurations(ctx context.Context, name string) ([]map[string]any, error)
+	// VoiceApps reads every page of one Teams.VoiceApps collection.
+	VoiceApps(ctx context.Context, kind teamsadminclient.VoiceAppKind) (teamsadminclient.VoiceAppsResult, error)
 }
 
 // Deps is everything a Factory needs to construct a collector for one tenant.
@@ -127,6 +140,15 @@ type Deps struct {
 	// ingest is configured AND the owning blob collector is enabled, so a twin is
 	// never suppressed into a hole. nil/empty means suppress nothing.
 	SuppressedTwins map[string]bool
+	// TeamsAdmin is the tenant's Teams admin API client (#712). It is non-nil ONLY
+	// when tenants[].teams.admin_api.enabled is set. Factories MUST accept a nil
+	// client, because the availability census builds every collector with a zero
+	// Deps; Collect returns an error on nil rather than panicking.
+	TeamsAdmin TeamsAdminClient
+	// TeamsSites is the tenant's loaded teams.sites_file (nil when none is
+	// configured). teams.network_topology reconciles Teams subnets against it and
+	// must treat nil as "no CSV", never as an error.
+	TeamsSites *sites.File
 }
 
 // Factory constructs one snapshot collector instance for a tenant. Window

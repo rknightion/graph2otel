@@ -360,6 +360,9 @@ func availabilityTransportConfigured(
 		if candidate.Name == "graph2otel.blob_categories" {
 			return blobConfigured
 		}
+		if candidate.Transport == telemetry.TransportTeamsAdmin {
+			return cfg.TenantTeamsAdminAPI(tenantID).Enabled
+		}
 	}
 	return true
 }

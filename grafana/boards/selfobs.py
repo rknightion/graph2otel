@@ -93,6 +93,10 @@ EXO_DURATION = SELF_OBS["graph2otel.exo.http.client.request.duration"].prom
 EXO_4XX = SELF_OBS["graph2otel.exo.http_4xx"].prom
 EXO_5XX = SELF_OBS["graph2otel.exo.http_5xx"].prom
 EXO_THROTTLE = SELF_OBS["graph2otel.exo.throttle.count"].prom
+TEAMS_ADMIN_DURATION = SELF_OBS["graph2otel.teams_admin.http.client.request.duration"].prom
+TEAMS_ADMIN_4XX = SELF_OBS["graph2otel.teams_admin.http_4xx"].prom
+TEAMS_ADMIN_5XX = SELF_OBS["graph2otel.teams_admin.http_5xx"].prom
+TEAMS_ADMIN_THROTTLE = SELF_OBS["graph2otel.teams_admin.throttle.count"].prom
 HUNT_DURATION = SELF_OBS["graph2otel.hunt.http.client.request.duration"].prom
 HUNT_4XX = SELF_OBS["graph2otel.hunt.http_4xx"].prom
 HUNT_5XX = SELF_OBS["graph2otel.hunt.http_5xx"].prom
@@ -590,6 +594,7 @@ def extra(b):
     b.row("Non-Graph transport HTTP")
     for title, duration, errors4, errors5, throttle in [
         ("Exchange Online", EXO_DURATION, EXO_4XX, EXO_5XX, EXO_THROTTLE),
+        ("Teams admin API", TEAMS_ADMIN_DURATION, TEAMS_ADMIN_4XX, TEAMS_ADMIN_5XX, TEAMS_ADMIN_THROTTLE),
         ("Advanced hunting", HUNT_DURATION, HUNT_4XX, HUNT_5XX, HUNT_THROTTLE),
         ("MDCA", MDCA_DURATION, MDCA_4XX, MDCA_5XX, MDCA_THROTTLE),
         ("O365 Activity", O365_DURATION, O365_4XX, O365_5XX, O365_THROTTLE),

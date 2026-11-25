@@ -51,6 +51,11 @@ const (
 	// TransportVAAC is Teams voice analytics, fetched with a user token on a
 	// separate audience. It uses the window registration path, not Graph.
 	TransportVAAC Transport = "vaac"
+	// TransportTeamsAdmin is the Teams admin REST API behind the MicrosoftTeams
+	// PowerShell Get-Cs* cmdlets (internal/teamsadminclient, #712). It is not
+	// Graph: a different host and audience, and access comes from an Entra
+	// directory role on the poller rather than any app permission.
+	TransportTeamsAdmin Transport = "teams_admin"
 )
 
 // transportEmitter stamps semconv.AttrIngestTransport onto every log record

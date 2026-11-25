@@ -59,8 +59,10 @@ changing profiles or overrides.
 ### Optional enrichment and inputs
 
 - **Sites and internal domains.** Site mapping runs locally. It prefers a
-  matching reported subnet, then tries the endpoint IP; unmatched endpoints
-  remain `unmapped`. Use site names that identify locations, not people or
+  matching reported subnet, then tries the endpoint IP, then the public
+  reflexive IP (the only location evidence for browser clients); unmatched
+  endpoints remain `unmapped`, and `<side>_site_match` names the field that
+  matched. Use site names that identify locations, not people or
   devices. See [site CSV validation, atomic replacement and domain matching](configuration.md#teams-site-mapping-and-internal-domains).
   Internal-domain classification does not filter external participants.
 - **ASN and GeoIP.** Optionally mount your own MaxMind-format ASN or City

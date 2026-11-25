@@ -22,6 +22,7 @@ type TeamsConfig struct {
 	SitesFile       string           `yaml:"sites_file"`
 	InternalDomains []string         `yaml:"internal_domains"`
 	VAAC            *VAACConfig      `yaml:"vaac" json:",omitempty"`
+	AdminAPI        *AdminAPIConfig  `yaml:"admin_api" json:",omitempty"`
 	GeoIP           TeamsGeoIPConfig `yaml:"geoip" json:",omitzero"`
 
 	siteFile *sites.File
@@ -55,6 +56,23 @@ func (c *Config) TenantVAAC(tenantID string) VAACConfig {
 		}
 	}
 	return VAACConfig{}
+}
+
+// AdminAPIConfig opts into the teams_admin transport (#712): the Teams admin
+// REST API behind the MicrosoftTeams PowerShell Get-Cs* cmdlets. It carries no
+// credential; access rests on an Entra directory role held by the poller.
+type AdminAPIConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+// TenantTeamsAdminAPI returns the tenant's teams_admin opt-in (false when unset).
+func (c *Config) TenantTeamsAdminAPI(tenantID string) AdminAPIConfig {
+	for _, tenant := range c.Tenants {
+		if tenant.TenantID == tenantID && tenant.Teams != nil && tenant.Teams.AdminAPI != nil {
+			return *tenant.Teams.AdminAPI
+		}
+	}
+	return AdminAPIConfig{}
 }
 
 // TeamsGeoIPConfig contains optional local MaxMind database paths.

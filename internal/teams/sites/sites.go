@@ -29,23 +29,65 @@ type Table struct {
 	bits    []int // configured prefix lengths, longest first
 }
 
+// MatchSource names the network field that matched a site.
+type MatchSource string
+
+const (
+	MatchNone      MatchSource = "" // no match: the site is Unmapped
+	MatchSubnet    MatchSource = "subnet"
+	MatchIP        MatchSource = "ip_address"
+	MatchReflexive MatchSource = "reflexive_ip_address"
+)
+
 // Lookup first finds the longest site prefix covering the entire reported subnet.
 // A bare subnet address is treated as a host. If the subnet has no match, Lookup
-// tries the endpoint IP. Neither relay nor reflexive IP is used for site matching.
-func (t *Table) Lookup(subnet, ip string) Site {
+// tries the endpoint IP, then the reflexive IP: the address the service saw after
+// NAT. Browser clients report no subnet or endpoint IP, so for them the
+// reflexive address is the only location evidence. Only a public reflexive
+// address is used; a private or shared one is a provider-internal hop. Graph
+// masks the last octet of some IPv4 reflexive addresses ("192.0.2.x"); a
+// masked address stands for its /24 and only matches a prefix of /24 or
+// shorter. The relay IP is never used for site matching.
+func (t *Table) Lookup(subnet, ip, reflexive string) (Site, MatchSource) {
 	if t != nil {
 		if p := parseSubnet(subnet); p.IsValid() {
 			if site, ok := t.match(p); ok {
-				return site
+				return site, MatchSubnet
 			}
 		}
 		if addr := parseIP(ip); addr.IsValid() {
 			if site, ok := t.match(netip.PrefixFrom(addr, addr.BitLen())); ok {
-				return site
+				return site, MatchIP
+			}
+		}
+		if p := parseReflexive(reflexive); p.IsValid() {
+			if site, ok := t.match(p); ok {
+				return site, MatchReflexive
 			}
 		}
 	}
-	return Site{Name: Unmapped}
+	return Site{Name: Unmapped}, MatchNone
+}
+
+// parseReflexive returns the public reflexive address as a host prefix, or a
+// masked IPv4 address ("a.b.c.x") as its /24. Anything else is invalid.
+func parseReflexive(s string) netip.Prefix {
+	s = strings.TrimSpace(s)
+	var p netip.Prefix
+	if head, ok := strings.CutSuffix(s, ".x"); ok {
+		addr, err := netip.ParseAddr(head + ".0")
+		if err != nil || !addr.Is4() {
+			return netip.Prefix{}
+		}
+		p = netip.PrefixFrom(addr, 24)
+	} else {
+		addr := parseIP(s)
+		p = netip.PrefixFrom(addr, addr.BitLen())
+	}
+	if !p.IsValid() || ClassifyIP(p.Addr().String()) != IPPublic {
+		return netip.Prefix{}
+	}
+	return p
 }
 
 func (t *Table) match(p netip.Prefix) (Site, bool) {
