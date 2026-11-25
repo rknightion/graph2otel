@@ -153,11 +153,13 @@ class TeamsInvestigationTests(unittest.TestCase):
 @unittest.skipUnless(shutil.which("logcli") or os.environ.get("TEAMS_LOGCLI_DOCKER") == "1",
                      "needs logcli or TEAMS_LOGCLI_DOCKER=1 with a cached grafana/logcli:3.6.7 image")
 class TeamsInvestigationLogQLTests(unittest.TestCase):
-    def query(self, target, records, fields, *, call):
+    def query(self, target, records, fields, *, call="", tenant="fixture-tenant", **inputs):
         runner = ["logcli"] if shutil.which("logcli") else [
             "docker", "run", "--rm", "-i", "--network", "none", "--pull=never", "grafana/logcli:3.6.7"]
         rendered = (target["expr"].replace('{service_name="graph2otel"}', '{source="logcli"} | json', 1)
-                    .replace("$tenant", "fixture-tenant").replace("${call_id:percentencode}", quote(call, safe="")))
+                    .replace("$tenant", tenant).replace("${call_id:percentencode}", quote(call, safe="")))
+        for name in ("site", "user", "health", "call_type", "modality", "min_seconds"):
+            rendered = rendered.replace("${" + name + ":percentencode}", quote(inputs.get(name, ""), safe=""))
         # stdin mode has no wire metadata and prints no labels. The JSON stage
         # loads the same keys; reading them back tests the production pipeline.
         rendered += " | line_format `" + "\t".join("{{." + name + "}}" for name in fields) + "`"
@@ -166,6 +168,53 @@ class TeamsInvestigationLogQLTests(unittest.TestCase):
                              capture_output=True, text=True, check=False, timeout=20)
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
         return [line.split("\t") for line in run.stdout.splitlines()]
+
+    def test_calls_discovery_only_links_tenant_scoped_evidence(self):
+        call = "fixture / `?&=call"
+        site = "fixture / `?&=site"
+        user = "fixture+organiser@example.com"
+        tenants = [{"tenant_id": "fixture-tenant"}, {"tenant_id": "other-tenant"}, {}]
+        for title, event, inputs, evidence, decoys in (
+            ("Call records", "teams.call",
+             {"user": user, "health": "poor", "call_type": "groupCall", "modality": "audio", "min_seconds": "0"},
+             {"organizer_user_principal_name": user, "call_health": "poor", "call_type": "groupCall",
+              "modalities": '["audio", "video"]', "duration_seconds": "0"},
+             ({"modalities": '["audioVideo"]'}, {"duration_seconds": ""}, {"call_health": "good"},
+              {"call_type": "peerToPeer"}, {"organizer_user_principal_name": user.upper()})),
+            ("Call IDs observed at the selected site", "teams.call_stream",
+             {"site": site, "user": user, "health": "good", "min_seconds": "999"},
+             {"caller_site": site, "callee_user_principal_name": user},
+             ({"caller_site": site + "."}, {"callee_user_principal_name": user.upper()})),
+        ):
+            with self.subTest(panel=title):
+                base = {"event_name": event, "call_id": call, "version": "1", **evidence}
+                rows = [{**base, **tenant} for tenant in tenants]
+                rows += [{**base, **tenants[0], **decoy, "version": str(i)} for i, decoy in enumerate(decoys, 2)]
+                spec = panel(title)
+                [linked] = [o["matcher"]["options"] for o in spec["vizConfig"]["spec"]["fieldConfig"]["overrides"]
+                            if any(p["id"] == "links" for p in o["properties"])]
+                columns = ("tenant_id", linked, "g2o_unlabelled_call_id", "version")
+                targets = query_models(spec)
+                self.assertTrue(all(q["queryType"] == "range" and q["maxLines"] == 250 for q in targets))
+
+                def results(tenant, *, fixture=(rows, columns, targets), **filters):
+                    fixture_rows, fixture_columns, fixture_targets = fixture
+                    return [self.query(q, fixture_rows, fixture_columns, tenant=tenant, **filters)
+                            for q in fixture_targets]
+
+                matches = results(".*", **inputs)
+                self.assertCountEqual([row for frame in matches for row in frame], [
+                    ["fixture-tenant", call, "", "1"], ["other-tenant", call, "", "1"], ["", "", call, "1"],
+                ])
+                # The table applies links per field. The unlabelled evidence must
+                # not share a frame containing the linked field, even as an empty cell.
+                self.assertEqual(len(matches), 2)
+                self.assertTrue(all(all(row[1] for row in frame) or all(row[2] for row in frame)
+                                    for frame in matches))
+                self.assertEqual([row for frame in results("fixture-tenant", **inputs) for row in frame],
+                                 [["fixture-tenant", call, "", "1"]])
+                toggled_site = {**inputs, "site": "" if "site" in inputs else site}
+                self.assertFalse(any(results(".*", **toggled_site)))
 
     def test_verdict_rows_keep_low_packets_and_reported_units(self):
         good = "fixture / good"
