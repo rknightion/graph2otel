@@ -660,16 +660,16 @@ class Builder:
         return self._logs_panel(title, desc, targets, no_value or NO_LOKI, w, h)
 
     def logs(self, event: str, title: str, filters: list = None, desc: str = "",
-             w: int = 24, h: int = 10):
-        """Raw log lines for one event."""
+             w: int = 24, h: int = 10, *, panel_id: int | None = None):
+        """Raw log lines for one event. An explicit ID does not advance the sequence."""
         expr = self._selector(event, filters)
         return self._logs_panel(title, desc, [self._loki_query(expr)],
-                                NO_LOKI, w, h)
+                                NO_LOKI, w, h, panel_id=panel_id)
 
     def _logs_panel(self, title: str, desc: str, targets: list, no_value: str,
-                    w: int, h: int):
+                    w: int, h: int, *, panel_id: int | None = None):
         return self._add({
-            "id": self._next_id(), "type": "logs", "title": title,
+            "id": self._next_id() if panel_id is None else panel_id, "type": "logs", "title": title,
             "description": desc + _loki_note(), "gridPos": {}, "datasource": LOKI_DS,
             # Neutral thresholds even on a logs panel: the gate has no exemption
             # list, because an exemption list is a second thing to audit and the
@@ -822,6 +822,8 @@ class Builder:
             if item.get("row"):
                 continue
             name, element = v2.panel_element(item["spec"], item["w"], item["h"])
+            if name in out:
+                raise ValueError(f"duplicate dashboard element {name}: {item['spec']['title']}")
             out[name] = element
         return out
 

@@ -75,13 +75,13 @@ class TeamsBuilder(Builder):
                 defaults["noValue"] = STAT_NO_VALUE
         return v2.leaf(title, [v2.rowspec("", self._panels[start:])])
 
-    def records(self, event, title, fields, *, filters=(), desc="", h=9):
+    def records(self, event, title, fields, *, filters=(), desc="", h=9, panel_id=None):
         # Loki exposes structured metadata in its per-row labels frame column.
         # The keep stage is also catalog-gated, not a parser for the log body.
         columns = ("tenant_id", *fields)
         keep = Raw("keep " + ", ".join(columns), keys=columns,
                    reason="Project the structured metadata columns used in the table")
-        panel = self.logs(event, title, [*filters, keep], desc + ROW_NOTE, h=h)
+        panel = self.logs(event, title, [*filters, keep], desc + ROW_NOTE, h=h, panel_id=panel_id)
         panel["type"] = "table"
         panel["targets"][0]["maxLines"] = RECORD_LIMIT
         panel["options"] = {"showHeader": True, "sortBy": [{"displayName": "Time", "desc": True}]}
@@ -695,7 +695,9 @@ def detail(b):
 
     roster = {"version": "Version", "participant_id": "Roster row ID", "identity_kind": "Identity kind",
               "id": "Identity ID", "display_name": "Display name", "user_principal_name": "UPN"}
-    panel = b.records("teams.call_participant", "Participant roster by call version", tuple(roster), filters=selected,
+    # Use a fresh deep-link ID without moving the existing panel sequence.
+    panel = b.records("teams.call_participant", "Participant roster by call version", tuple(roster),
+                      filters=selected, panel_id=1001,
                       desc="Graph roster observations for accepted versions, dated at call start. "
                            "Roster row and identity IDs are separate. This is not a join to media endpoints, "
                            "participant join times or quality impact, and is not an atomic source snapshot.")

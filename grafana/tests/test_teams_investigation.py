@@ -33,6 +33,10 @@ def verdict_panel():
 
 
 class TeamsInvestigationTests(unittest.TestCase):
+    def test_roster_and_caller_discovery_use_distinct_stable_panel_links(self):
+        self.assertEqual(panel("Participant roster by call version")["id"], 1001)
+        self.assertEqual(panel("Observed caller UPNs")["id"], 69, "keep the existing Users deep link")
+
     def test_fraction_axes_use_physical_bounds(self):
         for title in ("Packet loss p50 and p95 by media", "Poor-stream share by media"):
             defaults = panel(title)["vizConfig"]["spec"]["fieldConfig"]["defaults"]
