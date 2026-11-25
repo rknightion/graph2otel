@@ -1,0 +1,20 @@
+[
+  {
+    "Identity": "TeamsLab_UK",
+    "NetworkRegionID": "TeamsLab_UK",
+    "Description": "Teams lab 2026-11",
+    "CentralSite": "TeamsLab_UK",
+    "ConfigMetadata": {
+      "Authority": "Tenant"
+    }
+  },
+  {
+    "Identity": "TeamsLab_Cloud",
+    "NetworkRegionID": "TeamsLab_Cloud",
+    "Description": "Teams lab cloud offices",
+    "CentralSite": "TeamsLab_Cloud",
+    "ConfigMetadata": {
+      "Authority": "Tenant"
+    }
+  }
+]
