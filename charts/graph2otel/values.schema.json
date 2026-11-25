@@ -179,10 +179,15 @@
                 "purview.ediscovery_cases",
                 "purview.retention_labels",
                 "purview.sensitivity_labels",
+                "teams.auto_attendants",
+                "teams.call_queues",
                 "teams.call_records",
                 "teams.direct_routing_calls",
+                "teams.network_topology",
                 "teams.phone_numbers",
                 "teams.pstn_calls",
+                "teams.pstn_gateways",
+                "teams.sip_device_policy",
                 "teams.user_configuration",
                 "teams.voice_apps"
             ]

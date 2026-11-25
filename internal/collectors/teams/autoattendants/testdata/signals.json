@@ -1,0 +1,42 @@
+{
+  "Metrics": null,
+  "Logs": [
+    {
+      "EventName": "teams.auto_attendant",
+      "AttrKeys": [
+        "auto_attendant_application_instances",
+        "auto_attendant_application_instances_count",
+        "auto_attendant_authorized_users",
+        "auto_attendant_authorized_users_count",
+        "auto_attendant_call_flow_count",
+        "auto_attendant_call_handling_types",
+        "auto_attendant_call_handling_types_count",
+        "auto_attendant_greeting_texts",
+        "auto_attendant_greeting_texts_count",
+        "auto_attendant_hide_authorized_users_count",
+        "auto_attendant_id",
+        "auto_attendant_language_id",
+        "auto_attendant_mainline_attendant_enabled",
+        "auto_attendant_menu_option_actions",
+        "auto_attendant_menu_option_actions_count",
+        "auto_attendant_menu_option_target_types",
+        "auto_attendant_menu_option_target_types_count",
+        "auto_attendant_menu_prompt_texts",
+        "auto_attendant_menu_prompt_texts_count",
+        "auto_attendant_menu_target_ids",
+        "auto_attendant_menu_target_ids_count",
+        "auto_attendant_name",
+        "auto_attendant_operator_id",
+        "auto_attendant_operator_type",
+        "auto_attendant_schedule_count",
+        "auto_attendant_time_zone_id",
+        "auto_attendant_user_name_extension",
+        "auto_attendant_voice_id",
+        "auto_attendant_voice_response_enabled",
+        "config_hash_version",
+        "config_sha256",
+        "ingest_transport"
+      ]
+    }
+  ]
+}

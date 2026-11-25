@@ -1,0 +1,59 @@
+{
+  "Metrics": [
+    {
+      "Name": "graph2otel.api.unexpected",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
+      "AttrKeys": [
+        "collector",
+        "field",
+        "kind"
+      ]
+    },
+    {
+      "Name": "teams.pstn_gateway.count",
+      "Unit": "{gateway}",
+      "Kind": "gauge",
+      "Description": "Teams Direct Routing gateways by whether they are enabled (enabled=true or false; unknown when the wire carried no boolean). An empty snapshot means no gateway is configured.",
+      "AttrKeys": [
+        "enabled"
+      ]
+    }
+  ],
+  "Logs": [
+    {
+      "EventName": "teams.pstn_gateway",
+      "AttrKeys": [
+        "config_hash_version",
+        "config_sha256",
+        "ingest_transport",
+        "pstn_gateway_authority",
+        "pstn_gateway_bypass_mode",
+        "pstn_gateway_enabled",
+        "pstn_gateway_failover_response_codes",
+        "pstn_gateway_failover_time_seconds",
+        "pstn_gateway_forward_call_history",
+        "pstn_gateway_forward_pai",
+        "pstn_gateway_fqdn",
+        "pstn_gateway_gateway_lbr_enabled_user_override",
+        "pstn_gateway_gateway_site_lbr_enabled",
+        "pstn_gateway_identity",
+        "pstn_gateway_inbound_pstn_number_translation_rules_count",
+        "pstn_gateway_inbound_teams_number_translation_rules_count",
+        "pstn_gateway_invite_with_replaces",
+        "pstn_gateway_ip_address_version",
+        "pstn_gateway_max_concurrent_sessions",
+        "pstn_gateway_media_bypass",
+        "pstn_gateway_media_relay_routing_location_override",
+        "pstn_gateway_outbound_pstn_number_translation_rules_count",
+        "pstn_gateway_outbund_teams_number_translation_rules",
+        "pstn_gateway_outbund_teams_number_translation_rules_count",
+        "pstn_gateway_pidf_lo_supported",
+        "pstn_gateway_proxy_sbc",
+        "pstn_gateway_send_sip_options",
+        "pstn_gateway_sip_signaling_port"
+      ]
+    }
+  ]
+}
