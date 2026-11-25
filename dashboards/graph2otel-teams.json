@@ -261,11 +261,11 @@
           "links": [
             {
               "title": "Call quality",
-              "url": "/d/graph2otel-teams?dtab=Call-quality&from=${__from}&to=${__to}&${__all_variables}"
+              "url": "/d/graph2otel-teams?dtab=call-quality&from=${__from}&to=${__to}&${__all_variables}"
             },
             {
               "title": "Service health",
-              "url": "/d/graph2otel-teams?dtab=Service-health&from=${__from}&to=${__to}&${__all_variables}"
+              "url": "/d/graph2otel-teams?dtab=service-health&from=${__from}&to=${__to}&${__all_variables}"
             }
           ],
           "data": {
@@ -4223,7 +4223,7 @@
                         "value": [
                           {
                             "title": "Open Calls",
-                            "url": "/d/graph2otel-teams?dtab=Calls&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-site=${__value.raw:percentencode}"
+                            "url": "/d/graph2otel-teams?dtab=calls&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-site=${__value.raw:percentencode}"
                           }
                         ]
                       }
@@ -4333,7 +4333,7 @@
                         "value": [
                           {
                             "title": "Open Calls",
-                            "url": "/d/graph2otel-teams?dtab=Calls&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-site=${__value.raw:percentencode}"
+                            "url": "/d/graph2otel-teams?dtab=calls&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-site=${__value.raw:percentencode}"
                           }
                         ]
                       }
@@ -4663,7 +4663,7 @@
                         "value": [
                           {
                             "title": "Open Calls",
-                            "url": "/d/graph2otel-teams?dtab=Calls&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-site=${__value.raw:percentencode}"
+                            "url": "/d/graph2otel-teams?dtab=calls&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-site=${__value.raw:percentencode}"
                           }
                         ]
                       }
@@ -4793,7 +4793,7 @@
                         "value": [
                           {
                             "title": "Open Calls",
-                            "url": "/d/graph2otel-teams?dtab=Calls&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-site=${__value.raw:percentencode}"
+                            "url": "/d/graph2otel-teams?dtab=calls&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-site=${__value.raw:percentencode}"
                           }
                         ]
                       }
@@ -5063,7 +5063,7 @@
                         "value": [
                           {
                             "title": "Open Calls",
-                            "url": "/d/graph2otel-teams?dtab=Calls&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-site=${__value.raw:percentencode}"
+                            "url": "/d/graph2otel-teams?dtab=calls&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-site=${__value.raw:percentencode}"
                           }
                         ]
                       }
@@ -5708,7 +5708,7 @@
                         "value": [
                           {
                             "title": "Open Call detail",
-                            "url": "/d/graph2otel-teams?dtab=Call-detail&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-call_id=${__value.raw:percentencode}"
+                            "url": "/d/graph2otel-teams?dtab=call-detail&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-call_id=${__value.raw:percentencode}"
                           }
                         ]
                       }
@@ -5838,7 +5838,7 @@
                         "value": [
                           {
                             "title": "Open Call detail",
-                            "url": "/d/graph2otel-teams?dtab=Call-detail&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-call_id=${__value.raw:percentencode}"
+                            "url": "/d/graph2otel-teams?dtab=call-detail&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-call_id=${__value.raw:percentencode}"
                           }
                         ]
                       }
@@ -6207,7 +6207,7 @@
                   "links": [
                     {
                       "title": "Open stream timeline at call bounds",
-                      "url": "/d/graph2otel-teams?dtab=Call-detail&viewPanel=59&from=${__data.fields[\"From (padded)\"].numeric}&to=${__data.fields[\"To (padded)\"].numeric}&${datasource:queryparam}&${loki_datasource:queryparam}&${call_id:queryparam}&var-tenant=${__data.fields.Tenant.text:percentencode}",
+                      "url": "/d/graph2otel-teams?dtab=call-detail&viewPanel=59&from=${__data.fields[\"From (padded)\"].numeric}&to=${__data.fields[\"To (padded)\"].numeric}&${datasource:queryparam}&${loki_datasource:queryparam}&${call_id:queryparam}&var-tenant=${__data.fields.Tenant.text:percentencode}",
                       "targetBlank": true
                     }
                   ]
@@ -7637,6 +7637,145 @@
           }
         }
       },
+      "panel-1001": {
+        "kind": "Panel",
+        "spec": {
+          "id": 1001,
+          "title": "Participant roster by call version",
+          "description": "Graph roster observations for accepted versions, dated at call start. Roster row and identity IDs are separate. This is not a join to media endpoints, participant join times or quality impact, and is not an atomic source snapshot. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "loki",
+                      "uid": "${loki_datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "loki",
+                      "datasource": {
+                        "name": "${loki_datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`teams.call_participant` | tenant_id=~\"$tenant\" | label_format g2o_match=`{{if eq \"${call_id:percentencode}\" \"\"}}{{else}}{{if (eq (.call_id | urlquery | replace \"+\" \"%20\") \"${call_id:percentencode}\")}}yes{{end}}{{end}}` | g2o_match=\"yes\" | drop g2o_match | keep tenant_id, version, participant_id, identity_kind, id, display_name, user_principal_name",
+                        "editorMode": "code",
+                        "queryType": "range",
+                        "maxLines": 250
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "extractFields",
+                  "spec": {
+                    "options": {
+                      "source": "labels",
+                      "format": "json",
+                      "replace": true,
+                      "keepTime": true
+                    }
+                  }
+                },
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "indexByName": {
+                        "version": 0,
+                        "participant_id": 1,
+                        "identity_kind": 2,
+                        "id": 3,
+                        "display_name": 4,
+                        "user_principal_name": 5,
+                        "Time": 6,
+                        "tenant_id": 7
+                      },
+                      "renameByName": {
+                        "version": "Version",
+                        "participant_id": "Roster row ID",
+                        "identity_kind": "Identity kind",
+                        "id": "Identity ID",
+                        "display_name": "Display name",
+                        "user_principal_name": "UPN"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "sortBy": [
+                  {
+                    "displayName": "Time",
+                    "desc": true
+                  }
+                ]
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "No data yet. No roster rows visible. Select a tenant and a call ID.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "string"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byType",
+                      "options": "number"
+                    },
+                    "properties": [
+                      {
+                        "id": "noValue",
+                        "value": ""
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
       "panel-68": {
         "kind": "Panel",
         "spec": {
@@ -7817,7 +7956,7 @@
                         "value": [
                           {
                             "title": "Open Users",
-                            "url": "/d/graph2otel-teams?dtab=Users&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-user=${__value.raw:percentencode}"
+                            "url": "/d/graph2otel-teams?dtab=users&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-user=${__value.raw:percentencode}"
                           }
                         ]
                       }
@@ -7981,7 +8120,7 @@
                         "value": [
                           {
                             "title": "Open Users",
-                            "url": "/d/graph2otel-teams?dtab=Users&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-user=${__value.raw:percentencode}"
+                            "url": "/d/graph2otel-teams?dtab=users&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-user=${__value.raw:percentencode}"
                           }
                         ]
                       }
@@ -8145,7 +8284,7 @@
                         "value": [
                           {
                             "title": "Open Users",
-                            "url": "/d/graph2otel-teams?dtab=Users&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-user=${__value.raw:percentencode}"
+                            "url": "/d/graph2otel-teams?dtab=users&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-user=${__value.raw:percentencode}"
                           }
                         ]
                       }
@@ -8275,7 +8414,7 @@
                         "value": [
                           {
                             "title": "Open Call detail",
-                            "url": "/d/graph2otel-teams?dtab=Call-detail&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-call_id=${__value.raw:percentencode}"
+                            "url": "/d/graph2otel-teams?dtab=call-detail&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-call_id=${__value.raw:percentencode}"
                           }
                         ]
                       }
@@ -8405,7 +8544,7 @@
                         "value": [
                           {
                             "title": "Open Call detail",
-                            "url": "/d/graph2otel-teams?dtab=Call-detail&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-call_id=${__value.raw:percentencode}"
+                            "url": "/d/graph2otel-teams?dtab=call-detail&from=${__from}&to=${__to}&${datasource:queryparam}&${loki_datasource:queryparam}&var-tenant=${__data.fields.tenant_id:percentencode}&var-call_id=${__value.raw:percentencode}"
                           }
                         ]
                       }
@@ -15018,6 +15157,19 @@
                                   "element": {
                                     "kind": "ElementReference",
                                     "name": "panel-67"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 93,
+                                  "width": 24,
+                                  "height": 9,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-1001"
                                   }
                                 }
                               }
