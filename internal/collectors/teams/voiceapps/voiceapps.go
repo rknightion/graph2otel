@@ -1,6 +1,8 @@
 // Package voiceapps tails Teams AA/CQ call analytics over the opt-in VAAC
-// user transport. The lag, overlap, and row cap are conservative bounds,
-// not live timing or quota measurements. See the collector reference.
+// user transport. The interval and lag match the reference Teams
+// observability agent's 5-minute collection cycle and 15-minute processing
+// delay. They, the overlap and the row cap are not live timing or quota
+// measurements. See the collector reference.
 package voiceapps
 
 import (
@@ -23,10 +25,13 @@ import (
 )
 
 const (
-	name      = "teams.voice_apps"
-	aaEvent   = "teams.auto_attendant_call"
-	cqEvent   = "teams.call_queue_call"
-	lag       = time.Hour
+	name     = "teams.voice_apps"
+	aaEvent  = "teams.auto_attendant_call"
+	cqEvent  = "teams.call_queue_call"
+	interval = 5 * time.Minute
+	lag      = 15 * time.Minute
+	// Each poll rescans this much behind the watermark, so legs VAAC
+	// publishes later than the lag are still read; SeenIDs drops repeats.
 	overlap   = 6 * time.Hour
 	maxWindow = time.Hour
 )
@@ -39,7 +44,7 @@ type voiceApps struct {
 }
 
 func (*voiceApps) Name() string                         { return name }
-func (*voiceApps) DefaultInterval() time.Duration       { return 15 * time.Minute }
+func (*voiceApps) DefaultInterval() time.Duration       { return interval }
 func (*voiceApps) Lag() time.Duration                   { return lag }
 func (*voiceApps) Profiles() collector.ProfileSet       { return collector.ProfileTeams }
 func (*voiceApps) IngestTransport() telemetry.Transport { return telemetry.TransportVAAC }
