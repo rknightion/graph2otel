@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"log/slog"
 	"math/rand/v2"
 	"sync"
@@ -39,11 +40,14 @@ type Scheduler struct {
 	// staggerWindow bounds the random startup delay applied to each collector's
 	// first tick, to de-synchronize polls (see WithStaggerWindow). Zero disables it.
 	staggerWindow time.Duration
-	logger        *slog.Logger
-	selfObs       bool
-	status        *StatusTracker // optional; records per-collector run outcomes for the status page
-	availability  *availability.Tracker
-	tracer        trace.Tracer // optional; emits one root span per scrape cycle
+	// exportStartSpread is the window over which report-export collectors'
+	// first ticks are deterministically spread (see WithExportStartSpread).
+	exportStartSpread time.Duration
+	logger            *slog.Logger
+	selfObs           bool
+	status            *StatusTracker // optional; records per-collector run outcomes for the status page
+	availability      *availability.Tracker
+	tracer            trace.Tracer // optional; emits one root span per scrape cycle
 	// tenant, when non-empty, is the tenant ID this Scheduler instance polls.
 	// graph2otel runs one Scheduler per configured tenant, so this both (a)
 	// labels every self-obs metric with semconv.AttrTenantID alongside
@@ -65,6 +69,17 @@ type SchedulerOption func(*Scheduler)
 // fire immediately. Defaults to defaultStaggerWindow.
 func WithStaggerWindow(d time.Duration) SchedulerOption {
 	return func(s *Scheduler) { s.staggerWindow = d }
+}
+
+// WithExportStartSpread sets the window over which the first tick of every
+// report-export collector (telemetry.TransportReportExport) is spread. Each one
+// starts at a fixed offset derived from its tenant and name, so about two dozen
+// export jobs do not all queue against the Intune export bucket in the same
+// second at startup (#709). Because the ticker starts after that first run, the
+// offset also keeps their later ticks apart. It applies only while the stagger
+// window is non-zero. Zero disables the spread. Defaults to defaultExportStartSpread.
+func WithExportStartSpread(d time.Duration) SchedulerOption {
+	return func(s *Scheduler) { s.exportStartSpread = d }
 }
 
 // WithClock overrides the time source (used in tests).
@@ -134,12 +149,13 @@ func (s *Scheduler) checkpointKey(name string) string {
 // emitter and checkpoint store.
 func NewScheduler(e telemetry.Emitter, store CheckpointStore, opts ...SchedulerOption) *Scheduler {
 	s := &Scheduler{
-		emitter:       e,
-		store:         store,
-		now:           time.Now,
-		staggerWindow: defaultStaggerWindow,
-		logger:        slog.Default(),
-		selfObs:       true,
+		emitter:           e,
+		store:             store,
+		now:               time.Now,
+		staggerWindow:     defaultStaggerWindow,
+		exportStartSpread: defaultExportStartSpread,
+		logger:            slog.Default(),
+		selfObs:           true,
 	}
 	for _, o := range opts {
 		o(s)
@@ -169,6 +185,11 @@ func (s *Scheduler) Run(ctx context.Context, r *Registry) error {
 // of startup, not 10 minutes later.
 const defaultStaggerWindow = 3 * time.Second
 
+// defaultExportStartSpread is wide enough that ~24 export collectors land about
+// 4s apart, which the 24/min export limiter (one token per 2.5s) can meter
+// without queuing, while a 6h collector's first data still arrives in minutes.
+const defaultExportStartSpread = 90 * time.Second
+
 // coldStartTargetKeyPrefix reserves an internal checkpoint namespace which
 // cannot collide with the ordinary tenant/collector keys. The leading NUL is
 // outside the stable collector-name/config alphabet; appending checkpointKey is
@@ -184,7 +205,7 @@ func (s *Scheduler) runLoop(ctx context.Context, e Entry) {
 	// counts up from here (loop start), so a collector that never succeeds shows
 	// a growing — and therefore alertable — value.
 	lastSuccess := s.now()
-	if d := s.initialDelay(); d > 0 {
+	if d := s.initialDelay(e); d > 0 {
 		t := time.NewTimer(d)
 		select {
 		case <-ctx.Done():
@@ -213,9 +234,33 @@ func (s *Scheduler) runLoop(ctx context.Context, e Entry) {
 	}
 }
 
-func (s *Scheduler) initialDelay() time.Duration {
+// exportStartOffset is a report-export collector's fixed share of the start
+// spread: FNV-1a of "tenant/collector" scaled onto the spread, so it is the same on
+// every start and different for each collector.
+func (s *Scheduler) exportStartOffset(name string) time.Duration {
+	if s.exportStartSpread <= 0 {
+		return 0
+	}
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(s.tenant + "/" + name))
+	// FNV-1a barely moves the high bits for names that differ only in a last
+	// character, so finish with a splitmix64 avalanche before scaling.
+	x := h.Sum64()
+	x ^= x >> 30
+	x *= 0xbf58476d1ce4e5b9
+	x ^= x >> 27
+	x *= 0x94d049bb133111eb
+	x ^= x >> 31
+	frac := float64(x>>11) / (1 << 53) // uniform in [0,1)
+	return time.Duration(frac * float64(s.exportStartSpread))
+}
+
+func (s *Scheduler) initialDelay(e Entry) time.Duration {
 	if s.staggerWindow <= 0 {
 		return 0
+	}
+	if TransportOf(e.Collector) == telemetry.TransportReportExport {
+		return s.exportStartOffset(e.Collector.Name())
 	}
 	return time.Duration(rand.Float64() * float64(s.staggerWindow)) //nolint:gosec // G404: scheduling jitter is not security-sensitive
 }

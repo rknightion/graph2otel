@@ -629,13 +629,15 @@ RULES = [
         "g2o-throttle-saturation",
         "graph2otel sustained Graph API throttling",
         f'sum by (tenant_id, workload) '
-        f'(rate({_m("graph2otel.throttle.count")}[10m]))',
+        f'(rate({_m("graph2otel.throttle.count")}{{workload!="intune-export"}}[10m]))',
         "gt", [0], "15m",
         {"severity": "warning", "category": "throttle", "source": "graph2otel"},
         "Sustained 429s from Microsoft Graph on the {{ $labels.workload }} workload "
         "(tenant {{ $labels.tenant_id }})",
         "rate(graph2otel_throttle_count_total[10m]) (429 responses observed by the "
-        "client-side rate limiter) is above 0 for workload={{ $labels.workload }}, tenant "
+        "client-side rate limiter, every workload except intune-export, whose adaptive "
+        "limiter and in-tick retry absorb 429s; g2o-export-throttle-exhausted covers it "
+        "on impact) is above 0 for workload={{ $labels.workload }}, tenant "
         "{{ $labels.tenant_id }}, sustained for 15m — i.e. throttling that isn't a one-off "
         "blip but is still happening 10-15 minutes later. The rule treats no data as OK: "
         "zero throttle events is the healthy steady state, not an absence worth alerting on. "
@@ -643,6 +645,24 @@ RULES = [
         "5/10s, Identity Protection 1/s, Intune reports-export 48/min, or directory RU "
         "workloads send Retry-After, so silent throttling degrades data freshness before "
         "anything else visibly breaks).",
+        False,
+    ),
+    _alert(
+        "g2o-export-throttle-exhausted",
+        "graph2otel Intune export lost a cycle to throttling",
+        f'sum by (tenant_id, report_name) '
+        f'({teams_quality.counter_increase(_m("graph2otel.export.throttle_exhausted"), "30m")})',
+        "gt", [0], "0m",
+        {"severity": "warning", "category": "throttle", "source": "graph2otel"},
+        "Intune export {{ $labels.report_name }} ended on a 429 (tenant {{ $labels.tenant_id }})",
+        "An Intune report export call ran out of its in-tick throttle retry budget "
+        "(6 retries, 10 minutes) and ended on a 429 in the last 30m, so that tick's "
+        "data was not fetched until the next one. 429s that the retry absorbed do not "
+        "count: they are normal and the adaptive limiter lowers its rate on them "
+        "(graph2otel_throttle_effective_rate_per_minute). The expression keeps the first "
+        "value of a counter series born inside the window, so the first exhaustion after "
+        "a restart still fires. This is the impact signal "
+        "for the intune-export workload, which g2o-throttle-saturation excludes.",
         False,
     ),
     _alert(
@@ -2234,6 +2254,8 @@ DASHBOARD_TARGETS = {
     "g2o-payload-type-mismatch": ("Self-obs", "Payload type-mismatch rate"),
     "g2o-throttle-saturation":
         ("Self-obs", "Throttle (429) rate by workload"),
+    "g2o-export-throttle-exhausted":
+        ("Self-obs", "Exports ended by exhausted throttle budget"),
     "g2o-throttle-budget-consumption":
         ("Self-obs", "Graph-reported throttle budget consumed"),
     "g2o-mdca-uploads-stopped":

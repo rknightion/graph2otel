@@ -17,6 +17,7 @@ import (
 const (
 	metricThrottleCount           = "graph2otel.throttle.count"
 	metricThrottleLimitPercentage = "graph2otel.throttle.limit_percentage"
+	metricThrottleEffectiveRate   = "graph2otel.throttle.effective_rate_per_minute"
 
 	attrWorkload = "workload"
 	attrTenantID = "tenant_id"
@@ -53,18 +54,37 @@ type rateLimitTransport struct {
 func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	wl := ClassifyWorkload(req.URL.Path)
 
+	// The request's time is taken BEFORE it queues for a token. x/time/rate fixes
+	// a queued request's slot at Wait time, under the rate of that moment, so a
+	// request that waited through a decrease still ran under the old rate and
+	// its response must not count against the new one.
+	var issuedAt time.Time
 	if t.limiter != nil {
+		issuedAt = t.limiter.now()
 		if err := t.limiter.Wait(req.Context(), t.tenantID, wl); err != nil {
 			return nil, err
 		}
+		t.emitEffectiveRate(wl)
 	}
 
 	resp, err := t.next.RoundTrip(req)
-	if err != nil || resp == nil || resp.StatusCode != http.StatusTooManyRequests {
+	if err != nil || resp == nil {
+		return resp, err
+	}
+	if resp.StatusCode != http.StatusTooManyRequests {
+		if t.limiter != nil && resp.StatusCode < http.StatusBadRequest {
+			t.limiter.ObserveSuccess(t.tenantID, wl, issuedAt)
+			// Recovery steps happen here, so publish the state they leave.
+			t.emitEffectiveRate(wl)
+		}
 		return resp, err
 	}
 
 	observeThrottleResponse(t.emitter, t.tenantID, resp, wl)
+	if t.limiter != nil {
+		t.limiter.ObserveThrottle(t.tenantID, wl, issuedAt)
+		t.emitEffectiveRate(wl)
+	}
 
 	if parseRetryAfter(resp.Header.Get(headerRetryAfter)) <= 0 {
 		b := t.backoff
@@ -81,6 +101,21 @@ func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error
 	}
 
 	return resp, err
+}
+
+// emitEffectiveRate publishes an adaptive workload's current rate. Non-adaptive
+// workloads publish nothing.
+func (t *rateLimitTransport) emitEffectiveRate(wl Workload) {
+	if t.emitter == nil {
+		return
+	}
+	perMin, ok := t.limiter.EffectiveRatePerMinute(t.tenantID, wl)
+	if !ok {
+		return
+	}
+	t.emitter.Gauge(metricThrottleEffectiveRate, "{request}/min",
+		"Current client-side request rate of an adaptive workload limiter, lowered on 429s and raised after runs of successful requests.",
+		perMin, telemetry.Attrs{attrWorkload: string(wl), attrTenantID: t.tenantID})
 }
 
 // observeThrottleResponse records the bounded throttle self-obs signals for

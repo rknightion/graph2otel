@@ -40,6 +40,16 @@
         "report_name",
         "tenant_id"
       ]
+    },
+    {
+      "Name": "graph2otel.export.throttle_exhausted",
+      "Unit": "{job}",
+      "Kind": "sum",
+      "Description": "Intune export calls that ended on a 429 because the in-tick throttle retry budget was exhausted.",
+      "AttrKeys": [
+        "report_name",
+        "tenant_id"
+      ]
     }
   ],
   "Logs": null

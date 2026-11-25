@@ -313,6 +313,7 @@ func (c *Client) Export(ctx context.Context, req Request, e telemetry.Emitter) (
 
 	id, err := c.resumeOrCreate(ctx, req, format, throttle)
 	if err != nil {
+		c.noteThrottleExhausted(e, req.ReportName, err)
 		return nil, err
 	}
 
@@ -326,6 +327,7 @@ func (c *Client) Export(ctx context.Context, req Request, e telemetry.Emitter) (
 			c.emitTerminal(e, req.ReportName, "failed", pollCount, c.opts.Now().Sub(start), 0)
 			return nil, c.joinTerminalClear(req.ReportName, err)
 		}
+		c.noteThrottleExhausted(e, req.ReportName, err)
 		return nil, err
 	}
 
@@ -602,6 +604,20 @@ func (r *throttleRetry) wait(ctx context.Context, err error) (bool, error) {
 	r.retries++
 	r.spent += d
 	return true, nil
+}
+
+// noteThrottleExhausted counts an Export call that ended on a 429 because its
+// in-tick retry budget ran out: the throttle cost this tick's data, which the
+// raw graph2otel.throttle.count (it also counts every 429 the retry absorbed)
+// cannot say. It is the signal the g2o-export-throttle-exhausted alert uses.
+func (c *Client) noteThrottleExhausted(e telemetry.Emitter, reportName string, err error) {
+	var se *graphclient.HTTPStatusError
+	if !errors.As(err, &se) || se.StatusCode != http.StatusTooManyRequests {
+		return
+	}
+	e.Counter("graph2otel.export.throttle_exhausted", "{job}",
+		"Intune export calls that ended on a 429 because the in-tick throttle retry budget was exhausted.", 1,
+		telemetry.Attrs{"report_name": reportName})
 }
 
 // emitTerminal records the graph2otel.export.* self-obs metrics for one

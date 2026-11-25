@@ -2,12 +2,12 @@
 
 graph2otel ships two kinds of Grafana asset, each in its own top-level
 directory. The generated inventory is drift-gated at
-**2 dashboards, 26 alert rules, and 11 paused detection examples**:
+**2 dashboards, 27 alert rules, and 11 paused detection examples**:
 
 | Directory | Assets | Format | Target Grafana Cloud folder |
 | --- | --- | --- | --- |
 | `dashboards/` | 2 dashboards (**generated**) | Grafana **v2 dynamic dashboard** resource (`dashboard.grafana.app/v2`) | folder of your choice |
-| `alerts/rules/` | 26 alert rules (**generated**) | Grafana **App Platform** `AlertRule` (`rules.alerting.grafana.app/v0alpha1`) | `graph2otel` |
+| `alerts/rules/` | 27 alert rules (**generated**) | Grafana **App Platform** `AlertRule` (`rules.alerting.grafana.app/v0alpha1`) | `graph2otel` |
 | `alerts/rules/` | 11 detection examples (**generated**, all **paused**) | same, separate rule group | `graph2otel detections` |
 
 The `gcx` CLI is the manual import path. The repository-managed GitSync copy
