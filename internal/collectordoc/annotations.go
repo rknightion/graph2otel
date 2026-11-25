@@ -809,7 +809,7 @@ var annotations = map[string]Annotation{
 		Source:   "`/communications/callRecords/getPstnCalls(fromDateTime=…,toDateTime=…)` (v1.0)",
 	},
 	"teams.direct_routing_calls": {
-		Collects: "Direct Routing attempt logs, `teams.direct_routing.calls{trunk_fqdn,outcome,sip_class}` and `teams.direct_routing.network_effectiveness_ratio{trunk_fqdn}` (answered or SIP 486/600 busy, divided by all new attempts in the latest successful poll). The central telemetry budget limits trunk series. Excess attempt counts fold into `other`; excess effectiveness ratios are dropped rather than combined. Missing or malformed names share `unknown`; logs retain the original trunk. Shape and overlap are provisional, tested on synthetic docs-derived rows",
+		Collects: "Direct Routing attempt logs, `teams.direct_routing.calls{trunk_fqdn,outcome,sip_class}` and `teams.direct_routing.network_effectiveness_ratio{trunk_fqdn}` (answered or SIP 486/600 busy, divided by all new attempts in the latest successful poll). The central telemetry budget limits trunk series. Excess attempt counts fold into `other`; excess effectiveness ratios are dropped rather than combined. Missing or malformed names share `unknown`; logs retain the original trunk. A failed attempt has no start time on the wire, so its log takes the invite time, then the failure time. Overlap is provisional",
 		Source:   "`/communications/callRecords/getDirectRoutingCalls(fromDateTime=…,toDateTime=…)` (v1.0)",
 	},
 

@@ -19,6 +19,14 @@ issue. Do not record correction narratives here — those live on the issues.
   below 90 days. The collectors also respect `backfill.initial_lookback` and
   the shorter OTLP event horizon, rather than trying to ingest all of Graph's
   retained call history on startup.
+- **A failed Direct Routing attempt has no start time**
+  `[live-measured 2026-11-25, #675 (PSTN and Direct Routing live check)]`.
+  `getDirectRoutingCalls` returns `startDateTime: null` and `endDateTime: null` on
+  every failed attempt, with `inviteDateTime` and `failureDateTime` set and
+  `duration` 0. The collector times a row by start, then invite, then failure,
+  and drops it only when none parses. `mediaPathLocation` can be an empty
+  string; it is treated as absent. Whether `getPstnCalls` returns failed calls
+  at all is not yet measured, and its row has no invite or failure time.
 - **Dedicated `teams-phone` budget** `[docs-only]`: Microsoft's
   [PSTN call records limits](https://learn.microsoft.com/graph/throttling-limits#pstn-call-records-limits)
   give 200 requests per minute per app per tenant and 50 per minute per
