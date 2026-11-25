@@ -17,8 +17,16 @@ import (
 
 const (
 	base = "https://graph.microsoft.com/v1.0"
+	// The default cadence matches the reference Teams observability agent:
+	// one collection cycle every 5 minutes, each ending 15 minutes before
+	// now (its processing delay). Neither value is live-measured here.
+	// Operators can still set collectors.<name>.interval.
+	interval = 5 * time.Minute
+	lag      = 15 * time.Minute
 	// Until delivery lag is measured, scan a day of overlap behind the
-	// completed window. The scheduler already trails the wall clock by 15m.
+	// completed window, so rows Graph publishes later than the 15-minute
+	// lag are still read on later polls; seen-id dedupe drops repeats.
+	// The teams-phone limiter bounds the request rate whatever the cadence.
 	overlap = 24 * time.Hour
 	// Leave room for overlap within the sink's event horizon even when
 	// the scheduler is draining a backlog.
@@ -32,7 +40,7 @@ type Window struct {
 
 // New builds a Teams phone report poller for a single tenant and function.
 func New(d collectors.WindowDeps, name, function string, mapper func(map[string]any) (string, telemetry.Event)) *Window {
-	return &Window{logpipeline.NewLogCollector(name, 15*time.Minute, 15*time.Minute, d.TenantID, logpipeline.EndpointConfig{
+	return &Window{logpipeline.NewLogCollector(name, interval, lag, d.TenantID, logpipeline.EndpointConfig{
 		Path: "/communications/callRecords/" + function, CheckpointKey: name,
 		CollectorName: name, TimeField: "startDateTime", NoServerFilter: true,
 		Overlap: overlap, Map: mapper,
