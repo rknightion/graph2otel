@@ -11123,7 +11123,7 @@
         "spec": {
           "id": 1010,
           "title": "Reported effective policy assignments",
-          "description": "Latest metric export visible at the selected range end, per tenant. Counts assignments returned by Graph, not distinct users or policy definitions. Policy types outside the known set are counted as unknown and kept verbatim in the logs.",
+          "description": "Latest metric export visible at the selected range end, per tenant. Counts assignments returned by Graph, not distinct users or policy definitions. A complete poll reports zero for absent policy buckets. Types outside the known set count as unknown and are kept verbatim in the logs.",
           "links": [],
           "data": {
             "kind": "QueryGroup",

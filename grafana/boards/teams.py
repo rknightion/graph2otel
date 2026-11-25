@@ -949,7 +949,8 @@ def inventory(b):
     b.raw("Reported effective policy assignments", [f"sum by (tenant_id, policy_type) ({latest(policies)})"],
           viz="table", panel_id=1010,
           desc=at_end + "Counts assignments returned by Graph, not distinct users or policy definitions. "
-          "Policy types outside the known set are counted as unknown and kept verbatim in the logs.")
+          "A complete poll reports zero for absent policy buckets. Types outside the known set count as unknown "
+          "and are kept verbatim in the logs.")
     collectors = ',collector=~"teams[.](phone_numbers|user_configuration)"'
     finished = selector("graph2otel.scrape.last_timestamp", collectors)
     success = selector("graph2otel.scrape.success", collectors)

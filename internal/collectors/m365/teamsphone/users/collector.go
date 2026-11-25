@@ -24,7 +24,8 @@ const (
 
 var (
 	accountTypes = wirecheck.NewEnum("user", "resourceAccount", "guest", "sfbOnPremUser", "unknown", "unknownFutureValue", "ineligibleUser")
-	policyTypes  = wirecheck.NewEnum("TeamsCallingPolicy", "OnlineVoiceRoutingPolicy")
+	policyKinds  = []string{"TeamsCallingPolicy", "OnlineVoiceRoutingPolicy"}
+	policyTypes  = wirecheck.NewEnum(policyKinds...)
 )
 
 // The two nested arrays were populated in the poller's v1.0 list response
@@ -71,7 +72,12 @@ func (c users) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recor
 		return err
 	}
 	counts := map[userBucket]int{}
-	policies := map[string]int{}
+	// A complete empty poll must supersede old samples still in the
+	// backend lookback. Emit zero for the fixed buckets, not for entity IDs.
+	policies := map[string]int{"unknown": 0}
+	for _, kind := range policyKinds {
+		policies[kind] = 0
+	}
 	for _, u := range rows {
 		enabled := "unknown"
 		if u.EnterpriseVoiceEnabled != nil {

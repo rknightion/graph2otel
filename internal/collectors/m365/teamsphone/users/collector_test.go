@@ -6,7 +6,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/rknightion/graph2otel/internal/collectors/m365/teamsphone/internal/inventory"
 	"github.com/rknightion/graph2otel/internal/collectors/m365/teamsphone/internal/phonefixture"
+	"github.com/rknightion/graph2otel/internal/recordoutcome"
+	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
 
 const userURL = "https://graph.microsoft.com/v1.0/admin/teams/userConfigurations"
@@ -44,6 +47,39 @@ func TestUserConfigurationsFromGraph(t *testing.T) {
 		twins[1].Attrs["enterprise_voice_enabled"] != "false" || twins[2].Attrs["enterprise_voice_enabled"] != "" ||
 		twins[2].Attrs["account_type"] != "example-new-type" {
 		t.Errorf("user twins = %+v", twins)
+	}
+}
+
+func TestSuccessfulEmptyPolicyPollPublishesZeroForEachBoundedBucket(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		twins      int
+	}{
+		{"no assignments", `{"value":[` + voiceUser + `]}`, 1},
+		{"no users", `{"value":[]}`, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := users{inventory.New(phonefixture.Graph{userURL: tc.body}, usersName, usersScope, nil)}
+			rec := telemetrytest.New()
+			if err := c.Collect(t.Context(), rec.Emitter(), recordoutcome.NewRecorder()); err != nil {
+				t.Fatal(err)
+			}
+			if len(rec.LogRecords()) != tc.twins {
+				t.Fatalf("got %d user twins; want %d", len(rec.LogRecords()), tc.twins)
+			}
+			points := rec.MetricPoints("m365.teams.user_configuration.effective_policy_assignments")
+			want := map[string]float64{"TeamsCallingPolicy": 0, "OnlineVoiceRoutingPolicy": 0, "unknown": 0}
+			if len(points) != len(want) {
+				t.Fatalf("got %d policy points after a complete empty policy poll; want %d explicit zeroes", len(points), len(want))
+			}
+			got := map[string]float64{}
+			for _, point := range points {
+				got[point.Attrs["policy_type"]] = point.Value
+			}
+			if !maps.Equal(got, want) {
+				t.Errorf("policy points = %v; want %v", got, want)
+			}
+		})
 	}
 }
 

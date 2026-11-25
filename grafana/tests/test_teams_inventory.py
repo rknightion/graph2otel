@@ -70,6 +70,20 @@ class TeamsInventoryTests(unittest.TestCase):
                   query("Enterprise Voice enabled users", [sample(3, tenant_id="one"), sample(0, tenant_id="two")])]
         self.assert_queries(fixtures, checks)
 
+    def test_empty_policy_export_replaces_old_policy_values_in_lookback(self):
+        cat = catalog.load()
+        metric = cat.metric("m365.teams.user_configuration.effective_policy_assignments").prom
+        title = "Reported effective policy assignments"
+        spec, = [target["spec"]["query"]["spec"]
+                 for target in inventory_panels(cat)[title]["data"]["spec"]["queries"]]
+        expr = spec["expr"].replace("$tenant", ".*")
+        buckets = {"TeamsCallingPolicy": 3, "OnlineVoiceRoutingPolicy": 2, "unknown": 1}
+        fixtures = [{"series": f'{metric}{{tenant_id="fixture",policy_type="{kind}"}}', "values": f"{old} 0 _"}
+                    for kind, old in buckets.items()]
+        self.assert_queries(fixtures, [{"expr": expr, "eval_time": when, "exp_samples": [
+            {"labels": f'{{tenant_id="fixture",policy_type="{kind}"}}', "value": old if when == "0m" else 0}
+            for kind, old in buckets.items()]} for when in ("0m", "2m")])
+
     def test_last_successful_poll_is_not_the_last_attempt(self):
         cat = catalog.load()
         panels = inventory_panels(cat)
