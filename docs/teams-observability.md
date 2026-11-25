@@ -139,10 +139,11 @@ Teams audit is separate from calls. The existing [Teams audit filter](o365-manag
 selects records in the wider M365 audit feed, not the Teams-only profile.
 Filtering by record type does not provide samples or mappings for nested Teams
 payloads.
-Likewise, Phone inventory covers number assignments and the supported fields
-of user configuration. It does not map nested `telephoneNumbers` or
-`effectivePolicyAssignments`, or emit a policy count. See the
-[Phone inventory boundary](graph-api-gotchas.md#teams-phone-inventory).
+Phone inventory keeps the reported number and effective policy assignments as
+structured log evidence. The bounded policy gauge counts reported assignments,
+not users or policy definitions. The capped dashboard tables show history;
+use the [inventory read-back](signals.md#reading-a-complete-teams-phone-inventory)
+to check one completed poll and its delivered rows.
 
 ### What not to infer from quality metrics
 
