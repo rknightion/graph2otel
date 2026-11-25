@@ -22,12 +22,14 @@
     {
       "EventName": "teams.pstn_call",
       "AttrKeys": [
+        "call_duration_source",
         "call_id",
         "call_type",
         "callee_number",
         "caller_number",
         "charge",
         "conference_id",
+        "connection_charge",
         "connectivity_type",
         "currency",
         "destination_context",
@@ -40,6 +42,8 @@
         "license_capability",
         "operator",
         "start_time",
+        "tenant_country_code",
+        "usage_country_code",
         "user_display_name",
         "user_id",
         "user_principal_name"

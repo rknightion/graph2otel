@@ -1,5 +1,5 @@
-// Package pstncalls ingests v1.0 PSTN usage rows. Its wire shape is docs-derived;
-// neither call delivery lag nor connectivityType values are live-verified.
+// Package pstncalls ingests v1.0 PSTN usage rows. Delivery lag and the
+// connectivityType value set are not live-verified.
 package pstncalls
 
 import (
@@ -29,6 +29,10 @@ var fields = map[string]string{
 	"charge": semconv.AttrCharge, "currency": semconv.AttrCurrency, "destinationName": semconv.AttrDestinationName,
 	"destinationContext": semconv.AttrDestinationContext, "operator": semconv.AttrOperator, "licenseCapability": semconv.AttrLicenseCapability,
 	"inventoryType": semconv.AttrInventoryType, "connectivityType": semconv.AttrConnectivityType,
+	// These optional dimensions were present on both poller rows
+	// [live-measured 2026-11-25, #708 (Teams observability review)]. Log only.
+	"usageCountryCode": semconv.AttrUsageCountryCode, "tenantCountryCode": semconv.AttrTenantCountryCode,
+	"connectionCharge": semconv.AttrConnectionCharge, "callDurationSource": semconv.AttrCallDurationSource,
 }
 
 // The PSTN usage report documents these call types. Unknown values keep their

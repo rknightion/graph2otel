@@ -11287,15 +11287,30 @@
       ]
     },
     {
+      "event_name": "teams.direct_routing_poll",
+      "domain": "teams",
+      "attr_keys": [
+        "effective_attempts",
+        "poll_attempts",
+        "source_success_sip_4xx",
+        "trunk_fqdn"
+      ],
+      "packages": [
+        "internal/collectors/teams/directroutingcalls"
+      ]
+    },
+    {
       "event_name": "teams.pstn_call",
       "domain": "teams",
       "attr_keys": [
+        "call_duration_source",
         "call_id",
         "call_type",
         "callee_number",
         "caller_number",
         "charge",
         "conference_id",
+        "connection_charge",
         "connectivity_type",
         "currency",
         "destination_context",
@@ -11308,6 +11323,8 @@
         "license_capability",
         "operator",
         "start_time",
+        "tenant_country_code",
+        "usage_country_code",
         "user_display_name",
         "user_id",
         "user_principal_name"

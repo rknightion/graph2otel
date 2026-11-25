@@ -59,6 +59,15 @@
         "user_id",
         "user_principal_name"
       ]
+    },
+    {
+      "EventName": "teams.direct_routing_poll",
+      "AttrKeys": [
+        "effective_attempts",
+        "poll_attempts",
+        "source_success_sip_4xx",
+        "trunk_fqdn"
+      ]
     }
   ]
 }

@@ -5,6 +5,8 @@ package directroutingcalls
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -54,8 +56,7 @@ func mapRow(row map[string]any) (string, telemetry.Event) {
 	return id, telemetry.Event{Name: "teams.direct_routing_call", Body: "Teams Direct Routing call", Attrs: attrs, Timestamp: eventTime(row)}
 }
 
-// eventTime is the attempt's start, or for a failed attempt (startDateTime
-// null) its invite, the attempt's own start, then its failure. A row with
+// eventTime is the attempt's start, then invite, then failure. A row with
 // none of the three parseable stays zero, so the pipeline drops it rather
 // than stamping arrival time.
 func eventTime(row map[string]any) time.Time {
@@ -70,7 +71,7 @@ func eventTime(row map[string]any) time.Time {
 
 type dimensions struct{ trunk, outcome, sipClass string }
 
-type effectiveness struct{ effective, attempts float64 }
+type effectiveness struct{ effective, attempts, sourceSuccess4xx float64 }
 
 func (c *poller) CollectWindow(ctx context.Context, from, to time.Time, e telemetry.Emitter, outcomes *recordoutcome.Recorder) (time.Time, error) {
 	counts := make(map[dimensions]float64)
@@ -81,9 +82,13 @@ func (c *poller) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 		outcome, sipClass := classify(ev.Attrs)
 		counts[dimensions{trunk, outcome, sipClass}]++
 		ratio := ratios[trunk]
+		// The denominator includes every newly accepted attempt, even unknown outcomes.
 		ratio.attempts++
 		if outcome == "answered" || outcome == "busy" {
 			ratio.effective++
+		}
+		if outcome == "answered" && sipClass == "4xx" {
+			ratio.sourceSuccess4xx++
 		}
 		ratios[trunk] = ratio
 	}}
@@ -96,8 +101,17 @@ func (c *poller) CollectWindow(ctx context.Context, from, to time.Time, e teleme
 			telemetry.Attrs{semconv.AttrTrunkFQDN: key.trunk, semconv.AttrOutcome: key.outcome, semconv.AttrSIPClass: key.sipClass})
 	}
 	points := make([]telemetry.GaugePoint, 0, len(ratios))
+	finished := time.Now().UTC()
 	for trunk, ratio := range ratios {
 		points = append(points, telemetry.GaugePoint{Value: ratio.effective / ratio.attempts, Attrs: telemetry.Attrs{semconv.AttrTrunkFQDN: trunk}})
+		// Keep all three counts in one observation so series admission cannot
+		// retain the numerator and discard or fold its denominator separately.
+		// Loki can coalesce equal timestamps and bodies in a stream regardless
+		// of metadata. Keep the trunk in metadata and use its digest in the body.
+		body := fmt.Sprintf("Teams Direct Routing poll effectiveness (%x)", sha256.Sum256([]byte(trunk)))
+		e.LogEvent(telemetry.Event{Name: "teams.direct_routing_poll", Body: body, Timestamp: finished,
+			Attrs: telemetry.Attrs{semconv.AttrTrunkFQDN: trunk, semconv.AttrPollAttempts: int64(ratio.attempts),
+				semconv.AttrEffectiveAttempts: int64(ratio.effective), semconv.AttrSourceSuccessSIP4xx: int64(ratio.sourceSuccess4xx)}})
 	}
 	e.GaugeSnapshot("teams.direct_routing.network_effectiveness_ratio", semconv.UnitDimensionless,
 		"Fraction of new Teams Direct Routing attempts that answered or reached a busy user, in the latest successful poll", points)
@@ -122,6 +136,8 @@ func classify(attrs telemetry.Attrs) (outcome, sipClass string) {
 	success, hasSuccess := attrs[semconv.AttrSuccessfulCall].(bool)
 	switch {
 	case success:
+		// The source flag defines this outcome even when SIP disagrees. The
+		// SIP class and raw final code remain separate evidence.
 		outcome = "answered"
 	case code == 486 || code == 600: // Busy Here or Busy Everywhere (RFC 3261).
 		outcome = "busy"

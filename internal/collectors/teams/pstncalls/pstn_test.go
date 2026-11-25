@@ -77,6 +77,17 @@ func TestPSTNFixtureReplay(t *testing.T) {
 		b.Attrs["connectivity_type"] != "OperatorConnect" || b.Attrs["charge"] != "" {
 		t.Fatalf("second PSTN call lost detail: %+v", b)
 	}
+	for k, want := range map[string]string{
+		"usage_country_code": "US", "tenant_country_code": "US",
+		"connection_charge": "0", "call_duration_source": "syntheticDurationSource",
+	} {
+		if got := byID["fixture-call-a"].Attrs[k]; got != want {
+			t.Errorf("PSTN %s is %q, want %q", k, got, want)
+		}
+		if _, present := byID["fixture-call-b"].Attrs[k]; present {
+			t.Errorf("PSTN emitted %s for a row that did not carry it", k)
+		}
+	}
 	if row := byID["fixture-call-c"]; !row.Timestamp.Equal(late) {
 		t.Fatalf("late call was lost or misdated: %+v", row)
 	}

@@ -54,6 +54,12 @@ func TestDirectRoutingKeepsFailedAttemptsWithoutStartTime(t *testing.T) {
 		"fixture-answered-out": start, "fixture-failure-only": failure,
 	}
 	for _, log := range rec.LogRecords() {
+		if log.EventName == "teams.direct_routing_poll" {
+			if log.Attrs["poll_attempts"] != "4" || log.Attrs["effective_attempts"] != "1" {
+				t.Fatalf("poll summary included a dropped row or lost an attempt: %+v", log)
+			}
+			continue
+		}
 		id := log.Attrs["id"]
 		ts, ok := want[id]
 		if !ok {

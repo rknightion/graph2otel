@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -61,7 +62,9 @@ func TestDirectRoutingFixtureReplay(t *testing.T) {
 	if p := rec.MetricPoints(ratioMetric); len(p) != 0 {
 		t.Fatalf("poll without new attempts must not emit a ratio: %+v", p)
 	}
-	logs := rec.LogRecords()
+	logs := slices.DeleteFunc(rec.LogRecords(), func(log telemetrytest.LogRecord) bool {
+		return log.EventName != "teams.direct_routing_call"
+	})
 	if len(logs) != 4 || len(fetch.pages) != 0 {
 		t.Fatalf("got %d logs and %d unused replay pages; want 4 logs and 0 pages", len(logs), len(fetch.pages))
 	}
@@ -96,6 +99,60 @@ func TestDirectRoutingFixtureReplay(t *testing.T) {
 	}
 	if len(want) != 0 {
 		t.Fatalf("missing attempt counts: %v", want)
+	}
+}
+
+func TestDirectRoutingKeepsSourceSuccessAndSIPConflict(t *testing.T) {
+	to := time.Now().UTC().Truncate(time.Second)
+	from := to.Add(-3 * time.Hour)
+	start := to.Add(-time.Hour).Format(time.RFC3339)
+	const trunk = "sbc.example.invalid"
+	rows := []map[string]any{
+		{"id": "fixture-success-403", "startDateTime": start, "trunkFullyQualifiedDomainName": trunk,
+			"successfulCall": true, "finalSipCode": float64(403)},
+		{"id": "fixture-busy", "startDateTime": start, "trunkFullyQualifiedDomainName": trunk,
+			"successfulCall": false, "finalSipCode": float64(486)},
+		{"id": "fixture-unknown", "startDateTime": start, "trunkFullyQualifiedDomainName": trunk},
+	}
+	fetch := &replay{t: t, pages: []page{{url: initialURL(from, to), rows: rows}}}
+	c := newPoller(collectors.WindowDeps{TenantID: "fixture-tenant", Store: checkpoint.NewStore(t.TempDir()), Fetcher: fetch})
+	rec := telemetrytest.New()
+	if _, err := c.CollectWindow(t.Context(), from, to, rec.Emitter(), nil); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, log := range rec.LogRecords() {
+		if log.Attrs["id"] == "fixture-success-403" {
+			found = true
+			if log.Attrs["successful_call"] != "true" || log.Attrs["final_sip_code"] != "403" {
+				t.Fatalf("attempt must preserve both source success and SIP 403: %+v", log.Attrs)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("missing attempt with source success and SIP 403")
+	}
+	want := map[string]float64{"answered/4xx": 1, "busy/4xx": 1, "unknown/unknown": 1}
+	for _, p := range rec.MetricPoints(countMetric) {
+		key := p.Attrs["outcome"] + "/" + p.Attrs["sip_class"]
+		if p.Value != want[key] || p.Attrs["trunk_fqdn"] != trunk {
+			t.Fatalf("unexpected attempt count: %+v", p)
+		}
+		delete(want, key)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing attempt counts: %v", want)
+	}
+	// Source success and busy are effective. The unclassified attempt is
+	// still in the denominator; a 4xx is not necessarily an ineffective call.
+	assertRatio(t, rec, 2.0/3)
+	polls := slices.DeleteFunc(rec.LogRecords(), func(log telemetrytest.LogRecord) bool {
+		return log.EventName != "teams.direct_routing_poll"
+	})
+	if len(polls) != 1 || polls[0].Attrs["trunk_fqdn"] != trunk || polls[0].Attrs["poll_attempts"] != "3" ||
+		polls[0].Attrs["effective_attempts"] != "2" || polls[0].Attrs["source_success_sip_4xx"] != "1" ||
+		!polls[0].Timestamp.After(to.Add(-time.Second)) {
+		t.Fatalf("missing joint counts at poll time: %+v", polls)
 	}
 }
 
@@ -136,9 +193,28 @@ func TestDirectRoutingUsesCentralTrunkBudget(t *testing.T) {
 			t.Fatalf("non-additive ratio must not be folded: %+v", p)
 		}
 	}
-	logs := rec.LogRecords()
-	if len(logs) != 40 || logs[39].Attrs["trunk_fqdn"] != "trunk-39.example.invalid" {
-		t.Fatalf("got %d log rows, want all 40 raw trunk logs", len(logs))
+	var logs int
+	polls := make(map[string]struct{})
+	bodies := make(map[string]struct{})
+	for _, event := range rec.LogRecords() {
+		switch event.EventName {
+		case "teams.direct_routing_call":
+			logs++
+			if logs == 40 && event.Attrs["trunk_fqdn"] != "trunk-39.example.invalid" {
+				t.Fatalf("raw trunk was folded: %+v", event)
+			}
+		case "teams.direct_routing_poll":
+			name := event.Attrs["trunk_fqdn"]
+			if !strings.HasPrefix(name, "trunk-") || event.Attrs["poll_attempts"] != "1" ||
+				event.Attrs["effective_attempts"] != "1" || event.Attrs["source_success_sip_4xx"] != "0" {
+				t.Fatalf("poll counts split by the metric budget: %+v", event)
+			}
+			polls[name] = struct{}{}
+			bodies[event.Body] = struct{}{}
+		}
+	}
+	if logs != 40 || len(polls) != 40 || len(bodies) != 40 {
+		t.Fatalf("got %d source rows and %d poll summaries with %d distinct bodies; want 40 of each", logs, len(polls), len(bodies))
 	}
 }
 
