@@ -161,6 +161,8 @@ config:
       tenant_id: "00000000-0000-0000-0000-000000000000"
       # -- Optional expected application ID. A non-secret consistency assertion only; never credential selection.
       client_id: ""
+      # -- Mount a distinct 64-hex-character secret file per opted-in tenant. Only the path belongs here.
+      call_notification_client_state_file: ""
       # profiles: [teams] # Replace the global list for this tenant.
       # teams:
       #   geoip:
@@ -231,6 +233,18 @@ config:
     enabled: true
     addr: ":9090"
     refresh_interval: 5s
+
+  # -- Dedicated HTTPS receiver and ClusterIP Service for Teams call records. Off by default; no ingress is created.
+  call_notifications:
+    enabled: false
+    # -- Explicit pod bind address and port (different from admin), e.g. ":8443".
+    addr: ""
+    # -- Graph-facing HTTPS callback ending in /graph/call-records.
+    public_url: ""
+    # -- Absolute path to the mounted PEM certificate chain; use extraVolumeMounts.
+    tls_cert_file: ""
+    # -- Absolute path to the mounted PEM private key; use extraVolumeMounts.
+    tls_key_file: ""
 
   # -- Optional Grafana Pyroscope continuous profiling (default off). Has no
   # effect on the exporter's core job and a failure to reach Pyroscope is

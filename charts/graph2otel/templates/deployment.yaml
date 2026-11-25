@@ -51,13 +51,19 @@ spec:
           {{- end }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          {{- if .Values.config.admin.enabled }}
-          # Liveness answers only whether the process and admin server are
-          # running. Readiness latches after the first successful collector run.
-          # Only rendered when config.admin.enabled; the binary defaults it off.
+          {{- if or .Values.config.admin.enabled .Values.config.call_notifications.enabled }}
           ports:
+            {{- if .Values.config.admin.enabled }}
             - name: admin
               containerPort: {{ .Values.config.admin.addr | splitList ":" | last | int }}
+            {{- end }}
+            {{- if .Values.config.call_notifications.enabled }}
+            - name: callnotify
+              containerPort: {{ include "graph2otel.callNotificationPort" . }}
+            {{- end }}
+          {{- end }}
+          {{- if .Values.config.admin.enabled }}
+          # Only the admin server answers liveness and readiness checks.
           livenessProbe:
             httpGet:
               path: /healthz

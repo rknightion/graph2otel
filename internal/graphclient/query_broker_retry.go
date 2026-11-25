@@ -33,7 +33,17 @@ type queryBrokerRetryTransport struct {
 	tenantID          string
 }
 
+type noGraphRetryKey struct{}
+
 func (t *queryBrokerRetryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.Context().Value(noGraphRetryKey{}) == true {
+		// A subscription create must reconcile an ambiguous result by listing,
+		// not replaying the write. Disable both Kiota and query-broker retries.
+		options := &nethttplibrary.RetryHandlerOptions{
+			ShouldRetry: func(time.Duration, int, *http.Request, *http.Response) bool { return false },
+		}
+		return t.next.RoundTrip(req.Clone(context.WithValue(req.Context(), options.GetKey(), options)))
+	}
 	maxRetries := t.maxRetries
 	if maxRetries <= 0 {
 		maxRetries = defaultQueryBrokerRetries

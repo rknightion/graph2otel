@@ -39,6 +39,7 @@ profiles: [graph] # Default collector profiles for all tenants: graph, teams, or
 tenants:
   - tenant_id: "00000000-0000-0000-0000-000000000000" # hyphenated Entra directory GUID only
     client_id: "" # optional expected app ID; an assertion, not credential selection
+    call_notification_client_state_file: "" # Opt in when call_notifications is enabled; mount a distinct 64-hex-character secret file.
     # profiles: [teams] # Replace the global profile list for this tenant.
     # Optional offline enrichment of Teams call-stream logs; mount your own MMDBs.
     # teams:
@@ -256,6 +257,14 @@ admin:
   enabled: false # run the admin health/readiness/status HTTP endpoint
   addr: ":9090" # bind address for the admin endpoint
   refresh_interval: 5s # how often the status page re-polls /api/status.json (1s freshness ticker is independent)
+
+# Optional, separate Teams call-record HTTPS receiver. See docs/call-notifications.md.
+call_notifications:
+  enabled: false # Explicitly enable the dedicated TLS listener; polling remains active.
+  addr: "" # Explicit bind address, e.g. ":8443"; must not use the admin port.
+  public_url: "" # Graph-facing HTTPS URL ending in /graph/call-records, with no query or credentials.
+  tls_cert_file: "" # Absolute path to the mounted PEM certificate chain.
+  tls_key_file: "" # Absolute path to the mounted PEM private key; never set the key inline.
 
 # profiling enables optional Grafana Pyroscope continuous profiling (default
 # off). It has no effect on the exporter's core job and a failure to reach

@@ -70,6 +70,8 @@ type Config struct {
 	Collectors map[string]CollectorConfig `yaml:"collectors"`
 	// Admin configures the operator health/status endpoint (#12).
 	Admin AdminConfig `yaml:"admin"`
+	// CallNotifications configures a separate, optional HTTPS listener.
+	CallNotifications CallNotificationsConfig `yaml:"call_notifications"`
 	// Profiling configures optional Pyroscope continuous profiling (#85).
 	Profiling ProfilingConfig `yaml:"profiling"`
 	// Cardinality governs output-side active-series limits (#105).
@@ -250,6 +252,9 @@ type ProfilingPyroscope struct {
 // (client secret, certificate, workload identity, managed identity, ...) from
 // the ambient environment at run time, never from this struct or the YAML file.
 type TenantConfig struct {
+	// CallNotificationClientStateFile opts this tenant into call notifications.
+	// Only a mounted file path is accepted; the secret is not part of Config.
+	CallNotificationClientStateFile string `yaml:"call_notification_client_state_file"`
 	// TenantID is the hyphenated Entra directory GUID. Verified domains and other
 	// names are rejected because their tenant binding cannot be proved locally.
 	TenantID string `yaml:"tenant_id"`
@@ -766,6 +771,9 @@ func oneOf(v string, allowed ...string) bool {
 // Config is valid.
 func (c *Config) Validate() error {
 	if err := c.Teams.QualityThresholds.Validate(); err != nil {
+		return err
+	}
+	if err := c.validateCallNotifications(); err != nil {
 		return err
 	}
 	if !oneOf(c.LogLevel, "debug", "info", "warn", "error") {

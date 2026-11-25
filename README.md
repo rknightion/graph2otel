@@ -171,7 +171,9 @@ helm install g2o oci://ghcr.io/rknightion/charts/graph2otel \
 
 Production installs should keep `persistence.enabled=true`; an ephemeral
 checkpoint loses watermarks on pod replacement. The full values reference is in
-[the chart README](charts/graph2otel/README.md).
+[the chart README](charts/graph2otel/README.md). Teams call records can also
+use the [optional HTTPS notification listener](docs/call-notifications.md)
+without replacing polling or exposing the admin server.
 
 ### Binary
 

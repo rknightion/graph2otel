@@ -43,6 +43,30 @@ func TestDeploymentOmitsAdminSurfaceWhenDisabled(t *testing.T) {
 	assertMatchCount(t, rendered, "admin port", adminPort, 0)
 }
 
+func TestCallNotificationHelmExposure(t *testing.T) {
+	baseline := string(renderChart(t))
+	if strings.Contains(baseline, "kind: Service\n") || strings.Contains(baseline, "name: callnotify") {
+		t.Fatal("default chart exposes the call notification listener")
+	}
+	args := []string{"--set", "config.call_notifications.enabled=true", "--set-string", "config.call_notifications.addr=:8443"}
+	enabled := string(renderChart(t, args...))
+	if !strings.Contains(enabled, "type: ClusterIP") || !strings.Contains(enabled, "targetPort: callnotify") ||
+		!strings.Contains(enabled, "containerPort: 8443") || strings.Contains(enabled, "kind: Ingress\n") ||
+		strings.Contains(enabled, "targetPort: admin") {
+		t.Fatal("enabled chart must expose only the dedicated HTTPS port through its ClusterIP Service")
+	}
+	for _, flag := range []string{"replicaCount=2", "config.admin.addr=:8443"} {
+		command := append([]string{"template", "test", "."}, args...)
+		if _, err := runHelm(t, append(command, "--set", flag)...); err == nil {
+			t.Errorf("enabled chart accepted unsafe override %s", flag)
+		}
+	}
+	if _, err := runHelm(t, "template", "test", ".", "--set", "config.tenants[0].tenant_id=00000000-0000-0000-0000-000000000000",
+		"--set", "config.tenants[0].call_notification_client_state=synthetic-inline"); err == nil {
+		t.Fatal("chart accepted an inline notification secret")
+	}
+}
+
 func TestHelmRejectsTypoHeavyValues(t *testing.T) {
 	typos := []string{"ena" + "beld", "log_lee" + "vl", "proto" + "cool", "sor" + "uce"}
 	values := writeValues(t, fmt.Sprintf(`persistence:

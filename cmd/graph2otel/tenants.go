@@ -68,13 +68,10 @@ var _ collectorFactoryVisitor = (*runtimeFactoryVisitor)(nil)
 // wait func blocks until every launched Scheduler has drained (after ctx is
 // canceled).
 //
-// The returned error is the narrow exception to that rule, and today it has
-// exactly one source: a tenant registering two transports for the same records
-// (#144). It is process-fatal because it is a config that was never working
-// rather than a runtime fault, so there is nothing to degrade to and nothing to
-// recover from — and the state it describes is invisible from the outside. The
-// caller must cancel ctx and drain wait before exiting; tenants set up before
-// the offending one may already be running.
+// A startup error is process-fatal, including a conflicting collector registry
+// or invalid inputs for an explicitly enabled notification listener. The caller
+// must cancel ctx and drain wait before exiting; the listener and tenants set up
+// before the error may already be running.
 type tenantAuthBuilder func(config.TenantConfig) (*auth.TenantAuth, error)
 
 type tenantSetup func(
@@ -113,7 +110,21 @@ func startTenants(
 	logger *slog.Logger,
 	geoIPReaders tenantGeoIPReaders,
 ) (sources []admin.CollectorSource, skips map[admin.SkipKey]string, limiter *graphclient.WorkloadLimiter, wait func(), err error) {
-	return startTenantsWithBuilders(ctx, cfg, provider, logger, auth.NewTenantAuth, geoIPReaders.setupTenant)
+	notifications, err := startCallNotifications(ctx, cfg, logger)
+	if err != nil {
+		return nil, nil, nil, func() {}, err
+	}
+	setup := func(ctx context.Context, ta *auth.TenantAuth, cfg *config.Config, provider *telemetry.Provider,
+		logger *slog.Logger, limiter *graphclient.WorkloadLimiter, skips map[admin.SkipKey]string, wg *sync.WaitGroup,
+	) (admin.CollectorSource, error) {
+		return geoIPReaders.setupTenant(ctx, ta, cfg, provider, logger, limiter, skips, wg, notifications)
+	}
+	sources, skips, limiter, wait, err = startTenantsWithBuilders(ctx, cfg, provider, logger, auth.NewTenantAuth, setup)
+	waitWorkers := wait
+	return sources, skips, limiter, func() {
+		waitWorkers()
+		notifications.wait()
+	}, err
 }
 
 // startTenantsWithBuilders is the injectable composition-root seam for tenant
@@ -353,14 +364,23 @@ func (readers tenantGeoIPReaders) setupTenant(
 	limiter *graphclient.WorkloadLimiter,
 	skips map[admin.SkipKey]string,
 	wg *sync.WaitGroup,
+	notifications *callNotifications,
 ) (admin.CollectorSource, error) {
-	return readers.setupTenantWithGraphAndLicenseBuilders(
-		ctx, ta, cfg, provider, logger, limiter, skips, wg,
-		graphclient.NewClient,
+	var gc *graphclient.Client
+	src, err := readers.setupTenantWithGraphAndLicenseBuilders(ctx, ta, cfg, provider, logger, limiter, skips, wg,
+		func(ctx context.Context, ta *auth.TenantAuth, opts graphclient.Options) (*graphclient.Client, error) {
+			client, err := graphclient.NewClient(ctx, ta, opts)
+			gc = client
+			return client, err
+		},
 		func(ctx context.Context, client *graphclient.Client) (license.Capabilities, error) {
 			return license.Detect(ctx, license.NewGraphSkuLister(client))
 		},
 	)
+	if err == nil {
+		err = notifications.attach(ta.TenantID, src.Registry, gc, provider, logger, wg)
+	}
+	return src, err
 }
 
 func setupTenantWithGraphClientBuilder(

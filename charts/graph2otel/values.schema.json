@@ -431,6 +431,9 @@
                             "client_id": {
                                 "type": "string"
                             },
+                            "call_notification_client_state_file": {
+                                "type": "string"
+                            },
                             "profiles": {
                                 "type": "array",
                                 "minItems": 1,
@@ -608,6 +611,27 @@
                             "type": "string"
                         },
                         "refresh_interval": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "call_notifications": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "addr": {
+                            "type": "string"
+                        },
+                        "public_url": {
+                            "type": "string"
+                        },
+                        "tls_cert_file": {
+                            "type": "string"
+                        },
+                        "tls_key_file": {
                             "type": "string"
                         }
                     }

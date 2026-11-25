@@ -3,6 +3,7 @@ package graphclient
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -86,7 +87,32 @@ func (c *Client) RawGetWithHeaders(ctx context.Context, url string, headers map[
 // response is returned as an error including the status and body, so the caller
 // can classify the export API's report-specific 400s (bad reportName/select).
 func (c *Client) RawPost(ctx context.Context, url string, body []byte, headers map[string]string) ([]byte, error) {
-	if err := c.validateRawURL(url); err != nil {
+	return c.rawJSON(ctx, http.MethodPost, url, body, headers)
+}
+
+// RawSubscription makes a subscription lifecycle request without following
+// redirects or replaying a create. The POST body contains a verification secret;
+// a redirect must not send it to a second URL, even without Authorization.
+func (c *Client) RawSubscription(ctx context.Context, method, address string, body []byte) ([]byte, error) {
+	noRedirect := &nethttplibrary.RedirectHandlerOptions{
+		ShouldRedirect: func(*http.Request, *http.Response) bool { return false },
+	}
+	ctx = context.WithValue(ctx, noRedirect.GetKey(), noRedirect)
+	if method == http.MethodPost {
+		ctx = context.WithValue(ctx, noGraphRetryKey{}, true)
+	}
+	result, err := c.rawJSON(ctx, method, address, body, nil)
+	var status *HTTPStatusError
+	if errors.As(err, &status) {
+		// Graph can reflect clientState in an error body. Preserve only
+		// the bounded fields the reconciliation loop needs.
+		return nil, &HTTPStatusError{Method: method, StatusCode: status.StatusCode, RetryAfter: status.RetryAfter}
+	}
+	return result, err
+}
+
+func (c *Client) rawJSON(ctx context.Context, method, address string, body []byte, headers map[string]string) ([]byte, error) {
+	if err := c.validateRawURL(address); err != nil {
 		return nil, err
 	}
 	tok, err := c.cred.GetToken(ctx, policy.TokenRequestOptions{Scopes: []string{auth.GraphDefaultScope}})
@@ -94,9 +120,9 @@ func (c *Client) RawPost(ctx context.Context, url string, body []byte, headers m
 		return nil, fmt.Errorf("graphclient: tenant %q: acquire token: %w", c.TenantID, err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, method, address, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("graphclient: build request %s: %w", url, err)
+		return nil, fmt.Errorf("graphclient: build request %s: %w", address, err)
 	}
 	// Kiota retries by seeking the body, rather than calling GetBody. Keep
 	// the reader seekable like Kiota's own request adapter: default middleware
@@ -116,16 +142,16 @@ func (c *Client) RawPost(ctx context.Context, url string, body []byte, headers m
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("graphclient: POST %s: %w", url, err)
+		return nil, fmt.Errorf("graphclient: %s %s: %w", method, address, err)
 	}
 	defer resp.Body.Close()
 
-	respBody, err := readRawBody(url, resp.Body)
+	respBody, err := readRawBody(address, resp.Body)
 	if err != nil {
 		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, newHTTPStatusError(http.MethodPost, url, resp, respBody)
+		return nil, newHTTPStatusError(method, address, resp, respBody)
 	}
 	return respBody, nil
 }

@@ -1,0 +1,17 @@
+{{- if .Values.config.call_notifications.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "graph2otel.fullname" . | trunc 44 | trimSuffix "-" }}-call-notifications
+  labels:
+    {{- include "graph2otel.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "graph2otel.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: callnotify
+      protocol: TCP
+      port: {{ include "graph2otel.callNotificationPort" . }}
+      targetPort: callnotify
+{{- end }}
