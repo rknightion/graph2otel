@@ -18,7 +18,10 @@ just grafana-check   # the gate: coverage + log coverage + freshness + structure
 install need not open the Graph board. It uses the same catalogue and schema, but
 its own tabs and variables. The gate requires every `teams` metric on a placed
 Teams panel even if the Graph board already shows it. Site and call links carry
-the row tenant rather than reusing a multi-tenant selection. Use structured
+the row tenant rather than reusing a multi-tenant selection. Every site-labelled metric
+follows the `sites` dropdown, whose All value is `.*` so streams without a mapped site
+stay visible. Each tab states why its panels can be legitimately empty, and that note
+replaces the generic no-rows text, because a lab with no calls yet is the common case. Use structured
 metadata, not metric labels, for individual call or stream IDs.
 
 Pure standard-library `python3`. Nothing to install, which is why the CI job has no

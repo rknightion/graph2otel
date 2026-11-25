@@ -26,7 +26,7 @@ of a dashboard; a v2 resource has no top-level `uid`.
 | File | `metadata.name` | Use |
 | --- | --- | --- |
 | `dashboards/graph2otel.json` | `graph2otel` | Graph-wide posture and investigation |
-| `dashboards/graph2otel-teams.json` | `graph2otel-teams` | Teams calls, networking and service health without the other Graph domains |
+| `dashboards/graph2otel-teams.json` | `graph2otel-teams` | Teams call quality, sites, PSTN and Direct Routing, voice apps, phone inventory, usage and service health without the other Graph domains |
 
 The Graph dashboard nests feature tabs under domain tabs. The Teams dashboard
 keeps its investigation tabs visible even when a collector has no data. Click a

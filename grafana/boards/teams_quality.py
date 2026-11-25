@@ -15,10 +15,15 @@ _GROUP = "tenant_id, site"
 _SITE = 'site!~"unmapped|overflow|other|"'
 
 
-def site_queries(cat, tenant=TENANT_SEL, window=RATE):
-    """Return four measurement queries. A site with no evidence is absent."""
+def site_queries(cat, tenant=TENANT_SEL, window=RATE, site=""):
+    """Return four measurement queries. A site with no evidence is absent.
+
+    `site` is one more label matcher, such as a site template variable.
+    """
+    scope = f"{tenant},{_SITE}" + (f",{site}" if site else "")
+
     def increase(name, select):
-        return f"sum by ({_GROUP}) (increase({name}{{{tenant},{_SITE},{select}}}[{window}]))"
+        return f"sum by ({_GROUP}) (increase({name}{{{scope},{select}}}[{window}]))"
 
     def ratio(numer, denom):
         return f"(({numer}) / ({denom})) and on ({_GROUP}) (({denom}) > 0)"
