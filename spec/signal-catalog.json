@@ -6052,6 +6052,21 @@
       ]
     },
     {
+      "name": "m365.teams.user_configuration.effective_policy_assignments",
+      "prometheus_name": "m365_teams_user_configuration_effective_policy_assignments",
+      "unit": "{policy}",
+      "kind": "gauge",
+      "description": "Reported Teams user effective policy assignments by policy type.",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "policy_type"
+      ],
+      "packages": [
+        "internal/collectors/m365/teamsphone/users"
+      ]
+    },
+    {
       "name": "m365.teams.user_configuration.users",
       "prometheus_name": "m365_teams_user_configuration_users",
       "unit": "{user}",
@@ -10740,10 +10755,12 @@
       "attr_keys": [
         "account_type",
         "created_date_time",
+        "effective_policy_assignments",
         "enterprise_voice_enabled",
         "feature_types",
         "id",
         "modified_date_time",
+        "telephone_numbers",
         "user_principal_name"
       ],
       "packages": [

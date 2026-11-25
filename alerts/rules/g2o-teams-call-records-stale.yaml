@@ -34,8 +34,8 @@ spec:
     tuning_required: "Validate the Loki query, expected traffic, event delay and business hours for your tenant before enabling."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-teams-call-records-stale"
     __dashboardUid__: "graph2otel"
-    __panelId__: "408"
-    dashboard_path: "/d/graph2otel?dtab=M365&viewPanel=408"
+    __panelId__: "409"
+    dashboard_path: "/d/graph2otel?dtab=M365&viewPanel=409"
   expressions:
     A:
       model:

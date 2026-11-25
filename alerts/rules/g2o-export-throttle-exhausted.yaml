@@ -32,8 +32,8 @@ spec:
     description: "An Intune report export call ran out of its in-tick throttle retry budget (6 retries, 10 minutes) and ended on a 429 in the last 30m, so that tick's data was not fetched until the next one. 429s that the retry absorbed do not count: they are normal and the adaptive limiter lowers its rate on them (graph2otel_throttle_effective_rate_per_minute). The expression keeps the first value of a counter series born inside the window, so the first exhaustion after a restart still fires. This is the impact signal for the intune-export workload, which g2o-throttle-saturation excludes."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-export-throttle-exhausted"
     __dashboardUid__: "graph2otel"
-    __panelId__: "499"
-    dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=499"
+    __panelId__: "500"
+    dashboard_path: "/d/graph2otel?dtab=Self-obs&viewPanel=500"
   expressions:
     A:
       model:
