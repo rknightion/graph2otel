@@ -31026,6 +31026,99 @@
           }
         }
       },
+      "panel-1010": {
+        "kind": "Panel",
+        "spec": {
+          "id": 1010,
+          "title": "Teams effective voice policy assignments by type",
+          "description": "Returned assignments by policy type, not distinct users or defined policies.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "sum by (tenant_id, policy_type) (m365_teams_user_configuration_effective_policy_assignments{tenant_id=~\"$tenant\"})",
+                        "editorMode": "code",
+                        "range": false,
+                        "instant": true,
+                        "legendFormat": "{{tenant_id}} {{policy_type}}",
+                        "format": "table"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "fields": ""
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {},
+                  "noValue": "No metric rows. Check Signal availability above: this result alone is not evidence that the collector is disabled, healthy, or failed. A datasource or query error is shown separately.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
       "panel-372": {
         "kind": "Panel",
         "spec": {
@@ -51693,7 +51786,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-372"
+                                              "name": "panel-1010"
                                             }
                                           }
                                         },
@@ -51706,7 +51799,7 @@
                                             "height": 8,
                                             "element": {
                                               "kind": "ElementReference",
-                                              "name": "panel-373"
+                                              "name": "panel-372"
                                             }
                                           }
                                         },
@@ -51714,6 +51807,19 @@
                                           "kind": "GridLayoutItem",
                                           "spec": {
                                             "x": 0,
+                                            "y": 80,
+                                            "width": 12,
+                                            "height": 8,
+                                            "element": {
+                                              "kind": "ElementReference",
+                                              "name": "panel-373"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "kind": "GridLayoutItem",
+                                          "spec": {
+                                            "x": 12,
                                             "y": 80,
                                             "width": 12,
                                             "height": 8,

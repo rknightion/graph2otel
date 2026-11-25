@@ -4,6 +4,7 @@ package users
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 
 	"github.com/rknightion/graph2otel/internal/collector"
@@ -21,18 +22,40 @@ const (
 	usersEndpoint = inventory.GraphV1 + "/admin/teams/userConfigurations"
 )
 
-var accountTypes = wirecheck.NewEnum("user", "resourceAccount", "guest", "sfbOnPremUser", "unknown", "unknownFutureValue", "ineligibleUser")
+var (
+	accountTypes = wirecheck.NewEnum("user", "resourceAccount", "guest", "sfbOnPremUser", "unknown", "unknownFutureValue", "ineligibleUser")
+	policyKinds  = []string{"TeamsCallingPolicy", "OnlineVoiceRoutingPolicy"}
+	policyTypes  = wirecheck.NewEnum(policyKinds...)
+)
 
-// effectivePolicyAssignments and telephoneNumbers were empty on every
-// observed row. Do not infer a nested mapper or policy-count gauge.
+// The two nested arrays were populated in the poller's v1.0 list response
+// (live-measured 2026-11-25, #708 (Teams observability review)).
 type userConfiguration struct {
-	ID                     string   `json:"id"`
-	UserPrincipalName      string   `json:"userPrincipalName"`
-	AccountType            string   `json:"accountType"`
-	EnterpriseVoiceEnabled *bool    `json:"isEnterpriseVoiceEnabled"`
-	FeatureTypes           []string `json:"featureTypes"`
-	CreatedDateTime        string   `json:"createdDateTime"`
-	ModifiedDateTime       string   `json:"modifiedDateTime"`
+	ID                         string                      `json:"id"`
+	UserPrincipalName          string                      `json:"userPrincipalName"`
+	AccountType                string                      `json:"accountType"`
+	EnterpriseVoiceEnabled     *bool                       `json:"isEnterpriseVoiceEnabled"`
+	FeatureTypes               []string                    `json:"featureTypes"`
+	CreatedDateTime            string                      `json:"createdDateTime"`
+	ModifiedDateTime           string                      `json:"modifiedDateTime"`
+	EffectivePolicyAssignments []effectivePolicyAssignment `json:"effectivePolicyAssignments"`
+	TelephoneNumbers           []telephoneAssignment       `json:"telephoneNumbers"`
+}
+
+type effectivePolicyAssignment struct {
+	PolicyType       string            `json:"policyType,omitempty"`
+	PolicyAssignment *policyAssignment `json:"policyAssignment,omitempty"`
+}
+
+type policyAssignment struct {
+	AssignmentType string `json:"assignmentType,omitempty"`
+	DisplayName    string `json:"displayName,omitempty"`
+	PolicyID       string `json:"policyId,omitempty"`
+}
+
+type telephoneAssignment struct {
+	AssignmentCategory string `json:"assignmentCategory,omitempty"`
+	TelephoneNumber    string `json:"telephoneNumber,omitempty"`
 }
 
 type users struct{ inventory.Snapshot }
@@ -49,12 +72,23 @@ func (c users) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recor
 		return err
 	}
 	counts := map[userBucket]int{}
+	// A complete empty poll must supersede old samples still in the
+	// backend lookback. Emit zero for the fixed buckets, not for entity IDs.
+	policies := map[string]int{"unknown": 0}
+	for _, kind := range policyKinds {
+		policies[kind] = 0
+	}
 	for _, u := range rows {
 		enabled := "unknown"
 		if u.EnterpriseVoiceEnabled != nil {
 			enabled = strconv.FormatBool(*u.EnterpriseVoiceEnabled)
 		}
 		counts[userBucket{c.Bucket(e, "accountType", u.AccountType, accountTypes), enabled}]++
+		for _, row := range u.EffectivePolicyAssignments {
+			if row.PolicyAssignment != nil && *row.PolicyAssignment != (policyAssignment{}) {
+				policies[c.Bucket(e, "effectivePolicyAssignments.policyType", row.PolicyType, policyTypes)]++
+			}
+		}
 		e.LogEvent(u.twin())
 	}
 	points := make([]telemetry.GaugePoint, 0, len(counts))
@@ -64,6 +98,11 @@ func (c users) Collect(ctx context.Context, e telemetry.Emitter, outcomes *recor
 		}})
 	}
 	e.GaugeSnapshot("m365.teams.user_configuration.users", "{user}", "Teams users by account type and enterprise voice state.", points)
+	policyPoints := make([]telemetry.GaugePoint, 0, len(policies))
+	for kind, count := range policies {
+		policyPoints = append(policyPoints, telemetry.GaugePoint{Value: float64(count), Attrs: telemetry.Attrs{semconv.AttrPolicyType: kind}})
+	}
+	e.GaugeSnapshot("m365.teams.user_configuration.effective_policy_assignments", "{policy}", "Reported Teams user effective policy assignments by policy type.", policyPoints)
 	inventory.RecordTwins(outcomes, uint64(len(rows)))
 	return nil
 }
@@ -79,6 +118,15 @@ func (u userConfiguration) twin() telemetry.Event {
 	telemetry.SetStrs(attrs, semconv.AttrFeatureTypes, u.FeatureTypes)
 	telemetry.SetStr(attrs, semconv.AttrCreatedDateTime, u.CreatedDateTime)
 	telemetry.SetStr(attrs, semconv.AttrModifiedDateTime, u.ModifiedDateTime)
+	if len(u.EffectivePolicyAssignments) != 0 {
+		// These wire structs contain only strings and pointers to strings-only structs.
+		encoded, _ := json.Marshal(u.EffectivePolicyAssignments)
+		telemetry.SetStr(attrs, semconv.AttrEffectivePolicyAssignments, string(encoded))
+	}
+	if len(u.TelephoneNumbers) != 0 {
+		encoded, _ := json.Marshal(u.TelephoneNumbers)
+		telemetry.SetStr(attrs, semconv.AttrTelephoneNumbers, string(encoded))
+	}
 	// This is a current inventory observation, not a past change event.
 	// Keep source dates as attributes so old accounts still have log twins.
 	return telemetry.Event{

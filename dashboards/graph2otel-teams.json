@@ -10690,7 +10690,7 @@
         "spec": {
           "id": 96,
           "title": "Unassigned phone numbers",
-          "description": "Numbers in the tenant inventory with no user or voice application assignment. If it is empty: Needs the teams.phone_numbers and teams.user_configuration collectors. Collector health shows whether the source ran.",
+          "description": "Latest metric export visible at the selected range end, per tenant. Numbers with Graph's unassigned status. If it is empty: Needs the teams.phone_numbers and teams.user_configuration collectors. Collector health shows whether the source ran.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -10714,7 +10714,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "sum by (tenant_id) (m365_teams_phone_numbers_unassigned{tenant_id=~\"$tenant\"})",
+                        "expr": "sum by (tenant_id) ((m365_teams_phone_numbers_unassigned{tenant_id=~\"$tenant\"} and (timestamp(m365_teams_phone_numbers_unassigned{tenant_id=~\"$tenant\"}) == on (tenant_id) group_left max by (tenant_id) (timestamp(m365_teams_phone_numbers_unassigned{tenant_id=~\"$tenant\"})))))",
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
@@ -10773,7 +10773,7 @@
         "spec": {
           "id": 97,
           "title": "Enterprise Voice enabled users",
-          "description": "Teams user configurations with Enterprise Voice enabled. If it is empty: Needs the teams.phone_numbers and teams.user_configuration collectors. Collector health shows whether the source ran.",
+          "description": "Latest metric export visible at the selected range end, per tenant. Counts only confirmed enablement. Zero means no enabled configuration was reported and at least one was explicitly disabled. Unknown states are not counted. If it is empty: Needs the teams.phone_numbers and teams.user_configuration collectors. Collector health shows whether the source ran.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -10797,7 +10797,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "sum by (tenant_id) (m365_teams_user_configuration_users{tenant_id=~\"$tenant\",enterprise_voice_enabled=\"true\"})",
+                        "expr": "sum by (tenant_id) ((m365_teams_user_configuration_users{tenant_id=~\"$tenant\",enterprise_voice_enabled=\"true\"} and (timestamp(m365_teams_user_configuration_users{tenant_id=~\"$tenant\",enterprise_voice_enabled=\"true\"}) == on (tenant_id) group_left max by (tenant_id) (timestamp(m365_teams_user_configuration_users{tenant_id=~\"$tenant\"}))))) or 0 * sum by (tenant_id) ((m365_teams_user_configuration_users{tenant_id=~\"$tenant\",enterprise_voice_enabled=\"false\"} and (timestamp(m365_teams_user_configuration_users{tenant_id=~\"$tenant\",enterprise_voice_enabled=\"false\"}) == on (tenant_id) group_left max by (tenant_id) (timestamp(m365_teams_user_configuration_users{tenant_id=~\"$tenant\"})))))",
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
@@ -10856,7 +10856,7 @@
         "spec": {
           "id": 98,
           "title": "Teams user configurations",
-          "description": "All configurations returned, including resource accounts and ineligible users. If it is empty: Needs the teams.phone_numbers and teams.user_configuration collectors. Collector health shows whether the source ran.",
+          "description": "Latest metric export visible at the selected range end, per tenant. All configurations returned, including resource accounts and ineligible users. If it is empty: Needs the teams.phone_numbers and teams.user_configuration collectors. Collector health shows whether the source ran.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -10880,7 +10880,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "sum by (tenant_id) (m365_teams_user_configuration_users{tenant_id=~\"$tenant\"})",
+                        "expr": "sum by (tenant_id) ((m365_teams_user_configuration_users{tenant_id=~\"$tenant\"} and (timestamp(m365_teams_user_configuration_users{tenant_id=~\"$tenant\"}) == on (tenant_id) group_left max by (tenant_id) (timestamp(m365_teams_user_configuration_users{tenant_id=~\"$tenant\"})))))",
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
@@ -10939,7 +10939,7 @@
         "spec": {
           "id": 99,
           "title": "Phone numbers by capability and assignment",
-          "description": "A number can support several capabilities, so do not add the capability rows together.",
+          "description": "Latest metric export visible at the selected range end, per tenant. A number can support several capabilities, so do not add the capability rows together.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -10963,7 +10963,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "sum by (tenant_id, capability, number_type, assignment_status, activation_state) (m365_teams_phone_numbers_total{tenant_id=~\"$tenant\"})",
+                        "expr": "sum by (tenant_id, capability, number_type, assignment_status, activation_state) ((m365_teams_phone_numbers_total{tenant_id=~\"$tenant\"} and (timestamp(m365_teams_phone_numbers_total{tenant_id=~\"$tenant\"}) == on (tenant_id) group_left max by (tenant_id) (timestamp(m365_teams_phone_numbers_total{tenant_id=~\"$tenant\"})))))",
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
@@ -11031,7 +11031,7 @@
         "spec": {
           "id": 100,
           "title": "User configurations by account type",
-          "description": "Voice enablement by Teams account type. Telephone numbers and effective policies are not mapped.",
+          "description": "Latest metric export visible at the selected range end, per tenant. Voice enablement by Teams account type. See the log rows for assignment details.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -11055,7 +11055,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "sum by (tenant_id, account_type, enterprise_voice_enabled) (m365_teams_user_configuration_users{tenant_id=~\"$tenant\"})",
+                        "expr": "sum by (tenant_id, account_type, enterprise_voice_enabled) ((m365_teams_user_configuration_users{tenant_id=~\"$tenant\"} and (timestamp(m365_teams_user_configuration_users{tenant_id=~\"$tenant\"}) == on (tenant_id) group_left max by (tenant_id) (timestamp(m365_teams_user_configuration_users{tenant_id=~\"$tenant\"})))))",
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
@@ -11118,12 +11118,12 @@
           }
         }
       },
-      "panel-101": {
+      "panel-1010": {
         "kind": "Panel",
         "spec": {
-          "id": 101,
-          "title": "Phone numbers over time by assignment",
-          "description": "Summed across capability buckets, which overlap: read the trend, not the total.",
+          "id": 1010,
+          "title": "Reported effective policy assignments",
+          "description": "Latest metric export visible at the selected range end, per tenant. Counts assignments returned by Graph, not distinct users or policy definitions. A complete poll reports zero for absent policy buckets. Types outside the known set count as unknown and are kept verbatim in the logs.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -11147,11 +11147,195 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "avg by (tenant_id, assignment_status, number_type) (m365_teams_phone_numbers_total{tenant_id=~\"$tenant\"})",
+                        "expr": "sum by (tenant_id, policy_type) ((m365_teams_user_configuration_effective_policy_assignments{tenant_id=~\"$tenant\"} and (timestamp(m365_teams_user_configuration_effective_policy_assignments{tenant_id=~\"$tenant\"}) == on (tenant_id) group_left max by (tenant_id) (timestamp(m365_teams_user_configuration_effective_policy_assignments{tenant_id=~\"$tenant\"})))))",
+                        "editorMode": "code",
+                        "range": false,
+                        "instant": true,
+                        "format": "table"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "fields": ""
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {},
+                  "noValue": "No data yet. Needs the teams.phone_numbers and teams.user_configuration collectors. Collector health shows whether the source ran.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-1011": {
+        "kind": "Panel",
+        "spec": {
+          "id": 1011,
+          "title": "Last reported inventory poll finish",
+          "description": "Last reported poll finish in the selected range, per tenant and collector. Finishes include unsuccessful attempts. This timestamp does not establish a complete read.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "((max_over_time(graph2otel_scrape_last_timestamp_seconds{tenant_id=~\"$tenant\",collector=~\"teams[.](phone_numbers|user_configuration)\"}[$__range])) * 1000) >= ${__from}",
+                        "editorMode": "code",
+                        "range": false,
+                        "instant": true,
+                        "format": "table"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "table",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "showHeader": true,
+                "cellHeight": "sm",
+                "footer": {
+                  "show": false,
+                  "reducer": [
+                    "sum"
+                  ],
+                  "fields": ""
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "dateTimeAsIso",
+                  "custom": {},
+                  "noValue": "No data yet. Needs the teams.phone_numbers and teams.user_configuration collectors. Collector health shows whether the source ran.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-101": {
+        "kind": "Panel",
+        "spec": {
+          "id": 101,
+          "title": "Phone numbers over time by capability and assignment",
+          "description": "Each series counts numbers for one capability. Capabilities overlap, so do not add them together.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "sum by (tenant_id, capability, number_type, assignment_status) ((m365_teams_phone_numbers_total{tenant_id=~\"$tenant\"} and (timestamp(m365_teams_phone_numbers_total{tenant_id=~\"$tenant\"}) == on (tenant_id) group_left max by (tenant_id) (timestamp(m365_teams_phone_numbers_total{tenant_id=~\"$tenant\"})))))",
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
-                        "legendFormat": "{{tenant_id}} {{assignment_status}} {{number_type}}"
+                        "legendFormat": "{{tenant_id}} \u00b7 {{capability}} \u00b7 {{number_type}} \u00b7 {{assignment_status}}"
                       }
                     }
                   }
@@ -11302,8 +11486,8 @@
         "kind": "Panel",
         "spec": {
           "id": 103,
-          "title": "Phone number inventory",
-          "description": "One row per number per poll; the newest poll is first. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "title": "Phone number inventory history",
+          "description": "Observations from all polls in range, including older assignments and numbers later removed. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -11415,8 +11599,8 @@
         "kind": "Panel",
         "spec": {
           "id": 104,
-          "title": "Teams user configurations",
-          "description": "One row per user configuration per poll; the newest poll is first. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
+          "title": "Teams user configuration history",
+          "description": "Observations from all polls in range, including configurations later changed or removed. Blank assignment cells mean no assignments were reported on that row. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -11440,7 +11624,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "{service_name=\"graph2otel\"} | event_name=`m365.teams.user_configuration` | tenant_id=~\"$tenant\" | keep tenant_id, user_principal_name, account_type, enterprise_voice_enabled, feature_types, modified_date_time",
+                        "expr": "{service_name=\"graph2otel\"} | event_name=`m365.teams.user_configuration` | tenant_id=~\"$tenant\" | keep tenant_id, user_principal_name, account_type, enterprise_voice_enabled, feature_types, modified_date_time, effective_policy_assignments, telephone_numbers",
                         "editorMode": "code",
                         "queryType": "range",
                         "maxLines": 250
@@ -15751,7 +15935,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-101"
+                                    "name": "panel-1010"
                                   }
                                 }
                               },
@@ -15764,7 +15948,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-102"
+                                    "name": "panel-1011"
                                   }
                                 }
                               },
@@ -15773,6 +15957,32 @@
                                 "spec": {
                                   "x": 0,
                                   "y": 24,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-101"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 12,
+                                  "y": 24,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-102"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 32,
                                   "width": 24,
                                   "height": 9,
                                   "element": {
@@ -15785,7 +15995,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 33,
+                                  "y": 41,
                                   "width": 24,
                                   "height": 9,
                                   "element": {

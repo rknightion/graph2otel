@@ -770,7 +770,7 @@ var annotations = map[string]Annotation{
 		Source:   "`GET /v1.0/admin/teams/telephoneNumberManagement/numberAssignments` (live-measured 2026-11-24, #663: Teams Phone inventory).",
 	},
 	"teams.user_configuration": {
-		Collects: "Teams voice enablement by account type, with one user configuration log twin per row. Telephone-number and effective-policy lists were empty on the observed rows; neither list is mapped and there is no policy count.",
+		Collects: "Teams voice enablement by account type and bounded counts of returned effective policy assignments by policy type. One user configuration log twin per row retains reported telephone numbers and nested policy assignment details. Empty lists supply no assignments.",
 		Source:   "`GET /v1.0/admin/teams/userConfigurations` (live-measured 2026-11-24, #663: Teams Phone inventory).",
 	},
 

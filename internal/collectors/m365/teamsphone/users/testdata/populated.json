@@ -1,0 +1,43 @@
+{
+  "value": [
+    {
+      "id": "example-user-1",
+      "userPrincipalName": "user0@example.com",
+      "accountType": "user",
+      "isEnterpriseVoiceEnabled": true,
+      "effectivePolicyAssignments": [{
+        "policyType": "TeamsCallingPolicy",
+        "policyAssignment": {"assignmentType": "direct", "displayName": "Example policy", "policyId": "example-policy-1"}
+      }],
+      "telephoneNumbers": [{"assignmentCategory": "primary", "telephoneNumber": "+12025550100"}]
+    },
+    {
+      "id": "example-user-2",
+      "userPrincipalName": "user1@example.com",
+      "isEnterpriseVoiceEnabled": false,
+      "effectivePolicyAssignments": [],
+      "telephoneNumbers": []
+    },
+    {
+      "id": "example-user-3",
+      "userPrincipalName": "user6@example.com",
+      "isEnterpriseVoiceEnabled": false,
+      "effectivePolicyAssignments": [{
+        "policyType": "ExamplePolicy",
+        "policyAssignment": {"assignmentType": "direct", "displayName": "Example policy", "policyId": "example-policy-3"}
+      }],
+      "telephoneNumbers": []
+    },
+    {
+      "id": "example-user-4",
+      "userPrincipalName": "user10@example.com",
+      "accountType": "resourceAccount",
+      "isEnterpriseVoiceEnabled": true,
+      "effectivePolicyAssignments": [{
+        "policyType": "OnlineVoiceRoutingPolicy",
+        "policyAssignment": {"assignmentType": "direct", "displayName": "Example policy", "policyId": "example-policy-4"}
+      }],
+      "telephoneNumbers": [{"assignmentCategory": "primary", "telephoneNumber": "+12025550110"}]
+    }
+  ]
+}
