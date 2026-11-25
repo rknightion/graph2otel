@@ -237,8 +237,11 @@ def _verdict_coverage(b, noun, metric, share, *, scope=""):
         "Classified": count(classified), "Observed": observed,
         **{verdict.title(): count(growth(verdict)) for verdict in ("good", "poor", "unclassified")},
     }
-    panel = b.raw(f"Initial {noun} verdict coverage (processing time)", list(columns.values()),
-                  viz="table", unit="none", w=24, h=4,
+    # A Grafana table merge needs a tenant column in every result frame,
+    # even if only unstamped series supply a share. Valid tenant IDs are GUIDs.
+    scoped = [f'label_replace({expr}, "tenant_id", "(unlabelled)", "tenant_id", "^$")'
+              for expr in columns.values()]
+    panel = b.raw(f"Initial {noun} verdict coverage (processing time)", scoped, viz="table", unit="none", w=24, h=4,
                   desc=FIRST + " " + COUNT_NOTE + " Classified = good + poor; "
                        "the share is blank without a classified denominator. Counts are estimates. "
                        + ("The Site filter applies to streams only. " if scope else "")
@@ -552,17 +555,18 @@ def _call_timeline(b, selected):
     bounds = b.records(CALL, "Call bounds and timeline zoom", ("start_time", "end_time"), filters=timed, h=4,
                        desc="Open the stream timeline in a new tab. Bounds use the selected call's dated versions "
                             "and plotted stream peers in this search, padded by one second. "
-                            "The investigation window on this tab does not change. Only the All tenant selection "
-                            "includes unlabelled rows.")
+                            "The investigation window on this tab does not change. Zoom requires a tenant ID; "
+                            "unlabelled rows are still visible in the All-tenant evidence.")
     # Fixed millisecond padding preserves endpoints at the query boundary and lets
     # a zero-duration observation stay visible. No time is invented for absent bounds.
-    pad = Raw('label_format g2o_scope=`{{.tenant_id | default "All"}}`,'
+    pad = Raw('label_format g2o_scope=tenant_id,'
               f' g2o_from=`{{{{sub (unixEpochMillis ({clock} .start_time)) 1000}}}}`,'
               f' g2o_to=`{{{{add (unixEpochMillis ({clock} .end_time)) 1000}}}}`'
               ' | keep g2o_scope, g2o_from, g2o_to', keys=["tenant_id", "start_time", "end_time"],
               reason="Project padded numeric epoch bounds for the time picker")
     bounds["targets"] = [
-        {**b._loki_query(b._selector(event, (*timed, pad)), ref=ref), "maxLines": RECORD_LIMIT}
+        {**b._loki_query(b._selector(event, (*timed, f("tenant_id", "ne", ""), pad)), ref=ref),
+         "maxLines": RECORD_LIMIT}
         for ref, event in zip("AB", (CALL, STREAM))
     ]
     bounds["description"] = bounds["description"].replace(

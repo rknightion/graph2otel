@@ -66,6 +66,8 @@ class TeamsInvestigationTests(unittest.TestCase):
         self.assertIn('event_name=`teams.call`', queries[0]["expr"])
         self.assertIn('event_name=`teams.call_stream`', queries[1]["expr"])
         self.assertEqual(queries[1]["maxLines"], query_models(timeline)[0]["maxLines"])
+        for q in queries:
+            self.assertIn('| tenant_id!=``', q["expr"], "an unlabelled row must not offer an All-tenant zoom")
         for q in [*queries, *query_models(timeline)]:
             self.assertNotRegex(q["expr"], r'\| (?:version|direction|session_id|stream_id)=')
 
@@ -82,15 +84,19 @@ class TeamsInvestigationTests(unittest.TestCase):
                 def series(tenant, verdict, value, site="selected", *, population=(noun, metric, health)):
                     entity, metric_name, verdict_label = population
                     scope = "" if entity == "call" else f',site="{site}"'
-                    return {"series": f'{metric_name}{{tenant_id="{tenant}",{verdict_label}="{verdict}"{scope}}}',
+                    tenant_label = f'tenant_id="{tenant}",' if tenant else ""
+                    return {"series": f'{metric_name}{{{tenant_label}{verdict_label}="{verdict}"{scope}}}',
                             "values": f"_x10 {value}x4"}
 
-                input_series = [series("mixed", "good", 4), series("mixed", "poor", 4),
+                input_series = [series(None, "good", 3), series(None, "unclassified", 2),
+                                series("mixed", "good", 4), series("mixed", "poor", 4),
                                 series("mixed", "unclassified", 16), series("only-unclassified", "unclassified", 8),
                                 series("no-poor", "good", 6), series("quiet", "good", 0)]
                 if noun == "stream":
                     input_series += [series("mixed", "poor", 90, "excluded")]
                 expected = {
+                    "(unlabelled)": {"Good": 3, "Poor": 0, "Unclassified": 2, "Classified": 3, "Observed": 5,
+                                     f"{share} share": 1 if share == "Good" else 0},
                     "mixed": {"Good": 4, "Poor": 4, "Unclassified": 16, "Classified": 8, "Observed": 24,
                               f"{share} share": .5},
                     "only-unclassified": {"Good": 0, "Poor": 0, "Unclassified": 8, "Classified": 0, "Observed": 8},
