@@ -228,12 +228,11 @@ def overview(b):
     increase = {"op": "increase", "window": "$__range"}
     good = _agg(b, "teams.calls", match='call_health="good"', **increase)
     classified = _agg(b, "teams.calls", match='call_health=~"good|poor"', **increase)
-    _stat(b, "Calls counted in range", _count(b, "teams.calls"), FIRST + " " + COUNT_NOTE, w=6)
+    _call_count_panels(b)
     _stat(b, "Good share of classified calls", _share(good, classified),
           FIRST + " Unclassified calls are excluded. No classified observations means no percentage.",
           "percentunit", w=6)
-    _stat(b, "Direct Routing attempts in range", _count(b, "teams.direct_routing.calls"),
-          "Attempts through your own session border controllers. " + COUNT_NOTE, w=6)
+    _direct_routing_count_panels(b)
     _service_status(b, "Microsoft Teams service status", "stat", 6)
     _bars(b, "Calls by initial health", "teams.calls", ("call_health",), FIRST)
     _pie(b, "Calls by type in range", [_count(b, "teams.calls", keys=("type",))], ["{{tenant_id}} · {{type}}"],
@@ -547,22 +546,94 @@ def users(b):
     _link(panel, "call_id", "Call detail", "call_id")
 
 
+_EVENT_COUNT_NOTE = ("Exact for keyed Loki records visible in the selected event-time range, not a source census. "
+                     "Late records can change the count. Narrow the range if Loki reaches its series limit.")
+_ESTIMATE_NOTE = ("Estimated counter growth from exported metric samples in the selected collection-time range. "
+                  "Includes the first value of series with no usable baseline at range start; missing samples "
+                  "can distort the estimate. It is not an event-time count.")
+_DIRECT_ROUTING_CLASSIFICATION = ("Answered means Graph reports successful_call=true, even with SIP 403, which still "
+                                  "counts in the 4xx class. Otherwise SIP 486 or 600 is busy. Other explicit "
+                                  "failures or SIP 4xx to 6xx are failed; the rest are unknown.")
+
+
+def _keyed_event_count(b, title, event, keys, desc, *, filters, w):
+    group = ("tenant_id", *keys)
+    columns = ", ".join(group)
+    keep = Raw(f"keep {columns}", keys=group, reason="Project only the identity columns before counting")
+    sel = b._selector(event, [*filters, keep], by=list(keys))
+    # Instant Loki queries expand $__auto to the whole selected range. The
+    # inner sum collapses repeat deliveries of an identity across streams.
+    expr = f"count by (tenant_id) (sum by ({columns}) (count_over_time({sel} [$__auto])))"
+    panel = b._viz_panel("stat", title, [], "none",
+                         f"{desc} {_EVENT_COUNT_NOTE} Needs Loki.", w, 8)
+    panel["datasource"] = LOKI_DS
+    panel["targets"] = [b._loki_query(expr, legend="{{tenant_id}}", query_type="instant")]
+    panel["fieldConfig"]["defaults"].update(decimals=0, noValue=NO_LOKI)
+    return panel
+
+
+def _counter_estimate(b, title, metric, desc, *, w, unit="none", decimals=1):
+    panel = _stat(b, title, _agg(b, metric, op="increase", window="$__range"),
+                  f"{desc} {_ESTIMATE_NOTE}", unit=unit, w=w)
+    panel["fieldConfig"]["defaults"]["decimals"] = decimals
+    return panel
+
+
+def _call_count_panels(b, *, w=8):
+    keyed = f("call_id", "ne", "")
+    _keyed_event_count(b, "Unique call IDs (event time)", CALL, ("call_id",),
+                       "Distinct call IDs per tenant by call start time.", filters=[keyed], w=w)
+    _keyed_event_count(b, "Call versions (event time)", CALL, ("call_id", "version"),
+                       "Distinct call ID and version pairs per tenant by call start time.",
+                       filters=[keyed, f("version", "ne", "")], w=w)
+    _counter_estimate(b, "Calls (collection-time estimate)", "teams.calls", FIRST, w=w)
+
+
+def _direct_routing_count_panels(b, *, w=12):
+    _keyed_event_count(b, "Direct Routing attempts (event time)", "teams.direct_routing_call", ("id",),
+                       "Distinct Direct Routing row IDs per tenant. A row takes its start, invite or failure "
+                       "time, in that order.", filters=[f("id", "ne", "")], w=w)
+    _counter_estimate(b, "Direct Routing attempts (collection-time estimate)", "teams.direct_routing.calls",
+                      "Newly accepted Direct Routing report attempts, including unkeyed rows.", w=w)
+
+
 def phone(b):
-    for metric, title in (("teams.pstn.calls", "PSTN calls in range"),
-                          ("teams.pstn.minutes", "PSTN connected minutes in range"),
-                          ("teams.direct_routing.calls", "Direct Routing attempts in range")):
-        _stat(b, title, _agg(b, metric, op="increase", window="$__range"), COUNT_NOTE)
+    either_id = Raw("id != `` or call_id != ``", keys=["id", "call_id"],
+                    reason="A PSTN source row can be keyed by either ID and its start time")
+    _keyed_event_count(b, "PSTN report rows (event time)", "teams.pstn_call", ("id", "call_id", "start_time"),
+                       "Distinct PSTN row ID, PSTN call ID and start time tuples per tenant, with at least one ID. "
+                       "Row IDs can be shared; this is not a count of unique Teams calls.",
+                       filters=[either_id, f("start_time", "ne", "")], w=8)
+    _counter_estimate(b, "PSTN report rows (collection-time estimate)", "teams.pstn.calls",
+                      "Newly accepted PSTN report rows, including unkeyed rows.", w=8)
+    _counter_estimate(b, "PSTN connected minutes (collection-time estimate)", "teams.pstn.minutes",
+                      "Reported non-negative durations of newly accepted PSTN rows with a duration.",
+                      unit="suffix: min", decimals=2, w=8)
+    _direct_routing_count_panels(b)
     _bars(b, "Direct Routing attempts by trunk and SIP outcome", "teams.direct_routing.calls",
-          ("trunk_fqdn", "sip_class", "outcome"), "Attempts through your own session border controllers.")
-    trunk = b.metric("teams.direct_routing.network_effectiveness_ratio", title="Trunk effectiveness in latest successful poll",
-                     by=["trunk_fqdn"], desc="Share of new attempts that answered or reached a busy user in the latest successful poll.")
+          ("trunk_fqdn", "sip_class", "outcome"), _DIRECT_ROUTING_CLASSIFICATION)
+    trunk = b.metric("teams.direct_routing.network_effectiveness_ratio", title="Latest exported Direct Routing effectiveness",
+                     by=["trunk_fqdn"], desc="Each sample reflects the most recent available poll value, not a ratio "
+                     "over the selected range. Lookback can repeat a value between observations. Per trunk, the "
+                     "numerator is answered plus busy attempts. The denominator is all "
+                     "newly accepted attempts, including unknowns, not all attempts made. "
+                     "No new attempts means no new ratio. This is not an SBC health check or proof of connected "
+                     "media. " + _DIRECT_ROUTING_CLASSIFICATION)
     trunk["fieldConfig"]["defaults"].update(unit="percentunit", min=0, max=1)
+    trunk["fieldConfig"]["defaults"]["custom"].update(spanNulls=False, showPoints="always")
+    b.records("teams.direct_routing_poll", "Direct Routing effectiveness counts by poll", (
+        "trunk_fqdn", "effective_attempts", "poll_attempts", "source_success_sip_4xx",
+    ), desc="Each dated row is a successful poll with new attempts for this trunk. Effective is the numerator, "
+            "poll attempts is the denominator, and source success with SIP 4xx is a subset of effective. "
+            "Rows are poll-time evidence, not call start times or a range-wide rate.")
     b.records("teams.pstn_call", "PSTN call records", ("id", "call_id", "call_type", "connectivity_type",
-              "duration_seconds", "start_time", "end_time"),
-              desc="Phone log IDs are not assumed to name Graph call detail records.")
+              "duration_seconds", "call_duration_source", "usage_country_code", "tenant_country_code",
+              "connection_charge", "currency", "start_time", "end_time"),
+              desc="PSTN, Direct Routing and Graph call detail IDs are source-scoped, not join keys.")
     b.records("teams.direct_routing_call", "Direct Routing records", (
-        "id", "trunk_fqdn", "final_sip_code", "final_sip_code_phrase", "successful_call", "duration_seconds",
-    ))
+        "id", "trunk_fqdn", "successful_call", "final_sip_code", "final_sip_code_phrase", "duration_seconds",
+        "start_time", "invite_time", "failure_time",
+    ), desc="Source success and the final SIP code are independent evidence. Compare the timestamps where a start is absent.")
 
 
 def voice_apps(b):
