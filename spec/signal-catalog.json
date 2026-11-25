@@ -1,5 +1,5 @@
 {
-  "package_count": 181,
+  "package_count": 183,
   "domains": [
     "defender",
     "entra",
@@ -2135,6 +2135,8 @@
         "internal/collectors/intune/remediationrunstates",
         "internal/collectors/m365/messagetrace",
         "internal/collectors/m365/sharepointsettings",
+        "internal/collectors/m365/teamsphone/numbers",
+        "internal/collectors/m365/teamsphone/users",
         "internal/collectors/m365/unifiedaudit",
         "internal/collectors/mdca/clouddiscovery",
         "internal/collectors/purview/ediscoveryhealth",
@@ -5970,6 +5972,37 @@
       ]
     },
     {
+      "name": "m365.teams.phone_numbers.total",
+      "prometheus_name": "m365_teams_phone_numbers_total",
+      "unit": "{number_capability}",
+      "kind": "gauge",
+      "description": "Teams Phone numbers by type, assignment status, activation state and capability. A number can have several capabilities.",
+      "additive": false,
+      "domain": "m365",
+      "attr_keys": [
+        "activation_state",
+        "assignment_status",
+        "capability",
+        "number_type"
+      ],
+      "packages": [
+        "internal/collectors/m365/teamsphone/numbers"
+      ]
+    },
+    {
+      "name": "m365.teams.phone_numbers.unassigned",
+      "prometheus_name": "m365_teams_phone_numbers_unassigned",
+      "unit": "{number}",
+      "kind": "gauge",
+      "description": "Teams Phone numbers with unassigned status.",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [],
+      "packages": [
+        "internal/collectors/m365/teamsphone/numbers"
+      ]
+    },
+    {
       "name": "m365.teams.total",
       "prometheus_name": "m365_teams_total_ratio",
       "unit": "1",
@@ -5982,6 +6015,22 @@
       ],
       "packages": [
         "internal/collectors/m365/teams"
+      ]
+    },
+    {
+      "name": "m365.teams.user_configuration.users",
+      "prometheus_name": "m365_teams_user_configuration_users",
+      "unit": "{user}",
+      "kind": "gauge",
+      "description": "Teams users by account type and enterprise voice state.",
+      "additive": true,
+      "domain": "m365",
+      "attr_keys": [
+        "account_type",
+        "enterprise_voice_enabled"
+      ],
+      "packages": [
+        "internal/collectors/m365/teamsphone/users"
       ]
     },
     {
@@ -10623,6 +10672,42 @@
       ],
       "packages": [
         "internal/collectors/m365/teams"
+      ]
+    },
+    {
+      "event_name": "m365.teams.phone_number",
+      "domain": "m365",
+      "attr_keys": [
+        "activation_state",
+        "assignment_status",
+        "capabilities",
+        "city",
+        "country_code",
+        "id",
+        "number_source",
+        "number_type",
+        "operator_id",
+        "supported_customer_actions",
+        "telephone_number"
+      ],
+      "packages": [
+        "internal/collectors/m365/teamsphone/numbers"
+      ]
+    },
+    {
+      "event_name": "m365.teams.user_configuration",
+      "domain": "m365",
+      "attr_keys": [
+        "account_type",
+        "created_date_time",
+        "enterprise_voice_enabled",
+        "feature_types",
+        "id",
+        "modified_date_time",
+        "user_principal_name"
+      ],
+      "packages": [
+        "internal/collectors/m365/teamsphone/users"
       ]
     },
     {

@@ -181,7 +181,9 @@
                 "purview.sensitivity_labels",
                 "teams.call_records",
                 "teams.direct_routing_calls",
+                "teams.phone_numbers",
                 "teams.pstn_calls",
+                "teams.user_configuration",
                 "teams.voice_apps"
             ]
         },
