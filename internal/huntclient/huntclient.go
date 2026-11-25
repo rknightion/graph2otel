@@ -63,6 +63,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"golang.org/x/time/rate"
 
+	"github.com/rknightion/graph2otel/internal/adminhttp"
 	"github.com/rknightion/graph2otel/internal/auth"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -212,7 +213,7 @@ func (c *Client) do(ctx context.Context, label string, body []byte) ([]byte, err
 		return nil, fmt.Errorf("huntclient: %s: acquire token: %w", label, err)
 	}
 
-	req, err := http.NewRequestWithContext(withLabel(ctx, label),
+	req, err := http.NewRequestWithContext(adminhttp.WithLabel(ctx, label),
 		http.MethodPost, c.baseURL+runQueryPath, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("huntclient: %s: build request: %w", label, err)

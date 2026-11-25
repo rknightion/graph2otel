@@ -149,6 +149,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"golang.org/x/time/rate"
 
+	"github.com/rknightion/graph2otel/internal/adminhttp"
 	"github.com/rknightion/graph2otel/internal/auth"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 )
@@ -443,7 +444,7 @@ func (c *Client) do(ctx context.Context, cmdlet string, body []byte) ([]byte, er
 
 	// The cmdlet name rides the context so the transport can label its metrics
 	// without re-reading the request body.
-	req, err := http.NewRequestWithContext(withCmdlet(ctx, cmdlet),
+	req, err := http.NewRequestWithContext(adminhttp.WithLabel(ctx, cmdlet),
 		http.MethodPost, c.invokeURL(), bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("exoclient: %s: build request: %w", cmdlet, err)
