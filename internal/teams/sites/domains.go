@@ -36,31 +36,45 @@ func NewDomains(rules []string) (Domains, error) {
 	return d, nil
 }
 
+// IdentityScope describes how an observed UPN compares with the configured
+// domains. It is not a directory membership or network location verdict.
+type IdentityScope string
+
+const (
+	ScopeInternal IdentityScope = "internal"
+	ScopeExternal IdentityScope = "external"
+	ScopeUnknown  IdentityScope = "unknown"
+)
+
 // IsInternal reports whether a participant's UPN domain matches a rule.
-// An absent or malformed UPN is not internal. Do not use this to drop records.
-func (d Domains) IsInternal(upn string) bool {
+// A false result includes unknown scope, not just external identities.
+func (d Domains) IsInternal(upn string) bool { return d.Classify(upn) == ScopeInternal }
+
+// Classify reports unknown if there are no configured domains or no usable
+// UPN. Otherwise it reports internal for a match and external for a non-match.
+func (d Domains) Classify(upn string) IdentityScope {
 	if len(d.exact) == 0 && len(d.suffix) == 0 {
-		return false
+		return ScopeUnknown
 	}
 	local, domain, ok := strings.Cut(strings.TrimSpace(upn), "@")
 	if !ok || local == "" || strings.ContainsFunc(local, func(r rune) bool {
 		return unicode.IsSpace(r) || unicode.IsControl(r)
 	}) {
-		return false
+		return ScopeUnknown
 	}
 	domain, ok = domainName(domain)
 	if !ok {
-		return false
+		return ScopeUnknown
 	}
 	if _, ok := d.exact[domain]; ok {
-		return true
+		return ScopeInternal
 	}
 	for _, tail, more := strings.Cut(domain, "."); more; _, tail, more = strings.Cut(tail, ".") {
 		if _, ok := d.suffix[tail]; ok {
-			return true
+			return ScopeInternal
 		}
 	}
-	return false
+	return ScopeExternal
 }
 
 func domainName(name string) (string, bool) {

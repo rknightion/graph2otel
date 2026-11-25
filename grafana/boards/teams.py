@@ -505,14 +505,41 @@ def detail(b):
 
 
 def users(b):
-    b.text("Enter an exact UPN to find dated endpoints and calls organised by that user. "
-           "A user can appear on both stream sides or across versions. No poor-call ranking is available: "
-           "ranking a limited record view would not rank the tenant.", title="Investigate one user", h=4)
+    b.text("Choose a UPN below or enter an exact **User UPN**. The lists show the most recent dated observation "
+           "in each source's sample, per tenant and exact UPN. A UPN can occur in several lists. "
+           "These are observed stream sides and organisers, not a meeting roster or a ranking. "
+           "A user's presence on a stream does not establish impact or fault.", title="Investigate one user", h=4)
+    for event, side, title in ((STREAM, "caller", "Observed caller UPNs"),
+                               (STREAM, "callee", "Observed callee UPNs"),
+                               (CALL, "organizer", "Observed organiser UPNs")):
+        key = f"{side}_user_principal_name"
+        panel = b.records(event, title, (key,), h=6,
+                          filters=[f("tenant_id", "ne", ""), f("start_time", "ne", ""), f(key, "ne", "")],
+                          desc="One row per tenant and recorded UPN from the recent dated log sample. "
+                               "Unlabelled tenants and unreported UPNs are not listed.")
+        panel["transformations"].append({"id": "groupBy", "options": {"fields": {
+            "tenant_id": {"operation": "groupby"}, key: {"operation": "groupby"},
+            "Time": {"operation": "aggregate", "aggregations": ["max"]},
+        }}})
+        panel["options"]["sortBy"] = [{"displayName": "Last observed", "desc": True}]
+        _override(panel, "Time (max)", "displayName", "Last observed")
+        panel["fieldConfig"]["defaults"]["noValue"] = "No dated UPN observations with a tenant label in range."
+        _link(panel, key, "Users", "user")
+
+    scopes = ("caller_identity_scope", "callee_identity_scope")
+    # Backward compatibility: absence of the enum on old records is unknown,
+    # regardless of the old boolean, user ID, site or connection information.
+    show_unknown = Raw("label_format " + ", ".join(f'{key}=`{{{{ .{key} | default "unknown" }}}}`' for key in scopes),
+                       keys=scopes, reason="Show unknown on historical records without a scope")
     panel = b.records(STREAM, "Recent stream observations for the selected user", (
-        "call_id", "version", "stream_id", "caller_user_principal_name", "callee_user_principal_name",
-        "caller_platform", "caller_transport_protocol", "callee_transport_protocol", "stream_health",
+        "call_id", "version", "stream_id", "direction", "caller_user_principal_name", "callee_user_principal_name",
+        *scopes, "caller_platform", "caller_transport_protocol", "callee_transport_protocol", "stream_health",
     ), filters=[f("call_id", "ne", ""),
-                _matches("user", "caller_user_principal_name", "callee_user_principal_name", required=True)])
+                _matches("user", "caller_user_principal_name", "callee_user_principal_name", required=True),
+                show_unknown],
+       desc="Scope compares a reported UPN with the configured domains. Unknown is not external; "
+            "it includes an unavailable UPN, an unconfigured rule set or an older record without scope. "
+            "Direction describes the stream, not who is at fault.")
     _link(panel, "call_id", "Call detail", "call_id")
     panel = b.records(CALL, "Recent calls organised by the selected user", (
         "call_id", "version", "organizer_user_principal_name", "call_type", "call_health", "duration_seconds",

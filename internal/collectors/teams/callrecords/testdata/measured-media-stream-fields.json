@@ -1,0 +1,26 @@
+[
+  {
+    "averageBandwidthEstimate": null,
+    "averageRatioOfConcealedSamples": null,
+    "isAudioForwardErrorCorrectionUsed": false,
+    "maxRatioOfConcealedSamples": null
+  },
+  {
+    "averageBandwidthEstimate": null,
+    "averageRatioOfConcealedSamples": 0,
+    "isAudioForwardErrorCorrectionUsed": null,
+    "maxRatioOfConcealedSamples": 0
+  },
+  {
+    "averageBandwidthEstimate": null,
+    "averageRatioOfConcealedSamples": 0.0005,
+    "isAudioForwardErrorCorrectionUsed": false,
+    "maxRatioOfConcealedSamples": 0.002997
+  },
+  {
+    "averageBandwidthEstimate": 920568,
+    "averageRatioOfConcealedSamples": 0,
+    "isAudioForwardErrorCorrectionUsed": false,
+    "maxRatioOfConcealedSamples": 0
+  }
+]

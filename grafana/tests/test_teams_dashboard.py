@@ -73,7 +73,11 @@ class TeamsDashboardTests(unittest.TestCase):
                             self.assertEqual(parts.path, "/d/graph2otel-teams")
                             query = parse_qs(parts.query)
                             target = next(tab for tab in tabs if v2.slug(tab) == query["dtab"][0])
-                            variable = "call_id" if field == "call_id" else "site"
+                            variable = {
+                                "call_id": "call_id", "site": "site", "caller_site": "site", "callee_site": "site",
+                                "caller_user_principal_name": "user", "callee_user_principal_name": "user",
+                                "organizer_user_principal_name": "user",
+                            }[field]
                             self.assertEqual(query[f"var-{variable}"], ["Sample / `?&=Site"])
                             self.assertEqual(query["var-tenant"], ["example-tenant"])
                             self.assertEqual(query["from"] + query["to"], ["100", "200"])
@@ -82,8 +86,53 @@ class TeamsDashboardTests(unittest.TestCase):
                             routes.add((source, target, variable))
         self.assertEqual(routes, {
             ("Sites and network", "Calls", "site"), ("Calls", "Call detail", "call_id"),
-            ("Users", "Call detail", "call_id"),
+            ("Users", "Call detail", "call_id"), ("Users", "Users", "user"),
         })
+
+    def test_users_index_requires_dated_tenant_scoped_upns(self):
+        indexed = set()
+        for panel in self.panels_by_tab()["Users"]:
+            transforms = {t["group"]: t["spec"]["options"]
+                          for t in panel["data"]["spec"]["transformations"]}
+            if "groupBy" not in transforms:
+                continue
+            grouping = transforms["groupBy"]["fields"]
+            upn = next(key for key in grouping if key.endswith("_user_principal_name"))
+            self.assertEqual({k for k, v in grouping.items() if v["operation"] == "groupby"}, {"tenant_id", upn})
+            self.assertEqual(grouping["Time"]["aggregations"], ["max"])
+            targets = panel["data"]["spec"]["queries"]
+            self.assertEqual(len(targets), 1)
+            query = targets[0]["spec"]["query"]
+            self.assertEqual(query["group"], "loki")
+            self.assertEqual(query["spec"]["queryType"], "range")
+            self.assertGreater(query["spec"]["maxLines"], 0)
+            expr = query["spec"]["expr"]
+            self.assertIn('tenant_id=~"$tenant"', expr)
+            self.assertIn('| tenant_id!=``', expr)
+            self.assertIn(f'| {upn}!=``', expr)
+            self.assertIn('| start_time!=``', expr)
+            self.assertNotIn('${user:percentencode}', expr)
+            links = panel["vizConfig"]["spec"]["fieldConfig"]["overrides"]
+            self.assertTrue(any(o["matcher"]["options"] == upn and
+                                any(p["id"] == "links" for p in o["properties"]) for o in links))
+            indexed.add(upn)
+        self.assertEqual(indexed, {
+            "caller_user_principal_name", "callee_user_principal_name", "organizer_user_principal_name",
+        })
+
+    def test_users_stream_search_displays_unknown_scope_without_guessing(self):
+        queries = [q["spec"]["query"]["spec"]["expr"]
+                   for panel in self.panels_by_tab()["Users"] for q in panel["data"]["spec"]["queries"]]
+        selected = [expr for expr in queries if 'event_name=`teams.call_stream`' in expr
+                    and '${user:percentencode}' in expr]
+        self.assertEqual(len(selected), 1)
+        expr = selected[0]
+        keep = expr.rsplit(" | keep ", 1)[1].split(", ")
+        for side in ("caller", "callee"):
+            scope = f"{side}_identity_scope"
+            self.assertIn(scope, keep)
+            self.assertIn(f'{scope}=`{{{{ .{scope} | default "unknown" }}}}`', expr)
+            self.assertNotIn(f"{side}_is_internal", expr)
 
     def test_query_boundaries_on_a_teams_only_stack(self):
         for tab, panels in self.panels_by_tab().items():
