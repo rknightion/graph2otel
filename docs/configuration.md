@@ -201,8 +201,17 @@ tenants:
   host bits differ.
 - Site lookup uses the longest configured prefix covering the whole reported
   subnet. A matching subnet takes precedence over the endpoint IP. Without a
-  usable matching subnet, lookup tries the endpoint IP; without a match, the
-  result is `unmapped`. An omitted file leaves all sites unmapped.
+  usable matching subnet, lookup tries the endpoint IP, then the public reflexive
+  IP (the address Microsoft saw after NAT); without a match, the result is
+  `unmapped`. Browser clients report no subnet or endpoint IP, so a row for a
+  site's public egress address is what maps them. Graph masks the last octet of
+  some IPv4 reflexive addresses (`192.0.2.x`); a masked address only matches a
+  row of `/24` or shorter, so give egress rows a `/24` when that is accurate
+  enough. A user on a full-tunnel VPN or proxy maps to the site of that egress,
+  not to where they sit. A private or shared reflexive address is a
+  Microsoft-internal hop and never matches. The stream log's `caller_site_match` and `callee_site_match`
+  name the field that matched: `subnet`, `ip_address` or
+  `reflexive_ip_address`. An omitted file leaves all sites unmapped.
 - `internal_domains` classifies the domain of a participant's user principal name
   (UPN). `example.test` matches only that domain; `*.example.test` matches its
   proper subdomains at any depth, not the domain itself. Use both to cover both.

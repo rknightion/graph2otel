@@ -156,9 +156,10 @@ func mapSide(ep, parent endpoint, network Network, device Device, byID map[strin
 		}
 		name = first(name, parent.Name)
 	}
+	site, match := table.Lookup(network.Subnet, network.IP, network.ReflexiveIP)
 	return Side{
 		Identity: id, Agent: agent, Feedback: feedback, DeviceName: name,
-		Network: network, Device: device, Site: table.Lookup(network.Subnet, network.IP),
+		Network: network, Device: device, Site: site, SiteMatch: match,
 		IdentityScope: domains.Classify(id.UPN), IPClass: sites.ClassifyIP(network.IP),
 		RelayAddressPresent: sites.RelayUsed(network.RelayIP),
 	}

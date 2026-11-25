@@ -210,6 +210,7 @@ func setSide(a telemetry.Attrs, p string, s Side) {
 	setText(a, p+"site", s.Site.Name, maxTextBytes)
 	if s.Site.Name != sites.Unmapped {
 		setText(a, p+"site_country", s.Site.Country, maxTextBytes)
+		setText(a, p+"site_match", string(s.SiteMatch), maxTextBytes)
 		a[p+"site_latitude"] = s.Site.Latitude
 		a[p+"site_longitude"] = s.Site.Longitude
 	}

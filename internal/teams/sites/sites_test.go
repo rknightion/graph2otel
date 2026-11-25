@@ -25,7 +25,10 @@ func TestLookup(t *testing.T) {
 		"192.0.2.128/25,West,GB,0,-12.25\n"+
 		"192.0.2.0/24,Campus,GB,1,2\n"+
 		"2001:db8:1::/48,Annex,AU,-12,90\n"+
-		"2001:db8::/32,Region,AU,-90,180\n")
+		"2001:db8::/32,Region,AU,-90,180\n"+
+		"10.0.0.0/8,Corporate,GB,3,4\n"+
+		"203.0.113.0/25,Narrow,GB,5,6\n"+
+		"203.0.113.0/24,Wide,GB,7,8\n")
 	file, err := sites.Open(path)
 	if err != nil {
 		t.Fatal(err)
@@ -35,26 +38,39 @@ func TestLookup(t *testing.T) {
 	campus := sites.Site{Name: "Campus", Country: "GB", Latitude: 1, Longitude: 2}
 	annex := sites.Site{Name: "Annex", Country: "AU", Latitude: -12, Longitude: 90}
 	region := sites.Site{Name: "Region", Country: "AU", Latitude: -90, Longitude: 180}
+	narrow := sites.Site{Name: "Narrow", Country: "GB", Latitude: 5, Longitude: 6}
+	wide := sites.Site{Name: "Wide", Country: "GB", Latitude: 7, Longitude: 8}
+	unmapped := sites.Site{Name: "unmapped"}
 	for _, tc := range []struct {
-		name, subnet, ip string
-		want             sites.Site
+		name, subnet, ip, reflexive string
+		want                        sites.Site
+		match                       sites.MatchSource
 	}{
-		{"v4 overlap", "", "192.0.2.128", west},
-		{"v4 outside narrower range", "", "192.0.2.127", campus},
-		{"mapped v4", "", "::ffff:192.0.2.128", west},
-		{"v6 overlap", "", "2001:db8:1::7", annex},
-		{"v6 outside narrower range", "", "2001:db8:2::7", region},
-		{"subnet wins over address", "2001:db8:1:42::/64", "192.0.2.1", annex},
-		{"prefix must cover entire subnet", "192.0.2.128/24", "", campus},
-		{"bare subnet address", "192.0.2.128", "", west},
-		{"IP fallback on subnet miss", "198.51.100.0/24", "2001:db8:1::7", annex},
-		{"IP fallback on malformed subnet", "not-a-subnet", "192.0.2.1", campus},
-		{"unmapped", "", "198.51.100.1", sites.Site{Name: "unmapped"}},
-		{"no inputs", "", "", sites.Site{Name: "unmapped"}},
+		{"v4 overlap", "", "192.0.2.128", "", west, sites.MatchIP},
+		{"v4 outside narrower range", "", "192.0.2.127", "", campus, sites.MatchIP},
+		{"mapped v4", "", "::ffff:192.0.2.128", "", west, sites.MatchIP},
+		{"v6 overlap", "", "2001:db8:1::7", "", annex, sites.MatchIP},
+		{"v6 outside narrower range", "", "2001:db8:2::7", "", region, sites.MatchIP},
+		{"subnet wins over address", "2001:db8:1:42::/64", "192.0.2.1", "", annex, sites.MatchSubnet},
+		{"prefix must cover entire subnet", "192.0.2.128/24", "", "", campus, sites.MatchSubnet},
+		{"bare subnet address", "192.0.2.128", "", "", west, sites.MatchSubnet},
+		{"IP fallback on subnet miss", "198.51.100.0/24", "2001:db8:1::7", "", annex, sites.MatchIP},
+		{"IP fallback on malformed subnet", "not-a-subnet", "192.0.2.1", "", campus, sites.MatchIP},
+		{"unmapped", "", "198.51.100.1", "", unmapped, sites.MatchNone},
+		{"no inputs", "", "", "", unmapped, sites.MatchNone},
+		{"reflexive fallback when local fields miss", "", "198.51.100.1", "192.0.2.130", west, sites.MatchReflexive},
+		{"reflexive fallback with no local fields", "", "", "2001:db8:1::9", annex, sites.MatchReflexive},
+		{"local IP wins over reflexive", "", "192.0.2.1", "192.0.2.130", campus, sites.MatchIP},
+		{"masked reflexive matches its /24", "", "", "192.0.2.x", campus, sites.MatchReflexive},
+		{"masked reflexive never matches a narrower prefix", "", "", "203.0.113.x", wide, sites.MatchReflexive},
+		{"full reflexive matches the narrower prefix", "", "", "203.0.113.9", narrow, sites.MatchReflexive},
+		{"private reflexive is a provider hop", "", "", "10.0.17.160", unmapped, sites.MatchNone},
+		{"malformed masked reflexive", "", "", "192.0.x", unmapped, sites.MatchNone},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := table.Lookup(tc.subnet, tc.ip); got != tc.want {
-				t.Errorf("Lookup() = %+v, want %+v", got, tc.want)
+			got, match := table.Lookup(tc.subnet, tc.ip, tc.reflexive)
+			if got != tc.want || match != tc.match {
+				t.Errorf("Lookup() = %+v, %q, want %+v, %q", got, match, tc.want, tc.match)
 			}
 		})
 	}
@@ -151,8 +167,8 @@ func TestReload(t *testing.T) {
 		if err := file.Reload(); err == nil || !strings.Contains(err.Error(), "line 3") {
 			t.Fatalf("Reload() = %v, want validation error on line 3", err)
 		}
-		if got := file.Snapshot().Lookup("", "192.0.2.1").Name; got != "West" {
-			t.Errorf("after invalid reload = %q, want West", got)
+		if got, _ := file.Snapshot().Lookup("", "192.0.2.1", ""); got.Name != "West" {
+			t.Errorf("after invalid reload = %q, want West", got.Name)
 		}
 	})
 
@@ -173,11 +189,11 @@ func TestReload(t *testing.T) {
 		if err := file.Reload(); err != nil {
 			t.Fatal(err)
 		}
-		if got := file.Snapshot().Lookup("", "192.0.2.1").Name; got != "East" {
-			t.Errorf("after valid reload = %q, want East", got)
+		if got, _ := file.Snapshot().Lookup("", "192.0.2.1", ""); got.Name != "East" {
+			t.Errorf("after valid reload = %q, want East", got.Name)
 		}
-		if got := before.Lookup("", "192.0.2.1").Name; got != "West" {
-			t.Errorf("old snapshot changed to %q, want West", got)
+		if got, _ := before.Lookup("", "192.0.2.1", ""); got.Name != "West" {
+			t.Errorf("old snapshot changed to %q, want West", got.Name)
 		}
 	})
 
@@ -193,8 +209,8 @@ func TestReload(t *testing.T) {
 		if err := file.Reload(); err != nil {
 			t.Fatal(err)
 		}
-		if got := file.Snapshot().Lookup("", "192.0.2.1").Name; got != "unmapped" {
-			t.Errorf("after clearing sites = %q, want unmapped", got)
+		if got, _ := file.Snapshot().Lookup("", "192.0.2.1", ""); got.Name != "unmapped" {
+			t.Errorf("after clearing sites = %q, want unmapped", got.Name)
 		}
 	})
 
@@ -206,8 +222,8 @@ func TestReload(t *testing.T) {
 		if err = file.Reload(); err != nil {
 			t.Fatal(err)
 		}
-		if got := file.Snapshot().Lookup("", "192.0.2.1").Name; got != "unmapped" {
-			t.Errorf("without a configured file = %q, want unmapped", got)
+		if got, _ := file.Snapshot().Lookup("", "192.0.2.1", ""); got.Name != "unmapped" {
+			t.Errorf("without a configured file = %q, want unmapped", got.Name)
 		}
 	})
 }
@@ -217,11 +233,11 @@ func TestSampleFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := file.Snapshot().Lookup("", "192.0.2.130").Name; got != "Example Annex" {
-		t.Errorf("sample lookup = %q, want Example Annex", got)
+	if got, _ := file.Snapshot().Lookup("", "192.0.2.130", ""); got.Name != "Example Annex" {
+		t.Errorf("sample lookup = %q, want Example Annex", got.Name)
 	}
-	if got := file.Snapshot().Lookup("", "2001:db8:200::1").Name; got != "Example IPv6 Site" {
-		t.Errorf("sample lookup = %q, want Example IPv6 Site", got)
+	if got, _ := file.Snapshot().Lookup("", "2001:db8:200::1", ""); got.Name != "Example IPv6 Site" {
+		t.Errorf("sample lookup = %q, want Example IPv6 Site", got.Name)
 	}
 }
 

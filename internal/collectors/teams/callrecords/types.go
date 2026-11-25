@@ -86,6 +86,7 @@ type Side struct {
 	Network             Network
 	Device              Device
 	Site                sites.Site
+	SiteMatch           sites.MatchSource // which network field matched Site
 	IdentityScope       sites.IdentityScope
 	IPClass             sites.IPClass
 	RelayAddressPresent bool
