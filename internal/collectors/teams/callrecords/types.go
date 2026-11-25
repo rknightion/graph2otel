@@ -61,6 +61,12 @@ type StreamMetrics struct {
 	PacketUtilization                      *int64   `json:"packetUtilization"`
 	AudioCodec                             string   `json:"audioCodec"`
 	VideoCodec                             string   `json:"videoCodec"`
+
+	// live-measured 2026-11-25, #708 (Teams observability review).
+	AverageConcealedSamplesRatio *float64 `json:"averageRatioOfConcealedSamples"`
+	MaxConcealedSamplesRatio     *float64 `json:"maxRatioOfConcealedSamples"`
+	AverageBandwidthEstimateBPS  *int64   `json:"averageBandwidthEstimate"`
+	AudioFECUsed                 *bool    `json:"isAudioForwardErrorCorrectionUsed"`
 }
 
 // Side is one endpoint's identity, device and network evidence. An allocated
@@ -73,7 +79,7 @@ type Side struct {
 	Network             Network
 	Device              Device
 	Site                sites.Site
-	Internal            bool
+	IdentityScope       sites.IdentityScope
 	IPClass             sites.IPClass
 	RelayAddressPresent bool
 }

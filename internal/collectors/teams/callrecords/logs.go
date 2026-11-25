@@ -70,6 +70,12 @@ func (collector *Collector) streamLog(c Call, s Stream) telemetry.Event {
 	setFloat(a, semconv.AttrAveragePacketLossRate, m.AverageLoss)
 	setFloat(a, semconv.AttrMaxPacketLossRate, m.MaxLoss)
 	setFloat(a, semconv.AttrPostFECPacketLossRate, m.PostFECLoss)
+	setFloat(a, semconv.AttrAverageConcealedSamplesRatio, m.AverageConcealedSamplesRatio)
+	setFloat(a, semconv.AttrMaxConcealedSamplesRatio, m.MaxConcealedSamplesRatio)
+	setInt(a, semconv.AttrAverageBandwidthEstimateBPS, m.AverageBandwidthEstimateBPS)
+	if m.AudioFECUsed != nil {
+		telemetry.SetBool(a, semconv.AttrAudioFECUsed, *m.AudioFECUsed)
+	}
 	setFloat(a, semconv.AttrVideoFrameRate, m.VideoFrameRate)
 	setFloat(a, semconv.AttrReceivedFrameRate, m.ReceivedFrameRate)
 	setFloat(a, semconv.AttrVideoFrameLossPercent, m.VideoFrameLossPercent)
@@ -175,7 +181,8 @@ func setSide(a telemetry.Attrs, p string, s Side) {
 		a[p+"site_latitude"] = s.Site.Latitude
 		a[p+"site_longitude"] = s.Site.Longitude
 	}
-	a[p+semconv.AttrIsInternal] = s.Internal
+	a[p+semconv.AttrIsInternal] = s.IdentityScope == sites.ScopeInternal
+	a[p+semconv.AttrIdentityScope] = first(string(s.IdentityScope), string(sites.ScopeUnknown))
 	a[p+"relay_address_present"] = s.RelayAddressPresent
 	setText(a, p+"ip_class", string(s.IPClass), maxTextBytes)
 	n := s.Network
