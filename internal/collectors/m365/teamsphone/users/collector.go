@@ -115,11 +115,11 @@ func (u userConfiguration) twin() telemetry.Event {
 	if len(u.EffectivePolicyAssignments) != 0 {
 		// These wire structs contain only strings and pointers to strings-only structs.
 		encoded, _ := json.Marshal(u.EffectivePolicyAssignments)
-		telemetry.SetStr(attrs, "effective_policy_assignments", string(encoded))
+		telemetry.SetStr(attrs, semconv.AttrEffectivePolicyAssignments, string(encoded))
 	}
 	if len(u.TelephoneNumbers) != 0 {
 		encoded, _ := json.Marshal(u.TelephoneNumbers)
-		telemetry.SetStr(attrs, "telephone_numbers", string(encoded))
+		telemetry.SetStr(attrs, semconv.AttrTelephoneNumbers, string(encoded))
 	}
 	// This is a current inventory observation, not a past change event.
 	// Keep source dates as attributes so old accounts still have log twins.
