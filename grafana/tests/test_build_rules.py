@@ -844,6 +844,14 @@ class TestExportThrottleExhaustedFiresOnFirstEvent(unittest.TestCase):
                                  capture_output=True, text=True)
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
 
+    def test_exhausted_rule_counts_a_series_born_at_one_without_promtool(self):
+        # CI has no promtool, so the test above is skipped there. Assert the shape that
+        # makes a newly born series count: plain increase() reads a counter born at 1 as 0.
+        rule = next(r for r in build_rules.RULES if r["uid"] == "g2o-export-throttle-exhausted")
+        expr = rule["data"][0]["model"]["expr"]
+        metric = build_rules._m("graph2otel.export.throttle_exhausted")
+        self.assertIn(f"unless {metric} offset", expr)
+
 
 if __name__ == "__main__":
     unittest.main()
