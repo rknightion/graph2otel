@@ -426,10 +426,9 @@ that needs no action. See below.
 
 **Paused by default, and the reason matters.** A nonzero value is *expected* on a
 blob-derived stream. Those replay historical records, so a record can cross the
-7-day window by ordinary aging with nothing misconfigured anywhere:
-#297 measured graph2otel's
-blob-ingested Intune stream at 3.31 days old at the newest, 5.97 median and 6.95
-oldest. Enabling this rule at `>0` on such a tenant pages on normal behaviour.
+7-day window by ordinary aging even without a misconfiguration. In #297,
+graph2otel's blob-ingested Intune stream was 3.31 days old at the newest,
+5.97 days at the median and 6.95 days at the oldest. Enabling this rule at `>0` on such a tenant pages on normal behaviour.
 
 **Unblock condition:** open **Self-obs → Backend accept window** and read your own
 steady-state rate over a week. Raise the rule's threshold above it, then enable.
@@ -461,9 +460,8 @@ fires on **any** rejection class — a size limit, a label-count limit, an expir
 credential, a payload cap, a limit the backend introduces next year — without
 anyone having predicted it. Treat the per-limit rules as diagnostics that tell
 you *which* limit; treat this one as the thing that tells you a limit exists at
-all. It is what would have caught
-#419 on the day it began,
-rather than days later by grepping container logs.
+all. It would have caught #419 on the day it began, rather than days later
+by grepping container logs.
 
 **Known blind spot — this rule's silence is not proof of health.** Its own
 evidence travels through the **metrics** exporter, so a *total* metrics outage
