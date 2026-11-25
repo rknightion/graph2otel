@@ -169,6 +169,8 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/purview/retentionlabels"
 	_ "github.com/rknightion/graph2otel/internal/collectors/purview/sensitivitylabels"
 	_ "github.com/rknightion/graph2otel/internal/collectors/selfobs/blobcategories"
+	_ "github.com/rknightion/graph2otel/internal/collectors/teams/autoattendants"
+	_ "github.com/rknightion/graph2otel/internal/collectors/teams/callqueues"
 	_ "github.com/rknightion/graph2otel/internal/collectors/teams/directroutingcalls"
 	_ "github.com/rknightion/graph2otel/internal/collectors/teams/pstncalls"
 	_ "github.com/rknightion/graph2otel/internal/collectors/teams/voiceapps"

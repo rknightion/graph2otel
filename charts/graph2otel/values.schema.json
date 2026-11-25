@@ -179,6 +179,8 @@
                 "purview.ediscovery_cases",
                 "purview.retention_labels",
                 "purview.sensitivity_labels",
+                "teams.auto_attendants",
+                "teams.call_queues",
                 "teams.call_records",
                 "teams.direct_routing_calls",
                 "teams.phone_numbers",

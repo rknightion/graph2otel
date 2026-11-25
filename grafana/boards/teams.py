@@ -1165,6 +1165,8 @@ def admin_config(b):
            "configuration from the Teams admin API. Each object is a log twin with a config_sha256 "
            "that changes when its exported configuration changes.",
            title="Teams admin configuration", h=3, w=24)
+    b.metric("teams.call_queue.count", title="Call queues by routing method", by=["routing_method"],
+             desc="Queues with a missing or unrecognised routing method count under unknown.")
 
 
 CALLS_EMPTY = "Teams publishes a call record after the call ends, sometimes hours later."
