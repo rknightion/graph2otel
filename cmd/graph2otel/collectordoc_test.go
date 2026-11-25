@@ -19,7 +19,7 @@ var updateCollectorDoc = flag.Bool("update", false, "rewrite generated collector
 
 // These gates live in package main, and that placement is the point (#139).
 //
-// The registry is populated only by the blank imports in collectors_import.go,
+// The registry is populated by the collector imports in package main,
 // which is package main's own file. Any other home for this test would need its
 // own copy of that import list — and a collector added to production but missed
 // off the copy would be invisible to the very gate meant to catch it, which is

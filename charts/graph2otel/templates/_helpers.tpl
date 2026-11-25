@@ -56,3 +56,17 @@ config.example.yaml documents as never being config-file material.
 {{- define "graph2otel.config" -}}
 {{ .Values.config | toYaml }}
 {{- end -}}
+
+{{- define "graph2otel.callNotificationPort" -}}
+{{- if ne (int .Values.replicaCount) 1 -}}
+{{- fail "call notifications require replicaCount: 1" -}}
+{{- end -}}
+{{- $port := splitList ":" .Values.config.call_notifications.addr | last -}}
+{{- if or (not (regexMatch ":[1-9][0-9]{0,4}$" .Values.config.call_notifications.addr)) (gt (int $port) 65535) -}}
+{{- fail "call notifications require an explicit config.call_notifications.addr and port" -}}
+{{- end -}}
+{{- if and .Values.config.admin.enabled (eq (int $port) (.Values.config.admin.addr | splitList ":" | last | int)) -}}
+{{- fail "call notifications cannot use the admin port" -}}
+{{- end -}}
+{{- $port -}}
+{{- end -}}

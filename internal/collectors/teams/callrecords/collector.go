@@ -114,8 +114,8 @@ func (c *Collector) CollectWindow(ctx context.Context, from, to time.Time, e tel
 }
 
 // CollectCall ingests a call by ID without moving the polling watermark. A
-// future notification receiver must use the same tenant Collector instance and
-// pass only the call ID, never a URL or a version from the notification. Poll
+// notification receiver uses the same tenant Collector instance and passes
+// only the call ID, never a URL or a version from the notification. Poll
 // and direct fetch share hydration, enrichment, emission and durable dedupe.
 func (c *Collector) CollectCall(ctx context.Context, id string, e telemetry.Emitter, outcomes *recordoutcome.Recorder) error {
 	if err := c.acquire(ctx); err != nil {

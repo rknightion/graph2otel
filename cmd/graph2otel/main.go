@@ -372,9 +372,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	defer cancelTenants()
 	sources, skips, limiter, waitTenants, err := startTenants(tenantCtx, cfg, provider, logger, geoIPReaders)
 	if err != nil {
-		// A collector config that must not run (#144). Fatal on purpose: this
-		// state ships every record twice while every collector reports healthy,
-		// so a warning would be a line in a log about a system that looks fine.
+		// Refuse an invalid collector configuration or enabled HTTPS listener
+		// that could not start. Drain anything already running.
 		logger.Error("refusing to start", "error", err)
 		cancelTenants()
 		waitTenants()
