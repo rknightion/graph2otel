@@ -186,6 +186,25 @@ class TeamsInvestigationLogQLTests(unittest.TestCase):
                                   [[*row, unit] for row, unit in zip(selected, units)])
         self.assertEqual(self.query(target, rows, fields, call=""), [])
 
+    def test_call_roster_keeps_versions_and_distinct_id_kinds(self):
+        call_id = "fixture call / `?&"
+        base = {"event_name": "teams.call_participant", "tenant_id": "fixture-tenant", "call_id": call_id}
+        rows = [
+            {**base, "version": "1", "participant_id": "row-a", "id": "identity-a", "identity_kind": "user"},
+            {**base, "version": "2", "participant_id": "row-a", "id": "identity-b", "identity_kind": "user"},
+            {**base, "version": "2", "identity_kind": "unknown"},
+            {**base, "version": "2", "tenant_id": "different-tenant", "participant_id": "other-tenant"},
+            {**base, "version": "2", "call_id": "different call", "participant_id": "other-call"},
+            {**base, "version": "2", "event_name": "teams.call_stream", "participant_id": "stream-not-roster"},
+        ]
+        target = query_models(panel("Participant roster by call version"))[0]
+        fields = ("version", "participant_id", "identity_kind", "id")
+        self.assertCountEqual(self.query(target, rows, fields, call=call_id), [
+            ["1", "row-a", "user", "identity-a"], ["2", "row-a", "user", "identity-b"],
+            ["2", "", "unknown", ""],
+        ])
+        self.assertEqual(self.query(target, rows, fields, call=""), [])
+
     def test_call_bounds_include_peer_intervals_outside_one_call_version(self):
         base = {"tenant_id": "fixture-tenant", "call_id": "fixture-call"}
         records = []

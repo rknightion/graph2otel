@@ -139,9 +139,15 @@ def _duration():
     return _require(template, ["duration_seconds"], "Compare present durations to an optional numeric minimum")
 
 
+def _tab_route(title):
+    # Grafana 13 writes and matches lower-case scene routes; a mixed-case
+    # dtab can silently select Overview even with valid scoped variables.
+    return v2.slug(title).lower()
+
+
 def _link(panel, field, tab, variable):
     # Use the row tenant, not a possibly multi-tenant dashboard selection.
-    url = (f"/d/{NAME}?dtab={v2.slug(tab)}&from=${{__from}}&to=${{__to}}"
+    url = (f"/d/{NAME}?dtab={_tab_route(tab)}&from=${{__from}}&to=${{__to}}"
            + "&${datasource:queryparam}&${loki_datasource:queryparam}"
            + "&var-tenant=${__data.fields.tenant_id:percentencode}"
            + f"&var-{variable}=${{__value.raw:percentencode}}")
@@ -275,7 +281,7 @@ def overview(b):
                    "The same selection can cover different events on those clocks. "
                    "Caller endpoints are not necessarily call initiators. For missing signals, see **Collector health**.",
                    title="Teams call quality", h=3)
-    intro["links"] = [{"title": tab, "url": f"/d/{NAME}?dtab={v2.slug(tab)}"
+    intro["links"] = [{"title": tab, "url": f"/d/{NAME}?dtab={_tab_route(tab)}"
                        "&from=${__from}&to=${__to}&${__all_variables}"}
                       for tab in ("Call quality", "Service health")]
     _call_count_panels(b)
@@ -617,7 +623,7 @@ def _call_timeline(b, selected):
                                                 noValue="No dated streams. Open or enter a call ID.")
     bounds["fieldConfig"]["defaults"]["links"] = [{
         "title": "Open stream timeline at call bounds",
-        "url": (f"/d/{NAME}?dtab={v2.slug('Call detail')}&viewPanel={timeline['id']}&"
+        "url": (f"/d/{NAME}?dtab={_tab_route('Call detail')}&viewPanel={timeline['id']}&"
                 'from=${__data.fields["From (padded)"].numeric}&to=${__data.fields["To (padded)"].numeric}'
                 "&${datasource:queryparam}&${loki_datasource:queryparam}&${call_id:queryparam}"
                 "&var-tenant=${__data.fields.Tenant.text:percentencode}"),
@@ -686,6 +692,15 @@ def detail(b):
        desc="Application identity kinds and observed callee bot roles, not a count of all bots or attendees. "
             "Caller app ID and bot role are not catalogued.")
     bots["fieldConfig"]["defaults"]["noValue"] = "No application or bot evidence for the selected call."
+
+    roster = {"version": "Version", "participant_id": "Roster row ID", "identity_kind": "Identity kind",
+              "id": "Identity ID", "display_name": "Display name", "user_principal_name": "UPN"}
+    panel = b.records("teams.call_participant", "Participant roster by call version", tuple(roster), filters=selected,
+                      desc="Graph roster observations for accepted versions, dated at call start. "
+                           "Roster row and identity IDs are separate. This is not a join to media endpoints, "
+                           "participant join times or quality impact, and is not an atomic source snapshot.")
+    _detail_columns(panel, roster)
+    panel["fieldConfig"]["defaults"]["noValue"] = "No roster rows visible. Select a tenant and a call ID."
 
 
 def users(b):

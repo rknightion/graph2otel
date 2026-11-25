@@ -1,12 +1,12 @@
 """Contracts on the separate generated Teams dashboard."""
 
 import json
-from pathlib import Path
 import re
 import shutil
 import subprocess
 import tempfile
 import unittest
+from pathlib import Path
 from urllib.parse import parse_qs, quote, urlsplit
 
 import catalog
@@ -51,6 +51,7 @@ class TeamsDashboardTests(unittest.TestCase):
 
     def test_site_and_call_links_keep_the_row_tenant_and_time(self):
         tabs = self.panels_by_tab()
+        destinations = {v2.slug(title).lower(): title for title in tabs}
         routes = set()
         for source, panels in tabs.items():
             for panel in panels:
@@ -72,7 +73,9 @@ class TeamsDashboardTests(unittest.TestCase):
                             parts = urlsplit(url)
                             self.assertEqual(parts.path, "/d/graph2otel-teams")
                             query = parse_qs(parts.query)
-                            target = next(tab for tab in tabs if v2.slug(tab) == query["dtab"][0])
+                            slug = query["dtab"][0]
+                            self.assertIn(slug, destinations)
+                            target = destinations[slug]
                             variable = {
                                 "call_id": "call_id", "site": "site", "caller_site": "site", "callee_site": "site",
                                 "caller_user_principal_name": "user", "callee_user_principal_name": "user",
@@ -88,6 +91,15 @@ class TeamsDashboardTests(unittest.TestCase):
             ("Sites and network", "Calls", "site"), ("Calls", "Call detail", "call_id"),
             ("Users", "Call detail", "call_id"), ("Users", "Users", "user"),
         })
+
+    def test_panel_navigation_uses_the_routes_grafana_writes(self):
+        tabs = self.panels_by_tab()
+        overview = next(p for p in tabs["Overview"] if p["title"] == "Teams call quality")
+        self.assertEqual({parse_qs(urlsplit(link["url"]).query)["dtab"][0] for link in overview["links"]},
+                         {"call-quality", "service-health"})
+        bounds = next(p for p in tabs["Call detail"] if p["title"] == "Call bounds and timeline zoom")
+        links = bounds["vizConfig"]["spec"]["fieldConfig"]["defaults"]["links"]
+        self.assertEqual(parse_qs(urlsplit(links[0]["url"]).query)["dtab"], ["call-detail"])
 
     def test_users_index_requires_dated_tenant_scoped_upns(self):
         indexed = set()
