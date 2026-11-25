@@ -207,8 +207,9 @@ tenants:
   site's public egress address is what maps them. Graph masks the last octet of
   some IPv4 reflexive addresses (`192.0.2.x`); a masked address only matches a
   row of `/24` or shorter, so give egress rows a `/24` when that is accurate
-  enough. A private or shared reflexive address is a Microsoft-internal hop and
-  never matches. The stream log's `caller_site_match` and `callee_site_match`
+  enough. A user on a full-tunnel VPN or proxy maps to the site of that egress,
+  not to where they sit. A private or shared reflexive address is a
+  Microsoft-internal hop and never matches. The stream log's `caller_site_match` and `callee_site_match`
   name the field that matched: `subnet`, `ip_address` or
   `reflexive_ip_address`. An omitted file leaves all sites unmapped.
 - `internal_domains` classifies the domain of a participant's user principal name

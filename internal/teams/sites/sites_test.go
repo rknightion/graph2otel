@@ -26,7 +26,9 @@ func TestLookup(t *testing.T) {
 		"192.0.2.0/24,Campus,GB,1,2\n"+
 		"2001:db8:1::/48,Annex,AU,-12,90\n"+
 		"2001:db8::/32,Region,AU,-90,180\n"+
-		"10.0.0.0/8,Corporate,GB,3,4\n")
+		"10.0.0.0/8,Corporate,GB,3,4\n"+
+		"203.0.113.0/25,Narrow,GB,5,6\n"+
+		"203.0.113.0/24,Wide,GB,7,8\n")
 	file, err := sites.Open(path)
 	if err != nil {
 		t.Fatal(err)
@@ -36,6 +38,8 @@ func TestLookup(t *testing.T) {
 	campus := sites.Site{Name: "Campus", Country: "GB", Latitude: 1, Longitude: 2}
 	annex := sites.Site{Name: "Annex", Country: "AU", Latitude: -12, Longitude: 90}
 	region := sites.Site{Name: "Region", Country: "AU", Latitude: -90, Longitude: 180}
+	narrow := sites.Site{Name: "Narrow", Country: "GB", Latitude: 5, Longitude: 6}
+	wide := sites.Site{Name: "Wide", Country: "GB", Latitude: 7, Longitude: 8}
 	unmapped := sites.Site{Name: "unmapped"}
 	for _, tc := range []struct {
 		name, subnet, ip, reflexive string
@@ -57,7 +61,9 @@ func TestLookup(t *testing.T) {
 		{"reflexive fallback when local fields miss", "", "198.51.100.1", "192.0.2.130", west, sites.MatchReflexive},
 		{"reflexive fallback with no local fields", "", "", "2001:db8:1::9", annex, sites.MatchReflexive},
 		{"local IP wins over reflexive", "", "192.0.2.1", "192.0.2.130", campus, sites.MatchIP},
-		{"masked reflexive matches its /24, not a narrower prefix", "", "", "192.0.2.x", campus, sites.MatchReflexive},
+		{"masked reflexive matches its /24", "", "", "192.0.2.x", campus, sites.MatchReflexive},
+		{"masked reflexive never matches a narrower prefix", "", "", "203.0.113.x", wide, sites.MatchReflexive},
+		{"full reflexive matches the narrower prefix", "", "", "203.0.113.9", narrow, sites.MatchReflexive},
 		{"private reflexive is a provider hop", "", "", "10.0.17.160", unmapped, sites.MatchNone},
 		{"malformed masked reflexive", "", "", "192.0.x", unmapped, sites.MatchNone},
 	} {
