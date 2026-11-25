@@ -12,6 +12,15 @@
       ]
     },
     {
+      "Name": "m365.teams.user_configuration.effective_policy_assignments",
+      "Unit": "{policy}",
+      "Kind": "gauge",
+      "Description": "Reported Teams user effective policy assignments by policy type.",
+      "AttrKeys": [
+        "policy_type"
+      ]
+    },
+    {
       "Name": "m365.teams.user_configuration.users",
       "Unit": "{user}",
       "Kind": "gauge",
@@ -28,10 +37,12 @@
       "AttrKeys": [
         "account_type",
         "created_date_time",
+        "effective_policy_assignments",
         "enterprise_voice_enabled",
         "feature_types",
         "id",
         "modified_date_time",
+        "telephone_numbers",
         "user_principal_name"
       ]
     }

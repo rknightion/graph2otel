@@ -20,4 +20,6 @@ const (
 	AttrReverseNumberLookupOptions = "reverse_number_lookup_options"
 	AttrSupportedCustomerActions   = "supported_customer_actions"
 	AttrTelephoneNumber            = "telephone_number"
+	AttrTelephoneNumbers           = "telephone_numbers"
+	AttrEffectivePolicyAssignments = "effective_policy_assignments"
 )

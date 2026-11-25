@@ -90,10 +90,13 @@ issue. Do not record correction narratives here — those live on the issues.
   with `TeamsTelephoneNumber.Read.All` and `TeamsUserConfiguration.Read.All`,
   respectively `[live-measured 2026-11-24, #663 (Teams Phone inventory)]`.
   This measures API reads, not telemetry delivery.
-- `effectivePolicyAssignments` and `telephoneNumbers` were empty in all six
-  sampled user configurations, including the detail reads. The snapshot maps
-  neither nested list and emits no count by policy type. A non-empty,
-  sanitised sample is needed before mapping either list.
+- A later poller list of 13 user configurations had `telephoneNumbers` in
+  three rows and `effectivePolicyAssignments` in seven
+  `[live-measured 2026-11-25, #708 (Teams observability review)]`.
+  The nested `policyAssignment` carries `policyId`, `displayName` and
+  `assignmentType`; `policyType` is on the enclosing entry. The log twin
+  retains that nesting. The policy gauge counts returned assignments, not
+  defined policies or distinct users. Empty lists supply no assignments.
 
 ## Query mechanics (all workloads)
 
