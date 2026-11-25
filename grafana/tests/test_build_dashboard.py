@@ -1290,10 +1290,9 @@ class TestStructure(unittest.TestCase):
         self.assertTrue(d["spec"]["elements"])
 
     def test_no_orphan_dashboard_files(self):
-        """One dashboard file now, not six — a leftover old-named file would
-        be an orphan, unowned and stale."""
+        """Both boards must be present and no unowned dashboard may ship."""
         present = {f for f in os.listdir(build_dashboard.OUT_DIR) if f.endswith(".json")}
-        self.assertEqual(present, {build_dashboard.OUT_FILE})
+        self.assertEqual(present, {build_dashboard.OUT_FILE, build_dashboard.TEAMS_OUT_FILE})
 
     def test_group_keys_drops_an_id_that_has_a_name_twin(self):
         self.assertEqual(group_keys(["policy_id", "policy_name", "state"]),

@@ -89,20 +89,24 @@ jobs:
 
       # gitsync/grafana/graph2otel/ is its own GitSync folder ("graph2otel Dashboards"),
       # deliberately distinct from the "graph2otel" ALERTS folder the rules job writes.
-      - name: copy the generated dashboard into place
-        run: cp dashboards/graph2otel.json gitsync/grafana/graph2otel/graph2otel.json
+      - name: copy the generated dashboards into place
+        run: |
+          cp -- dashboards/graph2otel.json gitsync/grafana/graph2otel/graph2otel.json
+          cp -- dashboards/graph2otel-teams.json gitsync/grafana/graph2otel/graph2otel-teams.json
 
       - name: commit and push
         working-directory: gitsync
         run: |
           set -euo pipefail
-          if git diff --quiet; then
-            echo "dashboard already matches the stack source"
+          paths=(grafana/graph2otel/graph2otel.json grafana/graph2otel/graph2otel-teams.json)
+          git add -- "${paths[@]}"
+          if git diff --cached --quiet -- "${paths[@]}"; then
+            echo "dashboards already match the stack source"
             exit 0
           fi
           git config user.name  'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -am "Sync graph2otel dashboard from ${GITHUB_REPOSITORY}@${GITHUB_SHA}"
+          git commit -m "Sync graph2otel dashboards from ${GITHUB_REPOSITORY}@${GITHUB_SHA}" -- "${paths[@]}"
           # Grafana commits UI saves into this repo on its own, so a push can lose a
           # race with the stack. Rebase and retry rather than failing the sync.
           for attempt in 1 2 3; do
