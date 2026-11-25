@@ -1848,6 +1848,10 @@ def to_app_platform(rule: dict, group: str, interval: str, index: int) -> dict:
         entry = {"model": model}
         if node.get("datasourceUid") and node["datasourceUid"] != EXPR_UID:
             entry["datasourceUID"] = node["datasourceUid"]
+            # Grafana echoes the explicit Loki instant mode on the expression
+            # as well as in its model. Preserve it so strict read-back matches.
+            if node.get("queryType") == "instant":
+                entry["queryType"] = node["queryType"]
             window = node.get("relativeTimeRange") or {}
             entry["relativeTimeRange"] = {
                 "from": go_duration(window.get("from", 0)),
