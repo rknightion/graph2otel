@@ -51,6 +51,8 @@ Grafana 13.0.0 or newer. See
 
 ## Quickstart
 
+For a Teams-only deployment, start with the [Teams observability guide](docs/teams-observability.md).
+
 ### 1. Register the application
 
 Create an Entra ID app registration, grant the application permissions required
