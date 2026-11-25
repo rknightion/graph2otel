@@ -876,6 +876,14 @@ class TestAppPlatformProjection(unittest.TestCase):
             self.assertNotIn("datasourceUID", exprs[ref])
             self.assertNotIn("relativeTimeRange", exprs[ref])
 
+    def test_instant_loki_query_mode_matches_app_platform_readback(self):
+        """Grafana returns the explicit non-default mode outside the model too."""
+        for uid in ("g2o-teams-call-records-stale", "g2o-teams-service-incident-open"):
+            with self.subTest(uid=uid):
+                query = self._project(uid)["spec"]["expressions"]["A"]
+                self.assertEqual(query["queryType"], "instant")
+                self.assertEqual(query["model"]["queryType"], query["queryType"])
+
     def test_group_interval_becomes_a_per_rule_trigger(self):
         self.assertEqual(self._project()["spec"]["trigger"], {"interval": "5m"})
 

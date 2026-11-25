@@ -48,6 +48,7 @@ spec:
         intervalMs: 1000
         maxDataPoints: 43200
       datasourceUID: "grafanacloud-logs"
+      queryType: "instant"
       relativeTimeRange:
         from: "1h0m0s"
         to: "0s"
