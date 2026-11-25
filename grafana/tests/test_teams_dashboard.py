@@ -92,11 +92,34 @@ class TeamsDashboardTests(unittest.TestCase):
             ("Users", "Call detail", "call_id"), ("Users", "Users", "user"),
         })
 
-    def test_panel_navigation_uses_the_routes_grafana_writes(self):
+    def test_overview_diagnosis_links_keep_the_selected_scope(self):
         tabs = self.panels_by_tab()
         overview = next(p for p in tabs["Overview"] if p["title"] == "Teams call quality")
-        self.assertEqual({parse_qs(urlsplit(link["url"]).query)["dtab"][0] for link in overview["links"]},
-                         {"call-quality", "service-health"})
+        routes = {
+            "Call quality": "call-quality",
+            "Sites and network": "sites-and-network",
+            "Calls": "calls",
+            "PSTN and Direct Routing": "pstn-and-direct-routing",
+            "Service health": "service-health",
+            "Collector health": "collector-health",
+        }
+        self.assertCountEqual([link["title"] for link in overview["links"]], routes.keys())
+        scope = {"var-tenant": ["tenant-a", "tenant-b"], "var-datasource": ["example-prom"],
+                 "var-loki_datasource": ["example-logs"]}
+        variables = "&".join(f"{key}={value}" for key, values in scope.items() for value in values)
+        substitutions = {"__from": "100", "__to": "200", "__all_variables": variables}
+        for link in overview["links"]:
+            with self.subTest(destination=link["title"]):
+                self.assertIn(link["title"], tabs)
+                url = re.sub(r"\$\{([^}]+)\}", lambda m: substitutions[m[1]], link["url"])
+                parts = urlsplit(url)
+                self.assertEqual(parts.path, "/d/graph2otel-teams")
+                self.assertEqual(parse_qs(parts.query), {
+                    "dtab": [routes[link["title"]]], "from": ["100"], "to": ["200"], **scope,
+                })
+
+    def test_panel_navigation_uses_the_routes_grafana_writes(self):
+        tabs = self.panels_by_tab()
         bounds = next(p for p in tabs["Call detail"] if p["title"] == "Call bounds and timeline zoom")
         links = bounds["vizConfig"]["spec"]["fieldConfig"]["defaults"]["links"]
         self.assertEqual(parse_qs(urlsplit(links[0]["url"]).query)["dtab"], ["call-detail"])

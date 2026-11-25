@@ -276,22 +276,31 @@ def _client_legend(panel, *keys):
 
 
 def overview(b):
-    intro = b.text("Use **Call quality** and **Sites and network** for trends, then **Calls** and **Call detail** "
-                   "for evidence. Counters use processing time; logs use call or stream start. "
-                   "The same selection can cover different events on those clocks. "
-                   "Caller endpoints are not necessarily call initiators. For missing signals, see **Collector health**.",
-                   title="Teams call quality", h=3)
+    intro = b.text("Use the panel links for **Call quality** and **Sites and network** trends, "
+                   "or **PSTN and Direct Routing** for phone reports. In **Calls**, filter by duration or observed "
+                   "site, then open a call ID for details. For missing signals, see **Collector health**.\n\n"
+                   "Counters use processing time; logs use source event time. The same range can cover different "
+                   "events on those clocks, and late records can change log counts. Caller endpoints are not a "
+                   "count of distinct people and may not be call initiators.",
+                   title="Teams call quality", h=4)
     intro["links"] = [{"title": tab, "url": f"/d/{NAME}?dtab={_tab_route(tab)}"
                        "&from=${__from}&to=${__to}&${__all_variables}"}
-                      for tab in ("Call quality", "Service health")]
+                      for tab in ("Call quality", "Sites and network", "Calls", "PSTN and Direct Routing",
+                                  "Service health", "Collector health")]
     _call_count_panels(b)
     increase = {"op": "increase", "window": "$__range"}
     good = _agg(b, "teams.calls", match='call_health="good"', **increase)
     classified = _agg(b, "teams.calls", match='call_health=~"good|poor"', **increase)
-    _stat(b, "Good share of classified calls", _share(good, classified),
-          FIRST + " See the coverage table below for the denominator and unclassified count.", "percentunit", w=6)
+    share = _stat(b, "Good share of classified calls", _share(good, classified),
+                  FIRST + " See the coverage table below for the denominator and unclassified count.",
+                  "percentunit", w=6)
+    share["fieldConfig"]["defaults"]["noValue"] = "No positive classified denominator is visible; this is not 0%."
     _direct_routing_count_panels(b)
-    _service_status(b, "Microsoft Teams service status", "stat", 6)
+    status = _service_status(b, "Microsoft Teams service status", "stat", 6)
+    status["description"] += " It does not show whether a particular site is affected."
+    status["fieldConfig"]["defaults"]["noValue"] = (
+        "No Microsoft Teams status sample is visible. Check Service health and Collector health. "
+        "Missing status does not mean healthy.")
     _verdict_coverage(b, "call", "teams.calls", "good")
     _bars(b, "Calls by initial health", "teams.calls", ("call_health",), FIRST)
     _pie(b, "Calls by type in range", [_count(b, "teams.calls", keys=("type",))], ["{{tenant_id}} · {{type}}"],
@@ -307,7 +316,9 @@ def overview(b):
         f'sum by (tenant_id, platform) ({b.cat.metric("teams.client_versions").prom}{{{TENANT_SEL}}})'],
         viz="bargauge", unit="short", legends=["{{tenant_id}} · {{platform}}"],
         desc="Initial call counts per client platform, product and version bucket, summed by platform. "
-             "A call can contribute more than once to a platform. Latest 60 call-end minutes since process start.")
+             "A call can contribute more than once to a platform. Latest 60 call-end minutes since process start, "
+             "not a count over the selected range or a count of distinct people or devices.")
+    platforms["fieldConfig"]["defaults"]["noValue"] = "No recent client bucket samples are visible."
     _client_legend(platforms, "platform")
     platforms["description"] += " Tenant prefixes are display hints; inspect the series labels for full IDs."
     transitions = _bars(b, "Later call health transitions", "teams.call.health_transitions", ("from_health", "to_health"),
@@ -385,121 +396,245 @@ def quality(b):
 
 def _site_link(panel):
     _link(panel, "site", "Calls", "site")
+    panel["description"] += " Without a tenant label the site search includes all tenants."
 
 
-def _site_inventory(b):
-    q = site_queries(b.cat, grown=True, window="$__range", site=SITES, mapped_only=False)
-    span = {"keys": ("site",), "op": "increase", "window": "$__range", "match": SITES}
-    streams = _agg(b, "teams.streams", **span)
-    poor = _agg(b, "teams.streams", **{**span, "match": f'{SITES},stream_health="poor"'})
-    measured = _agg(b, "teams.streams", **{**span, "match": f'{SITES},stream_health=~"good|poor"'})
-    columns = (("Directional streams", f"round({streams})"), ("Poor share", _share(poor, measured, "site")),
-               ("Mean RTT", q["rtt"]), ("Mean jitter", q["jitter"]), ("Mean loss", q["loss"]),
-               ("TCP share", q["tcp"]))
-    panel = b.raw("Site inventory", [expr for _, expr in columns], viz="table", unit="short", w=24, h=9,
-                  desc="Every site value seen on a stream in range, including unmapped, overflow and other buckets. "
-                       "Poor share counts classified streams; means are audio-only. A blank cell means no evidence. "
-                       + FIRST)
+_NAMED_SITE = f'{SITES},site!~"unmapped|overflow|other|"'
+_AUDIO = 'media="audio"'
+
+
+def _site_streams(b, match=SITES, *, keys=("site",), window="$__range"):
+    return _agg(b, "teams.streams", keys=keys, match=match, op="increase", window=window)
+
+
+def _site_wifi(b, match, *, keys=("site",), window="$__range"):
+    known = _site_streams(b, f'{match},connection_type=~"wired|wifi|mobile|tunnel"', keys=keys, window=window)
+    wifi = _site_streams(b, f'{match},connection_type="wifi"', keys=keys, window=window)
+    return _share(wifi, known, *keys), known
+
+
+def _site_count(evidence, observed):
+    # Count zero only for tenants with observed traffic in this selection.
+    return (f"count by (tenant_id) ({evidence}) or on (tenant_id) "
+            f"(0 * count by (tenant_id) ({observed}))")
+
+
+def _site_table(b, title, columns, desc, *, h=5, empty, panel_id=None):
+    # Grafana must not merge a frame without tenant or site on Time alone.
+    # A tenant GUID cannot contain |, so the joined key stays unambiguous.
+    keyed = [f'label_join({expr}, "g2o_scope", "|", "tenant_id", "site")' for _, expr, _ in columns]
+    panel = b.raw(title, keyed, viz="table", unit="short", w=24, h=h, desc=desc, panel_id=panel_id)
     for target in panel["targets"]:
-        target["format"] = "table"
-    refs = [target["refId"] for target in panel["targets"]]
+        target.update(format="table", instant=True, range=False)
     panel["transformations"] = [
         {"id": "merge", "options": {}},
         {"id": "organize", "options": {
-            "excludeByName": {"Time": True},
-            "renameByName": {f"Value #{ref}": name for ref, (name, _) in zip(refs, columns)},
+            "excludeByName": {"Time": True, "g2o_scope": True},
+            "renameByName": {f"Value #{target['refId']}": name
+                             for target, (name, _, _) in zip(panel["targets"], columns)},
             "indexByName": {"tenant_id": 0, "site": 1},
         }},
     ]
+    defaults = panel["fieldConfig"]["defaults"]
+    defaults["noValue"] = empty
+    for name, _, unit in columns:
+        _override(panel, name, "noValue", "Unavailable")
+        if unit != "short":
+            _override(panel, name, "unit", unit)
+    _override(panel, "site", "noValue", "Unlabelled")
+    return panel
+
+
+def _site_inventory(b, observed, all_audio):
+    q = site_queries(b.cat, grown=True, window="$__range", site=SITES, mapped_only=False)
+    classified = _site_streams(b, f'{SITES},stream_health=~"good|poor"')
+    poor = _site_streams(b, f'{SITES},stream_health="poor"')
+    unclassified = _site_streams(b, f'{SITES},stream_health="unclassified"')
+    transport = _agg(b, "teams.stream.transport", keys=("site",), match=f'{SITES},transport=~"tcp|udp"',
+                     op="increase", window="$__range")
+    wifi, connection = _site_wifi(b, SITES)
+
+    def counted(expr):
+        return f"round(({expr}) or on (tenant_id, site) (0 * ({observed})))"
+
+    columns = (
+        ("Directional streams", f"round({observed})", "short"),
+        ("Classified streams", counted(classified), "short"),
+        ("Unclassified streams", counted(unclassified), "short"),
+        ("Poor share of classified", _share(poor, classified, "site"), "percentunit"),
+        ("Audio streams", counted(all_audio), "short"),
+        ("Mean audio RTT", q["rtt"], "s"), ("Mean audio jitter", q["jitter"], "s"),
+        ("Mean audio loss", q["loss"], "percentunit"),
+        ("Audio with TCP or UDP", counted(transport), "short"), ("Audio TCP share", q["tcp"], "percentunit"),
+        ("Streams with known connection type", counted(connection), "short"), ("Wi-Fi share", wifi, "percentunit"),
+    )
+    panel = _site_table(b, "Site inventory", columns, h=9, empty="No counted directional streams in this selection.",
+                        desc="One row per tenant and sender-site metric bucket. Unmapped, overflow, other and "
+                             "unlabelled rows are not named sites. Unavailable means no usable samples for that "
+                             "measurement or no positive denominator. Audio means use streams with known direction "
+                             "that report the measure. Verdict and Wi-Fi columns cover all media. Use a named site's "
+                             "link for an exact configured site search. " + FIRST + " " + COUNT_NOTE)
     panel["options"]["sortBy"] = [{"displayName": "Directional streams", "desc": True}]
-    for name, unit in (("Poor share", "percentunit"), ("Mean RTT", "s"), ("Mean jitter", "s"),
-                       ("Mean loss", "percentunit"), ("TCP share", "percentunit")):
-        _override(panel, name, "unit", unit)
-    _link(panel, "site", "Calls", "site")
+    _site_link(panel)
 
 
-def _network_kpis(b):
+def _network_kpis(b, measured, observed):
     q = site_queries(b.cat, grown=True, window="$__range", site=SITES, group="tenant_id", mapped_only=False)
-    wifi = _agg(b, "teams.streams", match=f'{SITES},connection_type="wifi"', op="increase", window="$__range")
-    known = _agg(b, "teams.streams", match=f'{SITES},connection_type=~"wired|wifi|mobile|tunnel"',
-                 op="increase", window="$__range")
-    mapped = site_queries(b.cat, grown=True, window="$__range", site=SITES)
-    note = " Every audio stream in range, including streams with no mapped site."
-    _stat(b, "Sites with audio measurements", f"count by (tenant_id) ({mapped['rtt']})",
-          "Mapped sites with at least one measured audio stream in range. Not the configured site count.", w=4)
-    for key, name, unit in (("rtt", "Mean audio round-trip time", "s"), ("jitter", "Mean audio jitter", "s"),
-                            ("loss", "Mean audio packet loss", "percentunit"), ("tcp", "Audio TCP share", "percentunit")):
-        _stat(b, name, q[key], name + "." + note, unit, w=4)
-    _stat(b, "Wi-Fi share of streams", _share(wifi, known),
-          "Directional streams on Wi-Fi among known connection types." + note, "percentunit", w=4)
+    wifi, _ = _site_wifi(b, SITES, keys=())
+    _stat(b, "Sites with audio measurements", _site_count(measured, observed),
+          "Named sender sites with at least one audio RTT, jitter, loss or known protocol observation in range. "
+          "Not the configured site count or the number evaluated against the local preset.", w=4)
+    scope = " Includes unmapped buckets when Site is All. See Site inventory for denominators."
+    for key, name, unit, desc in (
+        ("rtt", "Mean audio round-trip time", "s", "Audio streams with known direction and reported round-trip time."),
+        ("jitter", "Mean audio jitter", "s", "Audio streams with known direction and reported jitter."),
+        ("loss", "Mean audio packet loss", "percentunit", "Audio streams with known direction and reported loss."),
+        ("tcp", "Audio TCP share", "percentunit", "TCP among audio streams reporting sender TCP or UDP."),
+    ):
+        _stat(b, name, q[key], desc + scope, unit, w=4)
+    _stat(b, "Wi-Fi share of streams", wifi,
+          "Wi-Fi among directional streams of any media with known sender connection type." + scope, "percentunit", w=4)
 
 
 def sites(b):
-    _network_kpis(b)
+    observed = f"({_site_streams(b)}) > 0"
+    all_audio = _site_streams(b, f"{SITES},{_AUDIO}")
+    named_audio = _site_streams(b, f"{_NAMED_SITE},{_AUDIO}")
     queries = site_queries(b.cat, grown=True, window="$__range", site=SITES)
+    measured = " or ".join(f"({query})" for query in queries.values())
+    _network_kpis(b, measured, observed)
+
     status = compliance(queries, LOCAL, "<=")
-    status_note = ("Local preset: mean audio jitter ≤ 30 ms, round-trip time ≤ 200 ms, "
-                   "loss ≤ 2% and TCP share ≤ 1%. Only sites with all four measurements are evaluated. "
-                   "This is not a verified network path or a count of all configured sites.")
-    _pie(b, "Site compliance among evaluated sites", [
+    misses = f"({status}) == 0"
+    incomplete = f"((({named_audio}) > 0) or ({measured})) unless on (tenant_id, site) ({status})"
+    poor = _site_streams(b, f'{_NAMED_SITE},stream_health="poor"')
+    classified = _site_streams(b, f'{_NAMED_SITE},stream_health=~"good|poor"')
+    high_poor = f"({_share(poor, classified, 'site')}) > 0.05"
+    coverage = (
+        ("Preset evaluated", status), ("Audio sites not evaluated", incomplete), ("Missed preset", misses),
+        ("Sites with classified streams", f"({classified}) > 0"), ("Above 5% poor", high_poor),
+    )
+    _site_table(b, "Site assessment coverage", [(name, _site_count(expr, observed), "short") for name, expr in coverage],
+                "Counts named sender sites only. The preset needs all four audio measurements; poor share needs "
+                "classified streams of any media. Read each finding count beside its evaluated count: zero findings "
+                "with zero evaluated is not a pass. Unmapped and overflow traffic is in Site inventory.",
+                empty="No counted directional streams in this selection.", panel_id=1002)
+    status_note = ("Local preset: mean audio jitter ≤ 30 ms, round-trip time ≤ 200 ms, loss ≤ 2% and TCP share ≤ 1%. "
+                   "Each measure may use a different set of audio streams. This is not compliance with a "
+                   "network standard or a verified network path.")
+    ring = _pie(b, "Local preset among evaluated sites", [
         f"count by (tenant_id) (({status}) == {value})" for value in (1, 0)
     ], ["{{tenant_id}} · meets preset", "{{tenant_id}} · misses preset"], status_note, donut=True)
-    attention = b.raw("Measured sites missing the local preset", [f"({status}) == 0"],
-                      viz="table", desc=status_note)
+    ring["options"]["legend"]["values"] = ["value"]
+    ring["fieldConfig"]["defaults"]["noValue"] = "No named site had all four required audio measurements."
+    attention = _site_table(b, "Sites that did not meet the local preset", [("Preset result (0 = missed)", misses, "short")],
+                            status_note + " Compare the row's audio measurements in Site inventory.",
+                            empty="No misses listed. Check Site assessment coverage for the number evaluated.")
     _site_link(attention)
-    base = {"keys": ("site",), "op": "increase", "window": "$__range"}
-    named_site = f'{SITES},site!~"unmapped|overflow|other|"'
-    poor = _agg(b, "teams.streams", match=f'{named_site},stream_health="poor"', **base)
-    measured = _agg(b, "teams.streams", match=f'{named_site},stream_health=~"good|poor"', **base)
-    attention = b.raw("Sites above 5% poor classified streams", [f"({_share(poor, measured, 'site')}) > 0.05"],
-                      viz="table", unit="percentunit",
-                      desc="Directional streams from initial versions. Unclassified streams and metric overflow sites are excluded.")
+    attention = _site_table(b, "Sites above 5% poor classified streams", [("Poor share", high_poor, "percentunit")],
+                            "Poor among classified directional streams of any media. Unclassified streams and "
+                            "non-site buckets are excluded. See Site inventory for each site's classified count.",
+                            empty="No sites listed above 5%. Check Site assessment coverage for classified evidence.")
     _site_link(attention)
-    _site_inventory(b)
+    _site_inventory(b, observed, all_audio)
+    _site_observations(b)
+
+
+def _group_site_observations(panel, keys):
+    panel["transformations"].extend([
+        {"id": "groupBy", "options": {"fields": {
+            **{key: {"operation": "groupby", "aggregations": []} for key in keys},
+            "Time": {"operation": "aggregate", "aggregations": ["count", "max"]},
+        }}},
+        {"id": "organize", "options": {
+            "renameByName": {"Time (count)": "Stream observations (sample)", "Time (max)": "Latest stream start"},
+            "indexByName": {key: index for index, key in enumerate(keys)},
+        }},
+    ])
+    _override(panel, "Latest stream start", "unit", "dateTimeAsIso")
+
+
+def _site_observations(b):
     for side in ("caller", "callee"):
         site = f"{side}_site"
         lat, lon = f"{site}_latitude", f"{site}_longitude"
-        panel = b.records(STREAM, f"Observed {side} sites", (site, f"{site}_country", lat, lon),
-                          filters=[f(site, "nre", "unmapped|"), f(lat, "ne", ""), f(lon, "ne", "")],
-                          desc="Location from the configured site mapping, when seen on a stream. Not the full configured inventory.")
+        named = f(site, "nre", "unmapped|")
+        note = ("Named sites from the configured mapping, grouped by tenant and site within the recent Loki sample. "
+                "Unmapped sides are excluded because they name no site. Includes later versions. This is event "
+                "time; neither the Site metric dropdown nor the metric totals apply here. A site search from a row "
+                "without a tenant uses All tenants; it does not establish the row's tenant.")
+        panel = b.records(STREAM, f"Observed {side} sites", (site,), filters=[named], desc=note)
+        _group_site_observations(panel, ("tenant_id", site))
+        panel["options"]["sortBy"] = [{"displayName": "Latest stream start", "desc": True}]
+        panel["fieldConfig"]["defaults"]["noValue"] = (
+            f"No named {side} sites in the selected log range; unmapped sides are excluded.")
         _link(panel, site, "Calls", "site")
         if side == "caller":
-            # One side per query: a mapped coordinate is not a reflexive IP fix.
-            map_panel = b.records(STREAM, "Mapped caller site locations", (site, lat, lon),
-                                  filters=[f(lat, "ne", ""), f(lon, "ne", "")],
-                                  desc="Observed caller-side site coordinates, not call endpoints. "
-                                       "Compliance is shown separately; absence from this map proves nothing.")
+            map_panel = b.records(STREAM, "Mapped caller site locations", (lat, lon, site),
+                                  filters=[named, f(lat, "ne", ""), f(lon, "ne", "")],
+                                  desc="Caller site coordinates from the configured mapping, not endpoint locations or "
+                                       "preset results. One point per observed tenant, site and coordinate pair in "
+                                       "the log sample; Observed caller sites also lists sites without coordinates. "
+                                       "The two samples are separately capped, so do not divide their counts. A site "
+                                       "search from an unlabelled point includes all tenants.")
             map_panel["type"] = "geomap"
             map_panel["transformations"].append(_convert((lat, lon), "number"))
+            _group_site_observations(map_panel, ("tenant_id", lat, lon, site))
+            map_panel["fieldConfig"]["defaults"]["noValue"] = (
+                "No named caller sites with configured coordinates in this log range.")
+            _link(map_panel, site, "Calls", "site")
             map_panel["options"] = {"view": {"id": "fit", "allLayers": True}, "layers": [{
-                "type": "markers", "name": "Observed caller sites",
+                "type": "markers", "name": "Observed caller sites with coordinates",
                 "location": {"mode": "coords", "latitude": lat, "longitude": lon},
+                "config": {"showLegend": False, "style": {"color": {"fixed": "blue"}, "size": {"fixed": 9},
+                                                           "text": {"field": site, "mode": "field"},
+                                                           "textConfig": {"offsetY": -15}, "opacity": 1}},
                 "tooltip": True,
             }]}
 
 
+def _call_discovery(b, event, title, fields, *, filters, desc):
+    panel = b.records(event, title, ("call_id", *fields), filters=(*filters, f("tenant_id", "ne", "")),
+                      desc=desc)
+    # Grafana applies data links to an entire field, not individual rows. Put
+    # unlabelled evidence in a separate result with no link-bearing field.
+    unlabelled = Raw('label_format g2o_unlabelled_call_id=call_id | keep g2o_unlabelled_call_id, '
+                     + ', '.join(fields), keys=("call_id", *fields),
+                     reason="Show the original call ID as plain evidence without a tenant-scoped link")
+    panel["targets"].append({
+        **b._loki_query(b._selector(event, (*filters, f("tenant_id", "eq", ""), unlabelled)), ref="B"),
+        "maxLines": RECORD_LIMIT,
+    })
+    panel["description"] = panel["description"].replace(
+        ROW_NOTE, f" Up to {RECORD_LIMIT} recent rows per result (labelled or unlabelled) "
+                  "in the selected time range, not a census.")
+    _override(panel, "g2o_unlabelled_call_id", "displayName", "Call ID (tenant unavailable)")
+    _link(panel, "call_id", "Call detail", "call_id")
+
+
 def calls(b):
-    b.text("The call table filters by health, type, modality, organiser UPN and minimum duration. "
-           "Site is only recorded on stream sides. Use **Call IDs observed at the selected site** "
-           "when a site is entered, then follow the call ID to details. The general call table is "
-           "inactive during a site search. Site results match an optional user against either stream side; "
-           "call health, type, modality and duration filters only apply to the general call table. "
-           "Both views can show multiple versions.", title="How to search", h=5)
+    b.text("**Find a call:** clear Site search and use health, type, modality, organiser UPN or minimum duration. "
+           "For example, set health to `poor` and modality to `audio`. Text inputs match exact values.\n\n"
+           "**Find calls at a site:** enter the exact site name or follow a site link. This searches stream sides, "
+           "not whole calls. The optional user matches either side; health, type, modality and duration do not apply.\n\n"
+           "Open a linked call ID to see the same tenant and time window in Call detail. Each table can show "
+           "multiple versions. When both results are available, use the table's result selector: "
+           "unlabelled rows remain visible under All tenants but cannot open scoped detail.", title="How to search", h=5)
     site = _literal("site")
     general_calls = _require(f'{{{{if and .call_id (eq {site} "")}}}}yes{{{{end}}}}', ["call_id"],
                              "Show call-level rows only when a site search is not active")
-    panel = b.records(CALL, "Call records", (
-        "call_id", "version", "call_health", "call_type", "modalities", "participant_count",
+    _call_discovery(b, CALL, "Call records", (
+        "version", "call_health", "call_type", "modalities", "participant_count", "poor_stream_count",
         "organizer_user_principal_name", "duration_seconds", "start_time", "end_time",
     ), filters=[general_calls, _matches("health", "call_health"), _matches("call_type", "call_type"),
                 _matches("modality", "modalities", json_list=True),
-                _matches("user", "organizer_user_principal_name"), _duration()])
-    _link(panel, "call_id", "Call detail", "call_id")
-    panel = b.records(STREAM, "Call IDs observed at the selected site", (
-        "call_id", "version", "stream_id", "caller_site", "callee_site", "media", "stream_health",
+                _matches("user", "organizer_user_principal_name"), _duration()],
+        desc="One row per observed call version. Poor streams are not a count of affected participants.")
+    _call_discovery(b, STREAM, "Call IDs observed at the selected site", (
+        "version", "stream_id", "caller_site", "callee_site", "media", "stream_health",
     ), filters=[f("call_id", "ne", ""), _matches("site", "caller_site", "callee_site", required=True),
-                _matches("user", "caller_user_principal_name", "callee_user_principal_name")])
-    _link(panel, "call_id", "Call detail", "call_id")
+                _matches("user", "caller_user_principal_name", "callee_user_principal_name")],
+        desc="One row per matching stream observation, not a joined call summary. A call can appear more than once.")
 
 
 def _convert(fields, kind):
@@ -1178,13 +1313,11 @@ def practices(b):
            title="What the signals can establish", h=5, w=12)
     for key, name, unit in (("jitter", "Mean audio jitter by site", "s"), ("rtt", "Mean audio round-trip time by site", "s"),
                              ("loss", "Mean audio loss fraction by site", "percentunit")):
-        _slots(b.raw(name, [q[key]], unit=unit, legends=label, desc="Mapped sites only. " + SLOT_NOTE))
-    dims = {"keys": ("site",), "op": "increase", "window": "$__interval"}
-    wifi = _agg(b, "teams.streams", match=f'{SITES},connection_type="wifi"', **dims)
-    known = _agg(b, "teams.streams", match=f'{SITES},connection_type=~"wired|wifi|mobile|tunnel"', **dims)
-    _slots(b.raw("Wi-Fi share of observed connection types by site", [_share(wifi, known, "site")],
-           unit="percentunit", legends=label,
-           desc="Directional streams from first accepted versions, not a share of users or calls. "
+        _slots(b.raw(name, [q[key]], unit=unit, legends=label, desc="Mapped sender sites only. " + SLOT_NOTE),
+               share=unit == "percentunit")
+    wifi, _ = _site_wifi(b, _NAMED_SITE, window="$__interval")
+    _slots(b.raw("Wi-Fi share of observed connection types by site", [wifi], unit="percentunit", legends=label,
+           desc="Directional streams of any media at named sender sites, not a share of users or calls. "
                 "Unknown connection types are excluded. " + SLOT_NOTE), share=True)
 
 
