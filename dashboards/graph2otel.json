@@ -508,7 +508,8 @@
                         "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`entra\\..+`})",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
@@ -518,10 +519,12 @@
               "transformations": [
                 {
                   "kind": "Transformation",
-                  "group": "labelsToFields",
+                  "group": "organize",
                   "spec": {
                     "options": {
-                      "mode": "columns"
+                      "excludeByName": {
+                        "Time": true
+                      }
                     }
                   }
                 }
@@ -1813,14 +1816,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{group_id}}"
+                        "legendFormat": "{{tenant_id}} {{group_id}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -2356,14 +2372,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}}"
+                        "legendFormat": "{{tenant_id}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -2451,7 +2480,8 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "Organization info {{tenant_id}} {{tenant_type}}"
+                        "legendFormat": "Organization info {{tenant_id}} {{tenant_type}}",
+                        "format": "table"
                       }
                     }
                   }
@@ -2478,14 +2508,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "Organization age days {{tenant_id}}"
+                        "legendFormat": "Organization age days {{tenant_id}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -3921,14 +3964,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{method}}"
+                        "legendFormat": "{{tenant_id}} {{method}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -4106,14 +4162,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{setting}}"
+                        "legendFormat": "{{tenant_id}} {{setting}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -4359,14 +4428,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{policy_type}} {{requirements_satisfied}}"
+                        "legendFormat": "{{tenant_id}} {{policy_type}} {{requirements_satisfied}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -4439,14 +4521,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{access_type}} {{direction}} {{service}} {{target_kind}}"
+                        "legendFormat": "{{tenant_id}} {{access_type}} {{direction}} {{service}} {{target_kind}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -4519,14 +4614,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{setting}}"
+                        "legendFormat": "{{tenant_id}} {{setting}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -5312,14 +5420,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{caller}} {{enabled}} {{requirement}}"
+                        "legendFormat": "{{tenant_id}} {{caller}} {{enabled}} {{requirement}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -6229,14 +6350,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{account_enabled}} {{app_role_assignment_required}} {{has_owner}} {{has_sponsor}}"
+                        "legendFormat": "{{tenant_id}} {{account_enabled}} {{app_role_assignment_required}} {{has_owner}} {{has_sponsor}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -10669,7 +10803,8 @@
                         "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`intune\\..+`})",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
@@ -10679,10 +10814,12 @@
               "transformations": [
                 {
                   "kind": "Transformation",
-                  "group": "labelsToFields",
+                  "group": "organize",
                   "spec": {
                     "options": {
-                      "mode": "columns"
+                      "excludeByName": {
+                        "Time": true
+                      }
                     }
                   }
                 }
@@ -12748,14 +12885,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{policy_name}}"
+                        "legendFormat": "{{tenant_id}} {{policy_name}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -13548,14 +13698,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{profile_name}}"
+                        "legendFormat": "{{tenant_id}} {{profile_name}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -14078,14 +14241,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{config_name}} {{config_type}}"
+                        "legendFormat": "{{tenant_id}} {{config_name}} {{config_type}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -14158,14 +14334,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{config_name}}"
+                        "legendFormat": "{{tenant_id}} {{config_name}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -15498,14 +15687,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{profile_name}} {{setting}}"
+                        "legendFormat": "{{tenant_id}} {{profile_name}} {{setting}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -18883,14 +19085,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{category}} {{health_state}} {{manufacturer}} {{model}}"
+                        "legendFormat": "{{tenant_id}} {{category}} {{health_state}} {{manufacturer}} {{model}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -18963,14 +19178,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{health_state}} {{manufacturer}} {{model}}"
+                        "legendFormat": "{{tenant_id}} {{health_state}} {{manufacturer}} {{model}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -22292,7 +22520,8 @@
                         "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`(?:defender|mdca)\\..+`})",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
@@ -22302,10 +22531,12 @@
               "transformations": [
                 {
                   "kind": "Transformation",
-                  "group": "labelsToFields",
+                  "group": "organize",
                   "spec": {
                     "options": {
-                      "mode": "columns"
+                      "excludeByName": {
+                        "Time": true
+                      }
                     }
                   }
                 }
@@ -24504,14 +24735,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{node_label}} {{twinned}}"
+                        "legendFormat": "{{tenant_id}} {{node_label}} {{twinned}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -24584,14 +24828,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{edge_label}} {{twinned}}"
+                        "legendFormat": "{{tenant_id}} {{edge_label}} {{twinned}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -25384,14 +25641,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{category}}"
+                        "legendFormat": "{{tenant_id}} {{category}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -26405,7 +26675,8 @@
                         "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`(?:m365|teams)\\..+`})",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
@@ -26415,10 +26686,12 @@
               "transformations": [
                 {
                   "kind": "Transformation",
-                  "group": "labelsToFields",
+                  "group": "organize",
                   "spec": {
                     "options": {
-                      "mode": "columns"
+                      "excludeByName": {
+                        "Time": true
+                      }
                     }
                   }
                 }
@@ -26817,14 +27090,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{setting}}"
+                        "legendFormat": "{{tenant_id}} {{setting}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -26897,14 +27183,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{setting}}"
+                        "legendFormat": "{{tenant_id}} {{setting}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -28572,14 +28871,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{sharing_capability}} {{sharing_domain_restriction_mode}}"
+                        "legendFormat": "{{tenant_id}} {{sharing_capability}} {{sharing_domain_restriction_mode}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -29839,14 +30151,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{platform}}"
+                        "legendFormat": "{{tenant_id}} {{platform}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -29919,14 +30244,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}}"
+                        "legendFormat": "{{tenant_id}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -29999,14 +30337,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{activity}} {{days_ago}}"
+                        "legendFormat": "{{tenant_id}} {{activity}} {{days_ago}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -30439,14 +30790,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{activation_state}} {{assignment_status}} {{capability}} {{number_type}}"
+                        "legendFormat": "{{tenant_id}} {{activation_state}} {{assignment_status}} {{capability}} {{number_type}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -30602,14 +30966,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{account_type}} {{enterprise_voice_enabled}}"
+                        "legendFormat": "{{tenant_id}} {{account_type}} {{enterprise_voice_enabled}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -31159,14 +31536,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{service}}"
+                        "legendFormat": "{{tenant_id}} {{service}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -31368,14 +31758,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{activity_state}} {{workload}}"
+                        "legendFormat": "{{tenant_id}} {{activity_state}} {{workload}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -31448,14 +31851,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{action}} {{workload}}"
+                        "legendFormat": "{{tenant_id}} {{action}} {{workload}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -34136,7 +34552,8 @@
                         "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`purview\\..+`})",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
@@ -34146,10 +34563,12 @@
               "transformations": [
                 {
                   "kind": "Transformation",
-                  "group": "labelsToFields",
+                  "group": "organize",
                   "spec": {
                     "options": {
-                      "mode": "columns"
+                      "excludeByName": {
+                        "Time": true
+                      }
                     }
                   }
                 }
@@ -36251,14 +36670,27 @@
                         "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~\"$collector\",state=~\"degraded|failed|startup_failed\"} or graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~\"$collector\",state=\"blocked\",reason=\"permission_denied\"})",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -36337,14 +36769,27 @@
                         "expr": "sum by (tenant_id) (increase(graph2otel_record_outcomes_total{tenant_id=~\"$tenant\",collector=~\"$collector\",outcome=~\"dropped|errored\"}[$__range]))",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -36423,14 +36868,27 @@
                         "expr": "max by (signal) (graph2otel_otlp_delivery_degraded_ratio)",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -36528,14 +36986,27 @@
                         "expr": "sum by (tenant_id) (increase(graph2otel_checkpoint_persist_errors_total{tenant_id=~\"$tenant\",collector=~\"$collector\"}[$__range]))",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -36614,14 +37085,27 @@
                         "expr": "histogram_quantile(0.95, sum by (le, tenant_id, collector, ingest_transport) (rate(graph2otel_event_lag_seconds_bucket{tenant_id=~\"$tenant\", collector=~\"$collector\"}[$__rate_interval])))",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -36700,14 +37184,27 @@
                         "expr": "sum by (mode) (graph2otel_series_clipped)",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -36786,14 +37283,27 @@
                         "expr": "sum by (tenant_id) (increase(graph2otel_api_unexpected_total{tenant_id=~\"$tenant\",collector=~\"$collector\"}[$__range]))",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -36872,14 +37382,27 @@
                         "expr": "max by (tenant_id, workload) (graph2otel_throttle_limit_percentage_percent{tenant_id=~\"$tenant\"})",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -36958,14 +37481,27 @@
                         "expr": "max by (signal) (graph2otel_otlp_delivery_degraded_ratio)",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -37560,14 +38096,27 @@
                         "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~\"$collector\"})",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -37720,14 +38269,27 @@
                         "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\", collector=~\"$collector\", state=~\"disabled|covered\"})",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -37799,7 +38361,8 @@
                         "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\", collector=~\"$collector\", state=~\"degraded|failed|startup_failed\"})",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
@@ -37825,14 +38388,27 @@
                         "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\", collector=~\"$collector\", state=\"blocked\", reason=\"permission_denied\"})",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -37904,7 +38480,8 @@
                         "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\", collector=~\"$collector\", state=\"limited\", reason=\"partial_license\"})",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
@@ -37930,14 +38507,27 @@
                         "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\", collector=~\"$collector\", state=\"blocked\", reason=\"license_unavailable\"})",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -38208,14 +38798,27 @@
                         "expr": "graph2otel_scrape_staleness_seconds{tenant_id=~\"$tenant\", collector=~\"$collector\"}",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -38471,14 +39074,27 @@
                         "expr": "graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\", collector=~\"$collector\"}",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -38550,14 +39166,27 @@
                         "expr": "time() - graph2otel_collector_watermark_timestamp_seconds{tenant_id=~\"$tenant\", collector=~\"$collector\"}",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -39196,14 +39825,27 @@
                         "expr": "sum by (tenant_id, collector, ingest_transport, field, expected_type, actual_type) (rate(graph2otel_payload_type_mismatches_total{tenant_id=~\"$tenant\", collector=~\"$collector\"}[$__rate_interval]))",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -39456,14 +40098,27 @@
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
-                        "legendFormat": "{{tenant_id}} {{collector}} {{ingest_transport}} {{currency}} {{price_version}} {{attribution}}"
+                        "legendFormat": "{{tenant_id}} {{collector}} {{ingest_transport}} {{currency}} {{price_version}} {{attribution}}",
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -39535,14 +40190,27 @@
                         "expr": "graph2otel_build_info_ratio",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -39614,14 +40282,27 @@
                         "expr": "graph2otel_tenant_license_tier_ratio{tenant_id=~\"$tenant\"}",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -40053,14 +40734,27 @@
                         "expr": "topk(25, graph2otel_series_active)",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "kind": "Transformation",
+                  "group": "organize",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "vizConfig": {
@@ -42980,7 +43674,8 @@
                         "expr": "max by (tenant_id, collector, collector_transport, state, reason) (graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`.+`})",
                         "editorMode": "code",
                         "range": false,
-                        "instant": true
+                        "instant": true,
+                        "format": "table"
                       }
                     }
                   }
@@ -42990,10 +43685,12 @@
               "transformations": [
                 {
                   "kind": "Transformation",
-                  "group": "labelsToFields",
+                  "group": "organize",
                   "spec": {
                     "options": {
-                      "mode": "columns"
+                      "excludeByName": {
+                        "Time": true
+                      }
                     }
                   }
                 }

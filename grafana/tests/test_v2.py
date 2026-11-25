@@ -614,14 +614,14 @@ class TestTranslatesTheRealEstate(unittest.TestCase):
         self.assertIn("text", groups)
 
     def test_both_real_transformations_convert(self):
-        """The two C5 sites: ``labelsToFields`` and ``reduce``."""
+        """The two real transformation kinds: ``organize`` and ``reduce``."""
         converted = set()
         for _, item in self._items():
             _, el = v2.panel_element(item["spec"], item["w"], item["h"])
             for t in el["spec"]["data"]["spec"]["transformations"]:
                 self.assertEqual(t["kind"], "Transformation")
                 converted.add(t["group"])
-        self.assertEqual(converted, {"labelsToFields", "reduce"})
+        self.assertEqual(converted, {"organize", "reduce"})
 
     def test_every_real_panel_id_is_preserved_exactly(self):
         for board_name, item in self._items():

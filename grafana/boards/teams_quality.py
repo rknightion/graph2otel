@@ -15,18 +15,39 @@ _GROUP = "tenant_id, site"
 _SITE = 'site!~"unmapped|overflow|other|"'
 
 
-def site_queries(cat, tenant=TENANT_SEL, window=RATE, site=""):
+def counter_increase(series, window):
+    """Per-series counter increase over `window` that keeps a new series' first value.
+
+    `increase()` takes a series' first sample as its baseline, so a label set
+    created by the first event in the window contributes nothing. Sparse Teams
+    counters are created that way all the time: live-measured, plain
+    `increase()` counted 3 of the 7 calls first counted in a six-hour range, and 0
+    of 2 Direct Routing attempts. A cumulative OTLP counter starts at zero, so a
+    series with no sample at the window start gained its first value inside it.
+    Resets inside the window are already handled by `increase()`.
+    """
+    seen = f"0 * max_over_time({series}[{window}])"
+    return (f"((increase({series}[{window}]) or {seen}) + "
+            f"((min_over_time({series}[{window}]) unless {series} offset {window}) or {seen}))")
+
+
+def site_queries(cat, tenant=TENANT_SEL, window=RATE, site="", group=_GROUP, mapped_only=True, grown=False):
     """Return four measurement queries. A site with no evidence is absent.
 
     `site` is one more label matcher, such as a site template variable.
+    `group` and `mapped_only=False` give tenant-wide values that also count
+    streams with no mapped site. `grown` keeps the first value of a series born
+    inside the window (see counter_increase); the alert rules do not use it.
     """
-    scope = f"{tenant},{_SITE}" + (f",{site}" if site else "")
+    scope = tenant + (f",{_SITE}" if mapped_only else "") + (f",{site}" if site else "")
 
     def increase(name, select):
-        return f"sum by ({_GROUP}) (increase({name}{{{scope},{select}}}[{window}]))"
+        series = f"{name}{{{scope},{select}}}"
+        term = counter_increase(series, window) if grown else f"increase({series}[{window}])"
+        return f"sum by ({group}) ({term})"
 
     def ratio(numer, denom):
-        return f"(({numer}) / ({denom})) and on ({_GROUP}) (({denom}) > 0)"
+        return f"(({numer}) / ({denom})) and on ({group}) (({denom}) > 0)"
 
     def mean(metric):
         base = cat.metric(metric).prom
@@ -42,7 +63,7 @@ def site_queries(cat, tenant=TENANT_SEL, window=RATE, site=""):
         "loss": mean("teams.stream.packet_loss"),
         # No TCP in a site with measured UDP is a real zero. Missing evidence
         # for both protocols is not a zero and is removed by ratio().
-        "tcp": ratio(f"({tcp}) or on ({_GROUP}) (0 * ({known}))", known),
+        "tcp": ratio(f"({tcp}) or on ({group}) (0 * ({known}))", known),
     }
 
 

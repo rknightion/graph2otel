@@ -73,6 +73,8 @@ CENSUS_SENTINEL = "census_present"
 # every signal, metric and log alike (#143).
 TENANT_SEL = 'tenant_id=~"$tenant"'
 RATE = "$__rate_interval"
+# An instant table's evaluation time is the same on every row.
+HIDE_TABLE_TIME = {"id": "organize", "options": {"excludeByName": {"Time": True}}}
 
 PROM_DS = {"type": "prometheus", "uid": "${datasource}"}
 LOKI_DS = {"type": "loki", "uid": "${loki_datasource}"}
@@ -497,9 +499,12 @@ class Builder:
                 "justifyMode": "auto", "orientation": "auto",
             }
         elif viz == "table":
+            # One frame with a column per label. Without format=table each series
+            # is its own frame, and Grafana shows one of them behind a picker.
             for q in queries:
                 q["instant"] = True
                 q["range"] = False
+                q["format"] = "table"
             options = {"showHeader": True, "cellHeight": "sm",
                        "footer": {"show": False, "reducer": ["sum"], "fields": ""}}
         elif viz == "bargauge":
@@ -511,11 +516,14 @@ class Builder:
                        "cellGap": 1,
                        "color": {"mode": "scheme", "scheme": "Oranges", "steps": 64},
                        "yAxis": {"unit": unit}}
-        return self._add({
+        panel = {
             "id": self._next_id(), "type": viz, "title": title,
             "description": desc, "gridPos": {}, "datasource": PROM_DS,
             "fieldConfig": field_config, "options": options, "targets": queries,
-        }, w, h)
+        }
+        if viz == "table" and queries:
+            panel["transformations"] = [HIDE_TABLE_TIME]
+        return self._add(panel, w, h)
 
     def availability(self, collector_pattern: str):
         """Add the domain's truthful current collector-state table.
@@ -555,9 +563,7 @@ class Builder:
             _value_mapping("state", AVAILABILITY_STATES),
             _value_mapping("reason", AVAILABILITY_REASONS),
         ]
-        panel["transformations"] = [
-            {"id": "labelsToFields", "options": {"mode": "columns"}},
-        ]
+        panel["transformations"] = [HIDE_TABLE_TIME]
         return panel
 
     # ----- Loki panels (#162) ---------------------------------------------
