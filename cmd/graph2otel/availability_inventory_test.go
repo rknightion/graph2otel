@@ -433,7 +433,8 @@ func knownAvailabilityTransport(transport telemetry.Transport) bool {
 		telemetry.TransportReportExport,
 		telemetry.TransportMDCA,
 		telemetry.TransportExchangeOnline,
-		telemetry.TransportVAAC:
+		telemetry.TransportVAAC,
+		telemetry.TransportTeamsAdmin:
 		return true
 	default:
 		return false

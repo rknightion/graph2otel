@@ -29,6 +29,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/logpipeline"
 	"github.com/rknightion/graph2otel/internal/mdcaclient"
 	"github.com/rknightion/graph2otel/internal/o365activityclient"
+	"github.com/rknightion/graph2otel/internal/teamsadminclient"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/vaacclient"
 )
@@ -530,6 +531,24 @@ func (readers tenantGeoIPReaders) setupTenantWithGraphAndLicenseBuilders(
 		Export: exporter, Fleet: fleet, Store: store,
 		PrivilegedGroupAllowlist: tenantPrivilegedGroupIDs(cfg, ta.TenantID),
 	}
+	// Both the Teams admin client and the tenant's sites file are needed by the
+	// snapshot path (teams.network_topology reconciles subnets against the CSV),
+	// so they are resolved here, above the snapshot loop, rather than beside the
+	// window deps that also use the sites file.
+	teamsSites, teamsDomains := cfg.TeamsSiteInputs(ta.TenantID)
+	deps.TeamsSites = teamsSites
+	teamsAdminClient, teamsAdminErr := tenantTeamsAdminClient(cfg, ta, tlog, emitter, newTeamsAdminClient)
+	if teamsAdminErr != nil {
+		tlog.Error("Teams admin API client construction failed; teams_admin collectors will not run", "error", teamsAdminErr)
+		availabilityFailures = append(availabilityFailures, availabilityStartupFailure{
+			family:    availabilityFamilySnapshot,
+			transport: telemetry.TransportTeamsAdmin,
+			reason:    availability.ReasonTransportInitializationFailed,
+		})
+	}
+	// Assigned only on success: a failed construction leaves the interface
+	// untyped nil, never a typed-nil *Client that would pass a nil check.
+	deps.TeamsAdmin = teamsAdminClient
 	var paths runtimeFactoryVisitor
 	visitRegisteredCollectorFactories(&paths)
 	// polledNames records the stable name of every graph/window (polled)
@@ -580,6 +599,9 @@ func (readers tenantGeoIPReaders) setupTenantWithGraphAndLicenseBuilders(
 		if c.Name() == "graph2otel.blob_categories" && !blobConfigured {
 			continue
 		}
+		if skipTeamsAdminCollector(c, teamsAdminErr) {
+			continue
+		}
 		polledNames[c.Name()] = true
 		if interval, ok := gateCollector(c, ta, cfg, caps, tlog, skips); ok {
 			registry.Register(c, interval)
@@ -606,7 +628,6 @@ func (readers tenantGeoIPReaders) setupTenantWithGraphAndLicenseBuilders(
 	// effective limit at all — so both paths share this instance. It is nil, and
 	// buildErr is nil, for a tenant with no exchange_online block.
 	exoClient, exoBuildErr := tenantEXOClient(cfg, ta, tlog, emitter)
-	teamsSites, teamsDomains := cfg.TeamsSiteInputs(ta.TenantID)
 	wdeps := collectors.WindowDeps{
 		Graph:                  gc,
 		EXO:                    exoClient,
@@ -1202,6 +1223,41 @@ func registerMDCACollectors(
 // *exoclient.Client: a nil *Client assigned to the interface makes a non-nil
 // interface value, and every "the tenant has no Exchange Online" check
 // downstream is an interface nil check.
+// newTeamsAdminClient is the production constructor; a test replaces it to
+// exercise the construction-failure path, which the real constructor reaches
+// only on a bad BaseURL (it does no I/O).
+var newTeamsAdminClient = teamsadminclient.NewClient
+
+// tenantTeamsAdminClient builds the tenant's Teams admin API client, or returns
+// an UNTYPED nil interface when teams.admin_api.enabled is off. Returning the
+// concrete *Client through a nil-valued variable would produce a non-nil
+// interface holding a nil pointer, which every factory's nil check would miss.
+// On error it also returns an untyped nil.
+func tenantTeamsAdminClient(
+	cfg *config.Config,
+	ta *auth.TenantAuth,
+	tlog *slog.Logger,
+	emitter telemetry.Emitter,
+	build func(*auth.TenantAuth, teamsadminclient.Options) (*teamsadminclient.Client, error),
+) (collectors.TeamsAdminClient, error) {
+	if !cfg.TenantTeamsAdminAPI(ta.TenantID).Enabled {
+		return nil, nil
+	}
+	client, err := build(ta, teamsadminclient.Options{Emitter: emitter, Logger: tlog})
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
+}
+
+// skipTeamsAdminCollector reports whether a snapshot collector must not be
+// registered because the tenant's Teams admin client failed to construct. The
+// census row for those collectors is already overridden with
+// ReasonTransportInitializationFailed.
+func skipTeamsAdminCollector(c collector.Collector, clientErr error) bool {
+	return clientErr != nil && collector.TransportOf(c) == telemetry.TransportTeamsAdmin
+}
+
 func tenantEXOClient(
 	cfg *config.Config,
 	ta *auth.TenantAuth,
@@ -1619,6 +1675,9 @@ func collectorGate(c collector.Collector, cfg *config.Config, tenantID string, c
 	}
 	if collector.TransportOf(c) == telemetry.TransportVAAC && !cfg.TenantVAAC(tenantID).Enabled {
 		return 0, false, "teams.vaac.enabled not set"
+	}
+	if collector.TransportOf(c) == telemetry.TransportTeamsAdmin && !cfg.TenantTeamsAdminAPI(tenantID).Enabled {
+		return 0, false, "teams.admin_api.enabled not set"
 	}
 	if ok, requiredCap, _ := license.ShouldRun(c, caps); !ok {
 		return 0, false, fmt.Sprintf("requires %s", requiredCap)
