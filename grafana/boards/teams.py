@@ -453,12 +453,15 @@ def _site_inventory(b, observed, all_audio):
     transport = _agg(b, "teams.stream.transport", keys=("site",), match=f'{SITES},transport=~"tcp|udp"',
                      op="increase", window="$__range")
     wifi, connection = _site_wifi(b, SITES)
+    # Only the limiter emits a stream verdict of `other`. Its total is valid
+    # evidence of traffic, but it has lost every non-tenant breakdown.
+    clipped = _site_streams(b, f'{SITES},stream_health="other"')
+    available = f"({observed}) unless on (tenant_id, site) (({clipped}) > 0)"
 
     def counted(expr):
         return f"round(({expr}) or on (tenant_id, site) (0 * ({observed})))"
 
-    columns = (
-        ("Directional streams", f"round({observed})", "short"),
+    breakdown = (
         ("Classified streams", counted(classified), "short"),
         ("Unclassified streams", counted(unclassified), "short"),
         ("Poor share of classified", _share(poor, classified, "site"), "percentunit"),
@@ -468,14 +471,17 @@ def _site_inventory(b, observed, all_audio):
         ("Audio with TCP or UDP", counted(transport), "short"), ("Audio TCP share", q["tcp"], "percentunit"),
         ("Streams with known connection type", counted(connection), "short"), ("Wi-Fi share", wifi, "percentunit"),
     )
+    columns = (("Directional streams", f"round({observed})", "short"), *(
+        (name, f"({expr}) and on (tenant_id, site) ({available})", unit) for name, expr, unit in breakdown
+    ))
     panel = _site_table(b, "Site inventory", columns, h=9, empty="No counted directional streams in this selection.",
-                        desc="One row per tenant and sender-site metric bucket. Unmapped, overflow, other and "
-                             "unlabelled rows are not named sites. Unavailable means no usable samples for that "
-                             "measurement or no positive denominator. Audio means use streams with known direction "
-                             "that report the measure. Verdict and Wi-Fi columns cover all media. Use a named site's "
-                             "link for an exact configured site search. " + FIRST + " " + COUNT_NOTE)
+                        desc="One row per tenant and sender-site metric bucket with traffic in range. Unmapped, overflow, "
+                             "other and unlabelled rows do not identify named sites. If the limiter clips a bucket, "
+                             "its total remains but the breakdown is unavailable. An unavailable measurement can also "
+                             "mean no usable samples or denominator. Audio means use measured streams with known direction; "
+                             "verdict and Wi-Fi columns cover all media. Use the observed site tables for scoped links. "
+                             + FIRST + " " + COUNT_NOTE)
     panel["options"]["sortBy"] = [{"displayName": "Directional streams", "desc": True}]
-    _site_link(panel)
 
 
 def _network_kpis(b, measured, observed):

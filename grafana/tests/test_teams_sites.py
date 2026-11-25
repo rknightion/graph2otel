@@ -81,6 +81,38 @@ class TeamsSitesTests(unittest.TestCase):
         self.assertFalse(expected, "all coverage counts must be visible")
         self.check_promql(series, tests)
 
+    @unittest.skipUnless(shutil.which("promtool"), "needs promtool for offline PromQL fixture")
+    def test_inventory_omits_idle_rows_and_does_not_invent_clipped_breakdowns(self):
+        base = 'teams_streams_total{tenant_id="fixture",site="%s",media="%s",stream_health="%s",connection_type="%s"}'
+        series = [
+            {"series": base % ("idle", "audio", "good", "wifi"), "values": "7x6"},
+            {"series": base % ("measured", "audio", "good", "wifi"), "values": "_x4 2"},
+            # The limiter drops every non-tenant dimension into its other bucket.
+            {"series": base % ("other", "other", "other", "other"), "values": "_x4 6"},
+        ]
+        inventory = self.panels["Site inventory"]
+        organize = next(t for t in inventory["data"]["spec"]["transformations"] if t["group"] == "organize")
+        columns = organize["spec"]["options"]["renameByName"]
+        expected = {"Directional streams": {"measured": 2, "other": 6}, "Classified streams": {"measured": 2},
+                    "Unclassified streams": {"measured": 0}, "Audio streams": {"measured": 2},
+                    "Streams with known connection type": {"measured": 2}}
+        tests = []
+        for target in self.queries("Site inventory"):
+            column = columns[f"Value #{target['refId']}"]
+            if column not in expected:
+                continue
+            tests.append({"expr": target["expr"].replace("$tenant", ".*").replace("$sites", ".*")
+                          .replace("$__range", "5m"), "eval_time": "5m", "exp_samples": [
+                              {"labels": f'{{g2o_scope="fixture|{site}",site="{site}",tenant_id="fixture"}}', "value": value}
+                              for site, value in expected.pop(column).items()]})
+        self.assertFalse(expected)
+        self.check_promql(series, tests)
+
+    def test_inventory_buckets_do_not_link_as_named_sites(self):
+        overrides = self.panels["Site inventory"]["vizConfig"]["spec"]["fieldConfig"]["overrides"]
+        self.assertFalse(any(p["id"] == "links" and p.get("value")
+                             for o in overrides for p in o["properties"]))
+
     def test_observations_keep_named_sites_even_without_coordinates(self):
         for side in ("caller", "callee"):
             title = f"Observed {side} sites"
