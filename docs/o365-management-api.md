@@ -46,35 +46,41 @@ scorecard ran **6-0 against Microsoft's documentation** — treat the docs as hy
 
 ## Teams audit filtering
 
-To keep Microsoft Teams record type 25 from the O365 feed, set the following in
-that tenant's YAML:
+To keep Microsoft Teams (25) and Microsoft Teams Admin (57) records from
+`Audit.General`, set the following in that tenant's YAML. Use `[25]` if you do
+not want the admin records. Neither list is a catch-all for Teams-related audit
+records.
 
 ```yaml
 o365_activity:
   content_types: [Audit.General]
-  record_type_allow_list: [25]
+  record_type_allow_list: [25, 57]
 ```
 
 The API still lists and downloads the full `Audit.General` blobs. The allow-list
-saves downstream log ingest, not API traffic. It selects by the numeric
-`RecordType`, not the operation. Non-matching records are counted as `filtered`
-before mapping. The checkpoint still advances through the blobs, so widening
-or removing the list does not replay records that were filtered before.
+saves downstream log ingest, not API traffic. It selects by numeric `RecordType`,
+not workload or operation, and applies to all configured content types. Endpoint
+DLP (63) and other non-matching records are counted as `filtered` before mapping.
+Omitting the list or setting it to `[]` leaves record selection unchanged. The
+checkpoint still advances through the blobs, so widening or removing the list
+does not replay records that were filtered before.
 
-Live-measured 2026-11-24: six read-only windows of at most 24 hours on the
-already-enabled `Audit.General` subscription returned six blobs and one Teams
-record, type 25 `TeamsSessionStarted`. It emits as `m365.audit` with
-`operation=TeamsSessionStarted`, `record_type=MicrosoftTeams` and
-`record_type_id=25`. `object_id` stays opaque; the sample does not establish
-that it identifies a team, channel or meeting. The probe did not observe team creation, membership or
-settings changes, or meeting activity. Those operations still need samples
-before any Teams-specific fields can be mapped.
+Live-measured 2026-11-25: a read-only probe of the existing `Audit.General`
+subscription saw `TeamCreated`, `MemberAdded`, `TeamSettingChanged`,
+`ChannelAdded`, `TabAdded` and `TeamsSessionStarted` under type 25, and
+`TeamsAdminAction` and `WriteUserObjPreference` under type 57. It did not see
+meeting join activity. These records currently use the generic `m365.audit`
+attributes, including `operation` and `record_type_id`. A Teams session's
+`object_id` stays opaque; the probe does not establish that it identifies a
+team, channel or meeting.
 
 If you need to reduce what you fetch, the experimental Graph collector
-`m365.unified_audit` uses server-side `recordTypeFilters` that include Teams and
-exclude Endpoint DLP. It is an alternative, not a second Teams feed: disable
-`m365.activity` before enabling it. Graph uses a slower, beta async query and
-can throttle query creation.
+`m365.unified_audit` uses a fixed server-side `recordTypeFilters` list that
+includes `microsoftTeams`, `microsoftTeamsAdmin` and `teamsQuarantineMetadata`,
+among other record types, and excludes Endpoint DLP. This is not a Teams-only
+query or a configurable workload filter. Disable `m365.activity` before
+enabling the alternative. Graph uses a slower, beta async query and can
+throttle query creation.
 
 ## Windowing and retention
 
