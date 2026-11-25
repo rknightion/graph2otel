@@ -1,8 +1,9 @@
 package semconv
 
-// Attribute keys for Teams call and media stream evidence. Shared keys such
+// Attribute keys for Teams call, roster and media stream evidence. Shared keys such
 // as CallId, Version, Direction and StartTime use the existing constants.
 const (
+	AttrParticipantId       = "participant_id"
 	AttrParticipantCount    = "participant_count"
 	AttrParticipantUsers    = "participant_users"
 	AttrParticipantGuests   = "participant_guests"
@@ -53,6 +54,7 @@ const (
 	AttrSegmentFailureStage         = "segment_failure_stage"
 	AttrSegmentFailureReason        = "segment_failure_reason"
 
+	AttrIdentityKind                 = "identity_kind"
 	AttrIdentityScope                = "identity_scope"
 	AttrAverageConcealedSamplesRatio = "average_ratio_of_concealed_samples"
 	AttrMaxConcealedSamplesRatio     = "max_ratio_of_concealed_samples"

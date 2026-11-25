@@ -124,6 +124,7 @@ Use these as starting points, not schema or row-count equivalences.
 | Previous log family | graph2otel signal | What changes |
 | --- | --- | --- |
 | Call metadata | `teams.call` | A completed detail version, not a live call. Use the call ID and version when comparing with streams. |
+| Call roster | `teams.call_participant` | [Roster entries by version](signals.md#teams-call-roster), not join or leave events and not media endpoints. |
 | Stream details and CQD quality | `teams.call_stream` | Directional media and endpoint evidence for streams in each segment. Missing or unsupported inputs can leave quality unclassified. |
 | PSTN usage | `teams.pstn_call` | PSTN report rows, not a reconstruction from call streams. |
 | Direct Routing | `teams.direct_routing_call` | Direct Routing attempts, not a count of unique calls. |

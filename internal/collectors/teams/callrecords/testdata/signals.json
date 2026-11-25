@@ -184,6 +184,21 @@
       ]
     },
     {
+      "EventName": "teams.call_participant",
+      "AttrKeys": [
+        "call_id",
+        "display_name",
+        "id",
+        "identity_kind",
+        "ingest_transport",
+        "participant_id",
+        "tenant_id",
+        "text_fields_truncated",
+        "user_principal_name",
+        "version"
+      ]
+    },
+    {
       "EventName": "teams.call_stream",
       "AttrKeys": [
         "audio_codec",

@@ -21,21 +21,28 @@ func mapCall(d detail, version int64, sessions []hydratedSession, people []parti
 	seen := make(map[string]struct{}, len(people))
 	identityByID := make(map[string]Identity, len(people))
 	for _, person := range people {
-		identity := person.identity()
+		identity := person.sourceIdentity()
 		if identity.ID != "" {
 			identityByID[identity.ID] = identity
 		}
 		if person.ID != "" {
-			identityByID[person.ID] = identity
+			// Retain the existing endpoint lookup, but never use its fallback
+			// ID in a roster log. The wire supplies these IDs separately.
+			fallback := identity
+			fallback.ID = first(identity.ID, person.ID)
+			identityByID[person.ID] = fallback
 			if _, ok := seen[person.ID]; ok {
 				continue
 			}
 			seen[person.ID] = struct{}{}
 		}
 		call.Counts.add(identity.Kind)
+		call.roster = append(call.roster, rosterParticipant{id: person.ID, identity: identity})
 	}
 	if d.Organizer != nil {
-		call.Organizer = fillIdentity(d.Organizer.identity(), identityByID)
+		identity := d.Organizer.sourceIdentity()
+		identity.ID = first(identity.ID, d.Organizer.ID)
+		call.Organizer = fillIdentity(identity, identityByID)
 	}
 	for _, session := range sessions {
 		call.observe(session.Failure, session.Caller.Agent, session.Callee.Agent)
@@ -64,7 +71,8 @@ func (c *Call) observe(failure *Failure, agents ...Agent) {
 	}
 }
 
-func (p participant) identity() Identity {
+// sourceIdentity selects the existing projection without aliasing the IDs.
+func (p participant) sourceIdentity() Identity {
 	s := p.Identities
 	for _, v := range [...]struct {
 		value *Identity
@@ -76,12 +84,11 @@ func (p participant) identity() Identity {
 	} {
 		if v.value != nil {
 			id := *v.value
-			id.ID = first(id.ID, p.ID)
 			id.Kind = first(v.kind, identityKind(id.ODataType))
 			return id
 		}
 	}
-	return Identity{ID: p.ID}
+	return Identity{}
 }
 
 func identityKind(odataType string) string {
