@@ -3249,7 +3249,7 @@
       "prometheus_name": "graph2otel_throttle_effective_rate_per_minute",
       "unit": "{request}/min",
       "kind": "gauge",
-      "description": "Current client-side request rate of an adaptive workload limiter, lowered on 429s and recovered after a quiet period.",
+      "description": "Current client-side request rate of an adaptive workload limiter, lowered on 429s and raised after runs of successful requests.",
       "additive": false,
       "domain": "graph2otel",
       "attr_keys": [

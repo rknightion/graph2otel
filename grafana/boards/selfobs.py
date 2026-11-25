@@ -9,6 +9,7 @@ does not.
 
 from builder import DASHBOARD_NAME, RATE, TENANT_SEL
 import catalog as catalog_mod
+from boards.teams_quality import counter_increase
 
 CAT = catalog_mod.load()
 SELF_OBS = {
@@ -531,7 +532,7 @@ def extra(b):
           legends=["{{tenant_id}} {{report_name}}"], unit="bytes", w=12, h=6)
     b.raw("Exports ended by exhausted throttle budget",
           [f"sum by (tenant_id, report_name) "
-           f"(increase({EXPORT_THROTTLE_EXHAUSTED}{_T}[{RATE}]))"],
+           f"({counter_increase(EXPORT_THROTTLE_EXHAUSTED + _T, RATE)})"],
           legends=["{{tenant_id}} {{report_name}}"], w=12, h=6,
           desc="Export calls that ended on a 429 because the in-tick retry budget ran "
                "out, so that tick's data was not fetched. Absorbed 429s do not count "

@@ -16,6 +16,8 @@ import io
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -807,6 +809,40 @@ class TestRecordingRulesAreRetired(unittest.TestCase):
             doc = f.read()
         self.assertIn("#297", doc)
         self.assertIn("retired", doc.lower())
+
+
+class TestExportThrottleExhaustedFiresOnFirstEvent(unittest.TestCase):
+    """#709 review: a cumulative counter's series is BORN at 1, and plain
+    increase() takes a series' first sample as its baseline, so the first
+    exhaustion after a restart would never fire. Proved with promtool."""
+
+    @unittest.skipUnless(shutil.which("promtool"), "needs promtool")
+    def test_series_born_at_one_fires(self):
+        rule = next(r for r in build_rules.RULES if r["uid"] == "g2o-export-throttle-exhausted")
+        expr = rule["data"][0]["model"]["expr"]
+        metric = build_rules._m("graph2otel.export.throttle_exhausted")
+        labels = 'tenant_id="fixture-tenant",report_name="FixtureReport"'
+        test = {
+            "evaluation_interval": "1m",
+            "tests": [{
+                "interval": "1m",
+                "input_series": [
+                    # Absent for 10 minutes, then born at 1 and flat: one event.
+                    {"series": f"{metric}{{{labels}}}", "values": "_x10 1 1 1 1 1"},
+                ],
+                "promql_expr_test": [{
+                    "expr": f"round({expr})", "eval_time": "14m",
+                    "exp_samples": [{"labels": f"{{{labels}}}", "value": 1}],
+                }],
+            }],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "rule_test.yaml")
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump(test, fh)  # JSON is valid YAML
+            run = subprocess.run(["promtool", "test", "rules", path],
+                                 capture_output=True, text=True)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
 
 
 if __name__ == "__main__":

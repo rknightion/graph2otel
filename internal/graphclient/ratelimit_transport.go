@@ -54,17 +54,29 @@ type rateLimitTransport struct {
 func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	wl := ClassifyWorkload(req.URL.Path)
 
+	// The request's time is taken BEFORE it queues for a token. x/time/rate fixes
+	// a queued request's slot at Wait time, under the rate of that moment, so a
+	// request that waited through a decrease still ran under the old rate and
+	// its response must not count against the new one.
 	var issuedAt time.Time
 	if t.limiter != nil {
+		issuedAt = t.limiter.now()
 		if err := t.limiter.Wait(req.Context(), t.tenantID, wl); err != nil {
 			return nil, err
 		}
-		issuedAt = t.limiter.now()
 		t.emitEffectiveRate(wl)
 	}
 
 	resp, err := t.next.RoundTrip(req)
-	if err != nil || resp == nil || resp.StatusCode != http.StatusTooManyRequests {
+	if err != nil || resp == nil {
+		return resp, err
+	}
+	if resp.StatusCode != http.StatusTooManyRequests {
+		if t.limiter != nil && resp.StatusCode < http.StatusBadRequest {
+			t.limiter.ObserveSuccess(t.tenantID, wl, issuedAt)
+			// Recovery steps happen here, so publish the state they leave.
+			t.emitEffectiveRate(wl)
+		}
 		return resp, err
 	}
 
@@ -102,7 +114,7 @@ func (t *rateLimitTransport) emitEffectiveRate(wl Workload) {
 		return
 	}
 	t.emitter.Gauge(metricThrottleEffectiveRate, "{request}/min",
-		"Current client-side request rate of an adaptive workload limiter, lowered on 429s and recovered after a quiet period.",
+		"Current client-side request rate of an adaptive workload limiter, lowered on 429s and raised after runs of successful requests.",
 		perMin, telemetry.Attrs{attrWorkload: string(wl), attrTenantID: t.tenantID})
 }
 

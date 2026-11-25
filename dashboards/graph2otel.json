@@ -40731,7 +40731,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "sum by (tenant_id, report_name) (increase(graph2otel_export_throttle_exhausted_total{tenant_id=~\"$tenant\"}[$__rate_interval]))",
+                        "expr": "sum by (tenant_id, report_name) (((increase(graph2otel_export_throttle_exhausted_total{tenant_id=~\"$tenant\"}[$__rate_interval]) or 0 * max_over_time(graph2otel_export_throttle_exhausted_total{tenant_id=~\"$tenant\"}[$__rate_interval])) + ((min_over_time(graph2otel_export_throttle_exhausted_total{tenant_id=~\"$tenant\"}[$__rate_interval]) unless graph2otel_export_throttle_exhausted_total{tenant_id=~\"$tenant\"} offset $__rate_interval) or 0 * max_over_time(graph2otel_export_throttle_exhausted_total{tenant_id=~\"$tenant\"}[$__rate_interval]))))",
                         "editorMode": "code",
                         "range": true,
                         "instant": false,

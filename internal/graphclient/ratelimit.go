@@ -40,7 +40,9 @@ import (
 // ceiling Microsoft enforces on a live tenant (136 429s in 24h, all absorbed by
 // exportjob's in-tick retry, so no data lost but the alert fired). On an
 // observed 429 its rate is halved down to a floor of a sixth of the base, and it
-// recovers additively once the workload has been quiet. The current rate is
+// recovers additively after a run of successful requests with no 429 (not after
+// idle wall-clock time: export cycles are hours apart, so a learned rate must
+// survive the gap rather than reset to the setting that already 429ed). The current rate is
 // published as graph2otel.throttle.effective_rate_per_minute. No other workload
 // is adaptive.
 var workloadRates = map[Workload]struct {
@@ -58,20 +60,21 @@ var workloadRates = map[Workload]struct {
 	WorkloadTeamsCallRecords: {every: rate.Every(20 * time.Second / 30), burst: 1},
 }
 
-// adaptiveSpec opts one workload into rate adaptation. All three tunables are
+// adaptiveSpec opts one workload into rate adaptation. The rate tunables are
 // fractions of the workload's configured base rate, so the same spec scales with
 // the base (and with a scaled-down base in tests).
 type adaptiveSpec struct {
-	decrease    float64       // multiplier applied on an observed 429, in (0,1)
-	floor       float64       // lowest rate, as a fraction of base
-	recoverStep float64       // rate regained per quiet period, as a fraction of base
-	quiet       time.Duration // a quiet period: no 429 and no change for this long
+	decrease     float64 // multiplier applied on an observed 429, in (0,1)
+	floor        float64 // lowest rate, as a fraction of base
+	recoverStep  float64 // rate regained per step, as a fraction of base
+	recoverEvery int     // successful requests, with no 429 between them, per step
 }
 
 // intuneExportAdaptive halves on a 429, never drops below base/6 (4/min of 24),
-// and regains base/12 (2/min) per 5 quiet minutes, so a full recovery from the
-// floor takes about an hour.
-var intuneExportAdaptive = adaptiveSpec{decrease: 0.5, floor: 1.0 / 6, recoverStep: 1.0 / 12, quiet: 5 * time.Minute}
+// and regains base/12 (2/min) per 50 successful requests with no 429. One export
+// cycle sends a few hundred requests, so a full recovery from the floor takes a
+// few cycles of clean traffic, and an idle gap changes nothing.
+var intuneExportAdaptive = adaptiveSpec{decrease: 0.5, floor: 1.0 / 6, recoverStep: 1.0 / 12, recoverEvery: 50}
 
 // adaptiveState is one adaptive bucket's rate bookkeeping. Guarded by
 // WorkloadLimiter.mu.
@@ -80,7 +83,7 @@ type adaptiveState struct {
 	base         rate.Limit
 	baseBurst    int
 	cur          rate.Limit
-	lastChange   time.Time // last decrease or recovery step; recovery counts quiet time from here
+	successes    int       // successful requests since the last 429 or recovery step
 	lastDecrease time.Time // 429s from requests issued before this reflect the old rate
 }
 
@@ -126,13 +129,12 @@ func (l *WorkloadLimiter) Wait(ctx context.Context, tenantID string, wl Workload
 	if lim == nil {
 		return nil
 	}
-	l.recover(limiterKey{tenantID: tenantID, workload: wl}, l.now())
 	return lim.Wait(ctx)
 }
 
 // ObserveThrottle tells the limiter a request it admitted at issuedAt drew a
 // 429. For an adaptive workload it multiplies the rate down (to the floor) and
-// holds recovery off; for every other workload it does nothing. A 429 for a
+// restarts the success count; for every other workload it does nothing. A 429 for a
 // request issued before the last decrease is ignored: it reflects the old rate,
 // and counting it would collapse a burst of concurrent 429s straight to the floor.
 func (l *WorkloadLimiter) ObserveThrottle(tenantID string, wl Workload, issuedAt time.Time) {
@@ -145,7 +147,7 @@ func (l *WorkloadLimiter) ObserveThrottle(tenantID string, wl Workload, issuedAt
 		return
 	}
 	now := l.now()
-	st.lastChange, st.lastDecrease = now, now
+	st.lastDecrease, st.successes = now, 0
 	next := rate.Limit(float64(st.cur) * st.spec.decrease)
 	if floor := rate.Limit(float64(st.base) * st.spec.floor); next < floor {
 		next = floor
@@ -166,20 +168,26 @@ func (l *WorkloadLimiter) EffectiveRatePerMinute(tenantID string, wl Workload) (
 	return float64(st.cur) * 60, true
 }
 
-// recover raises an adaptive bucket one step per elapsed quiet period.
-func (l *WorkloadLimiter) recover(key limiterKey, now time.Time) {
+// ObserveSuccess tells the limiter a request it admitted at issuedAt came back
+// without a 429. After recoverEvery of them in a row an adaptive bucket below
+// its base regains one step; a 429 restarts the count. A success issued before
+// the last decrease is ignored, as it ran under the old rate. Other workloads
+// are untouched.
+func (l *WorkloadLimiter) ObserveSuccess(tenantID string, wl Workload, issuedAt time.Time) {
+	l.limiterFor(tenantID, wl)
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	key := limiterKey{tenantID: tenantID, workload: wl}
 	st, lim := l.adaptive[key], l.limiters[key]
-	if st == nil || lim == nil || st.cur >= st.base || st.spec.quiet <= 0 {
+	if st == nil || lim == nil || st.cur >= st.base || st.spec.recoverEvery <= 0 || issuedAt.Before(st.lastDecrease) {
 		return
 	}
-	steps := int(now.Sub(st.lastChange) / st.spec.quiet)
-	if steps <= 0 {
+	st.successes++
+	if st.successes < st.spec.recoverEvery {
 		return
 	}
-	st.lastChange = st.lastChange.Add(time.Duration(steps) * st.spec.quiet)
-	next := rate.Limit(float64(st.cur) + float64(steps)*float64(st.base)*st.spec.recoverStep)
+	st.successes = 0
+	next := rate.Limit(float64(st.cur) + float64(st.base)*st.spec.recoverStep)
 	if next > st.base {
 		next = st.base
 	}

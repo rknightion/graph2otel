@@ -651,7 +651,7 @@ RULES = [
         "g2o-export-throttle-exhausted",
         "graph2otel Intune export lost a cycle to throttling",
         f'sum by (tenant_id, report_name) '
-        f'(increase({_m("graph2otel.export.throttle_exhausted")}[30m]))',
+        f'({teams_quality.counter_increase(_m("graph2otel.export.throttle_exhausted"), "30m")})',
         "gt", [0], "0m",
         {"severity": "warning", "category": "throttle", "source": "graph2otel"},
         "Intune export {{ $labels.report_name }} ended on a 429 (tenant {{ $labels.tenant_id }})",
@@ -659,7 +659,9 @@ RULES = [
         "(6 retries, 10 minutes) and ended on a 429 in the last 30m, so that tick's "
         "data was not fetched until the next one. 429s that the retry absorbed do not "
         "count: they are normal and the adaptive limiter lowers its rate on them "
-        "(graph2otel_throttle_effective_rate_per_minute). This is the impact signal "
+        "(graph2otel_throttle_effective_rate_per_minute). The expression keeps the first "
+        "value of a counter series born inside the window, so the first exhaustion after "
+        "a restart still fires. This is the impact signal "
         "for the intune-export workload, which g2o-throttle-saturation excludes.",
         False,
     ),

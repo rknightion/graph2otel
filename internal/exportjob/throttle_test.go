@@ -269,3 +269,30 @@ func TestExportCountsExhaustedThrottleBudget(t *testing.T) {
 		t.Fatalf("absorbed 429 then a 400 counted as exhausted: %+v", pts)
 	}
 }
+
+// TestExportCountsExhaustedThrottleBudgetOnPoll: the create succeeds and every
+// status poll is then throttled past the budget. That ends the call on a 429
+// too, and must be counted exactly like a throttled create.
+func TestExportCountsExhaustedThrottleBudgetOnPoll(t *testing.T) {
+	poster := &fakePoster{
+		post: func(context.Context, string, []byte, map[string]string) ([]byte, error) {
+			return []byte(`{"id":"job1","status":"notStarted"}`), nil
+		},
+		get: func(context.Context, string, map[string]string) ([]byte, error) {
+			return nil, &graphclient.HTTPStatusError{Method: http.MethodGet, URL: "u", StatusCode: http.StatusTooManyRequests}
+		},
+	}
+	var delays []time.Duration
+	rec := telemetrytest.New()
+	c := New(poster, &fakeDownloader{}, Options{Sleep: noSleep(&delays)})
+	if _, err := c.Export(context.Background(), Request{ReportName: "R"}, rec.Emitter()); err == nil {
+		t.Fatal("Export succeeded against permanently throttled polls")
+	}
+	if len(delays) != defaultThrottleRetries {
+		t.Fatalf("throttle waits = %d, want %d: the poll path did not exhaust its budget", len(delays), defaultThrottleRetries)
+	}
+	pts := rec.MetricPoints("graph2otel.export.throttle_exhausted")
+	if len(pts) != 1 || pts[0].Value != 1 || pts[0].Attrs["report_name"] != "R" {
+		t.Fatalf("exhausted points = %+v, want one point of 1 for report R", pts)
+	}
+}

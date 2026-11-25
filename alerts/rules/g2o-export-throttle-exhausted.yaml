@@ -29,7 +29,7 @@ spec:
     pipeline: "graph2otel"
   annotations:
     summary: "Intune export {{ $labels.report_name }} ended on a 429 (tenant {{ $labels.tenant_id }})"
-    description: "An Intune report export call ran out of its in-tick throttle retry budget (6 retries, 10 minutes) and ended on a 429 in the last 30m, so that tick's data was not fetched until the next one. 429s that the retry absorbed do not count: they are normal and the adaptive limiter lowers its rate on them (graph2otel_throttle_effective_rate_per_minute). This is the impact signal for the intune-export workload, which g2o-throttle-saturation excludes."
+    description: "An Intune report export call ran out of its in-tick throttle retry budget (6 retries, 10 minutes) and ended on a 429 in the last 30m, so that tick's data was not fetched until the next one. 429s that the retry absorbed do not count: they are normal and the adaptive limiter lowers its rate on them (graph2otel_throttle_effective_rate_per_minute). The expression keeps the first value of a counter series born inside the window, so the first exhaustion after a restart still fires. This is the impact signal for the intune-export workload, which g2o-throttle-saturation excludes."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-export-throttle-exhausted"
     __dashboardUid__: "graph2otel"
     __panelId__: "498"
@@ -41,7 +41,7 @@ spec:
           type: "prometheus"
           uid: "grafanacloud-prom"
         editorMode: "code"
-        expr: "sum by (tenant_id, report_name) (increase(graph2otel_export_throttle_exhausted_total[30m]))"
+        expr: "sum by (tenant_id, report_name) (((increase(graph2otel_export_throttle_exhausted_total[30m]) or 0 * max_over_time(graph2otel_export_throttle_exhausted_total[30m])) + ((min_over_time(graph2otel_export_throttle_exhausted_total[30m]) unless graph2otel_export_throttle_exhausted_total offset 30m) or 0 * max_over_time(graph2otel_export_throttle_exhausted_total[30m]))))"
         instant: false
         range: true
         intervalMs: 1000

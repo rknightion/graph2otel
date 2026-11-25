@@ -1,7 +1,6 @@
 package graphclient
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"strings"
@@ -148,35 +147,47 @@ func TestAdaptiveLimiterHalvesToFloorAndIgnoresStale(t *testing.T) {
 	}
 }
 
-func TestAdaptiveLimiterRecoversAdditivelyAfterQuiet(t *testing.T) {
+func TestAdaptiveLimiterRecoversAdditivelyPerSuccessRun(t *testing.T) {
 	l, now := newFakeClockLimiter()
 	const tenant = "tenant-a"
 	wl := WorkloadIntuneExport
 	l.ObserveThrottle(tenant, wl, *now) // 12/min
+	rate := func() float64 { r, _ := l.EffectiveRatePerMinute(tenant, wl); return r }
+	succeed := func(n int) {
+		for i := 0; i < n; i++ {
+			l.ObserveSuccess(tenant, wl, *now)
+		}
+	}
 
-	// Not quiet long enough: no recovery.
-	*now = now.Add(4 * time.Minute)
-	if err := l.Wait(context.Background(), tenant, wl); err != nil {
-		t.Fatal(err)
-	}
-	if got, _ := l.EffectiveRatePerMinute(tenant, wl); got > 12.01 {
-		t.Fatalf("recovered after only 4 quiet minutes: %v/min", got)
-	}
-	// One quiet period regains 2/min.
-	*now = now.Add(time.Minute)
-	if err := l.Wait(context.Background(), tenant, wl); err != nil {
-		t.Fatal(err)
-	}
-	if got, _ := l.EffectiveRatePerMinute(tenant, wl); got < 13.99 || got > 14.01 {
-		t.Fatalf("after one quiet period = %v/min, want 14", got)
-	}
-	// Long quiet returns to base, not above it, and restores the burst.
+	// Idle time alone never recovers.
 	*now = now.Add(24 * time.Hour)
-	if err := l.Wait(context.Background(), tenant, wl); err != nil {
-		t.Fatal(err)
+	if got := rate(); got > 12.01 {
+		t.Fatalf("recovered to %v/min with no traffic", got)
 	}
-	if got, _ := l.EffectiveRatePerMinute(tenant, wl); got < 23.99 || got > 24.01 {
-		t.Fatalf("after long quiet = %v/min, want 24", got)
+	// 49 successes: not yet a step. A 429 then restarts the count.
+	succeed(49)
+	l.ObserveThrottle(tenant, wl, *now) // 6/min
+	succeed(49)
+	if got := rate(); got < 5.99 || got > 6.01 {
+		t.Fatalf("rate = %v/min after 49 successes following a 429, want 6", got)
+	}
+	// The 50th success is one additive step of 2/min.
+	succeed(1)
+	if got := rate(); got < 7.99 || got > 8.01 {
+		t.Fatalf("after one run of 50 successes = %v/min, want 8", got)
+	}
+	// A success issued before the last decrease ran under the old rate: ignored.
+	succeed(0)
+	for i := 0; i < 100; i++ {
+		l.ObserveSuccess(tenant, wl, now.Add(-time.Hour))
+	}
+	if got := rate(); got < 7.99 || got > 8.01 {
+		t.Fatalf("stale successes changed the rate to %v/min", got)
+	}
+	// Long clean traffic returns to base, not above it, and restores the burst.
+	succeed(5000)
+	if got := rate(); got < 23.99 || got > 24.01 {
+		t.Fatalf("after long clean traffic = %v/min, want 24", got)
 	}
 	for _, h := range l.Snapshot(*now) {
 		if h.Burst != 4 {
@@ -226,5 +237,135 @@ func TestEffectiveRateGaugePublishedForIntuneExportOnly(t *testing.T) {
 	last := pts[len(pts)-1]
 	if last.Value < 11.99 || last.Value > 12.01 || last.Attrs[attrWorkload] != string(WorkloadIntuneExport) {
 		t.Fatalf("last gauge = %+v, want 12/min for intune-export", last)
+	}
+}
+
+// statusServer answers every request with the status chosen by next, after delay.
+type statusServer struct {
+	delay time.Duration
+	next  func() int
+}
+
+func (s *statusServer) RoundTrip(req *http.Request) (*http.Response, error) {
+	if s.delay > 0 {
+		time.Sleep(s.delay)
+	}
+	return &http.Response{
+		StatusCode: s.next(),
+		Header:     http.Header{},
+		Body:       io.NopCloser(strings.NewReader("")),
+		Request:    req,
+	}, nil
+}
+
+const exportJobsURL = "https://graph.example/v1.0/deviceManagement/reports/exportJobs"
+
+// fastExportRate scales intune-export's base rate for the test: 40/s (burst 4)
+// unless a gap is given.
+func fastExportRate(t *testing.T, every ...time.Duration) {
+	t.Helper()
+	gap := 25 * time.Millisecond
+	if len(every) > 0 {
+		gap = every[0]
+	}
+	prev := workloadRates[WorkloadIntuneExport]
+	spec := prev
+	spec.every = rate.Every(gap)
+	workloadRates[WorkloadIntuneExport] = spec
+	t.Cleanup(func() { workloadRates[WorkloadIntuneExport] = prev })
+}
+
+func doExport(t *testing.T, rt *rateLimitTransport) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, exportJobsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := rt.RoundTrip(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+}
+
+// TestConcurrent429BurstHalvesOnce: seven requests issued together at 40/s burst
+// 4 are all throttled. Three of them wait in the limiter for a slot that was
+// fixed under the OLD rate, so their 429s say nothing about the new one. The
+// rate must halve once (20/s), not collapse to the floor.
+func TestConcurrent429BurstHalvesOnce(t *testing.T) {
+	fastExportRate(t)
+	rt := &rateLimitTransport{
+		next:     &statusServer{delay: 10 * time.Millisecond, next: func() int { return http.StatusTooManyRequests }},
+		limiter:  NewWorkloadLimiter(),
+		backoff:  &Backoff{Base: time.Millisecond, Max: time.Millisecond},
+		tenantID: "tenant-a",
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 7; i++ {
+		wg.Add(1)
+		go func() { defer wg.Done(); doExport(t, rt) }()
+	}
+	wg.Wait()
+	got, _ := rt.limiter.EffectiveRatePerMinute("tenant-a", WorkloadIntuneExport)
+	if want := 20.0 * 60; got < want-1 || got > want+1 {
+		t.Fatalf("rate after a burst of 7 concurrent 429s = %.0f/min, want one halving to %.0f/min", got, want)
+	}
+}
+
+func newFakeClockTransport(t *testing.T, status *int, rec *telemetrytest.Recorder) (*rateLimitTransport, *time.Time) {
+	t.Helper()
+	fastExportRate(t, time.Millisecond)
+	l, now := newFakeClockLimiter()
+	rt := &rateLimitTransport{
+		next:     &statusServer{next: func() int { return *status }},
+		limiter:  l,
+		backoff:  &Backoff{Base: time.Millisecond, Max: time.Millisecond},
+		tenantID: "tenant-a",
+		emitter:  rec.Emitter(),
+	}
+	return rt, now
+}
+
+// TestAdaptiveRatePersistsAcrossIdleGap: export cycles are six hours apart, so a
+// rate learned from a 429 must survive the idle gap instead of resetting to the
+// configured base that was already proven to 429.
+func TestAdaptiveRatePersistsAcrossIdleGap(t *testing.T) {
+	status := http.StatusTooManyRequests
+	rt, now := newFakeClockTransport(t, &status, telemetrytest.New())
+	doExport(t, rt) // 429: halves
+	halved, _ := rt.limiter.EffectiveRatePerMinute("tenant-a", WorkloadIntuneExport)
+
+	*now = now.Add(6 * time.Hour)
+	status = http.StatusOK
+	doExport(t, rt)
+	if got, _ := rt.limiter.EffectiveRatePerMinute("tenant-a", WorkloadIntuneExport); got > halved+0.01 {
+		t.Fatalf("rate recovered from %.0f to %.0f/min across an idle gap with no successful traffic", halved, got)
+	}
+}
+
+// TestAdaptiveRateRecoversOnSuccessfulRequestsAndGaugeFollows: recovery is paid
+// for by successful requests, a 429 resets that count, and the published gauge
+// is the current state after every step.
+func TestAdaptiveRateRecoversOnSuccessfulRequestsAndGaugeFollows(t *testing.T) {
+	status := http.StatusTooManyRequests
+	rec := telemetrytest.New()
+	rt, _ := newFakeClockTransport(t, &status, rec)
+	doExport(t, rt)
+	halved, _ := rt.limiter.EffectiveRatePerMinute("tenant-a", WorkloadIntuneExport)
+
+	status = http.StatusOK
+	for i := 0; i < 300; i++ {
+		doExport(t, rt)
+	}
+	got, _ := rt.limiter.EffectiveRatePerMinute("tenant-a", WorkloadIntuneExport)
+	if got <= halved {
+		t.Fatalf("rate stayed at %.0f/min after 300 successful requests", got)
+	}
+	if got > 1000*60+0.01 {
+		t.Fatalf("rate %.0f/min exceeds the 60000/min base", got)
+	}
+	pts := rec.MetricPoints(metricThrottleEffectiveRate)
+	if last := pts[len(pts)-1].Value; last != got {
+		t.Fatalf("last published gauge %.0f/min != current rate %.0f/min", last, got)
 	}
 }

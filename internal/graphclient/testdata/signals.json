@@ -48,7 +48,7 @@
       "Name": "graph2otel.throttle.effective_rate_per_minute",
       "Unit": "{request}/min",
       "Kind": "gauge",
-      "Description": "Current client-side request rate of an adaptive workload limiter, lowered on 429s and recovered after a quiet period.",
+      "Description": "Current client-side request rate of an adaptive workload limiter, lowered on 429s and raised after runs of successful requests.",
       "AttrKeys": [
         "tenant_id",
         "workload"
