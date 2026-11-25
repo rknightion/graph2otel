@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -122,19 +123,40 @@ func testDenseOverlap(t *testing.T, budget string, groupCount, groupSize int, sp
 	if err != nil {
 		t.Fatal(err)
 	}
-	poll := func(to time.Time) (time.Time, []string, error) {
+	poll := func(to time.Time, expectSavedBatch bool) (time.Time, []string, error) {
 		t.Helper()
 		aaRequests, cqRequests = 0, 0
 		c := &voiceApps{client: client, store: checkpoint.NewStore(dir), tenantID: fixtureTenant}
 		out := telemetrytest.New()
 		hwm, err := c.CollectWindow(t.Context(), anchor, to, out.Emitter(), recordoutcome.NewRecorder())
 		var ids []string
+		var cqCount int
+		var batchKnown string
 		for _, r := range out.LogRecords() {
-			if r.EventName == aaEvent && r.Timestamp.Equal(tailTime) {
+			switch r.EventName {
+			case aaEvent:
+				if !r.Timestamp.Equal(tailTime) {
+					t.Fatal("unexpected AA leg timestamp")
+				}
 				ids = append(ids, tailAA)
-			} else {
+			case cqEvent:
+				cqCount++
 				ids = append(ids, r.Attrs["dialog_id"])
+			case queueBatch:
+				if batchKnown != "" || r.Attrs["queue"] != fixtureCQ {
+					t.Fatal("unexpected saved batch queue or duplicate summary")
+				}
+				batchKnown = r.Attrs["known_result_legs"]
+			default:
+				t.Fatalf("unexpected event %s", r.EventName)
 			}
+		}
+		wantBatch := ""
+		if expectSavedBatch && cqCount > 0 {
+			wantBatch = strconv.Itoa(cqCount)
+		}
+		if batchKnown != wantBatch {
+			t.Fatalf("saved-batch count = %q, want %q for %d CQ legs", batchKnown, wantBatch, cqCount)
 		}
 		if aaRequests > 17 || cqRequests > 17 || len(ids) > 20000 {
 			t.Fatalf("poll exceeded a stream budget: AA=%d CQ=%d rows=%d", aaRequests, cqRequests, len(ids))
@@ -159,7 +181,7 @@ func testDenseOverlap(t *testing.T, budget string, groupCount, groupSize int, sp
 		}
 		return cp.Watermark
 	}
-	hw, ids, err := poll(target)
+	hw, ids, err := poll(target, true)
 	if len(ids) == 0 || hw.Equal(target) || !watermark().Equal(anchor) || err == nil || !strings.Contains(err.Error(), "exceeded "+budget+" limit") {
 		t.Fatalf("dense overlap pinned the first poll or crossed an incomplete interval: rows=%d, watermark=%v, err=%v", len(ids), hw, err)
 	}
@@ -168,7 +190,7 @@ func testDenseOverlap(t *testing.T, budget string, groupCount, groupSize int, sp
 		t.Fatal("emitted tail beyond the jointly complete prefix")
 	}
 	failCQ = true
-	hw, ids, err = poll(target)
+	hw, ids, err = poll(target, false)
 	if err == nil || strings.Contains(err.Error(), fixturePassword) || len(ids) != 0 || hw.Equal(target) || !watermark().Equal(anchor) || !firstCQ.After(floor) {
 		t.Fatalf("failed CQ query crossed or restarted the persisted prefix: rows=%d, start=%v, watermark=%v, err=%v", len(ids), firstCQ, hw, err)
 	}
@@ -181,7 +203,7 @@ func testDenseOverlap(t *testing.T, budget string, groupCount, groupSize int, sp
 	if err := os.Mkdir(files[0]+".tmp", 0700); err != nil {
 		t.Fatal(err)
 	}
-	hw, _, err = poll(target)
+	hw, _, err = poll(target, false)
 	if err == nil || !strings.Contains(err.Error(), "save VAAC checkpoint") || hw.Equal(target) || !watermark().Equal(anchor) || !firstCQ.Equal(resume) {
 		t.Fatalf("failed save crossed or restarted the persisted prefix: start=%v, watermark=%v, err=%v", firstCQ, hw, err)
 	}
@@ -189,7 +211,7 @@ func testDenseOverlap(t *testing.T, budget string, groupCount, groupSize int, sp
 		t.Fatal(err)
 	}
 	for i := 0; i < 12 && !hw.Equal(target); i++ {
-		hw, ids, err = poll(target)
+		hw, ids, err = poll(target, true)
 		if i == 0 && !firstCQ.Equal(resume) {
 			t.Fatal("restart skipped the prefix whose save failed")
 		}

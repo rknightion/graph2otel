@@ -2144,6 +2144,7 @@
         "internal/collectors/purview/sensitivitylabels",
         "internal/collectors/teams/callrecords",
         "internal/collectors/teams/directroutingcalls",
+        "internal/collectors/teams/voiceapps",
         "internal/wirecheck"
       ]
     },
@@ -11169,6 +11170,22 @@
       ],
       "packages": [
         "internal/collectors/teams/callrecords"
+      ]
+    },
+    {
+      "event_name": "teams.call_queue_batch",
+      "domain": "teams",
+      "attr_keys": [
+        "abandon_share",
+        "abandoned_legs",
+        "answer_share",
+        "answered_legs",
+        "ingest_transport",
+        "known_result_legs",
+        "queue"
+      ],
+      "packages": [
+        "internal/collectors/teams/voiceapps"
       ]
     },
     {

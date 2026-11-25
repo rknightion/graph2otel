@@ -5,6 +5,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/rknightion/graph2otel/internal/semconv"
@@ -16,6 +17,7 @@ import (
 const (
 	abandonRate = "teams.call_queue.abandon_rate"
 	answerRate  = "teams.call_queue.answer_rate"
+	queueBatch  = "teams.call_queue_batch"
 	waitTime    = "teams.call_queue.wait_time"
 	aaOutcome   = "teams.auto_attendant.calls"
 	answered    = "answered"
@@ -42,7 +44,7 @@ var cqEnum = wirecheck.NewEnum(slices.Collect(maps.Keys(cqResults))...)
 var aaEnum = wirecheck.NewEnum(slices.Collect(maps.Keys(aaResults))...)
 var waitBuckets = []float64{1, 5, 10, 20, 30, 60, 120, 300, 600}
 
-type queueCounts struct{ total, answered, abandoned float64 }
+type queueCounts struct{ known, answered, abandoned int64 }
 
 func resourceID(s string) string {
 	// Microsoft reports queue and AA GUIDs. Do not fall back to a display
@@ -84,14 +86,13 @@ func (c *voiceApps) recordMetrics(e telemetry.Emitter, event string, row vaaccli
 	}
 	result := text(row, "CallQueueCallResult")
 	bucket := cqResults[result]
-	if bucket == "" {
-		if result != "" {
-			c.watch.Value(e, "CallQueueCallResult", "unknown", cqEnum)
-		}
-		return // unknown result is not evidence of a non-answer or non-abandon
-	}
 	q := queues[id]
-	q.total++
+	if bucket != "" {
+		q.known++
+	} else if result != "" {
+		c.watch.Value(e, "CallQueueCallResult", "unknown", cqEnum)
+	}
+	// An unknown result can create a zero-denominator queue, never a share.
 	switch bucket {
 	case answered:
 		q.answered++
@@ -103,14 +104,28 @@ func (c *voiceApps) recordMetrics(e telemetry.Emitter, event string, row vaaccli
 	queues[id] = q
 }
 
-func emitRates(e telemetry.Emitter, queues map[string]queueCounts) {
+func (c *voiceApps) emitQueueRates(e telemetry.Emitter, at time.Time, queues map[string]queueCounts) {
 	abandons := make([]telemetry.GaugePoint, 0, len(queues))
 	answers := make([]telemetry.GaugePoint, 0, len(queues))
 	for id, q := range queues {
-		attrs := telemetry.Attrs{semconv.AttrQueue: id}
-		abandons = append(abandons, telemetry.GaugePoint{Value: q.abandoned / q.total, Attrs: attrs})
-		answers = append(answers, telemetry.GaugePoint{Value: q.answered / q.total, Attrs: attrs})
+		batch := telemetry.Attrs{
+			semconv.AttrQueue:           id,
+			semconv.AttrKnownResultLegs: q.known,
+			semconv.AttrAnsweredLegs:    q.answered,
+			semconv.AttrAbandonedLegs:   q.abandoned,
+		}
+		if q.known > 0 {
+			attrs := telemetry.Attrs{semconv.AttrQueue: id}
+			abandon, answer := float64(q.abandoned)/float64(q.known), float64(q.answered)/float64(q.known)
+			batch[semconv.AttrAbandonShare], batch[semconv.AttrAnswerShare] = abandon, answer
+			abandons = append(abandons, telemetry.GaugePoint{Value: abandon, Attrs: attrs})
+			answers = append(answers, telemetry.GaugePoint{Value: answer, Attrs: attrs})
+		}
+		// The shares and denominator survive export (or are dropped) together.
+		e.LogEvent(telemetry.Event{Name: queueBatch, Body: c.eventBody(queueBatch, id), Timestamp: at,
+			Severity: telemetry.SeverityInfo, Attrs: batch})
 	}
+	// Legacy gauges remain available, but cannot represent an atomic batch.
 	e.GaugeSnapshot(abandonRate, semconv.UnitDimensionless, "Share of newly seen queue legs with known results that abandoned.", abandons)
 	e.GaugeSnapshot(answerRate, semconv.UnitDimensionless, "Share of newly seen queue legs with known results that were answered.", answers)
 }

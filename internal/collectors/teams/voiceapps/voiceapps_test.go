@@ -7,10 +7,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -129,10 +131,10 @@ func TestVoiceAppsHTTPCheckpointAndTelemetry(t *testing.T) {
 		t.Fatal("initial read did not use the sourced EndTime filters")
 	}
 	logs := out.LogRecords()
-	if len(logs) != 4 {
-		t.Fatalf("emitted %d logs; want two AA chain legs and two CQ legs", len(logs))
+	if len(logs) != 5 {
+		t.Fatalf("emitted %d logs; want two AA chain legs, two CQ legs and one saved-batch summary", len(logs))
 	}
-	for _, rec := range logs {
+	for _, rec := range logs[:4] {
 		if rec.Timestamp != eventTime || rec.Attrs["ingest_transport"] != "vaac" {
 			t.Fatal("incorrect event time or transport")
 		}
@@ -167,6 +169,152 @@ func TestVoiceAppsHTTPCheckpointAndTelemetry(t *testing.T) {
 	}
 	if len(restarted.LogRecords()) != 0 || tokenRequests != 1 || len(filters) != 6 || filters[4][0].Value != to.Add(-6*time.Hour).Format(time.RFC3339) {
 		t.Fatal("overlap re-emitted a known leg, skipped the overlap or requested a fresh token")
+	}
+}
+
+func TestVoiceAppsQueueAdmissionAcrossOverlap(t *testing.T) {
+	const queueB = "00000000-0000-0000-0000-000000000004"
+	const otherTenant = "00000000-0000-0000-0000-000000000005"
+	to := time.Date(2000, 1, 1, 10, 0, 0, 0, time.UTC)
+	at := to.Add(-time.Minute)
+	_, cq := fixtureRows(at.Format(time.RFC3339))
+	answeredA, abandonedA := cq[0], cq[1]
+	unknownA := maps.Clone(abandonedA)
+	unknownA["DialogId"], unknownA["CallQueueCallResult"] = "synthetic-missing-result", nil
+	unknownB := maps.Clone(answeredA) // same dialog ID, different queue
+	unknownB["CallQueueId"], unknownB["CallQueueCallResult"], unknownB["CallQueueDurationSeconds"] = queueB, "synthetic-unrecognized", 0
+	otherA := maps.Clone(abandonedA)
+	otherA["DialogId"], otherA["CallQueueCallResult"] = "synthetic-other", "overflown"
+	unkeyedA := maps.Clone(answeredA) // known result and wait, but an invalid dialog type
+	unkeyedA["DialogId"] = 42
+	unkeyed := maps.Clone(abandonedA) // dialog, but no queue or result
+	unkeyed["CallQueueId"], unkeyed["CallQueueCallResult"], unkeyed["CallQueueDurationSeconds"] = nil, nil, 0
+	rows := []map[string]any{answeredA, abandonedA, otherA, unknownA, unknownB, unkeyedA, unkeyed}
+	nextB := maps.Clone(answeredA)
+	nextB["DialogId"], nextB["CallQueueId"], nextB["EndTime"] = "synthetic-next-dialog", queueB, to.Add(time.Minute).Format(time.RFC3339)
+	nextA := maps.Clone(unknownA)
+	nextA["DialogId"], nextA["EndTime"] = "synthetic-next-unknown", nextB["EndTime"]
+	rt := fakeWire(func(r *http.Request) (*http.Response, error) {
+		if r.Method == http.MethodPost {
+			return reply(http.StatusOK, `{"access_token":"`+fixtureToken+`","expires_in":3600}`), nil
+		}
+		q := decodeFixtureQuery(t, r)
+		if q.Filters[2].DataModelName == "HasAA" {
+			return reply(http.StatusOK, `{"dataResult":[]}`), nil
+		}
+		return fixtureReply(t, q, rows), nil
+	})
+	username, password := writeFixtureFiles(t)
+	client, err := vaacclient.New(fixtureTenant, username, password, rt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	poll := func(tenant string, from, to time.Time) *telemetrytest.Recorder {
+		t.Helper()
+		c := factory(collectors.WindowDeps{VAAC: client, Store: checkpoint.NewStore(dir), TenantID: tenant}).Collector.(*voiceApps)
+		out := telemetrytest.New()
+		hwm, err := c.CollectWindow(t.Context(), from, to, out.Emitter(), recordoutcome.NewRecorder())
+		if err != nil || !hwm.Equal(to) {
+			t.Fatalf("poll = %v, %v; want %v", hwm, err, to)
+		}
+		return out
+	}
+	checkMetric := func(out *telemetrytest.Recorder, name string, want map[string]float64) {
+		t.Helper()
+		got := make(map[string]float64)
+		for _, point := range out.MetricPoints(name) {
+			queue := point.Attrs["queue"]
+			if !maps.Equal(point.Attrs, map[string]string{"queue": queue}) {
+				t.Fatalf("%s has unexpected dimensions: %v", name, point.Attrs)
+			}
+			if name == waitTime && point.Count != 1 {
+				t.Fatalf("queue %s wait samples = %d; want 1", queue, point.Count)
+			}
+			got[queue] = point.Value
+		}
+		if !maps.Equal(got, want) {
+			t.Errorf("%s = %v; want %v", name, got, want)
+		}
+	}
+	processingStart := time.Now()
+	first := poll(fixtureTenant, to.Add(-time.Hour), to)
+	parallelTenant := poll(otherTenant, to.Add(-time.Hour), to)
+	rows = append(rows, nextA, nextB) // old keyed and unkeyed observations replay on a fresh collector
+	second := poll(fixtureTenant, to, to.Add(5*time.Minute))
+	checkMetric(first, answerRate, map[string]float64{fixtureCQ: 1.0 / 3})
+	checkMetric(first, abandonRate, map[string]float64{fixtureCQ: 1.0 / 3})
+	checkMetric(first, waitTime, map[string]float64{fixtureCQ: 14, queueB: 0})
+	checkMetric(second, answerRate, map[string]float64{queueB: 1})
+	checkMetric(second, abandonRate, map[string]float64{queueB: 0})
+	checkMetric(second, waitTime, map[string]float64{queueB: 14})
+
+	savedBatches := func(out *telemetrytest.Recorder) map[string][5]string {
+		t.Helper()
+		got := map[string][5]string{}
+		for _, rec := range out.LogRecords() {
+			if rec.EventName != "teams.call_queue_batch" {
+				continue
+			}
+			if rec.Timestamp.Before(processingStart) || rec.Attrs["ingest_transport"] != "vaac" {
+				t.Fatalf("queue batch must have a processing timestamp and VAAC transport")
+			}
+			queue := rec.Attrs["queue"]
+			if _, exists := got[queue]; exists {
+				t.Fatalf("queue %s has several batch observations", queue)
+			}
+			got[queue] = [5]string{rec.Attrs["known_result_legs"], rec.Attrs["answered_legs"], rec.Attrs["abandoned_legs"],
+				rec.Attrs["answer_share"], rec.Attrs["abandon_share"]}
+		}
+		return got
+	}
+	third := strconv.FormatFloat(1.0/3, 'g', -1, 64)
+	if got := savedBatches(first); !maps.Equal(got, map[string][5]string{fixtureCQ: {"3", "1", "1", third, third}, queueB: {"0", "0", "0", "", ""}}) {
+		t.Errorf("first saved-batch observations = %v", got)
+	}
+	if got := savedBatches(second); !maps.Equal(got, map[string][5]string{fixtureCQ: {"0", "0", "0", "", ""}, queueB: {"1", "1", "0", "1", "0"}}) {
+		t.Errorf("second saved-batch observations = %v", got)
+	}
+
+	type key struct{ queue, dialog string }
+	observations := map[key]int{}
+	bodies := map[string]key{}
+	for _, rec := range append(first.LogRecords(), second.LogRecords()...) {
+		if rec.EventName == "teams.call_queue_batch" {
+			continue
+		}
+		if rec.EventName != cqEvent || rec.Attrs["ingest_transport"] != "vaac" {
+			t.Fatalf("unexpected queue observation: %+v", rec)
+		}
+		k := key{rec.Attrs["queue"], rec.Attrs["dialog_id"]}
+		wantAt := at
+		if k.dialog == "synthetic-next-dialog" || k.dialog == "synthetic-next-unknown" {
+			wantAt = to.Add(time.Minute)
+		}
+		if !rec.Timestamp.Equal(wantAt) {
+			t.Errorf("queue observation %v time = %v; want event time %v", k, rec.Timestamp, wantAt)
+		}
+		observations[k]++
+		if previous, ok := bodies[rec.Body]; ok && previous != k {
+			t.Fatalf("distinct queue observations at the same event time share one Loki body: %v and %v", previous, k)
+		}
+		bodies[rec.Body] = k
+	}
+	for _, rec := range parallelTenant.LogRecords() {
+		if _, exists := bodies[rec.Body]; exists {
+			t.Errorf("two tenants observing the same source row emitted the same body")
+		}
+	}
+	// Eleven observations are not eleven legs: seven have a complete key.
+	// The two unkeyed observations remain evidence on both reads.
+	want := map[key]int{
+		{fixtureCQ, "synthetic-dialog"}: 1, {fixtureCQ, "synthetic-abandoned"}: 1, {fixtureCQ, "synthetic-other"}: 1,
+		{fixtureCQ, "synthetic-missing-result"}: 1, {fixtureCQ, "synthetic-next-unknown"}: 1,
+		{queueB, "synthetic-dialog"}: 1, {queueB, "synthetic-next-dialog"}: 1,
+		{fixtureCQ, ""}: 2, {"", "synthetic-abandoned"}: 2,
+	}
+	if !maps.Equal(observations, want) {
+		t.Errorf("queue observations = %v; want %v", observations, want)
 	}
 }
 

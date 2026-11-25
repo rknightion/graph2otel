@@ -123,7 +123,7 @@ func (c *voiceApps) CollectWindow(ctx context.Context, from, to time.Time, e tel
 		outcomes.Cause(recordoutcome.CauseSourceError)
 		return time.Time{}, fmt.Errorf("save VAAC checkpoint: %w", err)
 	}
-	emitRates(e, queues)
+	c.emitQueueRates(e, time.Now().UTC(), queues)
 	if readErr != nil {
 		// A successful CollectWindow (even with a partial watermark) can clear
 		// the scheduler's cold-start target. Report the incomplete read until
@@ -175,7 +175,13 @@ func (c *voiceApps) emitRows(e telemetry.Emitter, outcomes *recordoutcome.Record
 			continue
 		}
 		attrs := logAttrs(event, row)
-		e.LogEvent(telemetry.Event{Name: event, Body: event, Timestamp: ts, Severity: telemetry.SeverityInfo, Attrs: attrs})
+		// Loki can collapse equal timestamps and bodies before comparing
+		// metadata. Scope the discriminator by tenant without printing IDs.
+		var bodyKey any = id
+		if id == "" {
+			bodyKey = row // preserve differences even in non-keyable wire values
+		}
+		e.LogEvent(telemetry.Event{Name: event, Body: c.eventBody(event, bodyKey), Timestamp: ts, Severity: telemetry.SeverityInfo, Attrs: attrs})
 		outcomes.Add(recordoutcome.OutcomeEmitted, 1)
 		if id == "" {
 			c.watch.MissingField(e, "voice_call_dedupe_key")
@@ -216,10 +222,18 @@ func dedupeKey(event string, r vaacclient.Row) string {
 		}
 		parts = []any{event, r["DialogId"], r["CallQueueId"]}
 	}
-	// Store opaque digests, not call or account identifiers, on disk.
-	data, _ := json.Marshal(parts) // parts contain decoded JSON values only
-	digest := sha256.Sum256(data)
-	return hex.EncodeToString(digest[:])
+	// Keep the checkpoint key format stable across upgrades.
+	return digest(parts)
+}
+
+func (c *voiceApps) eventBody(event string, key any) string {
+	return event + " (" + digest([]any{c.tenantID, event, key}) + ")"
+}
+
+func digest(key any) string {
+	data, _ := json.Marshal(key) // callers pass JSON-decoded values and strings
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
 }
 
 var commonAttrs = map[string]string{
@@ -265,8 +279,13 @@ func logAttrs(event string, row vaacclient.Row) telemetry.Attrs {
 					attrs[attr] = v
 				}
 			case bool:
-				attrs[attr] = v
+				if attr != semconv.AttrQueue && attr != semconv.AttrDialogId {
+					attrs[attr] = v
+				}
 			case json.Number:
+				if attr == semconv.AttrQueue || attr == semconv.AttrDialogId {
+					continue // CQ key fields must stay strings all the way into Loki
+				}
 				if n, err := v.Int64(); err == nil {
 					attrs[attr] = n
 				} else if n, err := v.Float64(); err == nil {

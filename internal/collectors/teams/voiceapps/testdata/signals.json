@@ -1,6 +1,17 @@
 {
   "Metrics": [
     {
+      "Name": "graph2otel.api.unexpected",
+      "Unit": "1",
+      "Kind": "sum",
+      "Description": "Microsoft API responses that did not match what this collector was built against, by kind. Non-zero means an assumption needs re-checking; see the WARN log for the offending value.",
+      "AttrKeys": [
+        "collector",
+        "field",
+        "kind"
+      ]
+    },
+    {
       "Name": "teams.auto_attendant.calls",
       "Unit": "1",
       "Kind": "sum",
@@ -68,6 +79,18 @@
         "result",
         "start_date_time",
         "total_audio_stream_duration"
+      ]
+    },
+    {
+      "EventName": "teams.call_queue_batch",
+      "AttrKeys": [
+        "abandon_share",
+        "abandoned_legs",
+        "answer_share",
+        "answered_legs",
+        "ingest_transport",
+        "known_result_legs",
+        "queue"
       ]
     },
     {

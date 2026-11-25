@@ -4,6 +4,11 @@ package semconv
 // outcome dimensions label metrics; participant and call detail is log-only.
 const (
 	AttrQueue                                    = "queue"
+	AttrKnownResultLegs                          = "known_result_legs"
+	AttrAnsweredLegs                             = "answered_legs"
+	AttrAbandonedLegs                            = "abandoned_legs"
+	AttrAnswerShare                              = "answer_share"
+	AttrAbandonShare                             = "abandon_share"
 	AttrAutoAttendant                            = "auto_attendant"
 	AttrVoiceOutcome                             = "voice_outcome"
 	AttrDialogId                                 = "dialog_id"

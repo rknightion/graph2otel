@@ -1,6 +1,7 @@
 """Separate Teams investigation dashboard, assembled from the signal catalogue."""
 
-from builder import LOKI_DS, NO_LOKI, NO_METRIC, RATE, TENANT_SEL, Builder
+from builder import (AVAILABILITY_REASONS, AVAILABILITY_STATES, LOKI_DS, NO_LOKI, NO_METRIC, RATE,
+                     TENANT_SEL, Builder, _loki_note, _value_mapping)
 from logquery import Raw, f
 import v2
 
@@ -218,38 +219,94 @@ def _service_status(b, title, viz, w):
                  about="m365.service_health.status")
 
 
+def _verdict_coverage(b, noun, metric, share, *, scope=""):
+    span = {"op": "increase", "window": "$__range"}
+    observed = _agg(b, metric, match=scope, **span)
+
+    def growth(verdict):
+        match = f'{noun}_health=~"{verdict}"'
+        return _agg(b, metric, match=f"{scope},{match}" if scope else match, **span)
+
+    def count(expr):
+        # No verdict series contributes zero only if this tenant's total exists.
+        return f"(({expr}) or on (tenant_id) (0 * ({observed})))"
+
+    classified = growth("good|poor")
+    columns = {
+        f"{share.title()} share": _share(growth(share), classified),
+        "Classified": count(classified), "Observed": observed,
+        **{verdict.title(): count(growth(verdict)) for verdict in ("good", "poor", "unclassified")},
+    }
+    # A Grafana table merge needs a tenant column in every result frame,
+    # even if only unstamped series supply a share. Valid tenant IDs are GUIDs.
+    scoped = [f'label_replace({expr}, "tenant_id", "(unlabelled)", "tenant_id", "^$")'
+              for expr in columns.values()]
+    panel = b.raw(f"Initial {noun} verdict coverage (processing time)", scoped, viz="table", unit="none", w=24, h=4,
+                  desc=FIRST + " " + COUNT_NOTE + " Classified = good + poor; "
+                       "the share is blank without a classified denominator. Counts are estimates. "
+                       + ("The Site filter applies to streams only. " if scope else "")
+                       + "Loki lists event-time versions, including later observations, not this population.")
+    for target in panel["targets"]:
+        target.update(instant=True, range=False, format="table")
+    panel["transformations"] = [
+        {"id": "merge", "options": {}},
+        {"id": "organize", "options": {
+            "excludeByName": {"Time": True},
+            "renameByName": {f"Value #{target['refId']}": name for target, name in zip(panel["targets"], columns)},
+        }},
+    ]
+    panel["fieldConfig"]["defaults"].update(decimals=2, noValue="No initial observations in range.")
+    _override(panel, f"{share.title()} share", "unit", "percentunit")
+    _override(panel, f"{share.title()} share", "noValue", "-")
+
+
+def _client_legend(panel, *keys):
+    # Lead with the comparison dimension. The abbreviated tenant is for display
+    # only; it never replaces tenant_id in grouping or investigation links.
+    for target in panel["targets"]:
+        shortened = f'label_replace({target["expr"]}, "tenant_hint", "$1", "tenant_id", "^(.{{1,8}}).*$")'
+        target["expr"] = f'label_replace({shortened}, "tenant_hint", "unlabelled", "tenant_id", "^$")'
+        target["legendFormat"] = " · ".join("{{" + key + "}}" for key in (*keys, "tenant_hint"))
+
+
 def overview(b):
-    b.text("Start with **Call quality** and **Sites and network**, then use **Calls** and **Call detail** "
-           "for the evidence. Home and site metrics describe first accepted complete versions. "
-           "Log timestamps are source timestamps; metric counters and rates follow collection time. "
-           "Unique callers are not available as a bounded aggregate; endpoint rows are not a substitute. "
-           "A panel that says **No data yet** is not a health verdict: check **Collector health**.",
-           title="Teams call quality", h=4)
+    intro = b.text("Use **Call quality** and **Sites and network** for trends, then **Calls** and **Call detail** "
+                   "for evidence. Counters use processing time; logs use call or stream start. "
+                   "The same selection can cover different events on those clocks. "
+                   "Caller endpoints are not necessarily call initiators. For missing signals, see **Collector health**.",
+                   title="Teams call quality", h=3)
+    intro["links"] = [{"title": tab, "url": f"/d/{NAME}?dtab={v2.slug(tab)}"
+                       "&from=${__from}&to=${__to}&${__all_variables}"}
+                      for tab in ("Call quality", "Service health")]
+    _call_count_panels(b)
     increase = {"op": "increase", "window": "$__range"}
     good = _agg(b, "teams.calls", match='call_health="good"', **increase)
     classified = _agg(b, "teams.calls", match='call_health=~"good|poor"', **increase)
-    _call_count_panels(b)
     _stat(b, "Good share of classified calls", _share(good, classified),
-          FIRST + " Unclassified calls are excluded. No classified observations means no percentage.",
-          "percentunit", w=6)
+          FIRST + " See the coverage table below for the denominator and unclassified count.", "percentunit", w=6)
     _direct_routing_count_panels(b)
     _service_status(b, "Microsoft Teams service status", "stat", 6)
+    _verdict_coverage(b, "call", "teams.calls", "good")
     _bars(b, "Calls by initial health", "teams.calls", ("call_health",), FIRST)
     _pie(b, "Calls by type in range", [_count(b, "teams.calls", keys=("type",))], ["{{tenant_id}} · {{type}}"],
          FIRST + " " + COUNT_NOTE, donut=True)
     flags = b.raw("Calls with PSTN, video or sharing in range", [
         _count(b, "teams.calls", match=f'{flag}="true"') for flag in ("has_pstn", "has_video", "has_sharing")
-    ], viz="bargauge", unit="short", legends=["{{tenant_id}} · PSTN", "{{tenant_id}} · video", "{{tenant_id}} · sharing"],
+    ], viz="bargauge", unit="short", legends=["PSTN · {{tenant_id}}", "Video · {{tenant_id}}", "Sharing · {{tenant_id}}"],
         desc=FIRST + " A call can count in several bars. " + COUNT_NOTE)
     for target in flags["targets"]:
         target.update(instant=True, range=False)
-    platforms = b.raw("Recently ended calls by client platform", [
+    flags["options"].update(orientation="horizontal", namePlacement="left")
+    platforms = b.raw("Recent client bucket counts by platform", [
         f'sum by (tenant_id, platform) ({b.cat.metric("teams.client_versions").prom}{{{TENANT_SEL}}})'],
         viz="bargauge", unit="short", legends=["{{tenant_id}} · {{platform}}"],
-        desc="First accepted calls with a client on that platform, in the latest 60 call-end minutes since "
-             "process start. A call with several clients counts once per platform, so do not add the bars.")
-    _bars(b, "Later call health transitions", "teams.call.health_transitions", ("from_health", "to_health"),
-          "Changes between successive accepted versions. Not a signed correction to the initial counts.")
+        desc="Initial call counts per client platform, product and version bucket, summed by platform. "
+             "A call can contribute more than once to a platform. Latest 60 call-end minutes since process start.")
+    _client_legend(platforms, "platform")
+    platforms["description"] += " Tenant prefixes are display hints; inspect the series labels for full IDs."
+    transitions = _bars(b, "Later call health transitions", "teams.call.health_transitions", ("from_health", "to_health"),
+                        "Changes between successive accepted versions. Not a correction to the initial counts.")
+    transitions["fieldConfig"]["defaults"]["noValue"] = "Requires two accepted versions with different verdicts."
 
 
 def _measure(b, metric):
@@ -257,28 +314,22 @@ def _measure(b, metric):
 
 
 def quality(b):
-    b.text("Directional media streams from the first accepted complete version of each call, filtered by "
-           "the Site dropdown. Quantiles are estimated from histogram buckets, so they are bounded by "
-           "the bucket edges. The distributions combine the selected tenants.",
+    b.text("Stream counters use processing time and the first accepted complete call version. "
+           "Loki evidence is dated by stream start and includes later versions. "
+           "Use the **Site** dropdown to scope streams. Quantiles estimate values from histogram buckets.",
            title="Reading call quality", h=3)
-    span = {"op": "increase", "window": "$__range"}
-    poor = _agg(b, "teams.streams", match=f'{SITES},stream_health="poor"', **span)
-    classified = _agg(b, "teams.streams", match=f'{SITES},stream_health=~"good|poor"', **span)
-    _stat(b, "Directional streams counted in range", _count(b, "teams.streams", match=SITES),
-          FIRST + " " + COUNT_NOTE, w=4)
-    _stat(b, "Poor share of classified streams", _share(poor, classified),
-          FIRST + " Unclassified streams are excluded. No classified streams means no percentage.",
-          "percentunit", w=4)
-    _stat(b, "Calls with failure evidence in range", _count(b, "teams.call.failures"),
-          "Calls whose sessions or segments reported a failure stage. " + COUNT_NOTE, w=4)
-    # Range-wide means over every audio stream, mapped site or not. These stay
-    # readable when calls are too sparse for the per-interval quantiles below.
+    _verdict_coverage(b, "stream", "teams.streams", "poor", scope=SITES)
+    failure_note = "Requires a Graph session or segment failure stage or reason. Direct Routing SIP outcomes are separate."
+    failures = _stat(b, "Call failure evidence counted in range", _count(b, "teams.call.failures"),
+                     "A call can count once per failure-stage and reason bucket, not once overall. " + COUNT_NOTE, w=6)
+    failures["fieldConfig"]["defaults"]["noValue"] = failure_note
+    # Range-wide means stay readable when calls are too sparse for the per-interval quantiles below.
     tenant = site_queries(b.cat, grown=True, window="$__range", site=SITES, group="tenant_id", mapped_only=False)
     for key, name, unit in (("rtt", "Mean audio round-trip time", "s"), ("jitter", "Mean audio jitter", "s"),
                             ("loss", "Mean audio packet loss", "percentunit")):
         _stat(b, f"{name} in range", tenant[key],
-              "Mean of the per-stream averages over every audio stream in range, including streams with no "
-              "mapped site. Taken from the histogram sum and count, so bucket edges do not bound it.", unit, w=4)
+              "Mean of reported averages from measured audio streams in the selected sites. "
+              "All sites includes unmapped streams. Uses histogram sums and sample counts.", unit, w=6)
     _bars(b, "Directional streams by media and verdict", "teams.streams", ("media", "stream_health"),
           "Directional streams by verdict. " + FIRST, match=SITES)
     slot = {"keys": ("media",), "op": "increase", "window": "$__interval"}
@@ -296,24 +347,34 @@ def quality(b):
         _slots(b.raw(f"{name} p50 and p95 by media", [
             f"histogram_quantile({q}, sum by (le, tenant_id, media) ({grown}))" for q in ("0.5", "0.95")
         ], unit=unit, legends=["{{tenant_id}} · {{media}} · p50", "{{tenant_id}} · {{media}} · p95"],
-              desc="Per-stream averages reported by the endpoints, as bucketed quantiles across streams. " + SLOT_NOTE))
+              desc="Per-stream averages reported by the endpoints, as bucketed quantiles across streams. " + SLOT_NOTE),
+               share=unit == "percentunit")
         heat = b.raw(f"{name} distribution", [f"sum by (le) ({grown})"], viz="heatmap",
                      unit=unit, legends=["{{le}}"],
                      desc="How many directional streams fell in each bucket per interval, across the selected tenants. "
                           + SLOT_NOTE)
         heat["targets"][0]["format"] = "heatmap"
+        heat["options"]["yAxis"] = {"unit": unit, **({"min": 0, "max": 1} if unit == "percentunit" else {})}
         _slots(heat)
-    _bars(b, "Endpoint feedback", "teams.stream.feedback", ("media", "rating"),
-          "Ratings users gave at the end of a call, per directional stream.")
-    _bars(b, "Calls with failure evidence", "teams.call.failures", ("failure_stage", "reason_bucket"),
-          "Calls whose sessions or segments reported a failure stage, once per stage and reason bucket.")
-    _pie(b, "Poor stream causes", [_agg(b, "teams.streams", keys=("stream_health_cause",),
-         match=f'{SITES},stream_health="poor"', op="increase", window="$__range")],
-         ["{{tenant_id}} · {{stream_health_cause}}"],
-         "Reported primary cause bucket per poor directional stream, not proof of a network fault.")
-    b.metric("teams.client_versions", title="Recently ended calls by client bucket",
-             by=["platform", "product_family", "version_bucket"],
-             desc="Calls in the latest 60 call-end minutes since process start. Client buckets overlap.")
+    feedback = _bars(b, "Endpoint feedback", "teams.stream.feedback", ("media", "rating"),
+                     "Explicit user ratings, counted once per reporting side, session and media.")
+    feedback["fieldConfig"]["defaults"]["noValue"] = "Requires explicit user feedback."
+    breakdown = _bars(b, "Calls with failure evidence", "teams.call.failures", ("failure_stage", "reason_bucket"),
+                      "Graph session or segment failure evidence, once per call, stage and reason bucket.")
+    breakdown["fieldConfig"]["defaults"]["noValue"] = failure_note
+    for verdict in ("poor", "unclassified"):
+        causes = _agg(b, "teams.streams", keys=("stream_health_cause",), match=f'{SITES},stream_health="{verdict}"',
+                      op="increase", window="$__range")
+        panel = _pie(b, f"{verdict.title()} stream causes", [f"({causes}) > 0"],
+                     ["{{stream_health_cause}} · {{tenant_id}}"],
+                     f"Primary cause bucket per {verdict} directional stream, by processing time. "
+                     "Low packet utilisation is unclassified, not poor.")
+        panel["fieldConfig"]["defaults"]["noValue"] = f"No {verdict} stream causes in range."
+    clients = b.metric("teams.client_versions", title="Recently ended calls by client bucket",
+                       by=["platform", "product_family", "version_bucket"],
+                       desc="Calls in the latest 60 call-end minutes since process start. Client buckets overlap. "
+                            "Tenant prefixes are display hints; inspect the series labels for full IDs.")
+    _client_legend(clients, "platform", "product_family", "version_bucket")
 
 
 def _site_link(panel):
@@ -441,59 +502,182 @@ def _convert(fields, kind):
     ]}}
 
 
-def detail(b):
-    selected = [_matches("call_id", "call_id", required=True)]
-    b.text("Open a call from **Calls**, or select its tenant and enter a call ID. "
-           "Compare like versions. Missing fields mean unavailable observations; they do not indicate a good endpoint. "
-           "Relay addresses are allocations, not proof of relay use. Trace rows are reported hops only.",
-           title="Read the evidence", h=4)
-    b.records(CALL, "Call verdict and worst observed metrics by version", (
-        "call_id", "version", "call_health", "poor_stream_count", "worst_rtt_ms", "worst_jitter_ms",
-        "worst_packet_loss_rate", "shared_reflexive_ip", "participant_apps",
-    ), filters=selected)
-    b.records(STREAM, "Poor-stream threshold evidence", (
-        "version", "session_id", "segment_id", "stream_id", "media", "direction",
-        "stream_health_cause", "stream_health_metric", "stream_health_value", "stream_health_threshold",
-    ), filters=[*selected, f("stream_health_metric", "ne", "")],
-       desc="Value and threshold are in the units of the named metric; not all verdicts have threshold evidence.")
-    b.records(STREAM, "Directional streams", (
-        "version", "session_id", "segment_id", "stream_id", "media", "direction", "start_time", "end_time",
-        "stream_health", "average_rtt_ms", "average_jitter_ms", "average_packet_loss_rate",
-        "session_failure_stage", "session_failure_reason", "segment_failure_stage", "segment_failure_reason",
-    ), filters=selected)
-    # Only real intervals. An absent end must not paint a stream continuing to now.
-    keys = ("version", "session_id", "segment_id", "stream_id", "direction")
-    timeline = b.records(STREAM, "Dated stream intervals", (*keys, "start_time", "end_time", "stream_health"),
-                         filters=[*selected, f("start_time", "ne", ""), f("end_time", "ne", "")],
-                         desc="Whole-stream labels, not changing verdicts within the stream.")
+def _detail_columns(panel, columns):
+    panel["transformations"].append({"id": "organize", "options": {
+        "indexByName": {key: i for i, key in enumerate((*columns, "Time", "tenant_id"))},
+        "renameByName": {key: name for key, name in columns.items() if name},
+    }})
+    panel["fieldConfig"]["defaults"]["noValue"] = "Open or enter a call ID."
+
+
+_VERDICT_UNITS = {
+    "packets": ("packet_utilization",),
+    "ms": ("average_rtt_ms", "average_jitter_ms"),
+    "fraction (0-1)": ("average_packet_loss_rate", "post_fec_packet_loss_rate"),
+    "% (0-100)": ("video_frame_loss_percent",),
+    "fps": ("video_frame_rate",),
+}
+
+
+def _verdict_evidence(b, selected):
+    metric = "stream_health_metric"
+    tests = "".join('{{else if eq .' + metric + ' ' + ' '.join(f'"{name}"' for name in names) + '}}' + unit
+                    for unit, names in _VERDICT_UNITS.items())
+    unit = '{{if not .' + metric + '}}' + tests + '{{else}}unknown{{end}}'
+    columns = {
+        "stream_health": "Verdict", "stream_health_cause": "Cause", "media": "Media", "direction": "Direction",
+        metric: "Metric", "stream_health_value": "Measured value", "stream_health_threshold": "Threshold",
+        "g2o_units": "Units (value and threshold)", "version": "Version", "session_id": "Session",
+        "segment_id": "Segment", "stream_id": "Stream",
+    }
+    fields = tuple(k for k in columns if k != "g2o_units")
+    panel = b.records(STREAM, "Stream verdict evidence", fields, filters=selected,
+                      desc="The collector sets the verdict. Low packet utilisation means unclassified, not poor. "
+                           "Good streams and some unclassified streams have no threshold evidence.")
+    # Keep the wire keys plus the derived units field, which is presentation only.
+    stage = Raw(f'label_format g2o_units=`{unit}` | keep tenant_id, {", ".join(columns)}',
+                keys=["tenant_id", *fields], reason="Show the wire units beside threshold values")
+    panel["targets"][0]["expr"] = b._selector(STREAM, (*selected, stage))
+    _detail_columns(panel, columns)
+
+
+def _call_timeline(b, selected):
+    # The state timeline takes its viewport from the dashboard time picker.
+    # A separate link zooms only the timeline. Compute its range from call versions
+    # AND stream intervals, not from a single call/stream row, to retain peers.
+    clock = 'toDate "2006-01-02T15:04:05.999999999Z07:00"'
+    order = Raw(f'label_format g2o_interval=`{{{{$start := {clock} .start_time}}}}'
+                f'{{{{$end := {clock} .end_time}}}}'
+                '{{if and (not $start.IsZero) (not $end.IsZero) (not ($end.Before $start))}}yes{{end}}`'
+                ' | g2o_interval="yes" | drop g2o_interval', keys=["start_time", "end_time"],
+                reason="Reject malformed or reversed source intervals rather than draw a false duration")
+    timed = (*selected, f("start_time", "ne", ""), f("end_time", "ne", ""), order)
+    bounds = b.records(CALL, "Call bounds and timeline zoom", ("start_time", "end_time"), filters=timed, h=4,
+                       desc="Open the stream timeline in a new tab. Bounds use the selected call's dated versions "
+                            "and plotted stream peers in this search, padded by one second. "
+                            "The investigation window on this tab does not change. Zoom requires a tenant ID; "
+                            "unlabelled rows are still visible in the All-tenant evidence.")
+    # Fixed millisecond padding preserves endpoints at the query boundary and lets
+    # a zero-duration observation stay visible. No time is invented for absent bounds.
+    pad = Raw('label_format g2o_scope=tenant_id,'
+              f' g2o_from=`{{{{sub (unixEpochMillis ({clock} .start_time)) 1000}}}}`,'
+              f' g2o_to=`{{{{add (unixEpochMillis ({clock} .end_time)) 1000}}}}`'
+              ' | keep g2o_scope, g2o_from, g2o_to', keys=["tenant_id", "start_time", "end_time"],
+              reason="Project padded numeric epoch bounds for the time picker")
+    bounds["targets"] = [
+        {**b._loki_query(b._selector(event, (*timed, f("tenant_id", "ne", ""), pad)), ref=ref),
+         "maxLines": RECORD_LIMIT}
+        for ref, event in zip("AB", (CALL, STREAM))
+    ]
+    bounds["description"] = bounds["description"].replace(
+        ROW_NOTE, f" Up to {RECORD_LIMIT} recent rows from each source; not a census.")
+    bounds["transformations"][0]["options"]["keepTime"] = False
+    bounds["transformations"].extend([
+        _convert(("g2o_from", "g2o_to"), "number"),
+        {"id": "merge", "options": {}},
+        {"id": "groupBy", "options": {"fields": {
+            "g2o_scope": {"operation": "groupby", "aggregations": []},
+            "g2o_from": {"operation": "aggregate", "aggregations": ["min"]},
+            "g2o_to": {"operation": "aggregate", "aggregations": ["max"]},
+        }}},
+    ])
+    _detail_columns(bounds, {"g2o_from (min)": "From (padded)", "g2o_to (max)": "To (padded)", "g2o_scope": "Tenant"})
+    bounds["options"]["sortBy"] = []
+    bounds["fieldConfig"]["defaults"]["noValue"] = "No dated bounds. Open or enter a call ID."
+    for field in ("From (padded)", "To (padded)"):
+        _override(bounds, field, "unit", "dateTimeAsIso")
+    _override(bounds, "Tenant", "links", [])
+
+    keys = ("tenant_id", "version", "direction", "media", "session_id", "segment_id", "stream_id")
+    timeline = b.records(STREAM, "Dated stream intervals", ("start_time", "end_time", "stream_health"),
+                         filters=timed, desc="One verdict per dated directional stream, not a verdict history. "
+                         "Stream bounds can fall back to source segment dates. Use the bounds link to see the "
+                         "whole observed span without narrowing this search.")
+    parts = ('v{{.version}}', '{{.direction | default "unknown direction"}}', '{{.media}}',
+             '{{.session_id | default "?"}}/{{.segment_id | default "?"}}/{{.stream_id | default "?"}}',
+             '{{.tenant_id | default "unlabelled"}}')
+    lane = Raw('label_format g2o_lane=`' + ' · '.join(parts) + '`', keys=keys,
+               reason="Label individual lanes even when Graph omits an identifier")
+    # Project only the timeline fields so no other string becomes a state series.
+    timeline["targets"][0]["expr"] = b._selector(STREAM, (*timed, lane, Raw(
+        "keep g2o_lane, start_time, end_time, stream_health", keys=["start_time", "end_time", "stream_health"],
+        reason="Project state timeline data without plotting other string attributes")))
     timeline["type"] = "state-timeline"
-    timeline["options"] = {"mergeValues": False, "showValue": "auto", "rowHeight": 0.8}
+    timeline["options"] = {"mergeValues": False, "showValue": "auto", "rowHeight": 0.8, "perPage": 10,
+                           "tooltip": {"mode": "single"}, "legend": {"showLegend": False}}
     timeline["transformations"][0]["options"]["keepTime"] = False
     timeline["transformations"].extend([
         _convert(("start_time", "end_time"), "time"),
         {"id": "organize", "options": {"indexByName": {"start_time": 0, "end_time": 1, "stream_health": 2}}},
-        {"id": "partitionByValues", "options": {"fields": ["tenant_id", *keys], "keepFields": False}},
+        {"id": "calculateField", "options": {"mode": "index", "alias": "Observation"}},
+        {"id": "partitionByValues", "options": {"fields": ["g2o_lane", "Observation"], "keepFields": False}},
     ])
-    # Name each row by what tells streams apart, not by every partition label.
-    timeline["fieldConfig"]["defaults"]["displayName"] = (
-        "v${__field.labels.version} ${__field.labels.direction} stream ${__field.labels.stream_id}")
-    timeline["description"] += " Narrow the time picker to the call to see the intervals."
+    timeline["fieldConfig"]["defaults"].update(displayName="${__field.labels.g2o_lane}",
+                                                custom={"axisWidth": 220},
+                                                noValue="No dated streams. Open or enter a call ID.")
+    bounds["fieldConfig"]["defaults"]["links"] = [{
+        "title": "Open stream timeline at call bounds",
+        "url": (f"/d/{NAME}?dtab={v2.slug('Call detail')}&viewPanel={timeline['id']}&"
+                'from=${__data.fields["From (padded)"].numeric}&to=${__data.fields["To (padded)"].numeric}'
+                "&${datasource:queryparam}&${loki_datasource:queryparam}&${call_id:queryparam}"
+                "&var-tenant=${__data.fields.Tenant.text:percentencode}"),
+        "targetBlank": True,
+    }]
+
+
+def detail(b):
+    selected = [_matches("call_id", "call_id", required=True)]
+    b.text("Open a call from **Calls** or **Users**, or select its tenant and enter a call ID. "
+           "Compare matching versions. Use **Call bounds and timeline zoom** to inspect dated streams in a new tab. "
+           "Blank fields are unavailable, not good verdicts.", title="Read the evidence", h=3)
+    header = {
+        "version": "Version", "call_health": "Verdict", "start_time": "Call start (UTC)", "end_time": "Call end (UTC)",
+        "duration_seconds": "Duration (s)", "poor_stream_count": "Poor streams", "worst_rtt_ms": "Worst RTT (ms)",
+        "worst_jitter_ms": "Worst jitter (ms)", "worst_packet_loss_rate": "Worst loss (fraction)",
+        "dominant_transport": "Dominant transport", "shared_reflexive_ip": "Shared reflexive IP", "participant_apps": "Apps",
+        "call_id": "Call ID",
+    }
+    panel = b.records(CALL, "Call verdict and worst observed metrics by version", tuple(header), filters=selected, h=5,
+                      desc="Source start and end per version. Shared reflexive IP suggests a common breakout, not a proven path.")
+    _detail_columns(panel, header)
+    _call_timeline(b, selected)
+    _verdict_evidence(b, selected)
+    streams = {
+        "version": "Version", "media": "Media", "direction": "Direction", "stream_health": "Verdict",
+        "average_rtt_ms": "RTT (ms)", "average_jitter_ms": "Jitter (ms)", "average_packet_loss_rate": "Loss (fraction)",
+        "caller_user_principal_name": "Caller UPN", "caller_impact": "Caller impact",
+        "callee_user_principal_name": "Callee UPN", "callee_impact": "Callee impact",
+        "start_time": "Stream start (UTC)", "end_time": "Stream end (UTC)", "session_id": "Session",
+        "segment_id": "Segment", "stream_id": "Stream", "session_failure_stage": "Session failure stage",
+        "session_failure_reason": "Session failure reason", "segment_failure_stage": "Segment failure stage",
+        "segment_failure_reason": "Segment failure reason",
+    }
+    panel = b.records(STREAM, "Directional streams", tuple(streams), filters=selected,
+                      desc="Caller and callee are the reported media endpoints, not the full meeting roster. "
+                           "Impact labels follow the direction of a poor stream; they do not assign fault.")
+    _detail_columns(panel, streams)
     for side, extra in (("caller", ("platform", "product_family", "client_version", "device_name")), ("callee", ())):
-        b.records(STREAM, f"Reported {side} endpoint", ("version", "stream_id", "direction", *(
-            f"{side}_{key}" for key in (*extra, "device", "cpu_insufficient", "device_glitch",
-                                        "connection_type", "user_agent")),
-        ), filters=selected, desc="Device JSON may carry audio capture and render data. "
-                                "Callee platform and client version are not catalogued.")
-        b.records(STREAM, f"Reported {side} addresses and ASN", ("version", "stream_id", "direction", *(
-            f"{side}_{key}" for key in ("ip_address", "ip_class", "reflexive_ip_address", "relay_ip_address",
-                                        "relay_address_present", "asn", "asn_organization", "site")),
-        ), filters=selected, desc="Optional ASN enrichment describes a qualifying reflexive address, not a hop. "
-                                "Private/shared status describes the reported address only.")
-    b.records(STREAM, "Reported caller trace hops", (
+        common = {"version": "Version", "direction": "Direction", "stream_id": "Stream",
+                  "session_id": "Session", "segment_id": "Segment"}
+        endpoint = {f"{side}_{key}": key.replace("_", " ").capitalize() for key in (
+            "user_principal_name", "identity_kind", "id", "impact", "connection_type", "transport_protocol", *extra,
+            "device", "cpu_insufficient", "device_glitch", "low_speech_signal", "wifi_with_issue", "user_agent")}
+        panel = b.records(STREAM, f"Reported {side} endpoint", (*endpoint, *common), filters=selected,
+                          desc="Device JSON may carry audio capture and render data. "
+                               "Callee platform and client version are not catalogued.")
+        _detail_columns(panel, {**endpoint, **common})
+        network = {f"{side}_{key}": key.replace("_", " ").capitalize() for key in (
+            "site", "ip_address", "ip_class", "reflexive_ip_address", "relay_ip_address", "relay_address_present",
+            "asn", "asn_organization", "id")}
+        panel = b.records(STREAM, f"Reported {side} addresses and ASN", (*network, *common), filters=selected,
+                          desc="ASN is optional reflexive address enrichment. Relay allocations do not prove relay use.")
+        _detail_columns(panel, {**network, **common})
+    trace = b.records(STREAM, "Reported caller trace hops", (
         "version", "stream_id", "caller_trace_route_hops", "caller_trace_route_hops_omitted",
     ), filters=[*selected, f("caller_trace_route_hops", "ne", "")],
-       desc="The capped source trace where available. Missing hops do not establish a direct path.")
-    b.records(STREAM, "Application and bot evidence", (
+       desc="No trace reported for this call if empty. Missing hops do not establish a direct path.")
+    trace["fieldConfig"]["defaults"]["noValue"] = "No trace reported for the selected call."
+    bots = b.records(STREAM, "Application and bot evidence", (
         "version", "stream_id", "caller_identity_kind", "callee_identity_kind",
         "callee_app_id", "callee_bot_role",
     ), filters=[*selected, Raw('caller_identity_kind="app" or callee_identity_kind="app" or callee_bot_role!=""',
@@ -501,6 +685,7 @@ def detail(b):
                               reason="Either side may report an application identity")],
        desc="Application identity kinds and observed callee bot roles, not a count of all bots or attendees. "
             "Caller app ID and bot role are not catalogued.")
+    bots["fieldConfig"]["defaults"]["noValue"] = "No application or bot evidence for the selected call."
 
 
 def users(b):
@@ -637,27 +822,78 @@ def phone(b):
 
 
 def voice_apps(b):
-    b.text("This tab needs the optional **teams.voice_apps** collector, which reads Teams voice analytics and is "
-           "off unless enabled for the tenant. Queue and attendant labels are resource GUIDs. Queue shares describe "
-           "newly observed legs with known results, not intervals of event time.", title="Before you read this tab", h=3)
-    b.metric("teams.call_queue.answer_rate", title="Call queue answer share", by=["queue"])
-    b.metric("teams.call_queue.abandon_rate", title="Call queue abandon share", by=["queue"])
-    wait = counter_increase(f'{b.cat.metric("teams.call_queue.wait_time").prom}_bucket{{{TENANT_SEL}}}', "$__interval")
-    for q in ("0.95", "0.5"):
-        _slots(b.raw(f"Call queue wait time p{q[2:].ljust(2, '0')}", [
-            f"histogram_quantile({q}, sum by (le, tenant_id, queue) ({wait}))"], unit="s",
-            legends=["{{tenant_id}} · {{queue}}"],
-            desc="Time callers waited in the queue, as a bucketed quantile across newly observed legs. " + SLOT_NOTE))
+    b.text("This tab needs the optional **teams.voice_apps** collector. Queue and attendant labels are resource GUIDs. "
+           "The Loki summaries use event time. The share, denominator and wait panels use processing time. "
+           "An unkeyed queue observation can repeat across polls; it is evidence, not a distinct leg.",
+           title="Before you read this tab", h=4)
+    cq = "teams.call_queue_call"
+    vaac = [f("ingest_transport", "eq", "vaac")]
+    keyed = [*vaac, f("queue", "ne", ""), f("dialog_id", "ne", "")]
+    unkeyed = [*vaac, Raw("queue=`` or dialog_id=``", keys=["queue", "dialog_id"],
+                         reason="Either missing part makes a queue observation unkeyed")]
+    queue_legend = "{{tenant_id}} · {{queue}}"
+
+    def log_count(title, filters, keys, legend, desc, *, distinct=False):
+        keep = Raw("keep " + ", ".join(keys), keys=keys,
+                   reason="Discard unrelated per-record labels before counting")
+        sel = b._selector(cq, [*filters, keep], by=keys)
+        expr = f"sum by ({', '.join(keys)}) (count_over_time({sel} [$__range]))"
+        if distinct:
+            expr = f"count by (tenant_id, queue) ({expr})"
+        panel = b._viz_panel("stat", title, [], "short", desc + " Requires the Loki datasource.", 12, 5)
+        panel["datasource"] = LOKI_DS
+        panel["targets"] = [b._loki_query(expr, legend=legend, query_type="instant")]
+        panel["options"].update(graphMode="none", textMode="value_and_name")
+        panel["fieldConfig"]["defaults"]["noValue"] = NO_LOKI
+
+    log_count("Distinct keyed queue legs in range", keyed, ("tenant_id", "queue", "dialog_id"), queue_legend,
+              "One leg per tenant, queue ID and dialog ID in the selected event-time range. "
+              "Includes keys with unknown results. Shorten the range if Loki reaches its series limit.", distinct=True)
+    log_count("Call queue observations in range", vaac, ("tenant_id",), "{{tenant_id}}",
+              "Counts stored Loki observations, including unkeyed rows that can repeat across polls. "
+              "This is not a count of calls or distinct legs.")
+
+    shares = ("answer_share", "abandon_share")
+    counts = ("known_result_legs", "answered_legs", "abandoned_legs")
+    panel = b.records("teams.call_queue_batch", "Call queue outcomes by saved batch", ("queue", *counts, *shares),
+                      filters=vaac, desc="Counts and shares come from a single saved batch per queue. "
+                      "Zero known results means both shares are undefined. No row means no saved observation "
+                      "is visible, not zero calls. Dates show processing time, not call time.")
+    panel["transformations"].append(_convert((*counts, *shares), "number"))
+    for share in shares:
+        _override(panel, share, "unit", "percentunit")
+
+    wait = b.cat.metric("teams.call_queue.wait_time").prom
+    buckets = counter_increase(f'{wait}_bucket{{{TENANT_SEL}}}', "$__interval")
+    samples = counter_increase(f'{wait}_count{{{TENANT_SEL}}}', "$__interval")
+    for percentile, q in ((50, 0.5), (95, 0.95)):
+        _slots(b.raw(f"Call queue wait time p{percentile}", [
+            f"histogram_quantile({q}, sum by (le, tenant_id, queue) ({buckets}))"], unit="s", w=8,
+            legends=[queue_legend],
+            desc="Bucketed quantile of admitted queue waits. Read the observation count beside it. " + SLOT_NOTE))
+    _slots(b.raw("Admitted queue wait observations", [f"sum by (tenant_id, queue) ({samples})"], unit="short", w=8,
+                 legends=[queue_legend], desc="Sample count from the same histogram and interval as p50 and p95. "
+                 "Estimated from scraped counter samples, not from Loki rows. " + SLOT_NOTE))
     _bars(b, "Auto attendant call legs by outcome", "teams.auto_attendant.calls", ("auto_attendant", "voice_outcome"),
           "Auto attendant call legs by bounded outcome.")
-    b.records("teams.call_queue_call", "Call queue legs", (
-        "queue", "call_queue_identity", "result", "call_queue_final_state_action", "call_queue_duration_seconds",
-        "call_queue_agent_count", "agent_name", "start_date_time", "end_date_time",
-    ), desc="Caller and agent identities are kept in the log rows only.")
+    queue_fields = ("queue", "dialog_id", "call_queue_identity", "result", "call_queue_final_state_action",
+                    "call_queue_duration_seconds", "call_queue_agent_count", "agent_name", "start_date_time", "end_date_time")
+    b.records(cq, "Keyed call queue observations", queue_fields, filters=keyed,
+              desc="Rows with both a queue ID and a dialog ID. The summary above counts distinct keys.")
+    b.records(cq, "Unkeyed call queue observations", queue_fields, filters=unkeyed,
+              desc="The queue ID, dialog ID or both are absent or invalid. These rows can repeat across polls "
+                   "and do not count as legs.")
     b.records("teams.auto_attendant_call", "Auto attendant legs", (
         "auto_attendant", "auto_attendant_identity", "result", "auto_attendant_transfer_action",
         "auto_attendant_call_flow", "auto_attendant_chain_duration_seconds", "start_date_time", "end_date_time",
     ))
+    diagnostic = b.raw("Call queue share gauges (export diagnostics)", [
+        f'{b.cat.metric(f"teams.call_queue.{outcome}_rate").prom}{{{TENANT_SEL}}}'
+        for outcome in ("answer", "abandon")
+    ], unit="percentunit", w=24, h=5, legends=[f"{outcome} · {queue_legend}" for outcome in ("Answer", "Abandon")],
+       desc="Independent gauge series can be stale or clipped. Use the saved batches above for shares with "
+            "their matching denominator.")
+    diagnostic["fieldConfig"]["defaults"].update(min=0, max=1)
 
 
 def inventory(b):
@@ -717,20 +953,67 @@ def usage(b):
 def service(b):
     _service_status(b, "Microsoft Teams service status", "stat", 8)
     _service_status(b, "Microsoft Teams service status over time", "state-timeline", 16)
-    b.metric("m365.service_health.issues.total", title="Open service issues by classification (all services)",
-             by=["classification", "status"],
-             desc="Counts every Microsoft 365 service: the issue count carries no service label.")
-    b.metric("m365.service_health.services.total", title="Services by status (all services)", by=["status"])
+
+
+def _latest_labels(candidates, key, conflict_labels):
+    """Keep labels of the newest timestamp per identity, or an explicit conflict."""
+    newest = f"max by ({key}) ({candidates})"
+    latest = f"(({candidates}) == on ({key}) group_left () ({newest}))"
+    tie = f"(count by ({key}) ({latest}) > 1)"
+    conflict = f"(({newest}) and on ({key}) {tie})"
+    for name, value in conflict_labels.items():
+        conflict = f'label_replace({conflict}, "{name}", "{value}", "{name}", "^$")'
+    return f"(({latest} unless on ({key}) {tie}) or {conflict})"
+
+
+def _issue_summary(b, title, expr, columns, value_name, unit, desc, empty):
+    panel = b._viz_panel("table", title, [], unit, desc + _loki_note(), 24, 7)
+    panel["datasource"] = LOKI_DS
+    panel["targets"] = [b._loki_query(expr, query_type="instant")]
+    panel["fieldConfig"]["defaults"]["noValue"] = empty
+    # Loki returns one instant sample per series. Reduce makes a row from
+    # each series and its labels, without joining on display text or nulls.
+    panel["transformations"] = [
+        {"id": "reduce", "options": {"reducers": ["last"], "mode": "seriesToRows", "labelsToFields": True}},
+        {"id": "organize", "options": {"excludeByName": {"Field": True},
+                                       "indexByName": {name: i for i, name in enumerate((*columns, "Last"))},
+                                       "renameByName": {"Last": value_name}}},
+    ]
+    panel["options"]["sortBy"] = [{"displayName": value_name, "desc": True}]
+    if "title" in columns:
+        _override(panel, "title", "custom.wrapText", True)
+    for kind in ("string", "number"):
+        panel["fieldConfig"]["overrides"].append({"matcher": {"id": "byType", "options": kind},
+                                                   "properties": [{"id": "noValue", "value": ""}]})
 
 
 def issues(b):
-    distinct = b.log_table(ISSUE, "Distinct Teams issues observed open in range",
-                           by=["id", "title", "classification", "status"],
-                           filters=[f("service", "eq", "Microsoft Teams"), f("is_resolved", "eq", "false")],
-                           desc="One row per issue and status, with the number of polls that saw it open. "
-                                "Requires the service-health collector.", w=24, h=7)
-    distinct["fieldConfig"]["overrides"].append({"matcher": {"id": "byName", "options": "Total"},
-                                                 "properties": [{"id": "displayName", "value": "Polls seen open"}]})
+    identity = ("tenant_id", "id")
+    key = ", ".join(identity)
+    teams_only = f("service", "eq", "Microsoft Teams")
+    keyed = [teams_only, f("id", "ne", "")]
+    open_only = b._selector(ISSUE, filters=[*keyed, f("is_resolved", "eq", "false"), Raw(
+        f"keep {key}", keys=identity, reason="Discard mutable metadata before counting keyed observations")],
+        by=list(identity))
+    count = f"sum by ({key}) (count_over_time({open_only} [$__range]))"
+    _issue_summary(b, "Distinct Teams issues observed open in range", count, identity,
+                   "Polls seen open", "short",
+                   "One row per tenant and issue ID. Counts stored open observations in the selected range, "
+                   "not currently open issues. Missing IDs are left in the history only.",
+                   "No keyed Teams issues were observed open in this range. Check the Loki datasource and service-health collector.")
+    fields = (*identity, "title", "status", "classification", "is_resolved")
+    grouped = ", ".join(fields)
+    observed = b._selector(ISSUE, filters=[*keyed, f("is_resolved", "re", "true|false"), Raw(
+        f"keep {grouped} | label_format g2o_issue_ms=`{{{{ __timestamp__ | unixEpochMillis }}}}` | unwrap g2o_issue_ms",
+        keys=fields, reason="Compare the log event timestamps while retaining the latest row's display labels")])
+    candidates = f"max_over_time({observed} [$__range]) by ({grouped})"
+    _issue_summary(b, "Latest Teams issue observations in range",
+                   _latest_labels(candidates, key, {"status": "Conflicting observations"}),
+                   fields, "Observation time", "dateTimeAsIso",
+                   "Latest stored event per tenant and issue ID in the selected range. Open rows use poll time; "
+                   "resolutions use Microsoft's end time. If different display details share the latest millisecond, "
+                   "read the dated history below. This is not a current open-issue inventory.",
+                   "No keyed Teams issue observations in this range. This does not show whether any issue is currently open.")
     for title, resolved in (("Teams issue observations while open", "false"), ("Teams resolution events", "true")):
         panel = b.records(ISSUE, title, ("id", "title", "classification", "status", "impact_description",
                           "description", "last_modified_date_time", "end_date_time"),
@@ -738,28 +1021,87 @@ def issues(b):
                           desc="Requires the service-health collector. This is history, not a current-state join: "
                                "an open observation can also have a later resolution. No resolution row is not proof an issue remains open.")
         _override(panel, "description", "custom.cellOptions", {"type": "markdown"})
+        for field in ("impact_description", "description"):
+            _override(panel, field, "custom.inspect", True)
         panel["options"]["cellHeight"] = "lg"
+        if resolved == "true":
+            panel["fieldConfig"]["defaults"]["noValue"] = (
+                "No Teams resolution events in this range. A closure is recorded only for a previously observed open issue. "
+                "Check the Loki datasource and service-health collector; no row does not prove the issue is still open.")
+
+
+def _availability(b, selector):
+    metric = b.cat.metric("graph2otel.collector.availability").prom
+    key = "tenant_id, collector, collector_transport"
+    # An instant selector sees the last sample of *each* series, possibly from
+    # a replaced process or state. Compare their real sample timestamps, not
+    # the gauge (always 1) or the instant query's evaluation timestamp.
+    stamp = f"timestamp({metric}{{{TENANT_SEL},{selector}}})"
+    by_state = f"max by ({key}, state, reason) ({stamp})"
+    # Identical state/reason samples collapse above. At exactly equal times a
+    # conflicting tuple has no provable winner, regardless of severity.
+    expr = "1000 * " + _latest_labels(by_state, key, {"state": "unknown", "reason": "timestamp_tie"})
+    panel = b.raw("Signal availability", [expr], viz="table", w=24, h=8,
+                  desc="Newest exported state and reason per tenant, collector and collector transport at the "
+                       "selected end time, within the datasource's instant lookback. Compare these columns with "
+                       "availability.state, availability.reason and availability.transport in the poller's "
+                       "admin /api/status.json. Admin is live; this table can lag the snapshot refresh and export. "
+                       "If the newest samples have the same timestamp but disagree, the state is unknown. "
+                       "Healthy, empty means the run succeeded without fetching rows, not disabled or failed.")
+    panel["fieldConfig"]["defaults"]["noValue"] = (
+        "Availability unknown: no recent snapshot sample at the selected end time. "
+        "Check the tenant, Prometheus datasource and exporter; this is not evidence of a disabled collector.")
+    panel["fieldConfig"]["overrides"] = [
+        _value_mapping("state", {**AVAILABILITY_STATES, "unknown": {"text": "Unknown"}}),
+        _value_mapping("reason", {**AVAILABILITY_REASONS, "timestamp_tie": {"text": "Latest samples disagree"}}),
+    ]
+    _override(panel, "Value", "unit", "dateTimeAsIso")
+    _override(panel, "Value", "displayName", "Last exported sample")
 
 
 def health(b):
-    b.availability(COLLECTORS)
-    selector = f'collector=~`{COLLECTORS}`'
+    selector = f'collector=~`{COLLECTORS}|m365[.]collaboration_activity`'
+    _availability(b, selector)
+    name = b.cat.metric("graph2otel.collector.expected_interval").prom
+    series = f"{name}{{{TENANT_SEL},{selector}}}"
+    stamp = f"timestamp({series})"
+    key = "tenant_id, collector"
+    # Compare the sample times first: a retired instance's longer interval
+    # may still be in lookback. Only agree on a value at the newest time.
+    latest = f"({series} and ({stamp} == on ({key}) group_left () max by ({key}) ({stamp})))"
+    cadence = f"max by ({key}) ({latest}) == min by ({key}) ({latest})"
+    panel = b.raw("Scheduled collector interval", [cadence], viz="table", unit="s", w=24, h=7,
+                  desc="Latest exported scheduler interval (admin interval_seconds), when newest samples agree. "
+                       "Cadence, last success and checkpoint metrics identify only tenant and collector, not transport. "
+                       "Compare against availability, but do not read these metrics as per-transport results.")
+    panel["fieldConfig"]["defaults"]["noValue"] = "No recent interval sample, or newest samples disagree."
     for metric, title in (("graph2otel.collector.watermark_timestamp", "Window watermark lag"),
                           ("graph2otel.scrape.staleness", "Time since last successful scrape")):
         q = _agg(b, metric, keys=("collector",), match=selector, aggregate="max")
         b.raw(title, [f"time() - ({q})" if "watermark" in metric else q],
               unit="s", legends=["{{tenant_id}} · {{collector}}"],
-              desc=("Only window collectors that emit a watermark are shown. Missing is not zero lag."
+              desc=("Age of the durable event-time cursor (admin checkpoint watermark for window collectors). "
+                    "A successful quiet window can still advance its cursor. Missing is not zero lag."
                     if "watermark" in metric else
-                    "Until the first successful run, staleness counts from process start. Missing is not zero staleness."))
-    b.raw("Teams Graph throttle response rate", [_agg(b, "graph2otel.throttle.count", keys=("workload",),
-          match='workload=~"teams-call-records|teams-phone"', op="rate")],
-          legends=["{{tenant_id}} · {{workload}}"],
-          desc="These two Graph workload buckets are Teams-specific. Shared reporting and other Graph workloads cannot be attributed to Teams here.")
-    for metric, title, by in (
-        ("teams.call.metrics_skipped", "Call versions skipped by metrics admission rate", ["reason_bucket"]),
-    ):
-        b.metric(metric, title=title, by=by)
+                    "Compare with the scheduled collector interval. Until the first success this counts from "
+                    "process start. Admin staleness instead measures time since the last attempt. "
+                    "Missing is not zero staleness."))
+    throttle = b.raw("Teams Graph throttle response rate", [_agg(b, "graph2otel.throttle.count", keys=("workload",),
+                     match='workload=~"teams-call-records|teams-phone"', op="rate")],
+                     legends=["{{tenant_id}} · {{workload}}"],
+                     desc="Only the Teams-specific call records and phone workload buckets. Shared reporting "
+                          "and other Graph workloads cannot be attributed to Teams here. An empty plot may mean "
+                          "no throttles or too few samples to calculate a rate; it is not a health verdict.")
+    throttle["fieldConfig"]["defaults"]["noValue"] = (
+        "No Teams throttle rate samples. There may have been no throttle responses, or too few counter samples. "
+        "This does not establish zero throttling or collector health.")
+    skipped = b.metric("teams.call.metrics_skipped", title="Call versions skipped by metrics admission rate",
+                       by=["reason_bucket"],
+                       desc="Rate of versions skipped by metrics admission, not a measure of Graph collection failure. "
+                            "An empty plot may mean no skipped versions, no calls or too few counter samples.")
+    skipped["fieldConfig"]["defaults"]["noValue"] = (
+        "No admission-skip rate samples. There may have been no skipped versions, no calls, or too few "
+        "counter samples. Use Signal availability for the collector's last reported state.")
 
 
 def practices(b):
@@ -793,6 +1135,12 @@ def sites_and_network(b):
 def service_health(b):
     service(b)
     issues(b)
+    b.metric("m365.service_health.issues.total", title="Service issues by classification and status (all services)",
+             by=["classification", "status"],
+             desc="Counts expanded issues returned for all Microsoft 365 services, including any resolved rows "
+                  "the source returns. This metric does not carry a service label.")
+    b.metric("m365.service_health.services.total", title="Services by status (all services)", by=["status"],
+             desc="Fleet context across Microsoft 365 services, not limited to Teams.")
 
 
 def admin_config(b):
