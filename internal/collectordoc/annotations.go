@@ -819,6 +819,11 @@ var annotations = map[string]Annotation{
 		Source:   "`GET providers/microsoft.aadiam/diagnosticSettings` (ARM control plane, management.azure.com audience)",
 		Gating:   "runs only when blob ingest is configured (nil ARM otherwise → no-op); access is the poller's Entra roles, not a Graph scope, so RequiredPermissions is empty like defender.quarantine. Capability semantics — 'mapped' means a blob collector for the container is shipped, not that this tenant enabled it",
 	},
+	"teams.network_topology": {
+		Collects: "Teams tenant network topology: one log twin per region (`teams.network_region`), site (`teams.network_site`) and subnet (`teams.network_subnet`), each with a `config_sha256` that changes when its exported configuration changes, and the gauge `teams.network_subnet.csv_coverage{coverage}` counting subnets as covered, uncovered or no_csv against the `teams.sites_file` CSV. A Teams subnet is covered only when one CSV prefix contains all of it. Mapped against the committed 2026-11-25 lab captures",
+		Source:   "Teams admin API `GET /Skype.Policy/configurations/TenantNetworkRegion`, `TenantNetworkSite` and `TenantNetworkSubnet` (undocumented; the REST calls behind the Teams PowerShell `Get-CsTenantNetwork*` cmdlets), not Microsoft Graph",
+		Gating:   "opt-in: `teams.admin_api.enabled`; profile `teams`. Needs an Entra directory role on the poller (Global Reader measured sufficient), not a Graph scope",
+	},
 	"teams.voice_apps": {
 		Collects: "Teams auto attendant and call queue call legs, including caller and agent identities in log twins. Metrics use queue or attendant resource GUIDs, never call or participant labels. Queue shares describe newly observed legs with known results, not intervals of event time. Source fixtures are synthetic and docs-derived; no live tenant was used",
 		Source:   "Commercial-cloud Teams VAAC `GET /Teams.VoiceAnalytics/getanalytics`, not Microsoft Graph. Request contract from [Phenisys Collector 2.12.1](https://github.com/Phenisys/microsoft-teams-observability/releases/tag/v2.12.1) and [Microsoft's Voice Applications Historical Reports template 3.3.2](https://www.microsoft.com/download/details.aspx?id=104623)",

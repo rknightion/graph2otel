@@ -172,6 +172,7 @@ import (
 	_ "github.com/rknightion/graph2otel/internal/collectors/teams/autoattendants"
 	_ "github.com/rknightion/graph2otel/internal/collectors/teams/callqueues"
 	_ "github.com/rknightion/graph2otel/internal/collectors/teams/directroutingcalls"
+	_ "github.com/rknightion/graph2otel/internal/collectors/teams/networktopology"
 	_ "github.com/rknightion/graph2otel/internal/collectors/teams/pstncalls"
 	_ "github.com/rknightion/graph2otel/internal/collectors/teams/voiceapps"
 )

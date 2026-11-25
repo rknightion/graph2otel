@@ -1167,6 +1167,7 @@ def admin_config(b):
            title="Teams admin configuration", h=3, w=24)
     b.metric("teams.call_queue.count", title="Call queues by routing method", by=["routing_method"],
              desc="Queues with a missing or unrecognised routing method count under unknown.")
+    b.metric("teams.network_subnet.csv_coverage", title="Teams subnets by sites CSV coverage", by=["coverage"])
 
 
 CALLS_EMPTY = "Teams publishes a call record after the call ends, sometimes hours later."
