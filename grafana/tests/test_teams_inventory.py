@@ -84,29 +84,31 @@ class TeamsInventoryTests(unittest.TestCase):
             {"labels": f'{{tenant_id="fixture",policy_type="{kind}"}}', "value": old if when == "0m" else 0}
             for kind, old in buckets.items()]} for when in ("0m", "2m")])
 
-    def test_last_successful_poll_is_not_the_last_attempt(self):
+    def test_last_reported_poll_finish_does_not_infer_success(self):
         cat = catalog.load()
         panels = inventory_panels(cat)
         timestamp = cat.metric("graph2otel.scrape.last_timestamp").prom
         success = cat.metric("graph2otel.scrape.success").prom
         numbers, users = "teams.phone_numbers", "teams.user_configuration"
-        # A failed attempt in the same tenant does not move the success time.
-        # The user collector, and a second tenant, have never succeeded.
+        # Independently exported success and finish samples can be mixed:
+        # the failed finish at 120 has the previous success flag alongside it.
         fixtures = [{"series": f'{metric}{{tenant_id="{tenant}",collector="{collector}"}}', "values": values}
                     for tenant, collector, finished, results in (
-                        ("one", numbers, "_ 60 120 180", "_ 1 0 0"),
+                        ("one", numbers, "_ 60 120 180", "_ 1 1 0"),
                         ("one", users, "_ 60 120 180", "_ 0 0 0"),
                         ("two", numbers, "_ 60 120 180", "_ 0 0 0"),
                     ) for metric, values in ((timestamp, finished), (success, results))]
-        panel = panels.get("Last successful inventory poll")
-        self.assertIsNotNone(panel, "the inventory tab has no last successful poll query")
+        panel = panels.get("Last reported inventory poll finish")
+        self.assertIsNotNone(panel, "the inventory tab must not claim a successful poll from independent samples")
         spec, = (target["spec"]["query"]["spec"] for target in panel["data"]["spec"]["queries"])
         self.assertTrue(spec["instant"])
+        self.assertNotIn(success, spec["expr"], "success and finish gauges are not atomic")
         self.assert_queries(fixtures, [{
             "expr": spec["expr"].replace("$tenant", ".*").replace("$__range", "3m").replace("${__from}", "0"),
-            "eval_time": "3m", "exp_samples": [{
-                "labels": f'{{tenant_id="one",collector="{numbers}"}}', "value": 60000,
-            }],
+            "eval_time": "3m", "exp_samples": [
+                {"labels": f'{{tenant_id="{tenant}",collector="{collector}"}}', "value": 180000}
+                for tenant, collector in (("one", numbers), ("one", users), ("two", numbers))
+            ],
         }])
 
     def assert_queries(self, fixtures, checks):

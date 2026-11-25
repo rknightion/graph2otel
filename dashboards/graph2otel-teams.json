@@ -11214,8 +11214,8 @@
         "kind": "Panel",
         "spec": {
           "id": 1011,
-          "title": "Last successful inventory poll",
-          "description": "Last successful poll finish observed in the selected range, per tenant and collector. Empty successful polls count; failed attempts do not. Blank means no success was observed here.",
+          "title": "Last reported inventory poll finish",
+          "description": "Last reported poll finish in the selected range, per tenant and collector. Finishes include unsuccessful attempts. This timestamp does not establish a complete read.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -11239,7 +11239,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "(((graph2otel_scrape_last_timestamp_seconds{tenant_id=~\"$tenant\",collector=~\"teams[.](phone_numbers|user_configuration)\"} and (graph2otel_scrape_success_ratio{tenant_id=~\"$tenant\",collector=~\"teams[.](phone_numbers|user_configuration)\"} == 1)) or max_over_time((graph2otel_scrape_last_timestamp_seconds{tenant_id=~\"$tenant\",collector=~\"teams[.](phone_numbers|user_configuration)\"} and (graph2otel_scrape_success_ratio{tenant_id=~\"$tenant\",collector=~\"teams[.](phone_numbers|user_configuration)\"} == 1))[$__range:30s])) * 1000) >= ${__from}",
+                        "expr": "((max_over_time(graph2otel_scrape_last_timestamp_seconds{tenant_id=~\"$tenant\",collector=~\"teams[.](phone_numbers|user_configuration)\"}[$__range])) * 1000) >= ${__from}",
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
