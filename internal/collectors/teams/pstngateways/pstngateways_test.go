@@ -151,8 +151,8 @@ func TestMapGateway_RuleListCap(t *testing.T) {
 	if got["pstn_gateway_inbound_pstn_number_translation_rules_count"] != 101 {
 		t.Errorf("count = %#v, want the full length 101", got["pstn_gateway_inbound_pstn_number_translation_rules_count"])
 	}
-	if got["pstn_gateway_inbound_pstn_number_translation_rules_truncated"] != true {
-		t.Errorf("truncated = %#v, want true", got["pstn_gateway_inbound_pstn_number_translation_rules_truncated"])
+	if got["pstn_gateway_inbound_pstn_number_translation_rules_truncated"] != "true" {
+		t.Errorf("truncated = %#v, want the string \"true\"", got["pstn_gateway_inbound_pstn_number_translation_rules_truncated"])
 	}
 }
 

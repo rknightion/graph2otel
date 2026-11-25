@@ -369,7 +369,7 @@ func TestTwin_NullAbsentEmptyListsAndCap(t *testing.T) {
 		t.Error("an empty list did not export count 0")
 	}
 	k := semconv.AttrCallQueueDistributionLists
-	if len(a[k].([]string)) != 100 || a[k+"_count"] != 101 || a[k+"_truncated"] != true {
+	if len(a[k].([]string)) != 100 || a[k+"_count"] != 101 || a[k+"_truncated"] != "true" {
 		t.Errorf("101 ids: len=%d count=%v truncated=%v", len(a[k].([]string)), a[k+"_count"], a[k+"_truncated"])
 	}
 	k = semconv.AttrCallQueueAgentIds

@@ -218,9 +218,10 @@ func (c *Collector) subnetTwin(e telemetry.Emitter, r map[string]any, table *sit
 	cov := coverageNoCSV
 	if table != nil {
 		cov = coverageUncovered
-		// The empty IP stops Lookup falling back to an endpoint address.
+		// The empty endpoint and reflexive IPs stop Lookup falling back to an
+		// address match: only a CSV prefix containing the whole subnet counts.
 		if cidr != "" {
-			if site := table.Lookup(cidr, ""); site.Name != sites.Unmapped {
+			if site, src := table.Lookup(cidr, "", ""); src == sites.MatchSubnet && site.Name != sites.Unmapped {
 				cov = coverageCovered
 				a[semconv.AttrNetworkSubnetCsvSite] = site.Name
 			}

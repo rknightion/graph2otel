@@ -11,7 +11,8 @@ NAME = "graph2otel-teams"
 CALL = "teams.call"
 STREAM = "teams.call_stream"
 ISSUE = "m365.service_health_issue"
-COLLECTORS = (r"teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)"
+COLLECTORS = (r"teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration"
+              r"|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)"
               r"|m365[.](teams|teams_usage|servicehealth)")
 # Every site-labelled metric panel follows the Site dropdown. All is ".*",
 # which also keeps streams that carry no mapped site.

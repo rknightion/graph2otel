@@ -91,7 +91,7 @@
               "name": "${datasource}"
             },
             "spec": {
-              "query": "label_values(graph2otel_collector_availability{collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)`}, tenant_id)",
+              "query": "label_values(graph2otel_collector_availability{collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)`}, tenant_id)",
               "refId": "tenant"
             }
           },
@@ -11556,6 +11556,276 @@
         "kind": "Panel",
         "spec": {
           "id": 106,
+          "title": "Call queues by routing method",
+          "description": "Queues with a missing or unrecognised routing method count under unknown.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "sum by (tenant_id, routing_method) (teams_call_queue_count{tenant_id=~\"$tenant\"})",
+                        "editorMode": "code",
+                        "range": true,
+                        "instant": false,
+                        "legendFormat": "{{tenant_id}} {{routing_method}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": true
+                  },
+                  "noValue": "No data yet. Needs tenants[].teams.admin_api.enabled, off by default. Collector health shows whether the source ran.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-107": {
+        "kind": "Panel",
+        "spec": {
+          "id": 107,
+          "title": "Teams subnets by sites CSV coverage",
+          "description": "Teams tenant network subnets by sites CSV coverage: covered (one CSV prefix contains the whole subnet), uncovered (no such prefix) or no_csv (no teams.sites_file configured).",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "sum by (tenant_id, coverage) (teams_network_subnet_csv_coverage{tenant_id=~\"$tenant\"})",
+                        "editorMode": "code",
+                        "range": true,
+                        "instant": false,
+                        "legendFormat": "{{tenant_id}} {{coverage}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": true
+                  },
+                  "noValue": "No data yet. Needs tenants[].teams.admin_api.enabled, off by default. Collector health shows whether the source ran.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-108": {
+        "kind": "Panel",
+        "spec": {
+          "id": 108,
+          "title": "Direct Routing gateways by enabled",
+          "description": "Configured Direct Routing gateways (SBCs) by whether they are enabled. Per-gateway configuration is in the teams.pstn_gateway log twins.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "refId": "A",
+                    "hidden": false,
+                    "datasource": {
+                      "type": "prometheus",
+                      "uid": "${datasource}"
+                    },
+                    "query": {
+                      "kind": "DataQuery",
+                      "version": "v0",
+                      "group": "prometheus",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "refId": "A",
+                        "expr": "sum by (tenant_id, enabled) (teams_pstn_gateway_count{tenant_id=~\"$tenant\"})",
+                        "editorMode": "code",
+                        "range": true,
+                        "instant": false,
+                        "legendFormat": "{{tenant_id}} {{enabled}}"
+                      }
+                    }
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "v11.5.0",
+            "spec": {
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "showLegend": true,
+                  "calcs": [
+                    "lastNotNull",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": true
+                  },
+                  "noValue": "No data yet. Needs tenants[].teams.admin_api.enabled, off by default. Collector health shows whether the source ran.",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "text",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-109": {
+        "kind": "Panel",
+        "spec": {
+          "id": 109,
           "title": "Reading usage",
           "description": "",
           "links": [],
@@ -11580,10 +11850,10 @@
           }
         }
       },
-      "panel-107": {
+      "panel-110": {
         "kind": "Panel",
         "spec": {
-          "id": 107,
+          "id": 110,
           "title": "Teams users by platform (D7)",
           "description": "From the Teams usage report. A user may appear on several platforms; do not sum them.",
           "links": [],
@@ -11670,10 +11940,10 @@
           }
         }
       },
-      "panel-108": {
+      "panel-111": {
         "kind": "Panel",
         "spec": {
-          "id": 108,
+          "id": 111,
           "title": "Users by activity on the latest report day",
           "description": "days_ago=0 is the newest report date in the download, not today.",
           "links": [],
@@ -11760,10 +12030,10 @@
           }
         }
       },
-      "panel-109": {
+      "panel-112": {
         "kind": "Panel",
         "spec": {
-          "id": 109,
+          "id": 112,
           "title": "Report names concealed",
           "description": "1 means Microsoft conceals user, group and site names in reports, so identifier joins are not guaranteed. Absent means the setting is unknown. If it is empty: Usage reports refresh daily; the first values follow the first report poll. Collector health shows whether the source ran.",
           "links": [],
@@ -11843,10 +12113,10 @@
           }
         }
       },
-      "panel-110": {
+      "panel-113": {
         "kind": "Panel",
         "spec": {
-          "id": 110,
+          "id": 113,
           "title": "Teams in the tenant",
           "description": "All teams, any visibility. If it is empty: Usage reports refresh daily; the first values follow the first report poll. Collector health shows whether the source ran.",
           "links": [],
@@ -11926,10 +12196,10 @@
           }
         }
       },
-      "panel-111": {
+      "panel-114": {
         "kind": "Panel",
         "spec": {
-          "id": 111,
+          "id": 114,
           "title": "Ownerless teams",
           "description": "Teams with no owner, excluding archived teams. If it is empty: Usage reports refresh daily; the first values follow the first report poll. Collector health shows whether the source ran.",
           "links": [],
@@ -12009,10 +12279,10 @@
           }
         }
       },
-      "panel-112": {
+      "panel-115": {
         "kind": "Panel",
         "spec": {
-          "id": 112,
+          "id": 115,
           "title": "Teams with guests",
           "description": "Teams with at least one guest member. If it is empty: Usage reports refresh daily; the first values follow the first report poll. Collector health shows whether the source ran.",
           "links": [],
@@ -12092,10 +12362,10 @@
           }
         }
       },
-      "panel-113": {
+      "panel-116": {
         "kind": "Panel",
         "spec": {
-          "id": 113,
+          "id": 116,
           "title": "Teams by visibility",
           "description": "Total Teams by visibility.",
           "links": [],
@@ -12182,10 +12452,10 @@
           }
         }
       },
-      "panel-114": {
+      "panel-117": {
         "kind": "Panel",
         "spec": {
-          "id": 114,
+          "id": 117,
           "title": "Team memberships by role",
           "description": "Tenant-wide Teams membership count by role.",
           "links": [],
@@ -12272,10 +12542,10 @@
           }
         }
       },
-      "panel-115": {
+      "panel-118": {
         "kind": "Panel",
         "spec": {
-          "id": 115,
+          "id": 118,
           "title": "Channels by membership type",
           "description": "Teams channels by membership type and archived state.",
           "links": [],
@@ -12362,10 +12632,10 @@
           }
         }
       },
-      "panel-116": {
+      "panel-119": {
         "kind": "Panel",
         "spec": {
-          "id": 116,
+          "id": 119,
           "title": "Installed apps by distribution",
           "description": "Teams installed apps by distribution method and whether they hold RSC grants.",
           "links": [],
@@ -12452,10 +12722,10 @@
           }
         }
       },
-      "panel-117": {
+      "panel-120": {
         "kind": "Panel",
         "spec": {
-          "id": 117,
+          "id": 120,
           "title": "Microsoft Teams service status",
           "description": "Microsoft's declared status for the Microsoft Teams service, from the service-health collector.\n\nColour meaning: severity ladder defined by statusEnum in internal/collectors/m365/servicehealth/servicehealth.go, which maps Microsoft's microsoftServiceHealthStatus values onto 0-5 with -1 for an unmapped value. A level Microsoft adds beyond 5 renders as its bare number, which is visible rather than mislabelled. levels 4 and 5 are Microsoft's own serviceDegradation and serviceInterruption: the service is impaired, which is a state Microsoft defines rather than one this repository picked. Levels 1-3 are recovery and investigation, which are not impairment, so they are not coloured. If it is empty: Needs the m365.servicehealth collector. No issue rows means no Teams issue was observed in range. Collector health shows whether the source ran.",
           "links": [],
@@ -12574,10 +12844,10 @@
           }
         }
       },
-      "panel-118": {
+      "panel-121": {
         "kind": "Panel",
         "spec": {
-          "id": 118,
+          "id": 121,
           "title": "Microsoft Teams service status over time",
           "description": "Microsoft's declared status for the Microsoft Teams service, from the service-health collector.\n\nColour meaning: severity ladder defined by statusEnum in internal/collectors/m365/servicehealth/servicehealth.go, which maps Microsoft's microsoftServiceHealthStatus values onto 0-5 with -1 for an unmapped value. A level Microsoft adds beyond 5 renders as its bare number, which is visible rather than mislabelled. levels 4 and 5 are Microsoft's own serviceDegradation and serviceInterruption: the service is impaired, which is a state Microsoft defines rather than one this repository picked. Levels 1-3 are recovery and investigation, which are not impairment, so they are not coloured.",
           "links": [],
@@ -12683,10 +12953,10 @@
           }
         }
       },
-      "panel-119": {
+      "panel-122": {
         "kind": "Panel",
         "spec": {
-          "id": 119,
+          "id": 122,
           "title": "Distinct Teams issues observed open in range",
           "description": "One row per tenant and issue ID. Counts stored open observations in the selected range, not currently open issues. Missing IDs are left in the history only.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -12825,10 +13095,10 @@
           }
         }
       },
-      "panel-120": {
+      "panel-123": {
         "kind": "Panel",
         "spec": {
-          "id": 120,
+          "id": 123,
           "title": "Latest Teams issue observations in range",
           "description": "Latest stored event per tenant and issue ID in the selected range. Open rows use poll time; resolutions use Microsoft's end time. If different display details share the latest millisecond, read the dated history below. This is not a current open-issue inventory.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -12983,10 +13253,10 @@
           }
         }
       },
-      "panel-121": {
+      "panel-124": {
         "kind": "Panel",
         "spec": {
-          "id": 121,
+          "id": 124,
           "title": "Teams issue observations while open",
           "description": "Requires the service-health collector. This is history, not a current-state join: an open observation can also have a later resolution. No resolution row is not proof an issue remains open. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -13135,10 +13405,10 @@
           }
         }
       },
-      "panel-122": {
+      "panel-125": {
         "kind": "Panel",
         "spec": {
-          "id": 122,
+          "id": 125,
           "title": "Teams resolution events",
           "description": "Requires the service-health collector. This is history, not a current-state join: an open observation can also have a later resolution. No resolution row is not proof an issue remains open. Up to 250 recent records in the selected time range, not a census.\n\nNeeds a **Loki** datasource (selected above). Log attributes are Loki *structured metadata*, not stream labels: filter with `| event_name=\u2026` after `{service_name=\"graph2otel\"}`. A stream selector on an attribute matches zero rows silently (#90).",
           "links": [],
@@ -13287,10 +13557,10 @@
           }
         }
       },
-      "panel-123": {
+      "panel-126": {
         "kind": "Panel",
         "spec": {
-          "id": 123,
+          "id": 126,
           "title": "Service issues by classification and status (all services)",
           "description": "Counts expanded issues returned for all Microsoft 365 services, including any resolved rows the source returns. This metric does not carry a service label.",
           "links": [],
@@ -13377,10 +13647,10 @@
           }
         }
       },
-      "panel-124": {
+      "panel-127": {
         "kind": "Panel",
         "spec": {
-          "id": 124,
+          "id": 127,
           "title": "Services by status (all services)",
           "description": "Fleet context across Microsoft 365 services, not limited to Teams.",
           "links": [],
@@ -13467,10 +13737,10 @@
           }
         }
       },
-      "panel-125": {
+      "panel-128": {
         "kind": "Panel",
         "spec": {
-          "id": 125,
+          "id": 128,
           "title": "Signal availability",
           "description": "Newest exported state and reason per tenant, collector and collector transport at the selected end time, within the datasource's instant lookback. Compare these columns with availability.state, availability.reason and availability.transport in the poller's admin /api/status.json. Admin is live; this table can lag the snapshot refresh and export. If the newest samples have the same timestamp but disagree, the state is unknown. Healthy, empty means the run succeeded without fetching rows, not disabled or failed.",
           "links": [],
@@ -13496,7 +13766,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "1000 * ((((max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))) == on (tenant_id, collector, collector_transport) group_left () (max by (tenant_id, collector, collector_transport) (max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))))) unless on (tenant_id, collector, collector_transport) (count by (tenant_id, collector, collector_transport) (((max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))) == on (tenant_id, collector, collector_transport) group_left () (max by (tenant_id, collector, collector_transport) (max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})))))) > 1)) or label_replace(label_replace(((max by (tenant_id, collector, collector_transport) (max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})))) and on (tenant_id, collector, collector_transport) (count by (tenant_id, collector, collector_transport) (((max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))) == on (tenant_id, collector, collector_transport) group_left () (max by (tenant_id, collector, collector_transport) (max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})))))) > 1)), \"state\", \"unknown\", \"state\", \"^$\"), \"reason\", \"timestamp_tie\", \"reason\", \"^$\"))",
+                        "expr": "1000 * ((((max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))) == on (tenant_id, collector, collector_transport) group_left () (max by (tenant_id, collector, collector_transport) (max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))))) unless on (tenant_id, collector, collector_transport) (count by (tenant_id, collector, collector_transport) (((max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))) == on (tenant_id, collector, collector_transport) group_left () (max by (tenant_id, collector, collector_transport) (max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})))))) > 1)) or label_replace(label_replace(((max by (tenant_id, collector, collector_transport) (max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})))) and on (tenant_id, collector, collector_transport) (count by (tenant_id, collector, collector_transport) (((max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))) == on (tenant_id, collector, collector_transport) group_left () (max by (tenant_id, collector, collector_transport) (max by (tenant_id, collector, collector_transport, state, reason) (timestamp(graph2otel_collector_availability{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})))))) > 1)), \"state\", \"unknown\", \"state\", \"^$\"), \"reason\", \"timestamp_tie\", \"reason\", \"^$\"))",
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
@@ -13731,10 +14001,10 @@
           }
         }
       },
-      "panel-126": {
+      "panel-129": {
         "kind": "Panel",
         "spec": {
-          "id": 126,
+          "id": 129,
           "title": "Scheduled collector interval",
           "description": "Latest exported scheduler interval (admin interval_seconds), when newest samples agree. Cadence, last success and checkpoint metrics identify only tenant and collector, not transport. Compare against availability, but do not read these metrics as per-transport results.",
           "links": [],
@@ -13760,7 +14030,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "max by (tenant_id, collector) ((graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`} and (timestamp(graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}) == on (tenant_id, collector) group_left () max by (tenant_id, collector) (timestamp(graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))))) == min by (tenant_id, collector) ((graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`} and (timestamp(graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}) == on (tenant_id, collector) group_left () max by (tenant_id, collector) (timestamp(graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})))))",
+                        "expr": "max by (tenant_id, collector) ((graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`} and (timestamp(graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}) == on (tenant_id, collector) group_left () max by (tenant_id, collector) (timestamp(graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))))) == min by (tenant_id, collector) ((graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`} and (timestamp(graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}) == on (tenant_id, collector) group_left () max by (tenant_id, collector) (timestamp(graph2otel_collector_expected_interval_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})))))",
                         "editorMode": "code",
                         "range": false,
                         "instant": true,
@@ -13823,10 +14093,10 @@
           }
         }
       },
-      "panel-127": {
+      "panel-130": {
         "kind": "Panel",
         "spec": {
-          "id": 127,
+          "id": 130,
           "title": "Window watermark lag",
           "description": "Age of the durable event-time cursor (admin checkpoint watermark for window collectors). A successful quiet window can still advance its cursor. Missing is not zero lag.",
           "links": [],
@@ -13852,7 +14122,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "time() - (max by (tenant_id, collector) (graph2otel_collector_watermark_timestamp_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))",
+                        "expr": "time() - (max by (tenant_id, collector) (graph2otel_collector_watermark_timestamp_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`}))",
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
@@ -13913,10 +14183,10 @@
           }
         }
       },
-      "panel-128": {
+      "panel-131": {
         "kind": "Panel",
         "spec": {
-          "id": 128,
+          "id": 131,
           "title": "Time since last successful scrape",
           "description": "Compare with the scheduled collector interval. Until the first success this counts from process start. Admin staleness instead measures time since the last attempt. Missing is not zero staleness.",
           "links": [],
@@ -13942,7 +14212,7 @@
                       },
                       "spec": {
                         "refId": "A",
-                        "expr": "max by (tenant_id, collector) (graph2otel_scrape_staleness_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})",
+                        "expr": "max by (tenant_id, collector) (graph2otel_scrape_staleness_seconds{tenant_id=~\"$tenant\",collector=~`teams[.](call_records|pstn_calls|direct_routing_calls|voice_apps|phone_numbers|user_configuration|auto_attendants|call_queues|network_topology|pstn_gateways|sip_device_policy)|m365[.](teams|teams_usage|servicehealth)|m365[.]collaboration_activity`})",
                         "editorMode": "code",
                         "range": true,
                         "instant": false,
@@ -14003,10 +14273,10 @@
           }
         }
       },
-      "panel-129": {
+      "panel-132": {
         "kind": "Panel",
         "spec": {
-          "id": 129,
+          "id": 132,
           "title": "Teams Graph throttle response rate",
           "description": "Only the Teams-specific call records and phone workload buckets. Shared reporting and other Graph workloads cannot be attributed to Teams here. An empty plot may mean no throttles or too few samples to calculate a rate; it is not a health verdict.",
           "links": [],
@@ -14093,10 +14363,10 @@
           }
         }
       },
-      "panel-130": {
+      "panel-133": {
         "kind": "Panel",
         "spec": {
-          "id": 130,
+          "id": 133,
           "title": "Call versions skipped by metrics admission rate",
           "description": "Rate of versions skipped by metrics admission, not a measure of Graph collection failure. An empty plot may mean no skipped versions, no calls or too few counter samples.",
           "links": [],
@@ -15834,6 +16104,45 @@
                                     "name": "panel-105"
                                   }
                                 }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 3,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-106"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 12,
+                                  "y": 3,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-107"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 11,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-108"
+                                  }
+                                }
                               }
                             ]
                           }
@@ -15872,7 +16181,7 @@
                                   "height": 3,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-106"
+                                    "name": "panel-109"
                                   }
                                 }
                               },
@@ -15885,7 +16194,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-107"
+                                    "name": "panel-110"
                                   }
                                 }
                               },
@@ -15898,45 +16207,6 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-108"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 0,
-                                  "y": 11,
-                                  "width": 8,
-                                  "height": 8,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-109"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 8,
-                                  "y": 11,
-                                  "width": 8,
-                                  "height": 8,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-110"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 16,
-                                  "y": 11,
-                                  "width": 8,
-                                  "height": 8,
-                                  "element": {
-                                    "kind": "ElementReference",
                                     "name": "panel-111"
                                   }
                                 }
@@ -15945,7 +16215,7 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 0,
-                                  "y": 19,
+                                  "y": 11,
                                   "width": 8,
                                   "height": 8,
                                   "element": {
@@ -15958,12 +16228,51 @@
                                 "kind": "GridLayoutItem",
                                 "spec": {
                                   "x": 8,
+                                  "y": 11,
+                                  "width": 8,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-113"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 16,
+                                  "y": 11,
+                                  "width": 8,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-114"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 19,
+                                  "width": 8,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-115"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 8,
                                   "y": 19,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-113"
+                                    "name": "panel-116"
                                   }
                                 }
                               },
@@ -15976,7 +16285,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-114"
+                                    "name": "panel-117"
                                   }
                                 }
                               },
@@ -15989,7 +16298,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-115"
+                                    "name": "panel-118"
                                   }
                                 }
                               },
@@ -16002,7 +16311,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-116"
+                                    "name": "panel-119"
                                   }
                                 }
                               }
@@ -16043,7 +16352,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-117"
+                                    "name": "panel-120"
                                   }
                                 }
                               },
@@ -16056,7 +16365,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-118"
+                                    "name": "panel-121"
                                   }
                                 }
                               },
@@ -16069,7 +16378,7 @@
                                   "height": 7,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-119"
+                                    "name": "panel-122"
                                   }
                                 }
                               },
@@ -16082,7 +16391,7 @@
                                   "height": 7,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-120"
+                                    "name": "panel-123"
                                   }
                                 }
                               },
@@ -16095,7 +16404,7 @@
                                   "height": 9,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-121"
+                                    "name": "panel-124"
                                   }
                                 }
                               },
@@ -16108,7 +16417,7 @@
                                   "height": 9,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-122"
+                                    "name": "panel-125"
                                   }
                                 }
                               },
@@ -16121,7 +16430,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-123"
+                                    "name": "panel-126"
                                   }
                                 }
                               },
@@ -16134,7 +16443,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-124"
+                                    "name": "panel-127"
                                   }
                                 }
                               }
@@ -16175,7 +16484,7 @@
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-125"
+                                    "name": "panel-128"
                                   }
                                 }
                               },
@@ -16188,45 +16497,6 @@
                                   "height": 7,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-126"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 0,
-                                  "y": 15,
-                                  "width": 12,
-                                  "height": 8,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-127"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 12,
-                                  "y": 15,
-                                  "width": 12,
-                                  "height": 8,
-                                  "element": {
-                                    "kind": "ElementReference",
-                                    "name": "panel-128"
-                                  }
-                                }
-                              },
-                              {
-                                "kind": "GridLayoutItem",
-                                "spec": {
-                                  "x": 0,
-                                  "y": 23,
-                                  "width": 12,
-                                  "height": 8,
-                                  "element": {
-                                    "kind": "ElementReference",
                                     "name": "panel-129"
                                   }
                                 }
@@ -16234,13 +16504,52 @@
                               {
                                 "kind": "GridLayoutItem",
                                 "spec": {
+                                  "x": 0,
+                                  "y": 15,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-130"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 12,
+                                  "y": 15,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-131"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
+                                  "x": 0,
+                                  "y": 23,
+                                  "width": 12,
+                                  "height": 8,
+                                  "element": {
+                                    "kind": "ElementReference",
+                                    "name": "panel-132"
+                                  }
+                                }
+                              },
+                              {
+                                "kind": "GridLayoutItem",
+                                "spec": {
                                   "x": 12,
                                   "y": 23,
                                   "width": 12,
                                   "height": 8,
                                   "element": {
                                     "kind": "ElementReference",
-                                    "name": "panel-130"
+                                    "name": "panel-133"
                                   }
                                 }
                               }

@@ -120,6 +120,9 @@ SECTIONS = [
           "for shares with their matching denominator."}),
         ("Call queue wait time by queue", ["teams.call_queue.wait_time"]),
         ("Auto attendant call rate by attendant and outcome", ["teams.auto_attendant.calls"]),
+        ("Configured call queues by routing method (teams.admin_api)", ["teams.call_queue.count"]),
+        ("Teams subnets by sites CSV coverage (teams.admin_api)", ["teams.network_subnet.csv_coverage"]),
+        ("Direct Routing gateways by enabled (teams.admin_api)", ["teams.pstn_gateway.count"]),
     ]),
     ("Service health", [
         "m365.service_health.issues.total",

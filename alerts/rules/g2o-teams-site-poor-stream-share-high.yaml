@@ -33,8 +33,8 @@ spec:
     description: "Above 5% poor among at least 20 classified directional streams in 30m. Unknown direction, unclassified streams and unmapped or overflow sites are not eligible. Streams are attributed to the sender site."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-teams-site-poor-stream-share-high"
     __dashboardUid__: "graph2otel"
-    __panelId__: "391"
-    dashboard_path: "/d/graph2otel?dtab=M365&viewPanel=391"
+    __panelId__: "394"
+    dashboard_path: "/d/graph2otel?dtab=M365&viewPanel=394"
   expressions:
     A:
       model:

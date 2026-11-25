@@ -187,7 +187,7 @@ func TestTwin_EmptyListsAndCap(t *testing.T) {
 	if got := len(a[k].([]string)); got != 100 {
 		t.Errorf("capped list length = %d, want 100", got)
 	}
-	if a[k+"_count"] != 101 || a[k+"_truncated"] != true {
+	if a[k+"_count"] != 101 || a[k+"_truncated"] != "true" {
 		t.Errorf("count/truncated = %v/%v, want 101/true", a[k+"_count"], a[k+"_truncated"])
 	}
 }

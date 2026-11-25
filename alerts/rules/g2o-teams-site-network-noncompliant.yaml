@@ -33,8 +33,8 @@ spec:
     description: "At least one of the shared local audio targets for jitter, RTT, loss or TCP share failed over 30m. All four measurements are required. Unknown site and overflow traffic do not establish site compliance."
     runbook_url: "https://m7kni.io/graph2otel/runbooks/#g2o-teams-site-network-noncompliant"
     __dashboardUid__: "graph2otel"
-    __panelId__: "401"
-    dashboard_path: "/d/graph2otel?dtab=M365&viewPanel=401"
+    __panelId__: "404"
+    dashboard_path: "/d/graph2otel?dtab=M365&viewPanel=404"
   expressions:
     A:
       model:

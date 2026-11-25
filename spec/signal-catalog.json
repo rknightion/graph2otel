@@ -1,5 +1,5 @@
 {
-  "package_count": 184,
+  "package_count": 189,
   "domains": [
     "defender",
     "entra",
@@ -2142,8 +2142,12 @@
         "internal/collectors/purview/ediscoveryhealth",
         "internal/collectors/purview/retentionlabels",
         "internal/collectors/purview/sensitivitylabels",
+        "internal/collectors/teams/callqueues",
         "internal/collectors/teams/callrecords",
         "internal/collectors/teams/directroutingcalls",
+        "internal/collectors/teams/networktopology",
+        "internal/collectors/teams/pstngateways",
+        "internal/collectors/teams/sipdevicepolicy",
         "internal/collectors/teams/voiceapps",
         "internal/wirecheck"
       ]
@@ -6628,6 +6632,21 @@
       ]
     },
     {
+      "name": "teams.call_queue.count",
+      "prometheus_name": "teams_call_queue_count",
+      "unit": "{call_queue}",
+      "kind": "gauge",
+      "description": "Teams call queues by routing method. A queue whose routing method is missing or not a known integer counts under unknown, so the total equals the number of queues.",
+      "additive": true,
+      "domain": "teams",
+      "attr_keys": [
+        "routing_method"
+      ],
+      "packages": [
+        "internal/collectors/teams/callqueues"
+      ]
+    },
+    {
       "name": "teams.call_queue.wait_time",
       "prometheus_name": "teams_call_queue_wait_time_seconds",
       "unit": "s",
@@ -6728,6 +6747,21 @@
       ]
     },
     {
+      "name": "teams.network_subnet.csv_coverage",
+      "prometheus_name": "teams_network_subnet_csv_coverage",
+      "unit": "{subnet}",
+      "kind": "gauge",
+      "description": "Teams tenant network subnets by sites CSV coverage: covered (one CSV prefix contains the whole subnet), uncovered (no such prefix) or no_csv (no teams.sites_file configured).",
+      "additive": true,
+      "domain": "teams",
+      "attr_keys": [
+        "coverage"
+      ],
+      "packages": [
+        "internal/collectors/teams/networktopology"
+      ]
+    },
+    {
       "name": "teams.pstn.calls",
       "prometheus_name": "teams_pstn_calls_total",
       "unit": "{call}",
@@ -6754,6 +6788,21 @@
       "attr_keys": [],
       "packages": [
         "internal/collectors/teams/pstncalls"
+      ]
+    },
+    {
+      "name": "teams.pstn_gateway.count",
+      "prometheus_name": "teams_pstn_gateway_count",
+      "unit": "{gateway}",
+      "kind": "gauge",
+      "description": "Teams Direct Routing gateways by whether they are enabled (enabled=true or false; unknown when the wire carried no boolean). An empty snapshot means no gateway is configured.",
+      "additive": true,
+      "domain": "teams",
+      "attr_keys": [
+        "enabled"
+      ],
+      "packages": [
+        "internal/collectors/teams/pstngateways"
       ]
     },
     {
@@ -11082,6 +11131,47 @@
       ]
     },
     {
+      "event_name": "teams.auto_attendant",
+      "domain": "teams",
+      "attr_keys": [
+        "auto_attendant_application_instances",
+        "auto_attendant_application_instances_count",
+        "auto_attendant_authorized_users",
+        "auto_attendant_authorized_users_count",
+        "auto_attendant_call_flow_count",
+        "auto_attendant_call_handling_types",
+        "auto_attendant_call_handling_types_count",
+        "auto_attendant_greeting_texts",
+        "auto_attendant_greeting_texts_count",
+        "auto_attendant_hide_authorized_users_count",
+        "auto_attendant_id",
+        "auto_attendant_language_id",
+        "auto_attendant_mainline_attendant_enabled",
+        "auto_attendant_menu_option_actions",
+        "auto_attendant_menu_option_actions_count",
+        "auto_attendant_menu_option_target_types",
+        "auto_attendant_menu_option_target_types_count",
+        "auto_attendant_menu_prompt_texts",
+        "auto_attendant_menu_prompt_texts_count",
+        "auto_attendant_menu_target_ids",
+        "auto_attendant_menu_target_ids_count",
+        "auto_attendant_name",
+        "auto_attendant_operator_id",
+        "auto_attendant_operator_type",
+        "auto_attendant_schedule_count",
+        "auto_attendant_time_zone_id",
+        "auto_attendant_user_name_extension",
+        "auto_attendant_voice_id",
+        "auto_attendant_voice_response_enabled",
+        "config_hash_version",
+        "config_sha256",
+        "ingest_transport"
+      ],
+      "packages": [
+        "internal/collectors/teams/autoattendants"
+      ]
+    },
+    {
       "event_name": "teams.auto_attendant_call",
       "domain": "teams",
       "attr_keys": [
@@ -11173,6 +11263,57 @@
       ]
     },
     {
+      "event_name": "teams.call_queue",
+      "domain": "teams",
+      "attr_keys": [
+        "call_queue_agent_alert_time_seconds",
+        "call_queue_agent_ids",
+        "call_queue_agent_ids_count",
+        "call_queue_agent_opt_in_count",
+        "call_queue_agents_capped",
+        "call_queue_agents_in_sync_with_distribution_lists",
+        "call_queue_allow_opt_out",
+        "call_queue_application_instances",
+        "call_queue_application_instances_count",
+        "call_queue_authorized_users",
+        "call_queue_authorized_users_count",
+        "call_queue_conference_mode",
+        "call_queue_distribution_lists_count",
+        "call_queue_enable_wrap_time",
+        "call_queue_id",
+        "call_queue_language_id",
+        "call_queue_name",
+        "call_queue_no_agent_action",
+        "call_queue_no_agent_action_raw",
+        "call_queue_no_agent_apply_to",
+        "call_queue_no_agent_apply_to_raw",
+        "call_queue_no_agent_prompt_file_names_count",
+        "call_queue_no_agent_prompt_texts_count",
+        "call_queue_obo_resource_account_ids_count",
+        "call_queue_overflow_action",
+        "call_queue_overflow_action_raw",
+        "call_queue_overflow_prompt_file_names_count",
+        "call_queue_overflow_prompt_texts_count",
+        "call_queue_overflow_threshold",
+        "call_queue_presence_aware_routing",
+        "call_queue_routing_method",
+        "call_queue_routing_method_raw",
+        "call_queue_timeout_action",
+        "call_queue_timeout_action_raw",
+        "call_queue_timeout_prompt_file_names_count",
+        "call_queue_timeout_prompt_texts_count",
+        "call_queue_timeout_threshold_seconds",
+        "call_queue_use_default_music_on_hold",
+        "call_queue_wrap_time_duration_seconds",
+        "config_hash_version",
+        "config_sha256",
+        "ingest_transport"
+      ],
+      "packages": [
+        "internal/collectors/teams/callqueues"
+      ]
+    },
+    {
       "event_name": "teams.call_queue_batch",
       "domain": "teams",
       "attr_keys": [
@@ -11218,6 +11359,19 @@
       ],
       "packages": [
         "internal/collectors/teams/voiceapps"
+      ]
+    },
+    {
+      "event_name": "teams.call_queue_diagnostic",
+      "domain": "teams",
+      "attr_keys": [
+        "call_queue_diagnostic_count",
+        "call_queue_diagnostic_level",
+        "call_queue_diagnostic_message",
+        "ingest_transport"
+      ],
+      "packages": [
+        "internal/collectors/teams/callqueues"
       ]
     },
     {
@@ -11407,6 +11561,86 @@
       ]
     },
     {
+      "event_name": "teams.ip_phone_policy",
+      "domain": "teams",
+      "attr_keys": [
+        "config_hash_version",
+        "config_sha256",
+        "ingest_transport",
+        "ip_phone_policy_allow_better_together",
+        "ip_phone_policy_allow_home_screen",
+        "ip_phone_policy_allow_hot_desking",
+        "ip_phone_policy_authority",
+        "ip_phone_policy_description",
+        "ip_phone_policy_hot_desking_idle_timeout_in_minutes",
+        "ip_phone_policy_identity",
+        "ip_phone_policy_search_on_common_area_phone_mode",
+        "ip_phone_policy_sign_in_mode"
+      ],
+      "packages": [
+        "internal/collectors/teams/sipdevicepolicy"
+      ]
+    },
+    {
+      "event_name": "teams.network_region",
+      "domain": "teams",
+      "attr_keys": [
+        "config_hash_version",
+        "config_sha256",
+        "ingest_transport",
+        "network_region_authority",
+        "network_region_central_site",
+        "network_region_description",
+        "network_region_identity"
+      ],
+      "packages": [
+        "internal/collectors/teams/networktopology"
+      ]
+    },
+    {
+      "event_name": "teams.network_site",
+      "domain": "teams",
+      "attr_keys": [
+        "config_hash_version",
+        "config_sha256",
+        "ingest_transport",
+        "network_site_authority",
+        "network_site_description",
+        "network_site_emergency_call_routing_policy",
+        "network_site_emergency_calling_policy",
+        "network_site_enable_location_based_routing",
+        "network_site_identity",
+        "network_site_location_policy",
+        "network_site_network_region_id",
+        "network_site_network_roaming_policy",
+        "network_site_site_address"
+      ],
+      "packages": [
+        "internal/collectors/teams/networktopology"
+      ]
+    },
+    {
+      "event_name": "teams.network_subnet",
+      "domain": "teams",
+      "attr_keys": [
+        "config_hash_version",
+        "config_sha256",
+        "ingest_transport",
+        "network_subnet_authority",
+        "network_subnet_cidr",
+        "network_subnet_csv_coverage",
+        "network_subnet_csv_site",
+        "network_subnet_description",
+        "network_subnet_identity",
+        "network_subnet_mask_bits",
+        "network_subnet_network_site_id",
+        "network_subnet_subnet_id"
+      ],
+      "packages": [
+        "internal/collectors/teams/networktopology"
+      ]
+    },
+    {
       "event_name": "teams.pstn_call",
       "domain": "teams",
       "attr_keys": [
@@ -11438,6 +11672,58 @@
       ],
       "packages": [
         "internal/collectors/teams/pstncalls"
+      ]
+    },
+    {
+      "event_name": "teams.pstn_gateway",
+      "domain": "teams",
+      "attr_keys": [
+        "config_hash_version",
+        "config_sha256",
+        "ingest_transport",
+        "pstn_gateway_authority",
+        "pstn_gateway_bypass_mode",
+        "pstn_gateway_enabled",
+        "pstn_gateway_failover_response_codes",
+        "pstn_gateway_failover_time_seconds",
+        "pstn_gateway_forward_call_history",
+        "pstn_gateway_forward_pai",
+        "pstn_gateway_fqdn",
+        "pstn_gateway_gateway_lbr_enabled_user_override",
+        "pstn_gateway_gateway_site_lbr_enabled",
+        "pstn_gateway_identity",
+        "pstn_gateway_inbound_pstn_number_translation_rules_count",
+        "pstn_gateway_inbound_teams_number_translation_rules_count",
+        "pstn_gateway_invite_with_replaces",
+        "pstn_gateway_ip_address_version",
+        "pstn_gateway_max_concurrent_sessions",
+        "pstn_gateway_media_bypass",
+        "pstn_gateway_media_relay_routing_location_override",
+        "pstn_gateway_outbound_pstn_number_translation_rules_count",
+        "pstn_gateway_outbund_teams_number_translation_rules",
+        "pstn_gateway_outbund_teams_number_translation_rules_count",
+        "pstn_gateway_pidf_lo_supported",
+        "pstn_gateway_proxy_sbc",
+        "pstn_gateway_send_sip_options",
+        "pstn_gateway_sip_signaling_port"
+      ],
+      "packages": [
+        "internal/collectors/teams/pstngateways"
+      ]
+    },
+    {
+      "event_name": "teams.sip_devices_configuration",
+      "domain": "teams",
+      "attr_keys": [
+        "config_hash_version",
+        "config_sha256",
+        "ingest_transport",
+        "sip_devices_authority",
+        "sip_devices_bulk_sign_in",
+        "sip_devices_identity"
+      ],
+      "packages": [
+        "internal/collectors/teams/sipdevicepolicy"
       ]
     }
   ]

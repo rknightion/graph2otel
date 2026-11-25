@@ -82,10 +82,10 @@ attribute set, and the Graph API permission scope each collector needs), see
 
 ## Shipped collector and ingest surface
 
-The generated registry currently exposes **179 logical collectors** through
+The generated registry currently exposes **182 logical collectors** through
 **7 registration paths**: Snapshot, Window, Blob, O365, MDCA, EXO, and Hunt. The generated
 [collector reference](collectors.md) is authoritative; the registration-path inventory
-contains 182 registration-path candidates because some logical collectors can register
+contains 185 registration-path candidates because some logical collectors can register
 through more than one transport.
 
 Reusable ingest-engine shapes handle the event and export transports:
