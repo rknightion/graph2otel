@@ -36,8 +36,9 @@ class TeamsDashboardTests(unittest.TestCase):
         self.assertEqual(manifest["metadata"]["name"], "graph2otel-teams")
         tabs = manifest["spec"]["layout"]["spec"]["tabs"]
         self.assertEqual([tab["spec"]["title"] for tab in tabs], [
-            "Home", "Sites", "Calls", "Call detail", "Users", "PSTN / Direct Routing",
-            "Issues", "Health", "Best practices",
+            "Overview", "Call quality", "Sites and network", "Calls", "Call detail", "Users",
+            "PSTN and Direct Routing", "Auto attendant and call queue", "Phone inventory",
+            "Usage", "Service health", "Collector health",
         ])
         for tab in tabs:
             self.assertNotIn("conditionalRendering", tab["spec"])
@@ -76,7 +77,7 @@ class TeamsDashboardTests(unittest.TestCase):
                             self.assertEqual(query["var-loki_datasource"], ["example-logs"])
                             routes.add((source, target, variable))
         self.assertEqual(routes, {
-            ("Sites", "Calls", "site"), ("Calls", "Call detail", "call_id"),
+            ("Sites and network", "Calls", "site"), ("Calls", "Call detail", "call_id"),
             ("Users", "Call detail", "call_id"),
         })
 
@@ -98,8 +99,9 @@ class TeamsDashboardTests(unittest.TestCase):
                             r'^\{service_name="graph2otel"\} \| event_name=`([^`]+)` \| tenant_id=~"\$tenant"', expr)
                         self.assertIsNotNone(match, expr)
                         event = match[1]
-                        self.assertTrue(event.startswith("teams.") or event == "m365.service_health_issue")
-                        if tab == "Issues":
+                        self.assertTrue(event.startswith("teams.") or event in {
+                            "m365.service_health_issue", "m365.teams.phone_number", "m365.teams.user_configuration"})
+                        if tab == "Service health":
                             self.assertEqual(event, "m365.service_health_issue")
                             self.assertIn('| service=`Microsoft Teams`', expr)
                             self.assertRegex(expr, r'\| is_resolved=`(true|false)`')
@@ -116,15 +118,74 @@ class TeamsDashboardTests(unittest.TestCase):
                         else:
                             self.assertNotIn('${call_id:percentencode}', expr)
 
+    def prom_exprs(self, tab):
+        return [target["spec"]["query"]["spec"]["expr"]
+                for panel in self.panels_by_tab()[tab]
+                for target in panel["data"]["spec"]["queries"]
+                if target["spec"]["query"]["group"] == "prometheus"]
+
+    def test_call_quality_plots_each_stream_measure_as_quantiles_and_a_distribution(self):
+        panels = self.panels_by_tab()["Call quality"]
+        for name in ("teams_stream_jitter_seconds", "teams_stream_rtt_seconds", "teams_stream_packet_loss"):
+            with self.subTest(metric=name):
+                quantiles = {q for expr in self.prom_exprs("Call quality")
+                             for q in re.findall(r"histogram_quantile\((0\.\d+), [^\n]*" + name + "_bucket", expr)}
+                self.assertEqual(quantiles, {"0.5", "0.95"})
+                heatmaps = [p for p in panels if p["vizConfig"]["group"] == "heatmap"
+                            and any(name + "_bucket" in t["spec"]["query"]["spec"]["expr"]
+                                    for t in p["data"]["spec"]["queries"])]
+                self.assertEqual(len(heatmaps), 1, "one bucket distribution per measure")
+                target = heatmaps[0]["data"]["spec"]["queries"][0]["spec"]["query"]["spec"]
+                self.assertEqual(target["format"], "heatmap")
+                self.assertIn("by (le)", target["expr"])
+
+    def test_site_labelled_metrics_follow_the_site_variable(self):
+        variables = {v["spec"]["name"]: v for v in self.manifest["spec"]["variables"]}
+        sites = variables["sites"]
+        self.assertEqual(sites["kind"], "QueryVariable")
+        self.assertTrue(sites["spec"]["includeAll"] and sites["spec"]["multi"])
+        self.assertEqual(sites["spec"]["allValue"], ".*")
+        self.assertIn("teams_streams_total", sites["spec"]["query"]["spec"]["query"])
+        self.assertIn('tenant_id=~"$tenant"', sites["spec"]["query"]["spec"]["query"])
+        cat = catalog.load()
+        sited = {m.prom for m in cat.metrics.values() if m.domain == "teams" and "site" in m.keys}
+        self.assertGreaterEqual(len(sited), 5)
+        pattern = re.compile(r"(" + "|".join(sorted(sited)) + r")(?:_bucket|_sum|_count)?\{([^}]*)\}")
+        seen = 0
+        for tab in self.panels_by_tab():
+            for expr in self.prom_exprs(tab):
+                for name, selector in pattern.findall(expr):
+                    seen += 1
+                    with self.subTest(tab=tab, metric=name):
+                        self.assertIn('site=~"$sites"', selector)
+        self.assertGreater(seen, 20)
+
+    def test_data_panels_say_no_data_yet_instead_of_looking_broken(self):
+        for tab, panels in self.panels_by_tab().items():
+            for panel in panels:
+                if panel["vizConfig"]["group"] == "text":
+                    continue
+                with self.subTest(tab=tab, panel=panel["title"]):
+                    note = panel["vizConfig"]["spec"]["fieldConfig"]["defaults"]["noValue"]
+                    self.assertTrue(note.startswith("No data yet."), note)
+                    self.assertGreater(len(note), len("No data yet. "))
+
     def test_coverage_fails_if_a_real_team_metric_has_no_placed_team_panel(self):
         cat = catalog.load()
-        name = "teams.call.health_transitions"
-        panel_name = next(key for key, p in self.manifest["spec"]["elements"].items()
-                          if any(name in cat.metrics_referenced_by(t["spec"]["query"]["spec"]["expr"])
-                                 for t in p["spec"]["data"]["spec"]["queries"]))
+        for name in ("teams.call.health_transitions", "m365.teams.phone_numbers.unassigned",
+                     "m365.teams_usage.activity.users", "m365.service_health.status"):
+            with self.subTest(metric=name):
+                self.assert_coverage_catches_missing(cat, name)
+        self.assertEqual(teams.coverage_violations(cat, self.manifest), [])
+
+    def assert_coverage_catches_missing(self, cat, name):
+        panel_names = {key for key, p in self.manifest["spec"]["elements"].items()
+                       if any(name in cat.metrics_referenced_by(t["spec"]["query"]["spec"]["expr"])
+                              for t in p["spec"]["data"]["spec"]["queries"])}
+        self.assertTrue(panel_names, name)
         mutated = json.loads(json.dumps(self.manifest))
         for tab in mutated["spec"]["layout"]["spec"]["tabs"]:
             for row in tab["spec"]["layout"]["spec"]["rows"]:
                 items = row["spec"]["layout"]["spec"]["items"]
-                items[:] = [item for item in items if item["spec"]["element"]["name"] != panel_name]
+                items[:] = [item for item in items if item["spec"]["element"]["name"] not in panel_names]
         self.assertIn(f"Teams dashboard is missing metric {name}", teams.coverage_violations(cat, mutated))
