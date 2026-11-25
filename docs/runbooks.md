@@ -546,6 +546,31 @@ a graph2otel change. Otherwise lengthen the poll intervals of the collectors on
 that workload. Panel:
 **Self-obs → Graph throttling and outbound HTTP**.
 
+The `intune-export` workload is excluded from this rule (#709): its limiter is
+adaptive and its in-tick retry absorbs the 429s that remain, so a raw 429 rate
+there is not an impact. `g2o-export-throttle-exhausted` covers it.
+
+### g2o-export-throttle-exhausted
+
+An Intune report export call ran out of its in-tick throttle retry budget (6
+retries or 10 minutes) and ended on a 429, so that tick's data was not fetched
+until the next one. This is the impact signal for the `intune-export` workload.
+`graph2otel_export_throttle_exhausted_job_total` counts only exports that ended
+this way, never a 429 the retry absorbed.
+
+**No data:** `OK`. No exhausted exports is the healthy steady state.
+
+**Evaluator error:** `Error`.
+
+**False positives:** none expected. A single export is retried at the next tick.
+
+**Remediation:** read `graph2otel_throttle_effective_rate_per_minute`. The limiter
+halves on a 429 down to a floor of 4 a minute and recovers 2 a minute per quiet 5
+minutes, so a rate pinned at the floor means Microsoft's real ceiling is lower
+still. Lengthen the export collectors' intervals, or check whether another
+application in the tenant shares the export bucket. Panels:
+**Self-obs → Export jobs** and **Graph throttling and outbound HTTP**.
+
 ### g2o-throttle-budget-consumption
 
 Graph's own `x-ms-throttle-limit-percentage` response header reported over 80%

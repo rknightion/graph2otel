@@ -2534,6 +2534,22 @@
       ]
     },
     {
+      "name": "graph2otel.export.throttle_exhausted",
+      "prometheus_name": "graph2otel_export_throttle_exhausted_total",
+      "unit": "{job}",
+      "kind": "sum",
+      "description": "Intune export calls that ended on a 429 because the in-tick throttle retry budget was exhausted.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "report_name",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/exportjob"
+      ]
+    },
+    {
       "name": "graph2otel.graphclient.http_4xx",
       "prometheus_name": "graph2otel_graphclient_http_4xx_total",
       "unit": "1",
@@ -3219,6 +3235,22 @@
       "kind": "sum",
       "description": "Count of throttle responses observed from Microsoft Graph.",
       "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "tenant_id",
+        "workload"
+      ],
+      "packages": [
+        "internal/graphclient"
+      ]
+    },
+    {
+      "name": "graph2otel.throttle.effective_rate_per_minute",
+      "prometheus_name": "graph2otel_throttle_effective_rate_per_minute",
+      "unit": "{request}/min",
+      "kind": "gauge",
+      "description": "Current client-side request rate of an adaptive workload limiter, lowered on 429s and recovered after a quiet period.",
+      "additive": false,
       "domain": "graph2otel",
       "attr_keys": [
         "tenant_id",

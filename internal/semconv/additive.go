@@ -56,6 +56,7 @@ var nonAdditiveUnits = map[string]struct{}{
 	"min":             {},
 	"h":               {},
 	"d":               {},
+	"{request}/min":   {}, // a limiter's rate; summing workloads or tenants is not a rate anyone has
 }
 
 // additiveUnits are the real (non-annotation) UCUM units whose gauges may be

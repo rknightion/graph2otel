@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rknightion/graph2otel/internal/graphclient"
 	"github.com/rknightion/graph2otel/internal/signalcapture"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
@@ -78,6 +79,27 @@ func TestSignalGolden(t *testing.T) {
 		t.Fatalf("failed Export error = %v, want ErrJobFailed", err)
 	}
 
+	exhausted := telemetrytest.New()
+	exhaustedClient := New(
+		&fakePoster{
+			post: func(context.Context, string, []byte, map[string]string) ([]byte, error) {
+				return nil, &graphclient.HTTPStatusError{Method: "POST", URL: "u", StatusCode: 429}
+			},
+		},
+		&fakeDownloader{},
+		Options{Now: stepClock(base), Sleep: func(context.Context, time.Duration) error { return nil }},
+	)
+	exhaustedEmitter := telemetry.WithTenant(
+		telemetry.WithTransport(exhausted.Emitter(), telemetry.TransportReportExport),
+		"fixture-tenant",
+	)
+	if _, err := exhaustedClient.Export(context.Background(), Request{ReportName: "DeviceInstallStatusByApp"}, exhaustedEmitter); err == nil {
+		t.Fatal("Export succeeded against a permanently throttled create")
+	}
+	if pts := exhausted.MetricPoints("graph2otel.export.throttle_exhausted"); len(pts) != 1 || pts[0].Attrs["tenant_id"] != "fixture-tenant" {
+		t.Fatalf("exhausted points = %+v, want one stamped fixture-tenant", pts)
+	}
+
 	assertTerminalFixture(t, completed, "completed", 3, len(completedZIP))
 	assertTerminalFixture(t, failed, "failed", 2, 0)
 
@@ -86,6 +108,7 @@ func TestSignalGolden(t *testing.T) {
 		*updateSignalGolden,
 		completed,
 		failed,
+		exhausted,
 	); err != nil {
 		t.Fatal(err)
 	}

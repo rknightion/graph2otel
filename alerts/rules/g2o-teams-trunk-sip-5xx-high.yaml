@@ -14,7 +14,7 @@ metadata:
     grafana.com/provenance: "api"
   labels:
     grafana.com/group: "graph2otel-alerts"
-    grafana.com/group-index: "23"
+    grafana.com/group-index: "24"
 spec:
   title: "Teams Direct Routing SIP 5xx failures above 10%"
   paused: true

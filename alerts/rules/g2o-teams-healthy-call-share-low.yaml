@@ -14,7 +14,7 @@ metadata:
     grafana.com/provenance: "api"
   labels:
     grafana.com/group: "graph2otel-alerts"
-    grafana.com/group-index: "19"
+    grafana.com/group-index: "20"
 spec:
   title: "Teams healthy-call share below 90%"
   paused: true

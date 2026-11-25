@@ -51,6 +51,7 @@ EXPECTED_PAUSED = {
     "g2o-record-integrity-loss": False,               # primary, doc block 6
     "g2o-payload-type-mismatch": True,                # companion, doc block 6
     "g2o-throttle-saturation": False,                # primary, doc block 4
+    "g2o-export-throttle-exhausted": False,           # impact signal for intune-export
     "g2o-throttle-budget-consumption": True,         # companion
     "g2o-mdca-uploads-stopped": False,               # default-enabled, doc block 5
     "g2o-mdca-parse-failing": False,                 # default-enabled, doc block 5
@@ -80,8 +81,19 @@ class TestRuleIdentity(unittest.TestCase):
         actual = {r["uid"]: r["isPaused"] for r in build_rules.RULES}
         self.assertEqual(actual, EXPECTED_PAUSED)
 
-    def test_twenty_six_alert_rules_and_no_recording_rules(self):
-        self.assertEqual(len(build_rules.RULES), 26)
+    def test_twenty_seven_alert_rules_and_no_recording_rules(self):
+        self.assertEqual(len(build_rules.RULES), 27)
+
+    def test_intune_export_alert_fires_on_impact_not_absorbed_429s(self):
+        """#709: the raw 429 rate rule excludes intune-export (whose 429s the
+        in-tick retry absorbs); a separate rule fires when the retry budget is
+        exhausted."""
+        by_uid = {r["uid"]: r for r in build_rules.RULES}
+        raw = by_uid["g2o-throttle-saturation"]["data"][0]["model"]["expr"]
+        self.assertIn('workload!="intune-export"', raw)
+        impact = by_uid["g2o-export-throttle-exhausted"]["data"][0]["model"]["expr"]
+        self.assertIn("graph2otel_export_throttle_exhausted", impact)
+        self.assertIn("increase(", impact)
 
 
 class TestPipelineShape(unittest.TestCase):

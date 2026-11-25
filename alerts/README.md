@@ -335,7 +335,10 @@ as infinitely stale — a zero `time.Time` is epoch `-62135596800` (year 1), not
 
 ## Doc block 4 — Throttle saturation
 
-**Rules:** `g2o-throttle-saturation` (primary),
+**Rules:** `g2o-throttle-saturation` (primary, every workload except
+`intune-export`), `g2o-export-throttle-exhausted` (the `intune-export` impact
+signal, #709: fires only when an export ends on a 429 after its in-tick retry
+budget is spent, not on 429s the retry and the adaptive limiter absorb),
 `g2o-throttle-budget-consumption` (companion).
 
 **What/why:** graph2otel's client-side rate limiter (`#5`, M1) proactively

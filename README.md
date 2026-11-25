@@ -44,7 +44,7 @@ Metrics and logs are pushed directly over OTLP using gRPC or HTTP. `stdout` is
 available for local inspection. There is no Prometheus scrape endpoint and the
 core Graph collectors need no Log Analytics workspace or Event Hub.
 
-The repository also ships 2 dashboards, 26 alert rules, and 11 paused detection examples,
+The repository also ships 2 dashboards, 27 alert rules, and 11 paused detection examples,
 all generated. The dashboards use Grafana's v2 dynamic format and need
 Grafana 13.0.0 or newer. See
 [Deploying observability](docs/deploying-observability.md).

@@ -14,7 +14,7 @@ metadata:
     grafana.com/provenance: "api"
   labels:
     grafana.com/group: "graph2otel-alerts"
-    grafana.com/group-index: "21"
+    grafana.com/group-index: "22"
 spec:
   title: "Teams site poor-stream share above 5%"
   paused: true

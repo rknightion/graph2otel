@@ -14,7 +14,7 @@ metadata:
     grafana.com/provenance: "api"
   labels:
     grafana.com/group: "graph2otel-alerts"
-    grafana.com/group-index: "25"
+    grafana.com/group-index: "26"
 spec:
   title: "Microsoft Teams service incident is open"
   paused: true

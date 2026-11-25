@@ -14,7 +14,7 @@ metadata:
     grafana.com/provenance: "api"
   labels:
     grafana.com/group: "graph2otel-alerts"
-    grafana.com/group-index: "24"
+    grafana.com/group-index: "25"
 spec:
   title: "Teams call-record event time is stale"
   paused: true

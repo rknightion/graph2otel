@@ -228,3 +228,44 @@ func TestExportCapsConcurrentJobs(t *testing.T) {
 		t.Fatalf("max concurrent export jobs = %d, want exactly the cap of 2", got)
 	}
 }
+
+// TestExportCountsExhaustedThrottleBudget: a 429 that outlasts the retry budget
+// is published as graph2otel.export.throttle_exhausted, and one the retry
+// absorbed is not (#709: the alert must fire on lost data, not absorbed 429s).
+func TestExportCountsExhaustedThrottleBudget(t *testing.T) {
+	throttled := &fakePoster{
+		post: func(context.Context, string, []byte, map[string]string) ([]byte, error) {
+			return nil, &graphclient.HTTPStatusError{Method: http.MethodPost, URL: "u", StatusCode: http.StatusTooManyRequests}
+		},
+		get: func(context.Context, string, map[string]string) ([]byte, error) { return nil, nil },
+	}
+	var delays []time.Duration
+	rec := telemetrytest.New()
+	c := New(throttled, &fakeDownloader{}, Options{Sleep: noSleep(&delays)})
+	if _, err := c.Export(context.Background(), Request{ReportName: "R"}, rec.Emitter()); err == nil {
+		t.Fatal("Export succeeded against a permanently throttled create")
+	}
+	pts := rec.MetricPoints("graph2otel.export.throttle_exhausted")
+	if len(pts) != 1 || pts[0].Value != 1 || pts[0].Attrs["report_name"] != "R" {
+		t.Fatalf("exhausted points = %+v, want one point of 1 for report R", pts)
+	}
+
+	// Throttled once, then absorbed by the in-tick retry: no exhausted count.
+	var posts int
+	absorbed := &fakePoster{
+		post: func(context.Context, string, []byte, map[string]string) ([]byte, error) {
+			posts++
+			if posts == 1 {
+				return nil, &graphclient.HTTPStatusError{Method: http.MethodPost, URL: "u", StatusCode: http.StatusTooManyRequests}
+			}
+			return nil, &graphclient.HTTPStatusError{Method: http.MethodPost, URL: "u", StatusCode: http.StatusBadRequest}
+		},
+		get: func(context.Context, string, map[string]string) ([]byte, error) { return nil, nil },
+	}
+	rec2 := telemetrytest.New()
+	c2 := New(absorbed, &fakeDownloader{}, Options{Sleep: noSleep(&delays)})
+	_, _ = c2.Export(context.Background(), Request{ReportName: "R"}, rec2.Emitter())
+	if pts := rec2.MetricPoints("graph2otel.export.throttle_exhausted"); len(pts) != 0 {
+		t.Fatalf("absorbed 429 then a 400 counted as exhausted: %+v", pts)
+	}
+}

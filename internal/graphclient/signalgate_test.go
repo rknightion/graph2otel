@@ -80,6 +80,33 @@ func TestSignalGolden(t *testing.T) {
 		}
 	})
 
+	t.Run("adaptive-intune-export", func(t *testing.T) {
+		rec := telemetrytest.New()
+		recs = append(recs, rec)
+		var calls atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			if calls.Add(1) == 1 {
+				w.Header().Set(headerRetryAfter, "0.01")
+				w.WriteHeader(http.StatusTooManyRequests)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+
+		client := newGraphHTTPClient(Options{
+			Emitter:           rec.Emitter(),
+			TenantID:          "tenant-capture",
+			Limiter:           NewWorkloadLimiter(),
+			RetryDelaySeconds: 1,
+		})
+		resp, err := client.Get(srv.URL + "/deviceManagement/reports/exportJobs")
+		if err != nil {
+			t.Fatalf("request: %v", err)
+		}
+		_ = resp.Body.Close()
+	})
+
 	if err := signalcapture.GoldenAt(
 		filepath.Join("testdata", "signals.json"),
 		*updateSignalGolden,

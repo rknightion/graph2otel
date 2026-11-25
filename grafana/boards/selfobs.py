@@ -77,12 +77,14 @@ EXPORT_JOBS = SELF_OBS["graph2otel.export.jobs"].prom
 EXPORT_DURATION = SELF_OBS["graph2otel.export.duration_seconds"].prom
 EXPORT_POLLS = SELF_OBS["graph2otel.export.poll_count"].prom
 EXPORT_BYTES = SELF_OBS["graph2otel.export.bytes"].prom
+EXPORT_THROTTLE_EXHAUSTED = SELF_OBS["graph2otel.export.throttle_exhausted"].prom
 SERIES_ACTIVE = SELF_OBS["graph2otel.series.active"].prom
 SERIES_LIMIT = SELF_OBS["graph2otel.series.limit"].prom
 SERIES_CLIPPED = SELF_OBS["graph2otel.series.clipped"].prom
 SERIES_TOTAL = SELF_OBS["graph2otel.series.total"].prom
 THROTTLE_COUNT = SELF_OBS["graph2otel.throttle.count"].prom
 THROTTLE_PCT = SELF_OBS["graph2otel.throttle.limit_percentage"].prom
+THROTTLE_EFFECTIVE_RATE = SELF_OBS["graph2otel.throttle.effective_rate_per_minute"].prom
 HTTP_DURATION = SELF_OBS["graph2otel.http.client.request.duration"].prom
 HTTP_4XX = SELF_OBS["graph2otel.graphclient.http_4xx"].prom
 HTTP_5XX = SELF_OBS["graph2otel.graphclient.http_5xx"].prom
@@ -526,7 +528,15 @@ def extra(b):
     b.raw("Export polls to terminal state", [f"{EXPORT_POLLS}{_T}"],
           legends=["{{tenant_id}} {{report_name}}"], w=8)
     b.raw("Downloaded export size", [f"{EXPORT_BYTES}{_T}"],
-          legends=["{{tenant_id}} {{report_name}}"], unit="bytes", w=24, h=6)
+          legends=["{{tenant_id}} {{report_name}}"], unit="bytes", w=12, h=6)
+    b.raw("Exports ended by exhausted throttle budget",
+          [f"sum by (tenant_id, report_name) "
+           f"(increase({EXPORT_THROTTLE_EXHAUSTED}{_T}[{RATE}]))"],
+          legends=["{{tenant_id}} {{report_name}}"], w=12, h=6,
+          desc="Export calls that ended on a 429 because the in-tick retry budget ran "
+               "out, so that tick's data was not fetched. Absorbed 429s do not count "
+               "here; they are in the Throttle (429) rate panel. The "
+               "g2o-export-throttle-exhausted alert fires on this.")
 
     b.row("Cardinality limiter (#235)")
     b.raw("Active series by source metric (process-wide)",
@@ -552,6 +562,12 @@ def extra(b):
           [f"sum by (tenant_id, workload) "
            f"(rate({THROTTLE_COUNT}{_T}[{RATE}]))"],
           legends=["{{tenant_id}} {{workload}}"], w=8)
+    b.raw("Adaptive limiter effective rate (requests per minute)",
+          [f"{THROTTLE_EFFECTIVE_RATE}{_T}"],
+          legends=["{{tenant_id}} {{workload}}"], w=8,
+          desc="Current client-side request rate of an adaptive workload limiter "
+               "(intune-export only). It halves on a 429 down to a floor, and "
+               "recovers in steps after a quiet period.")
     throttle_detail = b.raw(
         "Graph-reported throttle budget consumed", [f"{THROTTLE_PCT}{_T}"],
           legends=["{{tenant_id}} {{workload}}"], unit="percent", w=8,
