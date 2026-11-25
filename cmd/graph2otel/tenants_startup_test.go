@@ -31,6 +31,7 @@ import (
 	"github.com/rknightion/graph2otel/internal/mdcaclient"
 	"github.com/rknightion/graph2otel/internal/o365activityclient"
 	"github.com/rknightion/graph2otel/internal/recordoutcome"
+	"github.com/rknightion/graph2otel/internal/teamsadminclient"
 	"github.com/rknightion/graph2otel/internal/telemetry"
 	"github.com/rknightion/graph2otel/internal/telemetrytest"
 )
@@ -1266,5 +1267,63 @@ func assertTenantWideFailureCoveragePrecondition(
 			point,
 			wantUnderlyingReason,
 		)
+	}
+}
+
+// TestSetupTenantTeamsAdminClientConstructionFailureIsIsolated runs the real
+// tenant setup with the teams admin client builder failing. The failure must be
+// logged and must not take the tenant down: every other collector still
+// registers. (No teams_admin collector is registered yet, so the census override
+// itself is covered by TestSkipTeamsAdminCollector and the availability tests.)
+func TestSetupTenantTeamsAdminClientConstructionFailureIsIsolated(t *testing.T) {
+	provider, err := telemetry.NewProvider(t.Context(), telemetry.Options{Protocol: "stdout", StdoutWriter: io.Discard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := provider.Shutdown(context.Background()); err != nil {
+			t.Error(err)
+		}
+	})
+	original := newTeamsAdminClient
+	t.Cleanup(func() { newTeamsAdminClient = original })
+	var built int
+	newTeamsAdminClient = func(*auth.TenantAuth, teamsadminclient.Options) (*teamsadminclient.Client, error) {
+		built++
+		return nil, errors.New("synthetic bad base url")
+	}
+
+	for _, enabled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("enabled=%t", enabled), func(t *testing.T) {
+			built = 0
+			cfg := &config.Config{Profiles: []string{"teams"}, CheckpointDir: t.TempDir(), Tenants: []config.TenantConfig{{
+				TenantID: teamsAdminTenant,
+				Teams:    &config.TeamsConfig{AdminAPI: &config.AdminAPIConfig{Enabled: enabled}},
+			}}}
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+			var wg sync.WaitGroup
+			var logs bytes.Buffer
+			source, err := tenantGeoIPReaders(nil).setupTenantWithGraphAndLicenseBuilders(ctx, startupTenantAuth(teamsAdminTenant), cfg, provider,
+				slog.New(slog.NewTextHandler(&logs, nil)), graphclient.NewWorkloadLimiter(), map[admin.SkipKey]string{}, &wg,
+				func(context.Context, *auth.TenantAuth, graphclient.Options) (*graphclient.Client, error) {
+					return &graphclient.Client{TenantID: teamsAdminTenant}, nil
+				},
+				func(context.Context, *graphclient.Client) (license.Capabilities, error) {
+					return allAvailabilityTestCapabilities(), nil
+				},
+			)
+			wg.Wait()
+			if err != nil {
+				t.Fatalf("a Teams admin client failure took the tenant down: %v", err)
+			}
+			if len(source.Registry.Entries()) == 0 {
+				t.Fatal("no collectors registered after a Teams admin client failure")
+			}
+			logged := strings.Contains(logs.String(), "Teams admin API client construction failed")
+			if wantBuilt := map[bool]int{false: 0, true: 1}[enabled]; built != wantBuilt || logged != enabled {
+				t.Fatalf("enabled=%t: builder calls=%d (want %d), failure logged=%t (want %t)", enabled, built, wantBuilt, logged, enabled)
+			}
+		})
 	}
 }

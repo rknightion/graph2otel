@@ -42,7 +42,7 @@ class TeamsDashboardTests(unittest.TestCase):
         self.assertEqual([tab["spec"]["title"] for tab in tabs], [
             "Overview", "Call quality", "Sites and network", "Calls", "Call detail", "Users",
             "PSTN and Direct Routing", "Auto attendant and call queue", "Phone inventory",
-            "Usage", "Service health", "Collector health",
+            "Configuration", "Usage", "Service health", "Collector health",
         ])
         for tab in tabs:
             self.assertNotIn("conditionalRendering", tab["spec"])

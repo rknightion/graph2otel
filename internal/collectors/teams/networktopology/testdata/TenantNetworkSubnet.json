@@ -1,0 +1,52 @@
+[
+  {
+    "Description": "Teams lab 2026-11",
+    "NetworkSiteID": "TeamsLab_Home_LAN",
+    "MaskBits": 24,
+    "SubnetID": "10.0.0.0",
+    "Identity": "10.0.0.0",
+    "ConfigMetadata": {
+      "Authority": "Tenant"
+    }
+  },
+  {
+    "Description": "Teams lab 2026-11",
+    "NetworkSiteID": "TeamsLab_Home_IOT",
+    "MaskBits": 24,
+    "SubnetID": "10.0.50.0",
+    "Identity": "10.0.50.0",
+    "ConfigMetadata": {
+      "Authority": "Tenant"
+    }
+  },
+  {
+    "Description": null,
+    "NetworkSiteID": "TeamsLab_AWS_London",
+    "MaskBits": 20,
+    "SubnetID": "172.31.16.0",
+    "Identity": "172.31.16.0",
+    "ConfigMetadata": {
+      "Authority": "Tenant"
+    }
+  },
+  {
+    "Description": null,
+    "NetworkSiteID": "TeamsLab_Dublin",
+    "MaskBits": 30,
+    "SubnetID": "10.250.1.0",
+    "Identity": "10.250.1.0",
+    "ConfigMetadata": {
+      "Authority": "Tenant"
+    }
+  },
+  {
+    "Description": null,
+    "NetworkSiteID": "TeamsLab_US_West",
+    "MaskBits": 30,
+    "SubnetID": "10.250.2.0",
+    "Identity": "10.250.2.0",
+    "ConfigMetadata": {
+      "Authority": "Tenant"
+    }
+  }
+]

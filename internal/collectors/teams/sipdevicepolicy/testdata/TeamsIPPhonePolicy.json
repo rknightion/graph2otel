@@ -1,0 +1,49 @@
+[
+  {
+    "Description": null,
+    "SignInMode": "UserSignIn",
+    "SearchOnCommonAreaPhoneMode": "Enabled",
+    "AllowHomeScreen": "EnabledUserOverride",
+    "AllowBetterTogether": "Enabled",
+    "AllowHotDesking": true,
+    "HotDeskingIdleTimeoutInMinutes": 120,
+    "Key": {
+      "ScopeClass": "Global",
+      "SchemaId": {
+        "XName": {
+          "name": "{urn:schema:Microsoft.Rtc.Management.Policy.Teams.2017}TeamsIPPhonePolicy"
+        }
+      },
+      "AuthorityId": {
+        "Class": "Host",
+        "InstanceId": "00000000-0000-0000-0000-000000000000",
+        "XmlRoot": {
+          "name": "{urn:schema:Microsoft.Rtc.Management.ScopeFramework.2008}AuthorityId"
+        }
+      },
+      "DefaultXml": {
+        "SchemaId": {
+          "XName": {
+            "name": "{urn:schema:Microsoft.Rtc.Management.Policy.Teams.2017}TeamsIPPhonePolicy"
+          }
+        },
+        "Data": {
+          "TeamsIPPhonePolicy": {
+            "@xmlns": "urn:schema:Microsoft.Rtc.Management.Policy.Teams.2017"
+          }
+        },
+        "ConfigObject": null,
+        "Signature": "00000000-0000-0000-0000-000000000000",
+        "IsModified": true
+      },
+      "XmlRoot": {
+        "name": "{urn:schema:Microsoft.Rtc.Management.ScopeFramework.2008}AnchoredXmlKey"
+      }
+    },
+    "Identity": "Global",
+    "ConfigMetadata": {
+      "Authority": "Host"
+    },
+    "ConfigId": "Global"
+  }
+]

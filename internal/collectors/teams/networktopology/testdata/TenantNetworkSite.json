@@ -1,0 +1,92 @@
+[
+  {
+    "Subnets": null,
+    "Postalcodes": null,
+    "PhoneNumbers": null,
+    "Identity": "TeamsLab_Home_LAN",
+    "NetworkSiteID": "TeamsLab_Home_LAN",
+    "Description": "Teams lab 2026-11",
+    "NetworkRegionID": "TeamsLab_UK",
+    "LocationPolicy": null,
+    "EnableLocationBasedRouting": false,
+    "SiteAddress": null,
+    "EmergencyCallRoutingPolicy": null,
+    "EmergencyCallingPolicy": null,
+    "NetworkRoamingPolicy": null,
+    "ConfigMetadata": {
+      "Authority": "Tenant"
+    }
+  },
+  {
+    "Subnets": null,
+    "Postalcodes": null,
+    "PhoneNumbers": null,
+    "Identity": "TeamsLab_Home_IOT",
+    "NetworkSiteID": "TeamsLab_Home_IOT",
+    "Description": "Teams lab 2026-11",
+    "NetworkRegionID": "TeamsLab_UK",
+    "LocationPolicy": null,
+    "EnableLocationBasedRouting": false,
+    "SiteAddress": null,
+    "EmergencyCallRoutingPolicy": null,
+    "EmergencyCallingPolicy": null,
+    "NetworkRoamingPolicy": null,
+    "ConfigMetadata": {
+      "Authority": "Tenant"
+    }
+  },
+  {
+    "Subnets": null,
+    "Postalcodes": null,
+    "PhoneNumbers": null,
+    "Identity": "TeamsLab_AWS_London",
+    "NetworkSiteID": "TeamsLab_AWS_London",
+    "Description": "AWS London robots",
+    "NetworkRegionID": "TeamsLab_Cloud",
+    "LocationPolicy": null,
+    "EnableLocationBasedRouting": false,
+    "SiteAddress": null,
+    "EmergencyCallRoutingPolicy": null,
+    "EmergencyCallingPolicy": null,
+    "NetworkRoamingPolicy": null,
+    "ConfigMetadata": {
+      "Authority": "Tenant"
+    }
+  },
+  {
+    "Subnets": null,
+    "Postalcodes": null,
+    "PhoneNumbers": null,
+    "Identity": "TeamsLab_Dublin",
+    "NetworkSiteID": "TeamsLab_Dublin",
+    "Description": "Dublin office",
+    "NetworkRegionID": "TeamsLab_Cloud",
+    "LocationPolicy": null,
+    "EnableLocationBasedRouting": false,
+    "SiteAddress": null,
+    "EmergencyCallRoutingPolicy": null,
+    "EmergencyCallingPolicy": null,
+    "NetworkRoamingPolicy": null,
+    "ConfigMetadata": {
+      "Authority": "Tenant"
+    }
+  },
+  {
+    "Subnets": null,
+    "Postalcodes": null,
+    "PhoneNumbers": null,
+    "Identity": "TeamsLab_US_West",
+    "NetworkSiteID": "TeamsLab_US_West",
+    "Description": "US West office",
+    "NetworkRegionID": "TeamsLab_Cloud",
+    "LocationPolicy": null,
+    "EnableLocationBasedRouting": false,
+    "SiteAddress": null,
+    "EmergencyCallRoutingPolicy": null,
+    "EmergencyCallingPolicy": null,
+    "NetworkRoamingPolicy": null,
+    "ConfigMetadata": {
+      "Authority": "Tenant"
+    }
+  }
+]

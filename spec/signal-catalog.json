@@ -1,5 +1,5 @@
 {
-  "package_count": 183,
+  "package_count": 184,
   "domains": [
     "defender",
     "entra",
@@ -3211,6 +3211,75 @@
       "attr_keys": [],
       "packages": [
         "internal/telemetry"
+      ]
+    },
+    {
+      "name": "graph2otel.teams_admin.http.client.request.duration",
+      "prometheus_name": "graph2otel_teams_admin_http_client_request_duration_seconds",
+      "unit": "s",
+      "kind": "histogram",
+      "description": "Duration of an outbound Teams admin API request.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "http.request.method",
+        "http.response.status_code",
+        "server.address",
+        "teams_admin.resource",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/teamsadminclient"
+      ]
+    },
+    {
+      "name": "graph2otel.teams_admin.http_4xx",
+      "prometheus_name": "graph2otel_teams_admin_http_4xx_total",
+      "unit": "1",
+      "kind": "sum",
+      "description": "Count of 4xx responses graph2otel received from its own outbound Teams admin API calls.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "http.response.status_code",
+        "teams_admin.resource",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/teamsadminclient"
+      ]
+    },
+    {
+      "name": "graph2otel.teams_admin.http_5xx",
+      "prometheus_name": "graph2otel_teams_admin_http_5xx_total",
+      "unit": "1",
+      "kind": "sum",
+      "description": "Count of 5xx responses graph2otel received from its own outbound Teams admin API calls.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "http.response.status_code",
+        "teams_admin.resource",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/teamsadminclient"
+      ]
+    },
+    {
+      "name": "graph2otel.teams_admin.throttle.count",
+      "prometheus_name": "graph2otel_teams_admin_throttle_count_total",
+      "unit": "1",
+      "kind": "sum",
+      "description": "Count of 429 throttle responses observed from the Teams admin API.",
+      "additive": true,
+      "domain": "graph2otel",
+      "attr_keys": [
+        "teams_admin.resource",
+        "tenant_id"
+      ],
+      "packages": [
+        "internal/teamsadminclient"
       ]
     },
     {

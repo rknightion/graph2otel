@@ -470,6 +470,13 @@
                                             "password_file": { "type": "string" }
                                         }
                                     },
+                                    "admin_api": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "enabled": { "type": "boolean" }
+                                        }
+                                    },
                                     "geoip": {
                                         "type": "object",
                                         "additionalProperties": false,

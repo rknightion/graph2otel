@@ -244,6 +244,23 @@ This unsupported integration signs in with a user password. It is incompatible
 with MFA and some Conditional Access policies, and the logs can carry caller
 and agent identities. Graph preflight cannot verify access to this feed.
 
+#### Teams admin API
+
+`tenants[].teams.admin_api.enabled` (default `false`) turns on the `teams_admin`
+transport: the REST API behind the Teams PowerShell `Get-Cs*` cmdlets, which has
+no Graph equivalent. With the key off, every collector on that transport is
+disabled with the reason `teams.admin_api.enabled not set`, even when the
+`teams` profile is selected or a collector is named in `collectors`. The key
+is file-only, like `teams.vaac`, because tenants are a YAML list. Strict
+validation rejects unknown keys under `admin_api` and a non-boolean value.
+
+The transport carries no secret and needs no app permission. It reuses the
+poller's credential on the "Skype and Teams Tenant Admin API" audience, and
+access comes from an Entra directory role on the poller; Global Reader was
+measured sufficient. Graph preflight cannot verify that role, so `check` lists
+it as a manual prerequisite. See [Teams admin API](teams-admin-api.md) for the
+wire facts.
+
 #### Teams offline ASN and GeoIP
 
 Set `tenants[].teams.geoip.asn_db` and/or `tenants[].teams.geoip.city_db` to local

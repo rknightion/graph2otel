@@ -545,12 +545,14 @@ func TestHelmComposesTeamsSitesAndVAACFileSettings(t *testing.T) {
           enabled: true
           username_file: /synthetic/username
           password_file: /synthetic/password
+        admin_api:
+          enabled: true
 `
 	rendered, err := runHelm(t, "template", "test", ".", "-f", writeValues(t, settings))
 	if err != nil {
 		t.Fatalf("helm template rejected combined Teams settings: %v\n%s", err, rendered)
 	}
-	for _, field := range []string{"sites_file:", "internal_domains:", "vaac:", "username_file:", "password_file:", "teams.voice_apps:"} {
+	for _, field := range []string{"sites_file:", "internal_domains:", "vaac:", "username_file:", "password_file:", "admin_api:", "teams.voice_apps:"} {
 		if !strings.Contains(string(rendered), field) {
 			t.Errorf("helm template dropped %s", field)
 		}
@@ -559,6 +561,11 @@ func TestHelmComposesTeamsSitesAndVAACFileSettings(t *testing.T) {
 	output, err := runHelm(t, "template", "test", ".", "-f", writeValues(t, invalid))
 	if err == nil || !strings.Contains(string(output), "password") {
 		t.Fatal("helm template did not reject inline VAAC password key")
+	}
+	badAdmin := strings.Replace(settings, "        admin_api:\n          enabled: true\n", "        admin_api:\n          enabled: true\n          base_url: https://example.test\n", 1)
+	output, err = runHelm(t, "template", "test", ".", "-f", writeValues(t, badAdmin))
+	if err == nil || !strings.Contains(string(output), "base_url") {
+		t.Fatal("helm template did not reject an unknown admin_api key")
 	}
 }
 

@@ -33,7 +33,7 @@ Read before adding or changing any metric, log attribute, namespace or opt-in ga
   not merely unsliceable. It never means a tenant named inside a record: `/security/alerts_v2`
   carries its own `tenantId` holding the same value, and graph2otel deliberately does not map it.
 - **Every log record names its transport**: `ingest_transport` is one of `graph` / `blob` /
-  `o365_activity` / `audit_query` / `report_export` / `mdca` / `exchange_online` / `vaac`, stamped at the **emitter boundary**
+  `o365_activity` / `audit_query` / `report_export` / `mdca` / `exchange_online` / `vaac` / `teams_admin`, stamped at the **emitter boundary**
   (`telemetry.WithTransport`) and not in the engines, because many collectors emit with no engine
   and `exportjob` never emits at all. Outermost stamp wins: the Scheduler sets the `graph`
   baseline and each engine and export collector overrides it. **Log-only** - a metric label would

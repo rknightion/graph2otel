@@ -238,26 +238,18 @@ func requiredCollectorPermissions(cfg *config.Config, tenantID string, caps lice
 		manual[c.Name()] = append(manual[c.Name()], prerequisite...)
 	}
 
-	deps := collectors.Deps{Profiles: cfg.SelectedProfiles(tenantID), TenantID: tenantID, Logger: logger, Caps: caps}
-	polledNames := map[string]bool{}
-	for _, factory := range paths.snapshot {
-		c := factory(deps)
-		polledNames[c.Name()] = true
-		if c.Name() == "graph2otel.blob_categories" {
-			if tenant.BlobIngest.AccountURL != "" {
-				add(c, "ARM diagnostic-settings read access and Azure Storage category configuration cannot be proven from a Graph token")
-			}
-			continue
-		}
-		add(c)
-	}
+	// The sites file is resolved for the snapshot path too (teams.network_topology).
+	// TeamsAdmin stays nil: preflight never calls the API, and the manual
+	// prerequisite below carries what a Graph token cannot prove.
+	teamsSites, teamsDomains := cfg.TeamsSiteInputs(tenantID)
+	deps := collectors.Deps{Profiles: cfg.SelectedProfiles(tenantID), TenantID: tenantID, Logger: logger, Caps: caps, TeamsSites: teamsSites}
+	polledNames := addPreflightSnapshotCollectors(paths.snapshot, deps, tenant.BlobIngest.AccountURL != "", add)
 
 	var exo collectors.EXOClient
 	if tenant.ExchangeOnline.Enabled {
 		exo = preflightEXOClient{}
 	}
 	store := checkpoint.NewStore("")
-	teamsSites, teamsDomains := cfg.TeamsSiteInputs(tenantID)
 	wdeps := collectors.WindowDeps{
 		TenantID: tenantID, Logger: logger, Caps: caps, EXO: exo, Store: store,
 		TeamsSites: teamsSites, TeamsInternalDomains: teamsDomains, TeamsQualityThresholds: &cfg.Teams.QualityThresholds,
@@ -348,10 +340,39 @@ func transportManualPrerequisites(c collector.Collector) []string {
 		return []string{exchangeOnlineManualPrerequisite}
 	case telemetry.TransportVAAC:
 		return []string{"VAAC user sign-in and permission to access AA/CQ or CQD cannot be proven from a Graph token"}
+	case telemetry.TransportTeamsAdmin:
+		return []string{teamsAdminManualPrerequisite}
 	default:
 		return nil
 	}
 }
+
+// addPreflightSnapshotCollectors offers every snapshot collector to add and
+// returns the set of polled names. It is a function of its inputs, rather than
+// inline in requiredCollectorPermissions, so a test can drive it with factories
+// that are not in the global registry.
+func addPreflightSnapshotCollectors(
+	factories []collectors.Factory,
+	deps collectors.Deps,
+	blobConfigured bool,
+	add func(collector.Collector, ...string),
+) map[string]bool {
+	polledNames := map[string]bool{}
+	for _, factory := range factories {
+		c := factory(deps)
+		polledNames[c.Name()] = true
+		if c.Name() == "graph2otel.blob_categories" {
+			if blobConfigured {
+				add(c, "ARM diagnostic-settings read access and Azure Storage category configuration cannot be proven from a Graph token")
+			}
+			continue
+		}
+		add(c, transportManualPrerequisites(c)...)
+	}
+	return polledNames
+}
+
+const teamsAdminManualPrerequisite = "the Teams admin API needs an Entra directory role on the poller (Global Reader measured sufficient); a Graph token cannot prove it"
 
 // preflightEXOClient is construction-only. A WindowFactory only needs a
 // non-nil EXO seam to declare its collector; the preflight never invokes it.

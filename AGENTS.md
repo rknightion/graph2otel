@@ -249,5 +249,6 @@ file such as `ROADMAP.md` beside them.
 | Any Graph/Intune/Purview endpoint work | `docs/graph-api-gotchas.md` | every live-verified API quirk: page-size ceilings, beta-only filters, throttle table, Intune export traps, Purview label state, permanent-gap ledger, probe rules |
 | Anything blob-shaped | `docs/blob-ingest.md` | layout, byte-offset cursor design, backfill and freeze behaviour, at-least-once duplicates, per-category envelope mapping |
 | `m365.activity` or O365 Management API work | `docs/o365-management-api.md` | wire-format traps (CreationTime, PascalCase, unknown record types), AF20024, the 24h window cap, arrival-clock dedupe |
+| Any Teams admin API (`teams_admin`) work | `docs/teams-admin-api.md` | wire paths, auth, paging, enum tables, error envelopes |
 | Naming a signal or writing a LogQL query | `docs/signals.md` | event names, structured-metadata querying, `tenant_id` truth |
 | Adding or changing a **beta** endpoint | `docs/api-drift.md` | the beta drift canary: `spec/graph-beta-surface.json` must list every beta-consuming package, gated both ways, then `just graphdrift-update` |
