@@ -121,6 +121,50 @@ func TestCollectTeamsReports(t *testing.T) {
 	}
 }
 
+func TestUsageReportRefreshDates(t *testing.T) {
+	g := &graphStub{bodies: map[string]string{
+		devicesPath: devicesCSV, teamsPath: teamsCSV,
+		trendPath: strings.ReplaceAll(trendCSV, "2026-11-23,", "2026-11-24,"),
+	}}
+	c, rec := New(g), telemetrytest.New()
+	check := func(want map[string]float64) {
+		t.Helper()
+		if err := c.Collect(t.Context(), rec.Emitter(), recordoutcome.NewRecorder()); err != nil {
+			t.Fatal(err)
+		}
+		got := map[string]float64{}
+		for _, pt := range rec.MetricPoints("m365.teams_usage.report_refresh_timestamp") {
+			if len(pt.Attrs) != 1 || pt.Kind != "gauge" {
+				t.Errorf("invalid freshness point: %+v", pt)
+			}
+			got[pt.Attrs["report_period"]] = pt.Value
+		}
+		if !maps.Equal(got, want) {
+			t.Errorf("report refresh timestamps = %v, want %v", got, want)
+		}
+	}
+	d7 := float64(time.Date(2026, 11, 23, 0, 0, 0, 0, time.UTC).Unix())
+	d30 := float64(time.Date(2026, 11, 24, 0, 0, 0, 0, time.UTC).Unix())
+	check(map[string]float64{"7": d7, "30": d30})
+
+	// A mixed refresh date must not label the complete platform aggregate.
+	g.bodies[devicesPath] = strings.Replace(devicesCSV, "2026-11-23,", "2026-11-24,", 1)
+	check(map[string]float64{"30": d30})
+	if got := rec.MetricPoints("teams.device_usage.users"); len(got) != 7 {
+		t.Errorf("mixed refresh dates must not erase platform counts: %+v", got)
+	}
+
+	// Unavailable D30 refresh data must not leave yesterday's date behind.
+	g.bodies[devicesPath] = devicesCSV
+	delete(g.bodies, trendPath)
+	check(map[string]float64{"7": d7})
+
+	// A header-only CSV supplies no date. A mismatched period is not D30.
+	g.bodies[devicesPath], _, _ = strings.Cut(devicesCSV, "\n")
+	g.bodies[trendPath] = strings.ReplaceAll(trendCSV, ",30\n", ",7\n")
+	check(nil)
+}
+
 func TestCollectDeviceUsageTwins(t *testing.T) {
 	header, _, _ := strings.Cut(devicesCSV, "\n")
 	g := &graphStub{bodies: map[string]string{

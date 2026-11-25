@@ -6203,6 +6203,21 @@
       ]
     },
     {
+      "name": "m365.teams_usage.report_refresh_timestamp",
+      "prometheus_name": "m365_teams_usage_report_refresh_timestamp_seconds",
+      "unit": "s",
+      "kind": "gauge",
+      "description": "UTC midnight of the source Report Refresh Date, in Unix seconds, for the D7 device and D30 user activity counts reports. Absent if not established.",
+      "additive": false,
+      "domain": "m365",
+      "attr_keys": [
+        "report_period"
+      ],
+      "packages": [
+        "internal/collectors/m365/teamsusage"
+      ]
+    },
+    {
       "name": "mdca.cloud_discovery.apps",
       "prometheus_name": "mdca_cloud_discovery_apps",
       "unit": "{app}",
