@@ -53,6 +53,12 @@ const (
 	AttrSegmentFailureStage         = "segment_failure_stage"
 	AttrSegmentFailureReason        = "segment_failure_reason"
 
+	AttrIdentityScope                = "identity_scope"
+	AttrAverageConcealedSamplesRatio = "average_ratio_of_concealed_samples"
+	AttrMaxConcealedSamplesRatio     = "max_ratio_of_concealed_samples"
+	AttrAverageBandwidthEstimateBPS  = "average_bandwidth_estimate_bps"
+	AttrAudioFECUsed                 = "audio_fec_used"
+
 	AttrCallHealth            = "call_health"
 	AttrPoorStreamCount       = "poor_stream_count"
 	AttrWorstRTTMs            = "worst_rtt_ms"

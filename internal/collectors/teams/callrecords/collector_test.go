@@ -124,7 +124,7 @@ func TestCallVersionsAndSites(t *testing.T) {
 	csv := filepath.Join(t.TempDir(), "sites.csv")
 	writeSite := func(name string) {
 		t.Helper()
-		b := "subnet,location,country,latitude,longitude\n192.0.2.0/24," + name + ",GB,0,0\n198.51.100.0/24,IpOnly,GB,1,2\n2001:db8::/32,Remote,GB,1,0\n"
+		b := "subnet,location,country,latitude,longitude\n192.0.2.0/24," + name + ",GB,0,0\n198.51.100.0/24,IpOnly,GB,1,2\n2001:db8::/32,Remote,GB,1,0\n2001:db8:1::/48,Annex,AU,3,4\n"
 		if err := os.WriteFile(csv, []byte(b), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -151,7 +151,20 @@ func TestCallVersionsAndSites(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			return encoded(t, syntheticDetail(t, "call-a", v, start)), nil
+			d := syntheticDetail(t, "call-a", v, start)
+			segment := d["sessions"].([]any)[0].(map[string]any)["segments"].([]any)[0].(map[string]any)
+			// Version 2 reports a distinct callee identity without a UPN. A
+			// named site and a populated identity ID cannot make it external.
+			if v == 2 {
+				segment["callee"] = map[string]any{"associatedIdentity": map[string]any{"id": "opaque-endpoint"}}
+			}
+			media := segment["media"].([]any)
+			audioCallee := media[0].(map[string]any)["calleeNetwork"].(map[string]any)
+			audioCallee["subnet"], audioCallee["ipAddress"] = "2001:db8:1:2::/64", "198.51.100.4"
+			video := media[1].(map[string]any)
+			video["callerNetwork"] = map[string]any{"ipAddress": "198.51.100.5"}
+			video["calleeNetwork"].(map[string]any)["subnet"] = "203.0.113.0/24"
+			return encoded(t, d), nil
 		case absolutePath + "/call-a/participants_v2":
 			if prefer != "odata.maxpagesize=130" {
 				t.Fatalf("participants Prefer = %q", prefer)
@@ -195,15 +208,20 @@ func TestCallVersionsAndSites(t *testing.T) {
 			t.Fatalf("expected call start, audio segment start, and SIP video start (no invalid event), got %+v", logs)
 		}
 		assertAttrs(t, logs[0], map[string]string{"version": strconv.Itoa(v), "call_id": "call-a", "duration_seconds": "60", "organizer_id": "person-1", "organizer_user_principal_name": "caller@corp.example.com", "participant_count": "5", "participant_users": "1", "participant_guests": "1", "participant_pstn": "1", "participant_apps": "1", "participant_devices": "1", "join_web_url": "https://example.com/join/synthetic", "ingest_transport": "graph"})
-		site := "PollSnapshot"
+		site, calleeScope := "PollSnapshot", "external"
 		if v == 2 {
-			site = "NextPoll"
+			site, calleeScope = "NextPoll", "unknown"
+			if got := logs[1].Attrs["callee_user_principal_name"]; got != "" {
+				t.Errorf("different segment endpoint inherited a participant UPN: %q", got)
+			}
+		} else {
+			assertAttrs(t, logs[1], map[string]string{"callee_bot_role": "customBot", "callee_app_id": "synthetic-app"})
 		}
-		assertAttrs(t, logs[1], map[string]string{"version": strconv.Itoa(v), "stream_id": "audio-nosip", "caller_site": site, "caller_site_country": "GB", "caller_site_latitude": "0", "caller_site_longitude": "0", "caller_is_internal": "true", "caller_ip_class": "public", "caller_relay_address_present": "true", "callee_site": "unmapped", "callee_is_internal": "false", "callee_ip_class": "public", "callee_relay_address_present": "false", "callee_bot_role": "customBot", "callee_app_id": "synthetic-app", "caller_client_version": "0.0.1", "caller_feedback_rating": "poor", "session_failure_stage": "midcall", "segment_failure_reason": "synthetic-segment-failure", "average_rtt_ms": "75", "max_jitter_ms": "31.5", "average_packet_loss_rate": "0", "packet_utilization": "650", "caller_bandwidth_low_ratio": "0"})
+		assertAttrs(t, logs[1], map[string]string{"version": strconv.Itoa(v), "stream_id": "audio-nosip", "caller_site": site, "caller_site_country": "GB", "caller_site_latitude": "0", "caller_site_longitude": "0", "caller_is_internal": "true", "caller_identity_scope": "internal", "caller_ip_class": "public", "caller_relay_address_present": "true", "callee_site": "Annex", "callee_site_country": "AU", "callee_site_latitude": "3", "callee_site_longitude": "4", "callee_is_internal": "false", "callee_identity_scope": calleeScope, "callee_ip_class": "public", "callee_relay_address_present": "false", "caller_client_version": "0.0.1", "caller_feedback_rating": "poor", "session_failure_stage": "midcall", "segment_failure_reason": "synthetic-segment-failure", "average_rtt_ms": "75", "max_jitter_ms": "31.5", "average_packet_loss_rate": "0", "packet_utilization": "650", "caller_bandwidth_low_ratio": "0"})
 		if _, ok := logs[1].Attrs["post_fec_packet_loss_rate"]; ok {
 			t.Error("missing post-FEC loss was fabricated")
 		}
-		assertAttrs(t, logs[2], map[string]string{"stream_id": "video-sip", "direction": "calleeToCaller", "video_frame_rate": "30", "post_fec_packet_loss_rate": "0.02", "callee_site": "Remote", "callee_site_country": "GB", "callee_site_latitude": "1", "callee_site_longitude": "0", "callee_ip_class": "public"})
+		assertAttrs(t, logs[2], map[string]string{"stream_id": "video-sip", "direction": "calleeToCaller", "video_frame_rate": "30", "post_fec_packet_loss_rate": "0.02", "caller_site": "IpOnly", "callee_site": "Remote", "callee_site_country": "GB", "callee_site_latitude": "1", "callee_site_longitude": "0", "callee_ip_class": "public"})
 		var hops []Hop
 		if err := json.Unmarshal([]byte(logs[1].Attrs["caller_trace_route_hops"]), &hops); err != nil || len(hops) != 1 || hops[0].IP != "192.0.2.11" {
 			t.Fatalf("trace route did not preserve structured hop: %+v (%v)", hops, err)

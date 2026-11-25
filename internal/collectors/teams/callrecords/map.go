@@ -152,7 +152,7 @@ func mapSide(ep, parent endpoint, network Network, device Device, byID map[strin
 	return Side{
 		Identity: id, Agent: agent, Feedback: feedback, DeviceName: name,
 		Network: network, Device: device, Site: table.Lookup(network.Subnet, network.IP),
-		Internal: domains.IsInternal(id.UPN), IPClass: sites.ClassifyIP(network.IP),
+		IdentityScope: domains.Classify(id.UPN), IPClass: sites.ClassifyIP(network.IP),
 		RelayAddressPresent: sites.RelayUsed(network.RelayIP),
 	}
 }
