@@ -396,6 +396,26 @@ func TestCoverage_CoveredUncovered(t *testing.T) {
 	}
 }
 
+// TestCoverage_DoesNotMoveTheConfigHash: coverage comes from the operator's
+// sites CSV, not from Teams, so adding or changing the CSV must not look like a
+// Teams configuration change in config_sha256.
+func TestCoverage_DoesNotMoveTheConfigHash(t *testing.T) {
+	hashes := func(files *sites.File) map[string]string {
+		rec, _ := run(t, loadFixtures(t), files)
+		out := map[string]string{}
+		for _, a := range twins(rec, eventSubnet) {
+			out[a[semconv.AttrNetworkSubnetCidr]] = a[semconv.AttrConfigSHA256]
+		}
+		return out
+	}
+	noCSV := hashes(nil)
+	withCSV := hashes(writeSites(t, "10.0.0.0/16,Wide,GB,1,2\n"))
+	renamed := hashes(writeSites(t, "10.0.0.0/16,Renamed,GB,1,2\n"))
+	if len(noCSV) == 0 || !maps.Equal(noCSV, withCSV) || !maps.Equal(withCSV, renamed) {
+		t.Errorf("subnet hashes moved with the CSV:\n none    %v\n csv     %v\n renamed %v", noCSV, withCSV, renamed)
+	}
+}
+
 // TestCoverage_SubnetWithoutCIDR: a subnet missing its address or mask cannot be
 // matched, so with a CSV configured it is uncovered; without one, no_csv.
 func TestCoverage_SubnetWithoutCIDR(t *testing.T) {

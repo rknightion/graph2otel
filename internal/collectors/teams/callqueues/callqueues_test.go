@@ -289,6 +289,24 @@ func TestCollect_DiagnosticsDedupedPerPoll(t *testing.T) {
 	}
 }
 
+// TestCollect_DiagnosticErrorLevelIsError: a diagnostic Microsoft marks as an
+// error must not sit at INFO, where a severity filter at WARN or above hides it.
+// The lab only produced Warning; Error is the level name the module's
+// diagnostics use for failures.
+func TestCollect_DiagnosticErrorLevelIsError(t *testing.T) {
+	res := fixtureResult(t)
+	res.Diagnostics = []teamsadminclient.Diagnostic{{Level: "Error", Message: "broken"}}
+	rec := telemetrytest.New()
+	if err := New(collectors.Deps{TeamsAdmin: &fakeClient{res: res}}).Collect(context.Background(), rec.Emitter(), nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range rec.LogRecords() {
+		if l.EventName == "teams.call_queue_diagnostic" && l.SeverityText != "ERROR" {
+			t.Errorf("Error diagnostic severity = %q, want ERROR", l.SeverityText)
+		}
+	}
+}
+
 func TestTwin_ActionFamilies(t *testing.T) {
 	r := fixtureResult(t).Records[0]
 	r["OverflowAction"] = 1.0

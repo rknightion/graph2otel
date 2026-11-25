@@ -250,7 +250,10 @@ func diagnostics(in []teamsadminclient.Diagnostic) []telemetry.Event {
 	out := make([]telemetry.Event, 0, len(order))
 	for _, k := range order {
 		sev := telemetry.SeverityInfo
-		if strings.EqualFold(k.level, "warning") {
+		switch {
+		case strings.EqualFold(k.level, "error"):
+			sev = telemetry.SeverityError
+		case strings.EqualFold(k.level, "warning"):
 			sev = telemetry.SeverityWarn
 		}
 		attrs := telemetry.Attrs{semconv.AttrCallQueueDiagnosticCount: counts[k]}

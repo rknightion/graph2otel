@@ -215,6 +215,14 @@ func (c *Collector) subnetTwin(e telemetry.Emitter, r map[string]any, table *sit
 		a[semconv.AttrNetworkSubnetCidr] = cidr
 	}
 
+	label := cidr
+	if label == "" {
+		label = str(r, "Identity")
+	}
+	// Hash first: coverage is derived from the operator's sites CSV, not from
+	// Teams, so a CSV edit must not read as a Teams configuration change.
+	ev := twin(eventSubnet, "network subnet "+label, a)
+
 	cov := coverageNoCSV
 	if table != nil {
 		cov = coverageUncovered
@@ -228,12 +236,7 @@ func (c *Collector) subnetTwin(e telemetry.Emitter, r map[string]any, table *sit
 		}
 	}
 	a[semconv.AttrNetworkSubnetCsvCoverage] = cov
-
-	label := cidr
-	if label == "" {
-		label = str(r, "Identity")
-	}
-	return twin(eventSubnet, "network subnet "+label, a), cov
+	return ev, cov
 }
 
 // twin stamps the change hash and returns the Info-level event.
