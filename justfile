@@ -259,6 +259,13 @@ rules-readback context include_detections="0" pause="":
 grafana-canary context prometheus="grafanacloud-prom" loki="grafanacloud-logs":
     @python3 grafana/semantic_canary.py --context '{{ context }}' --prometheus-datasource '{{ prometheus }}' --loki-datasource '{{ loki }}'
 
+# verify the latest visible Teams Phone completion per tenant and collector (read-only)
+[group('infra')]
+[no-exit-message]
+[positional-arguments]
+verify-phone-inventory *args:
+    @python3 grafana/verify_phone_inventory.py "$@"
+
 # static, policy-free dashboard performance baseline (offline, JSON on stdout)
 [group('infra')]
 [no-exit-message]

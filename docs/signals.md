@@ -278,10 +278,28 @@ A failed or unparseable poll does not write a marker. These logs use observation
 source dates, when present, remain detail attributes. The marker records completion of
 one Graph walk, not a transaction with Loki or an atomic view across Graph pages.
 
-For verified detail at a fixed time, use the Loki `GET /loki/api/v1/query_range` endpoint
-with the **same absolute `start` and `end`** in Unix nanoseconds for both steps. Repeat for
-each tenant and collector; there is no combined inventory snapshot. Use an exact
-`tenant_id`, or `tenant_id=""` for an unlabelled single-tenant deployment. Do not use the
+Run the read-only verifier from this checkout with a named `gcx` context that can query
+Loki. Replace the example context, datasource UID, tenant and bounds:
+
+```sh
+just verify-phone-inventory --context example-stack --datasource example-loki \
+  --tenant example-tenant --start-ns 1700000000000000000 --end-ns 1700021600000000000 </dev/null
+```
+
+Both collectors are checked by default. Repeat `--tenant` for more than one tenant.
+The command uses the named context's auth, ignoring ambient `GRAFANA_*` overrides.
+It prints one JSON line per tenant and collector, with `receipt_ns` as an exact Unix
+nanosecond string (or `null` if no receipt time is established) and `tenant_index`
+numbered from one in argument order. No tenant IDs, entity rows or raw datasource
+errors are printed. Exit `0` means every result is `verified_complete`; exit `1`
+means at least one is `not_proven_complete`. Invalid arguments exit `2` without a
+query. Use `just verify-phone-inventory --help` for the read-back limit and other inputs.
+
+The verifier uses the Loki `GET /loki/api/v1/query_range` endpoint with the **same
+absolute `start` (inclusive) and `end` (exclusive)** in Unix nanoseconds for both
+steps. For a manual lookup, repeat for each tenant and collector; there is no combined
+inventory snapshot. Use an exact `tenant_id`, or `tenant_id=""` for an unlabelled
+single-tenant deployment. Do not use the
 dashboard's `All` matcher. These queries require Loki to expose the OTLP event name as
 `event_name` structured metadata, the same prerequisite as the dashboard's log panels.
 
@@ -297,10 +315,10 @@ dashboard's `All` matcher. These queries require Loki to expose the OTLP event n
 
 2. Fetch the corresponding detail event with that marker's exact, non-empty `snapshot_id`.
    Use `m365.teams.user_configuration` for the user collector. Request `entity_count + 1`
-   rows, including `limit=1` for a zero marker. If the endpoint cannot accept that limit,
-   report **over the read-back limit; not proven complete** rather than publishing a subset.
-   A 251-row budget, for example, can verify up to 250 entities. Do not apply entity or status
-   filters until *after* checking the full result.
+   rows, including `limit=1` for a zero marker. If that request exceeds the read-back
+   budget or the endpoint rejects it, report **not proven complete** rather than publishing
+   a subset. A 251-row budget, for example, can verify up to 250 entities. Do not apply
+   entity or status filters until *after* checking the full result.
 
    ```logql
    {service_name="graph2otel"} | event_name="m365.teams.phone_number" | tenant_id="example-tenant" | snapshot_id="0123456789abcdef0123456789abcdef"
@@ -310,15 +328,18 @@ dashboard's `All` matcher. These queries require Loki to expose the OTLP event n
    equals `entity_count`, all row `id` values are present and distinct, and no row has
    `attrs_truncated="true"`. In the default response encoding, each result's `stream` object
    includes the structured metadata for its rows. Any error, duplicate, clipped detail or
-   count mismatch is **not proven complete**. A short read can
-   be a range boundary, delayed indexing, retention or export loss; retry the same lookup
-   with an adequate window rather than borrowing older rows. Count zero with no matching rows
-   is a verified empty inventory for that poll, even when history still has older rows.
+   count mismatch is **not proven complete**. The verifier rejects warnings and paginated
+   responses rather than stitching pages together. It relies on Loki honouring the requested
+   limit or returning an error, not a proxy silently returning a shorter page as success.
+   A short read can be a range boundary, delayed indexing, retention or export loss. If detail
+   is still indexing, retry with the same bounds rather than borrowing older rows. Count zero
+   with no matching rows is a verified empty inventory for that poll, even when history
+   still has older rows.
 
-The result is complete for the **latest visible completion in the queried window**, not
-proof that every later poll or marker reached Loki. Before this marker was introduced,
-only history is available. Widen the range if the last poll falls outside it, and check
-collector health and export health before interpreting an old completion as recent.
+The result is complete for the **latest visible completion at receipt lookup in the queried
+window**, not proof that every later poll or marker reached Loki. Before this marker was
+introduced, only history is available. Widen the range if the last poll falls outside it,
+and check collector health and export health before interpreting an old completion as recent.
 
 ## OTLP → Prometheus name normalization
 
